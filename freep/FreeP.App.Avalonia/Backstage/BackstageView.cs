@@ -77,9 +77,12 @@ internal sealed class BackstageView : UserControl
     internal IReadOnlyList<SisterBackstageEntryPlan<Control>> Entries => _frame.Entries;
 
     public void Show()
+        => Show("Info");
+
+    public void Show(string paneLabel)
     {
         IsVisible = true;
-        _frame.Show("Info");
+        _frame.Show(paneLabel);
     }
 
     public void Hide()

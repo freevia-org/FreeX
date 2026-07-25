@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using FreeP.App.Avalonia;
 using FreeP.App.Recording;
@@ -979,6 +981,53 @@ public sealed class SlideShowWindowHeadlessTests
         });
 
         if (!ran) return;
+    }
+
+    [Fact]
+    public async Task MainWindow_StartSlideShow_assigns_visible_owner_lifecycle()
+    {
+        MainWindow? owner = null;
+        SlideShowWindow? slideShow = null;
+        var ran = await OnUiThread(() =>
+        {
+            owner = new MainWindow(Array.Empty<string>());
+            owner.Editor.SelectSlide(0);
+            owner.Show();
+            owner.StartSlideShow(fromStart: true);
+
+            var desktop = Application.Current?.ApplicationLifetime
+                as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+            slideShow = desktop?.Windows.OfType<SlideShowWindow>().Single(window => window.IsVisible);
+            slideShow.Should().NotBeNull();
+            owner.Close();
+            slideShow!.IsVisible.Should().BeFalse();
+        });
+
+        if (!ran) return;
+    }
+
+    [Fact]
+    public async Task MainWindow_StartSlideShow_restores_selection_and_focus_on_close()
+    {
+        MainWindow? owner = null;
+        var ran = await OnUiThread(() =>
+        {
+            owner = new MainWindow(Array.Empty<string>());
+            owner.Show();
+            owner.StartSlideShow(fromStart: true);
+
+            var desktop = Application.Current?.ApplicationLifetime
+                as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+            var slideShow = desktop?.Windows.OfType<SlideShowWindow>().Single(window => window.IsVisible);
+            slideShow.Should().NotBeNull();
+            slideShow!.Controller.GoToSlide(1);
+            slideShow.Close();
+        });
+
+        if (!ran) return;
+        owner!.CurrentSlideIndex.Should().Be(1);
+        owner.OwnerFocusRestoreCountForTests.Should().Be(1);
+        owner.Close();
     }
 
     // ── Ribbon definition ───────────────────────────────────────────────────────

@@ -3611,7 +3611,7 @@ public sealed partial class MainWindow : Window
             case FreePKeyboardCommand.OpenPresentation: _file.Open(); break;
             case FreePKeyboardCommand.SavePresentation: _file.Save(); break;
             case FreePKeyboardCommand.SavePresentationAs: _file.SaveAs(); break;
-            case FreePKeyboardCommand.PrintPresentation: RefreshPrintBackstagePlan(); break;
+            case FreePKeyboardCommand.PrintPresentation: ShowPrintBackstage(); break;
             case FreePKeyboardCommand.Undo: Editor.Undo(); break;
             case FreePKeyboardCommand.Redo: Editor.Redo(); break;
             case FreePKeyboardCommand.DeleteSelectedShapes: Editor.DeleteSelected(); break;
@@ -4197,9 +4197,21 @@ public sealed partial class MainWindow : Window
 
     // ── Backstage ─────────────────────────────────────────────────────────────────
 
-    private void ShowBackstage() => _backstage.Show();
+    private void ShowBackstage() => ShowBackstage("Info");
+
+    private void ShowBackstage(string paneLabel) => _backstage.Show(paneLabel);
+
+    private void ShowPrintBackstage()
+    {
+        RefreshPrintBackstagePlan();
+        ShowBackstage("Print");
+    }
 
     internal void ShowBackstageForTests() => ShowBackstage();
+
+    internal bool IsBackstageOpen => _backstage.IsOpen;
+
+    internal string? CurrentBackstagePaneLabel => _backstage.EvidencePaneLabel;
 
     internal bool ActivateBackstageEntryForTests(string label)
     {

@@ -52,7 +52,10 @@ public sealed class KeyboardContextParityTests
                 Press(window, Key.H, KeyModifiers.Control).Handled.Should().BeTrue();
                 window.IsFindReplaceReplaceInputVisible.Should().BeTrue();
                 Press(window, Key.P, KeyModifiers.Control).Handled.Should().BeTrue();
-                window.IsPrintOptionsPaneVisible.Should().BeTrue();
+                window.IsBackstageOpen.Should().BeTrue();
+                window.CurrentBackstagePaneLabel.Should().Be("Print");
+                window.LastPrintBackstagePlan.Should().NotBeNull();
+                window.LastPrintOutputPackage.Should().BeNull();
             }
             finally
             {

@@ -149,6 +149,30 @@ public sealed class SlideCanvasAvaloniaTests
         return body;
     }
 
+    [Fact]
+    public async Task SlideCanvas_refresh_invalidates_measure_after_first_slide_is_assigned()
+    {
+        Size desiredBeforeSlide = default;
+        Size desiredAfterSlide = default;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation();
+            var canvas = new SlideCanvas { Presentation = presentation };
+
+            canvas.Measure(new Size(800, 600));
+            desiredBeforeSlide = canvas.DesiredSize;
+
+            canvas.Slide = presentation.Slides[0];
+            canvas.Measure(new Size(800, 600));
+            desiredAfterSlide = canvas.DesiredSize;
+        });
+
+        desiredBeforeSlide.Should().Be(new Size(0, 0));
+        desiredAfterSlide.Width.Should().BeGreaterThan(0);
+        desiredAfterSlide.Height.Should().BeGreaterThan(0);
+    }
+
     private static SlideShape MakeTableShape(uint id, string text)
     {
         var table = new TableShape();

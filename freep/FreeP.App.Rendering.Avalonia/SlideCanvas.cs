@@ -147,6 +147,10 @@ public sealed class SlideCanvas : Control
     public void Refresh()
     {
         _cachedOps = null;
+        // Slide/presentation changes can also change the canvas' desired aspect-ratio size.
+        // InvalidateMeasure is required here because the canvas may already have been measured
+        // before a slideshow window assigns its first slide.
+        InvalidateMeasure();
         InvalidateVisual();
     }
 
