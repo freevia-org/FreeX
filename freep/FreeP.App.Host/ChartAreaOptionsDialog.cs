@@ -14,7 +14,9 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
     private readonly ChartAreaOptionsPlanner _planner;
     private readonly ComboBox _targetCombo;
     private readonly TextBox _fillBox;
+    private readonly CheckBox _noFillCheck;
     private readonly TextBox _outlineBox;
+    private readonly CheckBox _noOutlineCheck;
     private readonly TextBox _widthBox;
 
     public ChartAreaOptionsDialog(EditingSession editor)
@@ -43,7 +45,9 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
             }
         };
         _fillBox = new TextBox { MinWidth = 190 };
+        _noFillCheck = new CheckBox { Content = surface.NoFillLabel };
         _outlineBox = new TextBox { MinWidth = 190 };
+        _noOutlineCheck = new CheckBox { Content = surface.NoOutlineLabel };
         _widthBox = new TextBox { MinWidth = 120 };
         _targetCombo.SelectedIndex = 0;
         LoadControls();
@@ -59,7 +63,9 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
         var content = new StackPanel { Margin = new Thickness(14) };
         content.Children.Add(MakeRow(surface.TargetLabel, _targetCombo));
         content.Children.Add(MakeRow(surface.FillLabel, _fillBox));
+        content.Children.Add(_noFillCheck);
         content.Children.Add(MakeRow(surface.OutlineLabel, _outlineBox));
+        content.Children.Add(_noOutlineCheck);
         content.Children.Add(MakeRow(surface.WidthLabel, _widthBox));
         content.Children.Add(new TextBlock { Text = surface.Hint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7, Margin = new Thickness(0, 0, 0, 8) });
         content.Children.Add(buttons);
@@ -72,11 +78,13 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
         return _planner.BuildCommitPlan();
     }
 
-    internal void SetOptionsForTests(ChartAreaFormattingTarget target, string? fill, string? outline, double? width)
+    internal void SetOptionsForTests(ChartAreaFormattingTarget target, string? fill, string? outline, double? width, bool noFill = false, bool noOutline = false)
     {
         _targetCombo.SelectedIndex = target == ChartAreaFormattingTarget.PlotArea ? 1 : 0;
         _fillBox.Text = fill ?? string.Empty;
+        _noFillCheck.IsChecked = noFill;
         _outlineBox.Text = outline ?? string.Empty;
+        _noOutlineCheck.IsChecked = noOutline;
         _widthBox.Text = Format(width);
     }
 
@@ -96,14 +104,18 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
     private void LoadControls()
     {
         _fillBox.Text = _planner.FillColor;
+        _noFillCheck.IsChecked = _planner.NoFill;
         _outlineBox.Text = _planner.OutlineColor;
+        _noOutlineCheck.IsChecked = _planner.NoOutline;
         _widthBox.Text = Format(_planner.OutlineWidthPt);
     }
 
     private void UpdatePlannerFromControls()
     {
         _planner.SetFillColor(_fillBox.Text);
+        _planner.SetNoFill(_noFillCheck.IsChecked == true);
         _planner.SetOutlineColor(_outlineBox.Text);
+        _planner.SetNoOutline(_noOutlineCheck.IsChecked == true);
         _planner.SetOutlineWidth(ParseOptional(_widthBox.Text));
     }
 

@@ -39,6 +39,20 @@ public sealed class ChartAreaOptionsTests
     }
 
     [Fact]
+    public void Planner_AuthorsExplicitNoFillAndNoOutlineStates()
+    {
+        var chart = new ChartShape();
+        var planner = ChartAreaOptionsPlanner.FromChart(chart);
+
+        planner.SetNoFill(true);
+        planner.SetNoOutline(true);
+
+        var options = planner.BuildCommitPlan();
+        options.Fill.Should().BeSameAs(ShapeFill.None.Instance);
+        options.Outline.Should().BeSameAs(ShapeOutline.None.Instance);
+    }
+
+    [Fact]
     public void SetChartAreaOptions_RoundTripsAndUndoRestoresBothTargets()
     {
         var presentation = new Presentation();
@@ -71,6 +85,43 @@ public sealed class ChartAreaOptionsTests
         bus.Undo();
         ((ShapeFill.Solid)chart.PlotAreaFill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xEEEEEE));
         chart.PlotAreaOutline.Should().BeNull();
+    }
+
+    [Fact]
+    public void SetChartAreaOptions_RoundTripsExplicitNoFillAndNoOutline()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape
+        {
+            ChartAreaFill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0xFFFFFF))),
+            ChartAreaOutline = new ShapeOutline.Visible(new ThemeAwareColor(SrgbColor.FromRgb(0x000000)), 1),
+        };
+        var shape = new SlideShape { Id = 1, Kind = SlideShapeKind.Chart, Chart = chart };
+        slide.Shapes.Add(shape);
+        presentation.Slides.Add(slide);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetChartAreaOptionsCommand(
+            0,
+            shape.Id,
+            new ChartAreaOptions(
+                ChartAreaFormattingTarget.ChartArea,
+                ShapeFill.None.Instance,
+                ShapeOutline.None.Instance)));
+
+        chart.ChartAreaFill.Should().BeSameAs(ShapeFill.None.Instance);
+        chart.ChartAreaOutline.Should().BeSameAs(ShapeOutline.None.Instance);
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var reopened = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        reopened.ChartAreaFill.Should().BeOfType<ShapeFill.None>();
+        reopened.ChartAreaOutline.Should().BeOfType<ShapeOutline.None>();
+
+        bus.Undo();
+        chart.ChartAreaFill.Should().BeOfType<ShapeFill.Solid>();
+        chart.ChartAreaOutline.Should().BeOfType<ShapeOutline.Visible>();
     }
 
     [Fact]
