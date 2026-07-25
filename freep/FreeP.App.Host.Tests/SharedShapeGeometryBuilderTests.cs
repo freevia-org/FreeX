@@ -173,6 +173,22 @@ public sealed class SharedShapeGeometryBuilderTests
     }
 
     [Fact]
+    public void Star8_UsesAuthoredPointDepthAdjustmentWhenPresent()
+    {
+        var defaultGeometry = ShapeGeometryBuilder.Build(DrawingShapeKind.Star8, Bounds);
+        var adjustedGeometry = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Star8,
+            Bounds,
+            new Dictionary<string, double> { ["adj"] = 72000 });
+
+        defaultGeometry.Contours.Should().ContainSingle();
+        adjustedGeometry.Contours.Should().ContainSingle();
+        adjustedGeometry.Contours[0].Segments[0].End.Should().NotBe(defaultGeometry.Contours[0].Segments[0].End);
+        adjustedGeometry.Contours[0].Segments[0].End.Y.Should().BeLessThan(
+            defaultGeometry.Contours[0].Segments[0].End.Y);
+    }
+
+    [Fact]
     public void RightArrow_UsesAuthoredShaftAndHeadAdjustmentsWhenPresent()
     {
         var geometry = ShapeGeometryBuilder.Build(
