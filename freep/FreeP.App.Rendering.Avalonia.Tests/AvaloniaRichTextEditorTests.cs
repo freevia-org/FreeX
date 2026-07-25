@@ -59,6 +59,49 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task ShiftEnter_InsertsSoftBreakInsideParagraph_AndKeepsCaretAfterBreak()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs = { new Run { Text = "AlphaBeta" } },
+            });
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.FocusEditor().Should().BeTrue();
+                editor.SelectionStart = 5;
+                editor.SelectionEnd = 5;
+
+                Press(window, Key.Enter, PhysicalKey.Enter, RawInputModifiers.Shift);
+                await DrainInputAsync();
+
+                editor.Text.Should().Be("Alpha\nBeta");
+                editor.SelectionStart.Should().Be(6);
+                editor.SelectionEnd.Should().Be(6);
+
+                var edited = editor.EditedBody;
+                edited.Paragraphs.Should().ContainSingle();
+                edited.Paragraphs[0].Runs.Select(run => run.Text)
+                    .Should().Equal("Alpha", "\n", "Beta");
+                InCanvasTextEditPlanner.ExtractPlainText(edited)
+                    .Should().Be("Alpha\nBeta");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task InheritedRuns_UseSharedWpfFallbackInsteadOfNativeTextBoxTheme()
     {
         await Session.Dispatch(async () =>

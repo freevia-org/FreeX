@@ -72,6 +72,24 @@ public sealed class InCanvasRichTextEditBuffer
         }
     }
 
+    /// <summary>
+    /// Inserts a soft line break at the current selection. Unlike a normal newline,
+    /// this keeps the text in the current paragraph and is persisted as the model's
+    /// dedicated <c>Run.Text == "\n"</c> break run.
+    /// </summary>
+    public bool InsertSoftBreak(InCanvasEditorTextSelection selection)
+    {
+        int textLength = PlainText.Length;
+        int start = Math.Clamp(Math.Min(selection.Start, selection.End), 0, textLength);
+        int end = Math.Clamp(Math.Max(selection.Start, selection.End), 0, textLength);
+        ClearTypingStyle();
+        _body = RichTextBodyMutationPlanner.InsertSoftBreak(
+            _body,
+            start,
+            end - start);
+        return true;
+    }
+
     public bool ToggleTextFormat(
         TableCellTextFormatKind kind,
         InCanvasEditorTextSelection selection)
@@ -277,7 +295,8 @@ internal static class RichTextBodyMutationPlanner
         char? Character,
         Run? RunTemplate,
         Paragraph? NextParagraphTemplate,
-        bool IsInsertedBreak = false)
+        bool IsInsertedBreak = false,
+        bool IsSoftBreak = false)
     {
         public bool IsBreak => Character is null;
     }
@@ -311,6 +330,29 @@ internal static class RichTextBodyMutationPlanner
         return Rebuild(working, tokens);
     }
 
+    internal static TextBody InsertSoftBreak(
+        TextBody source,
+        int start,
+        int removedLength)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var working = TextBodyModelCloner.CloneTextBody(source) ?? new TextBody();
+        EnsureParagraph(working);
+
+        var tokens = Flatten(working);
+        int clampedStart = Math.Clamp(start, 0, tokens.Count);
+        int clampedLength = Math.Clamp(removedLength, 0, tokens.Count - clampedStart);
+        var insertionRun = ResolveInsertionRun(working, tokens, clampedStart, clampedLength);
+
+        tokens.RemoveRange(clampedStart, clampedLength);
+        tokens.Insert(
+            clampedStart,
+            new Token('\n', insertionRun, null, IsSoftBreak: true));
+
+        return Rebuild(working, tokens);
+    }
+
     internal static Run ResolveRunAtCaret(TextBody source, int caret)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -331,7 +373,11 @@ internal static class RichTextBodyMutationPlanner
             foreach (var run in paragraph.Runs)
             {
                 foreach (char character in run.Text)
-                    tokens.Add(new Token(character, run, null));
+                {
+                    tokens.Add(character == '\n'
+                        ? new Token(character, run, null, IsSoftBreak: true)
+                        : new Token(character, run, null));
+                }
             }
 
             if (paragraphIndex + 1 < body.Paragraphs.Count)
@@ -347,17 +393,22 @@ internal static class RichTextBodyMutationPlanner
         int removedLength)
     {
         if (removedLength > 0 && start < tokens.Count && tokens[start].RunTemplate is { } selectedRun)
-            return selectedRun;
+        {
+            if (!tokens[start].IsSoftBreak)
+                return selectedRun;
+        }
 
         for (int index = start - 1; index >= 0; index--)
         {
-            if (tokens[index].RunTemplate is { } precedingRun)
+            if (!tokens[index].IsSoftBreak
+                && tokens[index].RunTemplate is { } precedingRun)
                 return precedingRun;
         }
 
         for (int index = start; index < tokens.Count; index++)
         {
-            if (tokens[index].RunTemplate is { } followingRun)
+            if (!tokens[index].IsSoftBreak
+                && tokens[index].RunTemplate is { } followingRun)
                 return followingRun;
         }
 
@@ -427,6 +478,17 @@ internal static class RichTextBodyMutationPlanner
             if (token.IsBreak)
             {
                 FlushParagraph(token.NextParagraphTemplate, token.IsInsertedBreak);
+                continue;
+            }
+
+            if (token.IsSoftBreak)
+            {
+                FlushRun();
+                var softBreakRun = token.RunTemplate is null
+                    ? new Run()
+                    : TextBodyModelCloner.CloneRun(token.RunTemplate);
+                softBreakRun.Text = "\n";
+                paragraph.Runs.Add(softBreakRun);
                 continue;
             }
 

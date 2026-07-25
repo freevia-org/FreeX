@@ -175,6 +175,37 @@ internal sealed class AvaloniaRichTextEditor : Grid
     internal bool ApplyParagraphIndent(bool increase) =>
         ApplyMutation(() => _buffer.ApplyParagraphIndent(increase, Selection));
 
+    internal bool InsertSoftBreak()
+    {
+        SynchronizeText();
+        int start = Math.Min(SelectionStart, SelectionEnd);
+        int end = Math.Max(SelectionStart, SelectionEnd);
+        if (!_buffer.InsertSoftBreak(Selection))
+            return false;
+
+        string current = Text;
+        string updated = string.Concat(
+            current.AsSpan(0, start),
+            "\n",
+            current.AsSpan(end));
+
+        _synchronizing = true;
+        try
+        {
+            InputBox.Text = updated;
+        }
+        finally
+        {
+            _synchronizing = false;
+        }
+
+        SelectionStart = start + 1;
+        SelectionEnd = start + 1;
+        RenderBody();
+        FocusEditor();
+        return true;
+    }
+
     internal void ApplyPlanMetadata(
         InCanvasTableCellRichTextEditPlan plan,
         string richClass,
@@ -293,6 +324,14 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
     private void OnInputNavigationKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Enter
+            && (e.KeyModifiers & KeyModifiers.Shift) != 0
+            && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) == 0)
+        {
+            e.Handled = InsertSoftBreak();
+            return;
+        }
+
         if ((e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) != 0)
             return;
 

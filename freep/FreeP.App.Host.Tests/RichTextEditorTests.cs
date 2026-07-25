@@ -960,6 +960,10 @@ public sealed class RichTextEditorTests
         runs[0].Text.Should().Be("Line 1");
         runs[1].Text.Should().Be("\n", "soft break must survive as '\\n' text in the model");
         runs[2].Text.Should().Be("Line 2");
+        restored.Paragraphs.Should().ContainSingle(
+            "a soft LineBreak stays inside its source paragraph");
+        InCanvasTextEditPlanner.ExtractPlainText(restored)
+            .Should().Be("Line 1\nLine 2");
     }
 
     // ─── Z2: offset-based original-run matching (no cross-contamination after edits) ─

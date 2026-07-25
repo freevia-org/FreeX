@@ -59,6 +59,56 @@ public sealed class InCanvasRichTextEditBufferTests
     }
 
     [Fact]
+    public void SoftBreakInsertion_StaysInParagraphAsDedicatedBreakRun()
+    {
+        var source = new TextBody();
+        source.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = "AlphaBeta", Bold = true } },
+        });
+        var buffer = new InCanvasRichTextEditBuffer(source);
+
+        buffer.InsertSoftBreak(new InCanvasEditorTextSelection(5, 5)).Should().BeTrue();
+
+        buffer.Body.Paragraphs.Should().ContainSingle();
+        buffer.Body.Paragraphs[0].Runs.Select(run => run.Text)
+            .Should().Equal("Alpha", "\n", "Beta");
+        buffer.PlainText.Should().Be("Alpha\nBeta");
+        buffer.Body.Paragraphs[0].Runs[0].Bold.Should().BeTrue();
+        buffer.Body.Paragraphs[0].Runs[2].Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SoftBreakInsertion_ReplacesSelectedTextWithoutCreatingParagraph()
+    {
+        var source = new TextBody();
+        source.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = "AlphaBeta" } },
+        });
+        var buffer = new InCanvasRichTextEditBuffer(source);
+
+        buffer.InsertSoftBreak(new InCanvasEditorTextSelection(5, 9)).Should().BeTrue();
+
+        buffer.PlainText.Should().Be("Alpha\n");
+        buffer.Body.Paragraphs.Should().ContainSingle();
+        buffer.Body.Paragraphs[0].Runs.Select(run => run.Text)
+            .Should().Equal("Alpha", "\n");
+    }
+
+    [Fact]
+    public void SoftBreakInsertion_EmptyBodyCreatesDedicatedBreakRun()
+    {
+        var buffer = new InCanvasRichTextEditBuffer(new TextBody());
+
+        buffer.InsertSoftBreak(new InCanvasEditorTextSelection(0, 0)).Should().BeTrue();
+
+        buffer.Body.Paragraphs.Should().ContainSingle();
+        buffer.Body.Paragraphs[0].Runs.Select(run => run.Text)
+            .Should().Equal("\n");
+    }
+
+    [Fact]
     public void EnterSplit_ClonesNumberingMetadataToTheNewParagraph()
     {
         var source = new TextBody();
