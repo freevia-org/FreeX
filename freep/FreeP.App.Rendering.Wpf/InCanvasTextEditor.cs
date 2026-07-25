@@ -19,6 +19,7 @@ public sealed class InCanvasTextEditor
 
     private RichTextBox? _richBox;
     private InCanvasTextEditPlanner? _editPlan;
+    private TextBody? _shapeParagraphBody;
     private uint _editingShapeId;
     private bool _active;
 
@@ -86,6 +87,7 @@ public sealed class InCanvasTextEditor
         _editingShapeId = shapeId;
         _active = true;
         _editPlan = startPlan.EditPlanner;
+        _shapeParagraphBody = startPlan.OriginalBody;
 
         var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(
             new SlideScreenRect(
@@ -152,14 +154,21 @@ public sealed class InCanvasTextEditor
 
         var shape = slide.Shapes.FirstOrDefault(s => s.Id == _editingShapeId);
         if (shape is null)
+        {
+            _shapeParagraphBody = null;
             return;
+        }
 
-        var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(doc, shape.TextBody);
+        var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(
+            doc,
+            _shapeParagraphBody ?? shape.TextBody);
         var decision = editPlan?.CommitRichText(newBody)
             ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Unchanged, null);
 
         if (decision.Command is not null)
             _editor.Bus.Execute(decision.Command);
+
+        _shapeParagraphBody = null;
     }
 
     /// <summary>Cancels the edit without committing.</summary>
@@ -174,6 +183,7 @@ public sealed class InCanvasTextEditor
         _active = false;
         _ = _editPlan?.Cancel();
         _editPlan = null;
+        _shapeParagraphBody = null;
     }
 
     /// <summary>Toggles bold on the current RichTextBox selection. No-op if not active.</summary>
@@ -238,6 +248,85 @@ public sealed class InCanvasTextEditor
         _richBox.Selection.ApplyPropertyValue(
             TextElement.ForegroundProperty,
             new SolidColorBrush(wpfColor.Value));
+    }
+
+    public bool TryApplyActiveShapeParagraphAlignment(TextAlign alignment) =>
+        ApplyShapeParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphAlignment(body, alignment, selection));
+
+    public bool TryApplyActiveShapeParagraphBulletToggle() =>
+        ApplyShapeParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphBulletToggle(body, selection));
+
+    public bool TryApplyActiveShapeParagraphNumberingToggle() =>
+        ApplyShapeParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphNumberingToggle(body, selection));
+
+    public bool TryApplyActiveShapeParagraphListPreset(TableCellListPresetDescriptor preset)
+    {
+        ArgumentNullException.ThrowIfNull(preset);
+        return ApplyShapeParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphListPreset(body, selection, preset));
+    }
+
+    public bool TryApplyActiveShapeParagraphPictureBullet(PresentationPictureBulletPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        if (!payload.IsValid)
+            return false;
+
+        return ApplyShapeParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphPictureBullet(
+                body,
+                selection,
+                PresentationPictureBulletAuthoringPlanner.CreateImagePart(payload)));
+    }
+
+    public bool TryApplyActiveShapeParagraphIndent() =>
+        ApplyShapeParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphIndent(body, increase: true, selection: selection));
+
+    public bool TryApplyActiveShapeParagraphOutdent() =>
+        ApplyShapeParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphIndent(body, increase: false, selection: selection));
+
+    private bool ApplyShapeParagraphMutation(
+        Func<TextBody, (int Start, int End)?, TextBody> mutate)
+    {
+        if (!_active || _richBox is null)
+            return false;
+
+        var current = TextBodyFlowDocumentConverter.FromFlowDocument(
+            _richBox.Document,
+            _shapeParagraphBody);
+        (int Start, int End)? selection = _richBox.Selection.IsEmpty
+            ? null
+            : (LogicalOffsetAt(_richBox.Document, _richBox.Selection.Start),
+               LogicalOffsetAt(_richBox.Document, _richBox.Selection.End));
+        var updated = mutate(current, selection);
+        int start = selection?.Start ?? 0;
+        int end = selection?.End ?? InCanvasTextEditPlanner.ExtractPlainText(updated).Length;
+        _shapeParagraphBody = updated;
+
+        double fallbackPt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
+            updated,
+            InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt);
+        _richBox.Document = TextBodyFlowDocumentConverter.ToFlowDocument(updated, fallbackPt);
+
+        var startPointer = TextPointerAtLogicalOffset(_richBox.Document, start);
+        var endPointer = TextPointerAtLogicalOffset(_richBox.Document, end);
+        if (startPointer is not null && endPointer is not null)
+            _richBox.Selection.Select(startPointer, endPointer);
+        _richBox.Focus();
+        return true;
+    }
+
+    private static int LogicalOffsetAt(FlowDocument document, TextPointer position)
+    {
+        string text = new TextRange(document.ContentStart, position).Text
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n');
+        return text.Length;
     }
 
     private void OnCanvasMouseDown(object sender, MouseButtonEventArgs e)

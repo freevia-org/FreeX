@@ -343,6 +343,40 @@ public sealed class InCanvasTextEditPlanner
         return sb.ToString();
     }
 
+    public static TextBody ApplyParagraphAlignment(
+        TextBody source,
+        TextAlign alignment,
+        (int Start, int End)? selection) =>
+        TableCellEditPlanner.ApplyParagraphAlignmentToBody(source, alignment, selection);
+
+    public static TextBody ApplyParagraphBulletToggle(
+        TextBody source,
+        (int Start, int End)? selection) =>
+        TableCellEditPlanner.ApplyParagraphBulletToggleToBody(source, selection);
+
+    public static TextBody ApplyParagraphNumberingToggle(
+        TextBody source,
+        (int Start, int End)? selection) =>
+        TableCellEditPlanner.ApplyParagraphNumberingToggleToBody(source, selection);
+
+    public static TextBody ApplyParagraphListPreset(
+        TextBody source,
+        (int Start, int End)? selection,
+        TableCellListPresetDescriptor preset) =>
+        TableCellEditPlanner.ApplyParagraphListPresetToBody(source, selection, preset);
+
+    public static TextBody ApplyParagraphPictureBullet(
+        TextBody source,
+        (int Start, int End)? selection,
+        ImagePart image) =>
+        TableCellEditPlanner.ApplyParagraphPictureBulletToBody(source, selection, image);
+
+    public static TextBody ApplyParagraphIndent(
+        TextBody source,
+        bool increase,
+        (int Start, int End)? selection) =>
+        TableCellEditPlanner.ApplyParagraphIndentToBody(source, increase, selection);
+
     public static TextBody BuildPlainTextBody(TextBody? original, string text)
     {
         string fontFamily = "Calibri";

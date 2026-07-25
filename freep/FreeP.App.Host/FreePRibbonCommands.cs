@@ -282,34 +282,76 @@ internal static class FreePRibbonCommands
         }));
 
         registry.Register("freep.paragraph.align-left",
-            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left)));
+            new ActionRibbonCommand(() =>
+            {
+                if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Left) == true) return;
+                editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left);
+            }));
         registry.Register("freep.paragraph.align-center",
-            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center)));
+            new ActionRibbonCommand(() =>
+            {
+                if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Center) == true) return;
+                editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center);
+            }));
         registry.Register("freep.paragraph.align-right",
-            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right)));
+            new ActionRibbonCommand(() =>
+            {
+                if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Right) == true) return;
+                editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right);
+            }));
         registry.Register("freep.paragraph.align-justify",
-            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify)));
+            new ActionRibbonCommand(() =>
+            {
+                if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Justify) == true) return;
+                editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify);
+            }));
         registry.Register("freep.bullets",
             new ContextRibbonCommand(ctx =>
             {
+                var shapeEditor = getSlideCanvas?.Invoke()?.TextEditor;
+                if (PresentationListGalleryPlanner.TryGetPresetCommand(ctx.SelectedValue, out var shapePreset) &&
+                    shapePreset is not null &&
+                    shapeEditor?.TryApplyActiveShapeParagraphListPreset(shapePreset) == true) return;
+                if (shapeEditor?.TryApplyActiveShapeParagraphBulletToggle() == true) return;
                 if (ApplyTableCellListPreset(editor, ctx.SelectedValue)) return;
                 editor.TryApplyActiveTableCellParagraphBulletToggle();
             }));
         registry.Register("freep.numbering",
             new ContextRibbonCommand(ctx =>
             {
+                var shapeEditor = getSlideCanvas?.Invoke()?.TextEditor;
+                if (PresentationListGalleryPlanner.TryGetPresetCommand(ctx.SelectedValue, out var shapePreset) &&
+                    shapePreset is not null &&
+                    shapeEditor?.TryApplyActiveShapeParagraphListPreset(shapePreset) == true) return;
+                if (shapeEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true) return;
                 if (ApplyTableCellListPreset(editor, ctx.SelectedValue)) return;
                 editor.TryApplyActiveTableCellParagraphNumberingToggle();
             }));
-        RegisterListGalleryPresetCommands(registry, editor, pickPictureBulletPayload);
+        RegisterListGalleryPresetCommands(registry, editor, getSlideCanvas, pickPictureBulletPayload);
         registry.Register("freep.indent-increase",
-            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphIndent()));
+            new ActionRibbonCommand(() =>
+            {
+                if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphIndent() == true) return;
+                editor.TryApplyActiveTableCellParagraphIndent();
+            }));
         registry.Register("freep.indent-decrease",
-            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphOutdent()));
+            new ActionRibbonCommand(() =>
+            {
+                if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphOutdent() == true) return;
+                editor.TryApplyActiveTableCellParagraphOutdent();
+            }));
         registry.Register("freep.increase-indent",
-            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphIndent()));
+            new ActionRibbonCommand(() =>
+            {
+                if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphIndent() == true) return;
+                editor.TryApplyActiveTableCellParagraphIndent();
+            }));
         registry.Register("freep.decrease-indent",
-            new ActionRibbonCommand(() => editor.TryApplyActiveTableCellParagraphOutdent()));
+            new ActionRibbonCommand(() =>
+            {
+                if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphOutdent() == true) return;
+                editor.TryApplyActiveTableCellParagraphOutdent();
+            }));
 
         // ── Clipboard — Wave 5B / 10B ─────────────────────────────────────────────
         // When osClipboard is provided (MainWindow injects it), Copy and Cut also push
@@ -557,6 +599,7 @@ internal static class FreePRibbonCommands
     private static void RegisterListGalleryPresetCommands(
         RibbonCommandRegistry registry,
         EditingSession editor,
+        Func<SlideCanvas?>? getSlideCanvas,
         Func<PresentationPictureBulletPayload?>? pickPictureBulletPayload)
     {
         foreach (var item in PresentationListGalleryPlanner.BuildPlans().SelectMany(plan => plan.Items))
@@ -567,7 +610,10 @@ internal static class FreePRibbonCommands
             registry.Register(
                 item.CommandId,
                 new ActionRibbonCommand(() =>
-                    editor.TryApplyActiveTableCellParagraphListPreset(item.ListPreset)));
+                {
+                    if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphListPreset(item.ListPreset) == true) return;
+                    editor.TryApplyActiveTableCellParagraphListPreset(item.ListPreset);
+                }));
         }
 
         registry.Register(
@@ -576,7 +622,10 @@ internal static class FreePRibbonCommands
             {
                 var payload = (pickPictureBulletPayload ?? TryPickPictureBulletPayload)();
                 if (payload is not null)
+                {
+                    if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphPictureBullet(payload) == true) return;
                     editor.TryApplyActiveTableCellParagraphPictureBullet(payload);
+                }
             }));
     }
 

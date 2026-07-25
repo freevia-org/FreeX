@@ -2008,21 +2008,25 @@ public sealed partial class MainWindow : Window
         }));
         r.Register("freep.paragraph.align-left", new ActionRibbonCommand(() =>
         {
+            if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Left) == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left) == true) return;
             Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left);
         }));
         r.Register("freep.paragraph.align-center", new ActionRibbonCommand(() =>
         {
+            if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Center) == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center) == true) return;
             Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center);
         }));
         r.Register("freep.paragraph.align-right", new ActionRibbonCommand(() =>
         {
+            if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Right) == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right) == true) return;
             Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right);
         }));
         r.Register("freep.paragraph.align-justify", new ActionRibbonCommand(() =>
         {
+            if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Justify) == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify) == true) return;
             Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify);
         }));
@@ -2031,11 +2035,13 @@ public sealed partial class MainWindow : Window
             if (TableCellListPresetCatalog.TryGet(ctx.SelectedValue, out var bulletPreset) &&
                 bulletPreset is not null)
             {
+                if (_textEditor?.TryApplyActiveShapeParagraphListPreset(bulletPreset) == true) return;
                 if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(bulletPreset) == true) return;
                 Editor.TryApplyActiveTableCellParagraphListPreset(bulletPreset);
                 return;
             }
 
+            if (_textEditor?.TryApplyActiveShapeParagraphBulletToggle() == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true) return;
             Editor.TryApplyActiveTableCellParagraphBulletToggle();
         }));
@@ -2044,32 +2050,38 @@ public sealed partial class MainWindow : Window
             if (TableCellListPresetCatalog.TryGet(ctx.SelectedValue, out var numberingPreset) &&
                 numberingPreset is not null)
             {
+                if (_textEditor?.TryApplyActiveShapeParagraphListPreset(numberingPreset) == true) return;
                 if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(numberingPreset) == true) return;
                 Editor.TryApplyActiveTableCellParagraphListPreset(numberingPreset);
                 return;
             }
 
+            if (_textEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true) return;
             Editor.TryApplyActiveTableCellParagraphNumberingToggle();
         }));
         RegisterListGalleryPresetCommands(r);
         r.Register("freep.indent-increase", new ActionRibbonCommand(() =>
         {
+            if (_textEditor?.TryApplyActiveShapeParagraphIndent() == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphIndent() == true) return;
             Editor.TryApplyActiveTableCellParagraphIndent();
         }));
         r.Register("freep.indent-decrease", new ActionRibbonCommand(() =>
         {
+            if (_textEditor?.TryApplyActiveShapeParagraphOutdent() == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphOutdent() == true) return;
             Editor.TryApplyActiveTableCellParagraphOutdent();
         }));
         r.Register("freep.increase-indent", new ActionRibbonCommand(() =>
         {
+            if (_textEditor?.TryApplyActiveShapeParagraphIndent() == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphIndent() == true) return;
             Editor.TryApplyActiveTableCellParagraphIndent();
         }));
         r.Register("freep.decrease-indent", new ActionRibbonCommand(() =>
         {
+            if (_textEditor?.TryApplyActiveShapeParagraphOutdent() == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphOutdent() == true) return;
             Editor.TryApplyActiveTableCellParagraphOutdent();
         }));
@@ -2297,6 +2309,7 @@ public sealed partial class MainWindow : Window
 
             registry.Register(item.CommandId, new ActionRibbonCommand(() =>
             {
+                if (_textEditor?.TryApplyActiveShapeParagraphListPreset(item.ListPreset) == true) return;
                 if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(item.ListPreset) == true) return;
                 Editor.TryApplyActiveTableCellParagraphListPreset(item.ListPreset);
             }));
@@ -2840,6 +2853,12 @@ public sealed partial class MainWindow : Window
 
             if (payload is null)
                 return;
+
+            if (_textEditor?.TryApplyActiveShapeParagraphPictureBullet(payload) == true)
+            {
+                _statusText.Text = "Picture bullet applied.";
+                return;
+            }
 
             if (_textEditor?.TryApplyActiveTableCellParagraphPictureBullet(payload) == true)
             {
