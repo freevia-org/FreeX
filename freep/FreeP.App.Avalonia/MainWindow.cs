@@ -23,6 +23,9 @@ using Free.Shared.Theme;
 using FreeP.App.Avalonia.Backstage;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
+#if FREEP_WINDOWS_CAPTURE
+using FreeP.App.Recording.Windows;
+#endif
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -581,12 +584,12 @@ public sealed partial class MainWindow : Window
         _options.Normalize();
         _nativeOutputCapabilities = nativeOutputCapabilities ??
             LinuxNativeOutputCapabilities.Unavailable("Native output capability detection is pending.");
-        _nativePrintAdapter = nativePrintAdapter ?? new LinuxNativePrintHandoffAdapter(_nativeOutputCapabilities.Print);
+        _nativePrintAdapter = nativePrintAdapter ?? CreateNativePrintAdapter(_nativeOutputCapabilities.Print);
         _videoExportAdapter = videoExportAdapter ?? new LinuxVideoExportAdapter(_nativeOutputCapabilities.Video);
         _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(_nativeOutputCapabilities.Print);
         _videoExportHostCapabilities = BuildVideoExportHostCapabilities(_nativeOutputCapabilities.Video);
         _nativeOutputCapabilityDetector = nativeOutputCapabilityDetector ??
-            (nativeOutputCapabilities is null ? static () => new LinuxNativeOutputCapabilityDetector().Detect() : null);
+            (nativeOutputCapabilities is null ? DetectNativeOutputCapabilities : null);
         _printOutputPackageFactory = printOutputPackageFactory;
         _videoFramePackageFactory = videoFramePackageFactory;
         _clipboardService = new AvaloniaPresentationClipboardService(
@@ -834,7 +837,7 @@ public sealed partial class MainWindow : Window
                 Dispatcher.UIThread.Post(() =>
                 {
                     _nativeOutputCapabilities = task.Result;
-                    _nativePrintAdapter = new LinuxNativePrintHandoffAdapter(_nativeOutputCapabilities.Print);
+                    _nativePrintAdapter = CreateNativePrintAdapter(_nativeOutputCapabilities.Print);
                     _videoExportAdapter = new LinuxVideoExportAdapter(_nativeOutputCapabilities.Video);
                     _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(_nativeOutputCapabilities.Print);
                     _videoExportHostCapabilities = BuildVideoExportHostCapabilities(_nativeOutputCapabilities.Video);
@@ -3955,10 +3958,29 @@ public sealed partial class MainWindow : Window
         LinuxNativePrintCapability capability) =>
         capability.CanPrint
             ? PresentationNativePrintHandoffHostCapabilities.NativePrinterSubmissionAvailable(
-                "Avalonia Linux print host")
+                OperatingSystem.IsWindows() ? "Avalonia Windows print host" : "Avalonia Linux print host")
             : PresentationNativePrintHandoffHostCapabilities.Deferred(
-                "Avalonia Linux print host",
+                OperatingSystem.IsWindows() ? "Avalonia Windows print host" : "Avalonia Linux print host",
                 capability.Reason);
+
+    private static LinuxNativeOutputCapabilities DetectNativeOutputCapabilities()
+    {
+#if FREEP_WINDOWS_CAPTURE
+        if (OperatingSystem.IsWindows())
+            return WindowsNativePrintOutput.Detect();
+#endif
+        return new LinuxNativeOutputCapabilityDetector().Detect();
+    }
+
+    private static ILinuxNativePrintHandoffAdapter CreateNativePrintAdapter(
+        LinuxNativePrintCapability capability)
+    {
+#if FREEP_WINDOWS_CAPTURE
+        if (OperatingSystem.IsWindows())
+            return WindowsNativePrintOutput.CreateAdapter(capability);
+#endif
+        return new LinuxNativePrintHandoffAdapter(capability);
+    }
 
     private static PresentationVideoExportHandoffHostCapabilities BuildVideoExportHostCapabilities(
         LinuxVideoEncoderCapability capability) =>
