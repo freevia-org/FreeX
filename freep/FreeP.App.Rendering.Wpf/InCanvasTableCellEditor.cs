@@ -342,6 +342,10 @@ public sealed class InCanvasTableCellEditor
     public void ApplyItalic() => ExecuteCellFormattingCommand(EditingCommands.ToggleItalic);
     /// <summary>Toggles underline on the current cell RichTextBox selection.</summary>
     public void ApplyUnderline() => ExecuteCellFormattingCommand(EditingCommands.ToggleUnderline);
+    /// <summary>Toggles superscript on the current cell RichTextBox selection.</summary>
+    public void ApplySuperscript() => ApplyBaseline(BaselineAlignment.Superscript);
+    /// <summary>Toggles subscript on the current cell RichTextBox selection.</summary>
+    public void ApplySubscript() => ApplyBaseline(BaselineAlignment.Subscript);
 
     /// <summary>Sets font family on the current cell RichTextBox selection.</summary>
     public void ApplyFont(string? fontFamily)
@@ -379,6 +383,21 @@ public sealed class InCanvasTableCellEditor
         ApplyWithPreservedSelection(() => command.Execute(null, _cellTextBox));
     }
 
+    private void ApplyBaseline(BaselineAlignment alignment)
+    {
+        if (_cellTextBox is null)
+            return;
+
+        ApplyWithPreservedSelection(() =>
+        {
+            var current = _cellTextBox.Selection.GetPropertyValue(Inline.BaselineAlignmentProperty);
+            var next = current is BaselineAlignment currentAlignment && currentAlignment == alignment
+                ? BaselineAlignment.Baseline
+                : alignment;
+            _cellTextBox.Selection.ApplyPropertyValue(Inline.BaselineAlignmentProperty, next);
+        });
+    }
+
     private void ApplyWithPreservedSelection(Action apply)
     {
         if (_cellTextBox is null)
@@ -406,6 +425,17 @@ public sealed class InCanvasTableCellEditor
 
     private void OnCellTextBoxPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) != 0 &&
+            e.Key is Key.OemPlus or Key.Add)
+        {
+            if ((e.KeyboardDevice.Modifiers & ModifierKeys.Shift) != 0)
+                ApplySuperscript();
+            else
+                ApplySubscript();
+            e.Handled = true;
+            return;
+        }
+
         var plan = TableCellEditPlanner.PlanKeyboard(
             ToTableCellEditKeyboardKey(e.Key),
             ToTableCellEditKeyboardModifiers(e.KeyboardDevice.Modifiers));
@@ -431,6 +461,12 @@ public sealed class InCanvasTableCellEditor
                     break;
                 case TableCellTextFormatKind.Underline:
                     ApplyUnderline();
+                    break;
+                case TableCellTextFormatKind.Superscript:
+                    ApplySuperscript();
+                    break;
+                case TableCellTextFormatKind.Subscript:
+                    ApplySubscript();
                     break;
             }
             e.Handled = true;

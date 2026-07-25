@@ -18,6 +18,8 @@ public enum TableCellTextFormatKind
     Bold,
     Italic,
     Underline,
+    Superscript,
+    Subscript,
 }
 
 public enum TableCellTextValueFormatKind
@@ -1964,6 +1966,8 @@ public static class TableCellEditPlanner
         TableCellTextFormatKind.Bold => run.Bold,
         TableCellTextFormatKind.Italic => run.Italic,
         TableCellTextFormatKind.Underline => run.Underline,
+        TableCellTextFormatKind.Superscript => run.BaselineOffset > 0,
+        TableCellTextFormatKind.Subscript => run.BaselineOffset < 0,
         _ => false,
     };
 
@@ -1981,6 +1985,12 @@ public static class TableCellEditPlanner
                 break;
             case TableCellTextFormatKind.Underline:
                 run.Underline = value;
+                break;
+            case TableCellTextFormatKind.Superscript:
+                run.BaselineOffset = value ? 10000 : null;
+                break;
+            case TableCellTextFormatKind.Subscript:
+                run.BaselineOffset = value ? -10000 : null;
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, null);

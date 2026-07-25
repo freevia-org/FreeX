@@ -515,14 +515,18 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.font-color",
             "freep.bold",
             "freep.italic",
-            "freep.underline");
+            "freep.underline",
+            "freep.superscript",
+            "freep.subscript");
         commandIds.Should().ContainInOrder(
             "freep.font-family",
             "freep.font-size",
             "freep.font-color",
             "freep.bold",
             "freep.italic",
-            "freep.underline");
+            "freep.underline",
+            "freep.superscript",
+            "freep.subscript");
         wpfSize.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
         wpfColor.Items.Should().Equal(FreePRibbonDefinitionData.FontColors);
         size.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
@@ -646,6 +650,8 @@ public sealed class FreePRibbonDefinitionProfileTests
         source.Should().NotContain("g.IconToggle(\"freep.bold\", \"Bold\"");
         source.Should().NotContain("g.IconToggle(\"freep.italic\", \"Italic\"");
         source.Should().NotContain("g.IconToggle(\"freep.underline\", \"Underline\"");
+        source.Should().NotContain("g.IconToggle(\"freep.superscript\", \"Superscript\"");
+        source.Should().NotContain("g.IconToggle(\"freep.subscript\", \"Subscript\"");
         source.Should().NotContain("tab.Group(\"editing\", \"Editing\"");
         source.Should().NotContain("g.Large(\"freep.find\",    \"Find\"");
         source.Should().NotContain("g.Medium(\"freep.replace\", \"Replace\"");

@@ -726,6 +726,8 @@ internal static class TextBodyRunMutationPlanner
         TableCellTextFormatKind.Bold => run.Bold,
         TableCellTextFormatKind.Italic => run.Italic,
         TableCellTextFormatKind.Underline => run.Underline,
+        TableCellTextFormatKind.Superscript => run.BaselineOffset > 0,
+        TableCellTextFormatKind.Subscript => run.BaselineOffset < 0,
         _ => false,
     };
 
@@ -743,6 +745,12 @@ internal static class TextBodyRunMutationPlanner
                 break;
             case TableCellTextFormatKind.Underline:
                 run.Underline = value;
+                break;
+            case TableCellTextFormatKind.Superscript:
+                run.BaselineOffset = value ? 10000 : null;
+                break;
+            case TableCellTextFormatKind.Subscript:
+                run.BaselineOffset = value ? -10000 : null;
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, null);

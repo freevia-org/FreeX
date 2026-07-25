@@ -605,6 +605,8 @@ public sealed class TableCellEditPlannerTests
     [InlineData(TableCellTextFormatKind.Bold)]
     [InlineData(TableCellTextFormatKind.Italic)]
     [InlineData(TableCellTextFormatKind.Underline)]
+    [InlineData(TableCellTextFormatKind.Superscript)]
+    [InlineData(TableCellTextFormatKind.Subscript)]
     public void PlanTextFormat_ContinuationCell_BuildsUndoableRunFormatCommand(TableCellTextFormatKind kind)
     {
         var presentation = Presentation.CreateEmpty();
@@ -1556,6 +1558,8 @@ public sealed class TableCellEditPlannerTests
         TableCellTextFormatKind.Bold => run.Bold,
         TableCellTextFormatKind.Italic => run.Italic,
         TableCellTextFormatKind.Underline => run.Underline,
+        TableCellTextFormatKind.Superscript => run.BaselineOffset > 0,
+        TableCellTextFormatKind.Subscript => run.BaselineOffset < 0,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
 

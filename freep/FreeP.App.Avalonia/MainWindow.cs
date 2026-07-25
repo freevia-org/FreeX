@@ -2006,6 +2006,20 @@ public sealed partial class MainWindow : Window
             if (Editor.ToggleUnderlineOnActiveTableCell()) return;
             Editor.ToggleUnderlineOnSelection();
         }));
+        r.Register("freep.superscript", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Superscript) == true) return;
+            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Superscript) == true) return;
+            if (Editor.ToggleSuperscriptOnActiveTableCell()) return;
+            Editor.ToggleSuperscriptOnSelection();
+        }));
+        r.Register("freep.subscript", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Subscript) == true) return;
+            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Subscript) == true) return;
+            if (Editor.ToggleSubscriptOnActiveTableCell()) return;
+            Editor.ToggleSubscriptOnSelection();
+        }));
         r.Register("freep.paragraph.align-left", new ActionRibbonCommand(() =>
         {
             if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Left) == true) return;

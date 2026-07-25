@@ -1576,6 +1576,44 @@ public sealed class ToggleRunUnderlineCommand : RunFormatCommandBase
     protected override void RevertFromRun(Run r) => r.Underline = !r.Underline;
 }
 
+/// <summary>Toggles a run's superscript baseline offset.</summary>
+public sealed class ToggleRunSuperscriptCommand : RunFormatCommandBase
+{
+    private int? _priorBaseline;
+
+    public ToggleRunSuperscriptCommand(int slideIndex, uint shapeId, int paragraphIndex, int runIndex)
+        : base(slideIndex, shapeId, paragraphIndex, runIndex) { }
+
+    public override string Label => "Superscript";
+
+    protected override void ApplyToRun(Run r)
+    {
+        _priorBaseline = r.BaselineOffset;
+        r.BaselineOffset = r.BaselineOffset > 0 ? null : 10000;
+    }
+
+    protected override void RevertFromRun(Run r) => r.BaselineOffset = _priorBaseline;
+}
+
+/// <summary>Toggles a run's subscript baseline offset.</summary>
+public sealed class ToggleRunSubscriptCommand : RunFormatCommandBase
+{
+    private int? _priorBaseline;
+
+    public ToggleRunSubscriptCommand(int slideIndex, uint shapeId, int paragraphIndex, int runIndex)
+        : base(slideIndex, shapeId, paragraphIndex, runIndex) { }
+
+    public override string Label => "Subscript";
+
+    protected override void ApplyToRun(Run r)
+    {
+        _priorBaseline = r.BaselineOffset;
+        r.BaselineOffset = r.BaselineOffset < 0 ? null : -10000;
+    }
+
+    protected override void RevertFromRun(Run r) => r.BaselineOffset = _priorBaseline;
+}
+
 /// <summary>Sets the font family on a single run; captures old value for undo.</summary>
 public sealed class SetRunFontCommand : IPresentationCommand
 {

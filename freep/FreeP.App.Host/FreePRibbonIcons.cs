@@ -38,6 +38,8 @@ internal static class FreePRibbonIcons
             ["freep.bold"] = RibbonCommandIconKind.Bold,
             ["freep.italic"] = RibbonCommandIconKind.Italic,
             ["freep.underline"] = RibbonCommandIconKind.Underline,
+            ["freep.superscript"] = RibbonCommandIconKind.Superscript,
+            ["freep.subscript"] = RibbonCommandIconKind.Subscript,
 
             // Clipboard (Wave 5B)
             ["freep.format-painter"] = RibbonCommandIconKind.FormatPainter,

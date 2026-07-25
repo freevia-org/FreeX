@@ -650,12 +650,26 @@ public sealed class AvaloniaInCanvasTextEditor
                 Key.B => TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold),
                 Key.I => TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Italic),
                 Key.U => TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Underline),
+                Key.OemPlus or Key.Add => TryApplyActiveShapeTextFormat(
+                    (e.KeyModifiers & KeyModifiers.Shift) != 0
+                        ? TableCellTextFormatKind.Superscript
+                        : TableCellTextFormatKind.Subscript),
                 _ => false,
             };
     }
 
     private void OnCellTextBoxKeyDown(object? sender, KeyEventArgs e)
     {
+        if ((e.KeyModifiers & KeyModifiers.Control) != 0 &&
+            e.Key is Key.OemPlus or Key.Add)
+        {
+            e.Handled = TryApplyActiveTableCellTextFormat(
+                (e.KeyModifiers & KeyModifiers.Shift) != 0
+                    ? TableCellTextFormatKind.Superscript
+                    : TableCellTextFormatKind.Subscript);
+            return;
+        }
+
         var plan = TableCellEditPlanner.PlanKeyboard(
             ToTableCellEditKeyboardKey(e.Key),
             ToTableCellEditKeyboardModifiers(e.KeyModifiers));

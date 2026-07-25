@@ -275,6 +275,24 @@ public sealed class InCanvasRichTextEditBufferTests
     }
 
     [Fact]
+    public void BaselineFormatting_TogglesSuperscriptAndSubscriptInSharedBuffer()
+    {
+        var source = new TextBody();
+        source.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = "x" } } });
+        var buffer = new InCanvasRichTextEditBuffer(source);
+        var selection = new InCanvasEditorTextSelection(0, 1);
+
+        buffer.ToggleTextFormat(TableCellTextFormatKind.Superscript, selection).Should().BeTrue();
+        buffer.Body.Paragraphs[0].Runs.Single().BaselineOffset.Should().Be(10000);
+        source.Paragraphs[0].Runs.Single().BaselineOffset.Should().BeNull();
+
+        buffer.ToggleTextFormat(TableCellTextFormatKind.Superscript, selection).Should().BeTrue();
+        buffer.Body.Paragraphs[0].Runs.Single().BaselineOffset.Should().BeNull();
+        buffer.ToggleTextFormat(TableCellTextFormatKind.Subscript, selection).Should().BeTrue();
+        buffer.Body.Paragraphs[0].Runs.Single().BaselineOffset.Should().Be(-10000);
+    }
+
+    [Fact]
     public void CollapsedCaretFormatting_AppliesToSubsequentTypingWithoutRestylingBody()
     {
         var source = new TextBody();

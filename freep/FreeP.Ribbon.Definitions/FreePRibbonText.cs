@@ -55,6 +55,10 @@ internal static class FreePRibbonText
     public static string ItalicKeyTip => Get("Ribbon_Command_Italic_KeyTip");
     public static string UnderlineLabel => Get("Ribbon_Command_Underline_Label");
     public static string UnderlineKeyTip => Get("Ribbon_Command_Underline_KeyTip");
+    public static string SuperscriptLabel => Get("Ribbon_Command_Superscript_Label");
+    public static string SuperscriptKeyTip => Get("Ribbon_Command_Superscript_KeyTip");
+    public static string SubscriptLabel => Get("Ribbon_Command_Subscript_Label");
+    public static string SubscriptKeyTip => Get("Ribbon_Command_Subscript_KeyTip");
 
     public static RibbonText ParagraphGroup { get; } = new("Ribbon_Group_Paragraph_Label", "Ribbon_Group_Paragraph_KeyTip");
     public static RibbonText BulletsCommand { get; } = new("Ribbon_Command_Bullets_Label", "Ribbon_Command_Bullets_KeyTip");

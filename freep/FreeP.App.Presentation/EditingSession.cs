@@ -789,6 +789,8 @@ public sealed class EditingSession
     public void ToggleBoldOnSelection()      => TogglePropOnSelection(RunToggleKind.Bold);
     public void ToggleItalicOnSelection()    => TogglePropOnSelection(RunToggleKind.Italic);
     public void ToggleUnderlineOnSelection() => TogglePropOnSelection(RunToggleKind.Underline);
+    public void ToggleSuperscriptOnSelection() => TogglePropOnSelection(RunToggleKind.Superscript);
+    public void ToggleSubscriptOnSelection()   => TogglePropOnSelection(RunToggleKind.Subscript);
 
     /// <summary>
     /// Sets font family on every run in all selected shapes.
@@ -1850,6 +1852,12 @@ public sealed class EditingSession
     public bool ToggleUnderlineOnActiveTableCell() =>
         TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline);
 
+    public bool ToggleSuperscriptOnActiveTableCell() =>
+        TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Superscript);
+
+    public bool ToggleSubscriptOnActiveTableCell() =>
+        TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Subscript);
+
     public bool SetTableHeaderRow(int slideIndex, uint shapeId, bool isHeaderRow)
     {
         var command = new SetTableHeaderRowCommand(slideIndex, shapeId, isHeaderRow);
@@ -2448,7 +2456,7 @@ public sealed class EditingSession
 
     // ── Private helpers ───────────────────────────────────────────────────────────
 
-    private enum RunToggleKind { Bold, Italic, Underline }
+    private enum RunToggleKind { Bold, Italic, Underline, Superscript, Subscript }
 
     private void ClampCurrentSlide()
     {
@@ -2469,6 +2477,8 @@ public sealed class EditingSession
         RunToggleKind.Bold      => r.Bold,
         RunToggleKind.Italic    => r.Italic,
         RunToggleKind.Underline => r.Underline,
+        RunToggleKind.Superscript => r.BaselineOffset > 0,
+        RunToggleKind.Subscript   => r.BaselineOffset < 0,
         _                       => false
     };
 
@@ -2477,6 +2487,8 @@ public sealed class EditingSession
         RunToggleKind.Bold      => new ToggleRunBoldCommand(si, id, pi, ri),
         RunToggleKind.Italic    => new ToggleRunItalicCommand(si, id, pi, ri),
         RunToggleKind.Underline => new ToggleRunUnderlineCommand(si, id, pi, ri),
+        RunToggleKind.Superscript => new ToggleRunSuperscriptCommand(si, id, pi, ri),
+        RunToggleKind.Subscript   => new ToggleRunSubscriptCommand(si, id, pi, ri),
         _                       => throw new ArgumentOutOfRangeException(nameof(k))
     };
 

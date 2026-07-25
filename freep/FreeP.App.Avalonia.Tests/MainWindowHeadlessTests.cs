@@ -1554,6 +1554,8 @@ public sealed class MainWindowHeadlessTests
     [InlineData("freep.bold", "bold")]
     [InlineData("freep.italic", "italic")]
     [InlineData("freep.underline", "underline")]
+    [InlineData("freep.superscript", "superscript")]
+    [InlineData("freep.subscript", "subscript")]
     public async Task Ribbon_font_toggle_commands_route_to_editor(
         string commandId,
         string property)
@@ -1581,6 +1583,8 @@ public sealed class MainWindowHeadlessTests
                 "bold" => run.Bold,
                 "italic" => run.Italic,
                 "underline" => run.Underline,
+                "superscript" => run.BaselineOffset > 0,
+                "subscript" => run.BaselineOffset < 0,
                 _ => throw new ArgumentOutOfRangeException(nameof(property), property, null)
             };
         });
@@ -1594,6 +1598,8 @@ public sealed class MainWindowHeadlessTests
     [InlineData("freep.bold", "bold")]
     [InlineData("freep.italic", "italic")]
     [InlineData("freep.underline", "underline")]
+    [InlineData("freep.superscript", "superscript")]
+    [InlineData("freep.subscript", "subscript")]
     public async Task Ribbon_font_toggle_commands_route_to_active_table_cell(
         string commandId,
         string property)
@@ -1625,6 +1631,8 @@ public sealed class MainWindowHeadlessTests
                 "bold" => run.Bold,
                 "italic" => run.Italic,
                 "underline" => run.Underline,
+                "superscript" => run.BaselineOffset > 0,
+                "subscript" => run.BaselineOffset < 0,
                 _ => throw new ArgumentOutOfRangeException(nameof(property), property, null)
             };
         });

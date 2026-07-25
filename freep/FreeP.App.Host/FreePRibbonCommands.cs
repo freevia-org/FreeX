@@ -280,6 +280,18 @@ internal static class FreePRibbonCommands
             if (editor.ToggleUnderlineOnActiveTableCell()) return;
             editor.ToggleUnderlineOnSelection();
         }));
+        registry.Register("freep.superscript", new EditorToggleCommand(stateStore, "freep.superscript", () =>
+        {
+            if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplySuperscript(), e => e.ApplySuperscript())) return;
+            if (editor.ToggleSuperscriptOnActiveTableCell()) return;
+            editor.ToggleSuperscriptOnSelection();
+        }));
+        registry.Register("freep.subscript", new EditorToggleCommand(stateStore, "freep.subscript", () =>
+        {
+            if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplySubscript(), e => e.ApplySubscript())) return;
+            if (editor.ToggleSubscriptOnActiveTableCell()) return;
+            editor.ToggleSubscriptOnSelection();
+        }));
 
         registry.Register("freep.paragraph.align-left",
             new ActionRibbonCommand(() =>
