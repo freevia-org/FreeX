@@ -11,6 +11,7 @@ using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
 
 [assembly: AvaloniaTestApplication(typeof(FreeW.App.Avalonia.Tests.FreeWHeadlessApp))]
@@ -53,6 +54,25 @@ public sealed class DocumentViewHeadlessTests
         catch (Exception)
         {
             return false; // no headless drawing backend in this environment
+        }
+    }
+
+    private static async Task<bool> OnUiThreadAsync(Func<Task> action)
+    {
+        try
+        {
+            await Session.Dispatch(
+                async () =>
+                {
+                    await action();
+                    return true;
+                },
+                CancellationToken.None);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
         }
     }
 
@@ -320,9 +340,14 @@ public sealed class DocumentViewHeadlessTests
     [Fact]
     public async Task MainWindow_tracks_dirty_and_new_document_state_with_shared_file_command_workflow()
     {
-        var ran = await OnUiThread(() =>
+        var ran = await OnUiThreadAsync(async () =>
         {
-            var window = new MainWindow(Array.Empty<string>());
+            var window = new MainWindow(
+                Array.Empty<string>(),
+                new FreeWOptions(),
+                ApplicationOptionsStore<FreeWOptions>.ForPath(
+                    Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.Tests", Guid.NewGuid().ToString("N"), "settings.json")),
+                promptSaveChangesAsync: _ => Task.FromResult(SaveChangesPrompt.DontSave));
             var shellWorkflow = GetPrivateField<SisterAvaloniaFileCommandWorkflow>(window, "_fileWorkflow");
             var workflow = shellWorkflow.Workflow;
 
@@ -335,7 +360,7 @@ public sealed class DocumentViewHeadlessTests
             workflow.IsDirty.Should().BeTrue();
             window.Title.Should().Be("FreeW - Untitled *");
 
-            InvokePrivate(window, "NewDocument");
+            (await window.NewDocumentAsyncForTests()).Should().BeTrue();
 
             workflow.IsDirty.Should().BeFalse();
             workflow.CurrentPath.Should().BeNull();

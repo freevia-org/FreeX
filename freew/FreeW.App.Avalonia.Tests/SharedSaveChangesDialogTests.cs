@@ -70,6 +70,11 @@ public sealed class SharedSaveChangesDialogTests
         var sharedWorkflow = File.ReadAllText(FindRepoFile("shared", "Free.Shared.Shell.Avalonia", "SisterAvaloniaFileCommandWorkflow.cs"));
 
         mainWindow.Should().Contain("SisterAvaloniaFileCommandWorkflow");
+        mainWindow.Should().Contain("_fileWorkflow.NewAsync(");
+        mainWindow.Should().Contain("_fileWorkflow.ConfirmCloseAllowedAsync(");
+        mainWindow.Should().Contain("new SisterAvaloniaAsyncWindowCloseCoordinator(");
+        mainWindow.Should().NotContain("_fileWorkflow.ConfirmCloseAllowed(\"closing\")");
+        mainWindow.Should().NotContain("GetAwaiter().GetResult()");
         mainWindow.Should().NotContain("AvaloniaSaveChangesDialog.ShowAsync(");
         sharedWorkflow.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
         sharedWorkflow.Should().Contain("AvaloniaSaveChangesPromptText.ForDocumentAction(");

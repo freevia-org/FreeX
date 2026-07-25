@@ -79,6 +79,7 @@ public sealed partial class MainWindow : Window
     private ToggleButton _draftSwitch = null!;
     private ToggleButton _pagedEditSwitch = null!;
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
+    private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
     private readonly Border _titleBar;
     private IReadOnlyList<Button> _quickAccessButtons = [];
     private readonly FreeWOptions _options;
@@ -127,7 +128,6 @@ public sealed partial class MainWindow : Window
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
     private Thickness _editorMarginBeforeReadMode;
     private bool _suppressEditorDirty;
-    private bool _closingConfirmed;
     private AvaloniaSpeechEngine? _readAloudEngine;
     private ReadAloudController? _readAloudController;
     private CancellationTokenSource? _printCancellation;
@@ -154,7 +154,9 @@ public sealed partial class MainWindow : Window
         IPlatformPrintService? printService = null,
         Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>>? showPrintSelectionDialog = null,
         Action<IInputElement?>? restorePrintOwnerFocus = null,
-        Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>>? pickExportPath = null)
+        Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>>? pickExportPath = null,
+        Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
+        Func<string, Exception, Task>? showFileCommandErrorAsync = null)
     {
         _optionsStore = optionsStore;
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
@@ -182,8 +184,19 @@ public sealed partial class MainWindow : Window
                 ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication),
             maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: UpdateStatus,
-            save: () => SaveAsync().GetAwaiter().GetResult());
+            saveAsync: SaveAsync,
+            promptSaveChangesAsync: promptSaveChangesAsync,
+            showFileCommandErrorAsync: showFileCommandErrorAsync,
+            restoreOwnerFocus: RestoreOwnerFocus);
         _autosave = new AutosaveAdapter(_editor, _fileWorkflow.Workflow);
+        _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
+            confirmCloseAllowedAsync: ConfirmCloseAllowedAndStopAutosaveAsync,
+            requestClose: () =>
+            {
+                DisposeReadAloud();
+                Close();
+            },
+            restoreOwnerFocus: RestoreOwnerFocus);
         _navPane = new NavigationPane(_editor);
         _reviewingPane = new ReviewingPane(_editor);
         _reviewBalloonsPane = new ReviewBalloonsPane(_editor);
@@ -271,8 +284,8 @@ public sealed partial class MainWindow : Window
             await RefreshPrinterDiscoveryAsync();
         };
 
-        // Dirty-gate on close: run async dirty-check; cancel the close synchronously
-        // and let the async flow re-close if the user saves or discards.
+        // Dirty-gate on close: cancel the synchronous event and let the shared async
+        // coordinator resume the close only after the dirty decision settles.
         Closing += OnWindowClosing;
 
         var frame = SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(
@@ -374,6 +387,7 @@ public sealed partial class MainWindow : Window
     internal string ZoomLabelForTests => _zoomLabel.Text ?? string.Empty;
     internal void ApplyZoomForTests(double scale) => ApplyZoom(scale);
     internal void RaiseKeyDownForTest(KeyEventArgs args) => MainWindow_KeyDown(this, args);
+    internal bool IsCloseDecisionPendingForTests => _closeCoordinator.IsClosePending;
 
     /// <summary>
     /// Exposes the reveal-formatting pane for tests that need to inspect its state headlessly.
@@ -2585,30 +2599,25 @@ public sealed partial class MainWindow : Window
         _printCancellation?.Cancel();
         StopReadAloud();
 
-        // If we already ran the async gate and decided it's OK to close, let it through.
-        if (_closingConfirmed)
-        {
-            DisposeReadAloud();
-            _ = _autosave.StopAsync(); // fire-and-forget — cleanup is best-effort on close
-            return;
-        }
-
-        // Cancel this synchronous close event and run the gate asynchronously.
-        e.Cancel = true;
-        _ = ConfirmAndCloseAsync();
+        e.Cancel = _closeCoordinator.ShouldCancelClosing();
     }
 
-    private async Task ConfirmAndCloseAsync()
+    private async Task<bool> ConfirmCloseAllowedAndStopAutosaveCoreAsync()
     {
-        // ConfirmCloseAllowed runs on the UI thread because the shared Avalonia workflow
-        // shows the save-changes dialog synchronously for the dirty-gate path.
-        var allowed = _fileWorkflow.ConfirmCloseAllowed("closing");
-        if (!allowed)
-            return;
+        if (!await _fileWorkflow.ConfirmCloseAllowedAsync("closing"))
+            return false;
 
         await _autosave.StopAsync();
-        _closingConfirmed = true;
-        Close();
+        return true;
+    }
+
+    private Task<bool> ConfirmCloseAllowedAndStopAutosaveAsync() =>
+        ConfirmCloseAllowedAndStopAutosaveCoreAsync();
+
+    private void RestoreOwnerFocus()
+    {
+        Activate();
+        Focus();
     }
 
     private void ApplyZoom(double scale)
@@ -2632,12 +2641,18 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void NewDocument()
-    {
-        _fileWorkflow.New(
+    private void NewDocument() => _ = NewDocumentAsync();
+
+    internal Task<bool> NewDocumentAsyncForTests() => NewDocumentAsync();
+
+    private Task<bool> NewDocumentAsync() =>
+        _fileWorkflow.NewAsync(
             FileText.NewAction,
-            () => LoadDocumentContent(TextDocument.CreateEmpty()));
-    }
+            () =>
+            {
+                LoadDocumentContent(TextDocument.CreateEmpty());
+                return Task.CompletedTask;
+            });
 
     private void ToggleFindBar(bool show)
     {

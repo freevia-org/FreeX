@@ -210,9 +210,12 @@ public class RibbonAndDocumentTests
         mainWindow.Should().Contain("new SisterAvaloniaFileCommandWorkflow(");
         mainWindow.Should().Contain("new SisterAvaloniaFileTitleSpec(");
         mainWindow.Should().Contain("private readonly DocumentPersistenceWorkflow _documentPersistence");
-        mainWindow.Should().Contain("_fileWorkflow.New(");
+        mainWindow.Should().Contain("_fileWorkflow.NewAsync(");
         mainWindow.Should().Contain("_fileWorkflow.OpenAsync(");
         mainWindow.Should().Contain("_fileWorkflow.SaveAsync(");
+        mainWindow.Should().Contain("_fileWorkflow.ConfirmCloseAllowedAsync(");
+        mainWindow.Should().Contain("new SisterAvaloniaAsyncWindowCloseCoordinator(");
+        mainWindow.Should().Contain("saveAsync: SaveAsync");
         mainWindow.Should().Contain("_documentPersistence.Open(path)");
         mainWindow.Should().Contain("_documentPersistence.Save(_editor.Document, target)");
         mainWindow.Should().Contain("_documentPersistence.BuildSaveCompatibilityPlan(_editor.Document, target)");
