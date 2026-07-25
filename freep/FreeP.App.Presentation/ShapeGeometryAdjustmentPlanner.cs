@@ -65,6 +65,7 @@ public static class ShapeGeometryAdjustmentPlanner
     private const double DefaultArrowAdjustment = 50000;
     private const double MaxArrowAdjustment = 100000;
     private const double DefaultStarAdjustment = 42000;
+    private const double DefaultSlantAdjustment = 20000;
     private const double MaxStarAdjustment = 100000;
 
     public const string UnsupportedShapeMessage =
@@ -82,7 +83,8 @@ public static class ShapeGeometryAdjustmentPlanner
             shape.AutoShapeKind is not (DrawingShapeKind.Chord or DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle or DrawingShapeKind.Star5 or
                 DrawingShapeKind.RightArrow or DrawingShapeKind.LeftArrow or DrawingShapeKind.UpArrow or DrawingShapeKind.DownArrow or
                 DrawingShapeKind.LeftRightArrow or DrawingShapeKind.UpDownArrow or
-                DrawingShapeKind.Chevron or DrawingShapeKind.HomePlate))
+                DrawingShapeKind.Chevron or DrawingShapeKind.HomePlate or
+                DrawingShapeKind.Parallelogram or DrawingShapeKind.Trapezoid))
         {
             return new ShapeGeometryAdjustmentPlan(
                 shape.Id,
@@ -248,6 +250,28 @@ public static class ShapeGeometryAdjustmentPlanner
                     "adj",
                     shape.AutoShapeKind == DrawingShapeKind.Chevron ? "Chevron depth" : "Point depth",
                     new LayoutPoint(boundsDip.Right - depth, boundsDip.Top),
+                    adjustment,
+                    0,
+                    maximum)]);
+        }
+
+        if (shape.AutoShapeKind is DrawingShapeKind.Parallelogram or DrawingShapeKind.Trapezoid)
+        {
+            var maximum = GuideMaximum(boundsDip);
+            var adjustment = ReadAdjustment(
+                shape,
+                "adj",
+                DefaultSlantAdjustment * boundsDip.Width / Math.Min(boundsDip.Width, boundsDip.Height),
+                maximum);
+            var inset = Math.Min(boundsDip.Width, boundsDip.Height) * adjustment / 100000.0;
+            return new ShapeGeometryAdjustmentPlan(
+                shape.Id,
+                CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
+                boundsDip.Width > 0 && boundsDip.Height > 0 ? null : UnsupportedShapeMessage,
+                [new ShapeGeometryAdjustmentHandlePlan(
+                    "adj",
+                    shape.AutoShapeKind == DrawingShapeKind.Trapezoid ? "Trapezoid depth" : "Parallelogram slant",
+                    new LayoutPoint(boundsDip.Left + Math.Min(inset, boundsDip.Width / 2), boundsDip.Top),
                     adjustment,
                     0,
                     maximum)]);
@@ -426,6 +450,17 @@ public static class ShapeGeometryAdjustmentPlanner
             var minimumDimension = Math.Min(boundsDip.Width, boundsDip.Height);
             var maximum = GuideMaximum(boundsDip);
             var adjustment = (boundsDip.Right - pointerDip.X) / minimumDimension * 100000.0;
+            return new(true, "adj", Math.Clamp(adjustment, 0, maximum), null);
+        }
+
+        if (shape.AutoShapeKind is DrawingShapeKind.Parallelogram or DrawingShapeKind.Trapezoid)
+        {
+            if (handleName != "adj")
+                return new(false, null, null, InvalidHandleMessage);
+
+            var minimumDimension = Math.Min(boundsDip.Width, boundsDip.Height);
+            var maximum = GuideMaximum(boundsDip);
+            var adjustment = (pointerDip.X - boundsDip.Left) / minimumDimension * 100000.0;
             return new(true, "adj", Math.Clamp(adjustment, 0, maximum), null);
         }
 

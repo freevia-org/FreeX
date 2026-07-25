@@ -234,6 +234,23 @@ public sealed class SharedShapeGeometryBuilderTests
     }
 
     [Fact]
+    public void TrapezoidAndParallelogram_UseAuthoredSlantGuide()
+    {
+        var adjustments = new Dictionary<string, double> { ["adj"] = 50000 };
+
+        var trapezoid = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Trapezoid, Bounds, adjustments).Contours.Single();
+        var parallelogram = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Parallelogram, Bounds, adjustments).Contours.Single();
+
+        trapezoid.Start.Should().Be(new LayoutPoint(130, Bounds.Top));
+        trapezoid.Segments[0].End.Should().Be(new LayoutPoint(150, Bounds.Top));
+        parallelogram.Start.Should().Be(new LayoutPoint(130, Bounds.Top));
+        parallelogram.Segments[0].End.Should().Be(new LayoutPoint(Bounds.Right, Bounds.Top));
+        parallelogram.Segments[1].End.Should().Be(new LayoutPoint(150, Bounds.Bottom));
+    }
+
+    [Fact]
     public void CompoundArrows_UseAuthoredShaftAndSymmetricHeadGuides()
     {
         var adjustments = new Dictionary<string, double>

@@ -66,8 +66,8 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.Triangle => Triangle(rect, adjustments),
             DrawingShapeKind.RightTriangle => Polygon(rect, [(0, 0), (1, 1), (0, 1)]),
             DrawingShapeKind.Diamond => Polygon(rect, [(0.5, 0), (1, 0.5), (0.5, 1), (0, 0.5)]),
-            DrawingShapeKind.Parallelogram => Polygon(rect, [(0.2, 0), (1, 0), (0.8, 1), (0, 1)]),
-            DrawingShapeKind.Trapezoid => Polygon(rect, [(0.2, 0), (0.8, 0), (1, 1), (0, 1)]),
+            DrawingShapeKind.Parallelogram => Parallelogram(rect, adjustments),
+            DrawingShapeKind.Trapezoid => Trapezoid(rect, adjustments),
             DrawingShapeKind.Pentagon => Polygon(rect, [(0.5, 0), (1, 0.38), (0.82, 1), (0.18, 1), (0, 0.38)]),
             DrawingShapeKind.Hexagon => Polygon(rect, [(0.25, 0), (0.75, 0), (1, 0.5), (0.75, 1), (0.25, 1), (0, 0.5)]),
             DrawingShapeKind.Octagon => Polygon(rect, [(0.3, 0), (0.7, 0), (1, 0.3), (1, 0.7), (0.7, 1), (0.3, 1), (0, 0.7), (0, 0.3)]),
@@ -122,6 +122,44 @@ public static class ShapeGeometryBuilder
 
     private static LayoutPoint P(LayoutRect rect, double x, double y) =>
         new(rect.Left + (rect.Width * x), rect.Top + (rect.Height * y));
+
+    private static ShapeGeometry Parallelogram(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments)
+    {
+        var inset = SlantInset(rect, adjustments);
+        return Polygon(rect,
+        [
+            (inset / rect.Width, 0), (1, 0),
+            (1 - inset / rect.Width, 1), (0, 1),
+        ]);
+    }
+
+    private static ShapeGeometry Trapezoid(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments)
+    {
+        var inset = SlantInset(rect, adjustments);
+        return Polygon(rect,
+        [
+            (inset / rect.Width, 0), (1 - inset / rect.Width, 0),
+            (1, 1), (0, 1),
+        ]);
+    }
+
+    private static double SlantInset(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments)
+    {
+        // Keep the legacy outline for new/old shapes without an authored guide. DrawingML
+        // adjustment values use the smaller shape dimension as their reference length.
+        if (adjustments is null || !adjustments.TryGetValue("adj", out var adjustment))
+            return rect.Width * 0.2;
+
+        var maximumInset = rect.Width / 2;
+        var inset = Math.Min(rect.Width, rect.Height) * Math.Clamp(adjustment, 0, 100000) / 100000.0;
+        return Math.Clamp(inset, 0, maximumInset);
+    }
 
     private static ShapeGeometry Single(ShapeContour contour) => new([contour]);
 

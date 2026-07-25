@@ -428,6 +428,54 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     }
 
     [Fact]
+    public void Build_TrapezoidAndParallelogram_ExposeSlantGuides()
+    {
+        foreach (var kind in new[] { DrawingShapeKind.Trapezoid, DrawingShapeKind.Parallelogram })
+        {
+            var shape = new SlideShape
+            {
+                Id = 25,
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = kind,
+            };
+
+            var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+            plan.CanEdit.Should().BeTrue(kind.ToString());
+            plan.Handles.Should().ContainSingle();
+            plan.Handles[0].Name.Should().Be("adj");
+            plan.Handles[0].Label.Should().Be(kind == DrawingShapeKind.Trapezoid
+                ? "Trapezoid depth"
+                : "Parallelogram slant");
+            plan.Handles[0].PositionDip.Should().Be(new LayoutPoint(50, Bounds.Top));
+            plan.Handles[0].Value.Should().Be(40000);
+            plan.Handles[0].Maximum.Should().Be(200000);
+        }
+    }
+
+    [Fact]
+    public void BuildMutationPlan_TrapezoidAndParallelogram_MapSlantPointer()
+    {
+        foreach (var kind in new[] { DrawingShapeKind.Trapezoid, DrawingShapeKind.Parallelogram })
+        {
+            var shape = new SlideShape
+            {
+                Id = 26,
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = kind,
+            };
+
+            var plan = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+                shape, Bounds, "adj", new LayoutPoint(60, Bounds.Top));
+
+            plan.ShouldApply.Should().BeTrue(kind.ToString());
+            plan.Name.Should().Be("adj");
+            plan.Value.Should().Be(50000);
+            plan.DisabledReason.Should().BeNull();
+        }
+    }
+
+    [Fact]
     public void Build_CompoundArrows_ExposeShaftAndSymmetricHeadGuides()
     {
         var horizontal = new SlideShape
