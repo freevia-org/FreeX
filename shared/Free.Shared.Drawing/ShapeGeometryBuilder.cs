@@ -63,7 +63,7 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.Line => LinePath(rect),
             DrawingShapeKind.ElbowConnector => ElbowPath(rect),
             DrawingShapeKind.CurvedConnector => CurvedConnector(rect),
-            DrawingShapeKind.Triangle => Polygon(rect, [(0.5, 0), (1, 1), (0, 1)]),
+            DrawingShapeKind.Triangle => Triangle(rect, adjustments),
             DrawingShapeKind.RightTriangle => Polygon(rect, [(0, 0), (1, 1), (0, 1)]),
             DrawingShapeKind.Diamond => Polygon(rect, [(0.5, 0), (1, 0.5), (0.5, 1), (0, 0.5)]),
             DrawingShapeKind.Parallelogram => Polygon(rect, [(0.2, 0), (1, 0), (0.8, 1), (0, 1)]),
@@ -167,6 +167,17 @@ public static class ShapeGeometryBuilder
     }
 
     private static ShapeGeometry Rectangle(LayoutRect rect) => Single(RectangleContour(rect));
+
+    private static ShapeGeometry Triangle(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments)
+    {
+        // DrawingML's triangle guide moves the apex along the top edge.  The
+        // default 50000 value preserves the centered triangle used by newly
+        // created shapes and legacy packages without the guide.
+        var apexX = GetAdjustment(adjustments, "adj", 50000) / 100000.0;
+        return Polygon(rect, [(apexX, 0), (1, 1), (0, 1)]);
+    }
 
     private static ShapeContour RectangleContour(LayoutRect rect) =>
         PolygonContour(rect, [(0, 0), (1, 0), (1, 1), (0, 1)]);

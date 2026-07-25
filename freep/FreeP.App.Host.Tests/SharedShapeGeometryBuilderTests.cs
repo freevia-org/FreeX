@@ -145,6 +145,18 @@ public sealed class SharedShapeGeometryBuilderTests
     }
 
     [Fact]
+    public void Triangle_UsesAuthoredApexAdjustmentWhenPresent()
+    {
+        var geometry = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Triangle,
+            Bounds,
+            new Dictionary<string, double> { ["adj"] = 25000 });
+
+        geometry.Contours.Should().ContainSingle();
+        geometry.Contours[0].Start.Should().Be(new LayoutPoint(Bounds.Left + Bounds.Width / 4, Bounds.Top));
+    }
+
+    [Fact]
     public void Cylinder_EnumValue_Is44_NoRenumbering()
     {
         // Appended after HomePlate=43 — verify no renumbering occurred.

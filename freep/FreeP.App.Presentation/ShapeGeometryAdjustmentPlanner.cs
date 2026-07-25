@@ -57,6 +57,8 @@ public static class ShapeGeometryAdjustmentPlanner
     private const double DefaultEndAngle = 180 * AngleUnitsPerDegree;
     private const double DefaultCornerAdjustment = 18000;
     private const double MaxCornerAdjustment = 50000;
+    private const double DefaultTriangleAdjustment = 50000;
+    private const double MaxTriangleAdjustment = 100000;
 
     public const string UnsupportedShapeMessage =
         "This preset shape does not expose shared edit points yet.";
@@ -70,7 +72,7 @@ public static class ShapeGeometryAdjustmentPlanner
             return BuildCustomGeometryPlan(shape, boundsDip);
 
         if (shape.Kind != SlideShapeKind.AutoShape ||
-            shape.AutoShapeKind is not (DrawingShapeKind.Chord or DrawingShapeKind.RoundedRectangle))
+            shape.AutoShapeKind is not (DrawingShapeKind.Chord or DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle))
         {
             return new ShapeGeometryAdjustmentPlan(
                 shape.Id,
@@ -79,9 +81,35 @@ public static class ShapeGeometryAdjustmentPlanner
                 Array.Empty<ShapeGeometryAdjustmentHandlePlan>());
         }
 
+        if (shape.AutoShapeKind == DrawingShapeKind.Triangle)
+        {
+            var adjustment = ReadAdjustment(
+                shape,
+                "adj",
+                DefaultTriangleAdjustment,
+                MaxTriangleAdjustment);
+            return new ShapeGeometryAdjustmentPlan(
+                shape.Id,
+                CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
+                boundsDip.Width > 0 && boundsDip.Height > 0 ? null : UnsupportedShapeMessage,
+                [new ShapeGeometryAdjustmentHandlePlan(
+                    "adj",
+                    "Apex position",
+                    new LayoutPoint(
+                        boundsDip.Left + boundsDip.Width * adjustment / MaxTriangleAdjustment,
+                        boundsDip.Top),
+                    adjustment,
+                    0,
+                    MaxTriangleAdjustment)]);
+        }
+
         if (shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
         {
-            var adjustment = ReadAdjustment(shape, "adj", DefaultCornerAdjustment);
+            var adjustment = ReadAdjustment(
+                shape,
+                "adj",
+                DefaultCornerAdjustment,
+                MaxCornerAdjustment);
             var minDimension = Math.Min(boundsDip.Width, boundsDip.Height);
             var radius = minDimension * adjustment / 100000.0;
             return new ShapeGeometryAdjustmentPlan(
@@ -182,14 +210,20 @@ public static class ShapeGeometryAdjustmentPlanner
                 new ShapeGeometryCustomPointMutationPlan(pathIndex, segmentIndex, x, y, slot));
         }
 
-        if (shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+        if (shape.AutoShapeKind is DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle)
         {
             if (handleName != "adj")
                 return new(false, null, null, InvalidHandleMessage);
 
+            if (shape.AutoShapeKind == DrawingShapeKind.Triangle)
+            {
+                var adjustment = (pointerDip.X - boundsDip.Left) / boundsDip.Width * MaxTriangleAdjustment;
+                return new(true, "adj", Math.Clamp(adjustment, 0, MaxTriangleAdjustment), null);
+            }
+
             var minDimension = Math.Min(boundsDip.Width, boundsDip.Height);
-            var adjustment = (pointerDip.X - boundsDip.Left) / minDimension * 100000.0;
-            return new(true, "adj", Math.Clamp(adjustment, 0, MaxCornerAdjustment), null);
+            var cornerAdjustment = (pointerDip.X - boundsDip.Left) / minDimension * 100000.0;
+            return new(true, "adj", Math.Clamp(cornerAdjustment, 0, MaxCornerAdjustment), null);
         }
 
         if (handleName is not ("adj1" or "adj2"))
@@ -315,9 +349,13 @@ public static class ShapeGeometryAdjustmentPlanner
             ? Math.Clamp(value, 0, FullCircle)
             : fallback;
 
-    private static double ReadAdjustment(SlideShape shape, string name, double fallback) =>
+    private static double ReadAdjustment(
+        SlideShape shape,
+        string name,
+        double fallback,
+        double maximum) =>
         shape.PresetGeometryAdjustments.TryGetValue(name, out var value)
-            ? Math.Clamp(value, 0, MaxCornerAdjustment)
+            ? Math.Clamp(value, 0, maximum)
             : fallback;
 
     private static ShapeGeometryAdjustmentPlan BuildCustomGeometryPlan(

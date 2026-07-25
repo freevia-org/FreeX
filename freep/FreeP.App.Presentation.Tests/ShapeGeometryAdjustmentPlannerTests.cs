@@ -235,7 +235,7 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     }
 
     [Fact]
-    public void Build_NonChordPreset_ReportsUnsupportedWithoutInventingHandles()
+    public void Build_Triangle_ExposesApexHandle()
     {
         var shape = new SlideShape
         {
@@ -246,9 +246,36 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
 
         var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
 
-        plan.CanEdit.Should().BeFalse();
-        plan.Handles.Should().BeEmpty();
-        plan.DisabledReason.Should().Be(ShapeGeometryAdjustmentPlanner.UnsupportedShapeMessage);
+        plan.CanEdit.Should().BeTrue();
+        plan.Handles.Should().ContainSingle();
+        plan.Handles[0].Name.Should().Be("adj");
+        plan.Handles[0].Label.Should().Be("Apex position");
+        plan.Handles[0].PositionDip.Should().Be(new LayoutPoint(110, Bounds.Top));
+        plan.Handles[0].Value.Should().Be(50000);
+        plan.Handles[0].Minimum.Should().Be(0);
+        plan.Handles[0].Maximum.Should().Be(100000);
+    }
+
+    [Fact]
+    public void BuildMutationPlan_Triangle_MapsPointerToApexGuide()
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Triangle,
+        };
+
+        var plan = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape,
+            Bounds,
+            "adj",
+            new LayoutPoint(Bounds.Left + Bounds.Width * .75, Bounds.Top));
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.Name.Should().Be("adj");
+        plan.Value.Should().BeApproximately(75000, 0.001);
+        plan.DisabledReason.Should().BeNull();
     }
 
     private static SlideShape MakeCustomTriangle()
