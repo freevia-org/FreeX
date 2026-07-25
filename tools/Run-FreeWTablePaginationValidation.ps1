@@ -36,8 +36,13 @@ function Invoke-External {
     param([Parameter(Mandatory)][string]$FilePath, [Parameter(Mandatory)][string[]]$Arguments, [string]$WorkingDirectory = $repoRoot, [string]$OutputPath = "")
     Push-Location $WorkingDirectory
     try {
-        if ($OutputPath) { & $FilePath @Arguments 2>&1 | Tee-Object -FilePath $OutputPath } else { & $FilePath @Arguments }
-        if ($LASTEXITCODE -ne 0) { throw "$FilePath exited with code $LASTEXITCODE." }
+        $result = Invoke-NativeCaptured $FilePath $Arguments
+        foreach ($line in @($result.Output)) { Write-Host $line }
+        if ($OutputPath) {
+            $outputText = [string]::Join([Environment]::NewLine, [string[]]@($result.Output))
+            [IO.File]::WriteAllText($OutputPath, $outputText, (New-Object Text.UTF8Encoding($false)))
+        }
+        if ($result.ExitCode -ne 0) { throw "$FilePath exited with code $($result.ExitCode)." }
     } finally { Pop-Location }
 }
 
@@ -85,6 +90,7 @@ function Assert-ManifestContract {
         foreach ($name in @($row.evidence)) { $n = [string]$name; if ([IO.Path]::GetFileName($n) -ne $n -or $n.Contains("/") -or $n.Contains("\") -or -not $files.ContainsKey($n) -or $files[$n] -le 0) { throw "Result '$($row.id)' references invalid evidence '$n'." } }
     }
     if ($manifest.summary.passed -ne 5 -or $manifest.summary.failed -ne 0 -or $manifest.summary.total -ne 5) { throw "Manifest summary does not satisfy the five-passed contract." }
+    if (Test-Path -LiteralPath (Join-Path $EvidenceDirectory "probe-incomplete.txt")) { throw "Probe completion sentinel remains; the manifest cannot be promoted." }
     $manifest | Add-Member -NotePropertyName contractValidation -NotePropertyValue ([pscustomobject]@{ status = "passed"; validator = "tools/Run-FreeWTablePaginationValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freew-table-pagination-validation.schema.json" }) -Force
     $manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $ManifestPath -Encoding utf8
     $manifest
@@ -144,8 +150,6 @@ try {
     Copy-Item -LiteralPath $avaloniaTablePath -Destination (Join-Path $evidenceDirectory "avalonia-table-structure-test.txt") -Force
     if ($probeExitCode -ne 0) { throw "FreeW table-pagination probe exited with code $probeExitCode. See probe.log and results.json for the retained failure evidence." }
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    $sharedRow = @($manifest.results | Where-Object id -eq "shared-plan-proof")[0]
-    $sharedRow.status = if ($probeExitCode -eq 0) { "passed" } else { "failed" }; $sharedRow.evidenceLevel = "focused-test"; $sharedRow.category = "deterministic-shared-plan"; $sharedRow.evidence = @("shared-plan-test.txt", "avalonia-table-structure-test.txt"); $sharedRow.note = "Focused WPF-neutral planner and Avalonia table-structure proofs both passed and were retained with physical evidence."
     $manifest.parameters = [ordered]@{ fixture = $fixtureName; port = $Port; width = $Width; height = $Height; dpi = $Dpi }; $manifest.coverage.scope = "physical FreeW table pagination and third-page composition evidence lane"; $manifest.contractValidation = [ordered]@{ status = "pending"; validator = "tools/Run-FreeWTablePaginationValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freew-table-pagination-validation.schema.json" }
     $manifest.summary.passed = @($manifest.results | Where-Object status -eq "passed").Count; $manifest.summary.failed = @($manifest.results | Where-Object status -eq "failed").Count; $manifest.summary.total = 5
     $manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $manifestPath -Encoding utf8

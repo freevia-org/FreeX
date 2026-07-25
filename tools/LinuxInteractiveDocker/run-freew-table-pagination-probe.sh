@@ -325,35 +325,117 @@ if [[ -n "${owner_id:-}" && -f "$output/baseline-page-crop.png" ]]; then
 
     if [[ "$document_click_ready" == true ]]; then
         navigation_baseline_hash="$(sha256sum "$output/document-focus-click-page-crop.png" | awk '{print $1}')"
+        navigation_evidence=(
+            baseline.png
+            baseline-page-crop.png
+            document-focus-click.png
+            document-focus-click-page-crop.png
+            document-focus-click-state.txt
+            document-focus-click-proof.txt
+        )
         send_owner_key ctrl+End
-        capture ctrl-end.png
-        capture_page_crop ctrl-end.png ctrl-end-page-crop.png
-        capture_state ctrl-end
-        send_owner_key ctrl+End
-        capture ctrl-end-repeat.png
-        capture_page_crop ctrl-end-repeat.png ctrl-end-repeat-page-crop.png
-        capture_state ctrl-end-repeat
-        ctrl_end_hash="$(sha256sum "$output/ctrl-end-page-crop.png" | awk '{print $1}')"
-        ctrl_end_repeat_hash="$(sha256sum "$output/ctrl-end-repeat-page-crop.png" | awk '{print $1}')"
-        baseline_to_end_delta="$(screen_difference document-focus-click-page-crop.png ctrl-end-page-crop.png)"
-        end_stability_delta="$(screen_difference ctrl-end-page-crop.png ctrl-end-repeat-page-crop.png)"
-        printf 'key-symbol=ctrl+End\nnavigation-baseline=document-focus-click-page-crop.png\nnavigation-baseline-sha256=%s\nctrl-end-crop-sha256=%s\nctrl-end-repeat-crop-sha256=%s\nbaseline-to-end-AE=%s\nend-repeat-stability-AE=%s\nmaterial-change-threshold-AE=100\nstability-threshold-AE=100\nclick-focus-proof=document-focus-click-proof.txt\n' "$navigation_baseline_hash" "$ctrl_end_hash" "$ctrl_end_repeat_hash" "$baseline_to_end_delta" "$end_stability_delta" > "$output/third-page-navigation-proof.txt"
-        owner_focused_after_repeat="$(if owner_has_focus; then printf true; else printf false; fi)"
-        printf 'owner-focused-after-repeat=%s\n' "$owner_focused_after_repeat" >> "$output/third-page-navigation-proof.txt"
-        capture final.png
-        capture_page_crop final.png final-page-crop.png
-        capture_status_crop final.png final-status-bar-crop.png
-        capture_state final
-        printf 'final-screenshot=final.png\nfinal-status-bar-crop=final-status-bar-crop.png\n' >> "$output/third-page-navigation-proof.txt"
-        if [[ "$baseline_to_end_delta" =~ ^[0-9]+$ ]] && (( baseline_to_end_delta > 100 )) && [[ "$end_stability_delta" =~ ^[0-9]+$ ]] && (( end_stability_delta <= 100 )) && [[ "$owner_focused_after_repeat" == true ]]; then
-            record physical-third-page-navigation passed "A geometry-derived document-body click established owner focus before two Ctrl+End inputs reached the deterministic three-page endpoint; the endpoint changed materially from the post-click baseline and remained stable on repeat." baseline.png document-focus-click.png ctrl-end.png ctrl-end-repeat.png final.png baseline-page-crop.png document-focus-click-page-crop.png ctrl-end-page-crop.png ctrl-end-repeat-page-crop.png final-page-crop.png final-status-bar-crop.png document-focus-click-state.txt document-focus-click-proof.txt third-page-navigation-proof.txt
-        else
-            record physical-third-page-navigation failed "The focused document-body click and two Ctrl+End inputs did not prove a materially changed, stable endpoint while retaining owner focus." document-focus-click.png document-focus-click-page-crop.png document-focus-click-state.txt document-focus-click-proof.txt third-page-navigation-proof.txt ctrl-end.png ctrl-end-page-crop.png ctrl-end-repeat.png ctrl-end-repeat-page-crop.png final.png final-page-crop.png final-status-bar-crop.png
+        capture ctrl-end-logical.png
+        capture_page_crop ctrl-end-logical.png ctrl-end-logical-page-crop.png
+        capture_status_crop ctrl-end-logical.png ctrl-end-logical-status-bar-crop.png
+        capture_state ctrl-end-logical
+        ctrl_end_logical_delta="$(screen_difference document-focus-click-page-crop.png ctrl-end-logical-page-crop.png)"
+        ctrl_end_owner_focus="$(if owner_has_focus; then printf true; else printf false; fi)"
+        navigation_evidence+=(
+            ctrl-end-logical.png
+            ctrl-end-logical-page-crop.png
+            ctrl-end-logical-status-bar-crop.png
+            ctrl-end-logical-state.txt
+        )
+
+        page_down_max=8
+        material_change_seen=false
+        stable_endpoint_reached=false
+        stable_step=""
+        stable_previous_crop=""
+        stable_endpoint_full=""
+        stable_endpoint_crop=""
+        stable_endpoint_status=""
+        stable_endpoint_state=""
+        stable_endpoint_focus=false
+        previous_crop=ctrl-end-logical-page-crop.png
+        : > "$output/page-down-steps.txt"
+
+        for ((page_down_step = 1; page_down_step <= page_down_max; page_down_step++)); do
+            printf -v page_down_label '%02d' "$page_down_step"
+            step_full="page-down-$page_down_label.png"
+            step_crop="page-down-$page_down_label-page-crop.png"
+            step_status="page-down-$page_down_label-status-bar-crop.png"
+            step_state="page-down-$page_down_label-state.txt"
+            send_owner_key Page_Down
+            capture "$step_full"
+            capture_page_crop "$step_full" "$step_crop"
+            capture_status_crop "$step_full" "$step_status"
+            capture_state "page-down-$page_down_label"
+            step_delta="$(screen_difference "$previous_crop" "$step_crop")"
+            step_baseline_delta="$(screen_difference document-focus-click-page-crop.png "$step_crop")"
+            step_owner_focus="$(if owner_has_focus; then printf true; else printf false; fi)"
+            {
+                printf 'step=%s\nkey-symbol=Page_Down\nprevious-crop=%s\nfull-screenshot=%s\npage-crop=%s\nstatus-bar-crop=%s\n' \
+                    "$page_down_step" "$previous_crop" "$step_full" "$step_crop" "$step_status"
+                printf 'previous-step-AE=%s\npost-click-baseline-AE=%s\nowner-focused=%s\n\n' \
+                    "$step_delta" "$step_baseline_delta" "$step_owner_focus"
+            } >> "$output/page-down-steps.txt"
+            navigation_evidence+=("$step_full" "$step_crop" "$step_status" "$step_state")
+
+            if [[ "$step_delta" =~ ^[0-9]+$ ]] && (( step_delta > 100 )); then
+                material_change_seen=true
+            fi
+            if [[ "$material_change_seen" == true &&
+                  "$step_delta" =~ ^[0-9]+$ ]] &&
+                  (( step_delta <= 100 )) &&
+                  [[ "$step_owner_focus" == true ]]; then
+                stable_endpoint_reached=true
+                stable_step="$page_down_step"
+                stable_previous_crop="$previous_crop"
+                stable_endpoint_full="$step_full"
+                stable_endpoint_crop="$step_crop"
+                stable_endpoint_status="$step_status"
+                stable_endpoint_state="$step_state"
+                stable_endpoint_focus="$step_owner_focus"
+                break
+            fi
+            previous_crop="$step_crop"
+        done
+
+        {
+            printf 'logical-end-key-symbol=ctrl+End\n'
+            printf 'logical-end-full=ctrl-end-logical.png\nlogical-end-page-crop=ctrl-end-logical-page-crop.png\n'
+            printf 'logical-end-status-bar-crop=ctrl-end-logical-status-bar-crop.png\n'
+            printf 'navigation-baseline=document-focus-click-page-crop.png\nnavigation-baseline-sha256=%s\n' "$navigation_baseline_hash"
+            printf 'logical-end-from-baseline-AE=%s\nlogical-end-owner-focused=%s\n' "$ctrl_end_logical_delta" "$ctrl_end_owner_focus"
+            printf 'page-down-key-symbol=Page_Down\npage-down-max=%s\nmaterial-change-threshold-AE=100\nstability-threshold-AE=100\n' "$page_down_max"
+            printf 'material-change-seen=%s\nstable-endpoint-reached=%s\nstable-step=%s\n' "$material_change_seen" "$stable_endpoint_reached" "$stable_step"
+            printf 'stable-previous-crop=%s\nstable-endpoint-crop=%s\nstable-endpoint-owner-focused=%s\n' "$stable_previous_crop" "$stable_endpoint_crop" "$stable_endpoint_focus"
+            printf 'click-focus-proof=document-focus-click-proof.txt\npage-down-step-proof=page-down-steps.txt\n'
+        } > "$output/third-page-navigation-proof.txt"
+
+        if [[ "$stable_endpoint_reached" == true ]]; then
+            cp "$output/$stable_endpoint_full" "$output/final.png"
+            cp "$output/$stable_endpoint_crop" "$output/final-page-crop.png"
+            cp "$output/$stable_endpoint_status" "$output/final-status-bar-crop.png"
+            cp "$output/$stable_endpoint_state" "$output/final-state.txt"
+            track_screenshot final.png
+            printf 'final-source-step=%s\nfinal-screenshot=final.png\nfinal-status-bar-crop=final-status-bar-crop.png\n' "$stable_step" >> "$output/third-page-navigation-proof.txt"
+            navigation_evidence+=(final.png final-page-crop.png final-status-bar-crop.png final-state.txt)
         fi
-        if image_nonblank_varied final-page-crop.png; then
-            record nonblank-final-page-render passed "The final repeated Ctrl+End endpoint crop is nonblank and contains measurable visual variation." final.png final-page-crop.png final-status-bar-crop.png final-state.txt third-page-navigation-proof.txt
+
+        if [[ "$material_change_seen" == true &&
+              "$stable_endpoint_reached" == true &&
+              "$ctrl_end_owner_focus" == true &&
+              "$stable_endpoint_focus" == true ]]; then
+            record physical-third-page-navigation passed "A document-body click established keyboard focus; Ctrl+End established the logical endpoint, then bounded physical Page_Down inputs produced a materially changed viewport and converged to a stable endpoint tied to the deterministic three-page rendering proof." "${navigation_evidence[@]}" page-down-steps.txt third-page-navigation-proof.txt
         else
-            record nonblank-final-page-render failed "ImageMagick could not prove that the final repeated Ctrl+End endpoint crop is nonblank and varied." final.png final-page-crop.png final-status-bar-crop.png final-state.txt
+            record physical-third-page-navigation failed "The focused Ctrl+End plus bounded Page_Down sequence did not prove both material viewport movement and a stable endpoint while retaining owner focus." "${navigation_evidence[@]}" page-down-steps.txt third-page-navigation-proof.txt
+        fi
+        if [[ "$stable_endpoint_reached" == true ]] && image_nonblank_varied final-page-crop.png; then
+            record nonblank-final-page-render passed "The final crop comes from the stable bounded Page_Down endpoint and is nonblank with measurable visual variation; the retained status crop is for manual review, not OCR." final.png final-page-crop.png final-status-bar-crop.png final-state.txt page-down-steps.txt third-page-navigation-proof.txt
+        else
+            record nonblank-final-page-render failed "No stable Page_Down endpoint was available, or ImageMagick could not prove its final crop nonblank and varied." "${navigation_evidence[@]}" page-down-steps.txt third-page-navigation-proof.txt
         fi
     else
         record physical-third-page-navigation failed "The geometry-derived document-body click did not complete while retaining owner focus, so Ctrl+End navigation was not attempted." document-focus-click.png document-focus-click-page-crop.png document-focus-click-state.txt document-focus-click-proof.txt
@@ -379,4 +461,28 @@ else
         if [[ -f "$avalonia_table_test" ]]; then cat "$avalonia_table_test"; fi
     } > "$output/shared-plan-proof.txt"
     record shared-plan-proof failed "Both focused planner and Avalonia table-structure outputs are required to contain passing test summaries." shared-plan-proof.txt
+fi
+
+if ! python3 - "$records" <<'PY'
+import json
+import sys
+
+required_ids = [
+    "visible-window-discovery",
+    "generated-fixture-hash-integrity",
+    "physical-third-page-navigation",
+    "nonblank-final-page-render",
+    "shared-plan-proof",
+]
+with open(sys.argv[1], encoding="utf-8") as handle:
+    rows = [json.loads(line) for line in handle if line.strip()]
+passed = (
+    len(rows) == len(required_ids)
+    and [row.get("id") for row in rows] == required_ids
+    and all(row.get("status") == "passed" for row in rows)
+)
+raise SystemExit(0 if passed else 1)
+PY
+then
+    exit 1
 fi
