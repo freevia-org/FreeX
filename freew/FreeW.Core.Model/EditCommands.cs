@@ -2056,6 +2056,52 @@ public sealed class SetShapeTextDirectionCommand(int paragraphIndex, int runInde
 }
 
 /// <summary>
+/// Replace one text run inside an inline text-box shape, snapshotting the prior value for undo.
+/// The editor uses this command for its bounded single-paragraph text-box caret route.
+/// </summary>
+public sealed class SetShapeTextRunCommand(
+    int paragraphIndex,
+    int runIndex,
+    int textParagraphIndex,
+    int textRunIndex,
+    string text) : IDocumentCommand
+{
+    private string? _previous;
+    private bool _applied;
+
+    public string Label => "Edit Shape Text";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeTextRunAt(context) is not { } run) return;
+        _previous = run.Text;
+        run.Text = text;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeTextRunAt(context) is not { } run || _previous is null) return;
+        run.Text = _previous;
+        _applied = false;
+    }
+
+    private Run? ShapeTextRunAt(IDocumentCommandContext context)
+    {
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
+            || runIndex < 0 || runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[runIndex].Shape is not { } shape
+            || textParagraphIndex < 0 || textParagraphIndex >= shape.TextParagraphs.Count)
+            return null;
+
+        var textParagraph = shape.TextParagraphs[textParagraphIndex];
+        return textRunIndex >= 0 && textRunIndex < textParagraph.Runs.Count
+            ? textParagraph.Runs[textRunIndex]
+            : null;
+    }
+}
+
+/// <summary>
 /// Set the rotation angle and flip flags on the inline shape at the given paragraph/run indices,
 /// snapshotting prior values for undo. Mirrors <see cref="SetImageRotationCommand"/> for shapes.
 /// </summary>
