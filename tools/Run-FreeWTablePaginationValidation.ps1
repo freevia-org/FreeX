@@ -134,7 +134,10 @@ try {
     }
     $containerPathLog | Set-Content -LiteralPath (Join-Path $evidenceDirectory "container-path-preflight.txt") -Encoding utf8
     $probeResult = Invoke-NativeCaptured "docker" @("exec", "--env", "FREEW_DOCUMENT_PATH=/documents/$fixtureName", "--env", "FREEW_SOURCE_FIXTURE_PATH=/work/fixture-source.docx", "--env", "FREEW_EXPECTED_DOCUMENT_NAME=$fixtureName", "--env", "FREEW_SHARED_PLAN_TEST_PATH=/work/shared-plan-test.txt", "--env", "FREEW_AVALONIA_TABLE_TEST_PATH=/work/avalonia-table-structure-test.txt", $session.containerName, "bash", "/work/run-freew-table-pagination-probe.sh", "/work/freew-table-pagination-validation")
-    $probeExitCode = $probeResult.ExitCode; $probeResult.Output | Set-Content -LiteralPath (Join-Path $evidenceDirectory "probe.log") -Encoding utf8
+    $probeExitCode = $probeResult.ExitCode
+    $probeLogPath = Join-Path $evidenceDirectory "probe.log"
+    $probeLogText = [string]::Join([Environment]::NewLine, [string[]]@($probeResult.Output))
+    [IO.File]::WriteAllText($probeLogPath, $probeLogText, (New-Object Text.UTF8Encoding($false)))
     $manifestPath = Join-Path $evidenceDirectory "results.json"
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw "Probe did not write $manifestPath (docker exec exit code $probeExitCode). See probe.log." }
     Copy-Item -LiteralPath $sharedPlanPath -Destination (Join-Path $evidenceDirectory "shared-plan-test.txt") -Force

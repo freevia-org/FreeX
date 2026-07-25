@@ -114,6 +114,67 @@ owner_has_focus() {
        "$(xdotool getwindowfocus 2>/dev/null || true)" == "$owner_id" ]]
 }
 
+click_document_surface() {
+    local key value max_x max_y click_exit
+    document_click_geometry="$(xdotool getwindowgeometry --shell "$owner_id" 2>/dev/null || true)"
+    document_window_x=""
+    document_window_y=""
+    document_window_width=""
+    document_window_height=""
+    while IFS='=' read -r key value; do
+        case "$key" in
+            X) document_window_x="$value" ;;
+            Y) document_window_y="$value" ;;
+            WIDTH) document_window_width="$value" ;;
+            HEIGHT) document_window_height="$value" ;;
+        esac
+    done <<< "$document_click_geometry"
+
+    if [[ ! "$document_window_x" =~ ^-?[0-9]+$ ||
+          ! "$document_window_y" =~ ^-?[0-9]+$ ||
+          ! "$document_window_width" =~ ^[0-9]+$ ||
+          ! "$document_window_height" =~ ^[0-9]+$ ]]; then
+        printf 'window-geometry=%s\nclick-status=invalid-owner-geometry\n' "$document_click_geometry" > "$output/document-focus-click-proof.txt"
+        return 1
+    fi
+
+    document_click_relative_x=$((document_window_width / 2))
+    document_click_relative_y=$((document_window_height * 45 / 100))
+    max_x=$((document_window_width - 180))
+    max_y=$((document_window_height - 140))
+    (( document_click_relative_x < 220 )) && document_click_relative_x=220
+    (( max_x < 220 )) && max_x=$((document_window_width - 20))
+    (( document_click_relative_x > max_x )) && document_click_relative_x=$max_x
+    (( document_click_relative_y < 200 )) && document_click_relative_y=200
+    (( max_y < 200 )) && max_y=$((document_window_height - 40))
+    (( document_click_relative_y > max_y )) && document_click_relative_y=$max_y
+    document_click_absolute_x=$((document_window_x + document_click_relative_x))
+    document_click_absolute_y=$((document_window_y + document_click_relative_y))
+
+    focus_owner
+    document_click_focus_before="$(if owner_has_focus; then printf true; else printf false; fi)"
+    if timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool mousemove --sync --window "$owner_id" \
+            "$document_click_relative_x" "$document_click_relative_y" click 1; then
+        click_exit=0
+    else
+        click_exit=$?
+    fi
+    sleep "$settle_seconds"
+    document_click_focus_after="$(if owner_has_focus; then printf true; else printf false; fi)"
+    {
+        printf 'window-geometry=%s\n' "$document_click_geometry"
+        printf 'window-x=%s\nwindow-y=%s\nwindow-width=%s\nwindow-height=%s\n' \
+            "$document_window_x" "$document_window_y" "$document_window_width" "$document_window_height"
+        printf 'click-relative-x=%s\nclick-relative-y=%s\nclick-absolute-x=%s\nclick-absolute-y=%s\n' \
+            "$document_click_relative_x" "$document_click_relative_y" "$document_click_absolute_x" "$document_click_absolute_y"
+        printf 'click-target-policy=center-x-and-45-percent-height-clamped-away-from-chrome\n'
+        printf 'click-exit-code=%s\nowner-focused-before-click=%s\nowner-focused-after-click=%s\n' \
+            "$click_exit" "$document_click_focus_before" "$document_click_focus_after"
+    } > "$output/document-focus-click-proof.txt"
+    [[ "$click_exit" -eq 0 && "$document_click_focus_after" == true ]]
+}
+
 send_owner_key() {
     focus_owner
     timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
@@ -252,36 +313,51 @@ else
 fi
 
 if [[ -n "${owner_id:-}" && -f "$output/baseline-page-crop.png" ]]; then
-    baseline_hash="$(sha256sum "$output/baseline-page-crop.png" | awk '{print $1}')"
-    send_owner_key ctrl+End
-    capture ctrl-end.png
-    capture_page_crop ctrl-end.png ctrl-end-page-crop.png
-    capture_state ctrl-end
-    send_owner_key ctrl+End
-    capture ctrl-end-repeat.png
-    capture_page_crop ctrl-end-repeat.png ctrl-end-repeat-page-crop.png
-    capture_state ctrl-end-repeat
-    ctrl_end_hash="$(sha256sum "$output/ctrl-end-page-crop.png" | awk '{print $1}')"
-    ctrl_end_repeat_hash="$(sha256sum "$output/ctrl-end-repeat-page-crop.png" | awk '{print $1}')"
-    baseline_to_end_delta="$(screen_difference baseline-page-crop.png ctrl-end-page-crop.png)"
-    end_stability_delta="$(screen_difference ctrl-end-page-crop.png ctrl-end-repeat-page-crop.png)"
-    printf 'key-symbol=ctrl+End\nbaseline-crop-sha256=%s\nctrl-end-crop-sha256=%s\nctrl-end-repeat-crop-sha256=%s\nbaseline-to-end-AE=%s\nend-repeat-stability-AE=%s\nstability-threshold-AE=100\n' "$baseline_hash" "$ctrl_end_hash" "$ctrl_end_repeat_hash" "$baseline_to_end_delta" "$end_stability_delta" > "$output/third-page-navigation-proof.txt"
-    owner_focused_after_repeat="$(if owner_has_focus; then printf true; else printf false; fi)"
-    printf 'owner-focused-after-repeat=%s\n' "$owner_focused_after_repeat" >> "$output/third-page-navigation-proof.txt"
-    capture final.png
-    capture_page_crop final.png final-page-crop.png
-    capture_status_crop final.png final-status-bar-crop.png
-    capture_state final
-    printf 'final-screenshot=final.png\nfinal-status-bar-crop=final-status-bar-crop.png\n' >> "$output/third-page-navigation-proof.txt"
-    if [[ "$baseline_to_end_delta" =~ ^[0-9]+$ ]] && (( baseline_to_end_delta > 100 )) && [[ "$end_stability_delta" =~ ^[0-9]+$ ]] && (( end_stability_delta <= 100 )) && [[ "$owner_focused_after_repeat" == true ]]; then
-        record physical-third-page-navigation passed "Two Ctrl+End inputs reached the deterministic three-page endpoint: the endpoint changed materially from baseline, remained stable on repeat, and retained owner focus." baseline.png ctrl-end.png ctrl-end-repeat.png final.png baseline-page-crop.png ctrl-end-page-crop.png ctrl-end-repeat-page-crop.png final-page-crop.png final-status-bar-crop.png third-page-navigation-proof.txt
+    if click_document_surface; then
+        document_click_ready=true
     else
-        record physical-third-page-navigation failed "Two Ctrl+End inputs did not prove a materially changed, stable endpoint while retaining the FreeW owner focus." third-page-navigation-proof.txt ctrl-end.png ctrl-end-page-crop.png ctrl-end-repeat.png ctrl-end-repeat-page-crop.png final.png final-page-crop.png final-status-bar-crop.png
+        document_click_ready=false
     fi
-    if image_nonblank_varied final-page-crop.png; then
-        record nonblank-final-page-render passed "The final repeated Ctrl+End endpoint crop is nonblank and contains measurable visual variation." final.png final-page-crop.png final-status-bar-crop.png final-state.txt third-page-navigation-proof.txt
+    capture document-focus-click.png
+    capture_page_crop document-focus-click.png document-focus-click-page-crop.png
+    capture_state document-focus-click
+    printf 'click-screenshot=document-focus-click.png\nclick-page-crop=document-focus-click-page-crop.png\nclick-state=document-focus-click-state.txt\n' >> "$output/document-focus-click-proof.txt"
+
+    if [[ "$document_click_ready" == true ]]; then
+        navigation_baseline_hash="$(sha256sum "$output/document-focus-click-page-crop.png" | awk '{print $1}')"
+        send_owner_key ctrl+End
+        capture ctrl-end.png
+        capture_page_crop ctrl-end.png ctrl-end-page-crop.png
+        capture_state ctrl-end
+        send_owner_key ctrl+End
+        capture ctrl-end-repeat.png
+        capture_page_crop ctrl-end-repeat.png ctrl-end-repeat-page-crop.png
+        capture_state ctrl-end-repeat
+        ctrl_end_hash="$(sha256sum "$output/ctrl-end-page-crop.png" | awk '{print $1}')"
+        ctrl_end_repeat_hash="$(sha256sum "$output/ctrl-end-repeat-page-crop.png" | awk '{print $1}')"
+        baseline_to_end_delta="$(screen_difference document-focus-click-page-crop.png ctrl-end-page-crop.png)"
+        end_stability_delta="$(screen_difference ctrl-end-page-crop.png ctrl-end-repeat-page-crop.png)"
+        printf 'key-symbol=ctrl+End\nnavigation-baseline=document-focus-click-page-crop.png\nnavigation-baseline-sha256=%s\nctrl-end-crop-sha256=%s\nctrl-end-repeat-crop-sha256=%s\nbaseline-to-end-AE=%s\nend-repeat-stability-AE=%s\nmaterial-change-threshold-AE=100\nstability-threshold-AE=100\nclick-focus-proof=document-focus-click-proof.txt\n' "$navigation_baseline_hash" "$ctrl_end_hash" "$ctrl_end_repeat_hash" "$baseline_to_end_delta" "$end_stability_delta" > "$output/third-page-navigation-proof.txt"
+        owner_focused_after_repeat="$(if owner_has_focus; then printf true; else printf false; fi)"
+        printf 'owner-focused-after-repeat=%s\n' "$owner_focused_after_repeat" >> "$output/third-page-navigation-proof.txt"
+        capture final.png
+        capture_page_crop final.png final-page-crop.png
+        capture_status_crop final.png final-status-bar-crop.png
+        capture_state final
+        printf 'final-screenshot=final.png\nfinal-status-bar-crop=final-status-bar-crop.png\n' >> "$output/third-page-navigation-proof.txt"
+        if [[ "$baseline_to_end_delta" =~ ^[0-9]+$ ]] && (( baseline_to_end_delta > 100 )) && [[ "$end_stability_delta" =~ ^[0-9]+$ ]] && (( end_stability_delta <= 100 )) && [[ "$owner_focused_after_repeat" == true ]]; then
+            record physical-third-page-navigation passed "A geometry-derived document-body click established owner focus before two Ctrl+End inputs reached the deterministic three-page endpoint; the endpoint changed materially from the post-click baseline and remained stable on repeat." baseline.png document-focus-click.png ctrl-end.png ctrl-end-repeat.png final.png baseline-page-crop.png document-focus-click-page-crop.png ctrl-end-page-crop.png ctrl-end-repeat-page-crop.png final-page-crop.png final-status-bar-crop.png document-focus-click-state.txt document-focus-click-proof.txt third-page-navigation-proof.txt
+        else
+            record physical-third-page-navigation failed "The focused document-body click and two Ctrl+End inputs did not prove a materially changed, stable endpoint while retaining owner focus." document-focus-click.png document-focus-click-page-crop.png document-focus-click-state.txt document-focus-click-proof.txt third-page-navigation-proof.txt ctrl-end.png ctrl-end-page-crop.png ctrl-end-repeat.png ctrl-end-repeat-page-crop.png final.png final-page-crop.png final-status-bar-crop.png
+        fi
+        if image_nonblank_varied final-page-crop.png; then
+            record nonblank-final-page-render passed "The final repeated Ctrl+End endpoint crop is nonblank and contains measurable visual variation." final.png final-page-crop.png final-status-bar-crop.png final-state.txt third-page-navigation-proof.txt
+        else
+            record nonblank-final-page-render failed "ImageMagick could not prove that the final repeated Ctrl+End endpoint crop is nonblank and varied." final.png final-page-crop.png final-status-bar-crop.png final-state.txt
+        fi
     else
-        record nonblank-final-page-render failed "ImageMagick could not prove that the final repeated Ctrl+End endpoint crop is nonblank and varied." final.png final-page-crop.png final-status-bar-crop.png final-state.txt
+        record physical-third-page-navigation failed "The geometry-derived document-body click did not complete while retaining owner focus, so Ctrl+End navigation was not attempted." document-focus-click.png document-focus-click-page-crop.png document-focus-click-state.txt document-focus-click-proof.txt
+        record nonblank-final-page-render failed "Final-page rendering was not attempted because document-surface keyboard focus was not proven." document-focus-click.png document-focus-click-state.txt document-focus-click-proof.txt
     fi
 else
     record physical-third-page-navigation failed "Navigation was not attempted because the focused FreeW owner or baseline crop was unavailable." probe-incomplete.txt
