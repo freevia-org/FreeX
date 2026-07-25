@@ -13945,7 +13945,7 @@ public sealed partial class MainWindow : Window
         var valueTypeRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 12,
+            Spacing = GoToSpecialDialogPlanner.AvaloniaValueTypeSpacing,
             Margin = new Thickness(8, 6, 8, 1),
             Children =
             {
@@ -13958,13 +13958,25 @@ public sealed partial class MainWindow : Window
 
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [okButton, cancelButton],
-            new Thickness(0, 10, 28, 51));
+            new Thickness(
+                0,
+                GoToSpecialDialogPlanner.ActionRowTopMargin,
+                GoToSpecialDialogPlanner.ActionRowRightMargin,
+                GoToSpecialDialogPlanner.ActionRowBottomMargin));
 
         var availableGroup = new GroupBox
         {
             Header = "Go To Special",
-            Margin = new Thickness(0, 3, 0, 13),
-            Padding = new Thickness(8, 1, 8, 9),
+            Margin = new Thickness(
+                0,
+                GoToSpecialDialogPlanner.AvaloniaChoiceGroupTopMargin,
+                0,
+                GoToSpecialDialogPlanner.AvaloniaChoiceGroupBottomMargin),
+            Padding = new Thickness(
+                GoToSpecialDialogPlanner.AvaloniaChoiceGroupHorizontalPadding,
+                1,
+                GoToSpecialDialogPlanner.AvaloniaChoiceGroupHorizontalPadding,
+                GoToSpecialDialogPlanner.AvaloniaChoiceGroupBottomPadding),
             Content = choiceGrid,
         };
         AvaloniaCompactDialogChrome.ApplyGroupBox(availableGroup, borderBrush: Brush(213, 223, 229));
@@ -13973,14 +13985,18 @@ public sealed partial class MainWindow : Window
         {
             Header = "Values for constants and formulas",
             Margin = new Thickness(0),
-            Padding = new Thickness(0, 0, 0, 4),
+            Padding = new Thickness(0, 0, 0, GoToSpecialDialogPlanner.AvaloniaValueTypeGroupBottomPadding),
             Content = valueTypeRow,
         };
         AvaloniaCompactDialogChrome.ApplyGroupBox(valueTypeGroup, borderBrush: Brush(213, 223, 229));
 
         var content = new StackPanel
         {
-            Margin = new Thickness(12, 12, 30, 0),
+            Margin = new Thickness(
+                GoToSpecialDialogPlanner.AvaloniaContentLeftMargin,
+                GoToSpecialDialogPlanner.AvaloniaContentTopMargin,
+                GoToSpecialDialogPlanner.AvaloniaContentRightMargin,
+                0),
             Children =
             {
                 new TextBlock
@@ -14047,7 +14063,11 @@ public sealed partial class MainWindow : Window
                 Content = choice.Label,
                 Tag = choice,
                 GroupName = "GoToSpecialKind",
-                Margin = new Thickness(0, 0, 12, 1),
+                Margin = new Thickness(
+                    0,
+                    0,
+                    GoToSpecialDialogPlanner.AvaloniaChoiceButtonRightMargin,
+                    GoToSpecialDialogPlanner.AvaloniaChoiceButtonBottomMargin),
                 IsChecked = index == 0,
             };
             buttons.Add(button);
@@ -14084,9 +14104,9 @@ public sealed partial class MainWindow : Window
 
     private static void ApplyGoToSpecialButtonSize(Button button)
     {
-        button.Height = 20;
-        button.MinHeight = 20;
-        button.MaxHeight = 20;
+        button.Height = GoToSpecialDialogPlanner.ActionButtonHeight;
+        button.MinHeight = GoToSpecialDialogPlanner.ActionButtonHeight;
+        button.MaxHeight = GoToSpecialDialogPlanner.ActionButtonHeight;
         button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
     }
 

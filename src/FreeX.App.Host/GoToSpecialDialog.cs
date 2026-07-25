@@ -26,7 +26,7 @@ public sealed class GoToSpecialDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        var root = new DockPanel { Margin = new Thickness(12) };
+        var root = new DockPanel { Margin = new Thickness(GoToSpecialDialogPlanner.ContentMargin) };
         var content = new StackPanel();
         DockPanel.SetDock(content, Dock.Top);
         root.Children.Add(content);
