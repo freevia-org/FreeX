@@ -366,11 +366,11 @@ public partial class MainWindow
             : _worksheetViewStates.GetOrSeed(sheet);
 
     /// <summary>
-    /// Records this window's own just-applied view-mode/zoom/display-toggle change so it survives
-    /// a sibling window later mutating the shared <see cref="Sheet"/>'s corresponding fields.
-    /// Call once, right after successfully executing a view-mode/zoom/Gridlines/Headings/Ruler
-    /// command in THIS window, for every sheet the command targeted (grouped-sheet edits touch
-    /// more than one).
+    /// Records this window's own just-applied view-mode/zoom/display-toggle/Freeze-Panes/Split
+    /// change so it survives a sibling window later mutating the shared <see cref="Sheet"/>'s
+    /// corresponding fields. Call once, right after successfully executing a
+    /// view-mode/zoom/Gridlines/Headings/Ruler/Freeze-Panes/Split command in THIS window, for
+    /// every sheet the command targeted (grouped-sheet edits touch more than one).
     /// </summary>
     private void SyncWindowViewState(IReadOnlyList<SheetId> sheetIds)
     {
@@ -382,8 +382,36 @@ public partial class MainWindow
                     sheet.ZoomPercent,
                     sheet.ShowGridlines,
                     sheet.ShowHeadings,
-                    sheet.ShowRulers));
+                    sheet.ShowRulers,
+                    sheet.FrozenRows,
+                    sheet.FrozenCols,
+                    sheet.SplitRow,
+                    sheet.SplitColumn,
+                    sheet.ShowFormulas));
         }
+    }
+
+    /// <summary>
+    /// This window's own effective view-origin for <paramref name="sheet"/> (Excel "New Window"
+    /// independence for Freeze Panes -- R89-freeze-split-per-window-1): resolves the
+    /// scrollbar-to-worksheet-index mapping against THIS window's effective frozen-row/column
+    /// count (<see cref="GetEffectiveViewState"/>) instead of the shared Sheet's, so a sibling
+    /// window's Freeze Panes change never shifts what this window's scrollbars resolve to. Use
+    /// this instead of the plain <see cref="CalculateViewportOrigin(Sheet?, double, double)"/>
+    /// static overload (which is kept, unmodified, for <c>ViewportOriginTests</c>) anywhere the
+    /// call happens on behalf of THIS window's live scroll state.
+    /// </summary>
+    private (uint TopRow, uint LeftCol) GetEffectiveViewportOrigin(
+        Sheet? sheet,
+        double verticalScrollValue,
+        double horizontalScrollValue)
+    {
+        var viewState = GetEffectiveViewState(sheet);
+        return ViewportScrollCalculator.CalculateViewportOrigin(
+            viewState.FrozenRows,
+            viewState.FrozenCols,
+            verticalScrollValue,
+            horizontalScrollValue);
     }
 
     private void UpdateViewport()
@@ -406,15 +434,15 @@ public partial class MainWindow
         }
         EnsureActiveCellSelection(sheet);
 
-        var (topRow, leftCol) = CalculateViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
+        var (topRow, leftCol) = GetEffectiveViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
         topRow = ClampViewportOrigin(
             topRow,
             CellAddress.MaxRow,
-            SheetGrid.Viewport is null ? 40 : (uint)CountScrollableRows(SheetGrid.Viewport, sheet));
+            SheetGrid.Viewport is null ? 40 : (uint)CountScrollableRows(SheetGrid.Viewport, viewState.FrozenRows));
         leftCol = ClampViewportOrigin(
             leftCol,
             CellAddress.MaxCol,
-            SheetGrid.Viewport is null ? 15 : (uint)CountScrollableColumns(SheetGrid.Viewport, sheet));
+            SheetGrid.Viewport is null ? 15 : (uint)CountScrollableColumns(SheetGrid.Viewport, viewState.FrozenCols));
         if (sheet is not null)
         {
             sheet.ViewTopRow = topRow;
@@ -543,7 +571,10 @@ public partial class MainWindow
             _ribbonState.SetChecked("View Headings", SheetGrid.ShowHeaders);
             _ribbonState.SetChecked("Ruler", SheetGrid.ShowRulers);
             _ribbonState.SetEnabled("Ruler", SheetGrid.WorksheetViewMode == WorksheetViewMode.PageLayout);
-            _ribbonState.SetChecked("Split", sheet?.SplitRow is not null || sheet?.SplitColumn is not null);
+            // R89-freeze-split-per-window-1: this window's own effective Split state, not the
+            // shared Sheet's -- a sibling "New Window" may have Split set/cleared without this
+            // window ever touching it.
+            _ribbonState.SetChecked("Split", viewState.SplitRow is not null || viewState.SplitColumn is not null);
             SyncWorkbookViewModeToggleState(SheetGrid.WorksheetViewMode);
             RefreshViewWindowCommandState();
         }
@@ -557,8 +588,10 @@ public partial class MainWindow
         SheetGrid.ColumnPageBreaks = sheet?.ColumnPageBreaks;
         SheetGrid.PrintArea = sheet?.PrintArea;
         SheetGrid.PagePreviewRange = CalculatePagePreviewRange(sheet, viewport);
-        SheetGrid.SplitRow = sheet?.SplitRow;
-        SheetGrid.SplitColumn = sheet?.SplitColumn;
+        // Split is this window's own state too (R89-freeze-split-per-window-1), same reasoning
+        // as Gridlines/Headings/Rulers above.
+        SheetGrid.SplitRow = viewState.SplitRow;
+        SheetGrid.SplitColumn = viewState.SplitColumn;
         SheetGrid.PageMargins = sheet?.PageMargins ?? WorksheetPageMargins.Narrow;
         SheetGrid.PageOrientation = sheet?.PageOrientation ?? WorksheetPageOrientation.Portrait;
         SheetGrid.PaperSize = sheet?.PaperSize ?? WorksheetPaperSize.A4;
@@ -575,8 +608,8 @@ public partial class MainWindow
 
         // Adjust scrollbar range to the used data range + buffer, thumb to visible area
         UpdateScrollbarMaximums(sheet);
-        var scrollableRowCount = CountScrollableRows(viewport, sheet);
-        var scrollableColumnCount = CountScrollableColumns(viewport, sheet);
+        var scrollableRowCount = CountScrollableRows(viewport, viewState.FrozenRows);
+        var scrollableColumnCount = CountScrollableColumns(viewport, viewState.FrozenCols);
         VerticalScroll.ViewportSize   = scrollableRowCount;
         HorizontalScroll.ViewportSize = scrollableColumnCount;
         VerticalScroll.LargeChange    = Math.Max(1, scrollableRowCount);
@@ -608,10 +641,10 @@ public partial class MainWindow
         if (rowDelta == 0) return;
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var (topRow, _) = CalculateViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
+        var (topRow, _) = GetEffectiveViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
         if (editRow > topRow) return;
 
-        var frozenRows = sheet?.FrozenRows ?? 0;
+        var frozenRows = GetEffectiveViewState(sheet).FrozenRows;
         var newTopRow = (uint)Math.Clamp((long)topRow + rowDelta, 1, CellAddress.MaxRow);
         var newVerticalValue = WorksheetIndexToScrollbarValue(newTopRow, frozenRows);
 
@@ -631,10 +664,10 @@ public partial class MainWindow
         if (colDelta == 0) return;
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var (_, leftCol) = CalculateViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
+        var (_, leftCol) = GetEffectiveViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
         if (editCol > leftCol) return;
 
-        var frozenCols = sheet?.FrozenCols ?? 0;
+        var frozenCols = GetEffectiveViewState(sheet).FrozenCols;
         var newLeftCol = (uint)Math.Clamp((long)leftCol + colDelta, 1, CellAddress.MaxCol);
         var newHorizontalValue = WorksheetIndexToScrollbarValue(newLeftCol, frozenCols);
 
@@ -819,13 +852,16 @@ public partial class MainWindow
         // Use a placeholder width for the first pass — the available width passed here
         // does not affect row metrics, so any reasonable value works.
         var placeholderWidth = SheetGrid.ActualRowHeaderWidth;
+        var viewState = GetEffectiveViewState(sheet);
         var request = new ViewportRequest(
             TopRow: topRow,
             LeftCol: leftCol,
             AvailableHeight: (SheetGrid.ActualHeight - SheetGrid.EffectiveColHeaderHeight) / _zoomLevel,
             AvailableWidth: CalculateViewportAvailableWidth(SheetGrid.ActualWidth, placeholderWidth, _zoomLevel),
             IncludeObjects: false,
-            SplitPaneOffsets: null);
+            SplitPaneOffsets: null,
+            FrozenRowsOverride: viewState.FrozenRows,
+            FrozenColsOverride: viewState.FrozenCols);
 
         var (lastVisibleRow, rowOutlineGroups) =
             _viewportService.ComputeRowMetricsSummary(_workbook, _currentSheetId, request);
@@ -834,13 +870,26 @@ public partial class MainWindow
 
     private ViewportModel CreateViewport(Sheet? sheet, uint topRow, uint leftCol, double rowHeaderWidth)
     {
+        // Freeze Panes/Window > Split/Show Formulas are this window's own state (Excel "New
+        // Window" independence -- R89-freeze-split-per-window-1, extended to Show Formulas by
+        // R89-show-formulas-per-window-1): the shared ViewportService already accepts
+        // FrozenRowsOverride/FrozenColsOverride/SplitOverride/ShowFormulasOverride on
+        // ViewportRequest (added for the Avalonia shell's own per-view overrides), so route THIS
+        // window's effective values through instead of letting it fall back to the shared
+        // Sheet.FrozenRows/FrozenCols/SplitRow/SplitColumn/ShowFormulas, which every window
+        // viewing this document shares.
+        var viewState = GetEffectiveViewState(sheet);
         var request = new ViewportRequest(
             TopRow: topRow,
             LeftCol: leftCol,
             AvailableHeight: (SheetGrid.ActualHeight - SheetGrid.EffectiveColHeaderHeight) / _zoomLevel,
             AvailableWidth: CalculateViewportAvailableWidth(SheetGrid.ActualWidth, rowHeaderWidth, _zoomLevel),
             IncludeObjects: _options.ObjectsDisplay == FreeXObjectDisplay.All,
-            SplitPaneOffsets: GetSplitPaneViewportOffsets(sheet, topRow, leftCol));
+            SplitPaneOffsets: GetSplitPaneViewportOffsets(viewState, topRow, leftCol),
+            FrozenRowsOverride: viewState.FrozenRows,
+            FrozenColsOverride: viewState.FrozenCols,
+            SplitOverride: new SplitPaneStateOverride(viewState.SplitRow, viewState.SplitColumn),
+            ShowFormulasOverride: viewState.ShowFormulas);
 
         return _viewportService.GetViewport(_workbook, _currentSheetId, request);
     }
@@ -849,15 +898,17 @@ public partial class MainWindow
     // (bottom-right) pane in Excel's split model -- neither has an independent scroll offset of
     // its own, so this always mirrors the CURRENT main topRow/leftCol rather than ever consulting
     // a sticky per-sheet offset, which used to let these two panes desync permanently from the
-    // main pane with no way to resync (r56 fix).
-    private SplitPaneViewportOffsets? GetSplitPaneViewportOffsets(Sheet? sheet, uint topRow, uint leftCol)
+    // main pane with no way to resync (r56 fix). Takes THIS window's effective view state
+    // (R89-freeze-split-per-window-1) rather than the shared Sheet directly.
+    private static SplitPaneViewportOffsets? GetSplitPaneViewportOffsets(
+        WorksheetViewStateSnapshot viewState, uint topRow, uint leftCol)
     {
-        if (sheet is null || (!sheet.SplitRow.HasValue && !sheet.SplitColumn.HasValue))
+        if (!viewState.SplitRow.HasValue && !viewState.SplitColumn.HasValue)
             return null;
 
         return new SplitPaneViewportOffsets(
-            sheet.SplitColumn.HasValue ? leftCol : null,
-            sheet.SplitRow.HasValue ? topRow : null);
+            viewState.SplitColumn.HasValue ? leftCol : null,
+            viewState.SplitRow.HasValue ? topRow : null);
     }
 
     private static GridRange? CalculatePagePreviewRange(Sheet? sheet, ViewportModel viewport)
@@ -913,9 +964,11 @@ public partial class MainWindow
         return addend >= remaining ? limit : value + addend;
     }
 
-    private static int CountScrollableRows(ViewportModel viewport, Sheet? sheet)
+    // Takes an explicit frozen-row count (THIS window's effective Freeze Panes state --
+    // R89-freeze-split-per-window-1) rather than a Sheet, so callers pass viewState.FrozenRows
+    // instead of ever falling back to the shared Sheet.FrozenRows.
+    private static int CountScrollableRows(ViewportModel viewport, uint frozenRows)
     {
-        var frozenRows = sheet?.FrozenRows ?? 0;
         var count = 0;
         foreach (var row in viewport.RowMetrics)
         {
@@ -926,9 +979,8 @@ public partial class MainWindow
         return Math.Max(1, count);
     }
 
-    private static int CountScrollableColumns(ViewportModel viewport, Sheet? sheet)
+    private static int CountScrollableColumns(ViewportModel viewport, uint frozenCols)
     {
-        var frozenCols = sheet?.FrozenCols ?? 0;
         var count = 0;
         foreach (var column in viewport.ColMetrics)
         {
@@ -959,11 +1011,18 @@ public partial class MainWindow
     public static uint CalculateScrollableLimit(uint absoluteLimit, uint frozenCount)
         => ViewportScrollCalculator.CalculateScrollableLimit(absoluteLimit, frozenCount);
 
-    private static uint GetScrollableRowLimit(Sheet? sheet) =>
-        ViewportScrollCalculator.GetScrollableRowLimit(sheet);
+    // R89-freeze-split-per-window-1: resolves against THIS window's effective Freeze Panes
+    // count (GetEffectiveViewState), not the shared Sheet.FrozenRows/FrozenCols a sibling
+    // "New Window" may have changed -- mirrors the ShowGridlines/ShowHeadings/ShowRulers
+    // per-window pattern above (R87-order-guard-window-state-sweep-1). The plain
+    // Sheet-based ViewportScrollCalculator.GetScrollableRowLimit/GetScrollableColumnLimit
+    // overloads are left untouched (ViewportOriginTests/ViewportScrollCalculatorTests still
+    // exercise those directly against a bare Sheet).
+    private uint GetScrollableRowLimit(Sheet? sheet) =>
+        ViewportScrollCalculator.GetScrollableRowLimit(GetEffectiveViewState(sheet).FrozenRows);
 
-    private static uint GetScrollableColumnLimit(Sheet? sheet) =>
-        ViewportScrollCalculator.GetScrollableColumnLimit(sheet);
+    private uint GetScrollableColumnLimit(Sheet? sheet) =>
+        ViewportScrollCalculator.GetScrollableColumnLimit(GetEffectiveViewState(sheet).FrozenCols);
 
     public static uint ClampViewportOrigin(double rawValue, uint absoluteLimit, uint visibleSpan)
         => ViewportScrollCalculator.ClampViewportOrigin(rawValue, absoluteLimit, visibleSpan);
@@ -1109,12 +1168,16 @@ public partial class MainWindow
     {
         var (usedMaxRow, usedMaxCol) = CalculateUsedRangeExtents(sheet);
 
-        var vp = SheetGrid.Viewport;
-        uint visRows = (uint)Math.Max(10, vp is null ? 40 : CountScrollableRows(vp, sheet));
-        uint visCols = (uint)Math.Max(5,  vp is null ? 15 : CountScrollableColumns(vp, sheet));
+        // Freeze Panes is this window's own state (R89-freeze-split-per-window-1): resolve
+        // against GetEffectiveViewState instead of the shared Sheet.FrozenRows/FrozenCols.
+        var viewState = GetEffectiveViewState(sheet);
+        var frozenRows = viewState.FrozenRows;
+        var frozenCols = viewState.FrozenCols;
 
-        var frozenRows = sheet?.FrozenRows ?? 0;
-        var frozenCols = sheet?.FrozenCols ?? 0;
+        var vp = SheetGrid.Viewport;
+        uint visRows = (uint)Math.Max(10, vp is null ? 40 : CountScrollableRows(vp, frozenRows));
+        uint visCols = (uint)Math.Max(5,  vp is null ? 15 : CountScrollableColumns(vp, frozenCols));
+
         uint currentRow = Math.Max(1, (uint)VerticalScroll.Value);
         uint currentCol = Math.Max(1, (uint)HorizontalScroll.Value);
         uint vMaxRow = CalculateScrollbarMaximumForUsedRange(

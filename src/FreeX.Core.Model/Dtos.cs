@@ -86,7 +86,13 @@ public sealed record ViewportRequest(
     SplitPaneViewportOffsets? SplitPaneOffsets = null,
     uint? FrozenRowsOverride = null,
     uint? FrozenColsOverride = null,
-    SplitPaneStateOverride? SplitOverride = null);
+    SplitPaneStateOverride? SplitOverride = null,
+    // A caller's own per-view Show Formulas toggle (e.g. the WPF host's per-window
+    // WorksheetViewStateStore -- R89-show-formulas-per-window-1), so Ctrl+` set in one
+    // View > New Window sibling never leaks into another sibling's displayed cell text.
+    // Null (the default) preserves the pre-existing behavior of ViewportService.GetDisplayText
+    // reading the shared Sheet.ShowFormulas field directly.
+    bool? ShowFormulasOverride = null);
 
 public sealed record SplitPaneViewportOffsets(
     uint? TopRightLeftCol = null,

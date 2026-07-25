@@ -6,7 +6,9 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorksheetAutoFilterXmlMapper
 {
-    public static WorksheetAutoFilterModel? Read(XElement? autoFilter)
+    public static WorksheetAutoFilterModel? Read(
+        XElement? autoFilter,
+        IReadOnlyList<CellStyle>? differentialStyles = null)
     {
         if (autoFilter is null)
             return null;
@@ -23,7 +25,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
                 .Select(element => element.ToString(SaveOptions.DisableFormatting))
                 .ToArray()
         };
-        model.FilterColumns.AddRange(ReadFilterColumns(autoFilter, worksheetNs));
+        model.FilterColumns.AddRange(ReadFilterColumns(autoFilter, worksheetNs, differentialStyles));
         return model;
     }
 
@@ -36,7 +38,10 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         Save(session, workbook);
     }
 
-    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    internal static void Save(
+        XlsxWorksheetXmlEditSession session,
+        Workbook workbook,
+        IReadOnlyDictionary<(SheetId, int), int>? colorFilterDxfIds = null)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
@@ -47,7 +52,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
 
             var root = worksheetEdit.Root;
             root.Element(worksheetNs + "autoFilter")?.Remove();
-            if (ToAutoFilterXml(sheet.AutoFilter, worksheetNs) is { } autoFilter)
+            if (ToAutoFilterXml(sheet.AutoFilter, worksheetNs, sheet.Id, colorFilterDxfIds) is { } autoFilter)
                 InsertAutoFilter(root, worksheetNs, autoFilter);
 
             session.MarkDirty(worksheetEdit);
@@ -69,10 +74,14 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
             return null;
 
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        return ToAutoFilterXml(autoFilter, worksheetNs)?.Attribute("ref")?.Value;
+        return ToAutoFilterXml(autoFilter, worksheetNs, default, null)?.Attribute("ref")?.Value;
     }
 
-    private static XElement? ToAutoFilterXml(WorksheetAutoFilterModel? autoFilter, XNamespace worksheetNs)
+    private static XElement? ToAutoFilterXml(
+        WorksheetAutoFilterModel? autoFilter,
+        XNamespace worksheetNs,
+        SheetId sheetId,
+        IReadOnlyDictionary<(SheetId, int), int>? colorFilterDxfIds)
     {
         if (autoFilter is null)
             return null;
@@ -86,7 +95,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
 
         return string.IsNullOrWhiteSpace(autoFilter.Reference)
             ? null
-            : ToModeledAutoFilterXml(autoFilter, worksheetNs);
+            : ToModeledAutoFilterXml(autoFilter, worksheetNs, sheetId, colorFilterDxfIds);
     }
 
     private static bool TryCreateNativeAutoFilter(string? nativeXml, XNamespace worksheetNs, out XElement? autoFilter)
@@ -112,14 +121,23 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         }
     }
 
-    private static XElement ToModeledAutoFilterXml(WorksheetAutoFilterModel autoFilter, XNamespace worksheetNs)
+    private static XElement ToModeledAutoFilterXml(
+        WorksheetAutoFilterModel autoFilter,
+        XNamespace worksheetNs,
+        SheetId sheetId,
+        IReadOnlyDictionary<(SheetId, int), int>? colorFilterDxfIds)
     {
         var element = new XElement(
             worksheetNs + "autoFilter",
             new XAttribute("ref", autoFilter.Reference!),
             autoFilter.FilterColumns
                 .Where(filterColumn => filterColumn.ColumnId >= 0)
-                .Select(filterColumn => ToFilterColumnXml(filterColumn, worksheetNs)));
+                .Select(filterColumn => ToFilterColumnXml(
+                    filterColumn,
+                    worksheetNs,
+                    colorFilterDxfIds is not null && colorFilterDxfIds.TryGetValue((sheetId, filterColumn.ColumnId), out var allocatedDxfId)
+                        ? allocatedDxfId
+                        : null)));
         XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, autoFilter.NativeAttributes);
 
         foreach (var nativeChildXml in autoFilter.NativeChildXmls ?? [])
@@ -132,7 +150,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         return element;
     }
 
-    private static XElement ToFilterColumnXml(WorksheetAutoFilterColumnModel filterColumn, XNamespace worksheetNs)
+    private static XElement ToFilterColumnXml(WorksheetAutoFilterColumnModel filterColumn, XNamespace worksheetNs, int? allocatedColorFilterDxfId)
     {
         var element = new XElement(
             worksheetNs + "filterColumn",
@@ -180,7 +198,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         else if (!hasCustomFilters && filterColumn.DynamicFilter is { } dynamicFilter)
             element.Add(ToDynamicFilterXml(dynamicFilter, worksheetNs));
         else if (!hasCustomFilters && filterColumn.ColorFilter is { } colorFilter)
-            element.Add(ToColorFilterXml(colorFilter, worksheetNs));
+            element.Add(ToColorFilterXml(colorFilter, worksheetNs, allocatedColorFilterDxfId));
         else if (!hasCustomFilters && filterColumn.IconFilter is { } iconFilter)
             element.Add(ToIconFilterXml(iconFilter, worksheetNs));
 
@@ -193,13 +211,18 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         return element;
     }
 
-    private static XElement ToColorFilterXml(WorksheetAutoFilterColorFilterModel colorFilter, XNamespace worksheetNs)
+    private static XElement ToColorFilterXml(WorksheetAutoFilterColorFilterModel colorFilter, XNamespace worksheetNs, int? allocatedDxfId)
     {
         var element = new XElement(worksheetNs + "colorFilter");
         if (colorFilter.DifferentialFormatIdRaw is not null)
             element.SetAttributeValue("dxfId", colorFilter.DifferentialFormatIdRaw);
         else if (colorFilter.DifferentialFormatId is not null)
             element.SetAttributeValue("dxfId", colorFilter.DifferentialFormatId.Value.ToString(CultureInfo.InvariantCulture));
+        // R89-io-autofilter-color-dxf-1-1: colorFilter.Color set but no dxfId on the model yet means
+        // XlsxAutoFilterColorFilterDxfWriter allocated a fresh dxf for this exact filter column just
+        // before this save pass -- write its index through.
+        else if (allocatedDxfId is not null)
+            element.SetAttributeValue("dxfId", allocatedDxfId.Value.ToString(CultureInfo.InvariantCulture));
 
         if (colorFilter.CellColorRaw is not null)
             element.SetAttributeValue("cellColor", colorFilter.CellColorRaw);
@@ -338,7 +361,10 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         return attributes.Count == 0 ? null : attributes;
     }
 
-    private static IEnumerable<WorksheetAutoFilterColumnModel> ReadFilterColumns(XElement autoFilter, XNamespace worksheetNs)
+    private static IEnumerable<WorksheetAutoFilterColumnModel> ReadFilterColumns(
+        XElement autoFilter,
+        XNamespace worksheetNs,
+        IReadOnlyList<CellStyle>? differentialStyles)
     {
         foreach (var column in autoFilter.Elements(worksheetNs + "filterColumn"))
         {
@@ -390,7 +416,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
                 nativeCustomFiltersAttributes?.Count > 0 ? nativeCustomFiltersAttributes : null,
                 ReadTop10(top10),
                 ReadDynamicFilter(dynamicFilter),
-                ReadColorFilter(colorFilter),
+                ReadColorFilter(colorFilter, differentialStyles),
                 ReadIconFilter(iconFilter),
                 filters?
                     .Elements(worksheetNs + "dateGroupItem")
@@ -419,7 +445,9 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         }
     }
 
-    private static WorksheetAutoFilterColorFilterModel? ReadColorFilter(XElement? colorFilter)
+    private static WorksheetAutoFilterColorFilterModel? ReadColorFilter(
+        XElement? colorFilter,
+        IReadOnlyList<CellStyle>? differentialStyles)
     {
         if (colorFilter is null)
             return null;
@@ -429,12 +457,28 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
                 !IsWorksheetAutoFilterModeledAttribute(attribute, "dxfId") &&
                 !IsWorksheetAutoFilterModeledAttribute(attribute, "cellColor"))
             .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
+        var dxfId = XlsxXmlAttributeReader.ReadIntAttribute(colorFilter, "dxfId");
+        var cellColor = XlsxXmlAttributeReader.ReadBoolAttribute(colorFilter, "cellColor", defaultValue: true);
+
+        // R89-io-autofilter-color-dxf-1-1: resolve the dxfId back to the actual fill/font colour it
+        // points at (when the referenced dxf is in range and this pass was given the workbook's
+        // resolved differential styles) so the colour filter round-trips its exact colour, not just
+        // its dxf index. `cellColor` selects which half of the dxf is the filter's colour: fill for
+        // true, font for false -- mirrors the OOXML semantics ToColorFilterXml/the schema define.
+        CellColor? resolvedColor = null;
+        if (dxfId is { } dxfIndex && differentialStyles is not null && dxfIndex >= 0 && dxfIndex < differentialStyles.Count)
+        {
+            var dxfStyle = differentialStyles[dxfIndex];
+            resolvedColor = cellColor ? dxfStyle.FillColor : (CellColor?)dxfStyle.FontColor;
+        }
+
         return new WorksheetAutoFilterColorFilterModel(
-            DifferentialFormatId: XlsxXmlAttributeReader.ReadIntAttribute(colorFilter, "dxfId"),
-            CellColor: XlsxXmlAttributeReader.ReadBoolAttribute(colorFilter, "cellColor", defaultValue: true),
+            DifferentialFormatId: dxfId,
+            CellColor: cellColor,
             DifferentialFormatIdRaw: colorFilter.Attribute("dxfId")?.Value,
             CellColorRaw: colorFilter.Attribute("cellColor")?.Value,
-            NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
+            NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes,
+            Color: resolvedColor);
     }
 
     private static WorksheetAutoFilterDateGroupItemModel ReadDateGroupItem(XElement dateGroup)

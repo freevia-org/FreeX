@@ -36,30 +36,13 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         if (root is null)
             return new Dictionary<Guid, int>();
 
-        var dxfs = root.Element(workbookNs + "dxfs");
-        if (dxfs is null)
-        {
-            dxfs = new XElement(workbookNs + "dxfs");
-            root.Add(dxfs);
-        }
-
-        // Allocate numFmtIds above the maximum existing custom format id to avoid collision
-        // with workbook numFmts (ids >= 164) and other dxf numFmts already in the file.
-        // The OOXML spec reserves 0-163 for built-ins; custom formats start at 164.
-        const int MinCustomNumFmtId = 164;
-        var maxExistingNumFmtId = root
-            .Element(workbookNs + "numFmts")?
-            .Elements(workbookNs + "numFmt")
-            .Select(element => int.TryParse(element.Attribute("numFmtId")?.Value, out var id) ? id : 0)
-            .DefaultIfEmpty(0)
-            .Max() ?? 0;
-        var maxDxfNumFmtId = dxfs
-            .Elements(workbookNs + "dxf")
-            .SelectMany(dxf => dxf.Elements(workbookNs + "numFmt"))
-            .Select(element => int.TryParse(element.Attribute("numFmtId")?.Value, out var id) ? id : 0)
-            .DefaultIfEmpty(0)
-            .Max();
-        var nextNumFmtId = Math.Max(MinCustomNumFmtId, Math.Max(maxExistingNumFmtId, maxDxfNumFmtId) + 1);
+        // R89-io-autofilter-color-dxf-1-1: dxfs-element access and numFmtId allocation are shared
+        // with XlsxAutoFilterColorFilterDxfWriter (see XlsxDifferentialStyleAllocator) so a colour
+        // filter's dxf and a conditional-format rule's dxf never collide/duplicate a numFmtId. The
+        // per-rule append-without-dedup loop below is left exactly as it was to avoid any behavior
+        // change to this already well-tested path.
+        var dxfs = XlsxDifferentialStyleAllocator.GetOrCreateDxfsElement(root, workbookNs);
+        var nextNumFmtId = XlsxDifferentialStyleAllocator.ComputeNextCustomNumFmtId(root, dxfs, workbookNs);
 
         var result = new Dictionary<Guid, int>();
         var nextIndex = dxfs.Elements(workbookNs + "dxf").Count();
@@ -78,7 +61,10 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         return result;
     }
 
-    private static XElement ToDifferentialStyleXml(CellStyle style, XNamespace workbookNs, int numFmtId)
+    // Internal (not private): reused by XlsxAutoFilterColorFilterDxfWriter (R89-io-autofilter-color-dxf-1-1)
+    // to build a <dxf> for an AutoFilter colour filter's fill/font colour via the same element shape
+    // as a conditional-format differential style, instead of a second hand-written dxf builder.
+    internal static XElement ToDifferentialStyleXml(CellStyle style, XNamespace workbookNs, int numFmtId)
     {
         var def = CellStyle.Default;
         var dxf = new XElement(

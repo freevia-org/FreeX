@@ -378,7 +378,7 @@ public partial class MainWindow
         // new frozen band when the old top-left now falls inside it). When unscrolled (Value
         // == 1, absolute row/col == 1) this maps back to 1 either way, so freeze-at-A1 is
         // unaffected.
-        var (preTopRow, preLeftCol) = CalculateViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
+        var (preTopRow, preLeftCol) = GetEffectiveViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
 
         var outcome = _commandBus.Execute(
             _workbook.Id,
@@ -388,6 +388,11 @@ public partial class MainWindow
             ShowCommandError(outcome, "Freeze Panes");
             return;
         }
+
+        // This window chose the new Freeze Panes state -- remember it as THIS window's own state
+        // (R89-freeze-split-per-window-1), exactly like SetWorksheetViewMode/the View-tab toggles:
+        // a sibling "New Window" over the same document must keep showing whatever it had before.
+        SyncWindowViewState([_currentSheetId]);
 
         var newVerticalValue = WorksheetIndexToScrollbarValue(preTopRow, frozenRows);
         var newHorizontalValue = WorksheetIndexToScrollbarValue(preLeftCol, frozenCols);
@@ -411,7 +416,11 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var wasSplit = sheet.SplitRow is not null || sheet.SplitColumn is not null;
+        // This window's own effective Split state (R89-freeze-split-per-window-1), not the
+        // shared Sheet's -- a sibling "New Window" may have Split set/cleared without this
+        // window ever touching it.
+        var viewState = GetEffectiveViewState(sheet);
+        var wasSplit = viewState.SplitRow is not null || viewState.SplitColumn is not null;
 
         uint? splitRow = null;
         uint? splitColumn = null;
@@ -437,10 +446,15 @@ public partial class MainWindow
             }
         }
 
+        var targetSheetIds = CurrentGroupedEditSheetIds();
         if (!TryExecuteGroupedSheetCommand(
                 "Split",
                 sheetId => new SetSplitPanesCommand(sheetId, splitRow, splitColumn)))
             return;
+
+        // This window chose the new Split state -- remember it as THIS window's own state
+        // (R89-freeze-split-per-window-1), same reasoning as Freeze Panes/the View-tab toggles.
+        SyncWindowViewState(targetSheetIds);
 
         // Toggling the split off (or recreating it fresh) must not leak the previous split's
         // per-pane scroll offsets into whatever split comes next -- otherwise a brand-new split
@@ -459,9 +473,12 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var nextRow = splitRow ?? sheet.SplitRow;
-        var nextColumn = splitColumn ?? sheet.SplitColumn;
-        if (nextRow == sheet.SplitRow && nextColumn == sheet.SplitColumn)
+        // This window's own effective Split state (R89-freeze-split-per-window-1), not the
+        // shared Sheet's.
+        var viewState = GetEffectiveViewState(sheet);
+        var nextRow = splitRow ?? viewState.SplitRow;
+        var nextColumn = splitColumn ?? viewState.SplitColumn;
+        if (nextRow == viewState.SplitRow && nextColumn == viewState.SplitColumn)
             return;
 
         if (!TryExecuteGroupedSheetCommand(
@@ -469,6 +486,7 @@ public partial class MainWindow
                 sheetId => new SetSplitPanesCommand(sheetId, nextRow, nextColumn)))
             return;
 
+        SyncWindowViewState([_currentSheetId]);
         _splitPaneViewportOffsets.Remove(_currentSheetId);
         UpdateViewport();
     }

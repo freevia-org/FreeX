@@ -99,6 +99,7 @@ public sealed partial class ViewportService : IViewportService
                     rowMetrics,
                     colMetrics,
                     request.IncludeFormulas,
+                    request.ShowFormulasOverride,
                     cfContext,
                     hasConditionalStyles,
                     hasConditionalIcons,
@@ -124,6 +125,7 @@ public sealed partial class ViewportService : IViewportService
                         colMetric.Col,
                         EstimateCharacterWidth(GetMergeAwareTargetWidthPixels(sheet, sheetId, rowMetric.Row, colMetric.Col, colMetric.Width)),
                         request.IncludeFormulas,
+                        request.ShowFormulasOverride,
                         cfContext,
                         hasAnyCellComments,
                         hasAnyStyleOnlyCells,
@@ -169,7 +171,7 @@ public sealed partial class ViewportService : IViewportService
                 effectiveSplitCol,
                 splitTopRows,
                 splitLeftColumns,
-                BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas, cfContext, hasAnyCellComments, hasConditionalDataBars, ref styleCache),
+                BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas, request.ShowFormulasOverride, cfContext, hasAnyCellComments, hasConditionalDataBars, ref styleCache),
                 topRightColumns,
                 bottomLeftRows)
             : null;
@@ -450,6 +452,7 @@ public sealed partial class ViewportService : IViewportService
         IReadOnlyList<RowMetric> rowMetrics,
         IReadOnlyList<ColMetric> colMetrics,
         bool includeFormulas,
+        bool? showFormulasOverride,
         CfEvaluationContext cfContext,
         bool hasConditionalStyles,
         bool hasConditionalIcons,
@@ -492,6 +495,7 @@ public sealed partial class ViewportService : IViewportService
                 cell,
                 targetWidthCharacters,
                 includeFormulas,
+                showFormulasOverride,
                 cfContext,
                 hasConditionalStyles,
                 hasConditionalIcons,
@@ -599,6 +603,7 @@ public sealed partial class ViewportService : IViewportService
         Cell cell,
         int targetWidthCharacters,
         bool includeFormulas,
+        bool? showFormulasOverride,
         CfEvaluationContext cfContext,
         bool hasConditionalStyles,
         bool hasConditionalIcons,
@@ -631,7 +636,7 @@ public sealed partial class ViewportService : IViewportService
 
         var displayText = cfIcon?.ShowValue == false || cfDataBar?.ShowValue == false
             ? ""
-            : GetDisplayText(workbook, sheet, cell, row, col, ref style, targetWidthCharacters);
+            : GetDisplayText(workbook, sheet, cell, row, col, ref style, targetWidthCharacters, showFormulasOverride);
         var commentDisplay = hasComment
             ? CreateCellCommentDisplay(sheet, new CellAddress(sheetId, row, col))
             : null;
@@ -968,6 +973,7 @@ public sealed partial class ViewportService : IViewportService
         IReadOnlyList<RowMetric> bottomLeftRows,
         IReadOnlyList<ColMetric> topRightColumns,
         bool includeFormulas,
+        bool? showFormulasOverride,
         CfEvaluationContext cfContext,
         bool hasAnyCellComments,
         bool hasConditionalDataBars,
@@ -990,15 +996,15 @@ public sealed partial class ViewportService : IViewportService
         foreach (var row in topRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(GetMergeAwareTargetWidthPixels(sheet, sheetId, row.Row, column.Col, column.Width)), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(GetMergeAwareTargetWidthPixels(sheet, sheetId, row.Row, column.Col, column.Width)), includeFormulas, showFormulasOverride, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
             foreach (var column in topRightColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(GetMergeAwareTargetWidthPixels(sheet, sheetId, row.Row, column.Col, column.Width)), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(GetMergeAwareTargetWidthPixels(sheet, sheetId, row.Row, column.Col, column.Width)), includeFormulas, showFormulasOverride, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
         }
 
         foreach (var row in bottomLeftRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(GetMergeAwareTargetWidthPixels(sheet, sheetId, row.Row, column.Col, column.Width)), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(GetMergeAwareTargetWidthPixels(sheet, sheetId, row.Row, column.Col, column.Width)), includeFormulas, showFormulasOverride, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
         }
 
         return cells;
@@ -1040,6 +1046,7 @@ public sealed partial class ViewportService : IViewportService
         uint col,
         int targetWidthCharacters,
         bool includeFormulas,
+        bool? showFormulasOverride,
         CfEvaluationContext cfContext,
         bool hasAnyCellComments,
         bool hasAnyStyleOnlyCells,
@@ -1167,6 +1174,7 @@ public sealed partial class ViewportService : IViewportService
             cell,
             targetWidthCharacters,
             includeFormulas,
+            showFormulasOverride,
             cfContext,
             hasConditionalStyles,
             hasConditionalIcons,
@@ -1447,9 +1455,11 @@ public sealed partial class ViewportService : IViewportService
         uint row,
         uint col,
         ref CellStyle style,
-        int targetWidthCharacters)
+        int targetWidthCharacters,
+        bool? showFormulasOverride = null)
     {
-        if (sheet.ShowFormulas && cell.FormulaText is not null &&
+        var showFormulas = showFormulasOverride ?? sheet.ShowFormulas;
+        if (showFormulas && cell.FormulaText is not null &&
             !(sheet.IsProtected && IsEffectivelyHidden(workbook, sheet, cell, row, col)))
         {
             return "=" + cell.FormulaText;

@@ -376,12 +376,19 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var showFormulas = !sheet.ShowFormulas;
+        // Toggle against THIS window's own effective Show Formulas state (R89-show-formulas-
+        // per-window-1), not the shared Sheet field directly -- a sibling "New Window" may have
+        // already flipped the shared field without this window ever adopting it, and reading the
+        // raw sheet here would silently re-toggle from that sibling's value instead of this
+        // window's own last-known one (mirrors the Freeze Panes/Split per-window pattern).
+        var showFormulas = !GetEffectiveViewState(sheet).ShowFormulas;
+        var targetSheetIds = CurrentGroupedEditSheetIds();
         if (!TryExecuteGroupedSheetCommand(
                 "Show Formulas",
                 sheetId => new SetWorksheetShowFormulasCommand(sheetId, showFormulas)))
             return;
 
+        SyncWindowViewState(targetSheetIds);
         UpdateViewport();
     }
 

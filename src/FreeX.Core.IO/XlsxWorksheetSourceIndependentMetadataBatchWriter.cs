@@ -1,4 +1,5 @@
 using System.IO;
+using System.Xml.Linq;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -38,7 +39,19 @@ internal static class XlsxWorksheetSourceIndependentMetadataBatchWriter
 
         using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
         if (hasAutoFilter)
-            XlsxWorksheetAutoFilterMapper.Save(session, workbook);
+        {
+            // R89-io-autofilter-color-dxf-1-1: allocate any missing colour-filter dxfs into
+            // xl/styles.xml BEFORE writing the autoFilter XML, so the filterColumn writer below can
+            // reference the freshly allocated dxfId.
+            IReadOnlyDictionary<(SheetId, int), int>? colorFilterDxfIds = null;
+            if (XlsxAutoFilterColorFilterDxfWriter.HasUnallocatedColorFilters(workbook))
+            {
+                XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+                colorFilterDxfIds = XlsxAutoFilterColorFilterDxfWriter.Save(session.Archive, workbook, workbookNs);
+            }
+
+            XlsxWorksheetAutoFilterMapper.Save(session, workbook, colorFilterDxfIds);
+        }
         if (hasDataValidationNativeMetadata)
             XlsxDataValidationNativeMetadataMapper.Save(session, workbook);
         if (hasWorksheetNativeMetadata)

@@ -3,25 +3,40 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>
-/// A window's own worksheet view mode, zoom level, and View tab display toggles for one sheet.
+/// A window's own worksheet view mode, zoom level, View tab display toggles, and Freeze/Split
+/// pane state for one sheet.
 /// </summary>
 /// <remarks>
 /// <see cref="ShowGridlines"/>/<see cref="ShowHeadings"/>/<see cref="ShowRulers"/> extend the
 /// R83 ViewMode/ZoomPercent per-window independence to the rest of the WPF host's View tab
 /// toggles (R87-order-guard-window-state-sweep-1), mirroring the Avalonia shell's R86
-/// <c>_viewShowGridlinesOverrides</c>/<c>_viewShowHeadingsOverrides</c> sweep. Show Formulas and
-/// Freeze/Split panes are NOT included here: their actual on-screen rendering is baked directly
-/// off the shared <see cref="Sheet"/> inside <c>FreeX.Core.Calc.ViewportService</c> (used by both
-/// shells), so a WPF-host-only override for those would desync the ribbon toggle from what the
-/// grid actually shows instead of fixing the leak -- closing that gap requires threading an
-/// override through <c>ViewportRequest</c> in the shared rendering engine, out of scope here.
+/// <c>_viewShowGridlinesOverrides</c>/<c>_viewShowHeadingsOverrides</c> sweep.
+/// <see cref="FrozenRows"/>/<see cref="FrozenCols"/>/<see cref="SplitRow"/>/<see cref="SplitColumn"/>
+/// extend it again to Freeze Panes/Window &gt; Split (R89-freeze-split-per-window-1): the shared
+/// rendering engine (<c>FreeX.Core.Calc.ViewportService</c>) already accepts a per-viewport
+/// <c>FrozenRowsOverride</c>/<c>FrozenColsOverride</c>/<c>SplitOverride</c> on <c>ViewportRequest</c>
+/// (added for the Avalonia shell's own per-view overrides in <c>WorkbookSession</c>), so the WPF
+/// host only needed to start populating those from this store instead of always reading the
+/// shared <see cref="Sheet"/> fields directly -- see <c>MainWindow.Viewport.cs</c>'s
+/// <c>CreateViewport</c>/<c>GetSplitPaneViewportOffsets</c> and the scroll-math call sites that
+/// now route through <c>GetEffectiveViewState</c>. <see cref="ShowFormulas"/> completes the sweep
+/// (R89-show-formulas-per-window-1): <c>ViewportRequest</c> now also carries a
+/// <c>ShowFormulasOverride</c> that <c>ViewportService.GetDisplayText</c> consults instead of
+/// unconditionally reading the shared <see cref="Sheet.ShowFormulas"/> field, so this window's own
+/// remembered Show Formulas toggle can flow through the same per-view override plumbing as
+/// Freeze Panes/Split above.
 /// </remarks>
 public readonly record struct WorksheetViewStateSnapshot(
     WorksheetViewMode ViewMode,
     int ZoomPercent,
     bool ShowGridlines = true,
     bool ShowHeadings = true,
-    bool ShowRulers = true);
+    bool ShowRulers = true,
+    uint FrozenRows = 0,
+    uint FrozenCols = 0,
+    uint? SplitRow = null,
+    uint? SplitColumn = null,
+    bool ShowFormulas = false);
 
 /// <summary>
 /// Remembers each worksheet's view mode, zoom level, and View tab display toggles within a
@@ -57,7 +72,12 @@ public sealed class WorksheetViewStateStore
             sheet.ZoomPercent,
             sheet.ShowGridlines,
             sheet.ShowHeadings,
-            sheet.ShowRulers);
+            sheet.ShowRulers,
+            sheet.FrozenRows,
+            sheet.FrozenCols,
+            sheet.SplitRow,
+            sheet.SplitColumn,
+            sheet.ShowFormulas);
         _bySheet[sheet.Id] = seeded;
         return seeded;
     }

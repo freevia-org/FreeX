@@ -113,6 +113,27 @@ public static class SparklineLayoutEngine
     }
 
     /// <summary>
+    /// Lays out a line sparkline with optional axis-bound overrides, optional date-axis spacing, and
+    /// the sparkline group's "Plot Data Right-to-Left" option. When <paramref name="rightToLeft"/> is
+    /// true, every computed X position is mirrored within <paramref name="rect"/> so the first data
+    /// point lands at the right edge and the last at the left, matching Excel; the mirroring is
+    /// applied to the horizontal fraction before scaling, so it composes correctly with date-axis
+    /// spacing (the date-proportional gaps are mirrored, not recomputed evenly).
+    /// </summary>
+    public static SparklineLineLayout CalculateLineLayout(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        double? overrideMin,
+        double? overrideMax,
+        IReadOnlyList<double>? datePositions,
+        bool rightToLeft)
+    {
+        var consumer = new LineLayoutCollector(values.Count);
+        VisitLineLayout(values, rect, ref consumer, overrideMin, overrideMax, datePositions, rightToLeft);
+        return consumer.ToLayout();
+    }
+
+    /// <summary>
     /// Streams a line sparkline's geometry into <paramref name="consumer"/> without allocating a list.
     /// Same math as <see cref="CalculateLineLayout"/>; a renderer can consume points/segments directly.
     /// </summary>
@@ -152,6 +173,26 @@ public static class SparklineLayoutEngine
         double? overrideMin,
         double? overrideMax,
         IReadOnlyList<double>? datePositions)
+        where TConsumer : struct, ISparklineLineLayoutConsumer =>
+        VisitLineLayout(values, rect, ref consumer, overrideMin, overrideMax, datePositions, rightToLeft: false);
+
+    /// <summary>
+    /// Streams a line sparkline's geometry into <paramref name="consumer"/>, optionally spacing
+    /// points by <paramref name="datePositions"/> and honoring the sparkline group's "Plot Data
+    /// Right-to-Left" option. When <paramref name="rightToLeft"/> is true every point's horizontal
+    /// fraction is mirrored (<c>1 - fraction</c>) before it is scaled into <paramref name="rect"/>, so
+    /// the first data point lands at the right edge and the last at the left; this single mirroring
+    /// step composes correctly with date-axis spacing since it is applied to the fraction the date
+    /// spacing already produced, not recomputed from scratch.
+    /// </summary>
+    public static void VisitLineLayout<TConsumer>(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        ref TConsumer consumer,
+        double? overrideMin,
+        double? overrideMax,
+        IReadOnlyList<double>? datePositions,
+        bool rightToLeft)
         where TConsumer : struct, ISparklineLineLayoutConsumer
     {
         if (values.Count == 0 || rect.Width <= 0 || rect.Height <= 0)
@@ -256,6 +297,8 @@ public static class SparklineLayoutEngine
             var xFraction = useDatePositions
                 ? (datePositions![i] - minPos) / posSpan
                 : (double)i / (values.Count - 1);
+            if (rightToLeft)
+                xFraction = 1 - xFraction;
             var point = new LayoutPoint(
                 rect.Left + (rect.Width * xFraction),
                 rect.Bottom - (Math.Clamp((value - min) / span, 0, 1) * rect.Height));
@@ -305,6 +348,25 @@ public static class SparklineLayoutEngine
     }
 
     /// <summary>
+    /// Lays out a column or win/loss sparkline with an optional maximum-absolute-value override and
+    /// the sparkline group's "Plot Data Right-to-Left" option. When <paramref name="rightToLeft"/> is
+    /// true each bar's slot is mirrored within <paramref name="rect"/> so the first value's bar lands
+    /// in the rightmost slot and the last in the leftmost, matching Excel; the vertical scale, axis
+    /// baseline, and bar sign coloring are unchanged.
+    /// </summary>
+    public static SparklineColumnLayout CalculateColumnLayout(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        bool winLoss,
+        double? overrideMaxAbs,
+        bool rightToLeft)
+    {
+        var consumer = new ColumnLayoutCollector(values.Count);
+        VisitColumnLayout(values, rect, winLoss, ref consumer, overrideMaxAbs, rightToLeft);
+        return consumer.ToLayout();
+    }
+
+    /// <summary>
     /// Streams a column / win-loss sparkline's bar geometry into <paramref name="consumer"/> without
     /// allocating a list. Same math as <see cref="CalculateColumnLayout(IReadOnlyList{double}, LayoutRect, bool)"/>.
     /// </summary>
@@ -327,6 +389,23 @@ public static class SparklineLayoutEngine
         bool winLoss,
         ref TConsumer consumer,
         double? overrideMaxAbs)
+        where TConsumer : struct, ISparklineColumnLayoutConsumer =>
+        VisitColumnLayout(values, rect, winLoss, ref consumer, overrideMaxAbs, rightToLeft: false);
+
+    /// <summary>
+    /// Streams a column / win-loss sparkline's bar geometry into <paramref name="consumer"/> with an
+    /// optional maximum-absolute-value override and the sparkline group's "Plot Data Right-to-Left"
+    /// option. When <paramref name="rightToLeft"/> is true each bar's slot index is mirrored
+    /// (<c>count - 1 - i</c>) so the first value's bar lands in the rightmost slot and the last in the
+    /// leftmost; the per-bar width, vertical scale, and axis baseline are unchanged.
+    /// </summary>
+    public static void VisitColumnLayout<TConsumer>(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        bool winLoss,
+        ref TConsumer consumer,
+        double? overrideMaxAbs,
+        bool rightToLeft)
         where TConsumer : struct, ISparklineColumnLayoutConsumer
     {
         if (values.Count == 0 || rect.Width <= 0 || rect.Height <= 0)
@@ -405,7 +484,8 @@ public static class SparklineLayoutEngine
                 ? rect.Height / 2
                 : Math.Abs(value) / maxAbs * maxBarHeight;
             height = Math.Min(maxBarHeight, Math.Max(1, height));
-            var x = rect.Left + (i * slot) + ((slot - barWidth) / 2);
+            var slotIndex = rightToLeft ? values.Count - 1 - i : i;
+            var x = rect.Left + (slotIndex * slot) + ((slot - barWidth) / 2);
             var y = value >= 0 ? axis - height : axis;
 
             consumer.AcceptBar(new LayoutRect(x, y, barWidth, height), value < 0);
@@ -419,14 +499,25 @@ public static class SparklineLayoutEngine
         CalculateColumnLayout(values, rect, kind == SparklineKind.WinLoss);
 
     /// <summary>
+    /// Lays out a sparkline of the given kind, dispatching to the line or column/win-loss math, and
+    /// honoring the sparkline group's "Plot Data Right-to-Left" option.
+    /// </summary>
+    public static SparklineColumnLayout CalculateColumnLayout(IReadOnlyList<double> values, LayoutRect rect, SparklineKind kind, bool rightToLeft) =>
+        CalculateColumnLayout(values, rect, kind == SparklineKind.WinLoss, overrideMaxAbs: null, rightToLeft);
+
+    /// <summary>
     /// Returns the per-point Y positions for a line sparkline with the given axis bounds.
-    /// Used by the renderer to place marker dots at each data point.
+    /// Used by the renderer to place marker dots at each data point. The returned <c>Index</c> is
+    /// always the point's original data index (0 = first, Count-1 = last) regardless of
+    /// <paramref name="rightToLeft"/>, so a caller identifying "first/last/high/low" markers by index
+    /// keeps working unchanged; only the geometry moves.
     /// </summary>
     public static IReadOnlyList<(int Index, LayoutPoint Point)> GetLinePoints(
         IReadOnlyList<double> values,
         LayoutRect rect,
         double? overrideMin,
-        double? overrideMax)
+        double? overrideMax,
+        bool rightToLeft = false)
     {
         if (values.Count == 0 || rect.Width <= 0 || rect.Height <= 0)
             return [];
@@ -463,8 +554,11 @@ public static class SparklineLayoutEngine
             if (!double.IsFinite(values[i])) continue;
             var n = values.Count == 1 ? 0 : i;
             var denom = values.Count == 1 ? 1 : values.Count - 1;
+            var xFraction = (double)n / denom;
+            if (rightToLeft)
+                xFraction = 1 - xFraction;
             var pt = new LayoutPoint(
-                rect.Left + (rect.Width * n / denom),
+                rect.Left + (rect.Width * xFraction),
                 rect.Bottom - (Math.Clamp((values[i] - min) / span, 0, 1) * rect.Height));
             result.Add((i, pt));
         }

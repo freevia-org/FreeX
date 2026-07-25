@@ -5,8 +5,10 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorksheetAutoFilterMapper
 {
-    public static WorksheetAutoFilterModel? Read(XElement? autoFilter) =>
-        XlsxWorksheetAutoFilterXmlMapper.Read(autoFilter);
+    public static WorksheetAutoFilterModel? Read(
+        XElement? autoFilter,
+        IReadOnlyList<CellStyle>? differentialStyles = null) =>
+        XlsxWorksheetAutoFilterXmlMapper.Read(autoFilter, differentialStyles);
 
     public static void MaterializeFilters(Sheet sheet) =>
         XlsxWorksheetAutoFilterMaterializer.MaterializeFilters(sheet);
@@ -14,6 +16,9 @@ internal static class XlsxWorksheetAutoFilterMapper
     public static void Save(Stream xlsxStream, Workbook workbook, XlsxWorkbookWorksheetPathMap? worksheetPathMap) =>
         XlsxWorksheetAutoFilterXmlMapper.Save(xlsxStream, workbook, worksheetPathMap);
 
-    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook) =>
-        XlsxWorksheetAutoFilterXmlMapper.Save(session, workbook);
+    internal static void Save(
+        XlsxWorksheetXmlEditSession session,
+        Workbook workbook,
+        IReadOnlyDictionary<(SheetId, int), int>? colorFilterDxfIds = null) =>
+        XlsxWorksheetAutoFilterXmlMapper.Save(session, workbook, colorFilterDxfIds);
 }

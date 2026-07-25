@@ -300,6 +300,15 @@ internal static class XlsxWorksheetAutoFilterNormalizer
 
     private static bool NormalizeColorFilterElement(XElement colorFilter)
     {
+        // dxfId is a REQUIRED attribute on CT_ColorFilter per the real ECMA-376/ISO 29500 schema (see
+        // XlsxNonChartSchemaValidationTests.AutoFilter_SanitizesInvalidAttributesForSchemaValidity,
+        // which fails with "The required attribute 'dxfId' is missing" if this element is emitted
+        // without one) -- a colorFilter that ends up with no valid dxfId is not a legal "no format"
+        // marker, it is simply invalid XML, so it must be dropped rather than written out. R89-io-
+        // autofilter-color-dxf-1-1's allocator (XlsxAutoFilterColorFilterDxfWriter) now always gives
+        // even a colourless "No Fill" filter a dxfId (an empty <dxf/>), so this path should no longer
+        // be hit by anything FreeX itself writes -- it remains as a safety net for malformed native
+        // XML carried over from another source.
         if (NormalizeUnsignedIntOrNull(colorFilter.Attribute("dxfId")?.Value) is not { } normalizedDxfId)
         {
             colorFilter.Remove();
