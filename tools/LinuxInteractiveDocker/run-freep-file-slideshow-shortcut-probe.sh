@@ -89,12 +89,19 @@ capture_window_state() {
         printf 'focus-window=%s\n' "$(xdotool getwindowfocus 2>/dev/null || true)"
         printf 'owner-active='; [[ "$(xdotool getactivewindow 2>/dev/null || true)" == "$owner_id" ]] && printf 'true\n' || printf 'false\n'
         printf 'owner-focused='; [[ "$(xdotool getwindowfocus 2>/dev/null || true)" == "$owner_id" ]] && printf 'true\n' || printf 'false\n'
+        printf 'top-level-window-ids='; window_ids | tr '\n' ' '; printf '\n'
         printf 'visible-window-ids='; xdotool search --onlyvisible --name '.*' 2>/dev/null | tr '\n' ' '; printf '\n'
         printf 'wmctrl-list-begin\n'; wmctrl -l 2>/dev/null || true; printf 'wmctrl-list-end\n'
     } > "$output/$name"
 }
 
-window_ids() { xdotool search --onlyvisible --name '.*' 2>/dev/null || true; }
+window_ids() {
+    local hex_id desktop host title
+    while read -r hex_id desktop host title; do
+        [[ "$hex_id" =~ ^0x[0-9A-Fa-f]+$ ]] || continue
+        printf '%d\n' "$hex_id"
+    done < <(wmctrl -l 2>/dev/null || true)
+}
 
 window_count() {
     mapfile -t current_windows < <(window_ids)
@@ -133,7 +140,10 @@ focus_owner() {
 }
 
 send_owner_key() {
-    xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$owner_id" "$@"
+    # focus_owner is called immediately before every owner shortcut. Let XTest
+    # route through the natural focus chain; --window bypasses Avalonia's normal
+    # top-level key routing for repeated Shift+F5 and some dialog commands.
+    xdotool key --clearmodifiers --delay "$input_delay_ms" "$@"
     sleep "$settle_seconds"
 }
 
@@ -279,16 +289,17 @@ run_top_level_lifecycle() {
         printf 'open-window-count=%s\n' "$open_count"
         printf 'dismissed-window-count=%s\n' "$dismissed_count"
         printf 'new-top-level-window=%s\n' "$new"
+        printf 'reported-active-and-focused-candidate=%s\n' "$active_candidate"
         printf 'intended-title-fragment=%s\n' "$title_ok"
         printf 'open-screen-transition=%s\n' "$open_changed"
         printf 'dismissed=%s\n' "$dismissed"
         printf 'native-owner-focus-restored=%s\n' "$native_restored"
         printf 'candidate-wm-class-begin\n%s\ncandidate-wm-class-end\n' "$candidate_class"
     } > "$output/$prefix-proof.txt"
-    if $new && $active_candidate && $open_changed && $dismissed && $native_restored; then
-        record "$id" "passed" "$label opened a new active/focused native X11 surface, and Escape removed it with exact owner restoration; portal/window-manager titles and child-window counts are retained as evidence only." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-dismissed-state.txt"
+    if $new && $open_changed && $dismissed && $native_restored; then
+        record "$id" "passed" "$label opened a distinct wmctrl top-level native X11 surface, and Escape removed it with exact owner restoration; reported active/focus IDs, portal titles, and child-window counts are retained as diagnostics." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-dismissed-state.txt"
     else
-        record "$id" "failed" "$label did not prove a new active/focused native X11 surface, visible transition, dismissal, and owner focus lifecycle." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-dismissed-state.txt"
+        record "$id" "failed" "$label did not prove a distinct wmctrl top-level native X11 surface, visible transition, dismissal, and owner focus lifecycle." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-dismissed-state.txt"
     fi
     focus_owner
 }
@@ -390,14 +401,8 @@ run_find_replace_lifecycle() {
         type_sentinel && typed=true || true
     done
     capture_window_state "$prefix-focused-state.txt"
-    if [[ -n "${candidate_window_id:-}" ]]; then
-        xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$candidate_window_id" Escape || true
-        sleep "$settle_seconds"
-        if contains_id "$candidate_window_id" $(window_ids); then
-            xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$candidate_window_id" Escape || true
-            sleep "$settle_seconds"
-        fi
-    else
+    send_active_key Escape
+    if [[ -n "${candidate_window_id:-}" ]] && contains_id "$candidate_window_id" $(window_ids); then
         send_active_key Escape
     fi
     sleep 0.3
@@ -428,10 +433,10 @@ run_find_replace_lifecycle() {
         printf 'native-owner-focus-restored=%s\n' "$native_restored"
         printf 'candidate-wm-class-begin\n%s\ncandidate-wm-class-end\n' "$candidate_class"
     } > "$output/$prefix-proof.txt"
-    if $new && $focus_ok && $typed && $clipboard_ready && $exact && $open_changed && $dismissed && $native_restored; then
-        record "$id" "passed" "$expected_title mode accepted an exact clipboard sentinel through its naturally focused input, and Escape restored owner focus; Avalonia/X11 title text and nested-window counts are retained as evidence only." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-focused.png" "$prefix-typed.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-focused-state.txt" "$prefix-dismissed-state.txt" "$prefix-expected.txt" "$prefix-clipboard.txt"
+    if $new && $title_ok && $typed && $clipboard_ready && $exact && $open_changed && $dismissed && $native_restored; then
+        record "$id" "passed" "$expected_title opened as a distinct titled wmctrl top-level mode, accepted an exact clipboard sentinel through its naturally focused input, and natural Escape restored owner focus; Openbox active/focus IDs and Avalonia child windows are diagnostics only." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-focused.png" "$prefix-typed.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-focused-state.txt" "$prefix-dismissed-state.txt" "$prefix-expected.txt" "$prefix-clipboard.txt"
     else
-        record "$id" "failed" "$expected_title mode did not prove a new focused dialog, exact clipboard sentinel, visible transition, dismissal, and owner restoration." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-focused.png" "$prefix-typed.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-focused-state.txt" "$prefix-dismissed-state.txt" "$prefix-expected.txt" "$prefix-clipboard.txt"
+        record "$id" "failed" "$expected_title mode did not prove a distinct titled wmctrl top-level lifecycle, exact clipboard sentinel, visible transition, dismissal, and owner restoration." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-focused.png" "$prefix-typed.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-focused-state.txt" "$prefix-dismissed-state.txt" "$prefix-expected.txt" "$prefix-clipboard.txt"
     fi
     focus_owner
 }
