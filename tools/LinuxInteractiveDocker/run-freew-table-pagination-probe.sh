@@ -10,6 +10,7 @@ input_delay_ms="${FREEW_X11_INPUT_DELAY_MS:-180}"
 settle_seconds="${FREEW_X11_SETTLE_SECONDS:-0.65}"
 pointer_timeout_seconds="${FREEW_X11_POINTER_TIMEOUT_SECONDS:-3}"
 shared_plan_test="${FREEW_SHARED_PLAN_TEST_PATH:-${SHARED_PLAN_TEST_PATH:-/work/shared-plan-test.txt}}"
+avalonia_table_test="${FREEW_AVALONIA_TABLE_TEST_PATH:-/work/avalonia-table-structure-test.txt}"
 records="$output/result-records.jsonl"
 screenshots_file="$output/screenshot-names.txt"
 manifest="$output/results.json"
@@ -66,6 +67,17 @@ capture() {
 capture_page_crop() {
     local source="$1" name="$2"
     convert "$output/$source" -crop 900x520+160+170 +repage "$output/$name" >/dev/null 2>&1
+    [[ -s "$output/$name" ]]
+}
+
+capture_status_crop() {
+    local source="$1" name="$2" dimensions width height crop_y
+    dimensions="$(identify -format '%w %h' "$output/$source" 2>/dev/null || true)"
+    read -r width height <<< "$dimensions"
+    [[ "$width" =~ ^[0-9]+$ && "$height" =~ ^[0-9]+$ ]]
+    crop_y=$((height - 56))
+    (( crop_y < 0 )) && crop_y=0
+    convert "$output/$source" -crop "520x56+0+$crop_y" +repage "$output/$name" >/dev/null 2>&1
     [[ -s "$output/$name" ]]
 }
 
@@ -241,45 +253,54 @@ fi
 
 if [[ -n "${owner_id:-}" && -f "$output/baseline-page-crop.png" ]]; then
     baseline_hash="$(sha256sum "$output/baseline-page-crop.png" | awk '{print $1}')"
-    send_owner_key ctrl+end
+    send_owner_key ctrl+End
     capture ctrl-end.png
     capture_page_crop ctrl-end.png ctrl-end-page-crop.png
     capture_state ctrl-end
+    send_owner_key ctrl+End
+    capture ctrl-end-repeat.png
+    capture_page_crop ctrl-end-repeat.png ctrl-end-repeat-page-crop.png
+    capture_state ctrl-end-repeat
     ctrl_end_hash="$(sha256sum "$output/ctrl-end-page-crop.png" | awk '{print $1}')"
-    fallback="none"
-    if [[ "$ctrl_end_hash" == "$baseline_hash" ]]; then
-        fallback="pagedown"
-        send_owner_key pagedown
-        capture pagedown-fallback.png
-        capture_page_crop pagedown-fallback.png pagedown-fallback-page-crop.png
-        capture_state pagedown-fallback
-    fi
+    ctrl_end_repeat_hash="$(sha256sum "$output/ctrl-end-repeat-page-crop.png" | awk '{print $1}')"
+    baseline_to_end_delta="$(screen_difference baseline-page-crop.png ctrl-end-page-crop.png)"
+    end_stability_delta="$(screen_difference ctrl-end-page-crop.png ctrl-end-repeat-page-crop.png)"
+    printf 'key-symbol=ctrl+End\nbaseline-crop-sha256=%s\nctrl-end-crop-sha256=%s\nctrl-end-repeat-crop-sha256=%s\nbaseline-to-end-AE=%s\nend-repeat-stability-AE=%s\nstability-threshold-AE=100\n' "$baseline_hash" "$ctrl_end_hash" "$ctrl_end_repeat_hash" "$baseline_to_end_delta" "$end_stability_delta" > "$output/third-page-navigation-proof.txt"
+    owner_focused_after_repeat="$(if owner_has_focus; then printf true; else printf false; fi)"
+    printf 'owner-focused-after-repeat=%s\n' "$owner_focused_after_repeat" >> "$output/third-page-navigation-proof.txt"
     capture final.png
     capture_page_crop final.png final-page-crop.png
+    capture_status_crop final.png final-status-bar-crop.png
     capture_state final
-    final_hash="$(sha256sum "$output/final-page-crop.png" | awk '{print $1}')"
-    final_delta="$(screen_difference baseline-page-crop.png final-page-crop.png)"
-    printf 'baseline-crop-sha256=%s\nctrl-end-crop-sha256=%s\nfinal-crop-sha256=%s\nfallback=%s\nbaseline-final-AE=%s\n' "$baseline_hash" "$ctrl_end_hash" "$final_hash" "$fallback" "$final_delta" > "$output/third-page-navigation-proof.txt"
-    printf 'owner-focused=%s\n' "$(if owner_has_focus; then printf true; else printf false; fi)" >> "$output/third-page-navigation-proof.txt"
-    if [[ "$final_delta" =~ ^[0-9]+$ ]] && (( final_delta > 100 )) && owner_has_focus; then
-        record physical-third-page-navigation passed "Ctrl+End reached a changed end-of-document render coupled to the deterministic three-page plan; PageDown was used only when Ctrl+End left the page crop unchanged." baseline.png ctrl-end.png final.png baseline-page-crop.png ctrl-end-page-crop.png final-page-crop.png third-page-navigation-proof.txt
+    printf 'final-screenshot=final.png\nfinal-status-bar-crop=final-status-bar-crop.png\n' >> "$output/third-page-navigation-proof.txt"
+    if [[ "$baseline_to_end_delta" =~ ^[0-9]+$ ]] && (( baseline_to_end_delta > 100 )) && [[ "$end_stability_delta" =~ ^[0-9]+$ ]] && (( end_stability_delta <= 100 )) && [[ "$owner_focused_after_repeat" == true ]]; then
+        record physical-third-page-navigation passed "Two Ctrl+End inputs reached the deterministic three-page endpoint: the endpoint changed materially from baseline, remained stable on repeat, and retained owner focus." baseline.png ctrl-end.png ctrl-end-repeat.png final.png baseline-page-crop.png ctrl-end-page-crop.png ctrl-end-repeat-page-crop.png final-page-crop.png final-status-bar-crop.png third-page-navigation-proof.txt
     else
-        record physical-third-page-navigation failed "The physical navigation sequence did not produce a changed final page while retaining the FreeW owner focus." third-page-navigation-proof.txt final.png final-page-crop.png
+        record physical-third-page-navigation failed "Two Ctrl+End inputs did not prove a materially changed, stable endpoint while retaining the FreeW owner focus." third-page-navigation-proof.txt ctrl-end.png ctrl-end-page-crop.png ctrl-end-repeat.png ctrl-end-repeat-page-crop.png final.png final-page-crop.png final-status-bar-crop.png
     fi
     if image_nonblank_varied final-page-crop.png; then
-        record nonblank-final-page-render passed "The final page crop is nonblank and contains measurable visual variation." final.png final-page-crop.png final-state.txt third-page-navigation-proof.txt
+        record nonblank-final-page-render passed "The final repeated Ctrl+End endpoint crop is nonblank and contains measurable visual variation." final.png final-page-crop.png final-status-bar-crop.png final-state.txt third-page-navigation-proof.txt
     else
-        record nonblank-final-page-render failed "ImageMagick could not prove that the final page crop is nonblank and varied." final.png final-page-crop.png final-state.txt
+        record nonblank-final-page-render failed "ImageMagick could not prove that the final repeated Ctrl+End endpoint crop is nonblank and varied." final.png final-page-crop.png final-status-bar-crop.png final-state.txt
     fi
 else
     record physical-third-page-navigation failed "Navigation was not attempted because the focused FreeW owner or baseline crop was unavailable." probe-incomplete.txt
     record nonblank-final-page-render failed "Final-page rendering was not attempted because the baseline capture was unavailable." probe-incomplete.txt
 fi
 
-if [[ -f "$shared_plan_test" ]] && grep -Eiq 'focused.*(test|success)|test.*(passed|success)|passed' "$shared_plan_test"; then
-    record shared-plan-proof passed "shared-plan-test.txt contains focused-test success evidence." shared-plan-test.txt
+focused_test_succeeded() {
+    local path="$1"
+    [[ -s "$path" ]] && grep -Eiq 'Failed:[[:space:]]*0' "$path" && grep -Eiq 'Passed:[[:space:]]*[1-9][[:digit:]]*' "$path"
+}
+
+if focused_test_succeeded "$shared_plan_test" && focused_test_succeeded "$avalonia_table_test"; then
+    record shared-plan-proof passed "Both focused planner and Avalonia table-structure outputs contain passing test summaries." shared-plan-test.txt avalonia-table-structure-test.txt
 else
-    printf 'shared-plan-test-path=%s\n' "$shared_plan_test" > "$output/shared-plan-proof.txt"
-    [[ -f "$shared_plan_test" ]] && cat "$shared_plan_test" >> "$output/shared-plan-proof.txt"
-    record shared-plan-proof failed "shared-plan-test.txt was absent or did not contain focused-test success evidence." shared-plan-proof.txt
+    {
+        printf 'shared-plan-test-path=%s\n' "$shared_plan_test"
+        if [[ -f "$shared_plan_test" ]]; then cat "$shared_plan_test"; fi
+        printf '\navalonia-table-structure-test-path=%s\n' "$avalonia_table_test"
+        if [[ -f "$avalonia_table_test" ]]; then cat "$avalonia_table_test"; fi
+    } > "$output/shared-plan-proof.txt"
+    record shared-plan-proof failed "Both focused planner and Avalonia table-structure outputs are required to contain passing test summaries." shared-plan-proof.txt
 fi
