@@ -705,3 +705,6 @@ hash_file "$document_path" > "$output/fixture-mounted-after.sha256.txt"
 if $lane_failed; then
     exit 1
 fi
+
+rm -f "$output/probe-incomplete.txt"
+exit 0
