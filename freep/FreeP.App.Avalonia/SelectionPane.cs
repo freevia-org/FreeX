@@ -73,7 +73,7 @@ internal sealed class SelectionPane : Border
             Content = $"{item.SelectionIndex + 1}. {item.ShapeName}",
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Padding = new Thickness(8, 5),
-            Margin = new Thickness(8, 1, 4, 1),
+            Margin = new Thickness(8 + (item.NestingDepth * 16), 1, 4, 1),
         };
         ToolTip.SetTip(select, $"Select {item.ShapeTypeLabel}");
         select.Click += (_, _) => _editor.Select(item.ShapeId);

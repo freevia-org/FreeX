@@ -19,17 +19,20 @@ public static class PresentationSelectionPanePlanner
             return new(slideIndex, false, null, []);
 
         // PowerPoint presents the front-most object first, while the model stores painter order.
-        var items = slide.Shapes
-            .AsEnumerable()
-            .Reverse()
-            .Select((shape, index) => new PresentationSelectionPaneItemPlan(
+        // Keep group children in the same local order directly beneath their group so the pane
+        // can address the real editable objects instead of treating a group as an opaque leaf.
+        var items = EnumerateShapesFrontToBack(slide.Shapes)
+            .Select((entry, index) => new PresentationSelectionPaneItemPlan(
                 index,
-                shape.Id,
-                string.IsNullOrWhiteSpace(shape.Name) ? DescribeKind(shape.Kind, shape.Id) : shape.Name,
-                shape.Kind,
-                DescribeKind(shape.Kind, shape.Id),
-                shape.IsHidden,
-                selected.Contains(shape.Id)))
+                entry.Shape.Id,
+                string.IsNullOrWhiteSpace(entry.Shape.Name)
+                    ? DescribeKind(entry.Shape.Kind, entry.Shape.Id)
+                    : entry.Shape.Name,
+                entry.Shape.Kind,
+                DescribeKind(entry.Shape.Kind, entry.Shape.Id),
+                entry.Shape.IsHidden,
+                selected.Contains(entry.Shape.Id),
+                entry.Depth))
             .ToArray();
 
         return new(
@@ -53,6 +56,21 @@ public static class PresentationSelectionPanePlanner
             SlideShapeKind.Ole => "Embedded object",
             _ => $"Object {id}",
         };
+
+    private static IEnumerable<(SlideShape Shape, int Depth)> EnumerateShapesFrontToBack(
+        IEnumerable<SlideShape> shapes,
+        int depth = 0)
+    {
+        foreach (var shape in shapes.Reverse())
+        {
+            yield return (shape, depth);
+            if (shape.Children.Count > 0)
+            {
+                foreach (var child in EnumerateShapesFrontToBack(shape.Children, depth + 1))
+                    yield return child;
+            }
+        }
+    }
 }
 
 public sealed record PresentationSelectionPaneItemPlan(
@@ -62,7 +80,8 @@ public sealed record PresentationSelectionPaneItemPlan(
     SlideShapeKind ShapeType,
     string ShapeTypeLabel,
     bool IsHidden,
-    bool IsSelected);
+    bool IsSelected,
+    int NestingDepth = 0);
 
 public sealed record PresentationSelectionPanePlan(
     int SlideIndex,

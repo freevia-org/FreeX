@@ -46,6 +46,64 @@ public sealed class SelectionPaneTests
     }
 
     [Fact]
+    public void Planner_ListsGroupChildrenInFrontToBackOrderWithDepth()
+    {
+        var slide = new Slide { Title = "Grouped selection" };
+        slide.Shapes.Clear();
+        var group = MakeShape(10, "Group");
+        group.Kind = SlideShapeKind.Group;
+        group.Children.Add(MakeShape(11, "Back child"));
+        group.Children.Add(MakeShape(12, "Front child"));
+        slide.Shapes.Add(MakeShape(1, "Behind group"));
+        slide.Shapes.Add(group);
+
+        var plan = PresentationSelectionPanePlanner.Build(slide, 0, [12]);
+
+        plan.Items.Select(item => item.ShapeName).Should().Equal("Group", "Front child", "Back child", "Behind group");
+        plan.Items.Select(item => item.NestingDepth).Should().Equal(0, 1, 1, 0);
+        plan.Items[1].IsSelected.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetShapeHiddenCommand_ResolvesGroupedChildAndIsUndoable()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide { Title = "Grouped visibility" };
+        slide.Shapes.Clear();
+        var group = MakeShape(10, "Group");
+        group.Kind = SlideShapeKind.Group;
+        group.Children.Add(MakeShape(11, "Child"));
+        slide.Shapes.Add(group);
+        presentation.Slides.Add(slide);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetShapeHiddenCommand(0, 11, true));
+        group.Children[0].IsHidden.Should().BeTrue();
+
+        bus.Undo();
+        group.Children[0].IsHidden.Should().BeFalse();
+    }
+
+    [Fact]
+    public void EditingSession_TogglesGroupedChildVisibilityThroughCommandBus()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide { Title = "Grouped session visibility" };
+        slide.Shapes.Clear();
+        var group = MakeShape(10, "Group");
+        group.Kind = SlideShapeKind.Group;
+        group.Children.Add(MakeShape(11, "Child"));
+        slide.Shapes.Add(group);
+        presentation.Slides.Add(slide);
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        session.ToggleShapeHidden(11).Should().BeTrue();
+        group.Children[0].IsHidden.Should().BeTrue();
+        session.Undo();
+        group.Children[0].IsHidden.Should().BeFalse();
+    }
+
+    [Fact]
     public void HiddenState_RoundTripsThroughPowerPointPackage()
     {
         var presentation = new Presentation();
