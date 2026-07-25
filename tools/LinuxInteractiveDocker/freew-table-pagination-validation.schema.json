@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://freex.local/schemas/freew-linux-table-pagination-physical-v1.json",
+  "title": "FreeW Linux physical table pagination evidence",
+  "description": "Strict host-promotion contract for the FreeW table-page composition stress surface.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "suite", "platform", "shell", "app", "appSurface", "parameters", "coverage", "contractValidation", "summary", "results"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "suite": { "const": "freew-linux-table-pagination-physical" },
+    "platform": { "const": "linux" },
+    "shell": { "const": "avalonia" },
+    "app": { "const": "FreeW" },
+    "appSurface": { "const": "table-page-composition-stress" },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["port"],
+      "properties": { "port": { "type": "integer", "const": 6096 } }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "exhaustive"],
+      "properties": {
+        "scope": { "const": "physical X11 table pagination plus deterministic shared-plan proof" },
+        "exhaustive": { "const": false }
+      }
+    },
+    "contractValidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "validator", "contractReference"],
+      "properties": {
+        "status": { "const": "passed" },
+        "validator": { "type": "string", "minLength": 1 },
+        "contractReference": { "const": "tools/LinuxInteractiveDocker/freew-table-pagination-validation.schema.json" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "failed", "total"],
+      "properties": {
+        "passed": { "type": "integer", "const": 5 },
+        "failed": { "type": "integer", "const": 0 },
+        "total": { "const": 5 }
+      }
+    },
+    "results": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "prefixItems": [
+        { "$ref": "#/$defs/visibleWindowDiscovery" },
+        { "$ref": "#/$defs/generatedFixtureHashIntegrity" },
+        { "$ref": "#/$defs/physicalThirdPageNavigation" },
+        { "$ref": "#/$defs/nonblankFinalPageRender" },
+        { "$ref": "#/$defs/sharedPlanProof" }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "level", "status", "evidence", "note"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "category": { "enum": ["physical-x11-table-pagination", "deterministic-shared-plan"] },
+        "level": { "enum": ["physical-x11-input", "focused-test"] },
+        "status": { "enum": ["passed", "failed"] },
+        "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    },
+    "visibleWindowDiscovery": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "id": { "const": "visible-window-discovery" }, "category": { "const": "physical-x11-table-pagination" }, "level": { "const": "physical-x11-input" } } }] },
+    "generatedFixtureHashIntegrity": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "id": { "const": "generated-fixture-hash-integrity" }, "category": { "const": "physical-x11-table-pagination" }, "level": { "const": "physical-x11-input" } } }] },
+    "physicalThirdPageNavigation": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "id": { "const": "physical-third-page-navigation" }, "category": { "const": "physical-x11-table-pagination" }, "level": { "const": "physical-x11-input" } } }] },
+    "nonblankFinalPageRender": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "id": { "const": "nonblank-final-page-render" }, "category": { "const": "physical-x11-table-pagination" }, "level": { "const": "physical-x11-input" } } }] },
+    "sharedPlanProof": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "id": { "const": "shared-plan-proof" }, "category": { "const": "deterministic-shared-plan" }, "level": { "const": "focused-test" } } }] }
+  }
+}
