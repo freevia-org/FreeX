@@ -17,6 +17,7 @@ public sealed record ChartSeriesOptionsSurfacePlan(
     string LineWidthLabel,
     string LineColorLabel,
     string LineDashLabel,
+    string NoLineLabel,
     string FillColorLabel,
     string MarkerLabel,
     string MarkerSizeLabel,
@@ -38,6 +39,7 @@ public sealed class ChartSeriesOptionsPlanner
     public const string LineWidthLabel = "Line width (pt)";
     public const string LineColorLabel = "Line color (#RRGGBB)";
     public const string LineDashLabel = "Line dash";
+    public const string NoLineLabel = "No line";
     public const string FillColorLabel = "Fill color (#RRGGBB)";
     public const string MarkerLabel = "Marker";
     public const string MarkerSizeLabel = "Marker size (pt)";
@@ -81,6 +83,7 @@ public sealed class ChartSeriesOptionsPlanner
     private double? _lineWidthPt;
     private ThemeAwareColor? _lineColor;
     private OutlineDash _lineDash;
+    private bool _noLine;
     private ThemeAwareColor? _fillColor;
     private ShapeFill? _fill;
     private ChartMarkerSymbol _markerSymbol;
@@ -102,6 +105,7 @@ public sealed class ChartSeriesOptionsPlanner
             LineWidthLabel,
             LineColorLabel,
             LineDashLabel,
+            NoLineLabel,
             FillColorLabel,
             MarkerLabel,
             MarkerSizeLabel,
@@ -127,6 +131,7 @@ public sealed class ChartSeriesOptionsPlanner
     public double? LineWidthPt => _lineWidthPt;
     public string LineColorText => FormatColor(_lineColor);
     public OutlineDash LineDash => _lineDash;
+    public bool NoLine => _noLine;
     public string FillColorText => FormatColor(_fillColor);
     public ChartMarkerSymbol MarkerSymbol => _markerSymbol;
     public double? MarkerSizePt => _markerSizePt;
@@ -141,6 +146,7 @@ public sealed class ChartSeriesOptionsPlanner
             _lineWidthPt = null;
             _lineColor = null;
             _lineDash = OutlineDash.Solid;
+            _noLine = false;
             _fillColor = null;
             _fill = null;
             _markerSymbol = ChartMarkerSymbol.Auto;
@@ -155,6 +161,7 @@ public sealed class ChartSeriesOptionsPlanner
         _lineWidthPt = series.LineStyle?.WidthPt;
         _lineColor = series.LineStyle?.Color;
         _lineDash = series.LineStyle?.Dash ?? OutlineDash.Solid;
+        _noLine = series.LineStyle?.NoFill == true;
         _fill = series.Fill;
         _fillColor = series.FillColor ?? (series.Fill is ShapeFill.Solid solid ? solid.Color : null);
         _markerSymbol = series.MarkerStyle?.Symbol ?? ChartMarkerSymbol.Auto;
@@ -168,6 +175,7 @@ public sealed class ChartSeriesOptionsPlanner
         ? null
         : ChartPointOptionsPlanner.ParseColor(text, LineColorLabel);
     public void SetLineDash(OutlineDash value) => _lineDash = value;
+    public void SetNoLine(bool value) => _noLine = value;
     public void SetFillColor(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -192,7 +200,8 @@ public sealed class ChartSeriesOptionsPlanner
         _fillColor,
         _fill,
         _lineColor,
-        _lineDash);
+        _lineDash,
+        _noLine);
 
     private static string FormatColor(ThemeAwareColor? color) =>
         color is null ? string.Empty : color.Resolved.ToString();

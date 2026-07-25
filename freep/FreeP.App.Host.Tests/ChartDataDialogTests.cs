@@ -160,7 +160,7 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart.Series[1].SmoothLine = true;
 
         var dialog = new ChartSeriesOptionsDialog(sess);
-        dialog.SetOptionsForTests(0, false, false, 2.25, ChartMarkerSymbol.Diamond, 7, "#4472C4", "#1F4E79", OutlineDash.DashDot);
+        dialog.SetOptionsForTests(0, false, false, 2.25, ChartMarkerSymbol.Diamond, 7, "#4472C4", "#1F4E79", OutlineDash.DashDot, true);
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -170,6 +170,7 @@ public sealed class ChartDataDialogTests : IDisposable
         options.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
         options.LineColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
         options.LineDash.Should().Be(OutlineDash.DashDot);
+        options.NoLine.Should().BeTrue();
     }
 
     [StaFact]

@@ -17,6 +17,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly TextBox _lineWidthBox;
     private readonly TextBox _lineColorBox;
     private readonly ComboBox _lineDashCombo;
+    private readonly CheckBox _noLineCheck;
     private readonly TextBox _fillColorBox;
     private readonly ComboBox _markerCombo;
     private readonly TextBox _markerSizeBox;
@@ -60,6 +61,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             DisplayMemberPath = nameof(ChartDashOption.Label),
             MinWidth = 150,
         };
+        _noLineCheck = new CheckBox { Content = surface.NoLineLabel };
         _fillColorBox = new TextBox { MinWidth = 140 };
         _markerCombo = new ComboBox
         {
@@ -90,6 +92,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         content.Children.Add(MakeRow(surface.LineWidthLabel, _lineWidthBox));
         content.Children.Add(MakeRow(surface.LineColorLabel, _lineColorBox));
         content.Children.Add(MakeRow(surface.LineDashLabel, _lineDashCombo));
+        content.Children.Add(_noLineCheck);
         content.Children.Add(MakeRow(surface.FillColorLabel, _fillColorBox));
         content.Children.Add(MakeRow(surface.MarkerLabel, _markerCombo));
         content.Children.Add(MakeRow(surface.MarkerSizeLabel, _markerSizeBox));
@@ -113,7 +116,8 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         double? markerSizePt,
         string? fillColor = null,
         string? lineColor = null,
-        OutlineDash lineDash = OutlineDash.Solid)
+        OutlineDash lineDash = OutlineDash.Solid,
+        bool noLine = false)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         _smoothLineCheck.IsChecked = smoothLine;
@@ -121,6 +125,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _lineWidthBox.Text = Format(lineWidthPt);
         _lineColorBox.Text = lineColor ?? string.Empty;
         _lineDashCombo.SelectedIndex = FindDashIndex(lineDash);
+        _noLineCheck.IsChecked = noLine;
         _markerCombo.SelectedIndex = FindMarkerIndex(markerSymbol);
         _markerSizeBox.Text = Format(markerSizePt);
         _fillColorBox.Text = fillColor ?? string.Empty;
@@ -146,6 +151,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _lineWidthBox.Text = Format(_planner.LineWidthPt);
         _lineColorBox.Text = _planner.LineColorText;
         _lineDashCombo.SelectedIndex = FindDashIndex(_planner.LineDash);
+        _noLineCheck.IsChecked = _planner.NoLine;
         _fillColorBox.Text = _planner.FillColorText;
         _markerCombo.SelectedIndex = FindMarkerIndex(_planner.MarkerSymbol);
         _markerSizeBox.Text = Format(_planner.MarkerSizePt);
@@ -159,6 +165,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _planner.SetLineColor(_lineColorBox.Text);
         if (_lineDashCombo.SelectedItem is ChartDashOption dash)
             _planner.SetLineDash(dash.Value);
+        _planner.SetNoLine(_noLineCheck.IsChecked == true);
         _planner.SetFillColor(_fillColorBox.Text);
         if (_markerCombo.SelectedItem is ChartMarkerSymbolOption marker)
             _planner.SetMarkerSymbol(marker.Value);

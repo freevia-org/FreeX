@@ -45,12 +45,14 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         if (_newOptions.LineColor is not null ||
             _newOptions.LineWidthPt.HasValue ||
             _newOptions.LineDash != OutlineDash.Solid ||
+            _newOptions.NoLine ||
             series.LineStyle is not null)
         {
             var line = series.LineStyle ?? new ChartLineStyle();
             line.Color = _newOptions.LineColor;
             line.WidthPt = _newOptions.LineWidthPt;
             line.Dash = _newOptions.LineDash;
+            line.NoFill = _newOptions.NoLine;
             series.LineStyle = line;
         }
 
