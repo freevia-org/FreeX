@@ -485,16 +485,80 @@ fi
 
 geometry="$(xdotool getwindowgeometry --shell "$owner_id" 2>/dev/null || true)"
 eval "$geometry"
-shape_center_x=$((X + 180 + (WIDTH - 180) * 36 / 100))
-shape_center_y=$((Y + HEIGHT * 38 / 100))
+if [[ ! "${X:-}" =~ ^-?[0-9]+$ || ! "${Y:-}" =~ ^-?[0-9]+$ ||
+      ! "${WIDTH:-}" =~ ^[0-9]+$ || ! "${HEIGHT:-}" =~ ^[0-9]+$ ]]; then
+    printf 'Owner geometry was incomplete or nonnumeric.\n%s\n' "$geometry" \
+        > "$output/shape-pointer-calibration-error.txt"
+    exit 1
+fi
+
+pane_width=180
+stage_body_top=$((Y + 137))
+stage_body_height=$((HEIGHT - 241))
+fit_box_x=$((X + pane_width + 40))
+fit_box_y=$((stage_body_top + 40))
+fit_box_width=$((WIDTH - pane_width - 80))
+fit_box_height=$((stage_body_height - 80))
+slide_width_emu=12192000
+slide_height_emu=6858000
+shape_center_x_emu=2286000
+shape_center_y_emu=1371600
+
+if (( fit_box_width * 9 <= fit_box_height * 16 )); then
+    slide_width_px=$fit_box_width
+    slide_height_px=$(((fit_box_width * 9 + 8) / 16))
+    slide_x=$fit_box_x
+    slide_y=$((fit_box_y + (fit_box_height - slide_height_px + 1) / 2))
+    fit_constraint=width
+else
+    slide_height_px=$fit_box_height
+    slide_width_px=$(((fit_box_height * 16 + 4) / 9))
+    slide_x=$((fit_box_x + (fit_box_width - slide_width_px + 1) / 2))
+    slide_y=$fit_box_y
+    fit_constraint=height
+fi
+shape_center_x=$((slide_x +
+    (slide_width_px * shape_center_x_emu + slide_width_emu / 2) /
+        slide_width_emu))
+shape_center_y=$((slide_y +
+    (slide_height_px * shape_center_y_emu + slide_height_emu / 2) /
+        slide_height_emu))
+
+if (( fit_box_width <= 0 || fit_box_height <= 0 ||
+      slide_width_px <= 0 || slide_height_px <= 0 ||
+      slide_x < fit_box_x || slide_y < fit_box_y ||
+      slide_x + slide_width_px > fit_box_x + fit_box_width ||
+      slide_y + slide_height_px > fit_box_y + fit_box_height ||
+      shape_center_x < slide_x || shape_center_x >= slide_x + slide_width_px ||
+      shape_center_y < slide_y || shape_center_y >= slide_y + slide_height_px )); then
+    {
+        printf 'Derived calibration geometry was nonsensical.\n'
+        printf 'owner=%s,%s,%s,%s\n' "$X" "$Y" "$WIDTH" "$HEIGHT"
+        printf 'fit-box=%s,%s,%s,%s\n' \
+            "$fit_box_x" "$fit_box_y" "$fit_box_width" "$fit_box_height"
+        printf 'slide-rect=%s,%s,%s,%s\n' \
+            "$slide_x" "$slide_y" "$slide_width_px" "$slide_height_px"
+        printf 'shape-center-point=%s,%s\n' "$shape_center_x" "$shape_center_y"
+    } > "$output/shape-pointer-calibration-error.txt"
+    exit 1
+fi
 {
-    printf 'calibration=known FreeP 1280x820 shell layout scaled from owner geometry\n'
+    printf 'calibration=derived 16:9 slide fit and fixture EMU center\n'
     printf 'owner-geometry-begin\n%s\nowner-geometry-end\n' "$geometry"
-    printf 'fixed-slide-pane-width=180\n'
-    printf 'fixed-canvas-margin=40\n'
-    printf 'fixed-notes-pane-height=60\n'
-    printf 'fixture-slide-aspect=4:3\n'
+    printf 'pane-width=%s\n' "$pane_width"
+    printf 'stage-body-top=%s\n' "$stage_body_top"
+    printf 'stage-body-height=%s\n' "$stage_body_height"
+    printf 'fit-box=%s,%s,%s,%s\n' \
+        "$fit_box_x" "$fit_box_y" "$fit_box_width" "$fit_box_height"
+    printf 'fit-ratio-comparison=%s:%s\n' \
+        "$((fit_box_width * 9))" "$((fit_box_height * 16))"
+    printf 'fit-constraint=%s\n' "$fit_constraint"
+    printf 'fixture-slide-size-emu=%s,%s\n' "$slide_width_emu" "$slide_height_emu"
+    printf 'fixture-slide-aspect=16:9\n'
+    printf 'derived-slide-rect=%s,%s,%s,%s\n' \
+        "$slide_x" "$slide_y" "$slide_width_px" "$slide_height_px"
     printf 'shape-bounds-emu=914400,914400,2743200,914400\n'
+    printf 'shape-center-emu=%s,%s\n' "$shape_center_x_emu" "$shape_center_y_emu"
     printf 'shape-center-point=%s,%s\n' "$shape_center_x" "$shape_center_y"
     printf 'selection-credit=clipboard native payload and exact package transitions only\n'
 } > "$output/shape-pointer-calibration.txt"
