@@ -160,6 +160,8 @@ public sealed class DocumentViewTableStructureTests
     {
         IReadOnlyList<int[]>? rowIndexesByPage = null;
         IReadOnlyList<int>? renderedCellHitCountByPage = null;
+        IReadOnlyList<double>? headerCellHeights = null;
+        IReadOnlyList<double>? bodyCellHeights = null;
         IReadOnlyDictionary<int, string>? placedTextByPage = null;
         var ran = await OnUiThread(() =>
         {
@@ -169,7 +171,18 @@ public sealed class DocumentViewTableStructureTests
             view.LoadDocument(doc);
             view.Measure(new Size(900, 4000));
 
-            var hitsByPage = GetTableCellHits(view)
+            var allCellHits = GetTableCellHits(view);
+            headerCellHeights = allCellHits
+                .Where(hit => hit.Row == 0)
+                .Select(hit => hit.Rect.Height)
+                .Distinct()
+                .ToArray();
+            bodyCellHeights = allCellHits
+                .Where(hit => hit.Row > 0)
+                .Select(hit => hit.Rect.Height)
+                .Distinct()
+                .ToArray();
+            var hitsByPage = allCellHits
                 .GroupBy(hit => PageIndexFromPageSpaceY(doc, hit.Rect.Y))
                 .OrderBy(group => group.Key)
                 .ToList();
@@ -189,6 +202,12 @@ public sealed class DocumentViewTableStructureTests
         rowIndexesByPage[1].Should().Equal(0, 3, 4, 5, 6);
         rowIndexesByPage[2].Should().Equal(0, 7, 8);
         renderedCellHitCountByPage.Should().Equal([12, 20, 12]);
+        headerCellHeights.Should().NotBeEmpty();
+        headerCellHeights.Should().OnlyContain(height => Math.Abs(height - 40.0) <= 0.1,
+            "the authored 30pt header height must be consumed as 40 DIP");
+        bodyCellHeights.Should().NotBeEmpty();
+        bodyCellHeights.Should().OnlyContain(height => Math.Abs(height - (58.0 * 96.0 / 72.0)) <= 0.1,
+            "the authored 58pt body height must be consumed as approximately 77.333 DIP");
         placedTextByPage.Should().ContainKey(2);
         placedTextByPage[2].Should().Contain("Page area");
         placedTextByPage[2].Should().Contain("Segment 7");
