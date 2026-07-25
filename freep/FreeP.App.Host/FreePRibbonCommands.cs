@@ -190,6 +190,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalBulletList)));
         registry.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicCycle)));
+        registry.Register(SmartArtAuthoringPlanner.ContinuousCycleLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.ContinuousCycle)));
         registry.Register(SmartArtAuthoringPlanner.GearCycleLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.GearCycle)));
         registry.Register(SmartArtAuthoringPlanner.TextCycleLayoutCommandId,

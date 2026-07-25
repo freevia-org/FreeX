@@ -28,6 +28,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, "verticalBoxList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, "verticalBulletList", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, "basicCycle", SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.ContinuousCycle, "continuousCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.GearCycle, "gearCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.TextCycle, "textCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BlockCycle, "blockCycle", SmartArtFamily.Cycle)]

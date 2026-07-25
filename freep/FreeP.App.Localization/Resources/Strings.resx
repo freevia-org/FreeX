@@ -862,6 +862,12 @@
   <data name="Ribbon_Command_SmartArtBasicCycle_KeyTip" xml:space="preserve">
     <value>C</value>
   </data>
+  <data name="Ribbon_Command_SmartArtContinuousCycle_Label" xml:space="preserve">
+    <value>Continuous Cycle</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtContinuousCycle_KeyTip" xml:space="preserve">
+    <value>CC</value>
+  </data>
   <data name="Ribbon_Command_SmartArtGearCycle_Label" xml:space="preserve">
     <value>Gear Cycle</value>
   </data>

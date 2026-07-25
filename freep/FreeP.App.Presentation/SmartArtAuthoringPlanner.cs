@@ -37,6 +37,7 @@ public enum SmartArtLayoutPreset
     VerticalBoxList,
     VerticalBulletList,
     BasicCycle,
+    ContinuousCycle,
     GearCycle,
     TextCycle,
     BlockCycle,
@@ -126,6 +127,7 @@ public static class SmartArtAuthoringPlanner
     public const string VerticalBoxListLayoutCommandId = "freep.smartart.layout.vertical-box-list";
     public const string VerticalBulletListLayoutCommandId = "freep.smartart.layout.vertical-bullet-list";
     public const string BasicCycleLayoutCommandId = "freep.smartart.layout.basic-cycle";
+    public const string ContinuousCycleLayoutCommandId = "freep.smartart.layout.continuous-cycle";
     public const string GearCycleLayoutCommandId = "freep.smartart.layout.gear-cycle";
     public const string TextCycleLayoutCommandId = "freep.smartart.layout.text-cycle";
     public const string BlockCycleLayoutCommandId = "freep.smartart.layout.block-cycle";
@@ -303,6 +305,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.BasicCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.ContinuousCycle =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/continuousCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.GearCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/gearCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.TextCycle =>

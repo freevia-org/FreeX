@@ -669,6 +669,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.ContinuousCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.GearCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.TextCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BlockCycle, SmartArtFamily.Cycle)]
@@ -1948,7 +1949,7 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ParsesKnownCycleFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    public void Reader_ParsesContinuousCycleAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/continuousCycle",
@@ -1961,8 +1962,8 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
             "unsupported cycle siblings still retain broad family metadata for future layout slices");
-        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
-            "cycle-family layouts outside the bounded allow-list should keep cached-drawing fallback");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "continuousCycle now uses the shared cycle-family live-layout path");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Phase 1", "Phase 2", "Phase 3");
     }
 
