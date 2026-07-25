@@ -1172,7 +1172,12 @@ public sealed class ChartDataCommandTests
         var chart = p.Slides[0].Shapes[0].Chart!;
         chart.Series[1].SmoothLine = true;
         chart.Series[1].OnSecondaryAxis = true;
-        chart.Series[1].LineStyle = new ChartLineStyle { WidthPt = 1.5, Dash = OutlineDash.Dash };
+        chart.Series[1].LineStyle = new ChartLineStyle
+        {
+            Color = new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4)),
+            WidthPt = 1.5,
+            Dash = OutlineDash.Dash,
+        };
         chart.Series[1].MarkerStyle = new ChartMarkerStyle
         {
             Symbol = ChartMarkerSymbol.Circle,
@@ -1190,7 +1195,10 @@ public sealed class ChartDataCommandTests
             id,
             new ChartSeriesOptions(
                 1, false, false, 2.25, ChartMarkerSymbol.Diamond, 8,
-                new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)))));
+                new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)),
+                null,
+                new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79)),
+                OutlineDash.DashDot)));
 
         var series = chart.Series[1];
         series.SmoothLine.Should().BeFalse();
@@ -1198,7 +1206,8 @@ public sealed class ChartDataCommandTests
         series.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
         series.Fill.Should().BeNull();
         series.LineStyle!.WidthPt.Should().Be(2.25);
-        series.LineStyle.Dash.Should().Be(OutlineDash.Dash);
+        series.LineStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        series.LineStyle.Dash.Should().Be(OutlineDash.DashDot);
         series.MarkerStyle!.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
         series.MarkerStyle.SizePt.Should().Be(8);
         series.MarkerStyle.NoStroke.Should().BeTrue();
@@ -1212,6 +1221,8 @@ public sealed class ChartDataCommandTests
         roundTripped.Series[1].FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
         roundTripped.Series[1].Fill.Should().BeNull();
         roundTripped.Series[1].LineStyle!.WidthPt.Should().Be(2.25);
+        roundTripped.Series[1].LineStyle!.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        roundTripped.Series[1].LineStyle!.Dash.Should().Be(OutlineDash.DashDot);
         var roundTrippedMarker = roundTripped.Series[1].MarkerStyle!;
         roundTrippedMarker.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
         roundTrippedMarker.SizePt.Should().Be(8);
@@ -1222,6 +1233,7 @@ public sealed class ChartDataCommandTests
         var revertedLine = series.LineStyle!;
         var revertedMarker = series.MarkerStyle!;
         revertedLine.WidthPt.Should().Be(1.5);
+        revertedLine.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
         revertedLine.Dash.Should().Be(OutlineDash.Dash);
         revertedMarker.Symbol.Should().Be(ChartMarkerSymbol.Circle);
         revertedMarker.SizePt.Should().Be(6);

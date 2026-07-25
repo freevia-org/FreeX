@@ -42,10 +42,15 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         series.FillColor = _newOptions.FillColor;
         series.Fill = _newOptions.Fill;
 
-        if (_newOptions.LineWidthPt.HasValue || series.LineStyle is not null)
+        if (_newOptions.LineColor is not null ||
+            _newOptions.LineWidthPt.HasValue ||
+            _newOptions.LineDash != OutlineDash.Solid ||
+            series.LineStyle is not null)
         {
             var line = series.LineStyle ?? new ChartLineStyle();
+            line.Color = _newOptions.LineColor;
             line.WidthPt = _newOptions.LineWidthPt;
+            line.Dash = _newOptions.LineDash;
             series.LineStyle = line;
         }
 

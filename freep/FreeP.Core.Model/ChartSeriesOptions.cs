@@ -9,4 +9,6 @@ public sealed record ChartSeriesOptions(
     ChartMarkerSymbol MarkerSymbol,
     double? MarkerSizePt,
     ThemeAwareColor? FillColor = null,
-    ShapeFill? Fill = null);
+    ShapeFill? Fill = null,
+    ThemeAwareColor? LineColor = null,
+    OutlineDash LineDash = OutlineDash.Solid);
