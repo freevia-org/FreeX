@@ -161,9 +161,64 @@ public static class ConnectionSiteHelper
                     _ => (midX, midY)
                 };
 
+            case DrawingShapeKind.Pentagon:
+                return siteIndex switch
+                {
+                    0 => (left, top + (long)Math.Round(shape.ExtentCyEmu * 0.38)),
+                    1 => (midX, top),
+                    2 => (right, top + (long)Math.Round(shape.ExtentCyEmu * 0.38)),
+                    3 => (midX, bottom),
+                    _ => (midX, midY)
+                };
+
+            case DrawingShapeKind.Hexagon:
+            case DrawingShapeKind.Octagon:
+            case DrawingShapeKind.Cross:
+            case DrawingShapeKind.PlusSign:
+                return siteIndex switch
+                {
+                    0 => (left, midY),
+                    1 => (midX, top),
+                    2 => (right, midY),
+                    3 => (midX, bottom),
+                    _ => (midX, midY)
+                };
+
+            case DrawingShapeKind.Star5:
+                var outerRadiusX = shape.ExtentCxEmu / 2.0;
+                var outerRadiusY = shape.ExtentCyEmu / 2.0;
+                var innerRadius = shape.PresetGeometryAdjustments.TryGetValue("adj", out var adjustment)
+                    ? Math.Clamp(adjustment / 100000.0, 0, 1)
+                    : 0.42;
+                var leftStar = StarPoint(midX, midY, outerRadiusX, outerRadiusY, 126);
+                var topStar = StarPoint(midX, midY, outerRadiusX, outerRadiusY, -90);
+                var rightStar = StarPoint(midX, midY, outerRadiusX, outerRadiusY, -18);
+                var bottomStar = StarPoint(midX, midY, outerRadiusX * innerRadius, outerRadiusY * innerRadius, 90);
+                return siteIndex switch
+                {
+                    0 => leftStar,
+                    1 => topStar,
+                    2 => rightStar,
+                    3 => bottomStar,
+                    _ => (midX, midY)
+                };
+
             default:
                 return null; // use bbox resolver
         }
+    }
+
+    private static (long X, long Y) StarPoint(
+        long centerX,
+        long centerY,
+        double radiusX,
+        double radiusY,
+        double angleDegrees)
+    {
+        var radians = angleDegrees * Math.PI / 180.0;
+        return (
+            (long)Math.Round(centerX + Math.Cos(radians) * radiusX),
+            (long)Math.Round(centerY + Math.Sin(radians) * radiusY));
     }
 
     // ── Bbox 8-site fallback (original behaviour) ─────────────────────────────────────
