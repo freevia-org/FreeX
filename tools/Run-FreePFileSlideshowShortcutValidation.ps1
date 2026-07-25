@@ -358,11 +358,50 @@ try {
         Add-ResultEvidence -Result $saveResult -Names @(
             "fixture-source-before.sha256.txt",
             "fixture-source-after.sha256.txt",
+            "fixture-mounted-before.sha256.txt",
+            "fixture-mounted-after.sha256.txt",
             "fixture-host-mounted-after.sha256.txt"
         )
-        if (-not (Test-Path -LiteralPath $mountedDocument -PathType Leaf)) {
+        $hashPaths = [ordered]@{
+            "source-before" = $sourceBefore
+            "source-after" = $sourceAfter
+            "mounted-before" = (Join-Path $evidenceDirectory "fixture-mounted-before.sha256.txt")
+            "mounted-after" = (Join-Path $evidenceDirectory "fixture-mounted-after.sha256.txt")
+            "host-mounted-after" = $mountedAfter
+        }
+        $hashes = @{}
+        $hashFailures = [System.Collections.Generic.List[string]]::new()
+        foreach ($entry in $hashPaths.GetEnumerator()) {
+            if (-not (Test-Path -LiteralPath $entry.Value -PathType Leaf)) {
+                $hashFailures.Add("$($entry.Key) hash artifact is missing")
+                continue
+            }
+            $value = (Get-Content -LiteralPath $entry.Value -Raw).Trim()
+            if ($value -notmatch '^[0-9a-f]{64}$') {
+                $hashFailures.Add("$($entry.Key) hash is not an exact lowercase 64-hex value")
+                continue
+            }
+            $hashes[$entry.Key] = $value
+        }
+        if ($hashes.ContainsKey("source-before") -and $hashes.ContainsKey("source-after") -and
+            $hashes["source-before"] -ne $hashes["source-after"]) {
+            $hashFailures.Add("original source before and after hashes differ")
+        }
+        if ($hashes.ContainsKey("mounted-before") -and $hashes.ContainsKey("source-before") -and
+            $hashes["mounted-before"] -ne $hashes["source-before"]) {
+            $hashFailures.Add("probe mounted-before does not equal source-before")
+        }
+        if ($hashes.ContainsKey("mounted-after") -and $hashes.ContainsKey("host-mounted-after") -and
+            $hashes["mounted-after"] -ne $hashes["host-mounted-after"]) {
+            $hashFailures.Add("probe mounted-after does not equal host-mounted-after")
+        }
+        if ($hashes.ContainsKey("mounted-before") -and $hashes.ContainsKey("mounted-after") -and
+            $hashes["mounted-before"] -eq $hashes["mounted-after"]) {
+            $hashFailures.Add("mounted before and after hashes are identical")
+        }
+        if ($hashFailures.Count -gt 0) {
             $saveResult.status = "failed"
-            $saveResult.note = "The host-mounted document was unavailable for after-save SHA256 evidence."
+            $saveResult.note = "File-save SHA256 evidence failed: $([string]::Join('; ', $hashFailures))."
         }
         $manifest.summary.passed = @($manifest.results | Where-Object { $_.status -eq "passed" }).Count
         $manifest.summary.failed = @($manifest.results | Where-Object { $_.status -eq "failed" }).Count

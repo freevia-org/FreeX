@@ -219,7 +219,6 @@ capture_window_state "bootstrap-owner-state.txt"
     printf 'slide-pane-geometry=%s\n' "$slide_pane_geometry"
     printf 'status-geometry=%s\n' "$status_geometry"
 } > "$output/bootstrap-visible-owner-proof.txt"
-record "visible-window-discovery" "passed" "Visible focused FreeP owner and fixture filename/title were discovered through X11." bootstrap-visible-owner-proof.txt bootstrap-baseline.png bootstrap-owner-state.txt
 
 run_top_level_lifecycle() {
     local id="$1" shortcut="$2" label="$3" title_fragment="$4"
@@ -529,53 +528,6 @@ else
 fi
 focus_owner
 
-if false; then
-python3 - "$records" "$screenshots_file" "$output/freep-file-slideshow-shortcut-results.json" "$owner_id" "$owner_title" "$expected_document_name" <<'PY'
-import json
-import sys
-
-records_path, screenshots_path, manifest_path, owner_id, owner_title, fixture_name = sys.argv[1:]
-with open(records_path, encoding="utf-8") as handle:
-    results = [json.loads(line) for line in handle if line.strip()]
-with open(screenshots_path, encoding="utf-8") as handle:
-    screenshots = list(dict.fromkeys(line.strip() for line in handle if line.strip()))
-manifest = {
-    "schemaVersion": 1,
-    "suite": "freep-linux-file-slideshow-shortcut-physical",
-    "platform": "linux",
-    "shell": "avalonia",
-    "app": "FreeP",
-    "baseline": False,
-    "appSurface": "document-editor-file-slideshow-shortcuts",
-    "window": {"id": owner_id, "title": owner_title, "pattern": fixture_name, "visible": True},
-    "parameters": {"width": 1280, "height": 820, "dpi": 96, "fixture": fixture_name},
-    "coverage": {
-        "scope": "physical FreeP file/slideshow shortcut evidence lane",
-        "exhaustive": False,
-        "familyContract": "tools/Run-FamilyLinuxInteractionValidation.ps1 keeps its exact FreeP 22-row contract.",
-    },
-    "contractValidation": {
-        "status": "pending",
-        "validator": "tools/Run-FreePFileSlideshowShortcutValidation.ps1",
-        "contractReference": "tools/LinuxInteractiveDocker/freep-file-slideshow-shortcut-validation.schema.json",
-    },
-    "screenshots": [{"name": name, "kind": "screenshot"} for name in screenshots],
-    "summary": {
-        "passed": sum(result["status"] == "passed" for result in results),
-        "failed": sum(result["status"] == "failed" for result in results),
-        "total": len(results),
-    },
-    "results": results,
-}
-with open(manifest_path, "w", encoding="utf-8") as handle:
-    json.dump(manifest, handle, ensure_ascii=False, indent=2)
-    handle.write("\n")
-print(json.dumps(manifest["summary"], sort_keys=True))
-if len(results) != 10 or manifest["summary"]["failed"]:
-    sys.exit(1)
-PY
-fi
-
 mapfile -t visible_owner_ids < <(xdotool search --onlyvisible --name "$window_pattern" 2>/dev/null || true)
 if (( ${#visible_owner_ids[@]} == 0 )); then
     printf 'No visible FreeP window matched %s.\n' "$window_pattern" > "$output/window-discovery-error.txt"
@@ -595,9 +547,8 @@ capture_window_state "owner-discovery-state.txt"
     printf 'visible-owner-count=%s\n' "${#visible_owner_ids[@]}"
     printf 'wm-class-begin\n'; xprop -id "$owner_id" WM_CLASS 2>/dev/null || true; printf 'wm-class-end\n'
 } > "$output/visible-window-discovery-proof.txt"
-if [[ "$owner_title" == *"$expected_document_name"* &&
-      ( "$owner_title" == *FreeP* || "$owner_title" == *Freep* ) &&
-      "$(xdotool getactivewindow 2>/dev/null || true)" == "$owner_id" ]]; then
+if active_owner_now && [[ "$owner_title" == *"$expected_document_name"* &&
+      ( "$owner_title" == *FreeP* || "$owner_title" == *Freep* ) ]]; then
     record "visible-window-discovery" "passed" "Visible focused FreeP owner and fixture filename/title were discovered through X11." visible-window-discovery-proof.txt baseline.png owner-discovery-state.txt
 else
     record "visible-window-discovery" "failed" "The visible owner did not prove FreeP focus and the expected fixture filename/title." visible-window-discovery-proof.txt baseline.png owner-discovery-state.txt
