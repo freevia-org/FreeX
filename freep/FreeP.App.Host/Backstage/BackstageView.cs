@@ -59,7 +59,7 @@ internal sealed class BackstageView : UserControl
             });
     }
 
-    public void Show() => _backstage.Show();
+    public void Show() => Show("Info");
 
     internal void Show(string paneLabelOrAutomationId)
     {
@@ -68,6 +68,8 @@ internal sealed class BackstageView : UserControl
     }
 
     internal string? EvidencePaneLabel => _evidencePaneLabel;
+
+    internal bool IsOpen => Visibility == Visibility.Visible;
 
     internal bool ApplyCustomPrintRangeForTests(string rangeText)
     {

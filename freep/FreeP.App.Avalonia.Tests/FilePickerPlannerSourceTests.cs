@@ -44,7 +44,7 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("PresentationPrintOutputPackageExecutor.BuildPackage(");
         source.Should().Contain("PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(");
         source.Should().Contain("PresentationPrintBackstagePlanner.Build(");
-        source.Should().Contain("ShowPrintOptionsPane()");
+        source.Should().Contain("ShowPrintBackstage");
         source.Should().Contain("RenderPrintOptionsPane(plan)");
         source.Should().Contain("plan.OutputOptionChoices");
         source.Should().Contain("plan.LayoutChoices");

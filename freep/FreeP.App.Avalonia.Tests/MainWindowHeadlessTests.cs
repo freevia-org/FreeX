@@ -2310,7 +2310,8 @@ public sealed class MainWindowHeadlessTests
         var found = false;
         PresentationPrintBackstagePlan? printPlan = null;
         PresentationPrintOutputPackage? printPackage = null;
-        var isPaneVisible = false;
+        var isBackstageOpen = false;
+        string? selectedPane = null;
 
         var ran = await OnUiThread(() =>
         {
@@ -2325,12 +2326,14 @@ public sealed class MainWindowHeadlessTests
             print!.Execute(RibbonCommandContext.Empty);
             printPlan = window.LastPrintBackstagePlan;
             printPackage = window.LastPrintOutputPackage;
-            isPaneVisible = window.IsPrintOptionsPaneVisible;
+            isBackstageOpen = window.IsBackstageOpen;
+            selectedPane = window.CurrentBackstagePaneLabel;
         });
 
         if (!ran) return;
         found.Should().BeTrue("the Avalonia registry should expose the shared Backstage print planner seam");
-        isPaneVisible.Should().BeTrue("the Print command should expose the Avalonia Backstage print projection");
+        isBackstageOpen.Should().BeTrue("the Print command should open the Avalonia Backstage");
+        selectedPane.Should().Be("Print");
         printPlan.Should().NotBeNull();
         printPackage.Should().BeNull("Backstage Print planning must not execute package handoff or open a native dialog");
         printPlan!.PackagePlan.PrintPlan.CommandId.Should().Be(PresentationExportPlanner.PrintCommandId);

@@ -1993,7 +1993,7 @@ public sealed partial class MainWindow : Window
         r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
         r.Register(PresentationExportPlanner.NotesPagePdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportNotesPagePdfAsync()));
         r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
-        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => ShowPrintOptionsPane()));
+        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(ShowPrintBackstage));
         r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => _ = FileExportVideoAsync()));
 
         // Slide navigation/management
@@ -3275,10 +3275,18 @@ public sealed partial class MainWindow : Window
 
     private Control? _backstageRestoreFocus;
 
-    private void ShowBackstage()
+    private void ShowBackstage() => ShowBackstage("Info");
+
+    private void ShowBackstage(string paneLabel)
     {
         _backstageRestoreFocus = FocusManager?.GetFocusedElement() as Control ?? _slideCanvas;
-        _backstage.Show();
+        _backstage.Show(paneLabel);
+    }
+
+    private void ShowPrintBackstage()
+    {
+        HidePrintOptionsPane();
+        ShowBackstage("Print");
     }
 
     private void HideBackstageAndRestoreFocus()
@@ -7819,7 +7827,7 @@ public sealed partial class MainWindow : Window
             case FreePKeyboardCommand.OpenPresentation: _ = FileOpenAsync(); break;
             case FreePKeyboardCommand.SavePresentation: _ = FileSaveAsync(); break;
             case FreePKeyboardCommand.SavePresentationAs: _ = FileSaveAsAsync(); break;
-            case FreePKeyboardCommand.PrintPresentation: ShowPrintOptionsPane(); break;
+            case FreePKeyboardCommand.PrintPresentation: ShowPrintBackstage(); break;
             case FreePKeyboardCommand.Undo: Editor.Undo(); break;
             case FreePKeyboardCommand.Redo: Editor.Redo(); break;
             case FreePKeyboardCommand.DeleteSelectedShapes: Editor.DeleteSelected(); break;

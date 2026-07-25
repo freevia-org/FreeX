@@ -57,6 +57,28 @@ public sealed class KeyboardContextParityTests
     }
 
     [StaFact]
+    public void WpfCtrlPOpensPrintBackstageAndBuildsSharedPlan()
+    {
+        var window = new MainWindow(
+            new FreePOptions(),
+            messageService: TestUserMessageService.DiscardUnsavedChanges,
+            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
+        try
+        {
+            Execute(window, Key.P, ModifierKeys.Control);
+
+            window.IsBackstageOpen.Should().BeTrue();
+            window.CurrentBackstagePaneLabel.Should().Be("Print");
+            window.LastPrintBackstagePlan.Should().NotBeNull();
+            window.LastPrintOutputPackage.Should().BeNull();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void WpfMenusRenderSharedOrderEnabledAndCheckedStateAndExecute()
     {
         var presentation = Presentation.CreateEmpty();
