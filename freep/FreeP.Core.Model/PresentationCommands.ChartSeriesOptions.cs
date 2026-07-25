@@ -11,6 +11,8 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
     private bool _oldOnSecondaryAxis;
     private ChartLineStyle? _oldLineStyle;
     private ChartMarkerStyle? _oldMarkerStyle;
+    private ThemeAwareColor? _oldFillColor;
+    private ShapeFill? _oldFill;
 
     public SetChartSeriesOptionsCommand(int slideIndex, uint shapeId, ChartSeriesOptions options)
     {
@@ -32,9 +34,13 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         _oldOnSecondaryAxis = series.OnSecondaryAxis;
         _oldLineStyle = CloneLineStyle(series.LineStyle);
         _oldMarkerStyle = CloneMarkerStyle(series.MarkerStyle);
+        _oldFillColor = series.FillColor;
+        _oldFill = series.Fill;
 
         series.SmoothLine = _newOptions.SmoothLine;
         series.OnSecondaryAxis = _newOptions.OnSecondaryAxis;
+        series.FillColor = _newOptions.FillColor;
+        series.Fill = _newOptions.Fill;
 
         if (_newOptions.LineWidthPt.HasValue || series.LineStyle is not null)
         {
@@ -65,6 +71,8 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         series.OnSecondaryAxis = _oldOnSecondaryAxis;
         series.LineStyle = CloneLineStyle(_oldLineStyle);
         series.MarkerStyle = CloneMarkerStyle(_oldMarkerStyle);
+        series.FillColor = _oldFillColor;
+        series.Fill = _oldFill;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 

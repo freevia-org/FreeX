@@ -160,12 +160,14 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart.Series[1].SmoothLine = true;
 
         var dialog = new ChartSeriesOptionsDialog(sess);
+        dialog.SetOptionsForTests(0, false, false, 2.25, ChartMarkerSymbol.Diamond, 7, "#4472C4");
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
         options.SeriesIndex.Should().Be(0);
         options.SmoothLine.Should().BeFalse();
         options.OnSecondaryAxis.Should().BeFalse();
+        options.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
     }
 
     [StaFact]

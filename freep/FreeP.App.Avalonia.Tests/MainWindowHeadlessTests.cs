@@ -6274,14 +6274,20 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartSeriesOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8);
+            dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4");
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
 
         if (!ran) return;
-        options.Should().Be(new ChartSeriesOptions(
-            0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8));
+        options.Should().NotBeNull();
+        options!.SeriesIndex.Should().Be(0);
+        options.SmoothLine.Should().BeTrue();
+        options.OnSecondaryAxis.Should().BeTrue();
+        options.LineWidthPt.Should().Be(2.25);
+        options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
+        options.MarkerSizePt.Should().Be(8);
+        options.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
     }
 
     [Fact]

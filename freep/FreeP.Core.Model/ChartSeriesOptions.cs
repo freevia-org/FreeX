@@ -7,4 +7,6 @@ public sealed record ChartSeriesOptions(
     bool OnSecondaryAxis,
     double? LineWidthPt,
     ChartMarkerSymbol MarkerSymbol,
-    double? MarkerSizePt);
+    double? MarkerSizePt,
+    ThemeAwareColor? FillColor = null,
+    ShapeFill? Fill = null);

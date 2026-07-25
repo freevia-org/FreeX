@@ -18,6 +18,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
     private readonly CheckBox _smoothLineCheck;
     private readonly CheckBox _secondaryAxisCheck;
     private readonly TextBox _lineWidthBox;
+    private readonly TextBox _fillColorBox;
     private readonly ComboBox _markerCombo;
     private readonly TextBox _markerSizeBox;
 
@@ -54,6 +55,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _smoothLineCheck = new CheckBox { Content = surface.SmoothLineLabel };
         _secondaryAxisCheck = new CheckBox { Content = surface.SecondaryAxisLabel };
         _lineWidthBox = new TextBox { MinWidth = 130 };
+        _fillColorBox = new TextBox { MinWidth = 150 };
         _markerCombo = new ComboBox
         {
             ItemsSource = ChartSeriesOptionsPlanner.MarkerOptions.Select(option => option.Label).ToArray(),
@@ -85,6 +87,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
                 _smoothLineCheck,
                 _secondaryAxisCheck,
                 MakeRow(surface.LineWidthLabel, _lineWidthBox),
+                MakeRow(surface.FillColorLabel, _fillColorBox),
                 MakeRow(surface.MarkerLabel, _markerCombo),
                 MakeRow(surface.MarkerSizeLabel, _markerSizeBox),
                 new TextBlock { Text = surface.AutoHint, Opacity = 0.7 },
@@ -105,7 +108,8 @@ internal sealed class ChartSeriesOptionsDialog : Window
         bool onSecondaryAxis,
         double? lineWidthPt,
         ChartMarkerSymbol markerSymbol,
-        double? markerSizePt)
+        double? markerSizePt,
+        string? fillColor = null)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         _smoothLineCheck.IsChecked = smoothLine;
@@ -113,6 +117,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _lineWidthBox.Text = Format(lineWidthPt);
         _markerCombo.SelectedIndex = FindMarkerIndex(markerSymbol);
         _markerSizeBox.Text = Format(markerSizePt);
+        _fillColorBox.Text = fillColor ?? string.Empty;
     }
 
     private void OnOk()
@@ -133,6 +138,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _smoothLineCheck.IsChecked = _planner.SmoothLine;
         _secondaryAxisCheck.IsChecked = _planner.OnSecondaryAxis;
         _lineWidthBox.Text = Format(_planner.LineWidthPt);
+        _fillColorBox.Text = _planner.FillColorText;
         _markerCombo.SelectedIndex = FindMarkerIndex(_planner.MarkerSymbol);
         _markerSizeBox.Text = Format(_planner.MarkerSizePt);
     }
@@ -142,6 +148,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _planner.SetSmoothLine(_smoothLineCheck.IsChecked == true);
         _planner.SetOnSecondaryAxis(_secondaryAxisCheck.IsChecked == true);
         _planner.SetLineWidth(ParseOptional(_lineWidthBox.Text, "Line width"));
+        _planner.SetFillColor(_fillColorBox.Text);
         if (_markerCombo.SelectedIndex >= 0 && _markerCombo.SelectedIndex < ChartSeriesOptionsPlanner.MarkerOptions.Count)
             _planner.SetMarkerSymbol(ChartSeriesOptionsPlanner.MarkerOptions[_markerCombo.SelectedIndex].Value);
         _planner.SetMarkerSize(ParseOptional(_markerSizeBox.Text, "Marker size"));

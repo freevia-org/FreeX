@@ -13,6 +13,7 @@ public sealed record ChartSeriesOptionsSurfacePlan(
     string SmoothLineLabel,
     string SecondaryAxisLabel,
     string LineWidthLabel,
+    string FillColorLabel,
     string MarkerLabel,
     string MarkerSizeLabel,
     string AutoHint,
@@ -31,6 +32,7 @@ public sealed class ChartSeriesOptionsPlanner
     public const string SmoothLineLabel = "Smooth line";
     public const string SecondaryAxisLabel = "Plot on secondary axis";
     public const string LineWidthLabel = "Line width (pt)";
+    public const string FillColorLabel = "Fill color (#RRGGBB)";
     public const string MarkerLabel = "Marker";
     public const string MarkerSizeLabel = "Marker size (pt)";
     public const string AutoHint = "Blank values preserve automatic series formatting.";
@@ -57,6 +59,8 @@ public sealed class ChartSeriesOptionsPlanner
     private bool _smoothLine;
     private bool _onSecondaryAxis;
     private double? _lineWidthPt;
+    private ThemeAwareColor? _fillColor;
+    private ShapeFill? _fill;
     private ChartMarkerSymbol _markerSymbol;
     private double? _markerSizePt;
 
@@ -74,6 +78,7 @@ public sealed class ChartSeriesOptionsPlanner
             SmoothLineLabel,
             SecondaryAxisLabel,
             LineWidthLabel,
+            FillColorLabel,
             MarkerLabel,
             MarkerSizeLabel,
             AutoHint,
@@ -96,6 +101,7 @@ public sealed class ChartSeriesOptionsPlanner
     public bool SmoothLine => _smoothLine;
     public bool OnSecondaryAxis => _onSecondaryAxis;
     public double? LineWidthPt => _lineWidthPt;
+    public string FillColorText => FormatColor(_fillColor);
     public ChartMarkerSymbol MarkerSymbol => _markerSymbol;
     public double? MarkerSizePt => _markerSizePt;
 
@@ -107,6 +113,8 @@ public sealed class ChartSeriesOptionsPlanner
             _smoothLine = false;
             _onSecondaryAxis = false;
             _lineWidthPt = null;
+            _fillColor = null;
+            _fill = null;
             _markerSymbol = ChartMarkerSymbol.Auto;
             _markerSizePt = null;
             return;
@@ -117,6 +125,8 @@ public sealed class ChartSeriesOptionsPlanner
         _smoothLine = series.SmoothLine ?? false;
         _onSecondaryAxis = series.OnSecondaryAxis;
         _lineWidthPt = series.LineStyle?.WidthPt;
+        _fill = series.Fill;
+        _fillColor = series.FillColor ?? (series.Fill is ShapeFill.Solid solid ? solid.Color : null);
         _markerSymbol = series.MarkerStyle?.Symbol ?? ChartMarkerSymbol.Auto;
         _markerSizePt = series.MarkerStyle?.SizePt;
     }
@@ -124,6 +134,17 @@ public sealed class ChartSeriesOptionsPlanner
     public void SetSmoothLine(bool value) => _smoothLine = value;
     public void SetOnSecondaryAxis(bool value) => _onSecondaryAxis = value;
     public void SetLineWidth(double? value) => _lineWidthPt = value;
+    public void SetFillColor(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            _fillColor = null;
+            return;
+        }
+
+        _fill = null;
+        _fillColor = ChartPointOptionsPlanner.ParseColor(text, FillColorLabel);
+    }
     public void SetMarkerSymbol(ChartMarkerSymbol value) => _markerSymbol = value;
     public void SetMarkerSize(double? value) => _markerSizePt = value;
 
@@ -133,7 +154,12 @@ public sealed class ChartSeriesOptionsPlanner
         _onSecondaryAxis,
         _lineWidthPt,
         _markerSymbol,
-        _markerSizePt);
+        _markerSizePt,
+        _fillColor,
+        _fill);
+
+    private static string FormatColor(ThemeAwareColor? color) =>
+        color is null ? string.Empty : color.Resolved.ToString();
 
     private static string SeriesLabelText(int index, ChartSeries series) =>
         string.IsNullOrWhiteSpace(series.Name) ? $"Series {index + 1}" : series.Name;

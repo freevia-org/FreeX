@@ -433,11 +433,18 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetSmoothLine(false);
         planner.SetOnSecondaryAxis(false);
         planner.SetLineWidth(2.25);
+        planner.SetFillColor("#4472C4");
         planner.SetMarkerSymbol(ChartMarkerSymbol.Diamond);
         planner.SetMarkerSize(8);
 
-        planner.BuildCommitPlan().Should().Be(new ChartSeriesOptions(
-            1, false, false, 2.25, ChartMarkerSymbol.Diamond, 8));
+        var options = planner.BuildCommitPlan();
+        options.SeriesIndex.Should().Be(1);
+        options.SmoothLine.Should().BeFalse();
+        options.OnSecondaryAxis.Should().BeFalse();
+        options.LineWidthPt.Should().Be(2.25);
+        options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
+        options.MarkerSizePt.Should().Be(8);
+        options.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
         planner.SeriesOptions.Select(option => option.Label)
             .Should().Equal("Revenue", "Margin");
         chart.Series[1].SmoothLine.Should().BeTrue("series dialogs must edit a working copy");

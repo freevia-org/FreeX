@@ -1179,16 +1179,24 @@ public sealed class ChartDataCommandTests
             SizePt = 6,
             NoStroke = true,
         };
+        chart.Series[1].Fill = new ShapeFill.Gradient(
+            [
+                new GradientStop(0, new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4))),
+                new GradientStop(1, new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79))),
+            ]);
 
         bus.Execute(new SetChartSeriesOptionsCommand(
             0,
             id,
             new ChartSeriesOptions(
-                1, false, false, 2.25, ChartMarkerSymbol.Diamond, 8)));
+                1, false, false, 2.25, ChartMarkerSymbol.Diamond, 8,
+                new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)))));
 
         var series = chart.Series[1];
         series.SmoothLine.Should().BeFalse();
         series.OnSecondaryAxis.Should().BeFalse();
+        series.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+        series.Fill.Should().BeNull();
         series.LineStyle!.WidthPt.Should().Be(2.25);
         series.LineStyle.Dash.Should().Be(OutlineDash.Dash);
         series.MarkerStyle!.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
@@ -1201,6 +1209,8 @@ public sealed class ChartDataCommandTests
         var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
         roundTripped.Series[1].SmoothLine.Should().BeFalse();
         roundTripped.Series[1].OnSecondaryAxis.Should().BeFalse();
+        roundTripped.Series[1].FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+        roundTripped.Series[1].Fill.Should().BeNull();
         roundTripped.Series[1].LineStyle!.WidthPt.Should().Be(2.25);
         var roundTrippedMarker = roundTripped.Series[1].MarkerStyle!;
         roundTrippedMarker.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
@@ -1216,6 +1226,8 @@ public sealed class ChartDataCommandTests
         revertedMarker.Symbol.Should().Be(ChartMarkerSymbol.Circle);
         revertedMarker.SizePt.Should().Be(6);
         revertedMarker.NoStroke.Should().BeTrue();
+        series.FillColor.Should().BeNull();
+        series.Fill.Should().BeOfType<ShapeFill.Gradient>();
     }
 
     [Fact]
