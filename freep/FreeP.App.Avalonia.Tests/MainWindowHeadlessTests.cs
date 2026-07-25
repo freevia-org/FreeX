@@ -11,6 +11,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Themes.Fluent;
+using Avalonia.VisualTree;
 using Free.Shared.AppServices;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
@@ -20,6 +21,7 @@ using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.App.Avalonia.Smoke;
 using FreeP.App.Recording;
+using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
 
@@ -87,6 +89,64 @@ public sealed class MainWindowHeadlessTests
         // An empty Presentation created by Presentation.CreateEmpty() has at least one slide.
         slideCount.Should().BeGreaterThanOrEqualTo(1,
             "a freshly created empty presentation contains at least one slide");
+    }
+
+    [Fact]
+    public async Task MainWindow_canvas_interaction_layers_share_margined_origin()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            try
+            {
+                window.Show();
+
+                var adorner = window.GetVisualDescendants()
+                    .OfType<SelectionAdornerLayer>()
+                    .Single(candidate =>
+                        candidate.Parent is Grid parent &&
+                        parent.Children.OfType<SlideCanvas>().Any() &&
+                        parent.Children.OfType<Canvas>().Any());
+                var stack = adorner.Parent.Should().BeOfType<Grid>().Subject;
+                var canvas = stack.Children.OfType<SlideCanvas>().Single();
+                var textOverlay = stack.Children.OfType<Canvas>().Single();
+                textOverlay.IsVisible = true;
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+                stack.Margin.Should().Be(new Thickness(FreePShellVisualMetrics.CanvasMargin));
+                canvas.Margin.Should().Be(default(Thickness));
+
+                var canvasOrigin = canvas.TranslatePoint(default, window);
+                var adornerOrigin = adorner.TranslatePoint(default, window);
+                var textOverlayOrigin = textOverlay.TranslatePoint(default, window);
+                canvasOrigin.Should().NotBeNull();
+                adornerOrigin.Should().Be(canvasOrigin);
+                textOverlayOrigin.Should().Be(canvasOrigin);
+                canvasOrigin!.Value.X.Should().BeGreaterThanOrEqualTo(FreePShellVisualMetrics.CanvasMargin);
+                canvasOrigin.Value.Y.Should().BeGreaterThanOrEqualTo(FreePShellVisualMetrics.CanvasMargin);
+
+                var shape = window.Editor.InsertDefaultRectangle();
+                window.Editor.Select(shape.Id);
+                var expected = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(
+                    shape,
+                    window.Editor.Presentation,
+                    canvas.CurrentTransform);
+                var actual = adorner.SelectionRects.Should().ContainSingle().Subject.screenRect;
+
+                (adornerOrigin!.Value.X + actual.Left).Should().BeApproximately(
+                    canvasOrigin.Value.X + expected.Left,
+                    0.001);
+                (adornerOrigin.Value.Y + actual.Top).Should().BeApproximately(
+                    canvasOrigin.Value.Y + expected.Top,
+                    0.001);
+                actual.Width.Should().BeApproximately(expected.Width, 0.001);
+                actual.Height.Should().BeApproximately(expected.Height, 0.001);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
     }
 
     [Fact]

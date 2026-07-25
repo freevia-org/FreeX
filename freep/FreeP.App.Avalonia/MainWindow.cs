@@ -613,7 +613,6 @@ public sealed partial class MainWindow : Window
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment   = VerticalAlignment.Stretch,
-            Margin              = new Thickness(FreePShellVisualMetrics.CanvasMargin),
         };
 
         _slidePaneList = new ListBox
@@ -925,6 +924,7 @@ public sealed partial class MainWindow : Window
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment   = VerticalAlignment.Stretch,
+            Margin              = new Thickness(FreePShellVisualMetrics.CanvasMargin),
         };
         canvasStack.Children.Add(_slideCanvas);
         canvasStack.Children.Add(_adorner);
