@@ -325,6 +325,52 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     }
 
     [Fact]
+    public void Build_Star8_ExposesPointDepthGuide()
+    {
+        var shape = new SlideShape
+        {
+            Id = 9,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Star8,
+        };
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.CanEdit.Should().BeTrue();
+        plan.Handles.Should().ContainSingle();
+        plan.Handles[0].Name.Should().Be("adj");
+        plan.Handles[0].Label.Should().Be("Star point depth");
+        plan.Handles[0].Value.Should().Be(46000);
+        plan.Handles[0].Maximum.Should().Be(100000);
+    }
+
+    [Fact]
+    public void BuildMutationPlan_Star8_MapsInnerPointToDepthGuide()
+    {
+        var shape = new SlideShape
+        {
+            Id = 9,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Star8,
+        };
+
+        var angle = -Math.PI / 2 + Math.PI / 8;
+        var radial = 0.5 * 0.72;
+        var plan = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape,
+            Bounds,
+            "adj",
+            new LayoutPoint(
+                Bounds.Left + Bounds.Width * (0.5 + Math.Cos(angle) * radial),
+                Bounds.Top + Bounds.Height * (0.5 + Math.Sin(angle) * radial)));
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.Name.Should().Be("adj");
+        plan.Value.Should().BeApproximately(72000, 0.001);
+        plan.DisabledReason.Should().BeNull();
+    }
+
+    [Fact]
     public void Build_RightArrow_ExposesShaftAndHeadGuides()
     {
         var shape = new SlideShape
