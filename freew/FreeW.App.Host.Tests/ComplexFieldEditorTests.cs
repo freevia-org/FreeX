@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 using Xunit;
@@ -71,6 +72,41 @@ public sealed class ComplexFieldEditorTests
 
         view.ToggleFieldCodes();
         FieldRun(view)!.ComplexField!.ShowCode.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void ToggleFieldCodes_RendersWordCodeShape_AndRestoresLiveResult()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Title = "Current title";
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Title: "),
+                Run.ComplexFieldRun(" TITLE ", "Stale result")
+            }
+        });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        string.Concat(view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+                .SelectMany(p => p.Inlines.OfType<System.Windows.Documents.Run>())
+                .Select(run => run.Text))
+            .Should().Contain("Title: Current title");
+
+        view.ToggleFieldCodes();
+        string.Concat(view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+                .SelectMany(p => p.Inlines.OfType<System.Windows.Documents.Run>())
+                .Select(run => run.Text))
+            .Should().Contain("Title: { TITLE }");
+
+        view.ToggleFieldCodes();
+        string.Concat(view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+                .SelectMany(p => p.Inlines.OfType<System.Windows.Documents.Run>())
+                .Select(run => run.Text))
+            .Should().Contain("Title: Current title");
     }
 
     [StaFact]
