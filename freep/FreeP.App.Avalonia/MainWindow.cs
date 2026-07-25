@@ -2308,6 +2308,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.DescendingBlockList)));
         r.Register(SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicPyramid)));
+        r.Register(SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PyramidList)));
         r.Register(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialCycle)));
         r.Register(SmartArtAuthoringPlanner.BasicMatrixLayoutCommandId,

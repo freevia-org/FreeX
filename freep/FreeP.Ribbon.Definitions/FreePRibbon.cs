@@ -524,6 +524,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
                 FreePRibbonText.SmartArtBasicPyramidCommand.Label, RibbonCommandIconKind.Rectangle,
                 FreePRibbonText.SmartArtBasicPyramidCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
+                FreePRibbonText.SmartArtPyramidListCommand.Label, RibbonCommandIconKind.Rectangle,
+                FreePRibbonText.SmartArtPyramidListCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
                 FreePRibbonText.SmartArtRadialCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtRadialCycleCommand.KeyTip);
