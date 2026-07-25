@@ -32,7 +32,8 @@ namespace FreeP.Core.Model;
 /// If an index falls outside the supported range the <em>centre</em> of the shape is returned
 /// as a safe fallback so connectors are always drawn somewhere meaningful.
 ///
-/// NOTE: Rotated shapes approximate with unrotated sites. Full per-shape tables for cross, star,
+/// Rotation and horizontal/vertical flips are applied after resolving the local site. Full
+/// per-shape tables for cross, star,
 /// chevron, etc. are deferred — these cover the overwhelming majority of real-world connectors.
 /// </summary>
 public static class ConnectionSiteHelper
@@ -49,10 +50,34 @@ public static class ConnectionSiteHelper
         if (shape.Kind == SlideShapeKind.AutoShape || shape.Kind == SlideShapeKind.Connector)
         {
             var perShape = ResolvePerShape(shape, siteIndex);
-            if (perShape.HasValue) return perShape.Value;
+            if (perShape.HasValue) return TransformSite(shape, perShape.Value);
         }
 
-        return ResolveBbox(shape, siteIndex);
+        return TransformSite(shape, ResolveBbox(shape, siteIndex));
+    }
+
+    private static (long X, long Y) TransformSite(SlideShape shape, (long X, long Y) site)
+    {
+        if (!shape.FlipH && !shape.FlipV && Math.Abs(shape.RotationDeg) < 0.000001)
+            return site;
+
+        var centerX = shape.OffsetXEmu + shape.ExtentCxEmu / 2.0;
+        var centerY = shape.OffsetYEmu + shape.ExtentCyEmu / 2.0;
+        var dx = site.X - centerX;
+        var dy = site.Y - centerY;
+
+        if (shape.FlipH)
+            dx = -dx;
+        if (shape.FlipV)
+            dy = -dy;
+
+        var radians = shape.RotationDeg * Math.PI / 180.0;
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        var x = centerX + cos * dx - sin * dy;
+        var y = centerY + sin * dx + cos * dy;
+
+        return ((long)Math.Round(x), (long)Math.Round(y));
     }
 
     // ── Per-shape site tables ─────────────────────────────────────────────────────────
@@ -156,8 +181,7 @@ public static class ConnectionSiteHelper
         long midX   = left + shape.ExtentCxEmu / 2;
         long midY   = top  + shape.ExtentCyEmu / 2;
 
-        // When the connector target has rotation we approximate with the unrotated mid-edge
-        // points; full rotated-site calculation is deferred (rare in practice and complex).
+        // The caller applies the target's flip/rotation after resolving these local points.
         return siteIndex switch
         {
             0 => (left,  midY),     // left-mid

@@ -98,6 +98,32 @@ public sealed class ConnectorAttachmentTests
     }
 
     [Fact]
+    public void ConnectionSiteHelper_RotationFollowsVisibleShapeTransform()
+    {
+        var shape = MakeRect(1, 200, 400, 600, 200);
+        shape.RotationDeg = 90;
+
+        var (x, y) = ConnectionSiteHelper.Resolve(shape, 1);
+
+        // Top-mid rotates clockwise around the shape centre.
+        x.Should().Be(600);
+        y.Should().Be(500);
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_HorizontalFlipMirrorsConnectionSite()
+    {
+        var shape = MakeRect(1, 200, 400, 600, 200);
+        shape.FlipH = true;
+
+        var (x, y) = ConnectionSiteHelper.Resolve(shape, 0);
+
+        // Left-mid mirrors to right-mid while preserving the vertical coordinate.
+        x.Should().Be(800);
+        y.Should().Be(500);
+    }
+
+    [Fact]
     public void ConnectionSiteHelper_OutOfRange_ReturnsCentre()
     {
         var shape = MakeRect(1, 0, 0, 200, 100);
