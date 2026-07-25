@@ -213,6 +213,28 @@ public sealed class InCanvasTextEditor
         EditingCommands.ToggleUnderline.Execute(null, _richBox);
     }
 
+    /// <summary>Applies superscript to the current RichTextBox selection.</summary>
+    public void ApplySuperscript()
+    {
+        ApplyBaseline(BaselineAlignment.Superscript);
+    }
+
+    /// <summary>Applies subscript to the current RichTextBox selection.</summary>
+    public void ApplySubscript()
+    {
+        ApplyBaseline(BaselineAlignment.Subscript);
+    }
+
+    private void ApplyBaseline(BaselineAlignment alignment)
+    {
+        if (_richBox is null)
+            return;
+
+        _richBox.Selection.ApplyPropertyValue(
+            Inline.BaselineAlignmentProperty,
+            alignment);
+    }
+
     /// <summary>Sets font family on the current RichTextBox selection. No-op if not active or null.</summary>
     public void ApplyFont(string? fontFamily)
     {
@@ -416,6 +438,14 @@ public sealed class InCanvasTextEditor
         else if (e.Key == Key.U)
         {
             ApplyUnderline();
+            e.Handled = true;
+        }
+        else if (e.Key is Key.OemPlus or Key.Add)
+        {
+            if ((e.KeyboardDevice.Modifiers & ModifierKeys.Shift) != 0)
+                ApplySuperscript();
+            else
+                ApplySubscript();
             e.Handled = true;
         }
     }
