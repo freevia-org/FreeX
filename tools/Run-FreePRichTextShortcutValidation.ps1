@@ -4,7 +4,7 @@
 
 .DESCRIPTION
   Starts one harness-owned FreeP Linux desktop, injects the independently-owned
-  rich-text probe, and validates its exact eight-row non-baseline contract.
+  rich-text probe, and validates its exact five-row non-baseline contract.
 #>
 [CmdletBinding()]
 param(
@@ -13,7 +13,7 @@ param(
     [ValidateRange(480, 4320)][int]$Height = 820,
     [ValidateRange(72, 240)][int]$Dpi = 96,
     [ValidateSet("2g", "4g", "6g", "8g")][string]$MemoryLimit = "4g",
-    [string]$OutputDir = "artifacts/linux-freep-rich-text-shortcuts",
+    [string]$OutputDir = "artifacts/freep-rich-text",
     [string]$PublishDir = "",
     [switch]$SkipPublish,
     [switch]$SkipImageBuild,
@@ -32,7 +32,13 @@ $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freep-rich-text-sh
 $manifestEvidenceHelper = Join-Path $PSScriptRoot "LinuxInteractiveDocker/ManifestEvidence.ps1"
 $null = . $manifestEvidenceHelper
 
-$requiredIds = @( "visible-window-discovery", "rich-editor-physical-soft-break-input", "saved-soft-break-native-package", "undo-restores-original-text", "redo-restores-soft-break" )
+$requiredIds = @(
+    "visible-window-discovery",
+    "rich-editor-physical-soft-break-input",
+    "saved-soft-break-native-package",
+    "undo-restores-original-text",
+    "redo-restores-soft-break"
+)
 
 function Invoke-External {
     param([Parameter(Mandatory = $true)][string]$FilePath, [Parameter(Mandatory = $true)][string[]]$Arguments, [string]$WorkingDirectory = $repoRoot)
@@ -69,10 +75,10 @@ function Assert-ManifestContract {
     $results = @($manifest.results)
     $ids = @($results | ForEach-Object { [string]$_.id })
     if ($results.Count -ne 5 -or $ids.Count -ne ($ids | Select-Object -Unique).Count -or
-        [string]::Join("|", $ids) -ne [string]::Join("|", $requiredIds)) { throw "Manifest must contain exactly the eight required unique result rows in contract order." }
+        [string]::Join("|", $ids) -ne [string]::Join("|", $requiredIds)) { throw "Manifest must contain exactly the five required unique result rows in contract order." }
     $passed = @($results | Where-Object { $_.status -eq "passed" }).Count
     $failed = @($results | Where-Object { $_.status -eq "failed" }).Count
-    if ($manifest.summary.total -ne 5 -or $manifest.summary.passed -ne $passed -or $manifest.summary.failed -ne $failed -or ($passed + $failed) -ne 5) { throw "Manifest summary does not match its eight result rows." }
+    if ($manifest.summary.total -ne 5 -or $manifest.summary.passed -ne $passed -or $manifest.summary.failed -ne $failed -or ($passed + $failed) -ne 5) { throw "Manifest summary does not match its five result rows." }
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
     foreach ($result in $results) {
@@ -127,19 +133,19 @@ try {
         $failureScreenshotName = $null; $initialScreenshotPath = Join-Path $sessionDirectory "screenshots/initial.png"
         if (Test-Path -LiteralPath $initialScreenshotPath -PathType Leaf) { $failureScreenshotName = "probe-runner-failure.png"; Copy-Item -LiteralPath $initialScreenshotPath -Destination (Join-Path $evidenceDirectory $failureScreenshotName) -Force }
         $failureScreenshots = if ($null -eq $failureScreenshotName) { @() } else { @([ordered]@{ name = $failureScreenshotName; kind = "screenshot" }) }
-        [ordered]@{ schemaVersion = 1; suite = "freep-linux-rich-text-shortcut-physical"; platform = "linux"; shell = "avalonia"; app = "FreeP"; baseline = $false; appSurface = "in-canvas-rich-text-soft-break"; window = [ordered]@{ id = if ([string]::IsNullOrWhiteSpace([string]$ready.windowId)) { "unknown-owner" } else { [string]$ready.windowId }; title = if ([string]::IsNullOrWhiteSpace([string]$ready.windowTitle)) { "FreeP $fixtureFileName" } else { [string]$ready.windowTitle }; pattern = $fixtureFileName; visible = $true }; parameters = [ordered]@{ width = $Width; height = $Height; dpi = $Dpi; fixture = $fixtureFileName }; coverage = [ordered]@{ scope = "physical FreeP rich-editor soft-break evidence lane"; exhaustive = $false; familyContract = "tools/Run-FamilyLinuxInteractionValidation.ps1 keeps its exact FreeP family contract." }; contractValidation = [ordered]@{ status = "pending"; validator = "tools/Run-FreePRichTextShortcutValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freep-rich-text-shortcut-validation.schema.json" }; screenshots = $failureScreenshots; summary = [ordered]@{ passed = 0; failed = 8; total = 8 }; results = $failureResults } | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+        [ordered]@{ schemaVersion = 1; suite = "freep-linux-rich-text-shortcut-physical"; platform = "linux"; shell = "avalonia"; app = "FreeP"; baseline = $false; appSurface = "in-canvas-rich-text-soft-break"; window = [ordered]@{ id = if ([string]::IsNullOrWhiteSpace([string]$ready.windowId)) { "unknown-owner" } else { [string]$ready.windowId }; title = if ([string]::IsNullOrWhiteSpace([string]$ready.windowTitle)) { "FreeP $fixtureFileName" } else { [string]$ready.windowTitle }; pattern = $fixtureFileName; visible = $true }; parameters = [ordered]@{ width = $Width; height = $Height; dpi = $Dpi; fixture = $fixtureFileName }; coverage = [ordered]@{ scope = "physical FreeP rich-editor soft-break evidence lane"; exhaustive = $false; familyContract = "tools/Run-FamilyLinuxInteractionValidation.ps1 keeps its exact FreeP family contract." }; contractValidation = [ordered]@{ status = "pending"; validator = "tools/Run-FreePRichTextShortcutValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freep-rich-text-shortcut-validation.schema.json" }; screenshots = $failureScreenshots; summary = [ordered]@{ passed = 0; failed = 5; total = 5 }; results = $failureResults } | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $manifestPath -Encoding utf8
         Write-Warning "Probe did not write a manifest; deterministic failure manifest created at $manifestPath"
     } else {
         $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-        $copyResult = @($manifest.results | Where-Object { $_.id -eq "rich-text-copy-x11-preserves-source" })[0]
-        if ($null -eq $copyResult) { throw "Probe manifest is missing rich-text-copy-x11-preserves-source." }
-        Add-ResultEvidence -Result $copyResult -Names @("fixture-source-before.sha256.txt", "fixture-source-after.sha256.txt", "fixture-mounted-before.sha256.txt", "fixture-mounted-after.sha256.txt", "fixture-host-mounted-after.sha256.txt")
+        $savedResult = @($manifest.results | Where-Object { $_.id -eq "saved-soft-break-native-package" })[0]
+        if ($null -eq $savedResult) { throw "Probe manifest is missing saved-soft-break-native-package." }
+        Add-ResultEvidence -Result $savedResult -Names @("fixture-source-before.sha256.txt", "fixture-source-after.sha256.txt", "fixture-mounted-before.sha256.txt", "fixture-mounted-after.sha256.txt", "fixture-host-mounted-after.sha256.txt")
         $hashPaths = [ordered]@{ "source-before" = $sourceBefore; "source-after" = $sourceAfter; "mounted-before" = (Join-Path $evidenceDirectory "fixture-mounted-before.sha256.txt"); "mounted-after" = (Join-Path $evidenceDirectory "fixture-mounted-after.sha256.txt"); "host-mounted-after" = $mountedAfter }
         $hashes = @{}; $hashFailures = [System.Collections.Generic.List[string]]::new()
         foreach ($entry in $hashPaths.GetEnumerator()) { if (-not (Test-Path -LiteralPath $entry.Value -PathType Leaf)) { $hashFailures.Add("$($entry.Key) hash artifact is missing"); continue }; if ((Get-Item -LiteralPath $entry.Value).Length -le 0) { $hashFailures.Add("$($entry.Key) hash artifact is empty"); continue }; $value = (Get-Content -LiteralPath $entry.Value -Raw).Trim(); if ($value -notmatch '^[0-9a-f]{64}$') { $hashFailures.Add("$($entry.Key) hash is not an exact lowercase 64-hex value"); continue }; $hashes[$entry.Key] = $value }
         foreach ($pair in @(@("source-before", "source-after"), @("source-before", "mounted-before"), @("mounted-after", "host-mounted-after"))) { if ($hashes.ContainsKey($pair[0]) -and $hashes.ContainsKey($pair[1]) -and $hashes[$pair[0]] -ne $hashes[$pair[1]]) { $hashFailures.Add("$($pair[0]) does not equal $($pair[1])") } }
-        if ($hashes.ContainsKey("mounted-before") -and $hashes.ContainsKey("mounted-after") -and $hashes["mounted-before"] -eq $hashes["mounted-after"]) { $hashFailures.Add("mounted-after does not differ from mounted-before after the final paste restoration checkpoint save") }
-        if ($hashFailures.Count -gt 0) { $copyResult.status = "failed"; $copyResult.note = "RichText source and saved working-copy SHA256 invariants failed: $([string]::Join('; ', $hashFailures))." }
+        if ($hashes.ContainsKey("mounted-before") -and $hashes.ContainsKey("mounted-after") -and $hashes["mounted-before"] -eq $hashes["mounted-after"]) { $hashFailures.Add("mounted-after does not differ from mounted-before after the final soft-break redo checkpoint save") }
+        if ($hashFailures.Count -gt 0) { $savedResult.status = "failed"; $savedResult.note = "Rich-text source and saved working-copy SHA256 invariants failed: $([string]::Join('; ', $hashFailures))." }
         $manifest.summary.passed = @($manifest.results | Where-Object { $_.status -eq "passed" }).Count; $manifest.summary.failed = @($manifest.results | Where-Object { $_.status -eq "failed" }).Count; $manifest.summary.total = @($manifest.results).Count
         $manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $manifestPath -Encoding utf8
     }
