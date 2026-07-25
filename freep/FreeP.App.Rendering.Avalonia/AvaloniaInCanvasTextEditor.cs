@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
@@ -11,7 +12,7 @@ namespace FreeP.App.Rendering.Avalonia;
 /// <summary>
 /// Manages rich in-canvas shape and table-cell editing for the Avalonia <see cref="SlideCanvas"/>.
 /// </summary>
-public sealed class AvaloniaInCanvasTextEditor
+public sealed class AvaloniaInCanvasTextEditor : IDisposable
 {
     private readonly SlideCanvas _canvas;
     private readonly EditingSession _editor;
@@ -31,6 +32,7 @@ public sealed class AvaloniaInCanvasTextEditor
     private int _editingCellCol;
     private bool _cellEditActive;
     private bool _cellClosing;
+    private bool _disposed;
 
     /// <summary>True while a shape's text is being edited in the overlay TextBox.</summary>
     public bool IsActive => _active;
@@ -299,14 +301,45 @@ public sealed class AvaloniaInCanvasTextEditor
 
         _canvas.PointerPressed += OnCanvasPointerPressed;
 
-        _editor.SelectionChanged += (_, _) => RefreshTableCellHighlight();
-        _editor.ActiveTableCellChanged += (_, _) => RefreshTableCellHighlight();
+        _editor.SelectionChanged += OnEditorSelectionChanged;
+        _editor.ActiveTableCellChanged += OnEditorActiveTableCellChanged;
         _editor.Changed += RefreshTableCellHighlight;
-        _editor.CurrentSlideChanged += (_, _) =>
+        _editor.CurrentSlideChanged += OnEditorCurrentSlideChanged;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        _canvas.PointerPressed -= OnCanvasPointerPressed;
+        _editor.SelectionChanged -= OnEditorSelectionChanged;
+        _editor.ActiveTableCellChanged -= OnEditorActiveTableCellChanged;
+        _editor.Changed -= RefreshTableCellHighlight;
+        _editor.CurrentSlideChanged -= OnEditorCurrentSlideChanged;
+
+        if (_textBox is not null)
         {
-            CommitCellEdit();
-            RefreshTableCellHighlight();
-        };
+            _textBox.InputBox.LostFocus -= OnTextBoxLostFocus;
+            _textBox.InputBox.KeyDown -= OnTextBoxKeyDown;
+        }
+        if (_cellTextBox is not null)
+        {
+            _cellTextBox.InputBox.LostFocus -= OnCellTextBoxLostFocus;
+            _cellTextBox.InputBox.KeyDown -= OnCellTextBoxKeyDown;
+        }
+
+        CancelCellEdit();
+        Cancel();
+    }
+
+    private void OnEditorSelectionChanged(object? sender, EventArgs e) => RefreshTableCellHighlight();
+    private void OnEditorActiveTableCellChanged(object? sender, EventArgs e) => RefreshTableCellHighlight();
+    private void OnEditorCurrentSlideChanged(object? sender, EventArgs e)
+    {
+        CommitCellEdit();
+        RefreshTableCellHighlight();
     }
 
     /// <summary>Activates the text editor for the given shape.</summary>
@@ -365,7 +398,7 @@ public sealed class AvaloniaInCanvasTextEditor
         Canvas.SetLeft(_textBox, placement.Left);
         Canvas.SetTop(_textBox, placement.Top);
 
-        _textBox.InputBox.LostFocus += (_, _) => Commit();
+        _textBox.InputBox.LostFocus += OnTextBoxLostFocus;
         _textBox.InputBox.KeyDown += OnTextBoxKeyDown;
 
         _overlay.Children.Add(_textBox);
@@ -427,7 +460,7 @@ public sealed class AvaloniaInCanvasTextEditor
         Canvas.SetLeft(_cellTextBox, placement.Left);
         Canvas.SetTop(_cellTextBox, placement.Top);
 
-        _cellTextBox.InputBox.LostFocus += (_, _) => CommitCellEdit();
+        _cellTextBox.InputBox.LostFocus += OnCellTextBoxLostFocus;
         _cellTextBox.InputBox.KeyDown += OnCellTextBoxKeyDown;
 
         _overlay.Children.Add(_cellTextBox);
@@ -657,6 +690,9 @@ public sealed class AvaloniaInCanvasTextEditor
                 _ => false,
             };
     }
+
+    private void OnTextBoxLostFocus(object? sender, RoutedEventArgs e) => Commit();
+    private void OnCellTextBoxLostFocus(object? sender, RoutedEventArgs e) => CommitCellEdit();
 
     private void OnCellTextBoxKeyDown(object? sender, KeyEventArgs e)
     {

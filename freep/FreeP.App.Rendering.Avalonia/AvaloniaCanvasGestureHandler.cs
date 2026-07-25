@@ -22,13 +22,14 @@ namespace FreeP.App.Rendering.Avalonia;
 ///         <see cref="SlideTransformCore"/> and <see cref="ShapeHitTester"/>.</item>
 /// </list>
 /// </summary>
-public sealed class AvaloniaCanvasGestureHandler
+public sealed class AvaloniaCanvasGestureHandler : IDisposable
 {
     // ── Wiring ─────────────────────────────────────────────────────────────────
 
     private readonly SlideCanvas            _canvas;
     private readonly EditingSession         _editor;
     private readonly SelectionAdornerLayer  _adorner;
+    private bool _disposed;
 
     // ── Drag state ─────────────────────────────────────────────────────────────
 
@@ -104,10 +105,30 @@ public sealed class AvaloniaCanvasGestureHandler
         // Keyboard events are raised on the top-level window; caller must subscribe
         // the canvas's parent (the window) and delegate to HandleKeyDown.
 
-        _editor.SelectionChanged    += (_, _) => RefreshAdorner();
-        _editor.Changed             += ()     => RefreshAdorner();
-        _editor.CurrentSlideChanged += (_, _) => RefreshAdorner();
+        _editor.SelectionChanged    += OnEditorSelectionChanged;
+        _editor.Changed             += OnEditorChanged;
+        _editor.CurrentSlideChanged += OnEditorCurrentSlideChanged;
     }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        _canvas.PointerPressed     -= OnPointerPressed;
+        _canvas.PointerReleased    -= OnPointerReleased;
+        _canvas.PointerMoved       -= OnPointerMoved;
+        _canvas.PointerCaptureLost -= OnPointerCaptureLost;
+        _editor.SelectionChanged   -= OnEditorSelectionChanged;
+        _editor.Changed            -= OnEditorChanged;
+        _editor.CurrentSlideChanged -= OnEditorCurrentSlideChanged;
+        _gesture = GestureKind.None;
+    }
+
+    private void OnEditorSelectionChanged(object? sender, EventArgs e) => RefreshAdorner();
+    private void OnEditorChanged() => RefreshAdorner();
+    private void OnEditorCurrentSlideChanged(object? sender, EventArgs e) => RefreshAdorner();
 
     /// <summary>Captures the selected source and arms source-then-target Format Painter mode.</summary>
     public bool BeginFormatPainter() => _editor.BeginFormatPainter();

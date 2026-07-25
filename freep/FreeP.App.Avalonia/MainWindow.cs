@@ -1805,20 +1805,17 @@ public sealed partial class MainWindow : Window
     private void RewireInteractionToEditor()
     {
         if (_adorner is null) return;
-        // The gesture handler and text editor subscribe to the canvas's pointer events,
-        // so we must create new instances to bind to the new EditingSession.
+        // The gesture handler and text editor subscribe strongly to the canvas's routed
+        // pointer events, so detach them before binding the new EditingSession.
         // Find the textOverlay in the visual tree (it's the 3rd child of the canvasStack).
         // We can retrieve it from the existing text editor's overlay or re-find it:
         Canvas? textOverlay = null;
-        if (_textEditor is not null)
-        {
-            // Cancel any active edit before we destroy the old editor.
-            _textEditor.Cancel();
-        }
+        _textEditor?.Dispose();
+        _textEditor = null;
+        _gestureHandler?.Dispose();
+        _gestureHandler = null;
+        UnwireTableContextMenu();
 
-        // Detach old gesture handler's pointer event subscriptions by creating a new instance.
-        // The old handlers go out of scope and GC naturally; Avalonia weak event subscriptions
-        // allow this. New instances re-subscribe.
         // Re-find the overlay canvas from the canvasStack structure.
         if (_slideCanvas.Parent is Grid canvasStack && canvasStack.Children.Count >= 3
             && canvasStack.Children[2] is Canvas ov)
@@ -1838,9 +1835,12 @@ public sealed partial class MainWindow : Window
 
     private void WireTableContextMenu()
     {
-        _slideCanvas.PointerPressed -= OnTableContextMenuPointerPressed;
+        UnwireTableContextMenu();
         _slideCanvas.PointerPressed += OnTableContextMenuPointerPressed;
     }
+
+    private void UnwireTableContextMenu() =>
+        _slideCanvas.PointerPressed -= OnTableContextMenuPointerPressed;
 
     private void OnTableContextMenuPointerPressed(object? sender, PointerPressedEventArgs e)
     {

@@ -3129,6 +3129,104 @@ public sealed class GestureHandlerAltSnapTests
             "constructor must succeed and PointerCaptureLost must be subscribable");
     }
 
+    [Fact]
+    public async Task RebuiltEditor_DetachesStalePointerHandler_AndCapturesSelectedShape()
+    {
+        await Run(() =>
+        {
+            var startupPresentation = Presentation.CreateEmpty();
+            var startupEditor = new EditingSession(
+                startupPresentation,
+                new PresentationCommandBus(startupPresentation));
+
+            var loadedPresentation = Presentation.CreateEmpty();
+            var loadedSlide = loadedPresentation.Slides[0];
+            loadedSlide.Shapes.Clear();
+            loadedSlide.Shapes.Add(new SlideShape
+            {
+                Id = 2,
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = DrawingShapeKind.Rectangle,
+                OffsetXEmu = 1905000L,
+                OffsetYEmu = 1905000L,
+                ExtentCxEmu = 3810000L,
+                ExtentCyEmu = 952500L,
+            });
+            var loadedEditor = new EditingSession(
+                loadedPresentation,
+                new PresentationCommandBus(loadedPresentation));
+            var canvas = new SlideCanvas
+            {
+                Width = 800,
+                Height = 600,
+                Presentation = loadedPresentation,
+                Slide = loadedSlide,
+            };
+            var adorner = new SelectionAdornerLayer();
+            var pointerPressCount = 0;
+            canvas.PointerPressed += (_, _) => pointerPressCount++;
+            using var staleHandler = new AvaloniaCanvasGestureHandler(
+                canvas,
+                startupEditor,
+                adorner);
+            var window = new Window
+            {
+                Width = 800,
+                Height = 600,
+                Content = canvas,
+            };
+
+            window.Show();
+            window.Activate();
+            canvas.Bounds.Width.Should().BeGreaterThan(0);
+            canvas.Bounds.Height.Should().BeGreaterThan(0);
+            FreeP.App.Compositor.ShapeHitTester.HitTest(
+                loadedSlide,
+                loadedPresentation,
+                canvas.CurrentTransform.ScreenToSlide(300, 225).X,
+                canvas.CurrentTransform.ScreenToSlide(300, 225).Y)
+                .Should().Be(2u);
+            window.MouseMove(new Point(300, 225), RawInputModifiers.None);
+            window.MouseDown(
+                new Point(300, 225),
+                MouseButton.Left,
+                RawInputModifiers.LeftMouseButton);
+            window.MouseUp(new Point(300, 225), MouseButton.Left, RawInputModifiers.None);
+
+            pointerPressCount.Should().Be(1);
+            loadedEditor.SelectedShapeIds.Should().BeEmpty(
+                "the stale startup handler still consumes the routed press");
+            window.Content = null;
+            window.Close();
+            staleHandler.Dispose();
+            using var currentHandler = new AvaloniaCanvasGestureHandler(
+                canvas,
+                loadedEditor,
+                adorner);
+            var rebuiltWindow = new Window
+            {
+                Width = 800,
+                Height = 600,
+                Content = canvas,
+            };
+            rebuiltWindow.Show();
+            rebuiltWindow.Activate();
+
+            rebuiltWindow.MouseMove(new Point(300, 225), RawInputModifiers.None);
+            rebuiltWindow.MouseDown(
+                new Point(300, 225),
+                MouseButton.Left,
+                RawInputModifiers.LeftMouseButton);
+            rebuiltWindow.MouseUp(new Point(300, 225), MouseButton.Left, RawInputModifiers.None);
+
+            pointerPressCount.Should().Be(2);
+            loadedEditor.SelectedShapeIds.Should().Equal(2u);
+            loadedEditor.CopySelectedShapes();
+            loadedEditor.CanPaste.Should().BeTrue();
+            rebuiltWindow.Close();
+        });
+    }
+
     // ── AD1: snap path can be disabled entirely (SnapToGrid=false, SnapToShapes=false) ─────
 
     [Fact]
