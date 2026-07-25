@@ -3196,6 +3196,8 @@ public sealed class GestureHandlerAltSnapTests
             pointerPressCount.Should().Be(1);
             loadedEditor.SelectedShapeIds.Should().BeEmpty(
                 "the stale startup handler still consumes the routed press");
+            adorner.UpdateSelection([(99u, new Rect(10, 10, 40, 20))]);
+            adorner.SelectionRects.Should().ContainSingle(rect => rect.id == 99u);
             window.Content = null;
             window.Close();
             staleHandler.Dispose();
@@ -3203,6 +3205,8 @@ public sealed class GestureHandlerAltSnapTests
                 canvas,
                 loadedEditor,
                 adorner);
+            adorner.SelectionRects.Should().BeEmpty(
+                "the rebuilt handler must initialize adorners from the new empty selection");
             var rebuiltWindow = new Window
             {
                 Width = 800,

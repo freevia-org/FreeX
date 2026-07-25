@@ -108,6 +108,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
         _editor.SelectionChanged    += OnEditorSelectionChanged;
         _editor.Changed             += OnEditorChanged;
         _editor.CurrentSlideChanged += OnEditorCurrentSlideChanged;
+        RefreshAdorner();
     }
 
     public void Dispose()
