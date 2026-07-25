@@ -555,6 +555,79 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void InCanvasTextEditor_ActiveShapeSuppression_FollowsEditorLifecycle()
+    {
+        var p = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 2743200L,
+            ExtentCyEmu = 1371600L,
+            TextBody = MakeTwoRunBody(),
+        };
+        slide.Shapes.Add(shape);
+
+        var editor = new EditingSession(p, new PresentationCommandBus(p));
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+
+        canvas.TextEditor!.Activate(shape.Id);
+        canvas.ActiveTextEditShapeId.Should().Be(shape.Id);
+
+        canvas.TextEditor.Cancel();
+        canvas.ActiveTextEditShapeId.Should().BeNull();
+
+        canvas.TextEditor.Activate(shape.Id);
+        canvas.TextEditor.Commit();
+        canvas.ActiveTextEditShapeId.Should().BeNull();
+
+        canvas.TextEditor.Activate(shape.Id);
+        canvas.TextEditor.Dispose();
+        canvas.ActiveTextEditShapeId.Should().BeNull();
+    }
+
+    [StaFact]
+    public void InCanvasTextEditor_CurrentSlideChange_CommitsTextAndClearsSuppression()
+    {
+        var p = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        p.Slides.Add(new Slide());
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 2743200L,
+            ExtentCyEmu = 1371600L,
+            TextBody = MakeTwoRunBody(),
+        };
+        slide.Shapes.Add(shape);
+
+        var editor = new EditingSession(p, new PresentationCommandBus(p));
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+        canvas.TextEditor!.Activate(shape.Id);
+
+        var box = overlay.Children.OfType<System.Windows.Controls.RichTextBox>().Single();
+        box.SelectAll();
+        box.Selection.Text = "Committed before slide change";
+
+        editor.SelectSlide(1);
+
+        canvas.ActiveTextEditShapeId.Should().BeNull();
+        InCanvasTextEditPlanner.ExtractPlainText(shape.TextBody)
+            .Should().Be("Committed before slide change");
+        editor.CanUndo.Should().BeTrue();
+    }
+
+    [StaFact]
     public void InCanvasTextEditor_Commit_IssuesSetShapeTextBodyCommand()
     {
         var p     = Presentation.CreateEmpty();
@@ -960,6 +1033,10 @@ public sealed class RichTextEditorTests
         runs[0].Text.Should().Be("Line 1");
         runs[1].Text.Should().Be("\n", "soft break must survive as '\\n' text in the model");
         runs[2].Text.Should().Be("Line 2");
+        restored.Paragraphs.Should().ContainSingle(
+            "a soft LineBreak stays inside its source paragraph");
+        InCanvasTextEditPlanner.ExtractPlainText(restored)
+            .Should().Be("Line 1\nLine 2");
     }
 
     // ─── Z2: offset-based original-run matching (no cross-contamination after edits) ─

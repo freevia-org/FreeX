@@ -60,9 +60,16 @@ public sealed class SlideCanvas : Control
             o => o.SlideIndex,
             (o, v) => o.SlideIndex = v);
 
+    public static readonly DirectProperty<SlideCanvas, uint?> ActiveTextEditShapeIdProperty =
+        AvaloniaProperty.RegisterDirect<SlideCanvas, uint?>(
+            nameof(ActiveTextEditShapeId),
+            o => o.ActiveTextEditShapeId,
+            (o, v) => o.ActiveTextEditShapeId = v);
+
     private Presentation? _presentation;
     private Slide? _slide;
     private int _slideIndex;
+    private uint? _activeTextEditShapeId;
 
     public Presentation? Presentation
     {
@@ -80,6 +87,19 @@ public sealed class SlideCanvas : Control
     {
         get => _slideIndex;
         set { SetAndRaise(SlideIndexProperty, ref _slideIndex, value); Refresh(); }
+    }
+
+    /// <summary>Shape whose base text is hidden while its rich editor overlay is active.</summary>
+    public uint? ActiveTextEditShapeId
+    {
+        get => _activeTextEditShapeId;
+        set
+        {
+            if (_activeTextEditShapeId == value)
+                return;
+            SetAndRaise(ActiveTextEditShapeIdProperty, ref _activeTextEditShapeId, value);
+            InvalidateVisual();
+        }
     }
 
     // ── Current slide→screen transform (updated on every render pass) ───────────
@@ -223,7 +243,7 @@ public sealed class SlideCanvas : Control
             case DrawOp.Shape shape:
                 // DA1: skip shapes that the slideshow has not yet revealed (entrance animation).
                 if (shape.ShapeId != 0 && SuppressedShapeIds.Contains(shape.ShapeId)) break;
-                RenderShape(dc, shape);
+                RenderShape(dc, shape, shape.ShapeId != 0 && shape.ShapeId == ActiveTextEditShapeId);
                 break;
             case DrawOp.Picture pic:
                 if (pic.ShapeId != 0 && SuppressedShapeIds.Contains(pic.ShapeId)) break;
@@ -252,7 +272,7 @@ public sealed class SlideCanvas : Control
 
     // ── AutoShape ────────────────────────────────────────────────────────────
 
-    private static void RenderShape(DrawingContext dc, DrawOp.Shape shape)
+    private static void RenderShape(DrawingContext dc, DrawOp.Shape shape, bool suppressText)
     {
         if (shape.Geometry.Contours.Count == 0 && shape.Text is null
             && (shape.ElbowRouteDip is null || shape.ElbowRouteDip.Count < 2)) return;
@@ -317,7 +337,7 @@ public sealed class SlideCanvas : Control
                 RenderImportedShapeMaterial(dc, materialPlan, geometry);
         }
 
-        if (shape.Text is not null)
+        if (!suppressText && shape.Text is not null)
             RenderText(dc, shape.Text, bounds);
 
         transformScope?.Dispose();

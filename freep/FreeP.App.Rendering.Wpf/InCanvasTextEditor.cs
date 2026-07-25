@@ -11,7 +11,7 @@ namespace FreeP.App.Rendering.Wpf;
 /// <summary>
 /// Manages an in-canvas rich-text editing overlay for <see cref="SlideCanvas"/>.
 /// </summary>
-public sealed class InCanvasTextEditor
+public sealed class InCanvasTextEditor : IDisposable
 {
     private readonly SlideCanvas _canvas;
     private readonly EditingSession _editor;
@@ -30,6 +30,7 @@ public sealed class InCanvasTextEditor
         _overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
 
         _canvas.MouseLeftButtonDown += OnCanvasMouseDown;
+        _editor.CurrentSlideChanged += OnEditorCurrentSlideChanged;
     }
 
     /// <summary>True while a shape's text is being edited in the RichTextBox overlay.</summary>
@@ -129,6 +130,7 @@ public sealed class InCanvasTextEditor
 
         _overlay.IsHitTestVisible = true;
         _overlay.Children.Add(_richBox);
+        _canvas.ActiveTextEditShapeId = shapeId;
         _richBox.Focus();
         _richBox.SelectAll();
     }
@@ -137,31 +139,24 @@ public sealed class InCanvasTextEditor
     public void Commit()
     {
         if (!_active || _richBox is null)
+        {
+            _canvas.ActiveTextEditShapeId = null;
             return;
+        }
 
         var doc = _richBox.Document;
         _overlay.Children.Remove(_richBox);
         _overlay.IsHitTestVisible = false;
         _richBox = null;
         _active = false;
+        _canvas.ActiveTextEditShapeId = null;
 
         var editPlan = _editPlan;
         _editPlan = null;
 
-        var slide = _editor.CurrentSlide;
-        if (slide is null)
-            return;
-
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == _editingShapeId);
-        if (shape is null)
-        {
-            _shapeParagraphBody = null;
-            return;
-        }
-
         var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(
             doc,
-            _shapeParagraphBody ?? shape.TextBody);
+            _shapeParagraphBody);
         var decision = editPlan?.CommitRichText(newBody)
             ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Unchanged, null);
 
@@ -175,16 +170,30 @@ public sealed class InCanvasTextEditor
     public void Cancel()
     {
         if (!_active || _richBox is null)
+        {
+            _canvas.ActiveTextEditShapeId = null;
             return;
+        }
 
         _overlay.Children.Remove(_richBox);
         _overlay.IsHitTestVisible = false;
         _richBox = null;
         _active = false;
+        _canvas.ActiveTextEditShapeId = null;
         _ = _editPlan?.Cancel();
         _editPlan = null;
         _shapeParagraphBody = null;
     }
+
+    public void Dispose()
+    {
+        _canvas.MouseLeftButtonDown -= OnCanvasMouseDown;
+        _editor.CurrentSlideChanged -= OnEditorCurrentSlideChanged;
+        Cancel();
+        _canvas.ActiveTextEditShapeId = null;
+    }
+
+    private void OnEditorCurrentSlideChanged(object? sender, EventArgs e) => Commit();
 
     /// <summary>Toggles bold on the current RichTextBox selection. No-op if not active.</summary>
     public void ApplyBold()

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -9,7 +10,9 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
+using Avalonia.Skia;
 using FluentAssertions;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
@@ -30,7 +33,8 @@ public sealed class SlideHeadlessApp : global::Avalonia.Application
 
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<SlideHeadlessApp>()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true });
+            .UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
 }
 
 /// <summary>
@@ -44,6 +48,77 @@ public sealed class SlideCanvasAvaloniaTests
 
     private static Task Run(Action action) =>
         Session.Dispatch(action, CancellationToken.None);
+
+    private static byte[] RenderPixels(SlideCanvas canvas, int width, int height)
+    {
+        canvas.Refresh();
+        canvas.Measure(new Size(width, height));
+        canvas.Arrange(new Rect(0, 0, width, height));
+        using var bitmap = new RenderTargetBitmap(new PixelSize(width, height));
+        bitmap.Render(canvas);
+        var pixels = new byte[width * height * 4];
+        var handle = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+        try
+        {
+            using var target = new PinnedFramebuffer(
+                handle.AddrOfPinnedObject(),
+                new PixelSize(width, height),
+                width * 4);
+            bitmap.CopyPixels(target);
+        }
+        finally
+        {
+            handle.Free();
+        }
+
+        return pixels;
+    }
+
+    private static int CountPixelDifferences(
+        byte[] first,
+        byte[] second,
+        int width,
+        int left,
+        int top,
+        int right,
+        int bottom)
+    {
+        int differences = 0;
+        for (int y = top; y < bottom; y++)
+        {
+            for (int x = left; x < right; x++)
+            {
+                int offset = (y * width + x) * 4;
+                if (first[offset] != second[offset]
+                    || first[offset + 1] != second[offset + 1]
+                    || first[offset + 2] != second[offset + 2]
+                    || first[offset + 3] != second[offset + 3])
+                {
+                    differences++;
+                }
+            }
+        }
+
+        return differences;
+    }
+
+    private sealed class PinnedFramebuffer : ILockedFramebuffer
+    {
+        public PinnedFramebuffer(IntPtr address, PixelSize size, int rowBytes)
+        {
+            Address = address;
+            Size = size;
+            RowBytes = rowBytes;
+        }
+
+        public IntPtr Address { get; }
+        public PixelSize Size { get; }
+        public int RowBytes { get; }
+        public Vector Dpi => new(96, 96);
+        public PixelFormat Format => PixelFormat.Bgra8888;
+        public AlphaFormat AlphaFormat => AlphaFormat.Premul;
+        public void Dispose() { }
+    }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -269,6 +344,137 @@ public sealed class SlideCanvasAvaloniaTests
 
         editor.Undo();
         shape.TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Original");
+    }
+
+    [Fact]
+    public async Task InCanvasTextEditor_ActiveShapeSuppression_FollowsEditorLifecycle()
+    {
+        await Run(() =>
+        {
+            var presentation = MakePresentation(presence =>
+            {
+                presence.Slides[0].Shapes.Clear();
+                presence.Slides[0].Shapes.Add(new SlideShape
+                {
+                    Id = 1,
+                    OffsetXEmu = 0,
+                    OffsetYEmu = 0,
+                    ExtentCxEmu = 2743200L,
+                    ExtentCyEmu = 1371600L,
+                    TextBody = MakeTextBody("Original"),
+                });
+            });
+            var shape = presentation.Slides[0].Shapes.Single();
+            var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.Activate(shape.Id);
+            canvas.ActiveTextEditShapeId.Should().Be(shape.Id);
+
+            textEditor.Cancel();
+            canvas.ActiveTextEditShapeId.Should().BeNull();
+
+            textEditor.Activate(shape.Id);
+            textEditor.Commit();
+            canvas.ActiveTextEditShapeId.Should().BeNull();
+
+            textEditor.Activate(shape.Id);
+            textEditor.Dispose();
+            canvas.ActiveTextEditShapeId.Should().BeNull();
+        });
+    }
+
+    [Fact]
+    public async Task InCanvasTextEditor_CurrentSlideChange_CommitsTextAndClearsSuppression()
+    {
+        SlideShape? shape = null;
+        EditingSession? editor = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(presence =>
+            {
+                presence.Slides[0].Shapes.Clear();
+                shape = new SlideShape
+                {
+                    Id = 1,
+                    OffsetXEmu = 0,
+                    OffsetYEmu = 0,
+                    ExtentCxEmu = 2743200L,
+                    ExtentCyEmu = 1371600L,
+                    TextBody = MakeTextBody("Original"),
+                };
+                presence.Slides[0].Shapes.Add(shape);
+                presence.Slides.Add(new Slide());
+            });
+
+            editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+            textEditor.Activate(shape!.Id);
+            RichInput(overlay).Text = "Committed before slide change";
+
+            editor.SelectSlide(1);
+
+            canvas.ActiveTextEditShapeId.Should().BeNull();
+            InCanvasTextEditPlanner.ExtractPlainText(shape.TextBody)
+                .Should().Be("Committed before slide change");
+            editor.CanUndo.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public async Task SlideCanvas_ActiveTextEditShapeId_SuppressesOnlyMatchingShapeText()
+    {
+        byte[]? before = null;
+        byte[]? suppressed = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(presence =>
+            {
+                presence.Slides[0].Shapes.Clear();
+                presence.Slides[0].Shapes.Add(new SlideShape
+                {
+                    Id = 1,
+                    OffsetXEmu = 457200,
+                    OffsetYEmu = 457200,
+                    ExtentCxEmu = 2743200,
+                    ExtentCyEmu = 1371600,
+                    Fill = new ShapeFill.Solid(new SrgbColor(0xD9, 0xE2, 0xF3)),
+                    TextBody = MakeTextBody("Active shape"),
+                });
+                presence.Slides[0].Shapes.Add(new SlideShape
+                {
+                    Id = 2,
+                    OffsetXEmu = 4572000,
+                    OffsetYEmu = 457200,
+                    ExtentCxEmu = 2743200,
+                    ExtentCyEmu = 1371600,
+                    Fill = new ShapeFill.Solid(new SrgbColor(0xE2, 0xF0, 0xD9)),
+                    TextBody = MakeTextBody("Other shape"),
+                });
+            });
+            var canvas = new SlideCanvas
+            {
+                Presentation = presentation,
+                Slide = presentation.Slides[0],
+            };
+
+            before = RenderPixels(canvas, 960, 540);
+            canvas.ActiveTextEditShapeId = 1;
+            suppressed = RenderPixels(canvas, 960, 540);
+        });
+
+        before.Should().NotBeNullOrEmpty("the Avalonia renderer should produce a raster");
+        suppressed.Should().NotBeNullOrEmpty("the suppressed render should produce a raster");
+        CountPixelDifferences(before!, suppressed!, 960, 0, 0, 360, 260)
+            .Should().BeGreaterThan(0, "the active shape base text should be removed");
+        CountPixelDifferences(before!, suppressed!, 960, 360, 0, 960, 260)
+            .Should().Be(0, "a different shape must remain unchanged");
     }
 
     [Fact]
@@ -1449,7 +1655,6 @@ public sealed class SlideCanvasAvaloniaTests
             catch { /* captured below */ }
         });
 
-        // With UseHeadlessDrawing = true the platform draws nothing but the pipeline must not throw.
         pngBytes.Should().NotBeNull("render pipeline must complete without throwing");
     }
 
