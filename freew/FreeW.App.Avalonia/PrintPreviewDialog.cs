@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
@@ -51,6 +52,16 @@ internal sealed class PrintPreviewDialog : Window
 
         Content = BuildShell(document, titleName);
         Opened += (_, _) => UpdatePageCount();
+        KeyDown += OnKeyDown;
+    }
+
+    private void OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape)
+            return;
+
+        Close();
+        e.Handled = true;
     }
 
     private Control BuildShell(TextDocument document, string displayName)

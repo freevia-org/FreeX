@@ -394,6 +394,35 @@ public class BackstageViewTests
     }
 
     [Fact]
+    public async Task PrintPreviewDialog_Escape_closes_the_real_window()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new PrintPreviewDialog(TextDocument.CreateEmpty(), "Test.docx");
+            try
+            {
+                dialog.Show();
+                dialog.IsVisible.Should().BeTrue();
+
+                var escape = new KeyEventArgs
+                {
+                    RoutedEvent = InputElement.KeyDownEvent,
+                    Key = Key.Escape,
+                    Source = dialog,
+                };
+                dialog.RaiseEvent(escape);
+
+                escape.Handled.Should().BeTrue();
+                dialog.IsVisible.Should().BeFalse("Escape must dismiss Print Preview like the WPF window");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public void Info_safety_planner_produces_Protect_and_Inspect_groups()
     {
         var groups = BackstageInfoSafetyPanePlanner.Build();
