@@ -3426,7 +3426,7 @@ public sealed class SlideShowWindow : Window
             }
 
             var shapeId = anim.ShapeId;
-            PlayShapeAnimation(element, plan, onReveal: anim.Kind == AnimationKind.Exit ? null : () =>
+            PlayShapeAnimationWithTiming(element, plan, onReveal: anim.Kind == AnimationKind.Exit ? null : () =>
             {
                 // DA1: once the entrance animation finishes (or fires), hand off painting to
                 // the base canvas.  The overlay element stays in the tree at full opacity but
@@ -3449,6 +3449,73 @@ public sealed class SlideShowWindow : Window
     /// For non-entrance (Emphasis/Exit) effects this callback is invoked at animation start
     /// because the shape is already visible in the base canvas.
     /// </param>
+    private void PlayShapeAnimationWithTiming(
+        Control element,
+        SlideShowShapeAnimationPlaybackPlan plan,
+        Action? onReveal = null)
+    {
+        var passCount = plan.RepeatIndefinitely
+            ? (int?)null
+            : Math.Max(1, plan.RepeatCount ?? 1);
+        var basePlan = plan with
+        {
+            RepeatCount = null,
+            RepeatIndefinitely = false,
+            AutoReverse = plan.AutoReverse,
+        };
+
+        PlayShapeAnimationPass(element, basePlan, onReveal, passCount, 0);
+    }
+
+    private void PlayShapeAnimationPass(
+        Control element,
+        SlideShowShapeAnimationPlaybackPlan basePlan,
+        Action? onReveal,
+        int? passCount,
+        int passIndex)
+    {
+        var isFinalPass = passCount is int count && passIndex >= count - 1;
+        var currentPlan = passIndex == 0 ? basePlan : basePlan with { DelayMs = 0 };
+        var passPlan = passIndex % 2 == 1 && basePlan.AutoReverse
+            ? BuildReverseAnimationPlan(currentPlan)
+            : currentPlan;
+
+        PlayShapeAnimation(element, passPlan, isFinalPass ? onReveal : null);
+
+        if (!isFinalPass)
+        {
+            var nextPassDelay = passPlan.DelayMs + passPlan.DurationMs;
+            DelayedAction(nextPassDelay, () =>
+                PlayShapeAnimationPass(element, basePlan, onReveal, passCount, passIndex + 1));
+        }
+    }
+
+    private static SlideShowShapeAnimationPlaybackPlan BuildReverseAnimationPlan(
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        var reversedAnimation = PresentationAnimationCommandPlanner.CloneAnimation(plan.Animation);
+        reversedAnimation.Kind = reversedAnimation.Kind switch
+        {
+            AnimationKind.Entrance => AnimationKind.Exit,
+            AnimationKind.Exit => AnimationKind.Entrance,
+            _ => AnimationKind.Emphasis,
+        };
+
+        var reversePlan = SlideShowPlaybackPlanner.PlanShapeAnimation(reversedAnimation, 0);
+        return reversePlan with
+        {
+            RepeatCount = null,
+            RepeatIndefinitely = false,
+            AutoReverse = false,
+            FromOpacity = plan.ToOpacity,
+            ToOpacity = plan.FromOpacity,
+            FromScale = plan.ToScale,
+            ToScale = plan.FromScale,
+            OffsetXFactor = -plan.OffsetXFactor,
+            OffsetYFactor = -plan.OffsetYFactor,
+        };
+    }
+
     private void PlayShapeAnimation(Control element, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
     {
         _lastAnimationFramePlan = SlideShowPlaybackFramePlanner.PlanFrame(plan, 0, _slideDipW, _slideDipH);

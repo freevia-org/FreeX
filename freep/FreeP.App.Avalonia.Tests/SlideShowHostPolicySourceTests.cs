@@ -223,7 +223,11 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowPlaybackFramePlanner.BuildAnimationStepPlaybackReadinessPlan(");
         source.Should().Contain("foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step))");
         source.Should().Contain("_lastAnimationFramePlan = SlideShowPlaybackFramePlanner.PlanFrame(plan, 0, _slideDipW, _slideDipH);");
-        source.Should().Contain("PlayShapeAnimation(element, plan, onReveal: anim.Kind == AnimationKind.Exit ? null : () =>");
+        source.Should().Contain("PlayShapeAnimationWithTiming(element, plan, onReveal: anim.Kind == AnimationKind.Exit ? null : () =>");
+        source.Should().Contain("private void PlayShapeAnimationWithTiming(");
+        source.Should().Contain("PlayShapeAnimationPass(element, basePlan, onReveal, passCount, 0);");
+        source.Should().Contain("BuildReverseAnimationPlan(currentPlan)");
+        source.Should().Contain("PlayShapeAnimationPass(element, basePlan, onReveal, passCount, passIndex + 1)");
         source.Should().Contain("PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));");
 
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Appear:");
