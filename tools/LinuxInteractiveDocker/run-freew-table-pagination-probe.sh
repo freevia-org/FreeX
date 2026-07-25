@@ -81,10 +81,10 @@ screen_difference() {
 
 image_nonblank_varied() {
     local image="$1" stats mean deviation
-    stats="$(identify -format '%[mean] %[standard_deviation]' "$output/$image" 2>/dev/null || true)"
+    stats="$(identify -format '%[fx:mean] %[fx:standard_deviation]' "$output/$image" 2>/dev/null || true)"
     read -r mean deviation <<< "$stats"
     [[ "$mean" =~ ^[0-9]+([.][0-9]+)?$ && "$deviation" =~ ^[0-9]+([.][0-9]+)?$ ]] || return 1
-    awk -v mean="$mean" -v deviation="$deviation" 'BEGIN { exit !(mean > 1 && mean < 254 && deviation > 2) }'
+    awk -v mean="$mean" -v deviation="$deviation" 'BEGIN { exit !(mean > 0.01 && mean < 0.99 && deviation > 0.01) }'
 }
 
 window_ids() {
@@ -262,7 +262,7 @@ if [[ -n "${owner_id:-}" && -f "$output/baseline-page-crop.png" ]]; then
     printf 'baseline-crop-sha256=%s\nctrl-end-crop-sha256=%s\nfinal-crop-sha256=%s\nfallback=%s\nbaseline-final-AE=%s\n' "$baseline_hash" "$ctrl_end_hash" "$final_hash" "$fallback" "$final_delta" > "$output/third-page-navigation-proof.txt"
     printf 'owner-focused=%s\n' "$(if owner_has_focus; then printf true; else printf false; fi)" >> "$output/third-page-navigation-proof.txt"
     if [[ "$final_delta" =~ ^[0-9]+$ ]] && (( final_delta > 100 )) && owner_has_focus; then
-        record physical-third-page-navigation passed "Ctrl+End reached a changed final page; PageDown was used only when Ctrl+End left the page crop unchanged." baseline.png ctrl-end.png final.png baseline-page-crop.png ctrl-end-page-crop.png final-page-crop.png third-page-navigation-proof.txt
+        record physical-third-page-navigation passed "Ctrl+End reached a changed end-of-document render coupled to the deterministic three-page plan; PageDown was used only when Ctrl+End left the page crop unchanged." baseline.png ctrl-end.png final.png baseline-page-crop.png ctrl-end-page-crop.png final-page-crop.png third-page-navigation-proof.txt
     else
         record physical-third-page-navigation failed "The physical navigation sequence did not produce a changed final page while retaining the FreeW owner focus." third-page-navigation-proof.txt final.png final-page-crop.png
     fi
