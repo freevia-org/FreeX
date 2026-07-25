@@ -7968,7 +7968,9 @@ public sealed class DocumentView : RichTextBox
         TextDocument document,
         int sourceBlockIndex)
     {
-        var leadingContentHeightDip = EstimateLeadingContentHeightDip(document, sourceBlockIndex);
+        var leadingContentHeightDip = DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(
+            document,
+            sourceBlockIndex);
         var tableLayoutPlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(
             table,
             page: document.Page,

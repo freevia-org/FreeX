@@ -5256,6 +5256,17 @@ public sealed class DocumentView : Control
     private static string TablePlainText(Table table) =>
         string.Join("  |  ", table.Rows.SelectMany(r => r.Cells).Select(c => c.PlainText));
 
+    private static double ApplyAuthoredTableRowHeight(TableRow row, double measuredHeight)
+    {
+        var authoredHeight = row.HeightPt is > 0
+            ? PageLayout.PointsToDip(row.HeightPt.Value)
+            : 0;
+        if (row.HeightRule == TableRowHeightRule.Exact && authoredHeight > 0)
+            return Math.Max(14, authoredHeight);
+
+        return Math.Max(measuredHeight, authoredHeight);
+    }
+
     // ---- Table rendering (grid + modal cell text editing) ----------------------------------------
 
     private void LayoutTablePaged(int blockIndex, Table table, double textWidth)
@@ -5275,7 +5286,12 @@ public sealed class DocumentView : Control
 
         const double pad = 5;
         var borders = table.Formatting.Borders || _showTableGridlines;
-        var tableLayoutPlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(table, page: _doc.Page);
+        var tableLayoutPlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(
+            table,
+            page: _doc.Page,
+            firstPageLeadingContentHeightDip: DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(
+                _doc,
+                blockIndex));
         var cellEffectiveFills = tableLayoutPlan.Cells.ToDictionary(
             cell => (cell.RowIndex, cell.CellIndex),
             cell => cell.EffectiveFill);
@@ -5333,7 +5349,7 @@ public sealed class DocumentView : Control
 
                 prCol += prSpan;
             }
-            rowHeights[pr] = prRowHeight;
+            rowHeights[pr] = ApplyAuthoredTableRowHeight(prRow, prRowHeight);
         }
 
         var plannedPagesByFirstSourceRow = _viewMode == DocumentViewMode.PrintLayout
@@ -5403,6 +5419,8 @@ public sealed class DocumentView : Control
                 measured.Add((cell, cellIndex, col, span, cellParas, markerInsets, fmt));
                 col += span;
             }
+
+            rowHeight = ApplyAuthoredTableRowHeight(row, rowHeight);
 
             // Treat the row as a unit: reserve space on the current page (or push to next).
             var rowContentY = reservedContentY ?? ReserveContentY(rowHeight);

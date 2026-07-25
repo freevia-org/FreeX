@@ -276,9 +276,19 @@ public sealed class DocumentViewLayoutPlannerTests
 
         pagination.EstimatedPageCount.Should().Be(3);
         pagination.Pages.Should().HaveCount(3);
+        pagination.Pages[0].SourceRowIndexes.Should().Equal(0, 1, 2);
+        pagination.Pages[1].SourceRowIndexes.Should().Equal(3, 4, 5, 6);
+        pagination.Pages[2].SourceRowIndexes.Should().Equal(7, 8);
+        pagination.Rows.Select(row => row.AssignedPageNumber).Should().Equal(
+            1, 1, 1, 2, 2, 2, 2, 3, 3);
         pagination.Pages[0].AvailableHeightDip.Should().BeLessThan(pagination.AvailableBodyHeightDip);
         pagination.Pages[1].IncludesRepeatedHeader.Should().BeTrue();
+        pagination.Pages[1].RepeatedHeaderRowIndexes.Should().Equal(0);
+        pagination.Pages[1].KeepTogetherRowIndexes.Should().Equal(3, 6);
         pagination.Pages[2].IncludesRepeatedHeader.Should().BeTrue();
+        pagination.Pages[2].RepeatedHeaderRowIndexes.Should().Equal(0);
+        pagination.Pages.Select(page => page.RenderRows[0].SourceRowIndex).Should().Equal(0, 0, 0);
+        pagination.Pages.Select(page => page.RenderRows[0].IsRepeatedHeader).Should().Equal(false, true, true);
     }
 
     [Fact]

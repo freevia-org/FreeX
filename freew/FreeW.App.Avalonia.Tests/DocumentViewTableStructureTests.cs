@@ -156,6 +156,46 @@ public sealed class DocumentViewTableStructureTests
     // ── row insert below ──────────────────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task TablePageCompositionStress_UsesSharedPlanForThreeRenderedPages()
+    {
+        IReadOnlyList<int[]>? rowIndexesByPage = null;
+        IReadOnlyList<int>? renderedCellHitCountByPage = null;
+        IReadOnlyDictionary<int, string>? placedTextByPage = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument();
+            var tableBlockIndex = doc.Blocks.IndexOf(doc.Blocks.OfType<Table>().Single());
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+
+            var hitsByPage = GetTableCellHits(view)
+                .GroupBy(hit => PageIndexFromPageSpaceY(doc, hit.Rect.Y))
+                .OrderBy(group => group.Key)
+                .ToList();
+            var distinctRowsByPage = hitsByPage
+                .Select(group => group.Select(hit => hit.Row).Distinct().OrderBy(row => row).ToArray())
+                .ToArray();
+            rowIndexesByPage = distinctRowsByPage;
+            renderedCellHitCountByPage = hitsByPage.Select(group => group.Count()).ToArray();
+            placedTextByPage = view.GetPlacedForBlock(tableBlockIndex)
+                .GroupBy(glyph => PageIndexFromPageSpaceY(doc, glyph.Y))
+                .ToDictionary(group => group.Key, group => string.Concat(group.Select(glyph => glyph.Ch)));
+        });
+
+        ran.Should().BeTrue("the Avalonia dispatcher and renderer must be available for pagination evidence");
+        rowIndexesByPage.Should().NotBeNull();
+        rowIndexesByPage![0].Should().Equal(0, 1, 2);
+        rowIndexesByPage[1].Should().Equal(0, 3, 4, 5, 6);
+        rowIndexesByPage[2].Should().Equal(0, 7, 8);
+        renderedCellHitCountByPage.Should().Equal([12, 20, 12]);
+        placedTextByPage.Should().ContainKey(2);
+        placedTextByPage[2].Should().Contain("Page area");
+        placedTextByPage[2].Should().Contain("Segment 7");
+        placedTextByPage[2].Should().Contain("Segment 8");
+    }
+
+    [Fact]
     public async Task InsertTableRowBelow_adds_row_after_caret_row()
     {
         int rowsBefore = -1, rowsAfter = -1;

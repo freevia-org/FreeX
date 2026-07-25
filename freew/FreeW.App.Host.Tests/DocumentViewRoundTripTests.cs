@@ -1475,6 +1475,7 @@ public sealed class DocumentViewRoundTripTests
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument();
         var sourceTable = doc.Blocks.OfType<Table>().Single();
+        var pagination = DocumentViewLayoutPlanner.BuildTableLayoutPlans(doc).Single().Pagination;
 
         var view = new DocumentView();
         view.LoadModel(doc);
@@ -1482,6 +1483,10 @@ public sealed class DocumentViewRoundTripTests
         var tables = RenderedTables(view.Document);
         var sections = RenderedTableSections(view.Document);
         tables.Should().HaveCount(3);
+        tables.Count.Should().Be(pagination.Pages.Count);
+        pagination.Pages[0].SourceRowIndexes.Should().Equal(0, 1, 2);
+        pagination.Pages[1].SourceRowIndexes.Should().Equal(3, 4, 5, 6);
+        pagination.Pages[2].SourceRowIndexes.Should().Equal(7, 8);
         sections.Should().HaveCount(3);
         sections.Select(section => section.BreakPageBefore).Should().Equal(false, true, true);
 
@@ -1503,6 +1508,7 @@ public sealed class DocumentViewRoundTripTests
         RenderedRowText(pageRows[2][0]).Should().Contain("Page area");
         RenderedRowText(pageRows[2][1]).Should().Contain("Segment 7");
         RenderedRowText(pageRows[2][2]).Should().Contain("Segment 8");
+        pageRows[2].Select(RenderedRowText).Should().OnlyContain(text => !string.IsNullOrWhiteSpace(text));
 
         view.CommitToModel();
         view.Model.Blocks.OfType<Table>().Should().ContainSingle()
