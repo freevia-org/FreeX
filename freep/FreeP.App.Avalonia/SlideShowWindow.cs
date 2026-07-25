@@ -3513,6 +3513,7 @@ public sealed class SlideShowWindow : Window
             ToScale = plan.FromScale,
             OffsetXFactor = -plan.OffsetXFactor,
             OffsetYFactor = -plan.OffsetYFactor,
+            MotionKeyFrames = SlideShowPlaybackPlanner.ReverseMotionPathKeyFrames(plan.MotionKeyFrames),
         };
     }
 

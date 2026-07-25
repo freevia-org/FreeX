@@ -366,6 +366,21 @@ public static class SlideShowPlaybackPlanner
         };
     }
 
+    public static IReadOnlyList<SlideShowMotionPathKeyFrame> ReverseMotionPathKeyFrames(
+        IReadOnlyList<SlideShowMotionPathKeyFrame> keyFrames)
+    {
+        ArgumentNullException.ThrowIfNull(keyFrames);
+
+        return keyFrames
+            .Reverse()
+            .Select(frame => new SlideShowMotionPathKeyFrame(
+                1 - frame.Progress,
+                frame.OffsetXFactor,
+                frame.OffsetYFactor))
+            .OrderBy(frame => frame.Progress)
+            .ToArray();
+    }
+
     public static SlideShowFallbackAnimationPlaybackPlan? PlanFallbackAnimation(
         ShapeAnimation animation,
         int startDelayMs)

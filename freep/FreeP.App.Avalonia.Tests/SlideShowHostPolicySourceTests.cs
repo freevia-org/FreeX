@@ -228,6 +228,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayShapeAnimationPass(element, basePlan, onReveal, passCount, 0);");
         source.Should().Contain("BuildReverseAnimationPlan(currentPlan)");
         source.Should().Contain("PlayShapeAnimationPass(element, basePlan, onReveal, passCount, passIndex + 1)");
+        source.Should().Contain("MotionKeyFrames = SlideShowPlaybackPlanner.ReverseMotionPathKeyFrames(plan.MotionKeyFrames)");
         source.Should().Contain("PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));");
 
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Appear:");

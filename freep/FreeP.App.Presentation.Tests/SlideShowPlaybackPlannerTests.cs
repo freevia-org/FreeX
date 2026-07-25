@@ -1798,6 +1798,22 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void ReverseMotionPathKeyFrames_ReversesProgressAndPreservesOffsets()
+    {
+        var reversed = SlideShowPlaybackPlanner.ReverseMotionPathKeyFrames(
+        [
+            new SlideShowMotionPathKeyFrame(0, 0, 0),
+            new SlideShowMotionPathKeyFrame(0.5, 0.2, 0.1),
+            new SlideShowMotionPathKeyFrame(1, 0.5, 0.25),
+        ]);
+
+        reversed.Should().Equal(
+            new SlideShowMotionPathKeyFrame(0, 0.5, 0.25),
+            new SlideShowMotionPathKeyFrame(0.5, 0.2, 0.1),
+            new SlideShowMotionPathKeyFrame(1, 0, 0));
+    }
+
+    [Fact]
     public void PlanShapeAnimation_PreservesImportedEmphasisPresetFamilies()
     {
         var expected = new Dictionary<AnimationPreset, SlideShowShapeAnimationEffectKind>
