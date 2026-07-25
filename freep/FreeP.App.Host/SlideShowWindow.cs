@@ -60,6 +60,7 @@ public sealed class SlideShowWindow : Window
     private readonly SlideShowController _controller;
     private readonly SlideShowSessionController _session;
     private readonly DispatcherTimer  _autoAdvanceTimer;
+    private PresenterViewWindow? _presenterViewWindow;
     private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
     private IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> _lastAnimationStepFrameEvidence = Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>();
     private SlideShowAnimationStepPlaybackReadinessPlan? _lastAnimationStepPlaybackReadinessPlan;
@@ -357,6 +358,31 @@ public sealed class SlideShowWindow : Window
             displayIntent,
             _session.ToolPlan);
 
+    /// <summary>Whether the synchronized presenter dashboard is currently open.</summary>
+    public bool IsPresenterViewOpen => _presenterViewWindow?.IsVisible == true;
+
+    /// <summary>Opens or closes the presenter dashboard without changing audience playback.</summary>
+    public void TogglePresenterView()
+    {
+        if (_presenterViewWindow is { IsVisible: true })
+        {
+            _presenterViewWindow.Close();
+            return;
+        }
+
+        var window = new PresenterViewWindow(
+            _presentation,
+            () => CreatePresenterState(DateTimeOffset.UtcNow));
+        _presenterViewWindow = window;
+        window.Owner = this;
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_presenterViewWindow, window))
+                _presenterViewWindow = null;
+        };
+        window.Show();
+    }
+
     public SlideShowPresenterToolPlan ApplyPresenterToolIntent(
         SlideShowTimingIntent timingIntent = SlideShowTimingIntent.None,
         SlideShowRecordingMediaIntent mediaIntent = SlideShowRecordingMediaIntent.None,
@@ -409,6 +435,14 @@ public sealed class SlideShowWindow : Window
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.P &&
+            (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            TogglePresenterView();
+            e.Handled = true;
+            return;
+        }
+
         if (TryHandleSlideNumberKey(e.Key.ToString()))
         {
             e.Handled = true;
@@ -5629,6 +5663,8 @@ public sealed class SlideShowWindow : Window
 
     private void Teardown(DateTimeOffset? nowUtc = null)
     {
+        _presenterViewWindow?.Close();
+        _presenterViewWindow = null;
         if (_session.IsClosed)
         {
             return;
