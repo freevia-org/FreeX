@@ -85,6 +85,50 @@ public sealed class SelectionPaneTests
     }
 
     [Fact]
+    public void SetShapeNameCommand_ResolvesGroupedChildAndIsUndoable()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide { Title = "Grouped names" };
+        slide.Shapes.Clear();
+        var group = MakeShape(10, "Group");
+        group.Kind = SlideShapeKind.Group;
+        group.Children.Add(MakeShape(11, "Old child name"));
+        slide.Shapes.Add(group);
+        presentation.Slides.Add(slide);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetShapeNameCommand(0, 11, "  New child name  "));
+        group.Children[0].Name.Should().Be("New child name");
+
+        bus.Undo();
+        group.Children[0].Name.Should().Be("Old child name");
+
+        bus.Redo();
+        group.Children[0].Name.Should().Be("New child name");
+    }
+
+    [Fact]
+    public void EditingSession_SetShapeNameRejectsBlankAndRoundTripsName()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide { Title = "Names" };
+        slide.Shapes.Clear();
+        slide.Shapes.Add(MakeShape(17, "Original"));
+        presentation.Slides.Add(slide);
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        session.SetShapeName(17, " Renamed ").Should().BeTrue();
+        slide.Shapes[0].Name.Should().Be("Renamed");
+        session.SetShapeName(17, "   ").Should().BeFalse();
+        slide.Shapes[0].Name.Should().Be("Renamed");
+
+        session.Undo();
+        slide.Shapes[0].Name.Should().Be("Original");
+        session.Redo();
+        slide.Shapes[0].Name.Should().Be("Renamed");
+    }
+
+    [Fact]
     public void EditingSession_TogglesGroupedChildVisibilityThroughCommandBus()
     {
         var presentation = new Presentation();
@@ -122,6 +166,23 @@ public sealed class SelectionPaneTests
         reopened.Slides.Should().ContainSingle();
         reopened.Slides[0].Shapes.Should().ContainSingle();
         reopened.Slides[0].Shapes[0].IsHidden.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RenamedObject_RoundTripsThroughPowerPointPackage()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide { Title = "Names" };
+        slide.Shapes.Clear();
+        slide.Shapes.Add(MakeShape(17, "Quarterly revenue"));
+        presentation.Slides.Add(slide);
+
+        using var stream = new MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var reopened = FreeP.Core.IO.PptxPackageReader.Read(stream);
+
+        reopened.Slides[0].Shapes[0].Name.Should().Be("Quarterly revenue");
     }
 
     private static SlideShape MakeShape(uint id, string name) => new()

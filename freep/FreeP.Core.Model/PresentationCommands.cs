@@ -345,6 +345,67 @@ public sealed class SetShapeHiddenCommand : IPresentationCommand
     }
 }
 
+/// <summary>Renames a slide object, including a grouped child, as one undoable edit.</summary>
+public sealed class SetShapeNameCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly string _newName;
+    private string _oldName = string.Empty;
+
+    public SetShapeNameCommand(int slideIndex, uint shapeId, string newName)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _newName = newName.Trim();
+    }
+
+    public string Label => "Rename Object";
+
+    public bool HasEffect(Presentation p) =>
+        TryGetShape(p, out var shape) &&
+        _newName.Length > 0 &&
+        !string.Equals(shape.Name, _newName, StringComparison.Ordinal);
+
+    public void Apply(Presentation p)
+    {
+        if (!TryGetShape(p, out var shape))
+            return;
+
+        _oldName = shape.Name;
+        shape.Name = _newName;
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (TryGetShape(p, out var shape))
+            shape.Name = _oldName;
+    }
+
+    private bool TryGetShape(Presentation p, out SlideShape shape)
+    {
+        shape = null!;
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
+            return false;
+
+        shape = FindShape(p.Slides[_slideIndex].Shapes, _shapeId)!;
+        return shape is not null;
+    }
+
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
+    }
+}
+
 /// <summary>
 /// Sets the title metadata for a slide. Revert restores the previous title.
 /// </summary>

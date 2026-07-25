@@ -681,6 +681,16 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public void SelectionPane_source_routes_rename_through_undoable_session()
+    {
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "SelectionPane.cs"));
+
+        source.Should().Contain("_editor.SetShapeName(");
+        source.Should().Contain("Key.Enter");
+        source.Should().Contain("rename.LostFocus");
+    }
+
+    [Fact]
     public void MainWindow_sources_route_animation_commands_through_shared_planner()
     {
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
