@@ -198,6 +198,26 @@ public sealed class SharedShapeGeometryBuilderTests
     }
 
     [Fact]
+    public void ChevronAndHomePlate_UseAuthoredPointDepth()
+    {
+        var chevron = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Chevron,
+            Bounds,
+            new Dictionary<string, double> { ["adj"] = 50000 });
+        var homePlate = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.HomePlate,
+            Bounds,
+            new Dictionary<string, double> { ["adj"] = 50000 });
+
+        chevron.Contours.Should().ContainSingle();
+        var insetX = Bounds.Right - Bounds.Height / 2;
+        chevron.Contours[0].Segments[0].End.Should().Be(new LayoutPoint(insetX, Bounds.Top));
+        chevron.Contours[0].Segments[4].End.Should().Be(new LayoutPoint(Bounds.Left + Bounds.Height / 2, Bounds.Top + Bounds.Height / 2));
+        homePlate.Contours.Should().ContainSingle();
+        homePlate.Contours[0].Segments[0].End.Should().Be(new LayoutPoint(insetX, Bounds.Top));
+    }
+
+    [Fact]
     public void Cylinder_EnumValue_Is44_NoRenumbering()
     {
         // Appended after HomePlate=43 — verify no renumbering occurred.

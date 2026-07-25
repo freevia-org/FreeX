@@ -352,6 +352,35 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
         }
     }
 
+    [Fact]
+    public void Build_ChevronAndHomePlate_ExposePointDepthGuide()
+    {
+        foreach (var kind in new[] { DrawingShapeKind.Chevron, DrawingShapeKind.HomePlate })
+        {
+            var shape = new SlideShape
+            {
+                Id = 22,
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = kind,
+            };
+
+            var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+            plan.CanEdit.Should().BeTrue(kind.ToString());
+            plan.Handles.Should().ContainSingle(kind.ToString());
+            plan.Handles[0].Name.Should().Be("adj");
+            plan.Handles[0].Label.Should().Be(kind == DrawingShapeKind.Chevron ? "Chevron depth" : "Point depth");
+            plan.Handles[0].PositionDip.Should().Be(new LayoutPoint(160, Bounds.Top));
+            plan.Handles[0].Value.Should().Be(50000);
+            plan.Handles[0].Maximum.Should().Be(200000);
+
+            var mutation = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+                shape, Bounds, "adj", new LayoutPoint(160, Bounds.Top));
+            mutation.ShouldApply.Should().BeTrue();
+            mutation.Value.Should().Be(50000);
+        }
+    }
+
     private static SlideShape MakeCustomTriangle()
     {
         var path = new CustomGeometryPath { PathW = 100, PathH = 100 };

@@ -410,6 +410,39 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_ChevronAndHomePlate_PreserveAuthoredPointDepth()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        uint id = 1;
+        foreach (var kind in new[] { DrawingShapeKind.Chevron, DrawingShapeKind.HomePlate })
+        {
+            var shape = new SlideShape
+            {
+                Id = id++,
+                Name = kind.ToString(),
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = kind,
+                ExtentCxEmu = 914400,
+                ExtentCyEmu = 457200,
+            };
+            shape.PresetGeometryAdjustments["adj"] = 75000;
+            slide.Shapes.Add(shape);
+        }
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        foreach (var kind in new[] { DrawingShapeKind.Chevron, DrawingShapeKind.HomePlate })
+        {
+            var shape = reloaded.Slides[0].Shapes.Single(candidate => candidate.Name == kind.ToString());
+            shape.AutoShapeKind.Should().Be(kind);
+            shape.PresetGeometryAdjustments["adj"].Should().Be(75000);
+        }
+    }
+
+    [Fact]
     public void RoundTrip_Rotation_And_Flip()
     {
         var pres = new Presentation();

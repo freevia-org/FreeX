@@ -97,8 +97,8 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.RoundedRectangularCallout => RoundedCallout(rect),
             DrawingShapeKind.OvalCallout => OvalCallout(rect),
             DrawingShapeKind.LineCallout => LineCallout(rect),
-            DrawingShapeKind.Chevron => Polygon(rect, [(0, 0), (0.76, 0), (1, 0.5), (0.76, 1), (0, 1), (0.24, 0.5)]),
-            DrawingShapeKind.HomePlate => Polygon(rect, [(0, 0), (0.76, 0), (1, 0.5), (0.76, 1), (0, 1)]),
+            DrawingShapeKind.Chevron => Chevron(rect, adjustments),
+            DrawingShapeKind.HomePlate => HomePlate(rect, adjustments),
             DrawingShapeKind.Cylinder => CylinderShape(rect),
             DrawingShapeKind.Chord => Chord(rect, adjustments),
             _ => Rectangle(rect)
@@ -227,6 +227,35 @@ public static class ShapeGeometryBuilder
                 (0.5, 1), (0, headBase), (0.5 - shaftHalf, headBase), (0.5 - shaftHalf, 0),
             ]),
         };
+    }
+
+    private static ShapeGeometry Chevron(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments)
+    {
+        if (adjustments is null || !adjustments.ContainsKey("adj"))
+            return Polygon(rect, [(0, 0), (0.76, 0), (1, 0.5), (0.76, 1), (0, 1), (0.24, 0.5)]);
+
+        var maximum = 100000.0 * rect.Width / Math.Min(rect.Width, rect.Height);
+        var depth = Math.Clamp(GetAdjustment(adjustments, "adj", 50000), 0, maximum);
+        var x1 = Math.Min(rect.Width, rect.Height) * depth / 100000.0;
+        var x2 = rect.Width - x1;
+        return Polygon(rect,
+        [(0, 0), (x2 / rect.Width, 0), (1, 0.5), (x2 / rect.Width, 1), (0, 1), (x1 / rect.Width, 0.5)]);
+    }
+
+    private static ShapeGeometry HomePlate(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments)
+    {
+        if (adjustments is null || !adjustments.ContainsKey("adj"))
+            return Polygon(rect, [(0, 0), (0.76, 0), (1, 0.5), (0.76, 1), (0, 1)]);
+
+        var maximum = 100000.0 * rect.Width / Math.Min(rect.Width, rect.Height);
+        var depth = Math.Clamp(GetAdjustment(adjustments, "adj", 50000), 0, maximum);
+        var x1 = rect.Width - Math.Min(rect.Width, rect.Height) * depth / 100000.0;
+        return Polygon(rect,
+        [(0, 0), (x1 / rect.Width, 0), (1, 0.5), (x1 / rect.Width, 1), (0, 1)]);
     }
 
     private static ShapeContour RectangleContour(LayoutRect rect) =>

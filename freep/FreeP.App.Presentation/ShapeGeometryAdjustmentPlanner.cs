@@ -46,9 +46,9 @@ public sealed record ShapeGeometryAdjustmentMutationPlan(
 /// <summary>
 /// Shared planning for PowerPoint-style preset-shape edit points.
 /// Supported geometries are imported/custom line vertices, Chord (two explicit angle guides),
-/// Rounded Rectangle (one explicit corner-radius guide), Triangle (one apex guide), and
-/// directional arrows (shaft and head guides). The compositor already consumes these geometry
-/// representations.
+/// Rounded Rectangle (one explicit corner-radius guide), Triangle (one apex guide), directional
+/// arrows (shaft and head guides), Chevron, and Home Plate (one point-depth guide each). The
+/// compositor already consumes these geometry representations.
 /// </summary>
 public static class ShapeGeometryAdjustmentPlanner
 {
@@ -76,7 +76,8 @@ public static class ShapeGeometryAdjustmentPlanner
 
         if (shape.Kind != SlideShapeKind.AutoShape ||
             shape.AutoShapeKind is not (DrawingShapeKind.Chord or DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle or
-                DrawingShapeKind.RightArrow or DrawingShapeKind.LeftArrow or DrawingShapeKind.UpArrow or DrawingShapeKind.DownArrow))
+                DrawingShapeKind.RightArrow or DrawingShapeKind.LeftArrow or DrawingShapeKind.UpArrow or DrawingShapeKind.DownArrow or
+                DrawingShapeKind.Chevron or DrawingShapeKind.HomePlate))
         {
             return new ShapeGeometryAdjustmentPlan(
                 shape.Id,
@@ -170,6 +171,24 @@ public static class ShapeGeometryAdjustmentPlanner
                         0,
                         MaxArrowAdjustment),
                 ]);
+        }
+
+        if (shape.AutoShapeKind is DrawingShapeKind.Chevron or DrawingShapeKind.HomePlate)
+        {
+            var maximum = GuideMaximum(boundsDip);
+            var adjustment = ReadAdjustment(shape, "adj", 50000, maximum);
+            var depth = Math.Min(boundsDip.Width, boundsDip.Height) * adjustment / 100000.0;
+            return new ShapeGeometryAdjustmentPlan(
+                shape.Id,
+                CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
+                boundsDip.Width > 0 && boundsDip.Height > 0 ? null : UnsupportedShapeMessage,
+                [new ShapeGeometryAdjustmentHandlePlan(
+                    "adj",
+                    shape.AutoShapeKind == DrawingShapeKind.Chevron ? "Chevron depth" : "Point depth",
+                    new LayoutPoint(boundsDip.Right - depth, boundsDip.Top),
+                    adjustment,
+                    0,
+                    maximum)]);
         }
 
         var start = ReadAngle(shape, "adj1", DefaultStartAngle);
@@ -297,6 +316,17 @@ public static class ShapeGeometryAdjustmentPlanner
             var minDimension = Math.Min(boundsDip.Width, boundsDip.Height);
             var cornerAdjustment = (pointerDip.X - boundsDip.Left) / minDimension * 100000.0;
             return new(true, "adj", Math.Clamp(cornerAdjustment, 0, MaxCornerAdjustment), null);
+        }
+
+        if (shape.AutoShapeKind is DrawingShapeKind.Chevron or DrawingShapeKind.HomePlate)
+        {
+            if (handleName != "adj")
+                return new(false, null, null, InvalidHandleMessage);
+
+            var minimumDimension = Math.Min(boundsDip.Width, boundsDip.Height);
+            var maximum = GuideMaximum(boundsDip);
+            var adjustment = (boundsDip.Right - pointerDip.X) / minimumDimension * 100000.0;
+            return new(true, "adj", Math.Clamp(adjustment, 0, maximum), null);
         }
 
         if (handleName is not ("adj1" or "adj2"))
@@ -434,6 +464,9 @@ public static class ShapeGeometryAdjustmentPlanner
     private static bool IsDirectionalArrow(DrawingShapeKind kind) =>
         kind is DrawingShapeKind.RightArrow or DrawingShapeKind.LeftArrow or
             DrawingShapeKind.UpArrow or DrawingShapeKind.DownArrow;
+
+    private static double GuideMaximum(LayoutRect boundsDip) =>
+        100000.0 * boundsDip.Width / Math.Min(boundsDip.Width, boundsDip.Height);
 
     private static ShapeGeometryAdjustmentPlan BuildCustomGeometryPlan(
         SlideShape shape,
