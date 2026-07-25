@@ -3691,6 +3691,7 @@ public sealed class SlideShowWindow : Window
         if (plan.EffectKind == SlideShowShapeAnimationEffectKind.MotionPath)
         {
             MotionPathEffect(sb, element, plan);
+            ApplyRepeatTiming(sb, plan);
             AttachEntranceCompletion(sb, plan);
             _pendingStoryboards.Add(sb);
             sb.Begin(element, isControllable: true);
@@ -3845,9 +3846,31 @@ public sealed class SlideShowWindow : Window
                 break;
         }
 
+        ApplyRepeatTiming(sb, plan);
         AttachEntranceCompletion(sb, plan);
         _pendingStoryboards.Add(sb);
         sb.Begin(element, isControllable: true);
+    }
+
+    private static void ApplyRepeatTiming(
+        Storyboard storyboard,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        if (plan.RepeatIndefinitely || plan.RepeatCount is > 1)
+        {
+            var repeatBehavior = plan.RepeatIndefinitely
+                ? RepeatBehavior.Forever
+                : new RepeatBehavior(plan.RepeatCount!.Value);
+
+            foreach (var timeline in storyboard.Children)
+                timeline.RepeatBehavior = repeatBehavior;
+        }
+
+        if (plan.AutoReverse)
+        {
+            foreach (var timeline in storyboard.Children)
+                timeline.AutoReverse = true;
+        }
     }
 
     private void AttachEntranceCompletion(
