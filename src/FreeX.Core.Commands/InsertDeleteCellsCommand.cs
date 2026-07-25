@@ -49,6 +49,10 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     // band-scoped shift below never moved or cleared them, silently destroying or misplacing
     // format-only cells such as a fill color applied to an empty cell.
     private List<(uint Row, uint Col, StyleId StyleId)>? _styleOnlySnapshot;
+    // R86-meta-3: mirrors DeleteCellsCommand's own _sparklineSnapshot field below — this band-scoped
+    // Insert Cells path never touched sheet.Sparklines at all before this fix, the exact gap
+    // R84-commands-clear-delete-5-1 fixed on the Delete side (see ShiftSparklinesInBandRight/Down).
+    private List<SparklineBandSnapshot>? _sparklineSnapshot;
 
     public string Label => "Insert Cells";
 
@@ -161,6 +165,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
             ShiftNamedRangesInBandRight(ctx.Workbook, _sheetId, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
 
+            // R86-meta-3: see ShiftSparklinesInBandRight for the move/grow rationale (mirrors
+            // ShiftNamedRangesInBandRight immediately above, but for sheet.Sparklines).
+            _sparklineSnapshot = CaptureSparklines(sheet);
+            ShiftSparklinesInBandRight(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
+
             InsertShiftRight(sheet, capture.Cells);
             // R71-commands-insert-delete-cells-4-2: Excel's Insert Cells default ("Insert Options"
             // smart-tag) copies the formatting of the cell immediately to the LEFT into the
@@ -267,6 +276,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
             ShiftNamedRangesInBandDown(ctx.Workbook, _sheetId, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
 
+            // R86-meta-3: see ShiftSparklinesInBandDown for the move/grow rationale (mirrors
+            // ShiftNamedRangesInBandDown immediately above, but for sheet.Sparklines).
+            _sparklineSnapshot = CaptureSparklines(sheet);
+            ShiftSparklinesInBandDown(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
+
             InsertShiftDown(sheet, capture.Cells);
             // R71-commands-insert-delete-cells-4-2: see the Shift-Right branch above.
             InheritVacatedFormatShiftDown(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row);
@@ -346,6 +360,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
+        RestoreSparklines(sheet, _sparklineSnapshot);
     }
 
     private void InsertShiftRight(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
@@ -1526,6 +1541,99 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             if (removed)
                 sheet.Sparklines.RemoveAt(i);
         }
+    }
+
+    /// <summary>
+    /// Insert Shift Right: named-range-style growth mirrored for sheet.Sparklines (R86-meta-3 —
+    /// this band-scoped Insert Cells path never touched sheet.Sparklines at all before this fix,
+    /// exactly the gap R84-commands-clear-delete-5-1 fixed on the Delete side; see
+    /// <see cref="ShiftSparklinesInBandLeft"/>). A sparkline's Location only moves when it falls
+    /// inside the row band (like any other single-cell annotation — see
+    /// <see cref="ShiftAnnotationsInBandRight{TValue}"/>); its DataRange/DateAxisRange fully inside
+    /// the row band GROW their End.Col by <paramref name="count"/> when the insert point straddles
+    /// them (Start.Col &lt; insertBeforeCol &lt;= End.Col), matching Excel's own reference-adjustment
+    /// (mirrors <see cref="ShiftNamedRangesInBandRight"/>); a range fully at/right of the insert
+    /// point shifts both endpoints right.
+    /// </summary>
+    internal static void ShiftSparklinesInBandRight(
+        Sheet sheet,
+        uint bandStartRow, uint bandEndRow,
+        uint insertBeforeCol, uint count)
+    {
+        foreach (var sparkline in sheet.Sparklines)
+        {
+            var location = sparkline.Location;
+            if (location.Row >= bandStartRow && location.Row <= bandEndRow && location.Col >= insertBeforeCol)
+                sparkline.Location = new CellAddress(location.Sheet, location.Row, location.Col + count);
+
+            if (GrowColRangeForBandRight(sparkline.DataRange, bandStartRow, bandEndRow, insertBeforeCol, count, out var newDataRange))
+                sparkline.DataRange = newDataRange;
+
+            if (sparkline.DateAxisRange is { } dateAxisRange &&
+                GrowColRangeForBandRight(dateAxisRange, bandStartRow, bandEndRow, insertBeforeCol, count, out var newDateAxisRange))
+                sparkline.DateAxisRange = newDateAxisRange;
+        }
+    }
+
+    /// <summary>Insert Shift Down: analogous to <see cref="ShiftSparklinesInBandRight"/> for rows/columns swapped.</summary>
+    internal static void ShiftSparklinesInBandDown(
+        Sheet sheet,
+        uint bandStartCol, uint bandEndCol,
+        uint insertBeforeRow, uint count)
+    {
+        foreach (var sparkline in sheet.Sparklines)
+        {
+            var location = sparkline.Location;
+            if (location.Col >= bandStartCol && location.Col <= bandEndCol && location.Row >= insertBeforeRow)
+                sparkline.Location = new CellAddress(location.Sheet, location.Row + count, location.Col);
+
+            if (GrowRowRangeForBandDown(sparkline.DataRange, bandStartCol, bandEndCol, insertBeforeRow, count, out var newDataRange))
+                sparkline.DataRange = newDataRange;
+
+            if (sparkline.DateAxisRange is { } dateAxisRange &&
+                GrowRowRangeForBandDown(dateAxisRange, bandStartCol, bandEndCol, insertBeforeRow, count, out var newDateAxisRange))
+                sparkline.DateAxisRange = newDateAxisRange;
+        }
+    }
+
+    /// <summary>Insert Shift Right: see <see cref="ShiftSparklinesInBandRight"/>. Returns false (no-op) when the range is outside the row band or entirely left of the insert point.</summary>
+    private static bool GrowColRangeForBandRight(
+        GridRange range,
+        uint bandStartRow, uint bandEndRow,
+        uint insertBeforeCol, uint count,
+        out GridRange translated)
+    {
+        translated = range;
+        if (range.Start.Row < bandStartRow || range.End.Row > bandEndRow) return false;
+        if (range.End.Col < insertBeforeCol) return false;
+
+        var newStartCol = range.Start.Col < insertBeforeCol
+            ? range.Start.Col
+            : Math.Min(range.Start.Col + count, CellAddress.MaxCol);
+        translated = new GridRange(
+            new CellAddress(range.Start.Sheet, range.Start.Row, newStartCol),
+            new CellAddress(range.End.Sheet, range.End.Row, Math.Min(range.End.Col + count, CellAddress.MaxCol)));
+        return true;
+    }
+
+    /// <summary>Insert Shift Down: analogous to <see cref="GrowColRangeForBandRight"/> for rows/columns swapped.</summary>
+    private static bool GrowRowRangeForBandDown(
+        GridRange range,
+        uint bandStartCol, uint bandEndCol,
+        uint insertBeforeRow, uint count,
+        out GridRange translated)
+    {
+        translated = range;
+        if (range.Start.Col < bandStartCol || range.End.Col > bandEndCol) return false;
+        if (range.End.Row < insertBeforeRow) return false;
+
+        var newStartRow = range.Start.Row < insertBeforeRow
+            ? range.Start.Row
+            : Math.Min(range.Start.Row + count, CellAddress.MaxRow);
+        translated = new GridRange(
+            new CellAddress(range.Start.Sheet, newStartRow, range.Start.Col),
+            new CellAddress(range.End.Sheet, Math.Min(range.End.Row + count, CellAddress.MaxRow), range.End.Col));
+        return true;
     }
 }
 

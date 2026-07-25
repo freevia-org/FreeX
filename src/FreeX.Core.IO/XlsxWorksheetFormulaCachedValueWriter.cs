@@ -24,6 +24,17 @@ namespace FreeX.Core.IO;
 /// placeholder <c>&lt;c&gt;</c> for each of them but never gives any of them a value (FreeX itself
 /// never assigns a <c>.Value</c> to anything but the anchor), so without this second pass every
 /// non-anchor spill member would silently round-trip as Blank (R61-io-shared-formula-6-1).</para>
+///
+/// <para>A LEGACY (Ctrl+Shift+Enter) array formula that was loaded but never recalculated is a
+/// distinct case from the spill members above: its non-anchor cells are ordinary occupied cells in
+/// <c>Sheet._cells</c> (not live spill values in <c>Sheet._spillValues</c>), so
+/// <c>sheet.HasSpillValues</c>/<c>EnumerateSpillTargetCells</c> never see them — yet
+/// <c>XlsxFileAdapter.Save.cs</c>'s <c>Range.FormulaArrayA1</c> write for the anchor's declared
+/// <c>ref</c> extent leaves the very same kind of empty placeholder <c>&lt;c&gt;</c> for every one of
+/// them (confirmed empirically: no way to give ClosedXML a value for a range it never evaluates
+/// itself). This class recovers that extent directly from the just-saved <c>&lt;f t="array"
+/// ref="..."&gt;</c> element and patches every member the same way as a spill member
+/// (R86-io-shared-array-formula-5-2).</para>
 /// </summary>
 internal static class XlsxWorksheetFormulaCachedValueWriter
 {
@@ -74,6 +85,14 @@ internal static class XlsxWorksheetFormulaCachedValueWriter
         Dictionary<(uint Row, uint Col), XElement>? spillCellsByAddress =
             spillTargetKeys is not null ? new Dictionary<(uint, uint), XElement>(spillTargetKeys.Count) : null;
 
+        // Non-anchor member addresses of a legacy CSE array formula, recovered directly from every
+        // <f t="array" ref="..."> element's declared extent (see class remarks). Collected up front
+        // (a cheap, order-independent pre-scan) exactly like spillTargetKeys above, so most sheets
+        // (which have no legacy array formulas at all) pay no extra cost.
+        HashSet<(uint Row, uint Col)>? legacyArrayMemberKeys = CollectLegacyArrayMemberKeys(sheetData, worksheetNs, fName);
+        Dictionary<(uint Row, uint Col), XElement>? legacyArrayMemberCellsByAddress =
+            legacyArrayMemberKeys is not null ? new Dictionary<(uint, uint), XElement>(legacyArrayMemberKeys.Count) : null;
+
         foreach (var cell in sheetData.Elements(worksheetNs + "row").Elements(worksheetNs + "c"))
         {
             var reference = cell.Attribute("r")?.Value;
@@ -83,6 +102,9 @@ internal static class XlsxWorksheetFormulaCachedValueWriter
 
             if (spillTargetKeys is not null && hasAddress && spillTargetKeys.Contains((address.Row, address.Col)))
                 spillCellsByAddress![(address.Row, address.Col)] = cell;
+
+            if (legacyArrayMemberKeys is not null && hasAddress && legacyArrayMemberKeys.Contains((address.Row, address.Col)))
+                legacyArrayMemberCellsByAddress![(address.Row, address.Col)] = cell;
 
             var formula = cell.Element(fName);
             if (formula is null)
@@ -123,7 +145,110 @@ internal static class XlsxWorksheetFormulaCachedValueWriter
             }
         }
 
+        if (legacyArrayMemberCellsByAddress is not null)
+        {
+            foreach (var addr in legacyArrayMemberKeys!)
+            {
+                if (!legacyArrayMemberCellsByAddress.TryGetValue(addr, out var memberCell))
+                    continue;
+
+                // A non-anchor legacy-array member never carries its own <f>; if one is somehow
+                // present (unexpected — stay defensive) or a value is already there, leave it alone.
+                if (memberCell.Element(fName) is not null ||
+                    memberCell.Element(vName) is not null ||
+                    memberCell.Element(isName) is not null)
+                {
+                    continue;
+                }
+
+                var value = sheet.GetValue(addr.Row, addr.Col);
+                if (WriteSpillMemberCachedValue(memberCell, worksheetNs, value))
+                    changed = true;
+            }
+        }
+
         return changed;
+    }
+
+    /// <summary>
+    /// Scans every <c>&lt;f t="array" ref="..."&gt;</c> element in the sheet's already-saved XML and
+    /// returns the set of non-anchor cell addresses its declared <c>ref</c> extent covers (or null
+    /// if the sheet has none). A cheap, order-independent pre-pass mirroring
+    /// <c>sheet.EnumerateSpillTargetCells()</c> above, except the source of truth here is the XML
+    /// itself rather than the in-memory model — the model has no notion of "legacy array formula
+    /// extent" beyond the anchor cell's own <see cref="Cell.LegacyArrayRows"/>/<see
+    /// cref="Cell.LegacyArrayCols"/>, and re-deriving the same extent from the saved <c>ref</c>
+    /// attribute is simpler than plumbing that through from the save loop.
+    /// </summary>
+    private static HashSet<(uint Row, uint Col)>? CollectLegacyArrayMemberKeys(
+        XElement sheetData,
+        XNamespace worksheetNs,
+        XName fName)
+    {
+        HashSet<(uint Row, uint Col)>? keys = null;
+
+        foreach (var formula in sheetData.Elements(worksheetNs + "row").Elements(worksheetNs + "c").Elements(fName))
+        {
+            if (!string.Equals(formula.Attribute("t")?.Value, "array", StringComparison.Ordinal))
+                continue;
+
+            if (!TryParseCellRangeReference(formula.Attribute("ref")?.Value, out var r0, out var c0, out var r1, out var c1) ||
+                (r1 == r0 && c1 == c0))
+            {
+                continue; // no ref, or a 1x1 extent -- nothing but the anchor itself either way.
+            }
+
+            keys ??= [];
+            for (var r = r0; r <= r1; r++)
+            {
+                for (var c = c0; c <= c1; c++)
+                {
+                    if (r == r0 && c == c0)
+                        continue; // the anchor itself -- patched by the normal formula-cell path.
+
+                    keys.Add((r, c));
+                }
+            }
+        }
+
+        return keys;
+    }
+
+    /// <summary>Parses an OOXML cell-range reference ("C1:C3" or a bare single cell "C1") into its
+    /// row/column bounds. A bare single-cell reference yields a 1x1 range (r0==r1, c0==c1).</summary>
+    private static bool TryParseCellRangeReference(
+        string? reference,
+        out uint r0,
+        out uint c0,
+        out uint r1,
+        out uint c1)
+    {
+        r0 = c0 = r1 = c1 = 0;
+        if (string.IsNullOrEmpty(reference))
+            return false;
+
+        var colonIndex = reference.IndexOf(':');
+        if (colonIndex < 0)
+        {
+            if (!CellAddress.TryParse(reference, default, out var single))
+                return false;
+
+            r0 = r1 = single.Row;
+            c0 = c1 = single.Col;
+            return true;
+        }
+
+        if (!CellAddress.TryParse(reference[..colonIndex], default, out var start) ||
+            !CellAddress.TryParse(reference[(colonIndex + 1)..], default, out var end))
+        {
+            return false;
+        }
+
+        r0 = Math.Min(start.Row, end.Row);
+        r1 = Math.Max(start.Row, end.Row);
+        c0 = Math.Min(start.Col, end.Col);
+        c1 = Math.Max(start.Col, end.Col);
+        return true;
     }
 
     private static bool WriteCachedValue(

@@ -45,7 +45,7 @@ public sealed partial class MainWindow
             _session.SelectionStats,
             StatusBarZoomSliderPlanner.ClampZoomPercent(_session.ZoomPercent),
             AvaloniaStatusBarSource.NormalizeReadyText(readyText),
-            _session.ActiveSheet.ViewMode);
+            _session.ViewMode);
 
     /// <summary>
     /// Renders the footer readout (<see cref="_selectionStatsText"/>) and ready text

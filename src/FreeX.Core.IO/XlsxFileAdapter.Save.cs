@@ -170,7 +170,15 @@ public sealed partial class XlsxFileAdapter
 
                 if (isHandledArrayMember)
                 {
-                    // no-op: value/formula already represented by the array range write.
+                    // no-op: value/formula already represented by the array range write. ClosedXML
+                    // never gives a non-anchor array-range member cell a cached value of its own (it
+                    // has no way to evaluate the formula), so the member cell's <v> is restored
+                    // post-save, directly in the generated XML, by
+                    // XlsxWorksheetFormulaCachedValueWriter (see R86-io-shared-array-formula-5-2) --
+                    // setting it here via ClosedXML's object model does not work: any read of
+                    // IXLCell.Value on a cell tied to a Formula triggers ClosedXML's OWN calc engine
+                    // (XLCell.Evaluate), which recomputes and overwrites it with ClosedXML's (usually
+                    // wrong/blank) evaluation of the array formula before the workbook is serialized.
                 }
                 else if (cell.HasFormula)
                 {
@@ -266,6 +274,9 @@ public sealed partial class XlsxFileAdapter
                     if (!style.Equals(CellStyle.Default))
                         ApplyStyleFast(xlCell, style, cell.StyleId, xlStyleValueCache);
                 }
+
+                if (cell.QuotePrefix)
+                    XlsxClosedXmlCellMapper.ApplyQuotePrefix(xlCell, true);
             }
 
             ApplyStyleOnlySeedCells(workbook, styleCache, xlStyleValueCache, xlSheet, sheet);

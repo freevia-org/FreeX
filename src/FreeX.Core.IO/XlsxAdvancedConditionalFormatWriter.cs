@@ -941,9 +941,16 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 continue;
             }
 
-            // Same xm:sqref-as-trailing-child requirement as the data-bar/icon-set cases above. The
-            // cfRule element itself is re-emitted byte-for-byte as captured at read time -- it is never
-            // modeled/reinterpreted, only carried through.
+            // The cfRule element itself is re-emitted as captured at read time -- it is never
+            // modeled/reinterpreted, only carried through -- EXCEPT for @priority, which must always
+            // reflect the live model value (cf.Priority) the same way the normal advanced-rule path
+            // does at ToAdvancedCfRuleXml. Rules get reordered/reprioritized via the Manage Conditional
+            // Formatting dialog (ReplaceAllConditionalFormatsCommand assigns fresh Priority values onto
+            // the model without touching NativeChildXmls), so re-emitting the captured priority
+            // byte-for-byte would silently revert this rule to its pre-edit evaluation order.
+            cfRuleElement.SetAttributeValue("priority", cf.Priority);
+
+            // Same xm:sqref-as-trailing-child requirement as the data-bar/icon-set cases above.
             x14CfElements.Add(new XElement(
                 x14Ns + "conditionalFormatting",
                 cfRuleElement,

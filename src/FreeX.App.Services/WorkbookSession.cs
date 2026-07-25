@@ -178,6 +178,44 @@ public sealed class WorkbookSession
     /// change what this view reports.
     /// </summary>
     private readonly Dictionary<SheetId, int> _viewZoomOverrides = [];
+    /// <summary>
+    /// This view's own Show Gridlines / Show Headings / Show Formulas / Freeze Panes snapshots per
+    /// sheet (R86: extends the R85 <see cref="_viewZoomOverrides"/> per-view-independence pattern to
+    /// the rest of the per-window view settings). Excel keeps all four as attributes of the
+    /// per-window <c>sheetView</c>/<c>pane</c> OOXML elements, but <see cref="Sheet.ShowGridlines"/>,
+    /// <see cref="Sheet.ShowHeadings"/>, <see cref="Sheet.ShowFormulas"/>, <see cref="Sheet.FrozenRows"/>,
+    /// and <see cref="Sheet.FrozenCols"/> live on the shared <see cref="Sheet"/> model so they can
+    /// round-trip through file save/load. Without these caches, <see cref="IsShowingGridlines"/> /
+    /// <see cref="IsShowingHeadings"/> / <see cref="IsShowingFormulas"/> / the freeze-pane scroll
+    /// helpers would read those shared fields directly, so toggling any of them in one
+    /// <see cref="CreateSiblingView"/> window would instantly "leak" into every other open window on
+    /// the same sheet. Entries are lazily seeded from the shared <see cref="Sheet"/> fields on first
+    /// read and invalidated in <see cref="ApplySuccessfulWorkbookMetadataResult"/> (covering both this
+    /// view's own setters and shared Undo/Redo of them) so a stale value is never returned; each
+    /// setter immediately reseeds its own entry/entries with the value(s) it just applied so a
+    /// sibling view's later change can't retroactively change what this view reports.
+    /// </summary>
+    private readonly Dictionary<SheetId, bool> _viewShowGridlinesOverrides = [];
+    private readonly Dictionary<SheetId, bool> _viewShowHeadingsOverrides = [];
+    private readonly Dictionary<SheetId, bool> _viewShowFormulasOverrides = [];
+    private readonly Dictionary<SheetId, uint> _viewFrozenRowsOverrides = [];
+    private readonly Dictionary<SheetId, uint> _viewFrozenColsOverrides = [];
+    /// <summary>
+    /// This view's own worksheet-view-mode snapshot per sheet (R86: view-window independence for
+    /// View Mode, mirroring <see cref="_viewZoomOverrides"/> for Zoom). Excel treats view mode
+    /// (Normal/Page Layout/Page Break Preview) as a per-window setting, but <see cref="Sheet.ViewMode"/>
+    /// lives on the shared <see cref="Sheet"/> model so it can round-trip through file save/load.
+    /// Without this cache, <see cref="ViewMode"/> would read that shared field directly, so
+    /// switching view mode in one <see cref="CreateSiblingView"/> window would instantly "leak"
+    /// into every other open window on the same sheet. Entries are lazily seeded from
+    /// <see cref="Sheet.ViewMode"/> on first read (see <see cref="ViewMode"/>) and invalidated in
+    /// <see cref="ApplySuccessfulWorkbookMetadataResult"/> (covering both this view's own
+    /// <see cref="SetWorksheetViewMode"/> and shared Undo/Redo of it) so a stale value is never
+    /// returned; <see cref="SetWorksheetViewMode"/> immediately reseeds its own entry with the
+    /// value it just applied so a sibling view's later change can't retroactively change what this
+    /// view reports.
+    /// </summary>
+    private readonly Dictionary<SheetId, WorksheetViewMode> _viewModeOverrides = [];
     private ulong _selectionStatsRevision;
     private string? _lastFindText;
     private FindOptions? _lastFindOptions;
@@ -361,11 +399,44 @@ public sealed class WorkbookSession
         _groupedSheetIds.Contains(ActiveSheet.Id) &&
         GetSelectableSheetIds().Count(_groupedSheetIds.Contains) > 1;
 
-    public bool IsShowingGridlines => ActiveSheet.ShowGridlines;
+    public bool IsShowingGridlines
+    {
+        get
+        {
+            if (_viewShowGridlinesOverrides.TryGetValue(ActiveSheet.Id, out var showGridlines))
+                return showGridlines;
 
-    public bool IsShowingHeadings => ActiveSheet.ShowHeadings;
+            showGridlines = ActiveSheet.ShowGridlines;
+            _viewShowGridlinesOverrides[ActiveSheet.Id] = showGridlines;
+            return showGridlines;
+        }
+    }
 
-    public bool IsShowingFormulas => ActiveSheet.ShowFormulas;
+    public bool IsShowingHeadings
+    {
+        get
+        {
+            if (_viewShowHeadingsOverrides.TryGetValue(ActiveSheet.Id, out var showHeadings))
+                return showHeadings;
+
+            showHeadings = ActiveSheet.ShowHeadings;
+            _viewShowHeadingsOverrides[ActiveSheet.Id] = showHeadings;
+            return showHeadings;
+        }
+    }
+
+    public bool IsShowingFormulas
+    {
+        get
+        {
+            if (_viewShowFormulasOverrides.TryGetValue(ActiveSheet.Id, out var showFormulas))
+                return showFormulas;
+
+            showFormulas = ActiveSheet.ShowFormulas;
+            _viewShowFormulasOverrides[ActiveSheet.Id] = showFormulas;
+            return showFormulas;
+        }
+    }
 
     public int ZoomPercent
     {
@@ -377,6 +448,25 @@ public sealed class WorkbookSession
             zoom = ActiveSheet.ZoomPercent;
             _viewZoomOverrides[ActiveSheet.Id] = zoom;
             return zoom;
+        }
+    }
+
+    /// <summary>
+    /// This view's own worksheet view mode (Normal/Page Layout/Page Break Preview). See
+    /// <see cref="_viewModeOverrides"/> remarks -- callers that display or branch on view mode
+    /// should read this instead of <c>ActiveSheet.ViewMode</c> directly, so a sibling
+    /// <see cref="CreateSiblingView"/> window's view-mode change never leaks into this view.
+    /// </summary>
+    public WorksheetViewMode ViewMode
+    {
+        get
+        {
+            if (_viewModeOverrides.TryGetValue(ActiveSheet.Id, out var viewMode))
+                return viewMode;
+
+            viewMode = ActiveSheet.ViewMode;
+            _viewModeOverrides[ActiveSheet.Id] = viewMode;
+            return viewMode;
         }
     }
 
@@ -1782,7 +1872,7 @@ public sealed class WorkbookSession
 
         var style = Workbook.GetStyle(cell.StyleId);
 
-        if (ActiveSheet.ShowFormulas && cell.FormulaText is not null)
+        if (IsShowingFormulas && cell.FormulaText is not null)
             return new AutoFitCellText("=" + cell.FormulaText, style.WrapText, TextRotation: style.TextRotation, FontSize: style.FontSize);
 
         var text = FreeX.Core.Formula.NumberFormatter.Format(cell.Value, style.NumberFormat);
@@ -1794,7 +1884,7 @@ public sealed class WorkbookSession
 
     public WorkbookCellEditResult SetShowFormulas(bool showFormulas)
     {
-        if (ActiveSheet.ShowFormulas == showFormulas)
+        if (IsShowingFormulas == showFormulas)
         {
             return new WorkbookCellEditResult(
                 true,
@@ -1810,12 +1900,15 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        // Reseed this view's own cache with the value it just applied -- see _viewShowFormulasOverrides
+        // remarks (mirrors SetZoomPercent's reseed of _viewZoomOverrides).
+        _viewShowFormulasOverrides[ActiveSheet.Id] = showFormulas;
         return result;
     }
 
     public WorkbookCellEditResult SetShowGridlines(bool showGridlines)
     {
-        if (ActiveSheet.ShowGridlines == showGridlines)
+        if (IsShowingGridlines == showGridlines)
         {
             return new WorkbookCellEditResult(
                 true,
@@ -1826,13 +1919,13 @@ public sealed class WorkbookSession
 
         return SetWorksheetViewOptions(
             showGridlines,
-            ActiveSheet.ShowHeadings,
+            IsShowingHeadings,
             ActiveSheet.ShowRulers);
     }
 
     public WorkbookCellEditResult SetShowHeadings(bool showHeadings)
     {
-        if (ActiveSheet.ShowHeadings == showHeadings)
+        if (IsShowingHeadings == showHeadings)
         {
             return new WorkbookCellEditResult(
                 true,
@@ -1842,7 +1935,7 @@ public sealed class WorkbookSession
         }
 
         return SetWorksheetViewOptions(
-            ActiveSheet.ShowGridlines,
+            IsShowingGridlines,
             showHeadings,
             ActiveSheet.ShowRulers);
     }
@@ -1861,14 +1954,14 @@ public sealed class WorkbookSession
         }
 
         return SetWorksheetViewOptions(
-            ActiveSheet.ShowGridlines,
-            ActiveSheet.ShowHeadings,
+            IsShowingGridlines,
+            IsShowingHeadings,
             showRulers);
     }
 
     public WorkbookCellEditResult SetWorksheetViewMode(WorksheetViewMode viewMode)
     {
-        if (ActiveSheet.ViewMode == viewMode)
+        if (ViewMode == viewMode)
         {
             return new WorkbookCellEditResult(
                 true,
@@ -1884,6 +1977,9 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        // Reseed this view's own cache with the value it just applied -- see _viewModeOverrides
+        // remarks (mirrors SetZoomPercent's reseed of _viewZoomOverrides).
+        _viewModeOverrides[ActiveSheet.Id] = viewMode;
         return result;
     }
 
@@ -3007,18 +3103,79 @@ public sealed class WorkbookSession
         if (tableInner is null)
             return null;
 
+        // R86-app-clipboard-interop-5-1: track column occupancy from an active rowspan the same way
+        // the WPF host's own TryParseHtmlClipboardTableRows (MainWindow.ClipboardCommands.cs,
+        // R57-services-clipboard-formats-5-2) and FreeX.Core.IO.HtmlTableReader do, so a merged header
+        // cell (colspan) or a rowspan-ed cell keeps every column after it lined up with the right data
+        // column instead of shifting left. Keyed by 1-based column -> the last (0-based) row index it
+        // remains occupied through.
+        var rowSpanRemaining = new Dictionary<int, int>();
         var rows = new List<List<string>>();
+        var rowIndex = -1;
+
         foreach (var rowInner in EnumerateHtmlElements(tableInner, "tr"))
         {
+            rowIndex++;
             var cells = new List<string>();
-            foreach (var cellInner in EnumerateHtmlCells(rowInner))
-                cells.Add(DecodeHtmlCellText(cellInner));
+            var col = 0;
+
+            foreach (var cellInfo in EnumerateHtmlCells(rowInner))
+            {
+                col++;
+                while (rowSpanRemaining.TryGetValue(col, out var occupiedThroughRow) && occupiedThroughRow >= rowIndex)
+                {
+                    EnsureHtmlPasteColumn(cells, col);
+                    col++;
+                }
+
+                var text = DecodeHtmlCellText(cellInfo.InnerHtml);
+
+                // R86-app-clipboard-interop-5-1: a <td> carrying the "mso-number-format:'\@'" marker
+                // (written by ClipboardHtmlSerializer.RequiresTextFormatMarker for a Text-typed source
+                // cell, and by real Excel for the same reason) must round-trip through this
+                // HTML-preferred paste path with the identical leading-apostrophe escape the plain-text
+                // clipboard sibling already carries -- otherwise a Text-formatted "00501" silently
+                // becomes the number 501 whenever CF_HTML is present (the common case, since copy
+                // always places CF_HTML alongside plain text). Mirrors the WPF host's
+                // R78-services-clipboard-formats-5-1 fix.
+                if (cellInfo.IsTextFormat)
+                    text = ClipboardSerializer.EscapeTextCellForPaste(text);
+
+                var colSpan = Math.Max(1, cellInfo.ColSpan);
+                var rowSpan = Math.Max(1, cellInfo.RowSpan);
+                var endCol = col + colSpan - 1;
+
+                // The pasted grid has no merged-cell concept (unlike HtmlTableReader's
+                // AddMergedRegion), so repeat the spanned cell's text across every column it covers --
+                // this matches what a merged header cell visually represents, and keeps every
+                // subsequent column's data under its own header instead of shifting left by one per
+                // colspan.
+                for (var c = col; c <= endCol; c++)
+                {
+                    EnsureHtmlPasteColumn(cells, c);
+                    cells[c - 1] = text;
+                }
+
+                if (rowSpan > 1)
+                {
+                    for (var c = col; c <= endCol; c++)
+                        rowSpanRemaining[c] = rowIndex + rowSpan - 1;
+                }
+
+                col = endCol;
+            }
 
             if (cells.Count > 0)
                 rows.Add(cells);
         }
 
         return rows.Count > 0 ? rows.Cast<IReadOnlyList<string>>().ToList() : null;
+    }
+
+    private static void EnsureHtmlPasteColumn(List<string> row, int col)
+    {
+        while (row.Count < col)
+            row.Add(string.Empty);
     }
 
     /// <summary>CF_HTML wraps the real markup between StartFragment/EndFragment comments after a small
@@ -3081,7 +3238,26 @@ public sealed class WorkbookSession
         }
     }
 
-    private static IEnumerable<string> EnumerateHtmlCells(string rowInner)
+    /// <summary>One &lt;td&gt;/&lt;th&gt; cell's inner HTML plus its colspan/rowspan (each defaulted to
+    /// 1 when absent or non-positive), used by <see cref="TryParseHtmlClipboardTableRows"/> to keep
+    /// merged-header columns aligned with their data (R86-app-clipboard-interop-5-1), plus whether the
+    /// cell's own style carries the "mso-number-format:'\@'" Text marker. Mirrors the WPF host's own
+    /// <c>HtmlCellSpan</c> (MainWindow.ClipboardCommands.cs).</summary>
+    private readonly record struct HtmlCellSpan(string InnerHtml, int ColSpan, int RowSpan, bool IsTextFormat);
+
+    /// <summary>Matches the "mso-number-format" Text (@) marker ClipboardHtmlSerializer writes for a
+    /// Text-typed source cell -- and that real Excel writes for the same reason -- regardless of which
+    /// quote style wraps the style attribute itself (single vs. double) or the format code inside it
+    /// (Excel emits <c>mso-number-format:"\@"</c>; FreeX's own writer emits
+    /// <c>mso-number-format:'\@'</c>). Searched directly against the tag's raw attribute text rather
+    /// than against an extracted "style" attribute value, since a simple quote-delimited attribute
+    /// extractor cannot reliably handle one quote style nested inside the other. Mirrors the WPF
+    /// host's own <c>MsoTextNumberFormatRegex</c>.</summary>
+    private static readonly System.Text.RegularExpressions.Regex MsoTextNumberFormatRegex = new(
+        @"mso-number-format\s*:\s*[""']\\?@[""']",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private static IEnumerable<HtmlCellSpan> EnumerateHtmlCells(string rowInner)
     {
         int i = 0;
         while (i < rowInner.Length)
@@ -3095,9 +3271,13 @@ public sealed class WorkbookSession
                 int tagEnd = rowInner.IndexOf('>', lt);
                 if (tagEnd < 0)
                     break;
+                var tagContent = rowInner[(lt + 1)..tagEnd];
+                var colSpan = ParseHtmlSpanAttribute(tagContent, "colspan");
+                var rowSpan = ParseHtmlSpanAttribute(tagContent, "rowspan");
+                var isTextFormat = MsoTextNumberFormatRegex.IsMatch(tagContent);
                 int closeStart = FindMatchingHtmlClose(rowInner, tagEnd + 1, name);
                 string inner = closeStart < 0 ? rowInner[(tagEnd + 1)..] : rowInner[(tagEnd + 1)..closeStart];
-                yield return inner;
+                yield return new HtmlCellSpan(inner, colSpan, rowSpan, isTextFormat);
                 i = closeStart < 0 ? rowInner.Length : SkipHtmlClosingTag(rowInner, closeStart);
             }
             else
@@ -3105,6 +3285,57 @@ public sealed class WorkbookSession
                 i = lt + 1;
             }
         }
+    }
+
+    /// <summary>Reads a numeric attribute (e.g. <c>colspan="2"</c>, <c>colspan=2</c>, or unquoted/single
+    /// quoted) from a tag's raw attribute text. Returns 1 (the "no span" default) if absent, malformed,
+    /// or non-positive. Mirrors the WPF host's own <c>ParseHtmlSpanAttribute</c>.</summary>
+    private static int ParseHtmlSpanAttribute(string tagContent, string attributeName)
+    {
+        var searchFrom = 0;
+        while (searchFrom < tagContent.Length)
+        {
+            var idx = tagContent.IndexOf(attributeName, searchFrom, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0)
+                return 1;
+
+            var afterIdx = idx + attributeName.Length;
+            var boundaryOk = idx == 0 || char.IsWhiteSpace(tagContent[idx - 1]);
+            if (!boundaryOk)
+            {
+                searchFrom = afterIdx;
+                continue;
+            }
+
+            var p = afterIdx;
+            while (p < tagContent.Length && char.IsWhiteSpace(tagContent[p]))
+                p++;
+            if (p >= tagContent.Length || tagContent[p] != '=')
+            {
+                searchFrom = afterIdx;
+                continue;
+            }
+
+            p++;
+            while (p < tagContent.Length && char.IsWhiteSpace(tagContent[p]))
+                p++;
+            if (p < tagContent.Length && (tagContent[p] == '"' || tagContent[p] == '\''))
+                p++;
+
+            var digitsStart = p;
+            while (p < tagContent.Length && char.IsDigit(tagContent[p]))
+                p++;
+
+            return int.TryParse(
+                tagContent[digitsStart..p],
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var value) && value > 0
+                ? value
+                : 1;
+        }
+
+        return 1;
     }
 
     /// <summary>The element name at a '&lt;' position, or null if it isn't a start/end tag name.</summary>
@@ -5132,12 +5363,19 @@ public sealed class WorkbookSession
         RefreshViewport();
         EnsureActiveCellVisible();
         // This method is the single choke point for every sheet-metadata command's forward apply
-        // (SetZoomPercent, SetShowGridlines, ...) AND for Undo/Redo of any of them (via
-        // ApplySuccessfulHistoryResult), so it is also the right place to drop this view's cached
-        // zoom for the affected sheet -- forcing the next ZoomPercent read to re-seed from the
-        // (possibly just-reverted) shared Sheet.ZoomPercent instead of returning a stale value.
-        // SetZoomPercent immediately reseeds its own entry afterward for the forward-apply case.
+        // (SetWorksheetViewMode, SetZoomPercent, SetShowGridlines, SetShowHeadings, SetShowFormulas,
+        // SetFreezePanes, ...) AND for Undo/Redo of any of them (via ApplySuccessfulHistoryResult),
+        // so it is also the right place to drop this view's cached values for the affected sheet --
+        // forcing the next read to re-seed from the (possibly just-reverted) shared Sheet fields
+        // instead of returning a stale value. Each forward-apply setter immediately reseeds its own
+        // entry/entries afterward (see their remarks).
         _viewZoomOverrides.Remove(ActiveSheet.Id);
+        _viewModeOverrides.Remove(ActiveSheet.Id);
+        _viewShowGridlinesOverrides.Remove(ActiveSheet.Id);
+        _viewShowHeadingsOverrides.Remove(ActiveSheet.Id);
+        _viewShowFormulasOverrides.Remove(ActiveSheet.Id);
+        _viewFrozenRowsOverrides.Remove(ActiveSheet.Id);
+        _viewFrozenColsOverrides.Remove(ActiveSheet.Id);
     }
 
     private void MarkDirty()
@@ -5600,6 +5838,10 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        // Reseed this view's own caches with the values just applied -- see _viewFrozenRowsOverrides
+        // remarks (mirrors SetZoomPercent's reseed of _viewZoomOverrides).
+        _viewFrozenRowsOverrides[ActiveSheet.Id] = frozenRows;
+        _viewFrozenColsOverrides[ActiveSheet.Id] = frozenCols;
         return result;
     }
 
@@ -5612,6 +5854,11 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        // Reseed this view's own caches with the values just applied -- see _viewShowGridlinesOverrides
+        // remarks (mirrors SetZoomPercent's reseed of _viewZoomOverrides). ShowRulers has no per-view
+        // override (not part of this sweep), so it keeps reading the shared Sheet field directly.
+        _viewShowGridlinesOverrides[ActiveSheet.Id] = showGridlines;
+        _viewShowHeadingsOverrides[ActiveSheet.Id] = showHeadings;
         return result;
     }
 
@@ -6208,7 +6455,7 @@ public sealed class WorkbookSession
 
     private bool TryGetScrollableRowRange(out uint firstRow, out uint lastRow)
     {
-        var frozenRows = ActiveSheet.FrozenRows;
+        var frozenRows = GetEffectiveFrozenRows();
         firstRow = 1;
         lastRow = 1;
         var found = false;
@@ -6234,7 +6481,7 @@ public sealed class WorkbookSession
 
     private bool TryGetScrollableColumnRange(out uint firstCol, out uint lastCol)
     {
-        var frozenCols = ActiveSheet.FrozenCols;
+        var frozenCols = GetEffectiveFrozenCols();
         firstCol = 1;
         lastCol = 1;
         var found = false;
@@ -6258,17 +6505,51 @@ public sealed class WorkbookSession
         return found;
     }
 
-    private bool IsFrozenRow(uint row) =>
-        ActiveSheet.FrozenRows > 0 && row <= ActiveSheet.FrozenRows;
+    private bool IsFrozenRow(uint row)
+    {
+        var frozenRows = GetEffectiveFrozenRows();
+        return frozenRows > 0 && row <= frozenRows;
+    }
 
-    private bool IsFrozenColumn(uint col) =>
-        ActiveSheet.FrozenCols > 0 && col <= ActiveSheet.FrozenCols;
+    private bool IsFrozenColumn(uint col)
+    {
+        var frozenCols = GetEffectiveFrozenCols();
+        return frozenCols > 0 && col <= frozenCols;
+    }
 
     private uint GetScrollableRowStart() =>
-        Math.Min(CellAddress.MaxRow, Math.Max(1, ActiveSheet.FrozenRows + 1));
+        Math.Min(CellAddress.MaxRow, Math.Max(1, GetEffectiveFrozenRows() + 1));
 
     private uint GetScrollableColumnStart() =>
-        Math.Min(CellAddress.MaxCol, Math.Max(1, ActiveSheet.FrozenCols + 1));
+        Math.Min(CellAddress.MaxCol, Math.Max(1, GetEffectiveFrozenCols() + 1));
+
+    /// <summary>
+    /// This view's effective frozen-row count (see <see cref="_viewFrozenRowsOverrides"/> remarks):
+    /// lazily seeded from the shared <see cref="Sheet.FrozenRows"/> on first read so a sibling
+    /// view's Freeze Panes change never retroactively changes what this view scrolls/renders around.
+    /// </summary>
+    private uint GetEffectiveFrozenRows()
+    {
+        if (_viewFrozenRowsOverrides.TryGetValue(ActiveSheet.Id, out var frozenRows))
+            return frozenRows;
+
+        frozenRows = ActiveSheet.FrozenRows;
+        _viewFrozenRowsOverrides[ActiveSheet.Id] = frozenRows;
+        return frozenRows;
+    }
+
+    /// <summary>
+    /// This view's effective frozen-column count. See <see cref="GetEffectiveFrozenRows"/>.
+    /// </summary>
+    private uint GetEffectiveFrozenCols()
+    {
+        if (_viewFrozenColsOverrides.TryGetValue(ActiveSheet.Id, out var frozenCols))
+            return frozenCols;
+
+        frozenCols = ActiveSheet.FrozenCols;
+        _viewFrozenColsOverrides[ActiveSheet.Id] = frozenCols;
+        return frozenCols;
+    }
 
     private static uint CalculateScrollOrigin(
         uint active,

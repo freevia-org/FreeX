@@ -13,10 +13,10 @@ namespace FreeX.Core.IO.Tests;
 ///
 /// This is a scoped model+IO-mapper fix: <see cref="Cell.QuotePrefix"/> plus
 /// <see cref="XlsxClosedXmlCellMapper.MapQuotePrefix"/>/<see cref="XlsxClosedXmlCellMapper.ApplyQuotePrefix"/>
-/// now carry the flag correctly through ClosedXML and survive a real workbook save/reload. Wiring
-/// these calls into the per-cell load/save loops (XlsxFileAdapter.cs / XlsxFileAdapter.Save.cs) so a
-/// live open-edit-save round trip populates <c>Cell.QuotePrefix</c> automatically is a follow-up
-/// outside this change's file scope.
+/// now carry the flag correctly through ClosedXML and survive a real workbook save/reload.
+/// R86-io-styles-dedup-index-5-1 wired these two calls into the per-cell load loop
+/// (XlsxFileAdapter.cs) and the per-cell full-save loop (XlsxFileAdapter.Save.cs) — see
+/// R86_QuotePrefixLoadSaveWiringTests for coverage of that live open-edit-save round trip.
 /// </summary>
 public sealed class XlsxCellQuotePrefixMapperTests
 {

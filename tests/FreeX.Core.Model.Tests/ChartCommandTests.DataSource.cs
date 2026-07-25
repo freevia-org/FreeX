@@ -178,6 +178,90 @@ public sealed partial class ChartCommandTests
     }
 
     [Fact]
+    public void R86_ChangeChartSourceCommand_ClearsAndRevertsStaleComboAxisTrendlineAndDataLabelOverridesOnSourceChange()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var range = CreateChartRange(sheet);
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+        var chart = sheet.Charts[0];
+        // Combo chart: series index 1 flagged as a secondary-axis line overlay, plus a few more
+        // SeriesIndex-keyed collections that describe the OLD series layout.
+        chart.SecondaryAxisSeriesIndexes.Add(1);
+        chart.ComboLineSeriesIndexes.Add(1);
+        chart.ComboScatterSeriesIndexes.Add(1);
+        chart.ExplodedSlices.Add(new ChartPointExplosion(1, 0, 0.2));
+        chart.RangeDataLabels.Add(new ChartRangeDataLabel(1, 0, "Label"));
+        chart.SeriesRangeDataLabels.Add(new ChartSeriesRangeDataLabels(1, "Sheet1!$D$1:$D$4", 4, []));
+        chart.TrendlineSeriesIndex = 1;
+        chart.ErrorBarSeriesIndex = 1;
+        var newRange = Range(sheet, 2, 2, 6, 5);
+        var command = new ChangeChartSourceCommand(sheet.Id, chart.Id, newRange);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        // Widening/relocating the data range re-indexes series, so all of these SeriesIndex-keyed
+        // members must be cleared - otherwise index 1 would silently mis-apply to whichever
+        // unrelated series now sits there (e.g. a brand-new series wrongly rendered as the combo
+        // line overlay / on the secondary axis).
+        chart.SecondaryAxisSeriesIndexes.Should().BeEmpty();
+        chart.ComboLineSeriesIndexes.Should().BeEmpty();
+        chart.ComboScatterSeriesIndexes.Should().BeEmpty();
+        chart.ExplodedSlices.Should().BeEmpty();
+        chart.RangeDataLabels.Should().BeEmpty();
+        chart.SeriesRangeDataLabels.Should().BeEmpty();
+        chart.TrendlineSeriesIndex.Should().Be(0);
+        chart.ErrorBarSeriesIndex.Should().Be(0);
+
+        command.Revert(ctx);
+
+        chart.SecondaryAxisSeriesIndexes.Should().Equal(1);
+        chart.ComboLineSeriesIndexes.Should().Equal(1);
+        chart.ComboScatterSeriesIndexes.Should().Equal(1);
+        chart.ExplodedSlices.Should().ContainSingle();
+        chart.RangeDataLabels.Should().ContainSingle();
+        chart.SeriesRangeDataLabels.Should().ContainSingle();
+        chart.TrendlineSeriesIndex.Should().Be(1);
+        chart.ErrorBarSeriesIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void R86_ChangeChartSourceCommand_KeepsComboAxisTrendlineAndDataLabelOverridesWhenSourceUnchanged()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var range = CreateChartRange(sheet);
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+        var chart = sheet.Charts[0];
+        chart.SecondaryAxisSeriesIndexes.Add(1);
+        chart.ComboLineSeriesIndexes.Add(1);
+        chart.ComboScatterSeriesIndexes.Add(1);
+        chart.ExplodedSlices.Add(new ChartPointExplosion(1, 0, 0.2));
+        chart.RangeDataLabels.Add(new ChartRangeDataLabel(1, 0, "Label"));
+        chart.SeriesRangeDataLabels.Add(new ChartSeriesRangeDataLabels(1, "Sheet1!$D$1:$D$4", 4, []));
+        chart.TrendlineSeriesIndex = 1;
+        chart.ErrorBarSeriesIndex = 1;
+        // Same range and orientation as the chart already has: not a source change, so nothing
+        // that's keyed by SeriesIndex should be touched.
+        var command = new ChangeChartSourceCommand(sheet.Id, chart.Id, range, firstRowIsHeader: chart.FirstRowIsHeader);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        chart.SecondaryAxisSeriesIndexes.Should().Equal(1);
+        chart.ComboLineSeriesIndexes.Should().Equal(1);
+        chart.ComboScatterSeriesIndexes.Should().Equal(1);
+        chart.ExplodedSlices.Should().ContainSingle();
+        chart.RangeDataLabels.Should().ContainSingle();
+        chart.SeriesRangeDataLabels.Should().ContainSingle();
+        chart.TrendlineSeriesIndex.Should().Be(1);
+        chart.ErrorBarSeriesIndex.Should().Be(1);
+    }
+
+    [Fact]
     public void ChangeChartSourceCommand_KeepsOrientationAndMappingsWhenSeriesInRowsOmitted()
     {
         var wb = new Workbook("test");

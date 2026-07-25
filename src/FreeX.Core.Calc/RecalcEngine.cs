@@ -369,6 +369,22 @@ public sealed class RecalcEngine
                         spillTargetsMayHaveChanged = true;
                         CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
                     }
+
+                    // R86-calc-volatile-circular-5-2: this cell reached its own address only
+                    // through INDIRECT's dynamic string argument (e.g. A1=INDIRECT("A1")+1) --
+                    // invisible to the static dependency graph, so plan.CyclicCells never included
+                    // it (see BuiltInFunctions.Lookup.Indirect.cs's IsIndirectSelfReference, which
+                    // produced this sentinel). Route it through the same non-iterative circular-
+                    // reference handling AddCyclicCell gives a statically-detected cycle (seed to
+                    // 0, record "#CIRCULAR!", track in _cyclicCells) instead of storing the
+                    // meaningless dynamic value INDIRECT would otherwise have read back.
+                    if (ReferenceEquals(result, ErrorValue.RuntimeCircularSelfReference))
+                    {
+                        AddCyclicCell(workbook, addr, ref cyclicCells, ref seenCyclicCells, ref errors, restrictWritesToSheet);
+                        _spillBlockedAnchors.Remove(addr);
+                        continue;
+                    }
+
                     cell.Value = result;
                     RoundPrecisionAsDisplayed(workbook, cell);
                     _spillBlockedAnchors.Remove(addr);

@@ -1507,6 +1507,15 @@ public sealed partial class FormulaEvaluator
             return BuildIsFormulaOrFormulaTextRangeValue(rangeRef, context,
                 cell => cell?.HasFormula == true ? TrueValue : FalseValue);
 
+        // A defined name (or an OFFSET/INDIRECT/INDEX/CHOOSE result) that resolves to a multi-cell
+        // reference must spill exactly the same way a literal bounded range does -- names and these
+        // functions are pure reference aliases in Excel, so ISFORMULA(Data) behaves identically to
+        // ISFORMULA(A1:A3) when Data = Sheet1!$A$1:$A$3. See R86-formula-logical-info-5-2.
+        var multiCellResult = TryEvaluateMultiCellNamedOrFunctionReference(
+            node.Arguments[0], context, mapReferenceFunctionValueErrorToNA: false,
+            cell => cell?.HasFormula == true ? TrueValue : FalseValue);
+        if (multiCellResult is not null) return multiCellResult;
+
         var error = TryResolveReferenceTopLeftCell(
             node.Arguments[0],
             context,
@@ -1525,6 +1534,12 @@ public sealed partial class FormulaEvaluator
         // formula-text-or-#N/A result per cell, matching the reference's shape.
         if (IsMultiCellBoundedRangeRef(node.Arguments[0], out var rangeRef))
             return BuildIsFormulaOrFormulaTextRangeValue(rangeRef, context, FormulaTextCellValue);
+
+        // Same defined-name/OFFSET/INDIRECT/INDEX/CHOOSE spill requirement as ISFORMULA above --
+        // see R86-formula-logical-info-5-2.
+        var multiCellResult = TryEvaluateMultiCellNamedOrFunctionReference(
+            node.Arguments[0], context, mapReferenceFunctionValueErrorToNA: true, FormulaTextCellValue);
+        if (multiCellResult is not null) return multiCellResult;
 
         var error = TryResolveReferenceTopLeftCell(
             node.Arguments[0],
@@ -1578,12 +1593,38 @@ public sealed partial class FormulaEvaluator
         uint r1 = Math.Max(range.Start.Row, range.End.Row);
         uint c0 = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
         uint c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
-        long rows = r1 - r0 + 1;
-        long cols = c1 - c0 + 1;
-        if (rows * cols > FormulaSafetyLimits.MaxMaterializedRangeCells)
+        return BuildIsFormulaOrFormulaTextRangeValue(
+            range.SheetName, r0, c0, (int)(r1 - r0 + 1), (int)(c1 - c0 + 1), context, cellValue);
+    }
+
+    // Same as above but for a reference already resolved to a RangeValue (a defined name, or an
+    // OFFSET/INDIRECT/INDEX/CHOOSE result) -- its StartRow/StartCol/RowCount/ColCount already
+    // describe the concrete, bounded worksheet rectangle the reference denotes (BuildRangeValue
+    // clamps any open-ended shape before this point), so no further clamping is needed here. See
+    // TryEvaluateMultiCellNamedOrFunctionReference / R86-formula-logical-info-5-2.
+    private static ScalarValue BuildIsFormulaOrFormulaTextRangeValue(
+        RangeValue range,
+        IEvalContext context,
+        Func<Cell?, ScalarValue> cellValue)
+        => BuildIsFormulaOrFormulaTextRangeValue(
+            range.SheetName, range.StartRow, range.StartCol, range.RowCount, range.ColCount, context, cellValue);
+
+    private static ScalarValue BuildIsFormulaOrFormulaTextRangeValue(
+        string? sheetName,
+        uint r0,
+        uint c0,
+        int rows,
+        int cols,
+        IEvalContext context,
+        Func<Cell?, ScalarValue> cellValue)
+    {
+        if (sheetName is not null && !context.SheetExists(sheetName))
             return ErrorValue.Ref;
 
-        var cells = new ScalarValue[(int)rows, (int)cols];
+        if ((long)rows * cols > FormulaSafetyLimits.MaxMaterializedRangeCells)
+            return ErrorValue.Ref;
+
+        var cells = new ScalarValue[rows, cols];
         for (int ri = 0; ri < rows; ri++)
             for (int ci = 0; ci < cols; ci++)
             {
@@ -1591,11 +1632,42 @@ public sealed partial class FormulaEvaluator
                 // multi-cell reference spanning a dynamic-array spill (e.g. ISFORMULA(A1:A3) where
                 // A1 spills into A2:A3) reports every spill member as a formula cell too, matching
                 // Excel — see TryGetCell's spill-fallback comment above.
-                TryGetCell(range.SheetName, r0 + (uint)ri, c0 + (uint)ci, context, out var cell);
+                TryGetCell(sheetName, r0 + (uint)ri, c0 + (uint)ci, context, out var cell);
                 cells[ri, ci] = cellValue(cell);
             }
 
-        return new RangeValue(cells, r0, c0) { SheetName = range.SheetName };
+        return new RangeValue(cells, r0, c0) { SheetName = sheetName };
+    }
+
+    // True when node is a NamedRangeNode or an OFFSET/INDIRECT/INDEX/CHOOSE call that resolves to
+    // a genuine multi-cell reference (a RangeValue spanning more than one cell) -- names and these
+    // functions are pure reference aliases in Excel, so ISFORMULA/FORMULATEXT must spill through
+    // them exactly as they do for a literal bounded range (mirrors IsMultiCellBoundedRangeRef /
+    // BuildIsFormulaOrFormulaTextRangeValue above). Returns null (not handled here) when the
+    // resolved reference is a single cell -- the caller's existing TryResolveReferenceTopLeftCell
+    // scalar path already handles that identically -- and also when node isn't one of these
+    // reference forms at all. See R86-formula-logical-info-5-2.
+    private ScalarValue? TryEvaluateMultiCellNamedOrFunctionReference(
+        FormulaNode node,
+        IEvalContext context,
+        bool mapReferenceFunctionValueErrorToNA,
+        Func<Cell?, ScalarValue> cellValue)
+    {
+        ScalarValue reference;
+        if (node is NamedRangeNode named)
+            reference = ResolveNamedRangeNodeAsReference(named, context);
+        else if (node is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT" or "INDEX" or "CHOOSE")
+            reference = EvaluateReferenceReturningFunction(fn, context);
+        else
+            return null;
+
+        if (reference is ErrorValue error)
+            return mapReferenceFunctionValueErrorToNA && error == ErrorValue.Value ? ErrorValue.NA : error;
+
+        if (reference is not RangeValue range || range.RowCount * range.ColCount <= 1)
+            return null;
+
+        return BuildIsFormulaOrFormulaTextRangeValue(range, context, cellValue);
     }
 
     private ErrorValue? TryResolveReferenceTopLeftCell(

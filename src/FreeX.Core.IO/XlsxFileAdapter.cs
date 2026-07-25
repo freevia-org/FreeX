@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using FreeX.Core.Model;
+using NPOI.POIFS.FileSystem;
 
 namespace FreeX.Core.IO;
 
@@ -539,6 +540,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 {
                     cell.StyleId = styleId;
                 }
+
+                cell.QuotePrefix = XlsxClosedXmlCellMapper.MapQuotePrefix(xlCell);
 
                 if (cell.Value is BlankValue && !cell.HasFormula)
                 {
@@ -1915,6 +1918,60 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         {
             if (buffer.Array![buffer.Offset + i] != CompoundFileBinarySignature[i])
                 return;
+        }
+
+        // The 8-byte OLE/CFB header is shared by EVERY compound-file document -- a real
+        // "Encrypt with Password" OOXML wrapper, but also a genuinely unencrypted legacy
+        // .xls/.xlt/.xlb workbook (or any other compound-file document) that merely ended up with a
+        // .xlsx extension (a mail gateway/export tool normalizing extensions, or a user renaming the
+        // file). Disambiguate by inspecting the compound file's own directory: MS-OFFCRYPTO's
+        // "Encrypt with Password" wrapper is the only shape that carries BOTH an "EncryptedPackage"
+        // stream (the encrypted OOXML zip payload) and an "EncryptionInfo" stream (the key/algorithm
+        // metadata) at the root. Anything else that merely shares the header -- including a real,
+        // unencrypted legacy binary workbook that FreeX's own LegacyXlsFileAdapter could open fine --
+        // must not be misreported as password-protected (see R86-services-file-format-detect-5-2).
+        //
+        // If the buffer isn't even a well-formed CFB structure (e.g. just the signature padded with
+        // zeros, as in a corrupt/truncated download), POIFSFileSystem itself throws while parsing the
+        // header -- fall back to the original conservative behavior in that case, since a signature
+        // match with no parseable structure at all still looks the most like a mishandled encrypted
+        // package.
+        try
+        {
+            using var cfbStream = new MemoryStream(buffer.Array!, buffer.Offset, buffer.Count, writable: false);
+            var poifs = new POIFSFileSystem(cfbStream);
+            try
+            {
+                var root = poifs.Root;
+                var hasEncryptedPackage = false;
+                var hasEncryptionInfo = false;
+                foreach (var entry in root)
+                {
+                    if (string.Equals(entry.Name, "EncryptedPackage", StringComparison.Ordinal))
+                        hasEncryptedPackage = true;
+                    else if (string.Equals(entry.Name, "EncryptionInfo", StringComparison.Ordinal))
+                        hasEncryptionInfo = true;
+                }
+
+                if (!hasEncryptedPackage || !hasEncryptionInfo)
+                {
+                    throw new WorkbookInvalidException(
+                        "The workbook could not be read because the file is not a valid .xlsx package (it appears to be a legacy .xls/.xlt binary workbook or another OLE compound-file document saved with a .xlsx extension).");
+                }
+            }
+            finally
+            {
+                poifs.Close();
+            }
+        }
+        catch (WorkbookInvalidException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // Not a parseable CFB structure at all -- fall through to the conservative
+            // password-protected report below, matching the previous behavior.
         }
 
         throw new WorkbookPasswordProtectedException(

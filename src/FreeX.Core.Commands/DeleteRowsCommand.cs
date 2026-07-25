@@ -36,6 +36,9 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private List<uint>? _rowPageBreakSnapshot;
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
+    // R86-commands-insert-move-refadjust-5-1: see RowColumnShiftHelpers.ShiftChartPositionRowsDown —
+    // tracked separately from _chartSnapshot above, which only tracks DataRange.
+    private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
@@ -104,6 +107,11 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.DeleteRowSetDictionaryRangeAndShiftDown(sheet.ColumnFilterOwnedRows, _startRow, _count);
 
         _rowHeightSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RowHeights);
+        // R86-commands-insert-move-refadjust-5-1: must run BEFORE sheet.RowHeights is re-keyed below
+        // — the deleted band's own heights are needed to measure the removed band's pixel height, and
+        // they are gone from the live dictionary once ShiftIndexesDown below has run.
+        _chartPositionSnapshot = RowColumnShiftHelpers.CaptureChartPositions(sheet);
+        RowColumnShiftHelpers.ShiftChartPositionRowsDown(sheet, _startRow, _count, sheet.RowHeights, sheet.DefaultRowHeight);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.RowHeights, _startRow, _count);
 
         _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
@@ -287,6 +295,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
+        RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
     }
 

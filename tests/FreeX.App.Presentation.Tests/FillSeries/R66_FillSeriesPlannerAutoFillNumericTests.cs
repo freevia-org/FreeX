@@ -8,8 +8,10 @@ namespace FreeX.App.Presentation.Tests.FillSeries;
 /// Regression tests for R66-commands-fill-series-6-1: Fill ▸ Series ▸ AutoFill silently no-opped
 /// for a NUMERIC (or date) seed because BuildAutoFillSeriesEdits only ever checked whether a
 /// line's leading cell was a TextValue. Excel's AutoFill detects a 2+ seed arithmetic/date series
-/// from the SEED CELLS already in the selection and continues it (a single numeric/date seed
-/// defaults to a plain +1/+1-day step, like the fill handle's own lone-cell default).
+/// from the SEED CELLS already in the selection and continues it. A lone seed's default is
+/// type-dependent (R86-commands-autofill-series-5-1): a lone date defaults to a plain +1-day
+/// step, but a lone plain number defaults to a COPY, matching the fill handle's own
+/// WantsSingleCellSeriesDefault.
 /// </summary>
 public sealed class R66_FillSeriesPlannerAutoFillNumericTests
 {
@@ -32,17 +34,20 @@ public sealed class R66_FillSeriesPlannerAutoFillNumericTests
     }
 
     [Fact]
-    public void BuildAutoFillSeriesEdits_SingleNumberSeed_DefaultsToPlusOneStep()
+    public void BuildAutoFillSeriesEdits_SingleNumberSeed_DefaultsToCopy()
     {
-        // A single numeric seed (5) has no natural trend to fit, so it defaults to +1, matching
-        // the fill handle's own lone-cell numeric default.
+        // A single numeric seed (5) has no natural trend to fit. Per R86-commands-autofill-
+        // series-5-1, AutofillCommand.WantsSingleCellSeriesDefault says a lone plain NUMBER
+        // defaults to a COPY (Ctrl would force an incrementing series instead, but the Fill
+        // Series dialog has no Ctrl-equivalent toggle) -- so this must default to 5, 5, 5, not
+        // an incrementing +1 step.
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 1));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(5));
 
         var edits = FillSeriesPlanner.BuildAutoFillSeriesEdits(sheet, range, FillSeriesDirection.Columns);
 
-        edits.Select(e => ((NumberValue)e.NewCell.Value).Value).Should().Equal(6, 7, 8);
+        edits.Select(e => ((NumberValue)e.NewCell.Value).Value).Should().Equal(5, 5, 5);
     }
 
     [Fact]
@@ -72,14 +77,21 @@ public sealed class R66_FillSeriesPlannerAutoFillNumericTests
         edits.Select(e => ((TextValue)e.NewCell.Value).Value).Should().Equal("Item 2", "Item 3", "Item 4");
     }
 
-    /// <summary>Sibling no-regression: a non-series text seed still no-ops (unchanged behavior).</summary>
+    /// <summary>
+    /// A non-series text seed now replays cyclically (R86-commands-autofill-series-5-2) instead
+    /// of no-opping: a single "hello" cell has a trivial 1-cell pattern, so it copies to every
+    /// remaining cell in the line, matching a fill-handle drag over the same single source cell
+    /// (AutofillCommand's pattern-copy fallback, sourceLength 1).
+    /// </summary>
     [Fact]
-    public void BuildAutoFillSeriesEdits_NonSeriesTextSeed_StillNoOps()
+    public void BuildAutoFillSeriesEdits_NonSeriesTextSeed_CopiesCyclically()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1));
         sheet.SetCell(range.Start, new TextValue("hello"));
 
-        FillSeriesPlanner.BuildAutoFillSeriesEdits(sheet, range, FillSeriesDirection.Columns).Should().BeEmpty();
+        var edits = FillSeriesPlanner.BuildAutoFillSeriesEdits(sheet, range, FillSeriesDirection.Columns);
+
+        edits.Select(e => ((TextValue)e.NewCell.Value).Value).Should().Equal("hello", "hello");
     }
 }

@@ -34,6 +34,9 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
     private List<RowColumnShiftHelpers.ChartSeriesColumnMappingsWorkbookSnapshot>? _chartSeriesColumnMappingsSnapshot;
+    // R86-commands-insert-move-refadjust-5-1: see RowColumnShiftHelpers.ShiftChartPositionColumnsUp/
+    // Down — tracked separately from _chartSnapshot above, which only tracks DataRange.
+    private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
@@ -134,6 +137,11 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftChartColumnsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
         RowColumnShiftHelpers.ShiftChartSeriesColumnMappingsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new InsertColsOp(sheet.Name, _beforeCol, _count));
+        // R86-commands-insert-move-refadjust-5-1: see ShiftChartPositionColumnsUp — columns before
+        // _beforeCol are untouched by this insert, so it is safe to read sheet.ColumnWidths here
+        // regardless of whether the ColumnWidths re-key above has already run.
+        _chartPositionSnapshot = RowColumnShiftHelpers.CaptureChartPositions(sheet);
+        RowColumnShiftHelpers.ShiftChartPositionColumnsUp(sheet, _beforeCol, _count);
         RowColumnShiftHelpers.ShiftAddressBearingColumnsUp(ctx.Workbook, sheet, _addressStateSnapshot, _beforeCol, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
@@ -240,6 +248,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreChartSeriesColumnMappings(ctx.Workbook, _chartSeriesColumnMappingsSnapshot);
+        RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
     }
 
@@ -374,6 +383,9 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
     private List<RowColumnShiftHelpers.ChartSeriesColumnMappingsWorkbookSnapshot>? _chartSeriesColumnMappingsSnapshot;
+    // R86-commands-insert-move-refadjust-5-1: see RowColumnShiftHelpers.ShiftChartPositionColumnsUp/
+    // Down — tracked separately from _chartSnapshot above, which only tracks DataRange.
+    private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
@@ -424,6 +436,11 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.HiddenCols, _startCol, _count);
 
         _columnWidthSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ColumnWidths);
+        // R86-commands-insert-move-refadjust-5-1: must run BEFORE sheet.ColumnWidths is re-keyed
+        // below — the deleted band's own widths are needed to measure the removed band's pixel
+        // width, and they are gone from the live dictionary once ShiftIndexesDown below has run.
+        _chartPositionSnapshot = RowColumnShiftHelpers.CaptureChartPositions(sheet);
+        RowColumnShiftHelpers.ShiftChartPositionColumnsDown(sheet, _startCol, _count, sheet.ColumnWidths, sheet.DefaultColumnWidth);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.ColumnWidths, _startCol, _count);
 
         // G1: same key-space as ColumnWidths — must shift/drop entries the same way, or a filter
@@ -585,6 +602,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreChartSeriesColumnMappings(ctx.Workbook, _chartSeriesColumnMappingsSnapshot);
+        RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
     }
 

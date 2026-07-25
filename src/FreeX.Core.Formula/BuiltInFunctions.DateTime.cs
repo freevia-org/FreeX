@@ -45,11 +45,47 @@ public static partial class BuiltInFunctions
         return culture;
     }
 
+    // A single recalculation pass typically evaluates many dependent NOW()/TODAY() cells in a
+    // tight, uninterrupted burst; Excel guarantees every one of them observes the exact same
+    // instant for that pass (e.g. =A1=B1, both =NOW(), is always TRUE within one pass). Reading
+    // DateTime.Now/DateTime.Today fresh on every single call — as this file used to do — lets a
+    // dependency chain large enough that walking it takes measurable wall-clock time return
+    // visibly different timestamps for cells evaluated early vs. late in the same pass.
+    //
+    // A fully general fix would thread a genuine per-recalculation-pass snapshot down from
+    // RecalcEngine through IEvalContext; RecalcEngine lives in a different project (FreeX.Core.Calc)
+    // and is out of this fix's scope. As a bounded, self-contained mitigation, cache the captured
+    // instant and keep reusing it as long as NOW()/TODAY() keep being invoked within a short idle
+    // window — exactly the "busy burst of volatile evaluations within one pass" shape described
+    // above — and only recapture once that burst goes quiet (a strong signal a new, unrelated
+    // pass has started, e.g. the next F9 keypress). TODAY() derives from the same cached instant
+    // as NOW() (rather than its own independent DateTime.Today) so the two stay mutually
+    // consistent within a pass too.
+    private static DateTime? _cachedPassNow;
+    private static long _cachedPassNowTicks;
+    private const long PassNowIdleWindowMs = 200;
+
+    private static DateTime CapturePassScopedNow()
+    {
+        long ticks = Environment.TickCount64;
+        var cached = _cachedPassNow;
+        if (cached is not null && ticks - _cachedPassNowTicks <= PassNowIdleWindowMs)
+        {
+            _cachedPassNowTicks = ticks; // slide the window so a long-but-busy pass stays consistent
+            return cached.Value;
+        }
+
+        var fresh = DateTime.Now;
+        _cachedPassNow = fresh;
+        _cachedPassNowTicks = ticks;
+        return fresh;
+    }
+
     private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        new DateTimeValue(DateToSerial(DateTime.Now, ctx.Uses1904DateSystem));
+        new DateTimeValue(DateToSerial(CapturePassScopedNow(), ctx.Uses1904DateSystem));
 
     private static ScalarValue Today(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        new DateTimeValue(DateToSerial(DateTime.Today, ctx.Uses1904DateSystem));
+        new DateTimeValue(DateToSerial(CapturePassScopedNow().Date, ctx.Uses1904DateSystem));
 
     private static ScalarValue Date(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -322,7 +358,12 @@ public static partial class BuiltInFunctions
         // rather than 0 (TimeSpan.Days would otherwise round toward zero).
         var start = startRaw.Date;
         var end = endRaw.Date;
-        if (end < start) return ErrorValue.Num;
+        // Guard against a reversed start>end range using the raw floored serials, not the
+        // collapsed DateTime values above: ExcelDateSystem.SerialToDate maps both the 1900
+        // phantom leap day (serial 60, "1900-02-29") and serial 59 ("1900-02-28") onto the
+        // same DateTime, so e.g. DATEDIF(60, 59, "D") (a reversed range) would otherwise read
+        // end.Date == start.Date and slip past this check instead of correctly erroring.
+        if (Math.Floor(ToNumber(endValue)) < Math.Floor(ToNumber(startValue))) return ErrorValue.Num;
         var unit  = ToText(unitValue).ToUpperInvariant();
 
         // start/end (above) collapse the 1900 phantom leap day (serial 60, "1900-02-29") onto
@@ -693,7 +734,7 @@ public static partial class BuiltInFunctions
         return MapBinaryMathArgs(args[0], args[1], (startDate, daysValue) => WorkdayScalar(startDate, daysValue, holidays, uses1904DateSystem));
     }
 
-    private static ScalarValue WorkdayScalar(ScalarValue startDate, ScalarValue daysValue, HashSet<DateTime> holidays, bool uses1904DateSystem)
+    private static ScalarValue WorkdayScalar(ScalarValue startDate, ScalarValue daysValue, HashSet<double> holidays, bool uses1904DateSystem)
     {
         double rawDays = ToNumber(daysValue);
         if (!double.IsFinite(rawDays)) return ErrorValue.Num;
@@ -701,7 +742,7 @@ public static partial class BuiltInFunctions
         return WorkdayScalar(startDate, (int)rawDays, holidays, uses1904DateSystem);
     }
 
-    private static ScalarValue WorkdayScalar(ScalarValue startDate, int days, HashSet<DateTime> holidays, bool uses1904DateSystem)
+    private static ScalarValue WorkdayScalar(ScalarValue startDate, int days, HashSet<double> holidays, bool uses1904DateSystem)
     {
         if (!TrySerialToDateTime(startDate, uses1904DateSystem, out _)) return ErrorValue.Num;
         // WORKDAY always returns a whole-day serial — Excel discards any time-of-day
@@ -725,10 +766,15 @@ public static partial class BuiltInFunctions
         while (remaining > 0)
         {
             serial += sign;
-            if (ExcelDowToMonIndex(serial, uses1904DateSystem) < 5 &&
-                !holidays.Contains(SerialToDate(serial, uses1904DateSystem).Date))
+            if (ExcelDowToMonIndex(serial, uses1904DateSystem) < 5 && !holidays.Contains(serial))
                 remaining--;
         }
+        // Excel returns #NUM! when the resulting workday falls outside the valid serial-date range.
+        // The pre-refactor loop got this implicitly by calling SerialToDate() on every candidate day
+        // (which threw past the max serial); the serial-keyed holiday lookup no longer does, so the
+        // out-of-range result must be validated explicitly here.
+        if (!TrySerialToDateTime(new NumberValue(serial), uses1904DateSystem, out _))
+            return ErrorValue.Num;
         return new NumberValue(serial);
     }
 
@@ -743,7 +789,7 @@ public static partial class BuiltInFunctions
         return MapBinaryMathArgs(args[0], args[1], (startDate, endDate) => NetworkdaysScalar(startDate, endDate, holidays, uses1904DateSystem));
     }
 
-    private static ScalarValue NetworkdaysScalar(ScalarValue startDate, ScalarValue endDate, HashSet<DateTime> holidays, bool uses1904DateSystem)
+    private static ScalarValue NetworkdaysScalar(ScalarValue startDate, ScalarValue endDate, HashSet<double> holidays, bool uses1904DateSystem)
     {
         if (!TrySerialToDateTime(startDate, uses1904DateSystem, out _)) return ErrorValue.Num;
         if (!TrySerialToDateTime(endDate, uses1904DateSystem, out _)) return ErrorValue.Num;
@@ -757,9 +803,8 @@ public static partial class BuiltInFunctions
         double lo = Math.Min(startSerial, endSerial);
         double hi = Math.Max(startSerial, endSerial);
         int count = CountExcelWeekdaysInclusive(lo, hi, uses1904DateSystem);
-        foreach (var h in holidays)
+        foreach (var hSerial in holidays)
         {
-            double hSerial = DateToSerial(h, uses1904DateSystem);
             if (hSerial >= lo && hSerial <= hi && ExcelDowToMonIndex(hSerial, uses1904DateSystem) < 5)
                 count--;
         }
@@ -1032,9 +1077,16 @@ public static partial class BuiltInFunctions
         return (serial - week1MondaySerial) / 7 + 1;
     }
 
-    private static bool TryCollectHolidays(ScalarValue? arg, bool uses1904DateSystem, out HashSet<DateTime> holidays, out ErrorValue? error)
+    // Holidays are keyed by the raw floored Excel serial, NOT by the resolved DateTime:
+    // ExcelDateSystem.SerialToDate collapses the 1900 phantom leap day (serial 60,
+    // "1900-02-29") onto the same real DateTime as serial 59 ("1900-02-28"), so storing
+    // (and later looking up) by DateTime would make a holiday specified at either serial
+    // indistinguishable from — and silently suppress — the other. Keying by serial instead
+    // matches how the candidate-day loops in WorkdayScalar/NetworkdaysScalar/*Intl already
+    // walk in serial space rather than DateTime space.
+    private static bool TryCollectHolidays(ScalarValue? arg, bool uses1904DateSystem, out HashSet<double> holidays, out ErrorValue? error)
     {
-        holidays = new HashSet<DateTime>();
+        holidays = new HashSet<double>();
         error = null;
         if (arg is RangeValue rv)
         {
@@ -1047,23 +1099,23 @@ public static partial class BuiltInFunctions
                 }
                 if (TryCellNumber(v, out double serial))
                 {
-                    if (!TrySerialToDateTime(new NumberValue(serial), uses1904DateSystem, out var holiday))
+                    if (!TrySerialToDateTime(new NumberValue(serial), uses1904DateSystem, out _))
                     {
                         error = ErrorValue.Num;
                         return false;
                     }
-                    holidays.Add(holiday.Date);
+                    holidays.Add(Math.Floor(serial));
                 }
             }
         }
         else if (arg is not null && TryHolidayScalarNumber(arg, out double s))
         {
-            if (!TrySerialToDateTime(new NumberValue(s), uses1904DateSystem, out var holiday))
+            if (!TrySerialToDateTime(new NumberValue(s), uses1904DateSystem, out _))
             {
                 error = ErrorValue.Num;
                 return false;
             }
-            holidays.Add(holiday.Date);
+            holidays.Add(Math.Floor(s));
         }
         return true;
     }

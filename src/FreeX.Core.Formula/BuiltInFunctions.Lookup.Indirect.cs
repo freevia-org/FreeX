@@ -48,11 +48,45 @@ public static partial class BuiltInFunctions
         if (sheetName is not null && IsExternalSheetReference(sheetName, ctx))
             return ErrorValue.Ref;
 
+        // R86-calc-volatile-circular-5-2: a cell that reaches its own address only through
+        // INDIRECT's dynamic string argument (e.g. A1=INDIRECT("A1")+1, or the common
+        // INDIRECT(ADDRESS(ROW(),COLUMN())) idiom) has no static precedent edge back to itself, so
+        // RecalcEngine's dependency-graph cycle detection can never see it -- see
+        // IsIndirectSelfReference's own remarks. Signal the sentinel here instead of actually
+        // reading the cell's own (stale/mid-evaluation) value; RecalcEngine's per-cell evaluation
+        // loop recognizes it and routes the cell through the same non-iterative circular-reference
+        // handling a statically-detected cycle gets.
+        if (IsIndirectSelfReference(ctx, sheetName, row, col))
+            return ErrorValue.RuntimeCircularSelfReference;
+
         return unwrapSingleCell
             ? sheetName is not null
                 ? ctx.GetCellValue(sheetName, row, col)
                 : ctx.GetCellValue(row, col)
             : BuildIndirectRange(ctx, sheetName, row, col, row, col);
+    }
+
+    /// <summary>
+    /// True when INDIRECT's resolved target (<paramref name="sheetName"/> — null means the
+    /// formula's own sheet — plus <paramref name="row"/>/<paramref name="col"/>) is exactly the
+    /// cell whose formula is currently being evaluated (<see cref="IEvalContext.CurrentCellAddress"/>).
+    /// That is a live re-entrancy: the formula would be reading its own not-yet-settled value for
+    /// this evaluation pass, the same shape of bug a direct A1=A1 self-loop would be if the
+    /// dependency graph didn't already catch it statically.
+    /// </summary>
+    private static bool IsIndirectSelfReference(IEvalContext ctx, string? sheetName, uint row, uint col)
+    {
+        if (ctx.CurrentCellAddress is not { } current || current.Row != row || current.Col != col)
+            return false;
+
+        if (sheetName is null)
+            return true;
+
+        // Sheet-qualified (e.g. INDIRECT("Sheet1!A1") while evaluating a formula on Sheet1) is
+        // still a self-reference when the named sheet resolves to the same sheet the currently-
+        // evaluating formula lives on. Resolve via the workbook the same way GetCellValue(sheetName,
+        // ...) itself would, rather than a raw string compare, so quoting/case differences agree.
+        return ctx.CurrentWorkbook?.GetSheet(sheetName)?.Id.Equals(current.Sheet) == true;
     }
 
     // Excel's INDIRECT (unlike a direct cell/range formula reference) requires the referenced

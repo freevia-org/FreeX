@@ -521,11 +521,14 @@ public static class FillSeriesPlanner
     /// detected from that line's own leading run of already-populated "seed" cells -- exactly
     /// like a fill-handle drag, where the source cells precede the destination cells being
     /// filled. A numeric or date seed run (Excel's AutoFill continues a 2+ cell arithmetic/date
-    /// trend, or defaults a lone seed to a +1/+1-day step) is detected first so AutoFill no
-    /// longer silently no-ops on numeric seeds; a text seed run falls back to
-    /// <see cref="AutofillCommand"/>'s own trailing-number / built-in-list detection, replaying
-    /// the exact same logic a fill-handle drag uses for "Item 1" -&gt; "Item 2" or
-    /// weekday/month lists.
+    /// trend; a lone date seed defaults to a +1-day step, while a lone plain number defaults to a
+    /// COPY, matching <see cref="AutofillCommand"/>'s own lone-cell default) is detected first; a
+    /// text seed run falls back to <see cref="AutofillCommand"/>'s own trailing-number /
+    /// built-in-list detection, replaying the exact same logic a fill-handle drag uses for
+    /// "Item 1" -&gt; "Item 2" or weekday/month lists, and any other seed run (numeric/date
+    /// seeds that don't match a detectable series, or non-list/non-trailing-number text) falls
+    /// back to a cyclic replay of the seed run itself, matching AutofillCommand's own
+    /// ResolvePatternSourceAddress fallback for the identical case.
     /// </summary>
     public static List<(CellAddress Address, Cell NewCell)> BuildAutoFillSeriesEdits(
         Sheet sheet,
@@ -542,8 +545,11 @@ public static class FillSeriesPlanner
     /// <summary>
     /// Builds one line's AutoFill edits: reads the leading contiguous run of populated cells as
     /// the line's seed(s), detects a numeric/date/text series from them, and fills the remaining
-    /// (blank) cells of the line. A line with no leading seed, or whose seed run doesn't match a
-    /// detectable series, is left untouched -- matching a non-series text seed's existing no-op.
+    /// (blank) cells of the line. A text seed run that doesn't match a detectable trailing-number
+    /// or built-in/custom-list series instead replays cyclically, matching a fill-handle drag's
+    /// own pattern-copy fallback for the identical case (see
+    /// <see cref="AutofillCommand"/>.ResolvePatternSourceAddress) -- a line with no leading seed
+    /// at all is still left untouched.
     /// </summary>
     private static void BuildAutoFillLineEdits(
         Sheet sheet,
@@ -576,25 +582,37 @@ public static class FillSeriesPlanner
         {
             var texts = seedValues.Select(value => ((TextValue)value).Value).ToList();
             var textSeries = AutofillCommand.TryCreateAutoFillTextSeries(texts);
-            if (textSeries is null)
-                return;
+            if (textSeries is not null)
+            {
+                for (var i = seedCount; i < line.Count; i++)
+                    edits.Add((line[i], Cell.FromValue(textSeries(i - seedCount + 1))));
 
+                return;
+            }
+
+            // No trailing-number/list series detected (e.g. an arbitrary alternating "Red",
+            // "Blue" pair, or a single plain word): replay the seed run's own values cyclically
+            // instead of leaving the rest of the line untouched, matching AutofillCommand's own
+            // ResolvePatternSourceAddress fallback for the identical non-series text case.
             for (var i = seedCount; i < line.Count; i++)
-                edits.Add((line[i], Cell.FromValue(textSeries(i - seedCount + 1))));
+                edits.Add((line[i], Cell.FromValue(seedValues[(i - seedCount) % seedCount])));
         }
     }
 
     /// <summary>
     /// Detects a numeric or date AutoFill series from a line's leading seed cells, mirroring the
     /// fill handle's own numeric/date trend detection (<see cref="AutofillCommand"/>'s
-    /// TryCreateScalarSeries / TryCreateForcedSingleCellSeries): a homogeneous 2+ cell seed run
-    /// fits a least-squares regression line through ALL the seed points and continues THAT line
-    /// (Excel's own behavior for a fill-handle drag), not a naive endpoint-average step -- for a
-    /// non-arithmetic seed run like 1, 2, 6 the two-point-average step would produce 8.5, 11,
-    /// 13.5, while the correctly-fitted regression line continues as 8, 10.5, 13. A lone numeric
-    /// or date seed defaults to a plain +1 step, since there is no trend to fit from a single
-    /// sample. A seed run that mixes types (or holds no numbers/dates at all) is not a
-    /// numeric/date series.
+    /// TryCreateScalarSeries / TryCreateForcedSingleCellSeries / WantsSingleCellSeriesDefault): a
+    /// homogeneous 2+ cell seed run fits a least-squares regression line through ALL the seed
+    /// points and continues THAT line (Excel's own behavior for a fill-handle drag), not a naive
+    /// endpoint-average step -- for a non-arithmetic seed run like 1, 2, 6 the two-point-average
+    /// step would produce 8.5, 11, 13.5, while the correctly-fitted regression line continues as
+    /// 8, 10.5, 13. A lone seed's default is type-dependent, matching
+    /// <see cref="AutofillCommand"/>.WantsSingleCellSeriesDefault's un-Ctrl'd default (AutoFill
+    /// has no Ctrl-equivalent toggle to flip it): a lone DATE seed defaults to a +1-day step,
+    /// since dates default to a series; a lone plain NUMBER seed instead defaults to a COPY (step
+    /// 0), since numbers default to a copy. A seed run that mixes types (or holds no
+    /// numbers/dates at all) is not a numeric/date series.
     /// </summary>
     private static bool TryCreateNumericOrDateLineSeries(
         IReadOnlyList<ScalarValue> seedValues,
@@ -602,15 +620,18 @@ public static class FillSeriesPlanner
     {
         Func<double, ScalarValue> createValue;
         double[] numbers;
+        bool isDate;
         if (seedValues.All(value => value is NumberValue))
         {
             createValue = serial => new NumberValue(serial);
             numbers = seedValues.Select(value => ((NumberValue)value).Value).ToArray();
+            isDate = false;
         }
         else if (seedValues.All(value => value is DateTimeValue))
         {
             createValue = serial => new DateTimeValue(serial);
             numbers = seedValues.Select(value => ((DateTimeValue)value).Value).ToArray();
+            isDate = true;
         }
         else
         {
@@ -633,9 +654,17 @@ public static class FillSeriesPlanner
             var intercept = numbers.Average() - step * meanX;
             anchor = intercept + step * (numbers.Length - 1);
         }
-        else
+        else if (isDate)
         {
             step = 1d;
+            anchor = numbers[0];
+        }
+        else
+        {
+            // Lone plain-number seed: Excel's fill handle default for a single numeric cell is a
+            // COPY, not an incrementing series (Ctrl would force the series instead, but AutoFill
+            // has no Ctrl-equivalent toggle here) -- see AutofillCommand.WantsSingleCellSeriesDefault.
+            step = 0d;
             anchor = numbers[0];
         }
 

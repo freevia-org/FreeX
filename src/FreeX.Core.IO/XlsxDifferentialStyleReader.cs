@@ -70,14 +70,25 @@ internal static class XlsxDifferentialStyleReader
         var font = dxf.Element(workbookNs + "font");
         if (font is not null)
         {
-            style.Bold = font.Element(workbookNs + "b") is not null;
-            style.Italic = font.Element(workbookNs + "i") is not null;
+            // ECMA-376 CT_BooleanProperty semantics (b/i/strike): the element's mere presence means
+            // "on" only when it carries no val attribute; an explicit val="0"/"false" means the dxf
+            // is turning that toggle OFF (e.g. a conditional-format rule that un-bolds matching
+            // cells). Mirrors XlsxStructuredTableStyleMetadataReader.ReadDifferentialStyleDiff, which
+            // reads the same dxf font shape correctly via ReadBoolAttribute(defaultValue: true).
+            if (font.Element(workbookNs + "b") is { } boldElement)
+                style.Bold = XlsxXmlAttributeReader.ReadBoolAttribute(boldElement, "val", defaultValue: true);
+            if (font.Element(workbookNs + "i") is { } italicElement)
+                style.Italic = XlsxXmlAttributeReader.ReadBoolAttribute(italicElement, "val", defaultValue: true);
             var underlineElement = font.Element(workbookNs + "u");
-            style.Underline = underlineElement is not null;
             var underlineVal = underlineElement?.Attribute("val")?.Value;
+            // CT_UnderlineProperty's val is an enum (single/double/.../none), not a plain boolean --
+            // val="none" is the explicit "turn underline off" form, so it must not be read as "on".
+            style.Underline = underlineElement is not null
+                && !string.Equals(underlineVal, "none", StringComparison.OrdinalIgnoreCase);
             style.DoubleUnderline = string.Equals(underlineVal, "double", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(underlineVal, "doubleAccounting", StringComparison.OrdinalIgnoreCase);
-            style.Strikethrough = font.Element(workbookNs + "strike") is not null;
+            if (font.Element(workbookNs + "strike") is { } strikeElement)
+                style.Strikethrough = XlsxXmlAttributeReader.ReadBoolAttribute(strikeElement, "val", defaultValue: true);
             var verticalAlignment = font.Element(workbookNs + "vertAlign")?.Attribute("val")?.Value;
             style.Superscript = string.Equals(verticalAlignment, "superscript", StringComparison.OrdinalIgnoreCase);
             style.Subscript = string.Equals(verticalAlignment, "subscript", StringComparison.OrdinalIgnoreCase);

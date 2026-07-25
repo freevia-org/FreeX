@@ -133,7 +133,7 @@ public sealed partial class MainWindow
             return;
 
         ClearSelectedDrawingObject();
-        var plan = PageLayoutStatusPlanner.PlanPageBreakPreviewToggle(_session.ActiveSheet.ViewMode);
+        var plan = PageLayoutStatusPlanner.PlanPageBreakPreviewToggle(_session.ViewMode);
         var result = _session.SetWorksheetViewMode(plan.TargetViewMode);
         var status = PageLayoutStatusPlanner.ResolveCommandStatus(
             plan.Status,

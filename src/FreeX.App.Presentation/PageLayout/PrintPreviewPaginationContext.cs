@@ -110,13 +110,22 @@ public sealed class PrintPreviewPaginationContext
         if (pageIndex < 0)
             return null;
 
+        // The &P/&N header/footer numbers must run continuously across every print area of this
+        // sheet (seeded from FirstPageNumber, aggregate total), matching the real print/PDF
+        // export's WorkbookPdfContentBuilder.ResolveEffectiveSheetPageNumber/-TotalPages -- NOT
+        // reset per area the way the local `remaining` index below (which only resolves which
+        // plan/page to render) would otherwise imply.
+        var globalPageNumber = (_sheet.FirstPageNumber ?? 1) + pageIndex;
+        var totalPages = PageCount;
+
         var remaining = pageIndex;
         foreach (var plan in _plans)
         {
             if (remaining < plan.PageCount)
             {
                 return PageContentRenderModelBuilder.Build(
-                    _workbook, _sheet, plan, remaining, _textMeasurer, workbookDirectory: _workbookDirectory);
+                    _workbook, _sheet, plan, remaining, _textMeasurer, workbookDirectory: _workbookDirectory,
+                    overridePageNumber: globalPageNumber, overrideTotalPages: totalPages);
             }
 
             remaining -= plan.PageCount;

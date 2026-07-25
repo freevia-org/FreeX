@@ -913,9 +913,12 @@ public static class PasteCommandFactory
 
     // Locale-aware counterpart to the en-US-only ValidGroupingRegex/TryParseExcelPasteNumber pair
     // below: validates that <paramref name="text"/> uses <paramref name="culture"/>'s own thousands
-    // grouping shape (exactly 3 digits per group, 1-3 in the leftmost group) before allowing
-    // AllowThousands parsing, so a malformed grouping is still rejected as text rather than silently
-    // misparsed -- the same Excel-parity precaution TryParseExcelPasteNumber applies for en-US.
+    // grouping shape -- per culture.NumberFormat.NumberGroupSizes, not a hardcoded 3 -- before
+    // allowing AllowThousands parsing, so a malformed grouping is still rejected as text rather than
+    // silently misparsed -- the same Excel-parity precaution TryParseExcelPasteNumber applies for
+    // en-US. Most cultures group uniformly by 3 (NumberGroupSizes = {3}), but some (e.g. en-IN/hi-IN
+    // Indian numbering) group the innermost 3 digits then repeat groups of 2 further left ({3,2}),
+    // e.g. "1,23,456"; validating against a fixed \d{3} per group would wrongly reject that as text.
     private static bool TryParseCultureGroupedNumber(string text, System.Globalization.CultureInfo culture, out double number)
     {
         number = 0;
@@ -926,8 +929,10 @@ public static class PasteCommandFactory
         var decimalSeparator = culture.NumberFormat.NumberDecimalSeparator;
         var groupPattern = System.Text.RegularExpressions.Regex.Escape(groupSeparator);
         var decimalPattern = System.Text.RegularExpressions.Regex.Escape(decimalSeparator);
-        var groupingRegex = new System.Text.RegularExpressions.Regex(
-            $@"^\(?[+-]?\d{{1,3}}({groupPattern}\d{{3}})*({decimalPattern}\d*)?[+-]?\)?$");
+        if (!TryBuildCultureGroupingPattern(culture.NumberFormat.NumberGroupSizes, groupPattern, decimalPattern, out var pattern))
+            return false;
+
+        var groupingRegex = new System.Text.RegularExpressions.Regex(pattern);
         if (!groupingRegex.IsMatch(text))
             return false;
 
@@ -939,6 +944,38 @@ public static class PasteCommandFactory
             System.Globalization.NumberStyles.AllowThousands;
 
         return double.TryParse(text, groupedStyles, culture, out number) && double.IsFinite(number);
+    }
+
+    // Builds the grouping-shape regex from the culture's actual NumberGroupSizes rather than a
+    // hardcoded 3. Per NumberFormatInfo.NumberGroupSizes semantics, groupSizes[0] is the size of the
+    // group nearest the decimal point, each successive element is the next group leftward, and the
+    // LAST element repeats indefinitely for every remaining (more significant) group -- including the
+    // partial leftmost group, which may have 1..lastSize digits. E.g. en-US {3} -> every group
+    // (including the one next to the decimal) repeats at size 3: "1,234,567". Indian numbering {3,2}
+    // -> the group next to the decimal is fixed at size 3, then every group further left repeats at
+    // size 2: "1,23,456". A group size of 0 signals "stop grouping" (rare); such cultures are not
+    // supported by this shape check and fall through to the other parse paths instead.
+    private static bool TryBuildCultureGroupingPattern(
+        int[] groupSizes, string groupPattern, string decimalPattern, out string pattern)
+    {
+        pattern = "";
+        if (groupSizes.Length == 0 || Array.Exists(groupSizes, static s => s <= 0))
+            return false;
+
+        var lastSize = groupSizes[^1];
+        var sb = new System.Text.StringBuilder();
+        sb.Append(@"^\(?[+-]?\d{1,").Append(lastSize).Append('}'); // partial leftmost group
+        sb.Append('(').Append(groupPattern).Append(@"\d{").Append(lastSize).Append("})*"); // repeating groups
+        // Remaining distinct sizes (nearest-decimal first) each occur exactly once, closest to the
+        // decimal point last, e.g. for {3,2} this appends the fixed size-3 group next to the decimal.
+        for (var i = groupSizes.Length - 2; i >= 0; i--)
+        {
+            sb.Append(groupPattern).Append(@"\d{").Append(groupSizes[i]).Append('}');
+        }
+
+        sb.Append('(').Append(decimalPattern).Append(@"\d*)?[+-]?\)?$");
+        pattern = sb.ToString();
+        return true;
     }
 
     // NumberStyles without AllowThousands — used for the first Excel-parity parse attempt so that

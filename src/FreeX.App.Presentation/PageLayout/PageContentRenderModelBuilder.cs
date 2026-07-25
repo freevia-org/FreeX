@@ -58,6 +58,20 @@ public static class PageContentRenderModelBuilder
     /// Directory that contains the workbook file, with a trailing path separator (e.g. <c>C:\Docs\</c>).
     /// Substituted for <c>&amp;Z</c> / <c>&amp;[Path]</c>. Pass an empty string when the workbook is unsaved.
     /// </param>
+    /// <param name="overridePageNumber">
+    /// When set, used as the page's &amp;P header/footer number instead of the default
+    /// <c>sheet.FirstPageNumber + pageIndex</c>. Callers that paginate a sheet's multiple print
+    /// areas as separate <paramref name="pagePlan"/>s (each restarting <paramref name="pageIndex"/>
+    /// at 0) pass a running index across all of that sheet's areas here, matching
+    /// <c>WorkbookPdfContentBuilder.ResolveEffectiveSheetPageNumber</c>'s continuous per-sheet
+    /// counter for the real print/PDF export.
+    /// </param>
+    /// <param name="overrideTotalPages">
+    /// When set, used as the page's &amp;N total-page count instead of the default
+    /// <c>pagePlan.PageCount</c> (that single area's own page count). Pass the aggregate page
+    /// count across all of a sheet's print areas so multi-area previews agree with
+    /// <c>WorkbookPdfContentBuilder.ResolveEffectiveSheetTotalPages</c>.
+    /// </param>
     public static PageContentLayout? Build(
         Workbook workbook,
         Sheet sheet,
@@ -65,7 +79,9 @@ public static class PageContentRenderModelBuilder
         int pageIndex,
         ITextMeasurer textMeasurer,
         DateTime? now = null,
-        string workbookDirectory = "")
+        string workbookDirectory = "",
+        int? overridePageNumber = null,
+        int? overrideTotalPages = null)
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(sheet);
@@ -116,8 +132,8 @@ public static class PageContentRenderModelBuilder
             measurement.TotalColumnWidth(pageColumns.Count),
             measurement.TotalRowHeight(pageRows.Count));
 
-        var pageNumber = (sheet.FirstPageNumber ?? 1) + pageIndex;
-        var totalPages = pagePlan.PageCount;
+        var pageNumber = overridePageNumber ?? (sheet.FirstPageNumber ?? 1) + pageIndex;
+        var totalPages = overrideTotalPages ?? pagePlan.PageCount;
 
         var cells = BuildCells(
             workbook,

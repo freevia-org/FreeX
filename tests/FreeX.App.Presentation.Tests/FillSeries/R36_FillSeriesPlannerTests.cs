@@ -171,15 +171,21 @@ public sealed class R36_FillSeriesPlannerTests
     }
 
     [Fact]
-    public void BuildAutoFillSeriesEdits_ReturnsNoEditsForANonSeriesTextSeed()
+    public void BuildAutoFillSeriesEdits_NonSeriesTextSeed_CopiesCyclicallyInsteadOfNoOp()
     {
+        // Updated for R86-commands-autofill-series-5-2: a non-series text seed ("hello" matches
+        // neither a trailing-number nor a built-in/custom list) now replays cyclically instead of
+        // no-opping, matching AutofillCommand's own pattern-copy fallback for the identical case
+        // (a single source cell trivially copies to every destination cell).
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 1));
         sheet.SetCell(range.Start, new TextValue("hello"));
 
-        FillSeriesPlanner.BuildAutoFillSeriesEdits(sheet, range, FillSeriesDirection.Columns).Should().BeEmpty();
+        var edits = FillSeriesPlanner.BuildAutoFillSeriesEdits(sheet, range, FillSeriesDirection.Columns);
+
+        edits.Select(e => ((TextValue)e.NewCell.Value).Value).Should().Equal("hello", "hello");
     }
 
     // ── R36-commands-fill-series-2-4 ──────────────────────────────────────────────────────────

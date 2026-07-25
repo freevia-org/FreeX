@@ -31,6 +31,10 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private List<uint>? _rowPageBreakSnapshot;
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
+    // R86-commands-insert-move-refadjust-5-1: a chart's own drawing position (Left/Top) is never
+    // cell-anchored (see RowColumnShiftHelpers.ShiftChartPositionRowsUp), so it must be captured and
+    // shifted separately from _chartSnapshot above, which only tracks DataRange.
+    private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private List<(CellAddress Address, Cell? OldCell)>? _tableCalculatedColumnFillSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
@@ -133,6 +137,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
         RowColumnShiftHelpers.ShiftChartRowsUp(ctx.Workbook, _sheetId, _beforeRow, _count);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count));
+        // R86-commands-insert-move-refadjust-5-1: see ShiftChartPositionRowsUp — rows before
+        // _beforeRow are untouched by this insert, so it is safe to read sheet.RowHeights here
+        // regardless of whether the RowHeights re-key above has already run.
+        _chartPositionSnapshot = RowColumnShiftHelpers.CaptureChartPositions(sheet);
+        RowColumnShiftHelpers.ShiftChartPositionRowsUp(sheet, _beforeRow, _count);
         RowColumnShiftHelpers.ShiftAddressBearingRowsUp(ctx.Workbook, sheet, _addressStateSnapshot, _beforeRow, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
@@ -346,6 +355,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
+        RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
     }
 

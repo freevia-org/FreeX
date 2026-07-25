@@ -72,15 +72,36 @@ internal static class XlsxClosedXmlCellMapper
             : value;
     }
 
+    // ClosedXML's internal placeholder text for a What-If Data Table cell (<f t="dataTable" .../>)
+    // is built from a broken interpolated-string template (XLCellFormula.DataTable1D/DataTable2D:
+    // $"{{TABLE({arg2},{arg}}}" -- missing the ')' before the final '}'), so IXLCell.FormulaA1 for
+    // such a cell comes back syntactically invalid, e.g. "{TABLE(C1,B1}" (unbalanced brace, no
+    // closing paren, no leading '='). Recognize that exact malformed shape and repair it to a
+    // well-formed "TABLE(arg1,arg2)" string instead of ever storing/re-emitting the broken text
+    // (see R86-io-shared-array-formula-5-1). No real Excel formula can ever take this shape (a
+    // literal curly brace only appears as ClosedXML's un-escaped placeholder wrapper here -- a
+    // genuine array formula's FormulaA1 is never wrapped in braces), so this is an unambiguous,
+    // safe signature to match.
+    private static readonly Regex DataTableFormulaTextPattern =
+        new(@"^\{TABLE\(([^,{}]*),([^,{}]*)\}$", RegexOptions.Compiled);
+
     public static string NormalizeFormulaText(string formulaText)
     {
         var normalized = formulaText.StartsWith("=", StringComparison.Ordinal)
             ? formulaText[1..]
             : formulaText;
 
-        return normalized
+        normalized = normalized
             .Replace("_xlfn.", "", StringComparison.OrdinalIgnoreCase)
             .Replace("_xlws.", "", StringComparison.OrdinalIgnoreCase);
+
+        var dataTableMatch = DataTableFormulaTextPattern.Match(normalized);
+        if (dataTableMatch.Success)
+        {
+            return $"TABLE({dataTableMatch.Groups[1].Value},{dataTableMatch.Groups[2].Value})";
+        }
+
+        return normalized;
     }
 
     private static bool ShouldUseCachedExternalFormulaValue(IXLCell xlCell, NotImplementedException ex) =>
@@ -325,10 +346,10 @@ internal static class XlsxClosedXmlCellMapper
     /// so it is modelled on <see cref="Cell"/> rather than <see cref="CellStyle"/>.
     /// </summary>
     /// <remarks>
-    /// Scoped model+IO-mapper support only: wiring these calls into the per-cell load loop
-    /// (XlsxFileAdapter.cs) and the per-cell save loop (XlsxFileAdapter.Save.cs) so the flag actually
-    /// flows through <c>Cell.QuotePrefix</c> on real load/save is a follow-up — those files are out of
-    /// this change's scope.
+    /// Wired into the per-cell load loop (XlsxFileAdapter.cs) and the per-cell full-save loop
+    /// (XlsxFileAdapter.Save.cs) so the flag flows through <see cref="Cell.QuotePrefix"/> on real
+    /// load/save. The patch-save path (XlsxFileAdapter.SourcePackageSnapshot.cs) never touches
+    /// cellXfs, so it already preserves quotePrefix verbatim for cells whose value doesn't change.
     /// </remarks>
     public static bool MapQuotePrefix(IXLCell xlCell) => xlCell.Style.IncludeQuotePrefix;
 

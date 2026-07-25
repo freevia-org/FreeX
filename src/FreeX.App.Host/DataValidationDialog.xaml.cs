@@ -31,6 +31,16 @@ public partial class DataValidationDialog : Window
     private readonly Action<DataValidationRangeSelectionRequest>? _requestRangeSelection;
     private string? _selectionSource;
 
+    // Native/passthrough data captured from the rule being edited (e.g. imeMode and other
+    // unmodeled attributes/child XML preserved on load, or the x14 extLst flag). The dialog's UI
+    // controls have no editors for these, so they must be carried through untouched rather than
+    // silently dropped when the user clicks OK. See DataValidationRuleEditorInput's doc comments.
+    private bool _existingIsX14;
+    private IReadOnlyDictionary<string, string>? _existingNativeAttributes;
+    private IReadOnlyList<string>? _existingNativeChildXmls;
+    private IReadOnlyDictionary<string, string>? _existingNativeContainerAttributes;
+    private IReadOnlyList<string>? _existingNativeContainerChildXmls;
+
     public DataValidationDialog(Action<DataValidationRangeSelectionRequest>? requestRangeSelection = null)
     {
         _requestRangeSelection = requestRangeSelection;
@@ -50,6 +60,11 @@ public partial class DataValidationDialog : Window
             return;
 
         _resultId = existing.Id;
+        _existingIsX14 = existing.IsX14;
+        _existingNativeAttributes = existing.NativeAttributes;
+        _existingNativeChildXmls = existing.NativeChildXmls;
+        _existingNativeContainerAttributes = existing.NativeContainerAttributes;
+        _existingNativeContainerChildXmls = existing.NativeContainerChildXmls;
         SelectComboItemByTag(TypeCombo, TypeTag(existing.Type));
         SelectComboItemByTag(OperatorCombo, OperatorTag(existing.Operator));
         SelectComboItemByTag(AlertStyleCombo, AlertStyleTag(existing.AlertStyle));
@@ -213,7 +228,12 @@ public partial class DataValidationDialog : Window
             ErrorTitle = ErrorTitleBox.Text,
             PromptTitle = PromptTitleBox.Text,
             PromptMessage = PromptMessageBox.Text,
-            ErrorMessage = ErrorMessageBox.Text
+            ErrorMessage = ErrorMessageBox.Text,
+            IsX14 = _existingIsX14,
+            NativeAttributes = _existingNativeAttributes,
+            NativeChildXmls = _existingNativeChildXmls,
+            NativeContainerAttributes = _existingNativeContainerAttributes,
+            NativeContainerChildXmls = _existingNativeContainerChildXmls
         };
 
     private TextBox ResolveInvalidCriteriaInput(DvType type, DvOperator op)

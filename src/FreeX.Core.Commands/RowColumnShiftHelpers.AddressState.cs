@@ -82,7 +82,7 @@ internal static partial class RowColumnShiftHelpers
 
         var snapshots = new List<TextBoxAddressSnapshot>(sheet.TextBoxes.Count);
         foreach (var textBox in sheet.TextBoxes)
-            snapshots.Add(new TextBoxAddressSnapshot(textBox, textBox.Anchor));
+            snapshots.Add(new TextBoxAddressSnapshot(textBox, textBox.Anchor, textBox.Width, textBox.Height));
 
         return snapshots;
     }
@@ -94,7 +94,7 @@ internal static partial class RowColumnShiftHelpers
 
         var snapshots = new List<DrawingShapeAddressSnapshot>(sheet.DrawingShapes.Count);
         foreach (var shape in sheet.DrawingShapes)
-            snapshots.Add(new DrawingShapeAddressSnapshot(shape, shape.Anchor));
+            snapshots.Add(new DrawingShapeAddressSnapshot(shape, shape.Anchor, shape.Width, shape.Height));
 
         return snapshots;
     }
@@ -120,7 +120,9 @@ internal static partial class RowColumnShiftHelpers
                 picture.IsLinkedToSourceRange,
                 picture.SourceRowCount,
                 picture.SourceColumnCount,
-                [.. picture.Cells]));
+                [.. picture.Cells],
+                picture.Width,
+                picture.Height));
         }
 
         return snapshots;
@@ -325,6 +327,10 @@ internal static partial class RowColumnShiftHelpers
         foreach (var entry in snapshot.TextBoxes)
         {
             entry.TextBox.Anchor = entry.Anchor;
+            // R86-commands-insert-move-refadjust-5-2: undo a "move and size with cells" resize
+            // (see ResizeSpanForShift) back to the exact pre-edit size, not just the pre-edit anchor.
+            entry.TextBox.Width = entry.Width;
+            entry.TextBox.Height = entry.Height;
             sheet.TextBoxes.Add(entry.TextBox);
         }
 
@@ -332,6 +338,8 @@ internal static partial class RowColumnShiftHelpers
         foreach (var entry in snapshot.DrawingShapes)
         {
             entry.Shape.Anchor = entry.Anchor;
+            entry.Shape.Width = entry.Width;
+            entry.Shape.Height = entry.Height;
             sheet.DrawingShapes.Add(entry.Shape);
         }
 
@@ -341,6 +349,8 @@ internal static partial class RowColumnShiftHelpers
             entry.Picture.Anchor = entry.Anchor;
             entry.Picture.LinkedSourceRange = entry.LinkedSourceRange;
             entry.Picture.IsLinkedToSourceRange = entry.IsLinkedToSourceRange;
+            entry.Picture.Width = entry.Width;
+            entry.Picture.Height = entry.Height;
 
             // P23: undo a structural edit that had refreshed a linked picture's rendered
             // snapshot (RefreshLinkedPictureSnapshot) must also put the geometry/cell cache back,
@@ -1015,6 +1025,11 @@ internal static partial class RowColumnShiftHelpers
                 continue;
 
             entry.TextBox.Anchor = anchor;
+            // R86-commands-insert-move-refadjust-5-2: see ResizeSpanForShift.
+            if (shift.Axis == AddressShiftAxis.Rows)
+                entry.TextBox.Height = ResizeSpanForShift(sheet, entry.Anchor, entry.Height, shift);
+            else
+                entry.TextBox.Width = ResizeSpanForShift(sheet, entry.Anchor, entry.Width, shift);
             sheet.TextBoxes.Add(entry.TextBox);
         }
     }
@@ -1028,6 +1043,11 @@ internal static partial class RowColumnShiftHelpers
                 continue;
 
             entry.Shape.Anchor = anchor;
+            // R86-commands-insert-move-refadjust-5-2: see ResizeSpanForShift.
+            if (shift.Axis == AddressShiftAxis.Rows)
+                entry.Shape.Height = ResizeSpanForShift(sheet, entry.Anchor, entry.Height, shift);
+            else
+                entry.Shape.Width = ResizeSpanForShift(sheet, entry.Anchor, entry.Width, shift);
             sheet.DrawingShapes.Add(entry.Shape);
         }
     }
@@ -1041,6 +1061,11 @@ internal static partial class RowColumnShiftHelpers
                 continue;
 
             entry.Picture.Anchor = anchor;
+            // R86-commands-insert-move-refadjust-5-2: see ResizeSpanForShift.
+            if (shift.Axis == AddressShiftAxis.Rows)
+                entry.Picture.Height = ResizeSpanForShift(sheet, entry.Anchor, entry.Height, shift);
+            else
+                entry.Picture.Width = ResizeSpanForShift(sheet, entry.Anchor, entry.Width, shift);
             var shiftedRange = entry.LinkedSourceRange is { } linkedRange
                 ? shift.ShiftRange(linkedRange)
                 : null;
@@ -1062,6 +1087,56 @@ internal static partial class RowColumnShiftHelpers
             }
 
             sheet.Pictures.Add(entry.Picture);
+        }
+    }
+
+    /// <summary>
+    /// R86-commands-insert-move-refadjust-5-2: Excel's default "Move and size with cells"
+    /// (twoCellAnchor) placement not only moves an anchored object's Anchor cell (already handled by
+    /// <see cref="AddressShift.ShiftAddress"/> above) but also grows/shrinks its Height (row axis) or
+    /// Width (column axis) when the insert/delete band falls INSIDE the object's existing pixel span
+    /// — strictly after its <paramref name="anchor"/> cell but before its far edge — so the object's
+    /// far edge keeps tracking the same underlying row/column it originally ended on, instead of
+    /// silently ending up covering fewer/more rows or columns than it originally spanned. An anchor
+    /// at/after the shift boundary already moves as a whole via ShiftAddress and needs no resize; a
+    /// shift entirely past the object's far edge doesn't touch it either.
+    ///
+    /// The delta uses the sheet's DEFAULT row/column size rather than precisely summing the
+    /// (possibly custom-sized) rows/columns inside the shifted band itself — a deliberate
+    /// simplification that keeps this resize order-independent with respect to the
+    /// RowHeights/ColumnWidths dictionary re-keying elsewhere in the same Apply() call (that
+    /// re-keying only ever touches rows/columns at or after the shift's own start, which never
+    /// includes anything before <paramref name="anchor"/> or before the shift's start — the two
+    /// positions this method actually measures), at the cost of being approximate when the shifted
+    /// band itself contains custom-sized rows/columns.
+    /// </summary>
+    private static double ResizeSpanForShift(Sheet sheet, CellAddress anchor, double currentSize, AddressShift shift)
+    {
+        if (shift.Axis == AddressShiftAxis.Rows)
+        {
+            if (shift.Start <= anchor.Row) return currentSize; // anchor itself moves wholesale
+            var anchorTop = CumulativeRowTop(sheet, anchor.Row);
+            var anchorBottom = anchorTop + currentSize;
+            var shiftTop = CumulativeRowTop(sheet, shift.Start);
+            if (shiftTop >= anchorBottom) return currentSize; // shift entirely past the far edge
+
+            var delta = shift.Count * sheet.DefaultRowHeight;
+            return shift.Kind == AddressShiftKind.Insert
+                ? currentSize + delta
+                : Math.Max(1.0, currentSize - Math.Min(delta, anchorBottom - shiftTop));
+        }
+        else
+        {
+            if (shift.Start <= anchor.Col) return currentSize;
+            var anchorLeft = CumulativeColumnLeft(sheet, anchor.Col);
+            var anchorRight = anchorLeft + currentSize;
+            var shiftLeft = CumulativeColumnLeft(sheet, shift.Start);
+            if (shiftLeft >= anchorRight) return currentSize;
+
+            var delta = shift.Count * sheet.DefaultColumnWidth * 8;
+            return shift.Kind == AddressShiftKind.Insert
+                ? currentSize + delta
+                : Math.Max(1.0, currentSize - Math.Min(delta, anchorRight - shiftLeft));
         }
     }
 
@@ -2091,9 +2166,12 @@ internal sealed record AddressBearingStateSnapshot(
 
 internal readonly record struct StyleOnlyEntry(uint Row, uint Col, StyleId StyleId);
 
-internal readonly record struct TextBoxAddressSnapshot(TextBoxModel TextBox, CellAddress Anchor);
+// R86-commands-insert-move-refadjust-5-2: Width/Height are captured alongside Anchor so a row/column
+// insert or delete that grows/shrinks the object's span (see ResizeSpanForShift) can be undone back
+// to its exact pre-edit size, not just its pre-edit anchor cell.
+internal readonly record struct TextBoxAddressSnapshot(TextBoxModel TextBox, CellAddress Anchor, double Width, double Height);
 
-internal readonly record struct DrawingShapeAddressSnapshot(DrawingShapeModel Shape, CellAddress Anchor);
+internal readonly record struct DrawingShapeAddressSnapshot(DrawingShapeModel Shape, CellAddress Anchor, double Width, double Height);
 
 internal readonly record struct PictureAddressSnapshot(
     PictureModel Picture,
@@ -2102,7 +2180,9 @@ internal readonly record struct PictureAddressSnapshot(
     bool IsLinkedToSourceRange,
     uint SourceRowCount,
     uint SourceColumnCount,
-    IReadOnlyList<PictureCellSnapshot> Cells);
+    IReadOnlyList<PictureCellSnapshot> Cells,
+    double Width,
+    double Height);
 
 internal readonly record struct SparklineAddressSnapshot(
     SparklineModel Sparkline,

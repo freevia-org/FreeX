@@ -70,7 +70,7 @@ public static partial class BuiltInFunctions
         return MapBinaryMathArgs(args[0], args[1], (startDate, endDate) => NetworkdaysIntlScalar(startDate, endDate, mask!, holidays, uses1904DateSystem));
     }
 
-    private static ScalarValue NetworkdaysIntlScalar(ScalarValue startDate, ScalarValue endDate, bool[] mask, HashSet<DateTime> holidays, bool uses1904DateSystem)
+    private static ScalarValue NetworkdaysIntlScalar(ScalarValue startDate, ScalarValue endDate, bool[] mask, HashSet<double> holidays, bool uses1904DateSystem)
     {
         if (!TrySerialToDateTime(startDate, uses1904DateSystem, out _)) return ErrorValue.Num;
         if (!TrySerialToDateTime(endDate, uses1904DateSystem, out _)) return ErrorValue.Num;
@@ -88,7 +88,7 @@ public static partial class BuiltInFunctions
         for (double serial = lo; serial <= hi; serial++)
         {
             if (mask[ExcelDowToMonIndex(serial, uses1904DateSystem)]) continue;
-            if (holidays.Contains(SerialToDate(serial, uses1904DateSystem).Date)) continue;
+            if (holidays.Contains(serial)) continue;
             count++;
         }
         return new NumberValue(sign * count);
@@ -109,7 +109,7 @@ public static partial class BuiltInFunctions
         return MapBinaryMathArgs(args[0], args[1], (startDate, daysValue) => WorkdayIntlScalar(startDate, daysValue, mask!, holidays, uses1904DateSystem));
     }
 
-    private static ScalarValue WorkdayIntlScalar(ScalarValue startDate, ScalarValue daysValue, bool[] mask, HashSet<DateTime> holidays, bool uses1904DateSystem)
+    private static ScalarValue WorkdayIntlScalar(ScalarValue startDate, ScalarValue daysValue, bool[] mask, HashSet<double> holidays, bool uses1904DateSystem)
     {
         if (!TrySerialToDateTime(startDate, uses1904DateSystem, out _)) return ErrorValue.Num;
         // WORKDAY.INTL always returns a whole-day serial — Excel discards any time-of-day
@@ -131,9 +131,14 @@ public static partial class BuiltInFunctions
         {
             serial += sign;
             if (mask[ExcelDowToMonIndex(serial, uses1904DateSystem)]) continue;
-            if (holidays.Contains(SerialToDate(serial, uses1904DateSystem).Date)) continue;
+            if (holidays.Contains(serial)) continue;
             remaining--;
         }
+        // Excel returns #NUM! when the resulting workday falls outside the valid serial-date range.
+        // The pre-refactor loop got this implicitly by calling SerialToDate() on every candidate day;
+        // the serial-keyed holiday lookup no longer does, so validate the out-of-range result here.
+        if (!TrySerialToDateTime(new NumberValue(serial), uses1904DateSystem, out _))
+            return ErrorValue.Num;
         return new NumberValue(serial);
     }
 }

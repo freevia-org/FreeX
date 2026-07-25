@@ -412,6 +412,20 @@ internal static partial class DelimitedTextWorkbookReader
             return Encoding.BigEndianUnicode.GetString(bytes[2..]);
         }
 
+        // A binary file (most commonly a ZIP/OOXML package such as .xlsx renamed to .csv/.txt -- the
+        // mirror image of the .xlsx-renamed-from-CSV case WorkbookOpenTargetPlanner already guards
+        // against) must never be silently decoded as if it were text. Without this guard, the strict
+        // UTF-8 decode below throws a DecoderFallbackException on the binary bytes, gets caught, and
+        // falls back to Windows-1252 -- which can decode ANY byte sequence without error -- so the
+        // workbook "opens" full of mojibake/garbage cells split on stray delimiter-looking bytes
+        // instead of surfacing a clear error. Reject up front instead.
+        if (LooksLikeBinaryContent(bytes))
+        {
+            throw new InvalidDataException(
+                "The file does not look like a text/CSV file. It may have been renamed from a " +
+                "different, non-text file type (e.g. a ZIP/.xlsx package).");
+        }
+
         try
         {
             return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
@@ -422,6 +436,28 @@ internal static partial class DelimitedTextWorkbookReader
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             return Encoding.GetEncoding(1252).GetString(bytes);
         }
+    }
+
+    /// <summary>
+    /// Positively identifies binary (non-text) content via two cheap signals: the ZIP local-file-header
+    /// magic ("PK", the same signature <c>WorkbookOpenTargetPlanner.LooksLikeZipPackage</c> checks for
+    /// every OOXML package), and an embedded NUL byte, which never legitimately appears in delimited
+    /// text but is common in other binary formats (e.g. OLE2 .xls). Only samples a bounded prefix for
+    /// the NUL check so a huge misnamed binary file doesn't force a full-content scan.
+    /// </summary>
+    private static bool LooksLikeBinaryContent(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length >= 2 && bytes[0] == 0x50 && bytes[1] == 0x4B) // ZIP local-file-header "PK"
+            return true;
+
+        var sample = bytes.Length > 8000 ? bytes[..8000] : bytes;
+        foreach (var b in sample)
+        {
+            if (b == 0)
+                return true;
+        }
+
+        return false;
     }
 
     private static ScalarValue CoerceValue(DelimitedTextField field)

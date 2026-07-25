@@ -3932,7 +3932,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateStatusBarViewButtons()
     {
-        var state = WorksheetViewModeUiStatePlanner.Build(_session.ActiveSheet.ViewMode);
+        var state = WorksheetViewModeUiStatePlanner.Build(_session.ViewMode);
         ApplyStatusBarViewButtonState(_statusNormalViewButton, state.NormalChecked);
         ApplyStatusBarViewButtonState(_statusPageLayoutViewButton, state.PageLayoutChecked);
         ApplyStatusBarViewButtonState(_statusPageBreakPreviewButton, state.PageBreakPreviewChecked);
@@ -4338,7 +4338,7 @@ public sealed partial class MainWindow : Window
                 IsShowingHeadings: _session.IsShowingHeadings,
                 CanZoomIn: _session.ZoomPercent < SetWorksheetZoomCommand.MaxZoomPercent,
                 CanZoomOut: _session.ZoomPercent > SetWorksheetZoomCommand.MinZoomPercent,
-                IsPageBreakPreview: WorksheetViewModeUiStatePlanner.Build(_session.ActiveSheet.ViewMode).PageBreakPreviewChecked,
+                IsPageBreakPreview: WorksheetViewModeUiStatePlanner.Build(_session.ViewMode).PageBreakPreviewChecked,
                 IsShowingFormulas: _session.IsShowingFormulas));
 
         foreach (var item in plan.Items)
@@ -4745,7 +4745,7 @@ public sealed partial class MainWindow : Window
         var overlay = BuildDrawingObjectOverlay(viewport);
         AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
 
-        var pageBreakOverlay = WorksheetViewModeUiStatePlanner.Build(_session.ActiveSheet.ViewMode).UsesPageBreakPreviewOverlay
+        var pageBreakOverlay = WorksheetViewModeUiStatePlanner.Build(_session.ViewMode).UsesPageBreakPreviewOverlay
             ? BuildPageBreakPreviewOverlay(viewport, showHeadings, zoomFactor)
             : null;
 
@@ -26264,8 +26264,17 @@ public sealed partial class MainWindow : Window
             // point in the open sequence, right after the session/shell refresh.
             ApplyReadOnlyRecommendedPromptIfNeeded(_session.Workbook);
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
+        catch (Exception ex)
         {
+            // Broad catch (matching the WPF host's equivalent open path in
+            // MainWindow.Backstage.cs) rather than an allow-list of exception types: adapter
+            // failures at open time are not limited to IOException/InvalidDataException/etc -- a
+            // password-protected .xlsx throws WorkbookPasswordProtectedException (a plain
+            // Exception subtype, not any of those), and a misnamed/mismatched file can throw other
+            // adapter-specific exceptions (e.g. XmlException). Any of those escaping this method
+            // propagates out of an `async void` event handler (OpenButton_Click / the Open Recent
+            // menu item's click handler), which is fatal and crashes the whole app instead of
+            // showing "Open failed: ..." (R86-services-file-format-detect-5-1).
             ShowOpenIssue($"Open failed: {ex.Message}");
         }
     }

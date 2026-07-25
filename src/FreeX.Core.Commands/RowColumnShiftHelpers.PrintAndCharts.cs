@@ -146,6 +146,150 @@ internal static partial class RowColumnShiftHelpers
             new CellAddress(original.End.Sheet,   original.End.Row,   col));
     }
 
+    // ── Chart drawing-position shifting (R86-commands-insert-move-refadjust-5-1) ─────────────────
+    // Unlike DataRange (a cell reference, shifted above), ChartModel.Left/Top are absolute pixel
+    // coordinates on the chart's OWN hosting sheet's canvas (see XlsxWorksheetChartWriter.ToAnchorMarker,
+    // which converts them into a from-cell+offset marker by walking cumulative row/column sizes from
+    // the sheet origin at SAVE time). Before this fix, no insert/delete command ever touched
+    // Left/Top, so a chart anchored below/right of an inserted or deleted row/column band stayed
+    // fixed on the canvas while the data it plots moved underneath it. A chart whose
+    // DrawingAnchorKind is Absolute ("Don't move or size with cells") is deliberately excluded —
+    // Excel keeps that kind fixed to the page, not to the underlying cells.
+    // Only the chart's OWN hosting sheet matters here (unlike DataRange, Left/Top cannot reference
+    // another sheet), so callers pass the single already-resolved Sheet, not the whole Workbook.
+
+    internal sealed class ChartPositionSnapshot
+    {
+        public required ChartModel Chart { get; init; }
+        public required double Left { get; init; }
+        public required double Top { get; init; }
+    }
+
+    internal static List<ChartPositionSnapshot> CaptureChartPositions(Sheet sheet) =>
+        sheet.Charts.Select(c => new ChartPositionSnapshot { Chart = c, Left = c.Left, Top = c.Top }).ToList();
+
+    internal static void RestoreChartPositions(List<ChartPositionSnapshot>? snapshot)
+    {
+        if (snapshot is null) return;
+        foreach (var entry in snapshot)
+        {
+            entry.Chart.Left = entry.Left;
+            entry.Chart.Top = entry.Top;
+        }
+    }
+
+    /// <summary>
+    /// Cumulative pixel size of every row/column strictly before <paramref name="index"/> (1-based),
+    /// mirroring XlsxWorksheetChartWriter.ToAnchorMarker's cumulative walk closely enough to locate a
+    /// chart relative to a structural-edit boundary (hidden-row/column zeroing is intentionally not
+    /// modeled here — a documented simplification for this position-only shift, distinct from the
+    /// writer's own save-time marker computation).
+    /// </summary>
+    private static double CumulativeSize(IEnumerable<KeyValuePair<uint, double>> customSizes, double defaultSize, uint index)
+    {
+        if (index <= 1) return 0;
+        var total = (double)(index - 1) * defaultSize;
+        foreach (var (i, size) in customSizes)
+            if (i < index) total += size - defaultSize;
+        return Math.Max(0, total);
+    }
+
+    /// <summary>Cumulative pixel height of every row strictly before <paramref name="row"/> (1-based) —
+    /// the row's own top edge. Shared by ResizeSpanForShift (RowColumnShiftHelpers.AddressState.cs) for
+    /// picture/shape/textbox "size with cells" resizing.</summary>
+    private static double CumulativeRowTop(Sheet sheet, uint row) =>
+        CumulativeSize(sheet.RowHeights, sheet.DefaultRowHeight, row);
+
+    /// <summary>Column analogue of <see cref="CumulativeRowTop"/> — the column's own left edge, in the
+    /// same *8 character-to-pixel unit as ChartModel.Left.</summary>
+    private static double CumulativeColumnLeft(Sheet sheet, uint col) =>
+        CumulativeSize(
+            sheet.ColumnWidths.Select(kv => new KeyValuePair<uint, double>(kv.Key, kv.Value * 8)),
+            sheet.DefaultColumnWidth * 8, col);
+
+    /// <summary>
+    /// Row insert: a chart anchored at/below <paramref name="start"/> (using the row heights as they
+    /// stand at call time — rows before <paramref name="start"/> are untouched by a row insert, so
+    /// this is safe to call either before or after sheet.RowHeights itself has been re-keyed) has its
+    /// Top pushed down by the inserted band's height so it stays visually below the data that moved
+    /// under it, matching Excel's "move and size with cells" twoCellAnchor behavior.
+    /// </summary>
+    internal static void ShiftChartPositionRowsUp(Sheet sheet, uint start, uint count)
+    {
+        if (sheet.Charts.Count == 0) return;
+        var insertedHeight = count * sheet.DefaultRowHeight;
+        if (insertedHeight <= 0) return;
+        var boundary = CumulativeSize(sheet.RowHeights, sheet.DefaultRowHeight, start);
+        foreach (var chart in sheet.Charts)
+            if (chart.DrawingAnchorKind != ChartDrawingAnchorKind.Absolute && chart.Top >= boundary)
+                chart.Top += insertedHeight;
+    }
+
+    /// <summary>
+    /// Row delete: analogous to <see cref="ShiftChartPositionRowsUp"/>, but the deleted band's height
+    /// must be measured from <paramref name="originalRowHeights"/>/<paramref name="originalDefaultRowHeight"/>
+    /// captured BEFORE sheet.RowHeights was re-keyed for the delete (the deleted rows' own heights are
+    /// gone from the live dictionary by the time callers can reach this). A chart anchored inside the
+    /// deleted band collapses to the delete boundary — mirroring <see cref="CollapseDeletedChartRowRange"/>'s
+    /// #REF!-vs-drop rationale, since Left/Top has no way to express "this chart's anchor is gone".
+    /// </summary>
+    internal static void ShiftChartPositionRowsDown(
+        Sheet sheet, uint start, uint count,
+        IEnumerable<KeyValuePair<uint, double>> originalRowHeights, double originalDefaultRowHeight)
+    {
+        if (sheet.Charts.Count == 0) return;
+        var bandTop = CumulativeSize(originalRowHeights, originalDefaultRowHeight, start);
+        var bandBottom = CumulativeSize(originalRowHeights, originalDefaultRowHeight, start + count);
+        var removedHeight = bandBottom - bandTop;
+        if (removedHeight <= 0) return;
+        foreach (var chart in sheet.Charts)
+        {
+            if (chart.DrawingAnchorKind == ChartDrawingAnchorKind.Absolute) continue;
+            if (chart.Top >= bandBottom)
+                chart.Top -= removedHeight;
+            else if (chart.Top >= bandTop)
+                chart.Top = bandTop;
+        }
+    }
+
+    /// <summary>Column analogue of <see cref="ShiftChartPositionRowsUp"/>. Widths use the same *8
+    /// character-to-pixel factor as XlsxWorksheetChartWriter.ToAnchorMarker so the comparison against
+    /// Left (already in that pixel unit) is consistent.</summary>
+    internal static void ShiftChartPositionColumnsUp(Sheet sheet, uint start, uint count)
+    {
+        if (sheet.Charts.Count == 0) return;
+        var insertedWidth = count * sheet.DefaultColumnWidth * 8;
+        if (insertedWidth <= 0) return;
+        var boundary = CumulativeSize(
+            sheet.ColumnWidths.Select(kv => new KeyValuePair<uint, double>(kv.Key, kv.Value * 8)),
+            sheet.DefaultColumnWidth * 8, start);
+        foreach (var chart in sheet.Charts)
+            if (chart.DrawingAnchorKind != ChartDrawingAnchorKind.Absolute && chart.Left >= boundary)
+                chart.Left += insertedWidth;
+    }
+
+    /// <summary>Column analogue of <see cref="ShiftChartPositionRowsDown"/>.</summary>
+    internal static void ShiftChartPositionColumnsDown(
+        Sheet sheet, uint start, uint count,
+        IEnumerable<KeyValuePair<uint, double>> originalColumnWidths, double originalDefaultColumnWidth)
+    {
+        if (sheet.Charts.Count == 0) return;
+        var scaledWidths = originalColumnWidths.Select(kv => new KeyValuePair<uint, double>(kv.Key, kv.Value * 8));
+        var defaultWidth = originalDefaultColumnWidth * 8;
+        var bandLeft = CumulativeSize(scaledWidths, defaultWidth, start);
+        var bandRight = CumulativeSize(scaledWidths, defaultWidth, start + count);
+        var removedWidth = bandRight - bandLeft;
+        if (removedWidth <= 0) return;
+        foreach (var chart in sheet.Charts)
+        {
+            if (chart.DrawingAnchorKind == ChartDrawingAnchorKind.Absolute) continue;
+            if (chart.Left >= bandRight)
+                chart.Left -= removedWidth;
+            else if (chart.Left >= bandLeft)
+                chart.Left = bandLeft;
+        }
+    }
+
     // ── Chart series-column-mapping shifting ──────────────────────────────────
     // ChartSeriesColumnMapping.ValueColumn is an ABSOLUTE worksheet column index (see
     // ChartModel.Support.cs), parsed once at load time from each series' <c:val> range so the

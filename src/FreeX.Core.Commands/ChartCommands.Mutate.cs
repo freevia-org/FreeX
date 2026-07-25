@@ -203,6 +203,14 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
     private List<ChartSeriesOrderOverride>? _previousSeriesOrderOverrides;
     private List<ChartSeriesRawXmlEntry>? _previousMultiLevelCategoryXml;
     private List<ChartPointMarkerFormat>? _previousPointMarkerFormats;
+    private List<ChartPointExplosion>? _previousExplodedSlices;
+    private List<ChartRangeDataLabel>? _previousRangeDataLabels;
+    private List<ChartSeriesRangeDataLabels>? _previousSeriesRangeDataLabels;
+    private List<int>? _previousSecondaryAxisSeriesIndexes;
+    private List<int>? _previousComboLineSeriesIndexes;
+    private List<int>? _previousComboScatterSeriesIndexes;
+    private int? _previousTrendlineSeriesIndex;
+    private int? _previousErrorBarSeriesIndex;
     private bool _clearedMappingsForSourceChange;
 
     public string Label => "Select Chart Data";
@@ -262,18 +270,36 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             // Per-series/per-point overrides (plot order, marker formatting, multi-level category
             // XML) are keyed by SeriesIndex too, so they must be cleared for the same reason -
             // otherwise they silently mis-apply to whichever unrelated series now sits at that
-            // index after the re-index.
+            // index after the re-index. The same applies to pie-slice explosions, "value from
+            // cells" range data labels, secondary-axis/combo-line/combo-scatter series-index
+            // lists, and the scalar trendline/error-bar series indexes.
             _previousSeriesColumnMappings = chart.SeriesColumnMappings;
             _previousVerbatimSeriesFormulas = chart.VerbatimSeriesFormulas;
             _previousSeriesOrderOverrides = chart.SeriesOrderOverrides;
             _previousMultiLevelCategoryXml = chart.MultiLevelCategoryXml;
             _previousPointMarkerFormats = chart.PointMarkerFormats;
+            _previousExplodedSlices = chart.ExplodedSlices;
+            _previousRangeDataLabels = chart.RangeDataLabels;
+            _previousSeriesRangeDataLabels = chart.SeriesRangeDataLabels;
+            _previousSecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes;
+            _previousComboLineSeriesIndexes = chart.ComboLineSeriesIndexes;
+            _previousComboScatterSeriesIndexes = chart.ComboScatterSeriesIndexes;
+            _previousTrendlineSeriesIndex = chart.TrendlineSeriesIndex;
+            _previousErrorBarSeriesIndex = chart.ErrorBarSeriesIndex;
             _clearedMappingsForSourceChange = true;
             chart.SeriesColumnMappings = [];
             chart.VerbatimSeriesFormulas = null;
             chart.SeriesOrderOverrides = [];
             chart.MultiLevelCategoryXml = [];
             chart.PointMarkerFormats = [];
+            chart.ExplodedSlices = [];
+            chart.RangeDataLabels = [];
+            chart.SeriesRangeDataLabels = [];
+            chart.SecondaryAxisSeriesIndexes = [];
+            chart.ComboLineSeriesIndexes = [];
+            chart.ComboScatterSeriesIndexes = [];
+            chart.TrendlineSeriesIndex = 0;
+            chart.ErrorBarSeriesIndex = 0;
         }
 
         chart.DataRange = _dataRange;
@@ -302,6 +328,14 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             chart.SeriesOrderOverrides = _previousSeriesOrderOverrides ?? [];
             chart.MultiLevelCategoryXml = _previousMultiLevelCategoryXml ?? [];
             chart.PointMarkerFormats = _previousPointMarkerFormats ?? [];
+            chart.ExplodedSlices = _previousExplodedSlices ?? [];
+            chart.RangeDataLabels = _previousRangeDataLabels ?? [];
+            chart.SeriesRangeDataLabels = _previousSeriesRangeDataLabels ?? [];
+            chart.SecondaryAxisSeriesIndexes = _previousSecondaryAxisSeriesIndexes ?? [];
+            chart.ComboLineSeriesIndexes = _previousComboLineSeriesIndexes ?? [];
+            chart.ComboScatterSeriesIndexes = _previousComboScatterSeriesIndexes ?? [];
+            chart.TrendlineSeriesIndex = _previousTrendlineSeriesIndex ?? 0;
+            chart.ErrorBarSeriesIndex = _previousErrorBarSeriesIndex ?? 0;
         }
 
         _previousDataRange = null;
@@ -313,6 +347,14 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         _previousSeriesOrderOverrides = null;
         _previousMultiLevelCategoryXml = null;
         _previousPointMarkerFormats = null;
+        _previousExplodedSlices = null;
+        _previousRangeDataLabels = null;
+        _previousSeriesRangeDataLabels = null;
+        _previousSecondaryAxisSeriesIndexes = null;
+        _previousComboLineSeriesIndexes = null;
+        _previousComboScatterSeriesIndexes = null;
+        _previousTrendlineSeriesIndex = null;
+        _previousErrorBarSeriesIndex = null;
         _clearedMappingsForSourceChange = false;
     }
 }

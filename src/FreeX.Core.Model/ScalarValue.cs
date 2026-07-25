@@ -71,6 +71,29 @@ public sealed record ErrorValue(string Code) : ScalarValue
     public static readonly ErrorValue Calc = new("#CALC!");
 
     /// <summary>
+    /// Sentinel returned by INDIRECT (see BuiltInFunctions.Lookup.Indirect.cs) when its string
+    /// argument dynamically resolves back to the very cell currently being evaluated — e.g.
+    /// A1=INDIRECT("A1")+1. That self-reference has no STATIC precedent edge in the dependency
+    /// graph (INDIRECT's target is a runtime string, invisible to RecalcEngine's AST-walking
+    /// CollectReferences), so Tarjan's SCC pass can never classify the cell as cyclic the way a
+    /// direct A1=A1+1 self-loop is. RecalcEngine's per-cell evaluation loop watches for this exact
+    /// instance and routes the cell through the same AddCyclicCell path a statically-detected cycle
+    /// uses (seed to 0, record "#CIRCULAR!", track in CyclicCells) — see R86-calc-volatile-
+    /// circular-5-2.
+    ///
+    /// Deliberately a SEPARATE instance from <see cref="Circular"/> (not merely the same Code) even
+    /// though both carry "#CIRCULAR!": several IO adapters (DelimitedTextWorkbookReader,
+    /// DifFileAdapter, PdfTableReader, PrnFileAdapter, SlkFileAdapter) map a literal "#CIRCULAR!"
+    /// cached value straight to <see cref="Circular"/> when importing a file, and an ordinary
+    /// formula that merely references such an imported cell (e.g. B1=A1, where A1 holds that
+    /// imported literal) must keep propagating it like any other error — not be misclassified as a
+    /// brand-new runtime circular reference of its own. Using a distinct instance here lets
+    /// RecalcEngine's identity check (<c>ReferenceEquals</c>) tell the two apart; a record's
+    /// value-based <c>==</c>/<c>Equals</c> would not.
+    /// </summary>
+    public static readonly ErrorValue RuntimeCircularSelfReference = new("#CIRCULAR!");
+
+    /// <summary>
     /// Excel's #FIELD! error: raised for linked-data-type field access (e.g. <c>=A1.Price</c>)
     /// when the referenced cell isn't a Rich Data Type record or doesn't expose that field.
     /// FreeX doesn't model linked data types, so any "&lt;cellref&gt;.&lt;field&gt;" reference
