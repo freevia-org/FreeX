@@ -277,7 +277,7 @@ else
 fi
 
 if [[ -f "$shared_plan_test" ]] && grep -Eiq 'focused.*(test|success)|test.*(passed|success)|passed' "$shared_plan_test"; then
-    record shared-plan-proof passed "shared-plan-test.txt contains focused-test success evidence." "$shared_plan_test"
+    record shared-plan-proof passed "shared-plan-test.txt contains focused-test success evidence." shared-plan-test.txt
 else
     printf 'shared-plan-test-path=%s\n' "$shared_plan_test" > "$output/shared-plan-proof.txt"
     [[ -f "$shared_plan_test" ]] && cat "$shared_plan_test" >> "$output/shared-plan-proof.txt"

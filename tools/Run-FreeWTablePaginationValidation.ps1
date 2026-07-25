@@ -45,7 +45,7 @@ function Assert-ManifestContract {
     $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
     if ($schema.'$schema' -notmatch "json-schema.org" -or $schema.title -notmatch "table pagination") { throw "Committed table-pagination schema is not a JSON Schema document." }
     $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-    if ($manifest.schemaVersion -ne 1 -or $manifest.suite -ne "freew-linux-table-pagination-physical" -or $manifest.platform -ne "linux" -or $manifest.shell -ne "avalonia" -or $manifest.app -ne "FreeW" -or $manifest.appSurface -ne "table-page-composition-stress" -or $manifest.parameters.port -ne 6096 -or $manifest.coverage.scope -ne "physical X11 table pagination plus deterministic shared-plan proof" -or $manifest.coverage.exhaustive -ne $false) { throw "Manifest header violates the committed schema." }
+    if ($manifest.schemaVersion -ne 1 -or $manifest.suite -ne "freew-linux-table-pagination-physical" -or $manifest.platform -ne "linux" -or $manifest.shell -ne "avalonia" -or $manifest.app -ne "FreeW" -or $manifest.baseline -ne $false -or $manifest.appSurface -ne "table-page-composition-stress" -or $manifest.window.visible -ne $true -or $manifest.parameters.fixture -ne $fixtureName -or $manifest.parameters.port -ne $Port -or $manifest.parameters.width -ne $Width -or $manifest.parameters.height -ne $Height -or $manifest.parameters.dpi -ne $Dpi -or $manifest.coverage.scope -ne "physical FreeW table pagination and third-page composition evidence lane" -or $manifest.coverage.exhaustive -ne $false -or $manifest.processExitCode -ne 0) { throw "Manifest header violates the committed schema or probe exit contract." }
     $rows = @($manifest.results); $ids = @($rows | ForEach-Object { [string]$_.id })
     if ($rows.Count -ne 5 -or [string]::Join("|", $ids) -ne [string]::Join("|", $requiredIds)) { throw "Manifest result IDs/order violate the exact contract." }
     $files = @{}; Get-ChildItem -LiteralPath $EvidenceDirectory -File | ForEach-Object { $files[$_.Name] = $_.Length }
@@ -53,7 +53,7 @@ function Assert-ManifestContract {
         $row = $rows[$i]; $physical = $i -lt 4
         $category = if ($physical) { "physical-x11-table-pagination" } else { "deterministic-shared-plan" }
         $level = if ($physical) { "physical-x11-input" } else { "focused-test" }
-        if ($row.category -ne $category -or $row.level -ne $level -or $row.status -ne "passed" -or @($row.evidence).Count -lt 1 -or [string]::IsNullOrWhiteSpace([string]$row.note)) { throw "Result '$($row.id)' violates the committed schema." }
+        if (($row.PSObject.Properties.Name -notcontains "evidenceLevel") -or ($row.PSObject.Properties.Name -contains "level") -or $row.category -ne $category -or $row.evidenceLevel -ne $level -or $row.status -ne "passed" -or @($row.evidence).Count -lt 1 -or [string]::IsNullOrWhiteSpace([string]$row.note)) { throw "Result '$($row.id)' violates the committed schema." }
         foreach ($name in @($row.evidence)) { $n = [string]$name; if ([IO.Path]::GetFileName($n) -ne $n -or $n.Contains("/") -or $n.Contains("\") -or -not $files.ContainsKey($n) -or $files[$n] -le 0) { throw "Result '$($row.id)' references invalid evidence '$n'." } }
     }
     if ($manifest.summary.passed -ne 5 -or $manifest.summary.failed -ne 0 -or $manifest.summary.total -ne 5) { throw "Manifest summary does not satisfy the five-passed contract." }
@@ -65,10 +65,10 @@ function Assert-ManifestContract {
 New-Item -ItemType Directory -Path $fixtureDir -Force | Out-Null
 $sharedPlanPath = Join-Path $outputRoot "shared-plan-test.txt"
 $fidelityOutput = if ($ShortOutput) { Join-Path $outputRoot "fidelity-render.txt" } else { "" }
-Invoke-External dotnet @("run", "--project", $fidelityProject, "--configuration", "Release", "--no-build", "--", "--generate-f2-corpus", $fixtureDir) -OutputPath $fidelityOutput
+Invoke-External dotnet @("run", "--project", $fidelityProject, "--configuration", "Release", "--", "--generate-f2-corpus", $fixtureDir) -OutputPath $fidelityOutput
 if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) { throw "Generated fixture is missing: $fixturePath" }
 $fixtureHash = (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant()
-Invoke-External dotnet @("test", $plannerProject, "--configuration", "Release", "--no-build", "--filter", "FullyQualifiedName~DocumentViewLayoutPlannerTests.BuildTableLayoutPlans_AccountsForLeadingDocumentContentWhenEstimatingFirstTablePage", "--logger", "console;verbosity=minimal") -OutputPath $sharedPlanPath
+Invoke-External dotnet @("test", $plannerProject, "--configuration", "Release", "--filter", "FullyQualifiedName~DocumentViewLayoutPlannerTests.BuildTableLayoutPlans_AccountsForLeadingDocumentContentWhenEstimatingFirstTablePage", "--logger", "console;verbosity=minimal") -OutputPath $sharedPlanPath
 
 $started = $false
 try {
@@ -81,16 +81,32 @@ try {
     Copy-Item -LiteralPath $fixturePath -Destination (Join-Path $sessionDir "fixture-source.docx") -Force
     Copy-Item -LiteralPath $sharedPlanPath -Destination (Join-Path $sessionDir "shared-plan-test.txt") -Force
     $evidenceDirectory = Join-Path $sessionDir "freew-table-pagination-validation"; New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
+    $containerPathChecks = [ordered]@{
+        "mounted-fixture" = "/documents/$fixtureName"
+        "source-fixture" = "/work/fixture-source.docx"
+        "shared-plan-test" = "/work/shared-plan-test.txt"
+    }
+    $containerPathLog = [System.Collections.Generic.List[string]]::new()
+    foreach ($check in $containerPathChecks.GetEnumerator()) {
+        $checkOutput = @(& docker exec $session.containerName test -s $check.Value 2>&1)
+        $checkExitCode = $LASTEXITCODE
+        $containerPathLog.Add("$($check.Key)=$($check.Value) exit=$checkExitCode")
+        foreach ($line in $checkOutput) { $containerPathLog.Add([string]$line) }
+        if ($checkExitCode -ne 0) {
+            $containerPathLog | Set-Content -LiteralPath (Join-Path $evidenceDirectory "container-path-preflight.txt") -Encoding utf8
+            throw "FreeW validation path '$($check.Value)' was not visible as a non-empty file inside the harness container."
+        }
+    }
+    $containerPathLog | Set-Content -LiteralPath (Join-Path $evidenceDirectory "container-path-preflight.txt") -Encoding utf8
     $probeOutput = @(& docker exec --env "FREEW_DOCUMENT_PATH=/documents/$fixtureName" --env "FREEW_SOURCE_FIXTURE_PATH=/work/fixture-source.docx" --env "FREEW_EXPECTED_DOCUMENT_NAME=$fixtureName" --env "FREEW_SHARED_PLAN_TEST_PATH=/work/shared-plan-test.txt" $session.containerName bash /work/run-freew-table-pagination-probe.sh /work/freew-table-pagination-validation 2>&1)
     $probeExitCode = $LASTEXITCODE; $probeOutput | Set-Content -LiteralPath (Join-Path $evidenceDirectory "probe.log") -Encoding utf8
     $manifestPath = Join-Path $evidenceDirectory "results.json"
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw "Probe did not write $manifestPath." }
     Copy-Item -LiteralPath $sharedPlanPath -Destination (Join-Path $evidenceDirectory "shared-plan-test.txt") -Force
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    foreach ($row in @($manifest.results)) { if ($row.PSObject.Properties.Name -contains "evidenceLevel") { $row | Add-Member -NotePropertyName level -NotePropertyValue ([string]$row.evidenceLevel) -Force; $row.PSObject.Properties.Remove("evidenceLevel") } }
     $sharedRow = @($manifest.results | Where-Object id -eq "shared-plan-proof")[0]
-    $sharedRow.status = if ($probeExitCode -eq 0) { "passed" } else { "failed" }; $sharedRow.level = "focused-test"; $sharedRow.category = "deterministic-shared-plan"; $sharedRow.evidence = @("shared-plan-test.txt"); $sharedRow.note = "Focused DocumentViewLayoutPlannerTests proof retained with physical evidence."
-    $manifest.parameters = [ordered]@{ port = 6096 }; $manifest.coverage.scope = "physical X11 table pagination plus deterministic shared-plan proof"; $manifest.contractValidation = [ordered]@{ status = "pending"; validator = "tools/Run-FreeWTablePaginationValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freew-table-pagination-validation.schema.json" }
+    $sharedRow.status = if ($probeExitCode -eq 0) { "passed" } else { "failed" }; $sharedRow.evidenceLevel = "focused-test"; $sharedRow.category = "deterministic-shared-plan"; $sharedRow.evidence = @("shared-plan-test.txt"); $sharedRow.note = "Focused DocumentViewLayoutPlannerTests proof retained with physical evidence."
+    $manifest.parameters = [ordered]@{ fixture = $fixtureName; port = $Port; width = $Width; height = $Height; dpi = $Dpi }; $manifest.coverage.scope = "physical FreeW table pagination and third-page composition evidence lane"; $manifest.contractValidation = [ordered]@{ status = "pending"; validator = "tools/Run-FreeWTablePaginationValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freew-table-pagination-validation.schema.json" }
     $manifest.summary.passed = @($manifest.results | Where-Object status -eq "passed").Count; $manifest.summary.failed = @($manifest.results | Where-Object status -eq "failed").Count; $manifest.summary.total = 5
     $manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $manifestPath -Encoding utf8
     $validated = Assert-ManifestContract $manifestPath $evidenceDirectory
