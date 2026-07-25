@@ -229,6 +229,9 @@ public sealed partial class MainWindow : Window
     private TextBlock _printOptionsPaneMessage = null!;
     private StackPanel _printOptionsPaneRowsPanel = null!;
     private Button _printOptionsPaneExecuteButton = null!;
+#if FREEP_WINDOWS_CAPTURE
+    private ComboBox? _nativePrinterPicker;
+#endif
     private TextBox? _printCustomRangeInput;
     private Button? _printCustomRangeApplyButton;
     private PresentationPrintRequest? _printOptionsPaneRequest;
@@ -3657,6 +3660,9 @@ public sealed partial class MainWindow : Window
         AddPrintOptionsPaneField("Hidden slides", plan.PrintHiddenSlides ? "Included" : "Not included");
         AddPrintOptionsPaneField("Options", plan.Options.DisplaySummary);
         AddPrintOptionsPaneField("Native printer handoff", plan.NativePrintHandoff.StatusText);
+#if FREEP_WINDOWS_CAPTURE
+        AddWindowsPrinterSelector();
+#endif
 
         AddPrintOptionsPaneSection("Output options");
 
@@ -3767,6 +3773,53 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(0, 16, 0, 6),
         });
     }
+
+#if FREEP_WINDOWS_CAPTURE
+    private void AddWindowsPrinterSelector()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        AddPrintOptionsPaneSection("Printer");
+        var printers = WindowsNativePrintOutput.GetPrinters();
+        if (printers.Count == 0)
+        {
+            AddPrintOptionsPaneField("Queue", "No Windows printer queues were detected.");
+            return;
+        }
+
+        _nativePrinterPicker = new ComboBox
+        {
+            ItemsSource = printers,
+            SelectedItem = _nativeOutputCapabilities.Print.PrinterName,
+            MinWidth = 280,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        AutomationProperties.SetAutomationId(_nativePrinterPicker, "FreePWindowsPrinterPicker");
+        _nativePrinterPicker.SelectionChanged += (_, _) =>
+        {
+            if (_nativePrinterPicker.SelectedItem is string printerName)
+                SelectWindowsPrinter(printerName);
+        };
+        _printOptionsPaneRowsPanel.Children.Add(_nativePrinterPicker);
+    }
+
+    private void SelectWindowsPrinter(string printerName)
+    {
+        var capability = WindowsNativePrintOutput.ForPrinter(printerName);
+        if (!capability.CanPrint)
+        {
+            _statusText.Text = capability.Reason;
+            return;
+        }
+
+        _nativeOutputCapabilities = _nativeOutputCapabilities with { Print = capability };
+        _nativePrintAdapter = WindowsNativePrintOutput.CreateAdapter(capability);
+        _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(capability);
+        _statusText.Text = $"Printer selected: {capability.PrinterName}";
+    }
+#endif
 
     private void AddPrintOptionsPaneField(string label, string value)
     {
