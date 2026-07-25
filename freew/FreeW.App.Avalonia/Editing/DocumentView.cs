@@ -5352,7 +5352,13 @@ public sealed class DocumentView : Control
             rowHeights[pr] = ApplyAuthoredTableRowHeight(prRow, prRowHeight);
         }
 
-        var plannedPagesByFirstSourceRow = _viewMode == DocumentViewMode.PrintLayout
+        // WPF suppresses synthetic table page segments when a vertical merge is present. The
+        // shared layout plan already records that eligibility fact, so use it as the cross-platform
+        // authority instead of repeating headers across a merge boundary.
+        var shouldRenderPlannedTablePages = _viewMode == DocumentViewMode.PrintLayout
+            && tableLayoutPlan.Pagination.Pages.Count > 1
+            && !tableLayoutPlan.HasVerticalMerges;
+        var plannedPagesByFirstSourceRow = shouldRenderPlannedTablePages
             ? tableLayoutPlan.Pagination.Pages
                 .Where(page => page.PageNumber > 1 && page.SourceRowIndexes.Count > 0)
                 .ToDictionary(page => page.SourceRowIndexes[0])

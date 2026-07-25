@@ -5323,7 +5323,7 @@ public sealed class DocumentView : RichTextBox
             // available rather than reconstructing it from character counts. The estimate remains the
             // startup fallback while WPF is still arranging the document.
             var anchorContentYDip = TryGetLiveParagraphAnchorContentY(blockIndex)
-                ?? EstimateLeadingContentHeightDip(_model, blockIndex);
+                ?? DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(_model, blockIndex);
             snapshots.AddRange(DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
                 paragraph,
                 blockIndex,
@@ -7848,7 +7848,7 @@ public sealed class DocumentView : RichTextBox
             var snapshots = DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
                 paragraph,
                 sourceBlockIndex,
-                EstimateLeadingContentHeightDip(document, sourceBlockIndex),
+                DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(document, sourceBlockIndex),
                 surface,
                 columnCount: 1);
 
@@ -7916,7 +7916,7 @@ public sealed class DocumentView : RichTextBox
             if (document.Blocks[blockIndex] is not ModelParagraph)
                 continue;
 
-            var leadingContentHeightDip = EstimateLeadingContentHeightDip(document, blockIndex);
+            var leadingContentHeightDip = DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(document, blockIndex);
             var estimatedPageIndex = surface.TextAreaHeightDip > 0
                 ? Math.Max(0, (int)(leadingContentHeightDip / surface.TextAreaHeightDip))
                 : 0;
@@ -8001,56 +8001,6 @@ public sealed class DocumentView : RichTextBox
         }
 
         return [BuildTable(table, document, sourceBlockIndex, tableLayoutPlan)];
-    }
-
-    private static double EstimateLeadingContentHeightDip(TextDocument document, int sourceBlockIndex)
-    {
-        if (sourceBlockIndex <= 0)
-            return 0;
-
-        var defaultFontSizeDip = Math.Max(8, document.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
-        var columnCount = Math.Max(1, document.Page.ColumnCount);
-        var charsPerColumnLine = columnCount == 1
-            ? 92
-            : Math.Max(
-                16,
-                (int)Math.Floor(
-                    DocumentViewLayoutPlanner.BuildColumnPlan(
-                        document.Page,
-                        PageLayout.ContentAreaDip(document.Page).Width,
-                        usePageColumns: true).WidthDip
-                    / Math.Max(4.5, defaultFontSizeDip * 0.50)));
-        var height = 0.0;
-        foreach (var block in document.Blocks.Take(sourceBlockIndex))
-        {
-            if (block is not ModelParagraph paragraph)
-                continue;
-
-            var charsPerLine = paragraph.StyleId?.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) == true
-                ? Math.Max(16, (int)Math.Round(charsPerColumnLine * 0.78))
-                : charsPerColumnLine;
-            var lineCount = Math.Max(1, (int)Math.Ceiling(
-                Math.Max(1, paragraph.PlainText.Length) / (double)charsPerLine));
-            var lineHeightDip = paragraph.Formatting.LineRule switch
-            {
-                LineSpacingRule.Exact or LineSpacingRule.AtLeast when paragraph.Formatting.LineHeightPt > 0
-                    => paragraph.Formatting.LineHeightPt * PxPerPoint,
-                _ => defaultFontSizeDip * Math.Max(1, paragraph.Formatting.LineSpacing)
-            };
-            height += lineCount * lineHeightDip
-                + paragraph.Formatting.SpaceBeforePt * PxPerPoint
-                + paragraph.Formatting.SpaceAfterPt * PxPerPoint;
-
-            if (paragraph.StyleId?.Equals("Heading1", StringComparison.OrdinalIgnoreCase) == true)
-                height += defaultFontSizeDip * 0.6;
-        }
-
-        // Word reserves a bottom band for a page footnote while the editable WPF flow keeps the note body
-        // outside the table's document tree. Include that reservation when estimating the first page.
-        if (document.Footnotes.Count > 0)
-            height += 80;
-
-        return Math.Max(0, height);
     }
 
     private static bool ShouldRenderPlannedTablePages(ModelTable table, DocumentTablePaginationPlan paginationPlan) =>

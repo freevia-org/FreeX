@@ -215,6 +215,41 @@ public sealed class DocumentViewTableStructureTests
     }
 
     [Fact]
+    public async Task VerticalMergeTable_does_not_repeat_header_or_drop_rows_when_plan_has_pages()
+    {
+        int headerCellCount = -1;
+        int renderedCellCount = -1;
+        string? renderedText = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument();
+            var table = doc.Blocks.OfType<Table>().Single();
+            table.Rows[1].Cells[0].VerticalMerge = VerticalMergeState.Restart;
+            table.Rows[2].Cells[0].VerticalMerge = VerticalMergeState.Continue;
+            var plan = DocumentViewLayoutPlanner.BuildTableLayoutPlans(doc).Single();
+            plan.HasVerticalMerges.Should().BeTrue();
+            plan.Pagination.Pages.Count.Should().BeGreaterThan(1);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+
+            var tableBlockIndex = doc.Blocks.IndexOf(table);
+            var hits = GetTableCellHits(view);
+            headerCellCount = hits.Count(hit => hit.Row == 0);
+            renderedCellCount = hits.Count;
+            renderedText = string.Concat(view.GetPlacedForBlock(tableBlockIndex).Select(glyph => glyph.Ch));
+        });
+
+        ran.Should().BeTrue("the Avalonia dispatcher and renderer must be available for merge pagination evidence");
+        headerCellCount.Should().Be(4,
+            "a vertical-merge table must not synthesize repeated header rows from the shared multi-page plan");
+        renderedCellCount.Should().Be(36,
+            "disabling synthetic segmentation must preserve all nine source rows and four cells per row");
+        renderedText.Should().Contain("Segment 8");
+    }
+
+    [Fact]
     public async Task InsertTableRowBelow_adds_row_after_caret_row()
     {
         int rowsBefore = -1, rowsAfter = -1;
