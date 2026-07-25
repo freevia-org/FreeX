@@ -227,6 +227,7 @@ public static class PresentationAnimationCommandPlanner
             RepeatIndefinitely = animation.RepeatIndefinitely,
             AutoReverse = animation.AutoReverse,
             Direction = animation.Direction,
+            EffectSubtype = animation.EffectSubtype,
             Motion = animation.Motion,
             TriggerShapeId = animation.TriggerShapeId,
         };

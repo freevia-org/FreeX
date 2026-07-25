@@ -20,7 +20,8 @@ public sealed record AnimationPaneEffectOptionDescriptor(
     string DisplayText,
     AnimationDirection? Direction,
     bool IsSelected,
-    int? WheelSpokeCount = null);
+    int? WheelSpokeCount = null,
+    string? EffectSubtype = null);
 
 public sealed record AnimationPaneEffectOptionsPlan(
     bool CanApply,
@@ -40,7 +41,8 @@ public sealed record AnimationPaneEffectOptionMutationPlan(
     AnimationDirection? Direction,
     string DisplayText,
     string? DisabledReason,
-    int? WheelSpokeCount = null);
+    int? WheelSpokeCount = null,
+    string? EffectSubtype = null);
 
 public sealed record AnimationPaneRepeatMutationPlan(
     bool ShouldApply,
@@ -869,10 +871,17 @@ public static class AnimationPanePlanner
             };
         }
 
-        var selected = descriptors.FirstOrDefault(option => option.Direction == animation.Direction)
+        var selected = descriptors.FirstOrDefault(option =>
+                option.Direction == animation.Direction
+                && option.EffectSubtype == animation.EffectSubtype)
+            ?? descriptors.FirstOrDefault(option => option.EffectSubtype == animation.EffectSubtype)
             ?? descriptors[0];
         var normalized = descriptors
-            .Select(option => option with { IsSelected = option.Direction == selected.Direction })
+            .Select(option => option with
+            {
+                IsSelected = option.Direction == selected.Direction
+                    && option.EffectSubtype == selected.EffectSubtype
+            })
             .ToArray();
 
         return new AnimationPaneEffectOptionsPlan(
@@ -924,16 +933,21 @@ public static class AnimationPanePlanner
         var animation = animations[animationIndex];
         var currentWheelSpokeCount = ResolveWheelSpokeCount(animation);
         var direction = option.Direction ?? animation.Direction;
+        var effectSubtype = option.EffectSubtype ?? animation.EffectSubtype;
+        if (option.EffectSubtype is not null)
+            direction = null;
         return new AnimationPaneEffectOptionMutationPlan(
             animation.Direction != direction
                 || (animation.Preset == AnimationPreset.Wheel
                     && option.WheelSpokeCount is not null
-                    && currentWheelSpokeCount != option.WheelSpokeCount),
+                    && currentWheelSpokeCount != option.WheelSpokeCount)
+                || animation.EffectSubtype != effectSubtype,
             animationIndex,
             direction,
             option.DisplayText,
             null,
-            option.WheelSpokeCount ?? animation.WheelSpokeCount);
+            option.WheelSpokeCount ?? animation.WheelSpokeCount,
+            effectSubtype);
     }
 
     public static bool TryApplyEffectOptionMutation(
@@ -951,6 +965,7 @@ public static class AnimationPanePlanner
 
         var updated = PresentationAnimationCommandPlanner.CloneAnimation(current);
         updated.Direction = plan.Direction;
+        updated.EffectSubtype = plan.EffectSubtype;
         if (current.Preset == AnimationPreset.Wheel)
             updated.WheelSpokeCount = plan.WheelSpokeCount;
         editor.SetAnimation(plan.AnimationIndex, updated);
@@ -1527,6 +1542,11 @@ public static class AnimationPanePlanner
                     yield return option;
                 break;
 
+            case AnimationPreset.Spin:
+                foreach (var option in SpinAmountOptions())
+                    yield return option;
+                break;
+
             case AnimationPreset.Peek:
             case AnimationPreset.Crawl:
             case AnimationPreset.Bounce:
@@ -1566,11 +1586,25 @@ public static class AnimationPanePlanner
         yield return EffectOption("out", "Out", AnimationDirection.Out);
     }
 
+    private static IEnumerable<AnimationPaneEffectOptionDescriptor> SpinAmountOptions()
+    {
+        yield return EffectSubtypeOption("quarter-spin", "Quarter Spin", "quarterSpin");
+        yield return EffectSubtypeOption("half-spin", "Half Spin", "halfSpin");
+        yield return EffectSubtypeOption("full-spin", "Full Spin", "fullSpin");
+        yield return EffectSubtypeOption("two-spins", "Two Spins", "twoSpins");
+    }
+
     private static AnimationPaneEffectOptionDescriptor EffectOption(
         string id,
         string displayText,
         AnimationDirection direction)
         => new(id, displayText, direction, false);
+
+    private static AnimationPaneEffectOptionDescriptor EffectSubtypeOption(
+        string id,
+        string displayText,
+        string effectSubtype)
+        => new(id, displayText, null, false, EffectSubtype: effectSubtype);
 
     private static IEnumerable<AnimationPaneEffectOptionDescriptor> BuildWheelSpokeOptions(int? authoredCount)
     {

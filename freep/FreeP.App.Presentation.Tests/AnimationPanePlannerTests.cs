@@ -803,6 +803,29 @@ public sealed class AnimationPanePlannerTests
             option.DisplayText == expectedSelected && option.IsSelected);
     }
 
+    [Fact]
+    public void BuildEffectOptionsPlan_ProjectsSpinAmountAndPreservesSelection()
+    {
+        var animations = new[]
+        {
+            new ShapeAnimation
+            {
+                ShapeId = 10u,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Spin,
+                EffectSubtype = "halfSpin",
+            },
+        };
+
+        var plan = AnimationPanePlanner.BuildEffectOptionsPlan(animations, 0);
+
+        plan.CanApply.Should().BeTrue();
+        plan.Options.Select(option => option.DisplayText)
+            .Should().Equal("Quarter Spin", "Half Spin", "Full Spin", "Two Spins");
+        plan.SelectedOptionText.Should().Be("Half Spin");
+        plan.Options.Should().ContainSingle(option => option.IsSelected && option.EffectSubtype == "halfSpin");
+    }
+
     [Theory]
     [InlineData(AnimationPreset.Wipe, "from-top", AnimationDirection.FromTop)]
     [InlineData(AnimationPreset.Zoom, "out", AnimationDirection.Out)]
@@ -918,6 +941,31 @@ public sealed class AnimationPanePlannerTests
         editor.CurrentSlideAnimations[0].WheelSpokeCount.Should().Be(8);
         editor.Undo();
         editor.CurrentSlideAnimations[0].WheelSpokeCount.Should().Be(4);
+    }
+
+    [Fact]
+    public void TryApplyEffectOptionMutation_UpdatesSpinAmountAndSupportsUndo()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = presentation.Slides[0].Shapes[0].Id,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Spin,
+            EffectSubtype = "quarterSpin",
+        });
+
+        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "two-spins");
+
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, plan).Should().BeTrue();
+        editor.CurrentSlideAnimations[0].EffectSubtype.Should().Be("twoSpins");
+        editor.CurrentSlideAnimations[0].Direction.Should().BeNull();
+        editor.Undo();
+        editor.CurrentSlideAnimations[0].EffectSubtype.Should().Be("quarterSpin");
     }
 
     [Fact]

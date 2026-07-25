@@ -128,4 +128,40 @@ public sealed class AnimationPresetRoundTripTests
         cTn.Attribute("presetClass")!.Value.Should().Be("entr");
         cTn.Attribute("presetSubtype")!.Value.Should().Be("fromBottomRight");
     }
+
+    [Fact]
+    public void SpinEffectSubtypeSurvivesReadCloneAndWrite()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Spin,
+            EffectSubtype = "twoSpins",
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+        animation.Preset.Should().Be(AnimationPreset.Spin);
+        animation.EffectSubtype.Should().Be("twoSpins");
+        animation.Direction.Should().BeNull();
+
+        var clonedAnimation = SlideCloner.CloneSlide(reloaded.Slides[0]).Animations.Single();
+        clonedAnimation.EffectSubtype.Should().Be("twoSpins");
+
+        using var second = new MemoryStream();
+        PptxPackageWriter.Write(reloaded, second);
+        using var archive = new ZipArchive(new MemoryStream(second.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetID")?.Value == "3");
+        cTn.Attribute("presetClass")!.Value.Should().Be("emph");
+        cTn.Attribute("presetSubtype")!.Value.Should().Be("twoSpins");
+    }
 }

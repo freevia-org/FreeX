@@ -536,6 +536,7 @@ public static class SlideCloner
             AutoReverse   = a.AutoReverse,
             Direction     = a.Direction,
             WheelSpokeCount = a.WheelSpokeCount,
+            EffectSubtype = a.EffectSubtype,
             TriggerShapeId = a.TriggerShapeId,
             RawPresetClass = a.RawPresetClass,
             RawPresetId = a.RawPresetId,

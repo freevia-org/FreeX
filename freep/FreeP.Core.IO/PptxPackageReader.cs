@@ -4894,6 +4894,7 @@ public static class PptxPackageReader
             AutoReverse    = autoReverse,
             Direction      = direction,
             WheelSpokeCount = wheelSpokeCount,
+            EffectSubtype  = preset == AnimationPreset.Spin ? presetSubtype : null,
             TriggerShapeId = triggerShapeId,
             RawPresetClass = knownPreset ? null : presetClass,
             RawPresetId = knownPreset ? null : presetId,

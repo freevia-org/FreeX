@@ -52,6 +52,12 @@ public sealed class ShapeAnimation
     public int? WheelSpokeCount { get; set; }
 
     /// <summary>
+    /// Optional authored effect-option subtype for modeled presets whose options are not
+    /// directional (for example, PowerPoint Spin's quarter/half/full/two-turn choices).
+    /// </summary>
+    public string? EffectSubtype { get; set; }
+
+    /// <summary>
     /// Preserves an animation preset that is not represented by the current
     /// <see cref="AnimationPreset"/> enum. Playback still uses the mapped
     /// fallback, but package save can re-emit the authored PowerPoint token.
