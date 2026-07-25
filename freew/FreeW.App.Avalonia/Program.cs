@@ -23,6 +23,9 @@ internal static class Program
         if (PackagingSmoke.TryRun(args, Console.Out, Console.Error, out var packagingExit))
             return packagingExit;
 
+        if (ReadAloudPauseSmoke.TryRun(args, Console.Out, Console.Error, out var readAloudPauseExit))
+            return readAloudPauseExit;
+
         // Parse the platform-neutral --launch-smoke contract (shared with the FreeX Linux lane).
         if (!LaunchSmokeOptions.TryParse(args, out var launchSmoke, out var startupArguments, out var error))
         {

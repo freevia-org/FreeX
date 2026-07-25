@@ -52,6 +52,30 @@ public interface ISpeechEngine
     /// <summary>Resumes a paused utterance (no-op when not paused).</summary>
     void Resume();
 
+    /// <summary>
+    /// Attempts to pause the current utterance. The default preserves the original void contract for
+    /// engines whose pause operation cannot report failure; process-backed engines should override this
+    /// so the controller does not expose a paused state after a failed signal.
+    /// </summary>
+    bool TryPause()
+    {
+        if (!SupportsPause)
+            return false;
+
+        Pause();
+        return true;
+    }
+
+    /// <summary>Attempts to resume the current utterance and reports whether the operation succeeded.</summary>
+    bool TryResume()
+    {
+        if (!SupportsPause)
+            return false;
+
+        Resume();
+        return true;
+    }
+
     /// <summary>Cancels all speech immediately; the pending completion callback must not fire.</summary>
     void Stop();
 }
@@ -182,12 +206,12 @@ public sealed class ReadAloudController
         switch (State)
         {
             case ReadAloudState.Playing:
-                _engine.Pause();
-                SetState(ReadAloudState.Paused);
+                if (_engine.TryPause())
+                    SetState(ReadAloudState.Paused);
                 break;
             case ReadAloudState.Paused:
-                _engine.Resume();
-                SetState(ReadAloudState.Playing);
+                if (_engine.TryResume())
+                    SetState(ReadAloudState.Playing);
                 break;
             case ReadAloudState.Stopped:
             default:
@@ -224,7 +248,7 @@ public sealed class ReadAloudController
     // playing — a Stop in between clears the queue and we must not resurrect it); otherwise we are done.
     private void OnSegmentCompleted()
     {
-        if (State == ReadAloudState.Stopped)
+        if (State != ReadAloudState.Playing)
             return;
 
         _current++;

@@ -112,6 +112,7 @@ if [[ -n "$app_arguments_b64" ]]; then
 fi
 interaction_validation=false
 physical_validation=false
+read_aloud_pause_validation=false
 for argument in "${app_arguments[@]}"; do
     if [[ "$argument" == "--interaction-validation" ]]; then
         interaction_validation=true
@@ -119,6 +120,10 @@ for argument in "${app_arguments[@]}"; do
     fi
     if [[ "$argument" == "--physical-validation" ]]; then
         physical_validation=true
+        break
+    fi
+    if [[ "$argument" == "--read-aloud-pause-smoke" ]]; then
+        read_aloud_pause_validation=true
         break
     fi
 done
@@ -132,7 +137,7 @@ child_pids+=("$app_pid")
 # Interaction validation is intentionally headless and can finish before X11 observes a window.
 # Publish readiness immediately so the host can wait on the mounted manifest, then retain the
 # desktop container until the orchestrator has collected the result and stops this owned session.
-if [[ "$interaction_validation" == true || "$physical_validation" == true ]]; then
+if [[ "$interaction_validation" == true || "$physical_validation" == true || "$read_aloud_pause_validation" == true ]]; then
     cat > /work/ready.json <<JSON
 {
   "status": "ready",
@@ -150,7 +155,15 @@ JSON
     wait "$app_pid"
     app_exit=$?
     set -e
-    if [[ $app_exit -ne 0 && ! -s /work/validation/interaction-validation.json ]]; then
+    if [[ $app_exit -ne 0 && "$read_aloud_pause_validation" == true ]]; then
+        cat > /work/failure.json <<JSON
+{
+  "status": "failed",
+  "reason": "$app_executable read-aloud pause smoke exited with code $app_exit.",
+  "appExecutable": "$app_executable"
+}
+JSON
+    elif [[ $app_exit -ne 0 && ! -s /work/validation/interaction-validation.json ]]; then
         cat > /work/failure.json <<JSON
 {
   "status": "failed",
