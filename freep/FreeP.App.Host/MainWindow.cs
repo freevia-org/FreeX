@@ -182,6 +182,8 @@ public sealed partial class MainWindow : Window
     private TextBlock _smartArtTextPaneMessage = null!;
     private StackPanel _smartArtTextPaneRowsPanel = null!;
     private Button _smartArtTextPaneAssistantButton = null!;
+    private WrapPanel _smartArtTextPaneOutlineActions = null!;
+    private readonly List<Button> _smartArtTextPaneActionButtons = new();
     private Button _smartArtTextPaneApplyButton = null!;
     private Button _smartArtTextPaneCloseButton = null!;
     private bool _smartArtTextPaneRefreshing;
@@ -251,6 +253,9 @@ public sealed partial class MainWindow : Window
         _smartArtTextPaneRowsPanel?.Children.OfType<TextBox>().Count(box =>
             box.Tag is SmartArtNodeOutlineItem item &&
             StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId)) ?? 0;
+    internal int SmartArtTextPaneActionButtonCount => _smartArtTextPaneActionButtons.Count;
+    internal int SmartArtTextPaneEnabledActionButtonCount =>
+        _smartArtTextPaneActionButtons.Count(button => button.IsEnabled);
     internal string SmartArtTextPaneMessage => _smartArtTextPaneMessage?.Text ?? string.Empty;
     internal IReadOnlyList<string> SmartArtTextPaneRenderedRows =>
         _smartArtTextPaneRowsPanel?.Children.OfType<TextBox>()
@@ -981,6 +986,39 @@ public sealed partial class MainWindow : Window
         _smartArtTextPaneApplyButton.Click += (_, _) => ApplySmartArtTextPane();
         _smartArtTextPaneCloseButton.Click += (_, _) => HideSmartArtTextPane();
 
+        _smartArtTextPaneOutlineActions = new WrapPanel
+        {
+            Margin = new Thickness(12, 0, 12, 4),
+        };
+        AddSmartArtTextPaneActionButton(
+            "Add sibling",
+            "Add a sibling row after the selected SmartArt row.",
+            SmartArtNodeEditKind.AddSiblingAfter);
+        AddSmartArtTextPaneActionButton(
+            "Add child",
+            "Add a child row below the selected SmartArt row.",
+            SmartArtNodeEditKind.AddChild);
+        AddSmartArtTextPaneActionButton(
+            "Remove",
+            "Remove the selected SmartArt row.",
+            SmartArtNodeEditKind.Remove);
+        AddSmartArtTextPaneActionButton(
+            "Move up",
+            "Move the selected SmartArt row earlier.",
+            SmartArtNodeEditKind.MoveUp);
+        AddSmartArtTextPaneActionButton(
+            "Move down",
+            "Move the selected SmartArt row later.",
+            SmartArtNodeEditKind.MoveDown);
+        AddSmartArtTextPaneActionButton(
+            "Promote",
+            "Promote the selected SmartArt row.",
+            SmartArtNodeEditKind.Promote);
+        AddSmartArtTextPaneActionButton(
+            "Demote",
+            "Demote the selected SmartArt row.",
+            SmartArtNodeEditKind.Demote);
+
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -996,8 +1034,10 @@ public sealed partial class MainWindow : Window
         header.Children.Add(_smartArtTextPaneHeading);
         header.Children.Add(_smartArtTextPaneMessage);
         DockPanel.SetDock(header, Dock.Top);
+        DockPanel.SetDock(_smartArtTextPaneOutlineActions, Dock.Bottom);
         DockPanel.SetDock(buttons, Dock.Bottom);
         panel.Children.Add(header);
+        panel.Children.Add(_smartArtTextPaneOutlineActions);
         panel.Children.Add(buttons);
         panel.Children.Add(new ScrollViewer
         {
@@ -1015,6 +1055,25 @@ public sealed partial class MainWindow : Window
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = panel,
         };
+    }
+
+    private void AddSmartArtTextPaneActionButton(
+        string label,
+        string toolTip,
+        SmartArtNodeEditKind kind)
+    {
+        var button = new Button
+        {
+            Content = label,
+            ToolTip = toolTip,
+            MinWidth = 82,
+            Padding = new Thickness(8, 3, 8, 3),
+            Margin = new Thickness(0, 0, 6, 6),
+            IsEnabled = false,
+        };
+        button.Click += (_, _) => ApplySmartArtTextPaneAction(kind);
+        _smartArtTextPaneActionButtons.Add(button);
+        _smartArtTextPaneOutlineActions.Children.Add(button);
     }
 
     private static string FormatAvailability(bool isAvailable)
@@ -2353,6 +2412,46 @@ public sealed partial class MainWindow : Window
         return LastSmartArtTextPaneEditResult;
     }
 
+    internal SmartArtNodeEditResult? ApplySmartArtTextPaneEditForTests(
+        SmartArtNodeEditKind kind,
+        string? modelId = null)
+    {
+        if (modelId is not null)
+            _selectedSmartArtTextPaneModelId = modelId;
+        return ApplySmartArtTextPaneAction(kind);
+    }
+
+    private SmartArtNodeEditResult? ApplySmartArtTextPaneAction(SmartArtNodeEditKind kind)
+    {
+        var targetId = _selectedSmartArtTextPaneModelId;
+        if (string.IsNullOrWhiteSpace(targetId))
+        {
+            LastSmartArtTextPaneEditResult = SmartArtNodeEditResult.NotApplied(
+                kind,
+                targetId,
+                "Select a SmartArt row first.");
+            RefreshSmartArtTextPane();
+            return LastSmartArtTextPaneEditResult;
+        }
+
+        var intent = kind switch
+        {
+            SmartArtNodeEditKind.AddSiblingAfter => SmartArtNodeEditIntent.AddSiblingAfter(
+                targetId,
+                SmartArtEditingPlanner.DefaultNewNodeText),
+            SmartArtNodeEditKind.AddChild => SmartArtNodeEditIntent.AddChild(
+                targetId,
+                SmartArtEditingPlanner.DefaultNewNodeText),
+            SmartArtNodeEditKind.Remove => SmartArtNodeEditIntent.Remove(targetId),
+            SmartArtNodeEditKind.MoveUp => SmartArtNodeEditIntent.MoveUp(targetId),
+            SmartArtNodeEditKind.MoveDown => SmartArtNodeEditIntent.MoveDown(targetId),
+            SmartArtNodeEditKind.Promote => SmartArtNodeEditIntent.Promote(targetId),
+            SmartArtNodeEditKind.Demote => SmartArtNodeEditIntent.Demote(targetId),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported SmartArt text-pane action."),
+        };
+        return ApplySmartArtTextPaneEdit(intent);
+    }
+
     internal SmartArtColorApplyResult ApplySmartArtColorPresetForTests(SmartArtColorPreset preset) =>
         ApplySmartArtColorPreset(preset);
 
@@ -2496,6 +2595,8 @@ public sealed partial class MainWindow : Window
             _smartArtTextPaneAssistantButton.IsEnabled =
                 shape?.SmartArt?.Data?.Family == SmartArtFamily.Hierarchy &&
                 selectedItem is { Level: > 0 };
+            foreach (var button in _smartArtTextPaneActionButtons)
+                button.IsEnabled = shape is not null && selectedItem is not null;
 
             foreach (var item in outline)
                 _smartArtTextPaneRowsPanel.Children.Add(BuildSmartArtTextPaneRow(item));
@@ -2555,10 +2656,16 @@ public sealed partial class MainWindow : Window
         if (route is null)
             return null;
 
+        return ApplySmartArtTextPaneEdit(route.Intent);
+    }
+
+    private SmartArtNodeEditResult? ApplySmartArtTextPaneEdit(SmartArtNodeEditIntent intent)
+    {
+
         var smartArtShape = GetSelectedSmartArtShape();
         if (smartArtShape is null)
         {
-            LastSmartArtTextPaneEditResult = SmartArtEditingPlanner.Apply(null, route.Intent);
+            LastSmartArtTextPaneEditResult = SmartArtEditingPlanner.Apply(null, intent);
         }
         else
         {
@@ -2566,7 +2673,7 @@ public sealed partial class MainWindow : Window
             {
                 LastSmartArtTextPaneEditResult = SmartArtEditingPlanner.Apply(
                     smartArt.Data,
-                    route.Intent);
+                    intent);
                 if (LastSmartArtTextPaneEditResult is not { Applied: true })
                     return false;
 

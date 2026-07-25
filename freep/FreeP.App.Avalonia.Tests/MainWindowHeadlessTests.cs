@@ -5015,6 +5015,8 @@ public sealed class MainWindowHeadlessTests
 
             window.ShowSmartArtTextPane();
             renderedRows = window.SmartArtTextPaneRenderedRows;
+            window.SmartArtTextPaneActionButtonCount.Should().Be(7);
+            window.SmartArtTextPaneEnabledActionButtonCount.Should().Be(7);
             window.SetSmartArtTextPaneRowText(0, "Discover");
             apply = window.ApplySmartArtTextPane();
             dirtyAfterApply = window.IsDirty;
@@ -5034,6 +5036,11 @@ public sealed class MainWindowHeadlessTests
                 SmartArtTextPaneShortcutKey.Enter,
                 SmartArtTextPaneShortcutModifiers.Control,
                 "n2");
+            window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.MoveUp, "n2")!.Applied.Should().BeTrue();
+            window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.MoveDown, "n2")!.Applied.Should().BeTrue();
+            window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.Promote, "freep-smartart-node-4")!.Applied.Should().BeTrue();
+            window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.Demote, "freep-smartart-node-3")!.Applied.Should().BeTrue();
+            window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.Remove, "freep-smartart-node-3")!.Applied.Should().BeTrue();
             rowCountAfterKeyboard = window.SmartArtTextPaneRowCount;
         });
 
@@ -5052,7 +5059,7 @@ public sealed class MainWindowHeadlessTests
         dirtyAfterApply.Should().BeTrue();
         addSibling!.Applied.Should().BeTrue();
         addChild!.Applied.Should().BeTrue();
-        rowCountAfterKeyboard.Should().Be(4);
+        rowCountAfterKeyboard.Should().Be(3);
     }
 
     [Fact]

@@ -1771,6 +1771,8 @@ public sealed class ReviewWorkflowAdapterTests
 
             var outline = window.ShowSmartArtTextPane();
             outline.Select(row => row.Text).Should().Equal("Plan", "Build");
+            window.SmartArtTextPaneActionButtonCount.Should().Be(7);
+            window.SmartArtTextPaneEnabledActionButtonCount.Should().Be(7);
             window.SmartArtTextPaneRenderedRows.Should().Equal(
                 "n1|0|False|Plan",
                 "n2|0|False|Build");
@@ -1805,6 +1807,12 @@ public sealed class ReviewWorkflowAdapterTests
                 "n2");
             addChild!.Applied.Should().BeTrue();
             window.SmartArtTextPaneRenderedRows.Should().Contain(row => row.Contains("|1|False|New node", StringComparison.Ordinal));
+
+            window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.MoveUp, "n2")!.Applied.Should().BeTrue();
+            window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.MoveDown, "n2")!.Applied.Should().BeTrue();
+            window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.Promote, "freep-smartart-node-4")!.Applied.Should().BeTrue();
+            window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.Demote, "freep-smartart-node-3")!.Applied.Should().BeTrue();
+            window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.Remove, "freep-smartart-node-3")!.Applied.Should().BeTrue();
         }
         finally
         {
