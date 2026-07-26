@@ -1824,9 +1824,7 @@ public static class DocxReader
         out IReadOnlyList<Block> blocks)
     {
         blocks = [];
-        if (!Equals(target.DefaultRun, nested.DefaultRun)
-            || !Equals(target.DefaultParagraph, nested.DefaultParagraph)
-            || nested.Footnotes.Count != 0
+        if (nested.Footnotes.Count != 0
             || nested.Endnotes.Count != 0
             || nested.Comments.Count != 0
             || nested.Preserved.Parts.Count != 0
@@ -1837,9 +1835,9 @@ public static class DocxReader
             return false;
         }
 
-        var styleMap = CopyNestedStyles(target, nested);
+        var (styleMap, defaultStyleId) = CopyNestedStyles(target, nested);
         foreach (var block in nested.Blocks)
-            RemapStyleIds(block, styleMap);
+            RemapStyleIds(block, styleMap, defaultStyleId);
 
         blocks = nested.Blocks;
         return true;
@@ -1862,48 +1860,130 @@ public static class DocxReader
         _ => true
     };
 
-    private static Dictionary<string, string> CopyNestedStyles(TextDocument target, TextDocument nested)
+    private static (Dictionary<string, string> StyleMap, string DefaultStyleId) CopyNestedStyles(
+        TextDocument target,
+        TextDocument nested)
     {
         var prefix = "AltChunk";
         var sequence = 1;
         while (target.Styles.Keys.Any(id => id.StartsWith(prefix + sequence + "_", StringComparison.Ordinal)))
             sequence++;
         prefix += sequence + "_";
+        var defaultStyleId = prefix + "DocumentDefaults";
 
         var styleMap = nested.Styles.Keys.ToDictionary(
             id => id,
             id => target.Styles.ContainsKey(id) ? prefix + id : id,
             StringComparer.Ordinal);
+        target.Styles[defaultStyleId] = new DocumentStyle
+        {
+            Id = defaultStyleId,
+            Name = "Imported document defaults",
+            Run = nested.DefaultRun,
+            Paragraph = nested.DefaultParagraph
+        };
         foreach (var style in nested.Styles.Values)
         {
             var id = styleMap[style.Id];
+            var (effectiveRun, effectiveParagraph) = ResolveNestedStyle(nested, style.Id);
             target.Styles[id] = new DocumentStyle
             {
                 Id = id,
                 Name = style.Name,
                 Type = style.Type,
-                BasedOnStyleId = RemapStyleId(style.BasedOnStyleId, styleMap),
+                // Style inheritance is flattened against the nested document's defaults. The host's
+                // defaults must not leak into materialized altChunk content.
+                BasedOnStyleId = null,
                 NextStyleId = RemapStyleId(style.NextStyleId, styleMap),
-                Run = style.Run,
-                Paragraph = style.Paragraph,
+                Run = effectiveRun,
+                Paragraph = effectiveParagraph,
                 TableBorders = style.TableBorders
             };
         }
 
-        return styleMap;
+        return (styleMap, defaultStyleId);
     }
 
-    private static void RemapStyleIds(Block block, IReadOnlyDictionary<string, string> styleMap)
+    private static (RunFormatting Run, ParagraphFormatting Paragraph) ResolveNestedStyle(TextDocument nested, string styleId)
+    {
+        var run = nested.DefaultRun;
+        var paragraph = nested.DefaultParagraph;
+        var chain = new Stack<DocumentStyle>();
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        for (var id = styleId; id is not null && visited.Add(id) && nested.Styles.TryGetValue(id, out var style); id = style.BasedOnStyleId)
+            chain.Push(style);
+        while (chain.TryPop(out var style))
+        {
+            run = OverlayRunFormatting(run, style.Run);
+            paragraph = OverlayParagraphFormatting(paragraph, style.Paragraph);
+        }
+        return (run, paragraph);
+    }
+
+    private static RunFormatting OverlayRunFormatting(RunFormatting inherited, RunFormatting direct) => direct with
+    {
+        Bold = direct.Bold || inherited.Bold,
+        Italic = direct.Italic || inherited.Italic,
+        Underline = direct.Underline || inherited.Underline,
+        Strikethrough = direct.Strikethrough || inherited.Strikethrough,
+        SmallCaps = direct.SmallCaps || inherited.SmallCaps,
+        AllCaps = direct.AllCaps || inherited.AllCaps,
+        Rtl = direct.Rtl || inherited.Rtl,
+        VerticalAlign = direct.VerticalAlign != VerticalAlign.Baseline ? direct.VerticalAlign : inherited.VerticalAlign,
+        FontFamily = direct.FontFamily ?? inherited.FontFamily,
+        FontSizePt = direct.FontSizePt ?? inherited.FontSizePt,
+        ColorHex = direct.ColorHex ?? inherited.ColorHex,
+        HighlightColorHex = direct.HighlightColorHex ?? inherited.HighlightColorHex,
+        CharacterBorder = direct.CharacterBorder ?? inherited.CharacterBorder,
+        CharacterShadingHex = direct.CharacterShadingHex ?? inherited.CharacterShadingHex,
+        CharacterShadingPattern = direct.CharacterShadingHex is not null
+            ? direct.CharacterShadingPattern
+            : inherited.CharacterShadingPattern,
+        LanguageTag = direct.LanguageTag ?? inherited.LanguageTag
+    };
+
+    private static ParagraphFormatting OverlayParagraphFormatting(ParagraphFormatting inherited, ParagraphFormatting direct)
+    {
+        var defaults = ParagraphFormatting.Default;
+        var line = direct.LineSpacingIsSet ? direct : inherited;
+        return direct with
+        {
+            Alignment = direct.Alignment != defaults.Alignment ? direct.Alignment : inherited.Alignment,
+            Rtl = direct.Rtl || inherited.Rtl,
+            SpaceBeforePt = direct.SpaceBeforeIsSet ? direct.SpaceBeforePt : inherited.SpaceBeforePt,
+            SpaceAfterPt = direct.SpaceAfterIsSet ? direct.SpaceAfterPt : inherited.SpaceAfterPt,
+            BeforeAutoSpacing = direct.SpaceBeforeIsSet ? direct.BeforeAutoSpacing : inherited.BeforeAutoSpacing,
+            AfterAutoSpacing = direct.SpaceAfterIsSet ? direct.AfterAutoSpacing : inherited.AfterAutoSpacing,
+            ContextualSpacing = direct.ContextualSpacing ?? inherited.ContextualSpacing,
+            SpaceBeforeIsSet = direct.SpaceBeforeIsSet || inherited.SpaceBeforeIsSet,
+            SpaceAfterIsSet = direct.SpaceAfterIsSet || inherited.SpaceAfterIsSet,
+            LineSpacing = line.LineSpacing,
+            LineRule = line.LineRule,
+            LineHeightPt = line.LineHeightPt,
+            LineSpacingIsSet = direct.LineSpacingIsSet || inherited.LineSpacingIsSet,
+            IndentLeftPt = direct.IndentLeftPt != defaults.IndentLeftPt ? direct.IndentLeftPt : inherited.IndentLeftPt,
+            IndentRightPt = direct.IndentRightPt != defaults.IndentRightPt ? direct.IndentRightPt : inherited.IndentRightPt,
+            FirstLineIndentPt = direct.FirstLineIndentPt != defaults.FirstLineIndentPt ? direct.FirstLineIndentPt : inherited.FirstLineIndentPt,
+            Border = direct.Border ?? inherited.Border,
+            ShadingColorHex = direct.ShadingColorHex ?? inherited.ShadingColorHex,
+            ShadingPattern = direct.ShadingColorHex is not null ? direct.ShadingPattern : inherited.ShadingPattern
+        };
+    }
+
+    private static void RemapStyleIds(
+        Block block,
+        IReadOnlyDictionary<string, string> styleMap,
+        string defaultStyleId)
     {
         switch (block)
         {
             case Paragraph paragraph:
-                paragraph.StyleId = RemapStyleId(paragraph.StyleId, styleMap);
+                paragraph.StyleId = RemapStyleId(paragraph.StyleId, styleMap) ?? defaultStyleId;
                 break;
             case Table table:
                 table.TableStyleId = RemapStyleId(table.TableStyleId, styleMap);
                 foreach (var paragraph in table.Rows.SelectMany(row => row.Cells).SelectMany(cell => cell.Paragraphs))
-                    paragraph.StyleId = RemapStyleId(paragraph.StyleId, styleMap);
+                    paragraph.StyleId = RemapStyleId(paragraph.StyleId, styleMap) ?? defaultStyleId;
                 break;
         }
     }

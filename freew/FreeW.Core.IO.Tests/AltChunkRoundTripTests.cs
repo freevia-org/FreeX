@@ -120,10 +120,17 @@ public class AltChunkRoundTripTests
     public void NestedWordPackageAltChunk_MaterializesEditableBlocksAndCarriesConflictingStyles()
     {
         var nested = new TextDocument();
+        nested.Styles["NestedBase"] = new DocumentStyle
+        {
+            Id = "NestedBase",
+            Name = "Nested base",
+            Run = new RunFormatting { Italic = true }
+        };
         nested.Styles["ImportedHeading"] = new DocumentStyle
         {
             Id = "ImportedHeading",
             Name = "Imported Heading",
+            BasedOnStyleId = "NestedBase",
             Run = new RunFormatting { Bold = true, FontSizePt = 18, ColorHex = "#336699" }
         };
         nested.Blocks.Add(new Paragraph("Nested heading") { StyleId = "ImportedHeading" });
@@ -151,12 +158,10 @@ public class AltChunkRoundTripTests
         importedHeading.PlainText.Should().Be("Nested heading");
         importedHeading.StyleId.Should().NotBe("ImportedHeading");
         document.Styles["ImportedHeading"].Run.Italic.Should().BeTrue();
-        document.Styles[importedHeading.StyleId!].Run.Should().Be(new RunFormatting
-        {
-            Bold = true,
-            FontSizePt = 18,
-            ColorHex = "#336699"
-        });
+        document.Styles[importedHeading.StyleId!].Run.Bold.Should().BeTrue();
+        document.Styles[importedHeading.StyleId!].Run.Italic.Should().BeTrue();
+        document.Styles[importedHeading.StyleId!].Run.FontSizePt.Should().Be(18);
+        document.Styles[importedHeading.StyleId!].Run.ColorHex.Should().Be("#336699");
         document.Blocks[2].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Nested body");
         document.Preserved.Parts.Should().NotContain(part => part.PartName == "/word/afchunk.docx");
 
@@ -196,9 +201,13 @@ public class AltChunkRoundTripTests
     }
 
     [Fact]
-    public void NestedWordPackageAltChunk_WithDifferentDocumentDefaults_RetainsItsPayloadAndBodyMarker()
+    public void NestedWordPackageAltChunk_WithDifferentDocumentDefaults_MaterializesWithSourceDefaults()
     {
-        var nested = new TextDocument();
+        var nested = new TextDocument
+        {
+            DefaultRun = new RunFormatting { FontFamily = "Times New Roman", FontSizePt = 14 },
+            DefaultParagraph = new ParagraphFormatting { SpaceAfterPt = 12, SpaceAfterIsSet = true }
+        };
         nested.Blocks.Add(new Paragraph("Nested body"));
         var sourceBytes = AuthorPackageWithAltChunk(
             chunkPartName: "afchunk.docx",
@@ -208,7 +217,17 @@ public class AltChunkRoundTripTests
 
         var document = ReadDocument(sourceBytes);
 
-        document.Blocks[1].Should().BeOfType<AltChunkBlock>().Which.PreservedPartName.Should().Be("/word/afchunk.docx");
+        var imported = document.Blocks[1].Should().BeOfType<Paragraph>().Which;
+        imported.PlainText.Should().Be("Nested body");
+        imported.StyleId.Should().NotBeNull();
+        var importedDefaults = document.Styles[imported.StyleId!];
+        importedDefaults.Run.FontFamily.Should().Be("Times New Roman");
+        importedDefaults.Run.FontSizePt.Should().Be(14);
+        importedDefaults.Paragraph.SpaceAfterPt.Should().Be(12);
+
+        var rewrittenBytes = WriteDocument(document);
+        using var zip = new ZipArchive(new MemoryStream(rewrittenBytes), ZipArchiveMode.Read);
+        zip.GetEntry("word/afchunk.docx").Should().BeNull();
     }
 
     private static TextDocument ReadDocument(byte[] bytes)
