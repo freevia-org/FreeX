@@ -146,6 +146,7 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var (sess, _) = MakeSession();
         sess.SelectedChart!.ValueAxis.Title = "Amount";
+        sess.SelectedChart.ValueAxis.Delete = true;
         sess.SelectedChart.ValueAxis.Min = 0;
         sess.SelectedChart.ValueAxis.Max = 100;
 
@@ -155,6 +156,7 @@ public sealed class ChartDataDialogTests : IDisposable
         dialog.Should().NotBeNull();
         options.Axis.Should().Be(ChartAxisKind.Value);
         options.Title.Should().Be("Amount");
+        options.ShowAxis.Should().BeFalse();
         options.Minimum.Should().Be(0);
         options.Maximum.Should().Be(100);
     }

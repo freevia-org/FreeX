@@ -8,6 +8,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
     private readonly ChartAxisOptions _newOptions;
 
     private string? _oldTitle;
+    private bool _oldDelete;
     private double? _oldMinimum;
     private double? _oldMaximum;
     private double? _oldMajorUnit;
@@ -39,6 +40,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         var axis = ResolveAxis(chart, _newOptions.Axis);
         Capture(axis);
         axis.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title.Trim();
+        axis.Delete = !_newOptions.ShowAxis;
         axis.Min = _newOptions.Minimum;
         axis.Max = _newOptions.Maximum;
         axis.MajorUnit = _newOptions.MajorUnit;
@@ -64,6 +66,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
 
         var axis = ResolveAxis(chart, _newOptions.Axis);
         axis.Title = _oldTitle;
+        axis.Delete = _oldDelete;
         axis.Min = _oldMinimum;
         axis.Max = _oldMaximum;
         axis.MajorUnit = _oldMajorUnit;
@@ -82,6 +85,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
     private void Capture(ChartAxis axis)
     {
         _oldTitle = axis.Title;
+        _oldDelete = axis.Delete;
         _oldMinimum = axis.Min;
         _oldMaximum = axis.Max;
         _oldMajorUnit = axis.MajorUnit;

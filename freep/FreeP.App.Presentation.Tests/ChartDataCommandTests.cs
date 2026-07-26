@@ -1168,6 +1168,7 @@ public sealed class ChartDataCommandTests
         var (p, bus, id) = MakeChartPresentation();
         var chart = p.Slides[0].Shapes[0].Chart!;
         chart.ValueAxis.Title = "Old axis";
+        chart.ValueAxis.Delete = true;
         chart.ValueAxis.Min = 0;
         chart.ValueAxis.Max = 200;
         chart.ValueAxis.MajorUnit = 50;
@@ -1186,9 +1187,10 @@ public sealed class ChartDataCommandTests
             new ChartAxisOptions(
                 ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false,
                 ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
-                ChartAxisCrossing.Min, 10)));
+                ChartAxisCrossing.Min, 10, false)));
 
         chart.ValueAxis.Title.Should().Be("Revenue");
+        chart.ValueAxis.Delete.Should().BeTrue();
         chart.ValueAxis.Min.Should().Be(10);
         chart.ValueAxis.Max.Should().Be(90);
         chart.ValueAxis.MajorUnit.Should().Be(10);
@@ -1207,6 +1209,7 @@ public sealed class ChartDataCommandTests
         stream.Position = 0;
         var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
         roundTripped.ValueAxis.Title.Should().Be("Revenue");
+        roundTripped.ValueAxis.Delete.Should().BeTrue();
         roundTripped.ValueAxis.Min.Should().Be(10);
         roundTripped.ValueAxis.Max.Should().Be(90);
         roundTripped.ValueAxis.MajorUnit.Should().Be(10);
@@ -1221,6 +1224,7 @@ public sealed class ChartDataCommandTests
 
         bus.Undo();
         chart.ValueAxis.Title.Should().Be("Old axis");
+        chart.ValueAxis.Delete.Should().BeTrue();
         chart.ValueAxis.Min.Should().Be(0);
         chart.ValueAxis.Max.Should().Be(200);
         chart.ValueAxis.MajorUnit.Should().Be(50);

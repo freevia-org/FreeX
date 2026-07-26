@@ -13,6 +13,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly ChartAxisOptionsPlanner _planner;
     private readonly ComboBox _axisCombo;
     private readonly TextBox _titleBox;
+    private readonly CheckBox _showAxisCheck;
     private readonly TextBox _minimumBox;
     private readonly TextBox _maximumBox;
     private readonly TextBox _majorUnitBox;
@@ -35,7 +36,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         Title = surface.Title;
         Width = ChartAxisOptionsPlanner.DefaultDialogWidth;
-        Height = ChartAxisOptionsPlanner.DefaultDialogHeight;
+        Height = ChartAxisOptionsPlanner.DefaultDialogHeight + 28;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
@@ -55,6 +56,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             }
         };
         _titleBox = new TextBox { MinWidth = 240 };
+        _showAxisCheck = new CheckBox { Content = surface.ShowAxisLabel };
         _minimumBox = new TextBox { MinWidth = 120 };
         _maximumBox = new TextBox { MinWidth = 120 };
         _majorUnitBox = new TextBox { MinWidth = 120 };
@@ -84,6 +86,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var content = new StackPanel { Margin = new Thickness(14) };
         content.Children.Add(MakeRow(surface.AxisLabel, _axisCombo));
         content.Children.Add(MakeRow(surface.AxisTitleLabel, _titleBox));
+        content.Children.Add(_showAxisCheck);
         content.Children.Add(MakeRow(surface.MinimumLabel, _minimumBox));
         content.Children.Add(MakeRow(surface.MaximumLabel, _maximumBox));
         content.Children.Add(MakeRow(surface.MajorUnitLabel, _majorUnitBox));
@@ -122,6 +125,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void LoadControls()
     {
         _titleBox.Text = _planner.Title;
+        _showAxisCheck.IsChecked = _planner.ShowAxis;
         _minimumBox.Text = Format(_planner.Minimum);
         _maximumBox.Text = Format(_planner.Maximum);
         _majorUnitBox.Text = Format(_planner.MajorUnit);
@@ -138,6 +142,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void UpdatePlannerFromControls()
     {
         _planner.SetTitle(_titleBox.Text);
+        _planner.SetShowAxis(_showAxisCheck.IsChecked == true);
         _planner.SetMinimum(ParseOptional(_minimumBox.Text, "Minimum"));
         _planner.SetMaximum(ParseOptional(_maximumBox.Text, "Maximum"));
         _planner.SetMajorUnit(ParseOptional(_majorUnitBox.Text, "Major unit"));
