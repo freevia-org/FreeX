@@ -21,6 +21,7 @@ public static class CommandGuards
     private const string AllowedEditRangeOnTargetSheetMessage = "Allowed edit range must be on the target sheet.";
     private const string CouldNotInsertSubtotalRowMessage = "Could not insert subtotal row.";
     private const string CannotChangePartOfArrayMessage = "You cannot change part of an array.";
+    private const string CannotChangePartOfDataTableMessage = "You cannot change part of a Data Table.";
 
     public static CommandOutcome? RejectIfProtected(Sheet sheet)
     {
@@ -249,25 +250,40 @@ public static class CommandGuards
     /// </summary>
     public static CommandOutcome? RejectIfSplitsArray(Sheet sheet, IEnumerable<CellAddress> addresses)
     {
-        if (!sheet.HasArrayOrSpillMembers)
+        if (!sheet.HasArrayOrSpillMembers && !sheet.HasDataTableRanges)
             return null;
 
         HashSet<CellAddress>? addressSet = null;
 
         foreach (var address in addresses)
         {
-            if (!sheet.TryGetArrayExtent(address, out var anchor, out var rows, out var cols))
-                continue;
-
-            addressSet ??= new HashSet<CellAddress>(addresses);
-
-            for (var r = 0u; r < rows; r++)
+            if (sheet.HasArrayOrSpillMembers && sheet.TryGetArrayExtent(address, out var anchor, out var rows, out var cols))
             {
-                for (var c = 0u; c < cols; c++)
+                addressSet ??= new HashSet<CellAddress>(addresses);
+
+                for (var r = 0u; r < rows; r++)
                 {
-                    var member = new CellAddress(anchor.Sheet, anchor.Row + r, anchor.Col + c);
+                    for (var c = 0u; c < cols; c++)
+                    {
+                        var member = new CellAddress(anchor.Sheet, anchor.Row + r, anchor.Col + c);
+                        if (!addressSet.Contains(member))
+                            return new CommandOutcome(false, CannotChangePartOfArrayMessage);
+                    }
+                }
+            }
+
+            // R90-app-goalseek-whatif-5-3: a What-If Analysis Data Table's result body is a single
+            // logical array (Excel's {=TABLE(,...)}) even though FreeX stores it as plain per-cell
+            // formulas — block editing/deleting just one interior cell, matching Excel's "You cannot
+            // change part of a Data Table.", while still allowing the whole body to be replaced at once.
+            if (sheet.HasDataTableRanges && sheet.TryGetDataTableRange(address, out var dataTableRange))
+            {
+                addressSet ??= new HashSet<CellAddress>(addresses);
+
+                foreach (var member in dataTableRange.AllCells())
+                {
                     if (!addressSet.Contains(member))
-                        return new CommandOutcome(false, CannotChangePartOfArrayMessage);
+                        return new CommandOutcome(false, CannotChangePartOfDataTableMessage);
                 }
             }
         }

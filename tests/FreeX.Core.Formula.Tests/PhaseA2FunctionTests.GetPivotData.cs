@@ -159,7 +159,16 @@ public partial class PhaseA2FunctionTests
             CacheId = 1,
             SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 3)),
             TargetRange = new GridRange(new CellAddress(sheet.Id, 2, 5), new CellAddress(sheet.Id, 9, 7)),
-            ShowSubtotals = true
+            ShowSubtotals = true,
+            // This test's hand-authored grid (separate "Region"/"Quarter" header columns, and
+            // subtotal rows like "East Total" that leave the inner Quarter column blank) is the
+            // Tabular report layout's rendered shape, not the Compact default introduced in
+            // round 90 (which renders a single indented "Row Labels" column -- see
+            // GetPivotData_CompactNestedRowFields_ReturnsLeafValue below). Pin the layout this
+            // test was written against explicitly so it keeps testing GETPIVOTDATA's row/subtotal
+            // resolution rather than silently depending on whatever the model's default happens
+            // to be.
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));

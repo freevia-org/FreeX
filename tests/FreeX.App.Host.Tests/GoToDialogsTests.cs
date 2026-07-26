@@ -122,6 +122,16 @@ public sealed class GoToDialogsTests
     }
 
     [Fact]
+    public void GoToSpecialParityCapture_SupportsFocusedProductionDialogRoute()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+
+        source.Should().Contain("string.Equals(targetSurfaceId, \"dialog.GoToSpecial\", StringComparison.Ordinal)");
+        source.Should().Contain("CaptureDialog(results, \"dialog.GoToSpecial\", outDir, () => new GoToSpecialDialog())");
+        source.Should().Contain("dialog.GoToSpecial, dialog.Sparkline");
+    }
+
+    [Fact]
     public void GoToDialog_ExposesUIANamesAndHelpTextForReferenceSurfaces()
     {
         var source = DialogSourceTestSupport.ReadHostSources("GoToDialog.cs");

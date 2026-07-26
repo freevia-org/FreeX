@@ -436,6 +436,9 @@ public sealed class ParityCaptureTests
                 CountExactColorOnRow(image, 274, red: 213, green: 223, blue: 229)
                     .Should().BeGreaterThan(300,
                         "the bottom value-type border should remain at the WPF-aligned action-row separation");
+                FindAccentRows(image, minimumY: 350, maximumY: 400, minimumPixels: 20)
+                    .Should().Equal([369, 388],
+                        "the default action button border should align with the WPF capture rows");
                 var checkboxAnchors = FindDarkRunStartsOnRow(image, 248, minimumLength: 12);
                 checkboxAnchors.Should().Equal([27, 113, 173, 255]);
 
@@ -554,6 +557,33 @@ public sealed class ParityCaptureTests
         }
 
         return count;
+    }
+
+    private static IReadOnlyList<int> FindAccentRows(
+        PixelImage image,
+        int minimumY,
+        int maximumY,
+        int minimumPixels)
+    {
+        var rows = new List<int>();
+        for (var y = minimumY; y <= maximumY; y++)
+        {
+            var count = 0;
+            for (var x = 0; x < image.Width; x++)
+            {
+                var offset = (y * image.Width + x) * 4;
+                var red = image.Pixels[offset + 2];
+                var green = image.Pixels[offset + 1];
+                var blue = image.Pixels[offset];
+                if (red < 180 && green is > 90 and < 210 && blue > 180)
+                    count++;
+            }
+
+            if (count >= minimumPixels)
+                rows.Add(y);
+        }
+
+        return rows;
     }
 
     private static IReadOnlyList<int> FindDarkRunStartsOnRow(

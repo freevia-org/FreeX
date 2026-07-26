@@ -898,9 +898,13 @@ public partial class MainWindow
             : SheetGrid.SelectedRange.Value.Start;
 
         var sheet = _workbook.GetSheet(_currentSheetId);
+        // Freeze Panes is this window's own state (R89-freeze-split-per-window-1): resolve
+        // against GetEffectiveViewState instead of the shared Sheet.FrozenRows/FrozenCols so
+        // Page Up/Down pages by THIS window's own scrollable-row/column count.
+        var pagingViewState = GetEffectiveViewState(sheet);
         var pagingViewport = SheetGrid.Viewport;
-        int pageSize = Math.Max(1, (pagingViewport is null ? 25 : CountScrollableRows(pagingViewport, sheet)) - 1);
-        int colPageSize = Math.Max(1, (pagingViewport is null ? 12 : CountScrollableColumns(pagingViewport, sheet)) - 1);
+        int pageSize = Math.Max(1, (pagingViewport is null ? 25 : CountScrollableRows(pagingViewport, pagingViewState.FrozenRows)) - 1);
+        int colPageSize = Math.Max(1, (pagingViewport is null ? 12 : CountScrollableColumns(pagingViewport, pagingViewState.FrozenCols)) - 1);
 
         CellAddress? target = ExcelWorksheetNavigationPlanner.GetHorizontalPageTarget(
             e.Key,

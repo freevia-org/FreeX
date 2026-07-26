@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.NamedRanges;
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -88,14 +90,16 @@ public sealed partial class NamedRangeDialog : Window
             var metadata = _workbook.TryGetNamedRangeMetadata(name, out var savedMetadata)
                 ? savedMetadata
                 : NamedRangeMetadata.WorkbookScope;
-            _items.Add(new NamedRangeViewModel(name, formulaText, formulaText, metadata.Scope, metadata.Comment));
+            _items.Add(new NamedRangeViewModel(
+                name, FormatNamedFormulaValue(_workbook, formulaText, scopeSheetId: null), formulaText, metadata.Scope, metadata.Comment));
         }
 
         foreach (var ((name, scopeSheetId), formulaText) in _workbook.ScopedNamedFormulas)
         {
             _workbook.TryGetScopedNamedRangeMetadata(name, scopeSheetId, out var metadata);
             var scopeLabel = _workbook.GetSheet(scopeSheetId)?.Name ?? metadata.Scope;
-            _items.Add(new NamedRangeViewModel(name, formulaText, formulaText, scopeLabel, metadata.Comment));
+            _items.Add(new NamedRangeViewModel(
+                name, FormatNamedFormulaValue(_workbook, formulaText, scopeSheetId), formulaText, scopeLabel, metadata.Comment));
         }
 
         ApplyFilter();
@@ -110,8 +114,90 @@ public sealed partial class NamedRangeDialog : Window
         return $"{sheetName}!{start}:{end}";
     }
 
-    private static string FormatValue(GridRange range, Workbook wb) =>
-        FormatRange(range, wb);
+    /// <summary>
+    /// R88-app-name-manager-ui-5-2: the Name Manager's Value column must show the name's actual
+    /// live computed value/preview (real Excel: e.g. "1.05" for a named constant, "{100;200}" for a
+    /// range name), not just repeat the Refers To text -- <see cref="FormatRange"/> above only
+    /// formats the RANGE REFERENCE, never any cell content. A single-cell name shows that cell's own
+    /// computed value; a multi-cell name shows a small array-literal preview (row-major, columns
+    /// comma-separated, rows semicolon-separated, capped like Excel's own Name Manager bounds how
+    /// much of a huge range's content it tries to render) and falls back to the plain range
+    /// reference beyond that cap.
+    /// </summary>
+    private static string FormatValue(GridRange range, Workbook wb)
+    {
+        if (wb.GetSheet(range.Start.Sheet) is not { } sheet)
+            return FormatRange(range, wb);
+
+        var rowCount = checked((int)(range.End.Row - range.Start.Row + 1));
+        var colCount = checked((int)(range.End.Col - range.Start.Col + 1));
+
+        if (rowCount == 1 && colCount == 1)
+            return FormatScalarValuePreview(sheet.GetCell(range.Start)?.Value);
+
+        const int maxPreviewCells = 25;
+        if ((long)rowCount * colCount > maxPreviewCells)
+            return FormatRange(range, wb);
+
+        var rowTexts = new List<string>(rowCount);
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            var cellTexts = new List<string>(colCount);
+            for (var col = range.Start.Col; col <= range.End.Col; col++)
+                cellTexts.Add(FormatScalarValuePreview(sheet.GetCell(row, col)?.Value));
+            rowTexts.Add(string.Join(",", cellTexts));
+        }
+
+        return "{" + string.Join(";", rowTexts) + "}";
+    }
+
+    /// <summary>
+    /// R88-app-name-manager-ui-5-2: evaluates a named FORMULA/constant's own text (e.g. "1.05" for
+    /// TaxRate, no leading "=" -- matching how Workbook.NamedFormulas/ScopedNamedFormulas store it,
+    /// see <see cref="DefineOrUpdateNamedFormula"/>) so the Value column shows its live computed
+    /// result rather than the formula source text again. Uses a fresh, throwaway
+    /// <see cref="FormulaEvaluator"/> (the same one-off pattern used elsewhere for ad-hoc,
+    /// non-cell-anchored evaluation, e.g. DataValidationService), evaluated against the name's own
+    /// scope sheet when it has one, or the workbook's first sheet for a workbook-scoped name (a
+    /// constant like "=1.05" has no sheet dependency, but FormulaEvaluator still needs a sheet
+    /// context to resolve any unqualified references the formula text might contain).
+    /// </summary>
+    private static string FormatNamedFormulaValue(Workbook wb, string formulaText, SheetId? scopeSheetId)
+    {
+        var sheet = (scopeSheetId is { } sheetId ? wb.GetSheet(sheetId) : null) ?? wb.Sheets.FirstOrDefault();
+        if (sheet is null)
+            return formulaText;
+
+        var result = new FormulaEvaluator().Evaluate(formulaText, sheet, wb);
+        return FormatScalarValuePreview(result);
+    }
+
+    private static string FormatScalarValuePreview(ScalarValue? value) =>
+        value switch
+        {
+            null or BlankValue => "",
+            TextValue text => text.Value,
+            NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+            DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.InvariantCulture),
+            ErrorValue error => error.Code,
+            RangeValue rangeValue => FormatRangeValuePreview(rangeValue),
+            _ => value.ToString() ?? ""
+        };
+
+    private static string FormatRangeValuePreview(RangeValue range)
+    {
+        var rowTexts = new List<string>(range.RowCount);
+        for (var row = 1; row <= range.RowCount; row++)
+        {
+            var cellTexts = new List<string>(range.ColCount);
+            for (var col = 1; col <= range.ColCount; col++)
+                cellTexts.Add(FormatScalarValuePreview(range.At(row, col)));
+            rowTexts.Add(string.Join(",", cellTexts));
+        }
+
+        return "{" + string.Join(";", rowTexts) + "}";
+    }
 
     // ── Event handlers ────────────────────────────────────────────────────────
 

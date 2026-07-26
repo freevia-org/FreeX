@@ -157,8 +157,11 @@ public sealed class ChartDataLabelFormatterTests
     }
 
     [Fact]
-    public void GetPieLabelFormat_UsesSeriesCategoryAndPercentagePlaceholder()
+    public void GetPieLabelFormat_ComposesValueAndPercentageWhenBothEnabled()
     {
+        // ShowDataLabelValue defaults to true, and Excel independently toggles ShowDataLabelPercentage
+        // (both showVal and showPercent can be set at once, e.g. the "Value, Percentage" preset), so
+        // both placeholders must appear - value before percentage, per Excel's fixed data-label order.
         var chart = new ChartModel
         {
             ShowDataLabelSeriesName = true,
@@ -168,6 +171,6 @@ public sealed class ChartDataLabelFormatterTests
         };
 
         ChartDataLabelFormatter.GetPieLabelFormat(chart, "Share")
-            .Should().Be($"Share{Environment.NewLine}{{1}}{Environment.NewLine}{{2:0%}}");
+            .Should().Be($"Share{Environment.NewLine}{{1}}{Environment.NewLine}{{0}}{Environment.NewLine}{{2:0%}}");
     }
 }

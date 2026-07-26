@@ -780,16 +780,21 @@ public partial class MainWindow
             Math.Clamp(activeRow, 1u, CellAddress.MaxRow),
             Math.Clamp(activeCol, 1u, CellAddress.MaxCol)));
 
+        // Freeze Panes is this window's own state (R89-freeze-split-per-window-1); at this point
+        // (window/document just opened) GetEffectiveViewState seeds fresh from the Sheet, so this
+        // is equivalent to the shared fields but keeps every scroll-math call site consistently
+        // routed through the per-window store.
+        var viewState = GetEffectiveViewState(sheet);
         VerticalScroll.Value = CalculateOpenedWorksheetScrollValue(
             sheet?.ViewTopRow,
             1,
             CellAddress.MaxRow,
-            sheet?.FrozenRows ?? 0);
+            viewState.FrozenRows);
         HorizontalScroll.Value = CalculateOpenedWorksheetScrollValue(
             sheet?.ViewLeftCol,
             1,
             CellAddress.MaxCol,
-            sheet?.FrozenCols ?? 0);
+            viewState.FrozenCols);
         UpdateViewport();
     }
 

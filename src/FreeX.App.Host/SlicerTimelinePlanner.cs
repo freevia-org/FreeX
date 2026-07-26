@@ -19,6 +19,17 @@ public static class SlicerTimelinePlanner
         string caption) =>
         SlicerTimelinePanePlanner.ToggleSlicerSelection(allItems, selectedItems, caption);
 
+    public static IReadOnlyList<string> ReplaceSlicerSelection(
+        IReadOnlyCollection<string> selectedItems,
+        string caption) =>
+        SlicerTimelinePanePlanner.ReplaceSlicerSelection(selectedItems, caption);
+
+    public static IReadOnlyList<string> ExtendSlicerSelection(
+        IReadOnlyList<string> allItems,
+        IReadOnlyCollection<string> selectedItems,
+        string caption) =>
+        SlicerTimelinePanePlanner.ExtendSlicerSelection(allItems, selectedItems, caption);
+
     public static bool HasActiveSlicerFilter(SlicerModel slicer) =>
         SlicerTimelinePanePlanner.HasActiveSlicerFilter(slicer);
 

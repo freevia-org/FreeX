@@ -871,9 +871,14 @@ public sealed class AutofillCommand : IWorkbookCommand
             return null;
 
         var numbers = parsed.Select(part => (double)part!.Value.Number).ToList();
+        // Like the built-in-list path below, this single-sample fallback step is direction-INDEPENDENT
+        // (+1 = the next value of an increasing sequence) so that the directedStep flip immediately
+        // below is the ONLY place direction is applied. Baking direction in here as well would
+        // double-negate it for Up/Left, silently cancelling the flip so a lone "Item5" dragged UP
+        // counted forward (Item6, Item7) instead of backward (Item4, Item3).
         double step = numbers.Count >= 2
             ? ComputeLinearFitSlope(numbers)
-            : (plan.Direction is FillDirection.Up or FillDirection.Left ? -1 : 1);
+            : 1;
         var lastNumber = plan.Direction is FillDirection.Up or FillDirection.Left ? numbers[0] : numbers[^1];
         var directedStep = plan.Direction is FillDirection.Up or FillDirection.Left ? -step : step;
 
@@ -925,9 +930,16 @@ public sealed class AutofillCommand : IWorkbookCommand
             if (indices.Any(index => index < 0))
                 continue;
 
+            // Unlike TryCreateTrailingNumberSeries (kept bit-for-bit as-is per the fill-handle
+            // no-regression contract), this single-sample fallback step is direction-INDEPENDENT
+            // -- always +1, exactly like the 2+-sample linear fit above always yields a positive
+            // step for an increasing (list-forward) sequence -- so that the directedStep flip
+            // immediately below is the only place direction is applied. Baking direction into
+            // this step too would double-negate it for Up/Left, silently cancelling the flip and
+            // making a lone list seed dragged backward advance forward instead of reversing.
             var step = indices.Count >= 2
                 ? (int)Math.Round(ComputeLinearFitSlope(indices.Select(i => (double)i).ToList()))
-                : (plan.Direction is FillDirection.Up or FillDirection.Left ? -1 : 1);
+                : 1;
             var lastIndex = plan.Direction is FillDirection.Up or FillDirection.Left ? indices[0] : indices[^1];
             var directedStep = plan.Direction is FillDirection.Up or FillDirection.Left ? -step : step;
             // Note: unlike the single-sample fallback above (which always seeds a nonzero

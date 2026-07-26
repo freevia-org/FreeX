@@ -17,7 +17,8 @@ public sealed partial class PivotTableRefreshServiceTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
-            TargetRange = Range(sheet, "E2", "L8")
+            TargetRange = Range(sheet, "E2", "L8"),
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(2, "Average", "average"));

@@ -438,7 +438,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XAttribute("id", pictureIndex + 1),
                         new XAttribute("name", DrawingName(picture.Name, $"Picture {pictureIndex}")),
                         string.IsNullOrWhiteSpace(picture.Title) ? null : new XAttribute("title", picture.Title),
-                        string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText)),
+                        string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText),
+                        ToDecorativeExtLst(drawingNs, picture.IsDecorative)),
                     new XElement(spreadsheetDrawingNs + "cNvPicPr")),
                 new XElement(spreadsheetDrawingNs + "blipFill",
                     new XElement(drawingNs + "blip",
@@ -498,7 +499,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XAttribute("id", pictureIndex + 1),
                         new XAttribute("name", DrawingName(picture.Name, $"Picture {pictureIndex}")),
                         string.IsNullOrWhiteSpace(picture.Title) ? null : new XAttribute("title", picture.Title),
-                        string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText)),
+                        string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText),
+                        ToDecorativeExtLst(drawingNs, picture.IsDecorative)),
                     new XElement(spreadsheetDrawingNs + "cNvPicPr")),
                 new XElement(spreadsheetDrawingNs + "blipFill",
                     new XElement(drawingNs + "blip", new XAttribute(relNs + "link", linkRelId)),
@@ -585,7 +587,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XAttribute("id", groupId),
                         new XAttribute("name", DrawingName(picture.Name, $"Picture {pictureIndex}")),
                         string.IsNullOrWhiteSpace(picture.Title) ? null : new XAttribute("title", picture.Title),
-                        string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText)),
+                        string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText),
+                        ToDecorativeExtLst(drawingNs, picture.IsDecorative)),
                     new XElement(spreadsheetDrawingNs + "cNvGrpSpPr")),
                 new XElement(spreadsheetDrawingNs + "grpSpPr",
                     new XElement(drawingNs + "xfrm",
@@ -673,6 +676,29 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XElement(drawingNs + "r",
                             rPr,
                             new XElement(drawingNs + "t", cell.Text)))));
+    }
+
+    /// <summary>
+    /// R90-app-accessibility-checker-5-2: emits the <c>&lt;a:extLst&gt;&lt;a:ext
+    /// uri="{C183D7F6-B498-43B3-948B-1728B52AA6E4}"&gt;&lt;adec:decorative val="1"/&gt;</c>
+    /// extension (the same one Word/PowerPoint/Excel 2019+ use for "Mark as decorative") as the
+    /// last child of a <c>&lt;xdr:cNvPr&gt;</c>, or <see langword="null"/> when
+    /// <paramref name="isDecorative"/> is false — matching <see cref="XlsxWorksheetDrawingPartReader.DrawingMlDecorativeExtensionUri"/>
+    /// so a decorative picture stays exempt from the Accessibility Checker's Missing Alt Text rule
+    /// after opening and resaving.
+    /// </summary>
+    private static XElement? ToDecorativeExtLst(XNamespace drawingNs, bool isDecorative)
+    {
+        if (!isDecorative)
+            return null;
+
+        XNamespace decorativeNs = "http://schemas.microsoft.com/office/drawing/2017/decorative";
+        return new XElement(drawingNs + "extLst",
+            new XElement(drawingNs + "ext",
+                new XAttribute("uri", XlsxWorksheetDrawingPartReader.DrawingMlDecorativeExtensionUri),
+                new XElement(decorativeNs + "decorative",
+                    new XAttribute(XNamespace.Xmlns + "adec", decorativeNs.NamespaceName),
+                    new XAttribute("val", "1"))));
     }
 
     private static bool HasPictureCrop(PictureModel picture) =>
@@ -830,7 +856,13 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XAttribute("name", DrawingName(shape.Name, $"Shape {shapeIndex}")),
                         string.IsNullOrWhiteSpace(shape.Title) ? null : new XAttribute("title", shape.Title),
                         string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText)),
-                    new XElement(spreadsheetDrawingNs + "cNvCxnSpPr")),
+                    new XElement(spreadsheetDrawingNs + "cNvCxnSpPr",
+                        // R90-shape-5-3: preserve which shapes this connector's endpoints were glued
+                        // to (stCxn/endCxn) so a connector loaded from a source file that goes through
+                        // this regenerated-element path (e.g. after any other property edit) doesn't
+                        // silently lose its shape attachment on save.
+                        ToConnectionSiteElement(drawingNs, "stCxn", shape.StartConnectedShapeId, shape.StartConnectedShapeConnectionIndex),
+                        ToConnectionSiteElement(drawingNs, "endCxn", shape.EndConnectedShapeId, shape.EndConnectedShapeConnectionIndex))),
                 shapeProperties)
             : new XElement(spreadsheetDrawingNs + "sp",
                 new XElement(spreadsheetDrawingNs + "nvSpPr",
@@ -851,6 +883,18 @@ internal static class XlsxWorksheetDrawingObjectWriter
             shapeOrConnectorElement,
             new XElement(spreadsheetDrawingNs + "clientData"));
     }
+
+    /// <summary>
+    /// R90-shape-5-3: builds a <c>&lt;a:stCxn id="..." idx="..."/&gt;</c>/<c>&lt;a:endCxn .../&gt;</c>
+    /// connection-site element, or <see langword="null"/> when <paramref name="shapeId"/> is null
+    /// (the connector endpoint is not glued to any shape).
+    /// </summary>
+    private static XElement? ToConnectionSiteElement(XNamespace drawingNs, string elementName, int? shapeId, int? connectionIndex) =>
+        shapeId is null
+            ? null
+            : new XElement(drawingNs + elementName,
+                new XAttribute("id", shapeId.Value),
+                new XAttribute("idx", connectionIndex ?? 0));
 
     /// <summary>
     /// Builds a minimal <c>&lt;xdr:txBody&gt;</c> element that round-trips shape text with

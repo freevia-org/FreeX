@@ -121,6 +121,10 @@ public sealed partial class MainWindow : Window
     private bool _updatingZoomSlider;
     private bool _readMode;
     private bool _pagedEditMode;
+    // Avalonia's PrintLayout is already the live, multi-page editing surface used by Page Edit.
+    // Keep the prior continuous view so entering the alias does not change the user's view when it
+    // is exited again (WPF restores the live editor that was underneath its page panel).
+    private DocumentViewMode _viewModeBeforePagedEdit = DocumentViewMode.PrintLayout;
     private bool _pagedEditModeBeforeOutline;
     private bool _outlineMode;
     private DocumentViewMode _viewModeBeforeReadMode = DocumentViewMode.PrintLayout;
@@ -415,6 +419,8 @@ public sealed partial class MainWindow : Window
     internal Control? WorkspaceContentForTests => _workspace.Child as Control;
     internal bool IsWorkspaceShowingLiveEditor => ReferenceEquals(_workspace.Child, _liveWorkspaceContent);
     internal bool IsOutlineModeActiveForTests => _outlineMode;
+    internal bool IsPagedEditModeActiveForTests => _pagedEditMode;
+    internal void TogglePagedEditViewForTests() => TogglePagedEditView();
     internal bool IsWorkspaceShowingOutline => ReferenceEquals(_workspace.Child, _outlineView);
     internal OutlineView OutlineViewForTests => _outlineView;
     internal void ToggleOutlineViewForTests() => ToggleOutlineView();
@@ -2413,11 +2419,13 @@ public sealed partial class MainWindow : Window
         if (_pagedEditMode)
         {
             _pagedEditMode = false;
+            _editor.ViewMode = _viewModeBeforePagedEdit;
         }
         else
         {
             if (_viewDepthPlan.Mode != FreeWViewDepthMode.LiveEditor)
                 ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
+            _viewModeBeforePagedEdit = _editor.ViewMode;
             _editor.ViewMode = DocumentViewMode.PrintLayout;
             _pagedEditMode = true;
         }

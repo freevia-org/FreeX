@@ -17,7 +17,8 @@ public sealed partial class PivotTableRefreshServiceTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "D5"),
-            TargetRange = Range(sheet, "F2", "I8")
+            TargetRange = Range(sheet, "F2", "I8"),
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.CalculatedFields.Add(new PivotCalculatedFieldModel("Revenue", "Amount*Units"));
         pivot.RowFields.Add(new PivotFieldModel(0));
@@ -277,7 +278,11 @@ public sealed partial class PivotTableRefreshServiceTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
-            TargetRange = Range(sheet, "E2", "H10")
+            TargetRange = Range(sheet, "E2", "H10"),
+            // R90-render-pivot-layout-5-1/5-3: pin the (former) Tabular/no-subtotal defaults this
+            // 2-row-field layout test was written against.
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));

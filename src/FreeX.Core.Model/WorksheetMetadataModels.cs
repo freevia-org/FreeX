@@ -278,7 +278,14 @@ public sealed record WorksheetAutoFilterColorFilterModel(
     bool CellColor = true,
     string? DifferentialFormatIdRaw = null,
     string? CellColorRaw = null,
-    IReadOnlyDictionary<string, string>? NativeAttributes = null);
+    IReadOnlyDictionary<string, string>? NativeAttributes = null,
+    // R89-io-autofilter-color-dxf-1-1: the actual fill/font colour this filter matches, resolved
+    // from (or, on save, allocated into) the workbook-level <dxfs> table via `DifferentialFormatId`.
+    // Null when the filter was never given an explicit colour (e.g. "No Fill", which has no dxf at
+    // all) or when a native dxfId couldn't be resolved to a color (e.g. index out of range, or the
+    // referenced dxf's font/fill element doesn't set a color). Distinct from `CellColor`, which is
+    // the OOXML `cellColor` boolean selecting fill-vs-font semantics, not a colour value.
+    CellColor? Color = null);
 
 public sealed record WorksheetAutoFilterIconFilterModel(
     string? IconSet = null,

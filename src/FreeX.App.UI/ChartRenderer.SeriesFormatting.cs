@@ -385,6 +385,11 @@ public static partial class ChartRenderer
         var textColor = chart.ResolveDataLabelTextColor(theme);
         var borderColor = chart.ResolveDataLabelBorderColor(theme);
         var fillColor = chart.ResolveDataLabelFillColor(theme);
+        // R88-render-chart-labels-legend-5-3: when the callout affordance is showing (a moved
+        // label's border) and no explicit label border was set, fall back to the leader-line
+        // color/thickness parsed from XLSX instead of a hardcoded gray/1pt -- otherwise those
+        // parsed values are never actually consumed by rendering.
+        var leaderLineColor = chart.ResolveDataLabelLeaderLineColor(theme);
         var accumulatedAngle = chart.FirstSliceAngle;
         for (var i = 0; i < points.Count; i++)
         {
@@ -408,8 +413,11 @@ public static partial class ChartRenderer
                 TextVerticalAlignment = OxyPlot.VerticalAlignment.Middle,
                 TextColor = ToOxyColor(textColor) ?? OxyColors.Automatic,
                 FontSize = chart.DataLabelFontSize,
-                Stroke = ToOxyColor(borderColor) ?? (chart.ShowDataLabelCallouts ? OxyColors.Gray : OxyColors.Transparent),
-                StrokeThickness = chart.DataLabelBorderThickness > 0 ? chart.DataLabelBorderThickness : chart.ShowDataLabelCallouts ? 1 : 0,
+                Stroke = ToOxyColor(borderColor)
+                    ?? (chart.ShowDataLabelCallouts ? ToOxyColor(leaderLineColor) ?? OxyColors.Gray : OxyColors.Transparent),
+                StrokeThickness = chart.DataLabelBorderThickness > 0
+                    ? chart.DataLabelBorderThickness
+                    : chart.ShowDataLabelCallouts ? chart.DataLabelLeaderLineThickness : 0,
                 Background = ToOxyColor(fillColor) ?? (chart.ShowDataLabelCallouts ? OxyColor.FromAColor(235, OxyColors.White) : OxyColors.Transparent),
                 TextRotation = chart.DataLabelAngle,
                 Padding = new OxyThickness(chart.ShowDataLabelCallouts ? 4 : 2)
@@ -608,6 +616,9 @@ public static partial class ChartRenderer
         var textColor = pointFormat?.ResolveTextColor(theme) ?? chart.ResolveDataLabelTextColor(theme);
         var borderColor = pointFormat?.ResolveBorderColor(theme) ?? chart.ResolveDataLabelBorderColor(theme);
         var fillColor = pointFormat?.ResolveFillColor(theme) ?? chart.ResolveDataLabelFillColor(theme);
+        // R88-render-chart-labels-legend-5-3: same leader-line fallback as the pie annotation path
+        // -- consume the parsed leader-line color/thickness instead of a hardcoded gray/1pt.
+        var leaderLineColor = chart.ResolveDataLabelLeaderLineColor(theme);
         model.Annotations.Add(new TextAnnotation
         {
             Text = ChartDataLabelTextPlanner.FormatDataLabel(chart, seriesName, categoryName, value),
@@ -618,8 +629,10 @@ public static partial class ChartRenderer
                 : OxyPlot.VerticalAlignment.Bottom,
             TextColor = ToOxyColor(textColor) ?? OxyColors.Automatic,
             FontSize = pointFormat?.FontSize ?? chart.DataLabelFontSize,
-            Stroke = ToOxyColor(borderColor) ?? (chart.ShowDataLabelCallouts ? OxyColors.Gray : OxyColors.Transparent),
-            StrokeThickness = pointFormat?.BorderThickness ?? (chart.DataLabelBorderThickness > 0 ? chart.DataLabelBorderThickness : chart.ShowDataLabelCallouts ? 1 : 0),
+            Stroke = ToOxyColor(borderColor)
+                ?? (chart.ShowDataLabelCallouts ? ToOxyColor(leaderLineColor) ?? OxyColors.Gray : OxyColors.Transparent),
+            StrokeThickness = pointFormat?.BorderThickness
+                ?? (chart.DataLabelBorderThickness > 0 ? chart.DataLabelBorderThickness : chart.ShowDataLabelCallouts ? chart.DataLabelLeaderLineThickness : 0),
             Background = ToOxyColor(fillColor) ?? (chart.ShowDataLabelCallouts ? OxyColor.FromAColor(235, OxyColors.White) : OxyColors.Transparent),
             TextRotation = chart.DataLabelAngle,
             Padding = new OxyThickness(chart.ShowDataLabelCallouts ? 4 : 2)

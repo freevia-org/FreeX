@@ -68,6 +68,57 @@ public static class SlicerTimelinePanePlanner
         return selected.ToList();
     }
 
+    /// <summary>
+    /// Plain-click semantics for the slicer side pane (R88-app-slicer-timeline-interaction-5-2):
+    /// replaces the whole selection with just <paramref name="caption"/>, unless it is already the
+    /// lone selected item -- in which case Excel treats the second plain click as clearing the filter
+    /// back to "everything selected". Mirrors <c>SlicerLayoutBuilder.Toggle</c>'s <c>additive: false</c>
+    /// branch (the native on-grid overlay's plain-click behaviour for the same slicer model), so both
+    /// surfaces agree instead of the pane being toggle-only.
+    /// </summary>
+    public static IReadOnlyList<string> ReplaceSlicerSelection(
+        IReadOnlyCollection<string> selectedItems,
+        string caption)
+    {
+        var isSoleSelection = selectedItems.Count == 1 &&
+            selectedItems.Contains(caption, StringComparer.CurrentCultureIgnoreCase);
+        return isSoleSelection ? [] : [caption];
+    }
+
+    /// <summary>
+    /// Shift-click semantics for the slicer side pane: extends the selection to the contiguous range
+    /// (in <paramref name="allItems"/> display order) between the earliest currently-selected item and
+    /// <paramref name="caption"/>, replacing the whole selection with that range -- Excel's shift-click
+    /// range-select behaviour. Falls back to selecting just <paramref name="caption"/> when nothing is
+    /// selected yet or either endpoint cannot be located in <paramref name="allItems"/>.
+    /// </summary>
+    public static IReadOnlyList<string> ExtendSlicerSelection(
+        IReadOnlyList<string> allItems,
+        IReadOnlyCollection<string> selectedItems,
+        string caption)
+    {
+        if (selectedItems.Count == 0)
+            return [caption];
+
+        var selectedSet = selectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+        var anchorIndex = -1;
+        var targetIndex = -1;
+        for (var index = 0; index < allItems.Count; index++)
+        {
+            if (anchorIndex < 0 && selectedSet.Contains(allItems[index]))
+                anchorIndex = index;
+            if (string.Equals(allItems[index], caption, StringComparison.CurrentCultureIgnoreCase))
+                targetIndex = index;
+        }
+
+        if (anchorIndex < 0 || targetIndex < 0)
+            return [caption];
+
+        var start = Math.Min(anchorIndex, targetIndex);
+        var end = Math.Max(anchorIndex, targetIndex);
+        return allItems.Skip(start).Take(end - start + 1).ToList();
+    }
+
     public static bool HasActiveSlicerFilter(SlicerModel slicer) =>
         slicer.SelectedItems.Count > 0;
 

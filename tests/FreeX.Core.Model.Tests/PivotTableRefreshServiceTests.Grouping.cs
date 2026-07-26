@@ -17,7 +17,8 @@ public sealed partial class PivotTableRefreshServiceTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "B5"),
-            TargetRange = Range(sheet, "D2", "F8")
+            TargetRange = Range(sheet, "D2", "F8"),
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0, Grouping: PivotFieldGrouping.Month));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));

@@ -19,7 +19,8 @@ public sealed partial class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "J8"),
             PageOverThenDown = true,
-            PageWrap = 2
+            PageWrap = 2,
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.PageFields.Add(new PivotFieldModel(0, SelectedItems: ["East", "West"]));
         pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Q1"));

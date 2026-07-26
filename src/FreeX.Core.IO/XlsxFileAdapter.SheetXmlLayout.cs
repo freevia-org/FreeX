@@ -212,8 +212,10 @@ public sealed partial class XlsxFileAdapter
         XNamespace packageRelNs) =>
         XlsxRelationshipReader.LoadTargets(archive, relsPath, sourcePart, packageRelNs);
 
-    private static WorksheetAutoFilterModel? ReadWorksheetAutoFilter(XElement? autoFilter) =>
-        XlsxWorksheetAutoFilterMapper.Read(autoFilter);
+    private static WorksheetAutoFilterModel? ReadWorksheetAutoFilter(
+        XElement? autoFilter,
+        IReadOnlyList<CellStyle>? differentialStyles) =>
+        XlsxWorksheetAutoFilterMapper.Read(autoFilter, differentialStyles);
 
     private static CfThresholdType FromCfvoType(string? type) =>
         XlsxAdvancedConditionalFormatMetadata.FromCfvoType(type);
@@ -309,7 +311,7 @@ public sealed partial class XlsxFileAdapter
             worksheetPath,
             worksheetXml.Root?.Element(worksheetNs + "singleXmlCells"));
         var additionalViews = XlsxWorksheetAdditionalViewMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sheetViews"));
-        var autoFilter = ReadWorksheetAutoFilter(worksheetXml.Root?.Element(worksheetNs + "autoFilter"));
+        var autoFilter = ReadWorksheetAutoFilter(worksheetXml.Root?.Element(worksheetNs + "autoFilter"), differentialStyles);
         var hasWorksheetDynamicFilters = HasDynamicFilter(autoFilter);
         var comments = XlsxWorksheetCommentReader.Read(archive, worksheetPath);
         var shownCommentAddresses = XlsxWorksheetCommentVisibilityReader.Read(archive, worksheetPath, worksheetXml, worksheetNs);

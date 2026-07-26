@@ -32,6 +32,36 @@ public static class ViewportScrollCalculator
     public static uint GetScrollableColumnLimit(Sheet? sheet) =>
         WorkbookViewportScrollPlanner.GetScrollableColumnLimit(sheet);
 
+    /// <summary>
+    /// Per-window Freeze Panes counterpart of <see cref="GetScrollableRowLimit(Sheet?)"/>: resolves
+    /// against an explicit frozen-row count instead of reading <c>Sheet.FrozenRows</c> off the shared
+    /// Sheet (R89-freeze-split-per-window-1), so a caller holding this window's own effective frozen
+    /// count (<c>MainWindow.GetEffectiveViewState</c>) gets a scrollable-row limit reflecting THIS
+    /// window's Freeze Panes state rather than a sibling "New Window"'s. Delegates to the same pure
+    /// <see cref="CalculateScrollableLimit"/> the Sheet-based overload above uses.
+    /// </summary>
+    public static uint GetScrollableRowLimit(uint frozenRows) =>
+        WorkbookViewportScrollPlanner.CalculateScrollableLimit(CellAddress.MaxRow, frozenRows);
+
+    /// <summary>Per-window counterpart of <see cref="GetScrollableColumnLimit(Sheet?)"/> -- see remarks on <see cref="GetScrollableRowLimit(uint)"/>.</summary>
+    public static uint GetScrollableColumnLimit(uint frozenCols) =>
+        WorkbookViewportScrollPlanner.CalculateScrollableLimit(CellAddress.MaxCol, frozenCols);
+
+    /// <summary>
+    /// Per-window Freeze Panes counterpart of <see cref="CalculateViewportOrigin(Sheet?, double, double)"/>:
+    /// resolves the scrollbar-to-worksheet-index mapping against explicit frozen-row/frozen-column
+    /// counts instead of the shared Sheet's (R89-freeze-split-per-window-1).
+    /// </summary>
+    public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(
+        uint frozenRows,
+        uint frozenCols,
+        double verticalScrollValue,
+        double horizontalScrollValue) =>
+        (
+            ScrollbarValueToWorksheetIndex(verticalScrollValue, frozenRows, CellAddress.MaxRow),
+            ScrollbarValueToWorksheetIndex(horizontalScrollValue, frozenCols, CellAddress.MaxCol)
+        );
+
     public static uint ClampViewportOrigin(double rawValue, uint absoluteLimit, uint visibleSpan) =>
         WorkbookViewportScrollPlanner.ClampViewportOrigin(rawValue, absoluteLimit, visibleSpan);
 

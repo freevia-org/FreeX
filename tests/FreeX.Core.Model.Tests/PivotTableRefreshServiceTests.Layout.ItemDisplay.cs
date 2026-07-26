@@ -18,7 +18,11 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "I10"),
-            RepeatItemLabels = false
+            RepeatItemLabels = false,
+            // R90-render-pivot-layout-5-1/5-3: pin the (former) Tabular/no-subtotal defaults this
+            // repeat-labels test was written against.
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -46,7 +50,9 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "J10"),
-            RepeatItemLabels = false
+            RepeatItemLabels = false,
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -75,7 +81,9 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "I12"),
-            BlankLineAfterItems = true
+            BlankLineAfterItems = true,
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -102,7 +110,9 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "J12"),
-            BlankLineAfterItems = true
+            BlankLineAfterItems = true,
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));

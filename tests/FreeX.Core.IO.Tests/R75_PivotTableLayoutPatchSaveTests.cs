@@ -52,7 +52,10 @@ public sealed class R75_PivotTableLayoutPatchSaveTests
         var adapter = new XlsxFileAdapter();
         var loaded = adapter.Load(source);
         var pivot = loaded.GetSheetAt(0).PivotTables.Single();
-        pivot.ReportLayout.Should().Be(PivotReportLayout.Tabular);
+        // R90-render-pivot-layout-5-3: PivotTableModel.ReportLayout's default changed from Tabular to
+        // Compact (Excel's actual out-of-the-box default), so a pivot built without setting it explicitly
+        // now round-trips as Compact.
+        pivot.ReportLayout.Should().Be(PivotReportLayout.Compact);
 
         pivot.ReportLayout = PivotReportLayout.Outline;
 

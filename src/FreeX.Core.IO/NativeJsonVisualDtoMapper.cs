@@ -30,6 +30,7 @@ internal static class NativeJsonVisualDtoMapper
         CropBottom = SanitizeCropEdge(picture.CropBottom),
         Title = picture.Title,
         AltText = picture.AltText,
+        IsDecorative = picture.IsDecorative,
         Cells = picture.Cells
             .OfType<PictureCellSnapshot>()
             .Select(cell => new PictureCellDto
@@ -83,7 +84,8 @@ internal static class NativeJsonVisualDtoMapper
                 CropRight = SanitizeCropEdge(pictureDto.CropRight),
                 CropBottom = SanitizeCropEdge(pictureDto.CropBottom),
                 Title = pictureDto.Title,
-                AltText = pictureDto.AltText
+                AltText = pictureDto.AltText,
+                IsDecorative = pictureDto.IsDecorative
             };
 
             NormalizePictureCrop(picture);
@@ -381,6 +383,7 @@ internal class PictureDto
     public double CropBottom { get; set; }
     public string? AltText { get; set; }
     public string? Title { get; set; }
+    public bool IsDecorative { get; set; }
     public List<PictureCellDto> Cells { get; set; } = [];
 }
 

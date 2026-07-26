@@ -33,8 +33,17 @@ public static class ChartTitleFit
     }
 }
 
-/// <summary>A single axis tick: its data value, its pixel position, and its formatted label.</summary>
-public readonly record struct AxisTick(double Value, double Position, string Label);
+/// <summary>
+/// A single axis tick: its data value, its pixel position, and its formatted label.
+/// <para>
+/// R90-render-chart-axis-titles-5-2: <c>DrawTickMark</c> is false for category ticks that
+/// Excel's "Interval between tick marks" (<see cref="ChartModel.XAxisTickMarkSkip"/>) thins out -- the
+/// tick still exists (so gridlines and the axis extent are unchanged) but the shells draw no tick mark
+/// at it. Label thinning ("Interval between labels", <see cref="ChartModel.XAxisLabelSkip"/>) needs no
+/// flag: a thinned label is simply emitted as an empty <c>Label</c>.
+/// </para>
+/// </summary>
+public readonly record struct AxisTick(double Value, double Position, string Label, bool DrawTickMark = true);
 
 /// <summary>
 /// The laid-out geometry for one chart axis: its side, screen line position, and major ticks. The

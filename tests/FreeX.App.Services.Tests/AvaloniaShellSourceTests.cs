@@ -5578,12 +5578,14 @@ public sealed class AvaloniaShellSourceTests
         getDataSource.Should().Contain("ImportDataPlanner.ResolveDelimiter(options, decodedText)");
 
         // The parse reuses the existing delimited-text reader and applies via ImportSheetCommand on the
-        // shared session command path; the source is remembered so Refresh can re-run it.
-        getDataSource.Should().Contain("new DelimitedTextFileAdapter(\".csv\", \"Text\", delimiter).Load(stream)");
-        getDataSource.Should().Contain("new ImportSheetCommand(targetSheetId, destination, sourceSheet)");
+        // shared session command path; the source (including its resolved anchor) is remembered so
+        // Refresh can re-run it back into the same anchor rather than the current selection.
+        getDataSource.Should().Contain("new DelimitedTextFileAdapter(");
+        getDataSource.Should().Contain("delimiter, allowSeparatorDirective, options.TreatConsecutiveDelimitersAsOne).Load(stream)");
+        getDataSource.Should().Contain("new ImportSheetCommand(destination.Sheet, destination, sourceSheet)");
         getDataSource.Should().Contain("_session.ExecuteReviewCommand(command)");
         getDataSource.Should().Contain("_session.AddSheet()");
-        getDataSource.Should().Contain("_lastImportSource = new ImportDataSource(filePath, options, resolvedDestination)");
+        getDataSource.Should().Contain("_lastImportSource = new ImportDataSource(filePath, options, resolvedDestination, destination)");
         getDataSource.Should().Contain("private void RefreshImportedData()");
 
         // User-facing strings go through UiText with the unique GetData_ key prefix.

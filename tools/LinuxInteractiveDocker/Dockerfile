@@ -5,6 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq \
     && apt-get install -y -qq --no-install-recommends \
         dbus-x11 \
+        espeak-ng \
         ffmpeg \
         fonts-dejavu \
         fonts-liberation \

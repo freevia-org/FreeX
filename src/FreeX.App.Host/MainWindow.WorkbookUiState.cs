@@ -65,6 +65,12 @@ public partial class MainWindow
     {
         _recalcEngine.RecalculateAllFormulas(_workbook);
         InvalidateNavigationCaches();
+        // R88-app-formula-auditing-5-1: the Watch Window is a modeless, non-closed dialog whose
+        // Value/Formula columns must track the workbook live -- refresh it at every recalculation
+        // choke point rather than only from its own Add/Refresh/Delete button handlers. Safe against
+        // re-entrancy: the dialog's own getEntries callback calls RecalculateWorkbook() before
+        // reading values, and WatchWindowDialog.Refresh() guards against being re-entered from here.
+        _watchWindowDialog?.Refresh();
     }
 
     /// <summary>
@@ -80,6 +86,8 @@ public partial class MainWindow
     {
         _recalcEngine.Recalculate(_workbook, []);
         InvalidateNavigationCaches();
+        // See RecalculateWorkbook above (R88-app-formula-auditing-5-1).
+        _watchWindowDialog?.Refresh();
     }
 
     private void RebuildDependenciesAndCalculate()
@@ -90,6 +98,8 @@ public partial class MainWindow
         // twice for a single Ctrl+Alt+Shift+F9 press.
         _recalcEngine.RecalculateAllFormulas(_workbook);
         InvalidateNavigationCaches();
+        // See RecalculateWorkbook above (R88-app-formula-auditing-5-1).
+        _watchWindowDialog?.Refresh();
         UpdateViewport();
     }
 
@@ -99,6 +109,12 @@ public partial class MainWindow
         {
             _recalcEngine.Recalculate(_workbook, changedCells);
             InvalidateNavigationCaches();
+            // R88-app-formula-auditing-5-1: this is the choke point every ordinary automatic-mode
+            // cell edit recalculates through (TryExecuteEditCells callers invoke this after the
+            // edit commits), so it is the one that matters most for the Watch Window's core "shows
+            // the live value while editing elsewhere" promise. See RecalculateWorkbook above for the
+            // re-entrancy note.
+            _watchWindowDialog?.Refresh();
         }
     }
 

@@ -42,7 +42,23 @@ public static class StructuredTableStyleService
         return styledAny;
     }
 
-    private static bool ApplyTableStyle(Workbook workbook, Sheet sheet, StructuredTableModel table)
+    /// <summary>
+    /// Re-flows a table's alternating banding purely from each row/column's CURRENT position
+    /// within <paramref name="table"/>.Range, overwriting any previously-baked stripe fill.
+    /// Call this after a mutation that can change which physical row/column a table's data
+    /// occupies — inserting/deleting rows inside the table, sorting it, or filtering it — since
+    /// real Excel's table banding is dynamic (purely positional) and continuously re-flows after
+    /// any such change, whereas <see cref="ApplyLoadedTableStyles"/>'s one-time load-time bake
+    /// never runs again on its own. Unlike the load-time materializer, this always rewrites the
+    /// body fill (forceReband) because after such a mutation any fill already on a body cell is
+    /// necessarily this service's own stale banding from before the mutation, never a user
+    /// customization (a genuine user fill would already have been preserved by whichever earlier
+    /// call painted it, and this call cannot tell the two apart once it starts).
+    /// </summary>
+    public static bool RebandTable(Workbook workbook, Sheet sheet, StructuredTableModel table) =>
+        ApplyTableStyle(workbook, sheet, table, forceReband: true);
+
+    private static bool ApplyTableStyle(Workbook workbook, Sheet sheet, StructuredTableModel table, bool forceReband = false)
     {
         var range = table.Range;
         if (range.Start.Sheet != sheet.Id ||
@@ -110,7 +126,7 @@ public static class StructuredTableStyleService
                     ? (rowOffset % 2 == 0 ? evenFill : oddFill)
                     : bodyFill;
                 for (var col = range.Start.Col; col <= range.End.Col; col++)
-                    styledAny |= MergeStyleOntoCell(workbook, sheet, row, col, rowStyle, isHeaderOrTotals: false, banding: banding);
+                    styledAny |= MergeStyleOntoCell(workbook, sheet, row, col, rowStyle, isHeaderOrTotals: false, banding: banding, forceFill: forceReband);
             }
 
             // ── Column stripes (overrides row fill per column, mirrors StructuredTableCommand) ──
@@ -129,7 +145,7 @@ public static class StructuredTableStyleService
                     for (var row = dataStartRow; row <= dataEndRow; row++)
                     {
                         var hadExplicitFillBeforeStyling = originalBodyFill!.Contains((row, col));
-                        styledAny |= MergeStyleOntoCell(workbook, sheet, row, col, colFill, isHeaderOrTotals: false, banding: banding, forceFill: !hadExplicitFillBeforeStyling);
+                        styledAny |= MergeStyleOntoCell(workbook, sheet, row, col, colFill, isHeaderOrTotals: false, banding: banding, forceFill: forceReband || !hadExplicitFillBeforeStyling);
                     }
                 }
             }
@@ -276,14 +292,21 @@ public static class StructuredTableStyleService
         StructuredTableStyleBanding banding,
         bool forceFill = false)
     {
+        // R90-reband regression fix: do NOT eagerly materialize a blank Cell here just to hold
+        // whatever style this pass computes -- a genuinely absent cell (no content, never styled)
+        // must only sprout into existence when the computed style is an actual VISIBLE change from
+        // a truly blank cell's rendering (a real fill color, a border, or bold), e.g. a striped
+        // table's colored band or a Medium-family style's interior border. A no-op pass -- most
+        // commonly the body-fill branch when ShowRowStripes is off and the style has no border,
+        // which paints nothing but an (explicit, but visually indistinguishable-from-blank) white
+        // fill -- must leave an untouched column alone, exactly like Excel never creates cell
+        // content from a cosmetic restripe. This is checked separately from the existing/merged
+        // content-equality check below (via HasVisibleTableFormatting), because
+        // BuildBodyStyle/EffectiveBodyFill always writes an *explicit* CellColor.White rather than a
+        // null "no fill" -- which would never structurally equal a truly blank cell's default style
+        // even though it renders identically.
         var cell = sheet.GetCell(row, col);
-        if (cell is null)
-        {
-            cell = new Cell { Value = BlankValue.Instance };
-            sheet.SetCell(new CellAddress(sheet.Id, row, col), cell);
-        }
-
-        var existing = workbook.GetStyle(cell.StyleId);
+        var existing = cell is not null ? workbook.GetStyle(cell.StyleId) : CellStyle.Default;
         var visual = workbook.GetStyle(visualStyleId);
 
         // Do not overwrite a fill the user (or the source file) explicitly set on a body cell; Excel's
@@ -326,9 +349,35 @@ public static class StructuredTableStyleService
         if (merged.Equals(existing))
             return false;
 
+        if (cell is null)
+        {
+            if (!HasVisibleTableFormatting(merged))
+                return false;
+
+            cell = new Cell { Value = BlankValue.Instance };
+            sheet.SetCell(new CellAddress(sheet.Id, row, col), cell);
+        }
+
         cell.StyleId = workbook.RegisterStyle(merged);
         return true;
     }
+
+    /// <summary>
+    /// True when <paramref name="style"/> would render as visibly different from a genuinely blank,
+    /// never-styled cell -- a non-white fill (explicit or theme-backed), a border on any side, or
+    /// bold text. Used to decide whether a banding pass is allowed to materialize a brand-new blank
+    /// <see cref="Cell"/> purely to hold this style: an all-white, borderless, non-bold style (e.g.
+    /// the default body-fill pass when a table has no row/column stripes and no style border) is
+    /// indistinguishable from no styling at all, so it must not sprout a cell where none existed.
+    /// </summary>
+    private static bool HasVisibleTableFormatting(CellStyle style) =>
+        (style.FillColor is { } fill && fill != CellColor.White) ||
+        style.FillThemeColor is not null ||
+        style.Bold ||
+        style.BorderTop.Style != BorderStyle.None ||
+        style.BorderRight.Style != BorderStyle.None ||
+        style.BorderBottom.Style != BorderStyle.None ||
+        style.BorderLeft.Style != BorderStyle.None;
 
     /// <summary>
     /// Applies bold emphasis onto a cell without touching its fill, font color, or other attributes.

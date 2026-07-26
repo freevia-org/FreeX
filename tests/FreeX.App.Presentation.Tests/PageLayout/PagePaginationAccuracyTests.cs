@@ -389,11 +389,16 @@ public sealed class PagePaginationAccuracyTests
     [Fact]
     public void CalculatePageCapacity_HeaderFooterMarginsSubtractedCorrectly()
     {
+        // R88-services-page-setup-margins-5-1: corrected to Excel's actual margin-guide model. The
+        // header/footer margin is the distance from the page edge to the header/footer band, which
+        // sits WITHIN the top/bottom margin band as long as it doesn't exceed it -- Excel does not
+        // reserve additional space on top of the top/bottom margins for it.
+        //
         // A4 portrait, narrow (Excel: 0.25" left/right, 0.75" top/bottom) margins.
-        // Paper height = 11.69", page margins = 0.75+0.75 = 1.5" -> printable = 10.19" = 978.24px.
-        // Header = 0.3", Footer = 0.3" -> reserved = 0.6" = 57.6px.
-        // Body height = 978.24 - 57.6 = 920.64px.
-        // Rows per page (at 20px) = floor(920.64 / 20) = 46.
+        // Header = 0.3", Footer = 0.3" -- both SMALLER than the 0.75" top/bottom margins, so they fit
+        // entirely within the margin band and reserve nothing extra.
+        // Body height = paper height - top margin - bottom margin = 11.69 - 0.75 - 0.75 = 10.19" = 978.24px.
+        // Rows per page (at 20px) = floor(978.24 / 20) = 48.
         const double pageH = 11.69;
         const double topMarginIn = 0.75;
         const double bottomMarginIn = 0.75;
@@ -402,8 +407,9 @@ public sealed class PagePaginationAccuracyTests
         const double dpi = 96.0;
         const double rowH = 20.0;
 
-        var printableH = (pageH - topMarginIn - bottomMarginIn) * dpi;
-        var bodyH = printableH - (headerIn + footerIn) * dpi;
+        var bodyTopIn = Math.Max(topMarginIn, headerIn);
+        var bodyBottomIn = Math.Max(bottomMarginIn, footerIn);
+        var bodyH = (pageH - bodyTopIn - bodyBottomIn) * dpi;
         var expectedRows = (uint)Math.Floor(bodyH / rowH);
 
         var capacity = PagePaginationPlanner.CalculatePageCapacity(

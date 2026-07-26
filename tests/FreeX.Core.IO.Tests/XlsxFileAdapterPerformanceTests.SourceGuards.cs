@@ -373,7 +373,9 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         batchSource.Should().Contain("internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)");
         batchSource.Should().Contain("XlsxWorksheetProtectionMetadataWriter.Save(session, workbook);");
         batchSource.Should().Contain("XlsxWorksheetHeaderFooterMetadataWriter.Save(session, workbook);");
-        sourceIndependentBatchSource.Should().Contain("XlsxWorksheetAutoFilterMapper.Save(session, workbook);");
+        // R89-io-autofilter-color-dxf-1-1: the autofilter save call now threads through any dxfIds
+        // XlsxAutoFilterColorFilterDxfWriter allocated for colour filters in this same batch pass.
+        sourceIndependentBatchSource.Should().Contain("XlsxWorksheetAutoFilterMapper.Save(session, workbook, colorFilterDxfIds);");
         sourceIndependentBatchSource.Should().Contain("XlsxDataValidationNativeMetadataMapper.Save(session, workbook);");
         sourceIndependentBatchSource.Should().Contain("XlsxWorksheetNativeMetadataBatchWriter.Save(session, workbook);");
         saveSource.Should().Contain("if (!XlsxDataValidationNativeMetadataMapper.HasNativeMetadata(sheet))");

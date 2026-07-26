@@ -273,7 +273,7 @@ public partial class GridView
         if (!ShouldDisplayDrawingObjectRect(rect, rotationDegrees, visibleRight, visibleBottom))
             return;
 
-        var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
+        var transformState = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
         var colors = new DrawingObjectColors(metadata.Paint.Fill, metadata.Paint.Outline);
         DrawTextBoxThemeEffect(dc, rect, themeEffect);
         var fillBrush = metadata.Paint.HasFill ? GetDrawingObjectBrush(242, colors.Fill) : null;
@@ -282,7 +282,7 @@ public partial class GridView
         DrawTextBoxThemeInnerShadow(dc, rect, themeEffect);
         if (EditingTextBoxId is { } editingTextBoxId && editingTextBoxId == textBox.Id)
         {
-            PopDrawingObjectTransform(dc, transformDepth);
+            PopDrawingObjectTransform(dc, transformState);
             return;
         }
 
@@ -291,10 +291,13 @@ public partial class GridView
         var textClipRect = new Rect(rect.Left + 4, rect.Top + 4, textWidth, textHeight);
         var text = GetDrawingObjectText(textBox.Text, TextBrush, 12, textWidth, textHeight, pixelsPerDip);
 
+        // Draw text with the flip's ScaleTransform popped (rotation, if any, stays active):
+        // Excel mirrors a flipped text box's outline but never its text (same as shapes).
+        PopDrawingObjectFlipTransform(dc, ref transformState);
         dc.PushClip(GetDrawingObjectClipGeometry(textClipRect));
         dc.DrawText(text, new Point(rect.Left + 4, rect.Top + 4));
         dc.Pop();
-        PopDrawingObjectTransform(dc, transformDepth);
+        PopDrawingObjectTransform(dc, transformState);
     }
 
     private void RenderDrawingShapes(DrawingContext dc)
@@ -360,7 +363,7 @@ public partial class GridView
             return;
 
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-        var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
+        var transformState = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
         var colors = new DrawingObjectColors(metadata.Paint.Fill, metadata.Paint.Outline);
         var shapeThemeEffect = ResolveDrawingShapeThemeEffect(metadata, themeEffect);
         var pen = GetDrawingShapeOutlinePen(colors.Outline, metadata.Outline);
@@ -379,8 +382,13 @@ public partial class GridView
         DrawShapeAuthoredInnerShadow(dc, metadata.Kind, rect, metadata.AuthoredEffect);
         DrawShapeThemeInnerShadow(dc, metadata.Kind, rect, shapeThemeEffect);
         if (metadata.HasShapeText)
+        {
+            // Draw text with the flip's ScaleTransform popped (rotation, if any, stays active):
+            // Excel mirrors a flipped shape's geometry but never its text.
+            PopDrawingObjectFlipTransform(dc, ref transformState);
             DrawShapeText(dc, shape, rect, pixelsPerDip);
-        PopDrawingObjectTransform(dc, transformDepth);
+        }
+        PopDrawingObjectTransform(dc, transformState);
     }
 
     private bool HasExplicitDrawingObjectZOrder() =>
@@ -1431,23 +1439,33 @@ public partial class GridView
     public static TextBoxRenderMetadata ResolveTextBoxRenderMetadata(TextBoxModel textBox, WorkbookTheme theme) =>
         GridDrawingObjectPlanner.ResolveTextBoxRenderMetadata(textBox, theme);
 
-    private static int PushDrawingObjectTransform(
+    /// <summary>
+    /// Tracks which of the two transforms <see cref="PushDrawingObjectTransform"/> pushed, so a
+    /// caller can pop just the flip (<see cref="PopDrawingObjectFlipTransform"/>) before drawing
+    /// shape/text-box text -- Excel mirrors a flipped shape's outline geometry but keeps its text
+    /// body upright and readable, so the flip's <see cref="ScaleTransform"/> must not be active
+    /// while text glyphs are drawn, while the rotation should still apply to the text like Excel.
+    /// </summary>
+    private readonly record struct DrawingObjectTransformState(bool HasRotation, bool HasFlip);
+
+    private static DrawingObjectTransformState PushDrawingObjectTransform(
         DrawingContext dc,
         double rotationDegrees,
         bool flipHorizontal,
         bool flipVertical,
         Rect rect)
     {
-        var depth = 0;
+        var hasRotation = false;
         if (Math.Abs(rotationDegrees % 360) > 0.0001)
         {
             dc.PushTransform(new RotateTransform(
                 rotationDegrees,
                 rect.Left + rect.Width / 2,
                 rect.Top + rect.Height / 2));
-            depth++;
+            hasRotation = true;
         }
 
+        var hasFlip = false;
         if (flipHorizontal || flipVertical)
         {
             dc.PushTransform(new ScaleTransform(
@@ -1455,15 +1473,31 @@ public partial class GridView
                 flipVertical ? -1 : 1,
                 rect.Left + rect.Width / 2,
                 rect.Top + rect.Height / 2));
-            depth++;
+            hasFlip = true;
         }
 
-        return depth;
+        return new DrawingObjectTransformState(hasRotation, hasFlip);
     }
 
-    private static void PopDrawingObjectTransform(DrawingContext dc, int depth)
+    /// <summary>
+    /// Pops just the flip <see cref="ScaleTransform"/> (if one was pushed), leaving any rotation
+    /// transform active. Call before drawing shape/text-box text so the text stays upright/mirror-free
+    /// under a flip while still following the shape's rotation, matching Excel.
+    /// </summary>
+    private static void PopDrawingObjectFlipTransform(DrawingContext dc, ref DrawingObjectTransformState state)
     {
-        for (var i = 0; i < depth; i++)
+        if (!state.HasFlip)
+            return;
+
+        dc.Pop();
+        state = state with { HasFlip = false };
+    }
+
+    private static void PopDrawingObjectTransform(DrawingContext dc, DrawingObjectTransformState state)
+    {
+        if (state.HasFlip)
+            dc.Pop();
+        if (state.HasRotation)
             dc.Pop();
     }
 

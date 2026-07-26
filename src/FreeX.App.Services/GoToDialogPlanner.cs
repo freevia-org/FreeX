@@ -91,7 +91,7 @@ public static class GoToSpecialDialogPlanner
     public const double AvaloniaContentRightMargin = 29;
     public const double ActionRowTopMargin = 10;
     public const double ActionRowRightMargin = 28;
-    public const double ActionRowBottomMargin = 51;
+    public const double ActionRowBottomMargin = 49;
     public const double ActionButtonHeight = 20;
     public const double AvaloniaChoiceGroupTopMargin = 3;
     public const double AvaloniaChoiceGroupBottomMargin = 13;

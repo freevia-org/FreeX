@@ -403,14 +403,20 @@ public sealed partial class MainWindow
     /// <summary>
     /// Parses <paramref name="decodedText"/> into a workbook through the existing delimited-text reader
     /// (which performs the value coercion), then applies its first sheet at the resolved destination via
-    /// <see cref="ImportSheetCommand"/>. Remembers the source so Refresh can re-run it. Returns false with
-    /// a user message on failure.
+    /// <see cref="ImportSheetCommand"/>. Remembers the source (including the exact anchor written to) so
+    /// Refresh can re-run it. When <paramref name="anchorOverride"/> is supplied and its sheet still
+    /// exists, the import re-targets that exact anchor instead of resolving a destination fresh (see
+    /// <see cref="RefreshImportedData"/> / R88-io-text-import-wizard-5-1) — this is what lets a refresh
+    /// land back on the original B2:D10-style block instead of the current selection, and what stops a
+    /// repeated new-sheet refresh from adding a new sheet on every run. Returns false with a user message
+    /// on failure.
     /// </summary>
     private bool TryImportFromText(
         string filePath,
         string decodedText,
         ImportDataOptions options,
-        out string? error)
+        out string? error,
+        CellAddress? anchorOverride = null)
     {
         error = null;
         var delimiter = ImportDataPlanner.ResolveDelimiter(options, decodedText);
@@ -422,7 +428,15 @@ public sealed partial class MainWindow
             // exact value-coercion (formulas, errors, dates, numbers) used by a plain CSV file open.
             var utf8 = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
             using var stream = new MemoryStream(utf8.GetBytes(decodedText));
-            imported = new DelimitedTextFileAdapter(".csv", "Text", delimiter).Load(stream);
+            // R88-io-text-import-wizard-5-3: only let an embedded "sep=X" directive override the active
+            // delimiter when the user left the wizard's delimiter choice on Detect; an explicit pick (e.g.
+            // Comma) must win, or the confirmed preview and the actual import can silently disagree.
+            var allowSeparatorDirective = options.Delimiter == ImportDelimiterKind.Detect;
+            // R88-io-text-import-wizard-5-2: forward "treat consecutive delimiters as one" into the real
+            // parse too, so the committed import matches the preview grid the user just confirmed (the
+            // preview is built with the same option via ImportDataPlanner.BuildSplitOptions).
+            imported = new DelimitedTextFileAdapter(
+                ".csv", "Text", delimiter, allowSeparatorDirective, options.TreatConsecutiveDelimitersAsOne).Load(stream);
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or ArgumentException)
         {
@@ -439,22 +453,37 @@ public sealed partial class MainWindow
         var sourceSheet = imported.Sheets[0];
         var resolvedDestination = options.Destination;
 
-        if (resolvedDestination == ImportDestinationKind.NewSheet)
+        // R88-io-text-import-wizard-5-1: a refresh re-targets the exact anchor the original import wrote
+        // to (same sheet, same cell) rather than resolving a destination fresh from the current selection
+        // or adding another new sheet. Only fall through to the fresh-resolve path below when there is no
+        // remembered anchor (first import) or its sheet has since been deleted.
+        CellAddress destination;
+        if (anchorOverride is { } anchor && _session.Workbook.GetSheet(anchor.Sheet) is not null)
         {
-            var addResult = _session.AddSheet();
-            if (!addResult.Success)
+            // The anchor's sheet still exists (SelectSheet's bool return only reports whether the active
+            // sheet/selection changed, not whether the sheet exists, so existence is checked directly).
+            _session.SelectSheet(anchor.Sheet);
+            destination = anchor;
+        }
+        else
+        {
+            if (resolvedDestination == ImportDestinationKind.NewSheet)
             {
-                error = addResult.ErrorMessage ?? UiText.Get("GetData_ImportFailed");
-                return false;
+                var addResult = _session.AddSheet();
+                if (!addResult.Success)
+                {
+                    error = addResult.ErrorMessage ?? UiText.Get("GetData_ImportFailed");
+                    return false;
+                }
             }
+
+            var targetSheetId = _session.ActiveSheet.Id;
+            destination = resolvedDestination == ImportDestinationKind.NewSheet
+                ? new CellAddress(targetSheetId, 1, 1)
+                : _session.SelectedRange.Start;
         }
 
-        var targetSheetId = _session.ActiveSheet.Id;
-        var destination = resolvedDestination == ImportDestinationKind.NewSheet
-            ? new CellAddress(targetSheetId, 1, 1)
-            : _session.SelectedRange.Start;
-
-        var command = new ImportSheetCommand(targetSheetId, destination, sourceSheet);
+        var command = new ImportSheetCommand(destination.Sheet, destination, sourceSheet);
         var outcome = _session.ExecuteReviewCommand(command);
         if (!outcome.Success)
         {
@@ -463,7 +492,7 @@ public sealed partial class MainWindow
         }
 
         _session.SelectCell(destination);
-        _lastImportSource = new ImportDataSource(filePath, options, resolvedDestination);
+        _lastImportSource = new ImportDataSource(filePath, options, resolvedDestination, destination);
 
         var used = sourceSheet.GetUsedRange()!.Value;
         RefreshShell(UiText.Format(
@@ -502,7 +531,7 @@ public sealed partial class MainWindow
         }
 
         var decoded = ImportDataPlanner.DecodeBytes(bytes, source.Options.Encoding);
-        if (!TryImportFromText(source.FilePath, decoded, source.Options, out var error))
+        if (!TryImportFromText(source.FilePath, decoded, source.Options, out var error, source.Anchor))
         {
             ShowEditIssue(error ?? UiText.Get("GetData_ImportFailed"));
             return;

@@ -71,7 +71,9 @@ public static partial class AccessibilityCheckerService
                 if (!picture.IsVisible)
                     continue;
 
-                AddAltTextIssue(issues, sheet, picture.Anchor, "Picture", picture.AltText, picture.Title, picture.Name);
+                AddAltTextIssue(
+                    issues, sheet, picture.Anchor, "Picture", picture.AltText, picture.Title, picture.Name,
+                    isDecorative: picture.IsDecorative);
             }
 
             foreach (var shape in sheet.DrawingShapes)
@@ -137,8 +139,16 @@ public static partial class AccessibilityCheckerService
         string objectType,
         string? altText,
         string? title,
-        string? name)
+        string? name,
+        bool isDecorative = false)
     {
+        // R90-app-accessibility-checker-5-2: a picture the user explicitly marked "decorative" in
+        // Excel's Alt Text pane is intentionally content-free and is exempt from the Missing
+        // alternative text rule, even when it has no alt text/title/name at all -- matching real
+        // Excel's own Accessibility Checker.
+        if (isDecorative)
+            return;
+
         var hasAccessibleText = false;
         foreach (var candidate in GetObjectAccessibleTextCandidates(altText, title, name))
         {

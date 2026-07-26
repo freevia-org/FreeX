@@ -12,6 +12,25 @@ public static class CustomViewStatePlanner
         return -1;
     }
 
+    /// <summary>
+    /// R90-io-sheet-view-custom-views-5-2: real Excel disables the entire Custom Views feature
+    /// (View &gt; Custom Views is grayed out; attempting it via the object model raises "This command
+    /// is not available in a workbook that contains a table") the moment ANY sheet in the workbook
+    /// has a structured Table, because a saved view's per-sheet state (hidden rows/cols, filters,
+    /// active cell) could conflict with a table's own AutoFilter/banding state on Show. Checked
+    /// across every sheet, not just the active one, since Excel's own gate is workbook-wide.
+    /// </summary>
+    public static CommandOutcome? RejectIfWorkbookHasTable(Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheet.StructuredTables.Count > 0)
+                return new CommandOutcome(false, "This command is not available in a workbook that contains a table.");
+        }
+
+        return null;
+    }
+
     public static List<WorksheetCustomViewState> CaptureWorkbookState(Workbook workbook) =>
         workbook.Sheets.Select(CaptureSheetState).ToList();
 

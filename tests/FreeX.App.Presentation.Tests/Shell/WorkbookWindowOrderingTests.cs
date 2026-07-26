@@ -5,7 +5,7 @@ namespace FreeX.App.Presentation.Tests.Shell;
 
 public sealed class WorkbookWindowOrderingTests
 {
-    // ── Window title numbering (Excel "Book1 - 1 / Book1 - 2" style) ──────────
+    // ── Window title numbering (Excel "Book1:1 / Book1:2" style) ──────────────
 
     [Fact]
     public void FormatWindowTitleSuffix_SingleWindow_HasNoSuffix()
@@ -15,9 +15,9 @@ public sealed class WorkbookWindowOrderingTests
     }
 
     [Theory]
-    [InlineData(1, 2, " - 1")]
-    [InlineData(2, 2, " - 2")]
-    [InlineData(3, 4, " - 3")]
+    [InlineData(1, 2, ":1")]
+    [InlineData(2, 2, ":2")]
+    [InlineData(3, 4, ":3")]
     public void FormatWindowTitleSuffix_MultipleWindows_NumbersByPosition(
         int position,
         int totalWindowCount,
@@ -40,9 +40,9 @@ public sealed class WorkbookWindowOrderingTests
     [Fact]
     public void ApplyTitleSuffix_AppendsExcelStyleNumberBeforeIsNotDoubled()
     {
-        WorkbookWindowOrdering.FormatWindowTitleSuffix(2, 3).Should().Be(" - 2");
+        WorkbookWindowOrdering.FormatWindowTitleSuffix(2, 3).Should().Be(":2");
         WorkbookWindowOrdering.FormatWindowTitleSuffix(2, 3)
-            .Should().NotContain(" - 2 - 2", "the suffix must not stack across renumbering");
+            .Should().NotContain(":2:2", "the suffix must not stack across renumbering");
     }
 
     // ── Next-window selection (Switch Windows cycles forward) ─────────────────

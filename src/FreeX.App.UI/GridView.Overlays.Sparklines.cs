@@ -26,16 +26,32 @@ public partial class GridView
     // The existing _brushCache (keyed by CellColor) is reused for fill brushes.
     private readonly Dictionary<(CellColor Color, double Thickness), Pen> _sparklinePenCache = new();
 
-    private Pen GetSparklinePen(CellColor color, double thicknessDip)
+    // Static (rather than instance) and cache-parameterized so the print/PDF path
+    // (DrawSparklineIntoCell below, called cross-assembly by PrintRenderer.GridCells.cs) can share
+    // this exact pen-building logic without an instance -- pass null for a one-shot, uncached pen
+    // (R88-render-sparkline-5-1). The interactive grid's own RenderSparklines below still passes its
+    // instance caches (_sparklinePenCache/_brushCache), so its behavior is unchanged.
+    private static Pen GetSparklinePen(
+        CellColor color,
+        double thicknessDip,
+        Dictionary<(CellColor Color, double Thickness), Pen>? penCache,
+        Dictionary<CellColor, SolidColorBrush>? brushCache)
     {
-        var key = (color, thicknessDip);
-        if (!_sparklinePenCache.TryGetValue(key, out var pen))
+        if (penCache is not null)
         {
-            pen = new Pen(BrushForCellColor(color, _brushCache), thicknessDip);
-            pen.Freeze();
-            _sparklinePenCache[key] = pen;
+            var key = (color, thicknessDip);
+            if (!penCache.TryGetValue(key, out var cachedPen))
+            {
+                cachedPen = new Pen(BrushForCellColor(color, brushCache), thicknessDip);
+                cachedPen.Freeze();
+                penCache[key] = cachedPen;
+            }
+
+            return cachedPen;
         }
 
+        var pen = new Pen(BrushForCellColor(color, brushCache), thicknessDip);
+        pen.Freeze();
         return pen;
     }
 
@@ -117,47 +133,138 @@ public partial class GridView
 
     // ── Axis line ─────────────────────────────────────────────────────────────
 
-    private void DrawSparklineAxisLine(DrawingContext dc, Rect rect, CellColor axisColor)
+    /// <summary>
+    /// Draws the sparkline "Show Axis" horizontal line at the actual zero-value position implied by
+    /// the data/scale, matching Excel: for column/win-loss sparklines this is the same zero baseline
+    /// <see cref="SparklineLayoutPlanner.CalculateColumnLayout(IReadOnlyList{double}, Rect, bool)"/>'s
+    /// underlying engine bars from (rect.Bottom for all-positive data, rect.Top for all-negative, the
+    /// midline for mixed-sign or win/loss); for line sparklines it is the pixel position of value 0
+    /// within the plotted min/max range, and is only drawn when that range actually spans (or
+    /// touches) zero -- otherwise real zero sits outside the visible plot and no line is drawn.
+    /// </summary>
+    private static void DrawSparklineAxisLine(
+        DrawingContext dc,
+        IReadOnlyList<double> values,
+        Rect rect,
+        SparklineKind kind,
+        CellColor axisColor,
+        double? overrideMin,
+        double? overrideMax,
+        Dictionary<(CellColor Color, double Thickness), Pen>? penCache,
+        Dictionary<CellColor, SolidColorBrush>? brushCache)
     {
-        var y = rect.Top + (rect.Height / 2);
-        var pen = GetSparklinePen(axisColor, 0.75);
-        dc.DrawLine(pen, new Point(rect.Left, y), new Point(rect.Right, y));
+        var y = kind == SparklineKind.Line
+            ? ResolveLineAxisY(values, rect, overrideMin, overrideMax)
+            : ResolveColumnAxisY(values, rect, kind == SparklineKind.WinLoss);
+
+        if (y is not { } axisY)
+            return;
+
+        var pen = GetSparklinePen(axisColor, 0.75, penCache, brushCache);
+        dc.DrawLine(pen, new Point(rect.Left, axisY), new Point(rect.Right, axisY));
+    }
+
+    /// <summary>
+    /// Zero-crossing Y for a line sparkline, or null when the plotted min/max range does not include
+    /// zero (real zero would sit outside the visible plot, so Excel does not draw the axis line).
+    /// </summary>
+    private static double? ResolveLineAxisY(IReadOnlyList<double> values, Rect rect, double? overrideMin, double? overrideMax)
+    {
+        double? min = null;
+        double? max = null;
+        foreach (var value in values)
+        {
+            if (!double.IsFinite(value))
+                continue;
+            if (min is null || value < min)
+                min = value;
+            if (max is null || value > max)
+                max = value;
+        }
+
+        if (min is null || max is null)
+            return null;
+
+        var lo = overrideMin ?? min.Value;
+        var hi = overrideMax ?? max.Value;
+        if (lo > hi)
+            (lo, hi) = (hi, lo);
+
+        // Real zero falls outside the plotted range -- no axis line to show.
+        if (0 < lo || 0 > hi)
+            return null;
+
+        var span = Math.Abs(hi - lo) < 0.0000001 ? 1 : hi - lo;
+        return rect.Bottom - (Math.Clamp((0 - lo) / span, 0, 1) * rect.Height);
+    }
+
+    /// <summary>
+    /// Zero-baseline Y for a column/win-loss sparkline: the cell bottom when the data is entirely
+    /// positive, the cell top when entirely negative, and the vertical midline for mixed-sign data or
+    /// win/loss (which is always keyed on sign alone) -- mirroring
+    /// <see cref="FreeX.App.Presentation.Sparklines.SparklineLayoutEngine.VisitColumnLayout{TConsumer}(IReadOnlyList{double}, FreeX.App.Presentation.Sparklines.LayoutRect, bool, ref TConsumer, double?)"/>'s
+    /// own baseline computation for the bars themselves.
+    /// </summary>
+    private static double ResolveColumnAxisY(IReadOnlyList<double> values, Rect rect, bool winLoss)
+    {
+        var hasPositive = false;
+        var hasNegative = false;
+        if (!winLoss)
+        {
+            foreach (var value in values)
+            {
+                if (!double.IsFinite(value))
+                    continue;
+                if (value > 0)
+                    hasPositive = true;
+                else if (value < 0)
+                    hasNegative = true;
+            }
+        }
+
+        if (hasPositive && !hasNegative)
+            return rect.Bottom;
+        if (hasNegative && !hasPositive)
+            return rect.Top;
+        return rect.Top + (rect.Height / 2);
     }
 
     // ── Line sparkline ────────────────────────────────────────────────────────
 
-    private void DrawLineSparkline(
+    private static void DrawLineSparkline(
         DrawingContext dc,
         SparklineModel sparkline,
         IReadOnlyList<double> values,
         Rect rect,
         Pen linePen,
         double? overrideMin,
-        double? overrideMax)
+        double? overrideMax,
+        Dictionary<CellColor, SolidColorBrush>? brushCache)
     {
         var consumer = new LineSparklineDrawingConsumer(dc, linePen);
-        SparklineLayoutPlanner.VisitLineLayout(values, rect, ref consumer, overrideMin, overrideMax);
+        SparklineLayoutPlanner.VisitLineLayout(values, rect, ref consumer, overrideMin, overrideMax, sparkline.RightToLeft);
 
         // Draw markers (line sparklines only).
         if (sparkline.ShowMarkers    || sparkline.ShowHighPoint   || sparkline.ShowLowPoint  ||
             sparkline.ShowFirstPoint || sparkline.ShowLastPoint   || sparkline.ShowNegativePoints)
         {
-            DrawLineMarkers(dc, sparkline, values, rect, overrideMin, overrideMax);
+            DrawLineMarkers(dc, sparkline, values, rect, overrideMin, overrideMax, brushCache);
         }
     }
 
-    private void DrawLineMarkers(
+    private static void DrawLineMarkers(
         DrawingContext dc,
         SparklineModel sparkline,
         IReadOnlyList<double> values,
         Rect rect,
         double? overrideMin,
-        double? overrideMax)
+        double? overrideMax,
+        Dictionary<CellColor, SolidColorBrush>? brushCache)
     {
         if (values.Count == 0)
             return;
 
-        var points = SparklineLayoutPlanner.GetLinePoints(values, rect, overrideMin, overrideMax);
+        var points = SparklineLayoutPlanner.GetLinePoints(values, rect, overrideMin, overrideMax, sparkline.RightToLeft);
         if (points.Count == 0)
             return;
 
@@ -214,7 +321,7 @@ public partial class GridView
                 markerColor = highColor;
 
             if (markerColor.HasValue)
-                dc.DrawEllipse(BrushForCellColor(markerColor.Value, _brushCache), null, pt, r, r);
+                dc.DrawEllipse(BrushForCellColor(markerColor.Value, brushCache), null, pt, r, r);
         }
     }
 
@@ -222,6 +329,7 @@ public partial class GridView
 
     private static void DrawColumnSparkline(
         DrawingContext dc,
+        SparklineModel sparkline,
         IReadOnlyList<double> values,
         Rect rect,
         bool winLoss,
@@ -230,7 +338,7 @@ public partial class GridView
         double? overrideMaxAbs)
     {
         var consumer = new ColumnSparklineDrawingConsumer(dc, positiveFill, negativeFill);
-        SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer, overrideMaxAbs);
+        SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer, overrideMaxAbs, sparkline.RightToLeft);
     }
 
     // ── Consumers (zero-allocation streaming) ─────────────────────────────────
@@ -340,19 +448,19 @@ public partial class GridView
 
             // Draw axis line first (behind the sparkline).
             if (sparkline.ShowAxis)
-                DrawSparklineAxisLine(dc, rect, axisColor);
+                DrawSparklineAxisLine(dc, values, rect, sparkline.Kind, axisColor, overrideMin, overrideMax, _sparklinePenCache, _brushCache);
 
             if (sparkline.Kind == SparklineKind.Line)
             {
                 // Line weight: model LineWeight is in points; convert to DIPs (96 dpi / 72 pt).
                 var lineWeightDip = PointsToDip(sparkline.LineWeight ?? DefaultLineWeightPt);
-                var linePen = GetSparklinePen(seriesColor, lineWeightDip);
-                DrawLineSparkline(dc, sparkline, values, rect, linePen, overrideMin, overrideMax);
+                var linePen = GetSparklinePen(seriesColor, lineWeightDip, _sparklinePenCache, _brushCache);
+                DrawLineSparkline(dc, sparkline, values, rect, linePen, overrideMin, overrideMax, _brushCache);
             }
             else
             {
                 DrawColumnSparkline(
-                    dc, values, rect,
+                    dc, sparkline, values, rect,
                     sparkline.Kind == SparklineKind.WinLoss,
                     BrushForCellColor(seriesColor,   _brushCache),
                     BrushForCellColor(negativeColor, _brushCache),
@@ -361,5 +469,112 @@ public partial class GridView
 
             dc.Pop();
         }
+    }
+
+    // ── Cross-assembly print/PDF reuse (R88-render-sparkline-5-1) ─────────────
+    // Sparklines are drawn as a screen-only overlay above (RenderSparklines): the WPF print/PDF
+    // path (PrintRenderer.GridCells.cs, a different assembly) never called into it, so Print/
+    // Print-Preview/PDF/XPS silently omitted every sparkline while still printing the cell's
+    // value/fill/borders/gridlines. These two methods are public (rather than private) so that
+    // path can draw the exact same sparkline ink instead of reimplementing the axis/scaling/layout
+    // logic a second time -- mirroring how DrawConditionalDataBar/DrawConditionalIcon were already
+    // made public for exactly this cross-assembly reuse. Deliberately independent of
+    // RenderSparklines above (which stays on the interactive grid's own render caches) so adding
+    // these carries no behavior change to the interactive redraw path.
+
+    /// <summary>
+    /// Computes the shared min/max/maxAbs bounds for every "Group" axis-scaling sparkline group
+    /// among <paramref name="sparklines"/>, exactly as <see cref="RenderSparklines"/>'s own
+    /// pre-compute step does.
+    /// </summary>
+    public static void BuildSparklineGroupScalingBounds(
+        IEnumerable<SparklineModel> sparklines,
+        IReadOnlyDictionary<Guid, IReadOnlyList<double>> sparklineValues,
+        out Dictionary<int, double> groupMinValues,
+        out Dictionary<int, double> groupMaxValues,
+        out Dictionary<int, double> groupMaxAbsValues)
+    {
+        groupMinValues = new Dictionary<int, double>();
+        groupMaxValues = new Dictionary<int, double>();
+        groupMaxAbsValues = new Dictionary<int, double>();
+
+        foreach (var sp in sparklines)
+        {
+            if ((sp.MinAxisType == SparklineAxisScaling.Group ||
+                 sp.MaxAxisType == SparklineAxisScaling.Group) &&
+                sparklineValues.TryGetValue(sp.Id, out var vals) && vals.Count > 0)
+            {
+                if (!groupMinValues.ContainsKey(sp.GroupId))
+                {
+                    groupMinValues[sp.GroupId] = double.MaxValue;
+                    groupMaxValues[sp.GroupId] = double.MinValue;
+                    groupMaxAbsValues[sp.GroupId] = 0;
+                }
+
+                foreach (var v in vals)
+                {
+                    if (!double.IsFinite(v)) continue;
+                    if (v < groupMinValues[sp.GroupId]) groupMinValues[sp.GroupId] = v;
+                    if (v > groupMaxValues[sp.GroupId]) groupMaxValues[sp.GroupId] = v;
+                    var abs = Math.Abs(v);
+                    if (abs > groupMaxAbsValues[sp.GroupId]) groupMaxAbsValues[sp.GroupId] = abs;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Draws one sparkline's axis line (if enabled) and its line/column/win-loss body (+ line
+    /// markers) into <paramref name="rect"/>, exactly as the interactive grid's per-sparkline body
+    /// in <see cref="RenderSparklines"/> does. <paramref name="brushCache"/>/<paramref name="penCache"/>
+    /// are optional -- pass null (the print path's one-shot use) for uncached brushes/pens.
+    /// </summary>
+    public static void DrawSparklineIntoCell(
+        DrawingContext dc,
+        SparklineModel sparkline,
+        IReadOnlyList<double> values,
+        Rect rect,
+        Dictionary<int, double> groupMinValues,
+        Dictionary<int, double> groupMaxValues,
+        Dictionary<int, double> groupMaxAbsValues,
+        Dictionary<CellColor, SolidColorBrush>? brushCache = null,
+        Dictionary<(CellColor Color, double Thickness), Pen>? penCache = null)
+    {
+        if (values.Count == 0)
+            return;
+
+        var overrideMin = ResolveAxisMin(sparkline, groupMinValues);
+        var overrideMax = ResolveAxisMax(sparkline, groupMaxValues);
+        var overrideMaxAbs = ResolveAxisMaxAbs(sparkline, groupMaxAbsValues);
+
+        var seriesColor = sparkline.SeriesColor ?? DefaultPositiveCellColor;
+        var negativeColor = sparkline.ShowNegativePoints
+            ? sparkline.NegativeColor ?? DefaultNegativeCellColor
+            : seriesColor;
+        var axisColor = sparkline.AxisColor ?? DefaultAxisCellColor;
+
+        var clipGeometry = new RectangleGeometry(rect);
+        dc.PushClip(clipGeometry);
+
+        if (sparkline.ShowAxis)
+            DrawSparklineAxisLine(dc, values, rect, sparkline.Kind, axisColor, overrideMin, overrideMax, penCache, brushCache);
+
+        if (sparkline.Kind == SparklineKind.Line)
+        {
+            var lineWeightDip = PointsToDip(sparkline.LineWeight ?? DefaultLineWeightPt);
+            var linePen = GetSparklinePen(seriesColor, lineWeightDip, penCache, brushCache);
+            DrawLineSparkline(dc, sparkline, values, rect, linePen, overrideMin, overrideMax, brushCache);
+        }
+        else
+        {
+            DrawColumnSparkline(
+                dc, sparkline, values, rect,
+                sparkline.Kind == SparklineKind.WinLoss,
+                BrushForCellColor(seriesColor,   brushCache),
+                BrushForCellColor(negativeColor, brushCache),
+                overrideMaxAbs);
+        }
+
+        dc.Pop();
     }
 }

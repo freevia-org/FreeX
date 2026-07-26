@@ -699,6 +699,13 @@ public sealed class ChartModel
     public CellColor? ResolveDataLabelTextColor(WorkbookTheme theme) =>
         DataLabelTextThemeColor?.Resolve(theme) ?? DataLabelTextColor;
 
+    // R88-render-chart-labels-legend-5-3: leader-line color/theme-color round-trip from XLSX
+    // (XlsxChartDataLabelReader.ApplyDataLabelLeaderLineProperties) but were never resolved for
+    // rendering; expose the same Color-vs-ThemeColor precedence as the sibling Resolve* members
+    // so the renderer can actually consume the parsed leader-line formatting.
+    public CellColor? ResolveDataLabelLeaderLineColor(WorkbookTheme theme) =>
+        DataLabelLeaderLineThemeColor?.Resolve(theme) ?? DataLabelLeaderLineColor;
+
     public CellColor? ResolveXAxisLabelTextColor(WorkbookTheme theme) =>
         XAxisLabelTextThemeColor?.Resolve(theme) ?? XAxisLabelTextColor;
 

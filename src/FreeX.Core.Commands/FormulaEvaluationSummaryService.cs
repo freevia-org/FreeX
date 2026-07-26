@@ -250,20 +250,27 @@ public static class FormulaEvaluationSummaryService
         FormulaNode node,
         HashSet<CellAddress> visited)
     {
-        if (node is not CellRefNode { SheetName: null } cellRef)
+        if (node is not CellRefNode cellRef)
             return null;
 
-        var address = new CellAddress(sheet.Id, cellRef.Row, cellRef.ColumnNumber);
+        // A precedent reference carrying an explicit SheetName is a cross-sheet reference
+        // (see FormulaEvaluator.References.cs) -- resolve it to its own sheet so Step In
+        // works for cross-sheet precedents the same way Excel allows, not just same-sheet ones.
+        var targetSheet = cellRef.SheetName is null ? sheet : workbook.GetSheet(cellRef.SheetName);
+        if (targetSheet is null)
+            return null;
+
+        var address = new CellAddress(targetSheet.Id, cellRef.Row, cellRef.ColumnNumber);
         if (!visited.Add(address))
             return null;
 
         try
         {
-            var cell = sheet.GetCell(address);
+            var cell = targetSheet.GetCell(address);
             if (cell?.HasFormula != true || string.IsNullOrWhiteSpace(cell.FormulaText))
                 return null;
 
-            return BuildSummary(workbook, sheet, address, cell, new HashSet<CellAddress>(visited));
+            return BuildSummary(workbook, targetSheet, address, cell, new HashSet<CellAddress>(visited));
         }
         finally
         {

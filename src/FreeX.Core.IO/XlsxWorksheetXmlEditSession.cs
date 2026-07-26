@@ -19,6 +19,12 @@ internal sealed class XlsxWorksheetXmlEditSession : IDisposable
         _worksheetPathMap = worksheetPathMap;
     }
 
+    // R89-io-autofilter-color-dxf-1-1: exposes the underlying archive so a writer that needs to touch
+    // xl/styles.xml (e.g. XlsxAutoFilterColorFilterDxfWriter, allocating a dxf for a colour filter)
+    // can do so within the same package-edit pass as the worksheet-level writers this session serves,
+    // instead of opening a second independent ZipArchive over the same stream.
+    public ZipArchive Archive => _archive;
+
     public bool TryGetWorksheet(Sheet sheet, out XlsxWorksheetXmlEdit edit)
     {
         edit = default;

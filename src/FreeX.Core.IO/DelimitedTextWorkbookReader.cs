@@ -25,7 +25,11 @@ internal static partial class DelimitedTextWorkbookReader
         ["#GETTING_DATA"] = new ErrorValue("#GETTING_DATA")
     };
 
-    public static Workbook Load(Stream stream, char delimiter, bool allowSeparatorDirective = false)
+    public static Workbook Load(
+        Stream stream,
+        char delimiter,
+        bool allowSeparatorDirective = false,
+        bool collapseConsecutiveDelimiters = false)
     {
         var workbook = new Workbook("Untitled");
         var sheet = workbook.AddSheet("Sheet1");
@@ -36,7 +40,7 @@ internal static partial class DelimitedTextWorkbookReader
         var canReadSeparatorDirective = allowSeparatorDirective;
         var fields = new DelimitedTextRecord();
         var quotedFieldBuilder = new StringBuilder();
-        while (TryReadRecord(text, ref position, delimiter, fields, quotedFieldBuilder))
+        while (TryReadRecord(text, ref position, delimiter, fields, quotedFieldBuilder, collapseConsecutiveDelimiters))
         {
             if (row > CellAddress.MaxRow)
                 break;
@@ -114,7 +118,7 @@ internal static partial class DelimitedTextWorkbookReader
         var record = new DelimitedTextRecord();
         var text = reader.ReadToEnd();
         var position = 0;
-        if (!TryReadRecord(text, ref position, delimiter, record, new StringBuilder()))
+        if (!TryReadRecord(text, ref position, delimiter, record, new StringBuilder(), collapseConsecutiveDelimiters: false))
             return false;
 
         fields.Capacity = record.Count;
@@ -128,7 +132,8 @@ internal static partial class DelimitedTextWorkbookReader
         ref int position,
         char delimiter,
         DelimitedTextRecord fields,
-        StringBuilder quotedFieldBuilder)
+        StringBuilder quotedFieldBuilder,
+        bool collapseConsecutiveDelimiters = false)
     {
         fields.Clear();
         quotedFieldBuilder.Clear();
@@ -172,10 +177,20 @@ internal static partial class DelimitedTextWorkbookReader
             else if (c == delimiter)
             {
                 AddField(fields, source, fieldStart, position - fieldStart - 1, currentWasQuoted, quotedFieldBuilder);
-                fieldStart = position;
                 quotedFieldBuilder.Clear();
                 currentWasQuoted = false;
                 atFieldStart = true;
+
+                // R88-io-text-import-wizard-5-2: mirror TextToColumnsSplitter's "treat consecutive
+                // delimiters as one" so a whitespace-aligned import matches what the wizard's preview
+                // (built on that same splitter) already showed the user.
+                if (collapseConsecutiveDelimiters)
+                {
+                    while (position < source.Length && source[position] == delimiter)
+                        position++;
+                }
+
+                fieldStart = position;
             }
             else if (c == '\r')
             {

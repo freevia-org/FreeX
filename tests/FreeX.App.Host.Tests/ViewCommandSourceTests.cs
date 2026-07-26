@@ -82,9 +82,11 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("_messageService.ShowWarning(");
         source.Should().Contain("_messageService.ShowInfo(");
 
-        // Reset Window Position runs through the pure WindowResetPositionPlanner.
+        // Reset Window Position (R90-app-window-arrange-freeze-ui-5-3) restores the active
+        // side-by-side pair's tiled halves via the registry, instead of cascading/recentering
+        // just the clicked window through the unrelated WindowResetPositionPlanner formula.
         source.Should().Contain("private void ViewResetWindowPositionBtn_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("WindowResetPositionPlanner.Compute(workArea.Width, workArea.Height, index)");
+        source.Should().Contain("_windowRegistry?.ResetSideBySidePair(workArea.Width, workArea.Height)");
         source.Should().Contain("SystemParameters.WorkArea");
 
         // Arrange All stores the workbook choice, then applies the live visible-window layout.

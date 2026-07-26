@@ -18,7 +18,10 @@ public sealed partial class PivotTableCommandTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "B3"),
-            TargetRange = Range(sheet, "D3", "E5")
+            TargetRange = Range(sheet, "D3", "E5"),
+            // R90-render-pivot-layout-5-3: pin the (former) Tabular default -- this test is about
+            // RefreshPivotTableCommand's undo/redo cell restoration, not the pivot-creation default.
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
@@ -73,7 +76,10 @@ public sealed partial class PivotTableCommandTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "B3"),
-            TargetRange = Range(sheet, "D3", "E5")
+            TargetRange = Range(sheet, "D3", "E5"),
+            // R90-render-pivot-layout-5-3: pin the (former) Tabular default -- this test is about the
+            // sheet-protection permission gate, not the pivot-creation default.
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));

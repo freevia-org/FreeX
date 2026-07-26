@@ -74,4 +74,21 @@ public sealed record ImportDataOptions
 
     /// <summary>Where the parsed rows are written.</summary>
     public ImportDestinationKind Destination { get; init; } = ImportDestinationKind.CurrentSheet;
+
+    /// <summary>
+    /// R88-io-text-import-wizard-5-4: overrides the decimal-point marker used when a value is coerced to
+    /// a number, independent of the current locale -- mirroring the Text Import Wizard's Advanced dialog.
+    /// Null (the default) leaves numeric coercion on its normal current-culture-then-invariant-culture
+    /// resolution. Must differ from <see cref="ThousandsSeparator"/> when both are set (an identical pair
+    /// is an invalid configuration, same as Text-to-Columns' <c>TextToColumnsAdvancedOptions</c>).
+    /// </summary>
+    public string? DecimalSeparator { get; init; }
+
+    /// <summary>
+    /// R88-io-text-import-wizard-5-4: overrides the digit-grouping marker stripped before numeric
+    /// coercion, independent of the current locale -- mirroring the Text Import Wizard's Advanced dialog.
+    /// Null (the default) leaves numeric coercion on its normal current-culture-then-invariant-culture
+    /// resolution. Must differ from <see cref="DecimalSeparator"/> when both are set.
+    /// </summary>
+    public string? ThousandsSeparator { get; init; }
 }

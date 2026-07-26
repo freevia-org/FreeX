@@ -109,6 +109,151 @@ public sealed class ReadAloudParityTests
     }
 
     [Fact]
+    public void Avalonia_process_engine_reports_pause_only_for_a_capable_backend()
+    {
+        using var unsupported = new AvaloniaSpeechEngine(
+            _ => new AvaloniaSpeechEngine.SpeechBackend("fake", []),
+            _ => { });
+        using var supported = new AvaloniaSpeechEngine(
+            _ => new AvaloniaSpeechEngine.SpeechBackend("fake", [], SupportsPause: true),
+            _ => { });
+
+        unsupported.SupportsPause.Should().BeFalse();
+        supported.SupportsPause.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Avalonia_pause_capability_is_backend_specific_not_unix_wide()
+    {
+        var dispatcherBackend = new AvaloniaSpeechEngine.SpeechBackend(
+            "spd-say", ["-w", "text"], SupportsPause: false);
+        var synthesizerBackend = new AvaloniaSpeechEngine.SpeechBackend(
+            "espeak", ["text"], SupportsPause: true);
+
+        dispatcherBackend.SupportsPause.Should().BeFalse();
+        synthesizerBackend.SupportsPause.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Avalonia_process_engine_pause_and_resume_do_not_complete_the_utterance()
+    {
+        var posted = new Queue<Action>();
+        var runner = new RecordingProcessRunner(new RecordingProcess(supportsPause: true));
+        using var engine = new AvaloniaSpeechEngine(
+            _ => new AvaloniaSpeechEngine.SpeechBackend("fake", [], SupportsPause: true),
+            posted.Enqueue,
+            runner);
+        var completed = false;
+
+        engine.SpeakAsync("pending", () => completed = true);
+
+        engine.TryPause().Should().BeTrue();
+        runner.Process.PauseCount.Should().Be(1);
+        engine.TryResume().Should().BeTrue();
+        runner.Process.ResumeCount.Should().Be(1);
+        completed.Should().BeFalse();
+        posted.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Avalonia_process_engine_suppresses_a_queued_completion_while_paused()
+    {
+        var posted = new Queue<Action>();
+        var runner = new RecordingProcessRunner(new RecordingProcess(supportsPause: true));
+        using var engine = new AvaloniaSpeechEngine(
+            _ => new AvaloniaSpeechEngine.SpeechBackend("fake", [], SupportsPause: true),
+            posted.Enqueue,
+            runner);
+        var completed = false;
+
+        engine.SpeakAsync("pending", () => completed = true);
+        engine.TryPause().Should().BeTrue();
+        runner.Complete();
+        posted.Should().ContainSingle();
+        posted.Dequeue()();
+        completed.Should().BeFalse();
+
+        engine.TryResume().Should().BeTrue();
+        runner.Complete();
+        posted.Should().ContainSingle();
+        posted.Dequeue()();
+        completed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Failed_pause_signal_leaves_controller_playing()
+    {
+        var runner = new RecordingProcessRunner(new RecordingProcess(supportsPause: true)
+        {
+            PauseResult = false,
+        });
+        using var engine = new AvaloniaSpeechEngine(
+            _ => new AvaloniaSpeechEngine.SpeechBackend("fake", [], SupportsPause: true),
+            _ => { },
+            runner);
+        var controller = new ReadAloudController(engine);
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("One"));
+
+        controller.Start(document);
+        controller.TogglePause();
+
+        controller.State.Should().Be(ReadAloudState.Playing);
+        runner.Process.PauseCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void Controller_repeated_pause_toggles_round_trip_and_only_completion_stops()
+    {
+        var runner = new RecordingProcessRunner(new RecordingProcess(supportsPause: true));
+        var posted = new Queue<Action>();
+        using var engine = new AvaloniaSpeechEngine(
+            _ => new AvaloniaSpeechEngine.SpeechBackend("fake", [], SupportsPause: true),
+            posted.Enqueue,
+            runner);
+        var controller = new ReadAloudController(engine);
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("One"));
+
+        controller.Start(document);
+        controller.TogglePause();
+        controller.State.Should().Be(ReadAloudState.Paused);
+        controller.TogglePause();
+        controller.State.Should().Be(ReadAloudState.Playing);
+        runner.Process.PauseCount.Should().Be(1);
+        runner.Process.ResumeCount.Should().Be(1);
+
+        runner.Complete();
+        posted.Should().ContainSingle();
+        posted.Dequeue()();
+        controller.State.Should().Be(ReadAloudState.Stopped);
+    }
+
+    [Fact]
+    public void Stop_while_paused_kills_child_and_suppresses_late_completion()
+    {
+        var posted = new Queue<Action>();
+        var runner = new RecordingProcessRunner(new RecordingProcess(supportsPause: true));
+        using var engine = new AvaloniaSpeechEngine(
+            _ => new AvaloniaSpeechEngine.SpeechBackend("fake", [], SupportsPause: true),
+            posted.Enqueue,
+            runner);
+        var completed = false;
+
+        engine.SpeakAsync("pending", () => completed = true);
+        engine.TryPause().Should().BeTrue();
+        engine.Stop();
+        runner.Process.WasKilled.Should().BeTrue();
+        runner.Complete();
+        while (posted.Count > 0)
+            posted.Dequeue()();
+
+        completed.Should().BeFalse();
+    }
+
+    [Fact]
     public void Controller_advances_and_completes_after_each_utterance()
     {
         var engine = new RecordingSpeechEngine();
@@ -307,7 +452,14 @@ public sealed class ReadAloudParityTests
 
     private sealed class RecordingProcessRunner : AvaloniaSpeechEngine.ISpeechProcessRunner
     {
-        public RecordingProcess Process { get; } = new();
+        public RecordingProcess Process { get; }
+
+        public RecordingProcessRunner()
+            : this(new RecordingProcess())
+        {
+        }
+
+        public RecordingProcessRunner(RecordingProcess process) => Process = process;
 
         public AvaloniaSpeechEngine.ISpeechProcess Start(
             AvaloniaSpeechEngine.SpeechBackend backend,
@@ -342,11 +494,29 @@ public sealed class ReadAloudParityTests
 
     private sealed class RecordingProcess : AvaloniaSpeechEngine.ISpeechProcess
     {
+        public RecordingProcess(bool supportsPause = false) => SupportsPause = supportsPause;
+
         public Action? Completion { get; set; }
         public bool WasKilled { get; private set; }
         public bool WasDisposed { get; private set; }
+        public int? ProcessId => null;
+        public bool SupportsPause { get; }
+        public bool PauseResult { get; set; } = true;
+        public bool ResumeResult { get; set; } = true;
+        public int PauseCount { get; private set; }
+        public int ResumeCount { get; private set; }
         public bool HasExited => WasKilled;
         public void Kill() => WasKilled = true;
+        public bool TryPause()
+        {
+            PauseCount++;
+            return SupportsPause && PauseResult;
+        }
+        public bool TryResume()
+        {
+            ResumeCount++;
+            return SupportsPause && ResumeResult;
+        }
         public void Dispose() => WasDisposed = true;
     }
 
@@ -355,6 +525,8 @@ public sealed class ReadAloudParityTests
         public bool WasStarted { get; private set; }
         public bool WasKilled { get; private set; }
         public bool WasDisposed { get; private set; }
+        public int? ProcessId => null;
+        public bool SupportsPause => false;
         public bool HasExited => WasKilled;
 
         public bool Start()
@@ -367,6 +539,8 @@ public sealed class ReadAloudParityTests
             throw new IOException("Simulated stdin failure.");
 
         public void Kill() => WasKilled = true;
+        public bool TryPause() => false;
+        public bool TryResume() => false;
         public void Dispose() => WasDisposed = true;
     }
 }

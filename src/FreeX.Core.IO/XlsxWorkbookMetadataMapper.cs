@@ -114,18 +114,54 @@ internal static class XlsxWorkbookMetadataMapper
         return model;
     }
 
-    public static XlsxWorkbookCustomView ToCustomView(XElement view)
+    /// <summary>
+    /// Resolves a workbook <c>&lt;customWorkbookView&gt;</c> element into the model, translating its
+    /// <c>activeSheetId</c> attribute -- a reference to a <c>&lt;sheet sheetId="N"&gt;</c> element's
+    /// <c>sheetId</c>, NOT a 1-based position -- into a 0-based sheet position via
+    /// <paramref name="sheetIdToIndex"/>. Excel never reuses/renumbers sheetId when sheets are
+    /// deleted/reordered, so treating the raw value as (position + 1) resolves to the wrong sheet
+    /// (or an out-of-range one) whenever a workbook's history diverges sheetId from position.
+    /// </summary>
+    public static XlsxWorkbookCustomView ToCustomView(XElement view, IReadOnlyDictionary<int, int> sheetIdToIndex)
     {
         var id = view.Attribute("guid")?.Value;
         var name = view.Attribute("name")?.Value;
+        int? activeSheetIndex = XlsxXmlAttributeReader.ReadIntAttribute(view, "activeSheetId") is { } activeSheetId
+            && activeSheetId > 0
+            && sheetIdToIndex.TryGetValue(activeSheetId, out var resolvedIndex)
+                ? resolvedIndex
+                : null;
+
         return new XlsxWorkbookCustomView(
             id ?? "",
             name ?? "",
             XlsxXmlAttributeReader.ReadBoolAttribute(view, "includePrintSettings", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(view, "includeHiddenRowCol", defaultValue: true),
-            XlsxXmlAttributeReader.ReadIntAttribute(view, "activeSheetId") is { } activeSheetId and > 0
-                ? activeSheetId - 1
-                : null);
+            activeSheetIndex);
+    }
+
+    /// <summary>
+    /// Builds a map from each <c>&lt;sheet&gt;</c> element's <c>sheetId</c> attribute to its 0-based
+    /// position within <c>&lt;sheets&gt;</c>, for resolving <c>customWorkbookView/@activeSheetId</c>
+    /// (see <see cref="ToCustomView"/>). The first element wins any duplicate sheetId (malformed
+    /// input only -- Excel never emits duplicates).
+    /// </summary>
+    public static IReadOnlyDictionary<int, int> BuildSheetIdToIndexMap(XElement? sheetsElement, XNamespace workbookNs)
+    {
+        var map = new Dictionary<int, int>();
+        if (sheetsElement is null)
+            return map;
+
+        var index = 0;
+        foreach (var sheet in sheetsElement.Elements(workbookNs + "sheet"))
+        {
+            if (XlsxXmlAttributeReader.ReadIntAttribute(sheet, "sheetId") is { } sheetId && !map.ContainsKey(sheetId))
+                map[sheetId] = index;
+
+            index++;
+        }
+
+        return map;
     }
 
     private static WorkbookFunctionGroupModel ToFunctionGroup(XElement element)

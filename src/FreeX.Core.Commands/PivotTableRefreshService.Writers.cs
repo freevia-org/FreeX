@@ -14,7 +14,9 @@ public static partial class PivotTableRefreshService
         var start = GetPivotBodyStart(pivotTable);
         var rowFields = pivotTable.RowFields.ToList();
         var rowFieldOutputColumns = RowFieldOutputColumnCount(pivotTable);
-        if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
+        // Excel's Compact form always shows the fixed "Row Labels" caption above the row-label
+        // column, whether there is one row field or several — it is not conditioned on field count.
+        if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 0)
             SetPivotCell(sheet, new CellAddress(sheet.Id, start.Row, start.Col), new TextValue("Row Labels"));
         else
         {

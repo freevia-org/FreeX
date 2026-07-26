@@ -28,6 +28,9 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
             return new CommandOutcome(false, "Custom view name cannot be blank.");
 
         var workbook = ctx.Workbook;
+        if (CustomViewStatePlanner.RejectIfWorkbookHasTable(workbook) is { } tableOutcome)
+            return tableOutcome;
+
         var index = FindViewIndex(workbook, _name);
         _hadPreviousView = index >= 0;
         _previousView = _hadPreviousView ? workbook.CustomViews[index] : null;
@@ -204,6 +207,9 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (CustomViewStatePlanner.RejectIfWorkbookHasTable(ctx.Workbook) is { } tableOutcome)
+            return tableOutcome;
+
         var index = SaveCustomViewCommand.FindViewIndex(ctx.Workbook, _name);
         if (index < 0)
             return new CommandOutcome(false, $"Custom view '{_name}' was not found.");
@@ -273,6 +279,9 @@ public sealed class DeleteCustomViewCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (CustomViewStatePlanner.RejectIfWorkbookHasTable(ctx.Workbook) is { } tableOutcome)
+            return tableOutcome;
+
         _deletedIndex = SaveCustomViewCommand.FindViewIndex(ctx.Workbook, _name);
         if (_deletedIndex < 0)
             return new CommandOutcome(false, $"Custom view '{_name}' was not found.");

@@ -18,7 +18,10 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "J8"),
-            ReportLayout = PivotReportLayout.Compact
+            ReportLayout = PivotReportLayout.Compact,
+            // R90-render-pivot-layout-5-1: pin the (former) no-subtotal default -- this test is about
+            // the compact single-row-label-column matrix layout, not subtotals.
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -55,6 +58,9 @@ public sealed partial class PivotTableRefreshServiceTests
             TargetRange = Range(sheet, "F2", "J12"),
             ReportLayout = PivotReportLayout.Compact,
             ShowSubtotals = true,
+            // R90-render-pivot-layout-5-1: pin the (former) Bottom default -- this test name and
+            // assertions specifically target Bottom-placed subtotals.
+            SubtotalPlacement = PivotSubtotalPlacement.Bottom,
             StyleName = "PivotStyleMedium9"
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
@@ -161,6 +167,9 @@ public sealed partial class PivotTableRefreshServiceTests
             TargetRange = Range(sheet, "F2", "J14"),
             ReportLayout = PivotReportLayout.Compact,
             ShowSubtotals = true,
+            // R90-render-pivot-layout-5-1: pin the (former) Bottom default -- this test name and
+            // assertions specifically target Bottom-placed subtotals.
+            SubtotalPlacement = PivotSubtotalPlacement.Bottom,
             BlankLineAfterItems = true
         };
         pivot.RowFields.Add(new PivotFieldModel(0));

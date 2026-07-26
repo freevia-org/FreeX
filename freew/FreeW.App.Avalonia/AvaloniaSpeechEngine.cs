@@ -8,8 +8,8 @@ namespace FreeW.App.Avalonia;
 /// <summary>
 /// Local, dependency-free speech adapter for the Avalonia host. It uses an installed OS speech command
 /// when one is available and otherwise completes each segment asynchronously as a deterministic no-op.
-/// The adapter deliberately reports that pause/resume is unsupported: the portable command-line backends
-/// can be stopped, but cannot reliably suspend and continue an utterance.
+/// Unix command-line backends are paused by signalling the exact owned child process (SIGSTOP/SIGCONT).
+/// Backends without that capability remain honest and report it as unsupported.
 /// </summary>
 public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
 {
@@ -21,6 +21,7 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
     private CancellationTokenSource? _completionCancellation;
     private Action? _pendingCompletion;
     private long _generation;
+    private bool _paused;
     private bool _disposed;
 
     public AvaloniaSpeechEngine()
@@ -41,8 +42,17 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
     /// <summary>Whether an installed speech command was found during the last backend probe.</summary>
     public bool IsBackendAvailable => TryCreateBackend(string.Empty) is not null;
 
-    /// <summary>Command-line backends do not provide honest pause/resume semantics.</summary>
-    public bool SupportsPause => false;
+    /// <summary>Whether the selected platform backend supports process-level pause/resume.</summary>
+    public bool SupportsPause => TryCreateBackend(string.Empty)?.SupportsPause == true;
+
+    internal int? OwnedProcessIdForSmoke
+    {
+        get
+        {
+            lock (_gate)
+                return _process?.ProcessId;
+        }
+    }
 
     public void SpeakAsync(string text, Action onCompleted)
     {
@@ -59,6 +69,7 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
                 return;
 
             generation = ++_generation;
+            _paused = false;
             _pendingCompletion = onCompleted;
             _completionCancellation = new CancellationTokenSource();
             cancellationToken = _completionCancellation.Token;
@@ -106,15 +117,39 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
         }
     }
 
-    public void Pause()
+    public bool TryPause()
     {
-        // No portable command-line backend offers a reliable pause operation.
+        lock (_gate)
+        {
+            if (_disposed || _process is null || _pendingCompletion is null || !_process.SupportsPause)
+                return false;
+
+            if (!_process.TryPause())
+                return false;
+
+            _paused = true;
+            return true;
+        }
     }
 
-    public void Resume()
+    public bool TryResume()
     {
-        // No portable command-line backend offers a reliable resume operation.
+        lock (_gate)
+        {
+            if (_disposed || _process is null || _pendingCompletion is null || !_process.SupportsPause)
+                return false;
+
+            if (!_process.TryResume())
+                return false;
+
+            _paused = false;
+            return true;
+        }
     }
+
+    public void Pause() => _ = TryPause();
+
+    public void Resume() => _ = TryResume();
 
     public void Stop()
     {
@@ -123,6 +158,7 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
         lock (_gate)
         {
             ++_generation;
+            _paused = false;
             _pendingCompletion = null;
             cancellation = _completionCancellation;
             _completionCancellation = null;
@@ -195,7 +231,7 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
         ISpeechProcess? process;
         lock (_gate)
         {
-            if (_disposed || generation != _generation || cancellationToken.IsCancellationRequested
+            if (_disposed || _paused || generation != _generation || cancellationToken.IsCancellationRequested
                 || _pendingCompletion is null)
                 return;
 
@@ -229,7 +265,7 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             var say = FindExecutable("say");
-            return say is null ? null : new SpeechBackend(say, [text]);
+            return say is null ? null : new SpeechBackend(say, [text], SupportsPause: true);
         }
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -241,15 +277,20 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
                     powershell,
                     ["-NoProfile", "-NonInteractive", "-Command",
                         "$s=New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak([Console]::In.ReadToEnd())"],
-                    WriteTextToStandardInput: true);
+                    WriteTextToStandardInput: true,
+                    SupportsPause: false);
         }
 
         var speechDispatcher = FindExecutable("spd-say");
         if (speechDispatcher is not null)
-            return new SpeechBackend(speechDispatcher, ["-w", text]);
+            // spd-say waits for a separate speech-dispatcher daemon. Suspending this client does not
+            // suspend the daemon's audio stream, so do not claim process-level pause parity here.
+            return new SpeechBackend(speechDispatcher, ["-w", text], SupportsPause: false);
 
         var espeak = FindExecutable("espeak-ng", "espeak");
-        return espeak is null ? null : new SpeechBackend(espeak, [text]);
+        var supportsUnixPause = RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+            || RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+        return espeak is null ? null : new SpeechBackend(espeak, [text], SupportsPause: supportsUnixPause);
     }
 
     private static string? FindExecutable(params string[] names)
@@ -274,7 +315,8 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
     internal sealed record SpeechBackend(
         string FileName,
         IReadOnlyList<string> Arguments,
-        bool WriteTextToStandardInput = false);
+        bool WriteTextToStandardInput = false,
+        bool SupportsPause = false);
 
     internal interface ISpeechProcessRunner
     {
@@ -284,22 +326,34 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
     internal interface ISpeechProcess : IDisposable
     {
         bool HasExited { get; }
+        int? ProcessId { get; }
+        bool SupportsPause { get; }
+        bool TryPause();
+        bool TryResume();
         void Kill();
     }
 
     internal sealed class ProcessSpeechRunner : ISpeechProcessRunner
     {
-        private readonly Func<ProcessStartInfo, Action, IPlatformSpeechProcess> _processFactory;
+        private readonly Func<ProcessStartInfo, Action, bool, IPlatformSpeechProcess> _processFactory;
 
         public ProcessSpeechRunner()
-            : this((startInfo, onExited) => new PlatformSpeechProcess(startInfo, onExited))
+            : this((startInfo, onExited, supportsPause) =>
+                new PlatformSpeechProcess(startInfo, onExited, supportsPause))
         {
         }
 
         internal ProcessSpeechRunner(
-            Func<ProcessStartInfo, Action, IPlatformSpeechProcess> processFactory)
+            Func<ProcessStartInfo, Action, bool, IPlatformSpeechProcess> processFactory)
         {
             _processFactory = processFactory ?? throw new ArgumentNullException(nameof(processFactory));
+        }
+
+        // Kept for focused fakes that do not need to vary process capability.
+        internal ProcessSpeechRunner(
+            Func<ProcessStartInfo, Action, IPlatformSpeechProcess> processFactory)
+            : this((startInfo, onExited, _) => processFactory(startInfo, onExited))
+        {
         }
 
         public ISpeechProcess Start(SpeechBackend backend, string text, Action onExited)
@@ -314,7 +368,7 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
             foreach (var argument in backend.Arguments)
                 startInfo.ArgumentList.Add(argument);
 
-            var process = _processFactory(startInfo, onExited);
+            var process = _processFactory(startInfo, onExited, backend.SupportsPause);
             try
             {
                 if (!process.Start())
@@ -345,7 +399,7 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
     {
         private readonly Process _process;
 
-        public PlatformSpeechProcess(ProcessStartInfo startInfo, Action onExited)
+        public PlatformSpeechProcess(ProcessStartInfo startInfo, Action onExited, bool supportsPause = false)
         {
             _process = new Process
             {
@@ -353,6 +407,24 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
                 EnableRaisingEvents = true,
             };
             _process.Exited += (_, _) => onExited();
+            SupportsPause = supportsPause;
+        }
+
+        public bool SupportsPause { get; }
+
+        public int? ProcessId
+        {
+            get
+            {
+                try
+                {
+                    return _process.HasExited ? null : _process.Id;
+                }
+                catch (InvalidOperationException)
+                {
+                    return null;
+                }
+            }
         }
 
         public bool Start() => _process.Start();
@@ -365,8 +437,55 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
             _process.StandardInput.Close();
         }
 
-        public void Kill() => _process.Kill(entireProcessTree: true);
+        public void Kill()
+        {
+            if (_process.HasExited)
+                return;
+
+            _process.Kill(entireProcessTree: true);
+            try
+            {
+                _process.WaitForExit(2000);
+            }
+            catch (InvalidOperationException)
+            {
+                // The child exited between the state check and WaitForExit.
+            }
+        }
+
+        public bool TryPause() => Signal(
+            RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? MacStopSignal : UnixStopSignal);
+
+        public bool TryResume() => Signal(
+            RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? MacContinueSignal : UnixContinueSignal);
+
+        private bool Signal(int signal)
+        {
+            if (!SupportsPause || !IsUnixSignalPlatform || HasExited)
+                return false;
+
+            try
+            {
+                return UnixKill(_process.Id, signal) == 0;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
 
         public void Dispose() => _process.Dispose();
+
+        private static bool IsUnixSignalPlatform =>
+            RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+            || RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+        private const int UnixStopSignal = 19;
+        private const int UnixContinueSignal = 18;
+        private const int MacStopSignal = 17;
+        private const int MacContinueSignal = 19;
+
+        [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
+        private static extern int UnixKill(int processId, int signal);
     }
 }

@@ -194,6 +194,36 @@ public sealed class DrawingShapeModel
     public DrawingArrowhead? TailArrowhead { get; set; }
 
     /// <summary>
+    /// R90-shape-5-3: the <c>id</c> of the other drawing shape this connector's START point is glued
+    /// to, from <c>&lt;xdr:cxnSp&gt;&lt;xdr:nvCxnSpPr&gt;&lt;xdr:cNvCxnSpPr&gt;&lt;a:stCxn id="..." idx="..."/&gt;</c>.
+    /// <see langword="null"/> means the start point is a free-floating endpoint, not attached to any shape.
+    /// Only meaningful when <see cref="DrawingShapeKindSupport.IsLineLike"/> is <see langword="true"/>. Preserved
+    /// for round-trip fidelity; FreeX does not yet re-route a connector when its attached shape moves.
+    /// </summary>
+    public int? StartConnectedShapeId { get; set; }
+
+    /// <summary>
+    /// The connection-site index (<c>idx</c>) on the <see cref="StartConnectedShapeId"/> shape that this
+    /// connector's start point is glued to. Meaningless when <see cref="StartConnectedShapeId"/> is null.
+    /// </summary>
+    public int? StartConnectedShapeConnectionIndex { get; set; }
+
+    /// <summary>
+    /// R90-shape-5-3: the <c>id</c> of the other drawing shape this connector's END point is glued to,
+    /// from <c>&lt;xdr:cxnSp&gt;&lt;xdr:nvCxnSpPr&gt;&lt;xdr:cNvCxnSpPr&gt;&lt;a:endCxn id="..." idx="..."/&gt;</c>.
+    /// <see langword="null"/> means the end point is a free-floating endpoint, not attached to any shape.
+    /// Only meaningful when <see cref="DrawingShapeKindSupport.IsLineLike"/> is <see langword="true"/>. Preserved
+    /// for round-trip fidelity; FreeX does not yet re-route a connector when its attached shape moves.
+    /// </summary>
+    public int? EndConnectedShapeId { get; set; }
+
+    /// <summary>
+    /// The connection-site index (<c>idx</c>) on the <see cref="EndConnectedShapeId"/> shape that this
+    /// connector's end point is glued to. Meaningless when <see cref="EndConnectedShapeId"/> is null.
+    /// </summary>
+    public int? EndConnectedShapeConnectionIndex { get; set; }
+
+    /// <summary>
     /// Adjust-handle values for the shape's preset geometry, from <c>&lt;a:avLst&gt;&lt;a:gd .../&gt;</c>
     /// (e.g. a rounded rectangle's dragged corner-radius handle, or a block arrow's head-size handle).
     /// <see langword="null"/> or empty means "use the geometry's built-in default handle positions".

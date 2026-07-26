@@ -56,19 +56,35 @@ public sealed class RemoveDuplicatesPlannerTests
     }
 
     [Fact]
-    public void GuessHasHeaders_RejectsSingleRowRangesAndAllTextBodies()
+    public void GuessHasHeaders_RejectsSingleRowRanges()
     {
         var workbook = CreateWorkbook();
         var sheet = workbook.Sheets.Single();
         var singleRow = Range(sheet, 1, 1, 1, 2);
+        sheet.SetCell(Address(sheet, 1, 1), new TextValue("Region"));
+        sheet.SetCell(Address(sheet, 1, 2), new TextValue("Rep"));
+
+        RemoveDuplicatesPlanner.GuessHasHeaders(sheet, singleRow).Should().BeFalse();
+    }
+
+    // R90-commands-remove-duplicates-consolidate-5-2: this used to assert False for an all-text
+    // body (every column text-typed, header labels distinct from the data beneath them), which
+    // was the bug itself -- real Excel guesses "has headers" here (see
+    // R90_RemoveDuplicatesGuessHasHeadersAllTextTests for the full duplicate-row scenario). The
+    // label-vs-data-recurrence heuristic now correctly recognizes "Region"/"Rep" as header labels
+    // because neither word reappears as a data value in its own column.
+    [Fact]
+    public void GuessHasHeaders_RecognizesAllTextHeaderRowWhenLabelsDoNotRecurAsData()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
         var allText = Range(sheet, 1, 1, 2, 2);
         sheet.SetCell(Address(sheet, 1, 1), new TextValue("Region"));
         sheet.SetCell(Address(sheet, 1, 2), new TextValue("Rep"));
         sheet.SetCell(Address(sheet, 2, 1), new TextValue("North"));
         sheet.SetCell(Address(sheet, 2, 2), new TextValue("Ada"));
 
-        RemoveDuplicatesPlanner.GuessHasHeaders(sheet, singleRow).Should().BeFalse();
-        RemoveDuplicatesPlanner.GuessHasHeaders(sheet, allText).Should().BeFalse();
+        RemoveDuplicatesPlanner.GuessHasHeaders(sheet, allText).Should().BeTrue();
     }
 
     [Fact]

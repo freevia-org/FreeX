@@ -15,7 +15,8 @@ public readonly record struct SparklineRenderInstruction(
     CellAddress Location,
     SparklineKind Kind,
     IReadOnlyList<double> Values,
-    LayoutRect CellRect);
+    LayoutRect CellRect,
+    bool RightToLeft = false);
 
 /// <summary>
 /// Pure, UI-free glue that mirrors the Windows host's sparkline pipeline for shared shell renderers:
@@ -78,19 +79,27 @@ public static class SparklineRenderPlanner
                 sparkline.Location,
                 sparkline.Kind,
                 series,
-                rect));
+                rect,
+                sparkline.RightToLeft));
         }
 
         return instructions;
     }
 
-    /// <summary>Lays out a line sparkline's geometry from a render instruction.</summary>
+    /// <summary>
+    /// Lays out a line sparkline's geometry from a render instruction, honoring the sparkline's
+    /// <see cref="SparklineRenderInstruction.RightToLeft"/> "Plot Data Right-to-Left" flag.
+    /// </summary>
     public static SparklineLineLayout LayoutLine(SparklineRenderInstruction instruction) =>
-        SparklineLayoutEngine.CalculateLineLayout(instruction.Values, instruction.CellRect);
+        SparklineLayoutEngine.CalculateLineLayout(
+            instruction.Values, instruction.CellRect, overrideMin: null, overrideMax: null, datePositions: null, instruction.RightToLeft);
 
-    /// <summary>Lays out a column / win-loss sparkline's geometry from a render instruction.</summary>
+    /// <summary>
+    /// Lays out a column / win-loss sparkline's geometry from a render instruction, honoring the
+    /// sparkline's <see cref="SparklineRenderInstruction.RightToLeft"/> "Plot Data Right-to-Left" flag.
+    /// </summary>
     public static SparklineColumnLayout LayoutColumn(SparklineRenderInstruction instruction) =>
-        SparklineLayoutEngine.CalculateColumnLayout(instruction.Values, instruction.CellRect, instruction.Kind);
+        SparklineLayoutEngine.CalculateColumnLayout(instruction.Values, instruction.CellRect, instruction.Kind, instruction.RightToLeft);
 
     /// <summary>
     /// Resolves a cell's pixel rectangle (in shell coordinates) for a sparkline location, returning

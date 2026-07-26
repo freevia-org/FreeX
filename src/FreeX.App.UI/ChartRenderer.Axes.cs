@@ -102,6 +102,10 @@ public static partial class ChartRenderer
                 ApplyAxisLineStyle(axis, chart.YAxisLineColor, chart.YAxisLineThickness);
             }
         }
+
+        // R90-render-chart-axis-titles-5-2: runs after the loop above so it sees the final axis set
+        // (a category axis is never log-converted, but the value axis in the same model may be).
+        ApplyCategoryAxisSkip(model, chart);
     }
 
     private static LinearAxis CreateCenteredIndexedCategoryAxis(
@@ -126,7 +130,7 @@ public static partial class ChartRenderer
         IReadOnlyList<string> labels,
         double minimum,
         double maximum) =>
-        new()
+        new SkipAwareIndexedCategoryAxis
         {
             Position = position,
             Title = title,
@@ -142,7 +146,7 @@ public static partial class ChartRenderer
         string? title,
         IReadOnlyList<string> labels)
     {
-        var axis = new CategoryAxis { Position = position, Title = title };
+        var axis = new SkipAwareCategoryAxis { Position = position, Title = title };
         axis.Labels.AddRange(labels);
         return axis;
     }

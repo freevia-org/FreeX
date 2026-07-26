@@ -27,6 +27,14 @@ public readonly record struct SlicerTileLayout(
 /// icons Excel shows at the top-right of the header band: a multi-select toggle and a clear-filter
 /// (funnel-×) glyph. Both are zero-height when the header is absent (ShowCaption=false).
 /// </para>
+/// <para>
+/// <see cref="MultiSelectModeActive"/> echoes back the transient multi-select mode the caller passed
+/// into <see cref="SlicerLayoutBuilder.Build"/>/<see cref="SlicerLayoutBuilder.BuildFull"/> (the mode
+/// itself has no persisted home on <c>SlicerModel</c> -- like a held modifier key, it lives only in the
+/// shell's own view-state) so a renderer can draw the icon pressed/highlighted while it is active. Use
+/// <see cref="SlicerLayoutBuilder.HitTestMultiSelectIcon"/> to detect a click on the icon and flip that
+/// shell-side flag before the next layout pass.
+/// </para>
 /// </summary>
 public sealed record SlicerLayoutModel(
     string Name,
@@ -42,7 +50,8 @@ public sealed record SlicerLayoutModel(
     int VisibleItemCount,
     bool HasOverflow,
     LayoutRect MultiSelectIconRect,
-    LayoutRect ClearFilterIconRect);
+    LayoutRect ClearFilterIconRect,
+    bool MultiSelectModeActive = false);
 
 /// <summary>
 /// The result of toggling a slicer tile: the new selection set ready to hand to the selection command.
@@ -85,12 +94,15 @@ public static class SlicerLayoutBuilder
     /// <paramref name="availableItems"/> is the full set of items offered by the slicer's source field;
     /// when empty, the slicer's own selected items are used as the available set (matching the source
     /// fallback). The preview shows up to four tiles; a single "all" tile is shown when nothing is
-    /// selected.
+    /// selected. <paramref name="multiSelectMode"/> is the caller's own transient multi-select-toggle
+    /// state (see <see cref="SlicerLayoutModel.MultiSelectModeActive"/>); it is only echoed into the
+    /// returned layout for the icon's pressed/highlighted appearance and does not change tile geometry.
     /// </summary>
     public static SlicerLayoutModel Build(
         SlicerModel slicer,
         IEnumerable<string> availableItems,
-        LayoutRect bounds)
+        LayoutRect bounds,
+        bool multiSelectMode = false)
     {
         ArgumentNullException.ThrowIfNull(slicer);
         ArgumentNullException.ThrowIfNull(availableItems);
@@ -124,7 +136,8 @@ public static class SlicerLayoutBuilder
             VisibleItemCount: tiles.Count(static tile => !tile.IsAllPreview),
             HasOverflow: items.Count > tiles.Count(static tile => !tile.IsAllPreview),
             MultiSelectIconRect: multiSelectRect,
-            ClearFilterIconRect: clearFilterRect);
+            ClearFilterIconRect: clearFilterRect,
+            MultiSelectModeActive: multiSelectMode);
     }
 
     /// <summary>
@@ -138,7 +151,8 @@ public static class SlicerLayoutBuilder
     public static SlicerLayoutModel BuildFull(
         SlicerModel slicer,
         IEnumerable<string> availableItems,
-        LayoutRect bounds)
+        LayoutRect bounds,
+        bool multiSelectMode = false)
     {
         ArgumentNullException.ThrowIfNull(slicer);
         ArgumentNullException.ThrowIfNull(availableItems);
@@ -171,7 +185,8 @@ public static class SlicerLayoutBuilder
             VisibleItemCount: visibleCount,
             HasOverflow: items.Count > visibleCount,
             MultiSelectIconRect: multiSelectRect,
-            ClearFilterIconRect: clearFilterRect);
+            ClearFilterIconRect: clearFilterRect,
+            MultiSelectModeActive: multiSelectMode);
     }
 
     // Lays out every available item across slicer.ColumnCount columns, capping the visible ROWS to what
@@ -243,6 +258,22 @@ public static class SlicerLayoutBuilder
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="point"/> falls inside <see cref="SlicerLayoutModel.MultiSelectIconRect"/>
+    /// -- the header's multi-select toggle icon. A shell should call this BEFORE its tile hit-test (the
+    /// same ordering <see cref="SlicerTimelineInteractionPlanner.BuildSlicerClearFilterCommand"/> already
+    /// uses for the clear-filter icon) so a click on the icon flips the shell's own multi-select mode
+    /// flag instead of falling through to whatever tile happens to sit underneath it. The rect is
+    /// zero-sized when the header is hidden (<see cref="SlicerModel.ShowCaption"/> = false), so this
+    /// always returns false in that case.
+    /// </summary>
+    public static bool HitTestMultiSelectIcon(SlicerLayoutModel layout, LayoutPoint point)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+        var rect = layout.MultiSelectIconRect;
+        return rect.Width > 0 && rect.Height > 0 && Contains(rect, point);
     }
 
     /// <summary>

@@ -29,6 +29,7 @@ public sealed partial class NativeJsonAdapter
         workbook.IterativeCalculation = dto.IterativeCalculation;
         workbook.MaxCalculationIterations = dto.MaxCalculationIterations;
         workbook.MaxCalculationChange = dto.MaxCalculationChange;
+        workbook.FullPrecision = dto.FullPrecision;
     }
 
     private static void PopulateCalculationOptions(Workbook workbook, WorkbookDto dto)
@@ -39,6 +40,7 @@ public sealed partial class NativeJsonAdapter
         dto.IterativeCalculation = workbook.IterativeCalculation;
         dto.MaxCalculationIterations = workbook.MaxCalculationIterations;
         dto.MaxCalculationChange = workbook.MaxCalculationChange;
+        dto.FullPrecision = workbook.FullPrecision;
     }
 
     private static WorkbookCountrySettingsModel? ToWorkbookCountrySettings(WorkbookCountrySettingsDto? dto)

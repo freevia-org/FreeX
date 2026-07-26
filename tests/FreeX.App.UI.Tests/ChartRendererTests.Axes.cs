@@ -142,7 +142,9 @@ public sealed partial class ChartRendererTests
             []));
 
         var axis = model.Axes.Single(axis => axis.Position == AxisPosition.Left)
-            .Should().BeOfType<CategoryAxis>().Subject;
+            // R90-render-chart-axis-titles-5-2: the renderer now builds a skip-aware CategoryAxis
+            // subclass, so assert the kind rather than the exact type.
+            .Should().BeAssignableTo<CategoryAxis>().Subject;
         axis.TextColor.Should().Be(OxyColors.Transparent);
         axis.FontSize.Should().Be(14);
         axis.AxislineColor.Should().Be(OxyColor.FromRgb(217, 83, 25));
@@ -338,8 +340,11 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        model.Axes.Single(axis => axis.Position == AxisPosition.Bottom)
-            .Should().BeOfType<LinearAxis>();
+        // R90-render-chart-axis-titles-5-2: the category axis is now a skip-aware LinearAxis subclass,
+        // so assert what this test is really about -- that it was not swapped for a LogarithmicAxis.
+        var categoryAxis = model.Axes.Single(axis => axis.Position == AxisPosition.Bottom);
+        categoryAxis.Should().BeAssignableTo<LinearAxis>();
+        categoryAxis.Should().NotBeOfType<LogarithmicAxis>();
     }
 
     [Fact]

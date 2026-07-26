@@ -1352,10 +1352,21 @@ public static class ChartLayoutEngine
         double linePosition,
         double labelAngle = 0)
     {
+        // R90-render-chart-axis-titles-5-2: honor Excel's Format Axis > Labels "Interval between
+        // labels" (<c:tickLblSkip>) and "Interval between tick marks" (<c:tickMarkSkip>), both read
+        // into the model by XlsxChartAxisReader. A thinned label becomes an empty label (the tick
+        // itself stays, so gridlines and the axis extent are untouched); a thinned tick mark clears
+        // DrawTickMark. Both properties live on the X* model fields regardless of which side the
+        // category axis sits on (the reader always writes XAxisLabelSkip/XAxisTickMarkSkip), so this
+        // builder keys off them for its Bottom and Left callers alike.
+        var labelInterval = ChartCategoryAxisSkip.ResolveInterval(request.Chart.XAxisLabelSkip);
+        var tickInterval = ChartCategoryAxisSkip.ResolveInterval(request.Chart.XAxisTickMarkSkip);
+
         var ticks = new List<AxisTick>();
         for (var i = 0; i < request.Categories.Count; i++)
         {
-            ticks.Add(new AxisTick(i, scale.Transform(i), request.Categories[i]));
+            var label = ChartCategoryAxisSkip.IsShown(i, labelInterval) ? request.Categories[i] : "";
+            ticks.Add(new AxisTick(i, scale.Transform(i), label, ChartCategoryAxisSkip.IsShown(i, tickInterval)));
         }
 
         return new AxisLayout

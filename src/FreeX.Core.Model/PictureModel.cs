@@ -33,6 +33,17 @@ public sealed class PictureModel
     public string? ContentType { get; set; }
     public string? Title { get; set; }
     public string? AltText { get; set; }
+
+    /// <summary>
+    /// R90-app-accessibility-checker-5-2: true when the user explicitly marked this picture
+    /// "decorative" (Excel's Alt Text pane "Mark as decorative" checkbox), from the
+    /// <c>&lt;xdr:cNvPr&gt;&lt;a:extLst&gt;&lt;a:ext uri="{C183D7F6-B498-43B3-948B-1728B52AA6E4}"&gt;
+    /// &lt;adec:decorative val="1"/&gt;</c> extension. A decorative picture is intentionally
+    /// content-free (e.g. a divider graphic) and is exempt from the Accessibility Checker's
+    /// "Missing alternative text" rule even when <see cref="AltText"/>/<see cref="Title"/>/
+    /// <see cref="Name"/> are all blank -- matching real Excel's own Accessibility Checker.
+    /// </summary>
+    public bool IsDecorative { get; set; }
     public double Width { get; set; } = 240;
     public double Height { get; set; } = 140;
     public bool LockAspectRatio { get; set; } = true;

@@ -1193,7 +1193,12 @@ public sealed class AvaloniaChartRenderer
 
     // ── Axes ────────────────────────────────────────────────────────────────
 
-    private static void RenderAxis(Canvas canvas, AxisLayout? axis, bool isValueAxis)
+    /// <summary>Length (px) used for minor tick marks -- shorter than <see cref="TickLength"/>, matching the
+    /// visual convention that minor ticks are subordinate to major ones (mirrors OxyPlot's smaller
+    /// MinorTickSize relative to MajorTickSize on the WPF renderer).</summary>
+    private const double MinorTickLength = TickLength * 0.6;
+
+    private void RenderAxis(Canvas canvas, AxisLayout? axis, bool isValueAxis)
     {
         if (axis is null)
             return;
@@ -1206,28 +1211,76 @@ public sealed class AvaloniaChartRenderer
 
         var labelAngle = axis.LabelAngle;
 
+        // R90-render-chart-axis-titles-5-1: honor the chart's configured major tick-mark type
+        // (None/Inside/Outside/Cross) instead of always drawing an outside tick at every position.
+        // Keys the X/Y model properties off axis position exactly the way RenderGridlines already
+        // does (Bottom/Top -> XAxis*, Left/Right -> YAxis*), and matches the WPF/OxyPlot renderer's
+        // ApplyTickAndLabelStyle (ChartRenderer.Axes.cs), which keys off axis.Position the same way.
+        var majorTickStyle = horizontal ? _chart.XAxisMajorTickStyle : _chart.YAxisMajorTickStyle;
+        var minorTickStyle = horizontal ? _chart.XAxisMinorTickStyle : _chart.YAxisMinorTickStyle;
+
         foreach (var tick in axis.Ticks)
         {
+            // R90-render-chart-axis-titles-5-2: AxisTick.DrawTickMark is false for the category ticks
+            // Excel's "Interval between tick marks" (<c:tickMarkSkip>) thins out. Label thinning
+            // ("Interval between labels") arrives as an empty tick.Label, which needs no gate here.
+            if (tick.DrawTickMark)
+                RenderTickMark(canvas, axis, horizontal, tick.Position, majorTickStyle, TickLength);
+
             if (horizontal)
             {
-                AddLine(canvas, tick.Position, axis.LinePosition, tick.Position, axis.LinePosition + TickLength);
                 AddTickLabel(canvas, tick.Label, tick.Position, axis.LinePosition + TickLength + 1, centerHorizontally: true, angle: labelAngle);
             }
             else
             {
-                var tickX = axis.Side == AxisSide.Right
-                    ? axis.LinePosition
-                    : axis.LinePosition - TickLength;
-                var tickEndX = axis.Side == AxisSide.Right
-                    ? axis.LinePosition + TickLength
-                    : axis.LinePosition;
-                AddLine(canvas, tickX, tick.Position, tickEndX, tick.Position);
-
                 if (axis.Side == AxisSide.Right)
                     AddTickLabel(canvas, tick.Label, axis.LinePosition + TickLength + 1, tick.Position, centerHorizontally: false, rightAligned: false, angle: labelAngle);
                 else
                     AddTickLabel(canvas, tick.Label, axis.LinePosition - TickLength - 1, tick.Position, centerHorizontally: false, angle: labelAngle);
             }
+        }
+
+        // R90-render-chart-axis-titles-5-1: minor tick marks. AxisLayout.MinorTicks is only populated
+        // when the chart requests minor gridlines for this axis (ChartLayoutEngine.BuildValueAxisLayout
+        // gates it on ShowXAxisMinorGridlines/ShowYAxisMinorGridlines) -- a genuine portable-layout gap
+        // for the case of minor tick marks requested WITHOUT minor gridlines, which this renderer alone
+        // cannot close. When minor-tick positions ARE available, honor the configured minor style here.
+        if (axis.MinorTicks is { Count: > 0 } minorTicks)
+        {
+            foreach (var tick in minorTicks)
+                RenderTickMark(canvas, axis, horizontal, tick.Position, minorTickStyle, MinorTickLength);
+        }
+    }
+
+    /// <summary>
+    /// Draws a single tick mark at <paramref name="tickPos"/> along <paramref name="axis"/>, oriented
+    /// per <paramref name="style"/>: None draws nothing, Outside extends away from the plot area (the
+    /// prior unconditional behavior), Inside extends toward the plot area, and Cross extends both ways.
+    /// </summary>
+    private static void RenderTickMark(Canvas canvas, AxisLayout axis, bool horizontal, double tickPos, ChartAxisTickStyle style, double length)
+    {
+        var (outerLen, innerLen) = style switch
+        {
+            ChartAxisTickStyle.None => (0.0, 0.0),
+            ChartAxisTickStyle.Inside => (0.0, length),
+            ChartAxisTickStyle.Cross => (length, length),
+            _ => (length, 0.0), // Outside (default)
+        };
+
+        if (outerLen <= 0 && innerLen <= 0)
+            return;
+
+        if (horizontal)
+        {
+            // Bottom axis: outward (away from the plot area above it) is +Y. Top axis: outward is -Y.
+            var sign = axis.Side == AxisSide.Top ? -1 : 1;
+            AddLine(canvas, tickPos, axis.LinePosition - sign * innerLen, tickPos, axis.LinePosition + sign * outerLen);
+        }
+        else
+        {
+            // Right axis: outward (away from the plot area to its left) is +X. Left axis: outward is -X.
+            var sign = axis.Side == AxisSide.Right ? 1 : -1;
+            AddLine(canvas, axis.LinePosition - sign * innerLen, tickPos, axis.LinePosition + sign * outerLen, tickPos);
         }
     }
 

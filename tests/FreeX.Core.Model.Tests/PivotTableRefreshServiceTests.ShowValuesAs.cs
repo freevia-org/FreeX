@@ -353,7 +353,10 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "D9"),
             TargetRange = Range(sheet, "F2", "K12"),
-            ReportLayout = PivotReportLayout.Tabular
+            ReportLayout = PivotReportLayout.Tabular,
+            // R90-render-pivot-layout-5-1: pin the (former) no-subtotal default -- this 2-row-field
+            // layout test's cell coordinates assume no subtotal rows.
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -388,7 +391,10 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "D9"),
             TargetRange = Range(sheet, "F2", "L12"),
-            ReportLayout = PivotReportLayout.Tabular
+            ReportLayout = PivotReportLayout.Tabular,
+            // R90-render-pivot-layout-5-1: pin the (former) no-subtotal default -- this 2-column-field
+            // layout test's cell coordinates assume no subtotal columns.
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.ColumnFields.Add(new PivotFieldModel(1));
@@ -422,7 +428,10 @@ public sealed partial class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "D9"),
             TargetRange = Range(sheet, "F2", "H20"),
             ReportLayout = PivotReportLayout.Tabular,
-            ShowSubtotals = true
+            ShowSubtotals = true,
+            // R90-render-pivot-layout-5-1: pin the (former) Bottom default -- this test's "East total"
+            // assertion expects the subtotal after the group's leaf rows.
+            SubtotalPlacement = PivotSubtotalPlacement.Bottom
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));

@@ -75,6 +75,86 @@ public static partial class FormulaAuditingService
         }
     }
 
+    private static IReadOnlyList<GridRange> ExtractPrecedentRegions(Workbook workbook, SheetId hostSheetId, string formulaText)
+    {
+        try
+        {
+            var ast = new Parser(new Lexer(formulaText).Tokenize()).Parse();
+            var result = new List<GridRange>();
+            CollectReferenceRegions(workbook, hostSheetId, ast, result);
+            return result;
+        }
+        catch (FormulaParseException)
+        {
+            return [];
+        }
+    }
+
+    // Mirrors CollectReferences above but preserves a multi-cell RangeRefNode/NamedRangeNode/
+    // StructuredReferenceNode as ONE contiguous GridRange region instead of flattening it into
+    // individual CellAddress entries. Used only by the trace-arrow builders (this service's
+    // CollectPrecedentTraceArrows and FormulaTraceArrowPlanner) so a range precedent collapses
+    // into a single arrow instead of one arrow per cell in the range
+    // (R88-app-formula-auditing-5-3), while GetDirectPrecedents/GetDirectDependents keep their
+    // existing per-cell contract unchanged for every other caller (Ctrl+[ navigation, Go To
+    // Special, dependents lookup, etc.).
+    private static void CollectReferenceRegions(
+        Workbook workbook,
+        SheetId hostSheetId,
+        FormulaNode node,
+        List<GridRange> result)
+    {
+        switch (node)
+        {
+            case CellRefNode cellRef:
+                if (ResolveSheet(workbook, hostSheetId, cellRef.SheetName) is { } cellSheet)
+                {
+                    var addr = new CellAddress(cellSheet.Id, cellRef.Row, cellRef.ColumnNumber);
+                    result.Add(new GridRange(addr, addr));
+                }
+                break;
+
+            case RangeRefNode rangeRef:
+                if (ResolveSheet(workbook, hostSheetId, rangeRef.SheetName ?? rangeRef.Start.SheetName) is { } rangeSheet)
+                {
+                    result.Add(new GridRange(
+                        new CellAddress(rangeSheet.Id, rangeRef.Start.Row, rangeRef.Start.ColumnNumber),
+                        new CellAddress(rangeSheet.Id, rangeRef.End.Row, rangeRef.End.ColumnNumber)));
+                }
+                break;
+
+            case NamedRangeNode namedRange:
+                // Sheet-scope-first, mirrors CollectReferences's NamedRangeNode handling above.
+                if (!workbook.ScopedNamedFormulas.ContainsKey((namedRange.Name, hostSheetId)) &&
+                    workbook.TryGetNamedRange(namedRange.Name, hostSheetId, out var range))
+                    result.Add(range);
+                break;
+
+            case StructuredReferenceNode structured:
+                if (StructuredReferenceResolver.ResolveDataBodyColumn(
+                        workbook,
+                        workbook.GetSheet(hostSheetId),
+                        structured.TableName,
+                        structured.ColumnName) is { } structuredRange)
+                    result.Add(structuredRange);
+                break;
+
+            case BinaryOpNode binary:
+                CollectReferenceRegions(workbook, hostSheetId, binary.Left, result);
+                CollectReferenceRegions(workbook, hostSheetId, binary.Right, result);
+                break;
+
+            case UnaryOpNode unary:
+                CollectReferenceRegions(workbook, hostSheetId, unary.Operand, result);
+                break;
+
+            case FunctionCallNode function:
+                foreach (var arg in function.Arguments)
+                    CollectReferenceRegions(workbook, hostSheetId, arg, result);
+                break;
+        }
+    }
+
     private static bool HasAnyBlankPrecedent(Workbook workbook, SheetId hostSheetId, string formulaText)
     {
         if (TryHasAnyBlankLocalCellReference(workbook, hostSheetId, formulaText, out var hasBlankLocalReference))
