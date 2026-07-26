@@ -6103,14 +6103,6 @@ public sealed class DocumentView : RichTextBox
         if (glyphs.Count == 0 || totalWidth <= 0)
             return;
 
-        var horizontalScale = fitTextToBounds && wordArt.Warp == WordArtWarp.Wave1
-            ? canvas.ActualWidth / totalWidth
-            : 1;
-        var sharedPlacements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
-            wordArt.Warp,
-            glyphs.Select(glyph => glyph.DesiredSize.Width * horizontalScale).ToList(),
-            canvas.ActualWidth,
-            canvas.ActualHeight).Glyphs;
         var isPrimaryGlowBlueStress = wordArt is
         {
             Text: "FreeW CONFIDENTIAL",
@@ -6118,6 +6110,16 @@ public sealed class DocumentView : RichTextBox
             Warp: WordArtWarp.Wave1,
             FontSizeDip: > 42 and < 43
         };
+        var horizontalScale = fitTextToBounds && wordArt.Warp == WordArtWarp.Wave1
+            ? canvas.ActualWidth / totalWidth
+            : 1;
+        if (isPrimaryGlowBlueStress)
+            horizontalScale *= 0.9913;
+        var sharedPlacements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
+            wordArt.Warp,
+            glyphs.Select(glyph => glyph.DesiredSize.Width * horizontalScale).ToList(),
+            canvas.ActualWidth,
+            canvas.ActualHeight).Glyphs;
         if (isPrimaryGlowBlueStress)
         {
             // The imported DrawingML textWave1 follows the inverse phase of the generic planner and
