@@ -52,7 +52,7 @@ try {
     $logDeadline = (Get-Date).AddSeconds(30)
     while ((Get-Date) -lt $logDeadline) {
         try {
-            $log = Get-Content -LiteralPath $sourceLog -Raw -ErrorAction Stop
+            $log = [IO.File]::ReadAllText($sourceLog)
         } catch {
             $log = ""
         }
@@ -66,7 +66,7 @@ try {
             -Action Stop -App FreeW -Port $Port -OutputDir $resolvedOutput
         if ($LASTEXITCODE -ne 0) { throw "Linux harness stop failed with exit code $LASTEXITCODE." }
         $cleanupRequired = $false
-        $log = Get-Content -LiteralPath $sourceLog -Raw -ErrorAction Stop
+        $log = [IO.File]::ReadAllText($sourceLog)
     }
     [IO.File]::WriteAllText($logPath, $log, [Text.UTF8Encoding]::new($false))
     $required = @(

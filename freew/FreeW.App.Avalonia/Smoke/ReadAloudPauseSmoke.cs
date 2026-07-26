@@ -117,9 +117,11 @@ internal static class ReadAloudPauseSmoke
         }
         finally
         {
-            // Stop before disposal on every path, including a timeout while the child is SIGSTOP'ed.
+            // Resume before stopping so a SIGSTOP'ed child cannot survive a failure path. Both calls are
+            // best-effort and idempotent: a naturally completed or already stopped child is harmless.
             try
             {
+                engine?.TryResume();
                 engine?.Stop();
             }
             catch
