@@ -484,6 +484,12 @@
   <data name="Ribbon_Command_ChartDataTableOptions_KeyTip" xml:space="preserve">
     <value>D</value>
   </data>
+  <data name="Ribbon_Command_ChartBubbleOptions_Label" xml:space="preserve">
+    <value>Bubble Options</value>
+  </data>
+  <data name="Ribbon_Command_ChartBubbleOptions_KeyTip" xml:space="preserve">
+    <value>B</value>
+  </data>
   <data name="Ribbon_Command_Chart3DViewOptions_Label" xml:space="preserve">
     <value>3-D View</value>
   </data>
