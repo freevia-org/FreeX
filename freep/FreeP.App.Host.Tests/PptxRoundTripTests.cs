@@ -562,6 +562,32 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_Explosion_PreservesAuthoredSpikeDepth()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var explosion = new SlideShape
+        {
+            Id = 1,
+            Name = "Adjusted explosion",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Explosion,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+        };
+        explosion.PresetGeometryAdjustments["adj"] = 82000;
+        slide.Shapes.Add(explosion);
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+        var reloadedExplosion = reloaded.Slides[0].Shapes.Single(shape => shape.Id == 1);
+
+        reloadedExplosion.AutoShapeKind.Should().Be(DrawingShapeKind.Explosion);
+        reloadedExplosion.PresetGeometryAdjustments["adj"].Should().Be(82000);
+    }
+
+    [Fact]
     public void RoundTrip_CompoundArrows_PreserveAuthoredAdjustmentGuides()
     {
         var pres = new Presentation();

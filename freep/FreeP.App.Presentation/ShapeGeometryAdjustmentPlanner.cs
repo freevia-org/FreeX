@@ -46,8 +46,8 @@ public sealed record ShapeGeometryAdjustmentMutationPlan(
 /// <summary>
 /// Shared planning for PowerPoint-style preset-shape edit points.
 /// Supported geometries are imported/custom line vertices, Chord (two explicit angle guides),
-/// Rounded Rectangle (one explicit corner-radius guide), Triangle (one apex guide), Star5 and
-/// Star8 (one point-depth guide each), directional
+/// Rounded Rectangle (one explicit corner-radius guide), Triangle (one apex guide), Star5,
+/// Star8, and Explosion (one point-depth guide each), directional
 /// arrows (shaft and head guides), compound arrows (shaft and symmetric head guides), Chevron,
 /// and Home Plate (one point-depth guide each). The compositor already consumes these geometry
 /// representations.
@@ -66,6 +66,7 @@ public static class ShapeGeometryAdjustmentPlanner
     private const double MaxArrowAdjustment = 100000;
     private const double DefaultStarAdjustment = 42000;
     private const double DefaultStar8Adjustment = 46000;
+    private const double DefaultExplosionAdjustment = 62000;
     private const double DefaultCrossAdjustment = 35000;
     private const double DefaultSlantAdjustment = 20000;
     private const double MaxCrossAdjustment = 50000;
@@ -83,7 +84,7 @@ public static class ShapeGeometryAdjustmentPlanner
             return BuildCustomGeometryPlan(shape, boundsDip);
 
         if (shape.Kind != SlideShapeKind.AutoShape ||
-            shape.AutoShapeKind is not (DrawingShapeKind.Chord or DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle or DrawingShapeKind.Star5 or DrawingShapeKind.Star8 or
+            shape.AutoShapeKind is not (DrawingShapeKind.Chord or DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle or DrawingShapeKind.Star5 or DrawingShapeKind.Star8 or DrawingShapeKind.Explosion or
                 DrawingShapeKind.RightArrow or DrawingShapeKind.LeftArrow or DrawingShapeKind.UpArrow or DrawingShapeKind.DownArrow or
                 DrawingShapeKind.LeftRightArrow or DrawingShapeKind.UpDownArrow or
                 DrawingShapeKind.Chevron or DrawingShapeKind.HomePlate or
@@ -173,6 +174,26 @@ public static class ShapeGeometryAdjustmentPlanner
                 [new ShapeGeometryAdjustmentHandlePlan(
                     "adj",
                     "Star point depth",
+                    new LayoutPoint(
+                        boundsDip.Left + boundsDip.Width * (0.5 + Math.Cos(angle) * radial),
+                        boundsDip.Top + boundsDip.Height * (0.5 + Math.Sin(angle) * radial)),
+                    adjustment,
+                    0,
+                    MaxStarAdjustment)]);
+        }
+
+        if (shape.AutoShapeKind == DrawingShapeKind.Explosion)
+        {
+            var adjustment = ReadAdjustment(shape, "adj", DefaultExplosionAdjustment, MaxStarAdjustment);
+            var radial = adjustment / MaxStarAdjustment / 2.0;
+            var angle = -Math.PI / 2 + 0.08 + Math.PI / 12;
+            return new ShapeGeometryAdjustmentPlan(
+                shape.Id,
+                CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
+                boundsDip.Width > 0 && boundsDip.Height > 0 ? null : UnsupportedShapeMessage,
+                [new ShapeGeometryAdjustmentHandlePlan(
+                    "adj",
+                    "Explosion spike depth",
                     new LayoutPoint(
                         boundsDip.Left + boundsDip.Width * (0.5 + Math.Cos(angle) * radial),
                         boundsDip.Top + boundsDip.Height * (0.5 + Math.Sin(angle) * radial)),
@@ -408,7 +429,7 @@ public static class ShapeGeometryAdjustmentPlanner
                 new ShapeGeometryCustomPointMutationPlan(pathIndex, segmentIndex, x, y, slot));
         }
 
-        if (shape.AutoShapeKind is DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle or DrawingShapeKind.Star5 or DrawingShapeKind.Star8 ||
+        if (shape.AutoShapeKind is DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle or DrawingShapeKind.Star5 or DrawingShapeKind.Star8 or DrawingShapeKind.Explosion ||
             IsDirectionalArrow(shape.AutoShapeKind))
         {
             if (IsDirectionalArrow(shape.AutoShapeKind))
@@ -445,13 +466,16 @@ public static class ShapeGeometryAdjustmentPlanner
                 return new(true, "adj", Math.Clamp(adjustment, 0, MaxTriangleAdjustment), null);
             }
 
-            if (shape.AutoShapeKind is DrawingShapeKind.Star5 or DrawingShapeKind.Star8)
+            if (shape.AutoShapeKind is DrawingShapeKind.Star5 or DrawingShapeKind.Star8 or DrawingShapeKind.Explosion)
             {
                 var starNormalizedX = (pointerDip.X - (boundsDip.Left + boundsDip.Width / 2)) / (boundsDip.Width / 2);
                 var starNormalizedY = (pointerDip.Y - (boundsDip.Top + boundsDip.Height / 2)) / (boundsDip.Height / 2);
-                var angle = shape.AutoShapeKind == DrawingShapeKind.Star8
-                    ? -Math.PI / 2 + Math.PI / 8
-                    : -Math.PI / 2 + Math.PI / 5;
+                var angle = shape.AutoShapeKind switch
+                {
+                    DrawingShapeKind.Star8 => -Math.PI / 2 + Math.PI / 8,
+                    DrawingShapeKind.Explosion => -Math.PI / 2 + 0.08 + Math.PI / 12,
+                    _ => -Math.PI / 2 + Math.PI / 5,
+                };
                 var radial = starNormalizedX * Math.Cos(angle) + starNormalizedY * Math.Sin(angle);
                 return new(true, "adj", Math.Clamp(radial * MaxStarAdjustment, 0, MaxStarAdjustment), null);
             }
