@@ -26,6 +26,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly TextBox _barGapWidthBox;
     private readonly TextBox _barOverlapBox;
     private readonly ComboBox _displayBlanksCombo;
+    private readonly CheckBox _showDataLabelsOverMaximumCheck;
 
     public ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -103,6 +104,12 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             MinWidth = 160,
             SelectedIndex = FindDisplayBlanksIndex(_planner.DisplayBlanksAs),
         };
+        _showDataLabelsOverMaximumCheck = new CheckBox
+        {
+            Content = surface.ShowDataLabelsOverMaximumLabel,
+            IsThreeState = true,
+            IsChecked = _planner.ShowDataLabelsOverMaximum,
+        };
 
         var buttons = new StackPanel
         {
@@ -133,6 +140,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         content.Children.Add(MakeRow(surface.BarGapWidthLabel, _barGapWidthBox));
         content.Children.Add(MakeRow(surface.BarOverlapLabel, _barOverlapBox));
         content.Children.Add(MakeRow(surface.DisplayBlanksAsLabel, _displayBlanksCombo));
+        content.Children.Add(_showDataLabelsOverMaximumCheck);
         content.Children.Add(new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -169,6 +177,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _planner.SetBarOverlapPercent(ParseOptionalPercent(_barOverlapBox.Text, "Bar overlap", -100, 100));
         if (_displayBlanksCombo.SelectedItem is ChartDisplayBlanksOption blanks)
             _planner.SetDisplayBlanksAs(blanks.Value);
+        _planner.SetShowDataLabelsOverMaximum(_showDataLabelsOverMaximumCheck.IsChecked);
     }
 
     private static StackPanel MakeRow(string label, Control control)

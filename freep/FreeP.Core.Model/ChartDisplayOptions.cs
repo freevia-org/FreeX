@@ -19,4 +19,5 @@ public sealed record ChartDisplayOptions(
     string? LabelSeparator = null,
     int? BarGapWidthPercent = null,
     int? BarOverlapPercent = null,
-    ChartDisplayBlanksAs? DisplayBlanksAs = null);
+    ChartDisplayBlanksAs? DisplayBlanksAs = null,
+    bool? ShowDataLabelsOverMaximum = null);
