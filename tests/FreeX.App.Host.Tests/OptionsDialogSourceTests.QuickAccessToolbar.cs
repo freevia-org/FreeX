@@ -74,9 +74,11 @@ public sealed partial class OptionsDialogSourceTests
 
         source.Should().Contain("QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList()");
 
-        source.Should().Contain("QuickAccessToolbarCatalog.DefaultCommandIds");
-
-        source.Should().Contain("QuickAccessCommandMatchesFilter(command, filterText)");
+        source.Should().Contain("QuickAccessToolbarCustomizationPlanner.FilterAvailable(");
+        source.Should().Contain("QuickAccessToolbarCustomizationPlanner.Apply(");
+        source.Should().Contain("QuickAccessToolbarCustomizationPlanner.Move(");
+        source.Should().Contain("QuickAccessToolbarCustomizationPlanner.Reset()");
+        source.Should().NotContain("QuickAccessCommandMatchesFilter");
 
         source.Should().Contain("QuickAccessSearchBox_TextChanged");
 
@@ -113,6 +115,8 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
 
         source.Should().Contain("QuickAccessToolbarCustomizationFile.DialogFilter");
+        source.Should().Contain("QuickAccessToolbarCustomizationFile.ImportMenuHeader");
+        source.Should().Contain("QuickAccessToolbarCustomizationFile.ExportMenuHeader");
 
         source.Should().Contain("QuickAccessToolbarCustomizationFile.DefaultExtension");
 

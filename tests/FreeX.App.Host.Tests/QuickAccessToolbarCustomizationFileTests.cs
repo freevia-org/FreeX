@@ -7,6 +7,15 @@ namespace FreeX.App.Host.Tests;
 public sealed class QuickAccessToolbarCustomizationFileTests
 {
     [Fact]
+    public void Contract_ProvidesSharedMenuLabelsAndAllPickerPatterns()
+    {
+        QuickAccessToolbarCustomizationFile.ImportMenuHeader.Should().Be("_Import customization file...");
+        QuickAccessToolbarCustomizationFile.ExportMenuHeader.Should().Be("_Export customization file...");
+        QuickAccessToolbarCustomizationFile.FilePickerPatterns.Should().Equal(
+            "*.freex-qat.json", "*.json", "*.*");
+    }
+
+    [Fact]
     public void Serialize_WritesFreeXOwnedJsonWithNormalizedCommands()
     {
         var json = QuickAccessToolbarCustomizationFile.Serialize(

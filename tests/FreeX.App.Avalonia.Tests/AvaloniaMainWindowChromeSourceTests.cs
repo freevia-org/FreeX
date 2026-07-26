@@ -276,19 +276,19 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         buildContentBlock.Should().Contain("WorkArea: BuildWorkbookWorkArea(),");
         buildContentBlock.Should().Contain("StatusBar: statusBar,");
         buildContentBlock.Should().Contain("BottomPanelsAboveStatus: [sheetTabs],");
-        buildContentBlock.Should().Contain("TopPanelsBelowRibbon: [formulaBar]");
+        buildContentBlock.Should().Contain("TopPanelsBelowRibbon: [belowRibbonQatHost, formulaBar]");
         buildContentBlock.Should().Contain("var root = new AvaloniaGrid();");
         buildContentBlock.Should().Contain("root.Children.Add(frame.Root);");
         buildContentBlock.Should().Contain("root.Children.Add(BuildBackstageOverlay());");
         buildContentBlock.Should().Contain("SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
         buildContentBlock.Should().Contain("Window: this,");
         buildContentBlock.Should().Contain("Body: root,");
-        buildContentBlock.Should().Contain("PopulateQuickAccessToolbar(windowFrame.QatHost);");
+        buildContentBlock.Should().Contain("PopulateQuickAccessToolbar(windowFrame.QatHost, belowRibbonQatHost);");
         buildContentBlock.Should().Contain("return windowFrame.Root;");
         AssertBefore(buildContentBlock, "Ribbon: ribbon,", "WorkArea: BuildWorkbookWorkArea(),");
         AssertBefore(buildContentBlock, "WorkArea: BuildWorkbookWorkArea(),", "StatusBar: statusBar,");
         AssertBefore(buildContentBlock, "StatusBar: statusBar,", "BottomPanelsAboveStatus: [sheetTabs],");
-        AssertBefore(buildContentBlock, "BottomPanelsAboveStatus: [sheetTabs],", "TopPanelsBelowRibbon: [formulaBar]");
+        AssertBefore(buildContentBlock, "BottomPanelsAboveStatus: [sheetTabs],", "TopPanelsBelowRibbon: [belowRibbonQatHost, formulaBar]");
         buildContentBlock.Should().NotContain("var root = new DockPanel();");
 
         statusBarBlock.Should().Contain("SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(");
@@ -314,9 +314,13 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             "Free.Shared.Shell.Avalonia",
             "SisterAppWindowFrameBuilder.cs"));
 
-        mainSource.Should().Contain("TopPanelsBelowRibbon: [formulaBar]");
+        mainSource.Should().Contain("TopPanelsBelowRibbon: [belowRibbonQatHost, formulaBar]");
         mainSource.Should().NotContain("TopPanelsBelowRibbon: [BuildQuickAccessToolbar(), formulaBar]");
-        contextMenuSource.Should().Contain("private void PopulateQuickAccessToolbar(Panel titleBarHost)");
+        contextMenuSource.Should().Contain("private void PopulateQuickAccessToolbar(Panel titleBarHost, Border belowRibbonHost)");
+        contextMenuSource.Should().Contain("Height = 0,");
+        contextMenuSource.Should().Contain("_avaloniaQuickAccessBelowRibbonHost.Height = 30;");
+        contextMenuSource.Should().Contain("_avaloniaQuickAccessOptions?.QuickAccessToolbarBelowRibbon == true");
+        contextMenuSource.Should().Contain("ApplyAvaloniaQuickAccessToolbarPlacement();");
         contextMenuSource.Should().NotContain("private Control BuildQuickAccessToolbar()");
         contextMenuSource.Should().Contain("WindowDecorationsElementRole.User");
         AssertBefore(

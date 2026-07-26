@@ -2,11 +2,15 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
+using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -49,6 +53,21 @@ public sealed partial class MainWindow
 
         // Edit a snapshot loaded from the shared store so unmanaged fields round-trip untouched.
         var current = AppOptionsStore.Load();
+        var quickAccessCommandIds = QuickAccessToolbarCatalog.NormalizeCommandIds(current.QuickAccessToolbarCommands).ToList();
+        var customDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(current.SpellCheckCustomDictionaryWords);
+        var warningText = new TextBlock
+        {
+            Foreground = Brush(180, 30, 30),
+            TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
+        };
+        AutomationProperties.SetAutomationId(warningText, "OptionsWarningText");
+
+        void ShowOptionsWarning(string message)
+        {
+            warningText.Text = message;
+            warningText.IsVisible = true;
+        }
 
         var dialog = new Window
         {
@@ -200,21 +219,162 @@ public sealed partial class MainWindow
             errorRulesPanel);
 
         // ── Proofing ────────────────────────────────────────────────────────────
-        var ignoreUppercaseBox = new CheckBox { Content = UiText.Get("Options_IgnoreUppercase"), IsChecked = current.ProofingIgnoreUppercase };
-        ApplyOptionsCheckBoxChrome(ignoreUppercaseBox);
-        AutomationProperties.SetAutomationId(ignoreUppercaseBox, "OptionsIgnoreUppercaseCheckBox");
-        var ignoreNumbersBox = new CheckBox { Content = UiText.Get("Options_IgnoreNumbers"), IsChecked = current.ProofingIgnoreNumbers };
-        ApplyOptionsCheckBoxChrome(ignoreNumbersBox);
-        AutomationProperties.SetAutomationId(ignoreNumbersBox, "OptionsIgnoreNumbersCheckBox");
+        var proofingWordsList = new ListBox
+        {
+            Width = 468,
+            Height = 108,
+            ItemsSource = customDictionaryWords.ToList(),
+        };
+        ApplyOptionsListBoxChrome(proofingWordsList);
+        AutomationProperties.SetName(proofingWordsList, OptionsText("Options_CustomDictionaryWordsAutomationName"));
+        AutomationProperties.SetAutomationId(proofingWordsList, "ProofingCustomDictionaryWordsList");
+        AutomationProperties.SetHelpText(proofingWordsList, OptionsText("Options_CustomDictionaryWordsHelpText"));
 
+        var proofingWordBox = new TextBox { Height = 24 };
+        ApplyOptionsTextBoxChrome(proofingWordBox);
+        AutomationProperties.SetName(proofingWordBox, OptionsText("Options_CustomDictionaryWordAutomationName"));
+        AutomationProperties.SetAutomationId(proofingWordBox, "ProofingCustomDictionaryWordBox");
+        AutomationProperties.SetHelpText(proofingWordBox, OptionsText("Options_CustomDictionaryWordHelpText"));
+
+        var proofingAddButton = new Button { Content = OptionsText("Options_CustomDictionaryAddWordButton"), Width = 78, Height = 26, IsEnabled = false };
+        ApplyOptionsButtonChrome(proofingAddButton, 78);
+        AutomationProperties.SetName(proofingAddButton, OptionsText("Options_CustomDictionaryAddWordButtonAutomationName"));
+        AutomationProperties.SetAutomationId(proofingAddButton, "ProofingCustomDictionaryAddWordButton");
+        AutomationProperties.SetHelpText(proofingAddButton, OptionsText("Options_CustomDictionaryAddWordHelpText"));
+
+        var proofingRemoveButton = new Button { Content = OptionsText("Options_CustomDictionaryRemoveWordButton"), Width = 92, Height = 26, IsEnabled = false };
+        ApplyOptionsButtonChrome(proofingRemoveButton, 92);
+        AutomationProperties.SetName(proofingRemoveButton, OptionsText("Options_CustomDictionaryRemoveWordButtonAutomationName"));
+        AutomationProperties.SetAutomationId(proofingRemoveButton, "ProofingCustomDictionaryRemoveWordButton");
+        AutomationProperties.SetHelpText(proofingRemoveButton, OptionsText("Options_CustomDictionaryRemoveWordHelpText"));
+
+        var proofingClearButton = new Button { Content = OptionsText("Options_CustomDictionaryClearAllButton"), Width = 82, Height = 26, IsEnabled = customDictionaryWords.Count > 0 };
+        ApplyOptionsButtonChrome(proofingClearButton, 82);
+        AutomationProperties.SetName(proofingClearButton, OptionsText("Options_CustomDictionaryClearAllButtonAutomationName"));
+        AutomationProperties.SetAutomationId(proofingClearButton, "ProofingCustomDictionaryClearWordsButton");
+        AutomationProperties.SetHelpText(proofingClearButton, OptionsText("Options_CustomDictionaryClearAllHelpText"));
+
+        void RefreshProofingWords(string? selectedWord = null)
+        {
+            var previous = selectedWord ?? proofingWordsList.SelectedItem as string;
+            proofingWordsList.ItemsSource = customDictionaryWords.ToList();
+            if (!string.IsNullOrWhiteSpace(previous))
+            {
+                proofingWordsList.SelectedItem = customDictionaryWords.FirstOrDefault(
+                    word => string.Equals(word, previous, StringComparison.OrdinalIgnoreCase));
+            }
+
+            proofingRemoveButton.IsEnabled = proofingWordsList.SelectedItem is string;
+            proofingClearButton.IsEnabled = customDictionaryWords.Count > 0;
+        }
+
+        void UpdateProofingButtons()
+        {
+            proofingAddButton.IsEnabled = AppOptions.NormalizeSpellCheckCustomDictionaryWord(proofingWordBox.Text) is not null;
+            proofingRemoveButton.IsEnabled = proofingWordsList.SelectedItem is string;
+            proofingClearButton.IsEnabled = customDictionaryWords.Count > 0;
+        }
+
+        proofingWordBox.TextChanged += (_, _) => UpdateProofingButtons();
+        proofingWordsList.SelectionChanged += (_, _) => UpdateProofingButtons();
+        proofingWordBox.KeyDown += (_, args) =>
+        {
+            if (args.Key is not (Key.Enter or Key.Return) || !proofingAddButton.IsEnabled)
+                return;
+
+            proofingAddButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            args.Handled = true;
+        };
+        proofingAddButton.Click += (_, _) =>
+        {
+            if (SpellCheckWorkflowPlanner.AddCustomDictionaryWord(customDictionaryWords, new HashSet<string>(customDictionaryWords, StringComparer.OrdinalIgnoreCase), proofingWordBox.Text ?? string.Empty))
+            {
+                var added = AppOptions.NormalizeSpellCheckCustomDictionaryWord(proofingWordBox.Text);
+                proofingWordBox.Clear();
+                RefreshProofingWords(added);
+            }
+            else
+            {
+                customDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(customDictionaryWords);
+                proofingWordBox.Clear();
+                RefreshProofingWords();
+            }
+        };
+        proofingRemoveButton.Click += (_, _) =>
+        {
+            if (proofingWordsList.SelectedItem is not string selected)
+                return;
+
+            var nextWord = SpellCheckWorkflowPlanner.RemoveCustomDictionaryWordAndSelectNext(
+                customDictionaryWords,
+                selected);
+            RefreshProofingWords(nextWord);
+        };
+        proofingClearButton.Click += (_, _) =>
+        {
+            SpellCheckWorkflowPlanner.ClearCustomDictionaryWords(customDictionaryWords);
+            RefreshProofingWords();
+            proofingWordBox.Focus();
+        };
+
+        var proofingAddRow = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("94,*,86"),
+            Margin = new Thickness(0, 8, 0, 8),
+        };
+        var proofingAddLabel = new TextBlock
+        {
+            Text = OptionsText("Options_CustomDictionaryAddWord"),
+            FontSize = 12,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        Grid.SetColumn(proofingAddLabel, 0);
+        Grid.SetColumn(proofingWordBox, 1);
+        Grid.SetColumn(proofingAddButton, 2);
+        proofingAddButton.Margin = new Thickness(8, 0, 0, 0);
+        proofingAddRow.Children.Add(proofingAddLabel);
+        proofingAddRow.Children.Add(proofingWordBox);
+        proofingAddRow.Children.Add(proofingAddButton);
+
+        var proofingActionRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(0, 0, 0, 14),
+            Children = { proofingRemoveButton, proofingClearButton },
+        };
+        var proofingWordsSection = new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = OptionsText("Options_CustomDictionaryWords"), FontSize = 12 },
+                proofingWordsList,
+            },
+        };
+        var autoCorrectButton = OptionsButton(OptionsText("Options_AutoCorrectOptions2"), width: 150);
+        autoCorrectButton.Click += (_, _) => ShowOptionsWarning(UiText.Get("DeferredCommand_AutoCorrectOptions_Body"));
+
+        var proofingChecks = new StackPanel
+        {
+            Spacing = 2,
+            Children =
+            {
+                OptionsCheckBox(OptionsText("Options_CheckSpellingAsYouType"), isChecked: true, isEnabled: false),
+                OptionsCheckBox(OptionsText("Options_IgnoreWordsInUPPERCASE"), isChecked: current.ProofingIgnoreUppercase, isEnabled: false),
+                OptionsCheckBox(OptionsText("Options_FlagRepeatedWords"), isEnabled: false),
+            },
+        };
         var proofingPanel = OptionsCategoryPanel(
-            OptionsSectionHeader(OptionsText("Options_AutoCorrectOptions")),
-            OptionsCheckBox(OptionsText("Options_CheckSpellingAsYouType"), isChecked: true, isEnabled: false),
-            ignoreUppercaseBox,
-            ignoreNumbersBox,
-            OptionsCheckBox(OptionsText("Options_FlagRepeatedWords"), isEnabled: false),
-            OptionsSectionHeader(OptionsText("Options_CustomDictionary")),
-            OptionsDescription(OptionsText("Options_CustomDictionaryDescription")));
+            OptionsSectionHeader(OptionsText("Options_AutoCorrectOptions"), topMargin: 0),
+            proofingChecks,
+            OptionsSectionHeader(OptionsText("Options_CustomDictionary"), topMargin: 26),
+            OptionsDescription(OptionsText("Options_CustomDictionaryDescription")),
+            proofingWordsSection,
+            proofingAddRow,
+            proofingActionRow,
+            autoCorrectButton);
+        proofingPanel.Spacing = 4;
 
         // ── View ────────────────────────────────────────────────────────────────
         var showFormulaBarBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Options_ShowFormulaBar")), IsChecked = current.ShowFormulaBar };
@@ -320,10 +480,307 @@ public sealed partial class MainWindow
             OptionsDescription(OptionsText("Options_ChooseCommandsFromPopularCommands")),
             OptionsButton(OptionsText("Options_ImportExport"), width: 130, isEnabled: false));
 
+        var quickAccessBelowRibbonBox = new CheckBox
+        {
+            Content = OptionsText("Options_ShowQuickAccessToolbarBelowTheRibbon"),
+            IsChecked = current.QuickAccessToolbarBelowRibbon,
+        };
+        ApplyOptionsCheckBoxChrome(quickAccessBelowRibbonBox);
+        AutomationProperties.SetAutomationId(quickAccessBelowRibbonBox, "QuickAccessToolbarBelowRibbonCheckBox");
+        AutomationProperties.SetHelpText(quickAccessBelowRibbonBox, OptionsText("Options_QuickAccessBelowRibbonHelpText"));
+
+        var quickAccessSearchBox = new TextBox { Height = 24 };
+        ApplyOptionsTextBoxChrome(quickAccessSearchBox);
+        AutomationProperties.SetName(quickAccessSearchBox, OptionsText("AutoFilter_Search3"));
+        AutomationProperties.SetAutomationId(quickAccessSearchBox, "QuickAccessToolbarCommandSearchBox");
+        AutomationProperties.SetHelpText(quickAccessSearchBox, OptionsText("Options_QuickAccessSearchHelpText"));
+
+        var quickAccessAvailableList = new ListBox { Height = 180 };
+        ApplyOptionsListBoxChrome(quickAccessAvailableList);
+        AutomationProperties.SetName(quickAccessAvailableList, OptionsText("Options_AvailableCommandsAutomationName"));
+        AutomationProperties.SetAutomationId(quickAccessAvailableList, "QuickAccessToolbarAvailableCommandsList");
+        AutomationProperties.SetHelpText(quickAccessAvailableList, OptionsText("Options_QuickAccessAvailableCommandsHelpText"));
+
+        var quickAccessSelectedList = new ListBox { Height = 180 };
+        ApplyOptionsListBoxChrome(quickAccessSelectedList);
+        AutomationProperties.SetName(quickAccessSelectedList, OptionsText("Options_QuickAccessToolbarCommandsAutomationName"));
+        AutomationProperties.SetAutomationId(quickAccessSelectedList, "QuickAccessToolbarSelectedCommandsList");
+        AutomationProperties.SetHelpText(quickAccessSelectedList, OptionsText("Options_QuickAccessSelectedCommandsHelpText"));
+
+        Button MakeQuickAccessButton(string text, string automationId, double width = 92)
+        {
+            var button = new Button { Content = text, Width = width, Height = 26 };
+            ApplyOptionsButtonChrome(button, width);
+            AutomationProperties.SetAutomationId(button, automationId);
+            var helpKey = automationId switch
+            {
+                "QuickAccessToolbarAddCommandButton" => "Options_QuickAccessAddCommandHelpText",
+                "QuickAccessToolbarRemoveCommandButton" => "Options_QuickAccessRemoveCommandHelpText",
+                "QuickAccessToolbarMoveUpButton" => "Options_QuickAccessMoveUpHelpText",
+                "QuickAccessToolbarMoveDownButton" => "Options_QuickAccessMoveDownHelpText",
+                "QuickAccessToolbarResetButton" => "Options_QuickAccessResetHelpText",
+                "QuickAccessToolbarImportExportButton" => "Options_QuickAccessImportExportHelpText",
+                _ => null,
+            };
+            if (helpKey is not null)
+                AutomationProperties.SetHelpText(button, OptionsText(helpKey));
+            return button;
+        }
+
+        var quickAccessAddButton = MakeQuickAccessButton(OptionsText("Options_Add"), "QuickAccessToolbarAddCommandButton");
+        var quickAccessRemoveButton = MakeQuickAccessButton(OptionsText("Options_Remove"), "QuickAccessToolbarRemoveCommandButton");
+        var quickAccessMoveUpButton = MakeQuickAccessButton(OptionsText("Options_MoveUp"), "QuickAccessToolbarMoveUpButton");
+        var quickAccessMoveDownButton = MakeQuickAccessButton(OptionsText("Options_MoveDown"), "QuickAccessToolbarMoveDownButton");
+        var quickAccessResetButton = MakeQuickAccessButton(OptionsText("Options_Reset"), "QuickAccessToolbarResetButton");
+        var quickAccessImportExportButton = MakeQuickAccessButton(OptionsText("Options_ImportExport"), "QuickAccessToolbarImportExportButton", 130);
+        quickAccessImportExportButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
+
+        void UpdateQuickAccessButtons()
+        {
+            quickAccessAddButton.IsEnabled = quickAccessAvailableList.SelectedItem is OptionsQuickAccessCommandChoice;
+            quickAccessRemoveButton.IsEnabled = quickAccessSelectedList.SelectedItem is OptionsQuickAccessCommandChoice && quickAccessCommandIds.Count > 1;
+            quickAccessMoveUpButton.IsEnabled = quickAccessSelectedList.SelectedIndex > 0;
+            quickAccessMoveDownButton.IsEnabled = quickAccessSelectedList.SelectedIndex >= 0 && quickAccessSelectedList.SelectedIndex < quickAccessCommandIds.Count - 1;
+        }
+
+        void RefreshQuickAccessLists(string? selectedAvailableId = null, string? selectedCommandId = null)
+        {
+            var filter = quickAccessSearchBox.Text?.Trim() ?? string.Empty;
+            var available = QuickAccessToolbarCustomizationPlanner.FilterAvailable(
+                    quickAccessCommandIds,
+                    filter,
+                    command => [UiText.Get(command.TitleResourceKey), UiText.Get(command.DescriptionResourceKey)])
+                .Select(command => new OptionsQuickAccessCommandChoice(command.Id, UiText.Get(command.TitleResourceKey)))
+                .ToList();
+            var selected = quickAccessCommandIds
+                .Select(id => QuickAccessToolbarCatalog.TryGet(id, out var command) ? command : null)
+                .Where(command => command is not null)
+                .Select(command => new OptionsQuickAccessCommandChoice(command!.Id, UiText.Get(command.TitleResourceKey)))
+                .ToList();
+            quickAccessAvailableList.ItemsSource = available;
+            quickAccessSelectedList.ItemsSource = selected;
+            if (!string.IsNullOrWhiteSpace(selectedAvailableId))
+                quickAccessAvailableList.SelectedItem = available.FirstOrDefault(item => string.Equals(item.Id, selectedAvailableId, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(selectedCommandId))
+                quickAccessSelectedList.SelectedItem = selected.FirstOrDefault(item => string.Equals(item.Id, selectedCommandId, StringComparison.OrdinalIgnoreCase));
+            UpdateQuickAccessButtons();
+        }
+
+        void AddQuickAccessCommand()
+        {
+            if (quickAccessAvailableList.SelectedItem is not OptionsQuickAccessCommandChoice choice)
+                return;
+            quickAccessCommandIds = QuickAccessToolbarCustomizationPlanner.Apply(
+                quickAccessCommandIds,
+                choice.Id,
+                QuickAccessToolbarCustomizationAction.Add).ToList();
+            RefreshQuickAccessLists(selectedCommandId: choice.Id);
+        }
+
+        void RemoveQuickAccessCommand()
+        {
+            if (quickAccessSelectedList.SelectedItem is not OptionsQuickAccessCommandChoice choice || quickAccessCommandIds.Count <= 1)
+                return;
+            var index = quickAccessCommandIds.FindIndex(id => string.Equals(id, choice.Id, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+                return;
+            quickAccessCommandIds = QuickAccessToolbarCustomizationPlanner.Apply(
+                quickAccessCommandIds,
+                choice.Id,
+                QuickAccessToolbarCustomizationAction.Remove).ToList();
+            var nextIndex = Math.Clamp(index, 0, quickAccessCommandIds.Count - 1);
+            RefreshQuickAccessLists(selectedCommandId: quickAccessCommandIds[nextIndex]);
+        }
+
+        void MoveQuickAccessCommand(int delta)
+        {
+            if (quickAccessSelectedList.SelectedItem is not OptionsQuickAccessCommandChoice choice)
+                return;
+            var index = quickAccessCommandIds.FindIndex(id => string.Equals(id, choice.Id, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+                return;
+            quickAccessCommandIds = QuickAccessToolbarCustomizationPlanner.Move(
+                quickAccessCommandIds,
+                choice.Id,
+                delta).ToList();
+            RefreshQuickAccessLists(selectedCommandId: choice.Id);
+        }
+
+        quickAccessSearchBox.TextChanged += (_, _) =>
+        {
+            var selectedAvailableId = (quickAccessAvailableList.SelectedItem as OptionsQuickAccessCommandChoice)?.Id;
+            var selectedCommandId = (quickAccessSelectedList.SelectedItem as OptionsQuickAccessCommandChoice)?.Id;
+            RefreshQuickAccessLists(selectedAvailableId, selectedCommandId);
+        };
+        quickAccessAvailableList.SelectionChanged += (_, _) => UpdateQuickAccessButtons();
+        quickAccessSelectedList.SelectionChanged += (_, _) => UpdateQuickAccessButtons();
+        quickAccessAvailableList.DoubleTapped += (_, _) => AddQuickAccessCommand();
+        quickAccessSelectedList.DoubleTapped += (_, _) => RemoveQuickAccessCommand();
+        quickAccessAvailableList.KeyDown += (_, args) =>
+        {
+            if (args.Key is Key.Enter or Key.Return)
+            {
+                AddQuickAccessCommand();
+                args.Handled = true;
+            }
+        };
+        quickAccessSelectedList.KeyDown += (_, args) =>
+        {
+            if (args.KeyModifiers.HasFlag(KeyModifiers.Control) && args.Key == Key.Up)
+            {
+                MoveQuickAccessCommand(-1);
+                args.Handled = true;
+            }
+            else if (args.KeyModifiers.HasFlag(KeyModifiers.Control) && args.Key == Key.Down)
+            {
+                MoveQuickAccessCommand(1);
+                args.Handled = true;
+            }
+            else if (args.Key is Key.Delete or Key.Back)
+            {
+                RemoveQuickAccessCommand();
+                args.Handled = true;
+            }
+        };
+        quickAccessAddButton.Click += (_, _) => AddQuickAccessCommand();
+        quickAccessRemoveButton.Click += (_, _) => RemoveQuickAccessCommand();
+        quickAccessMoveUpButton.Click += (_, _) => MoveQuickAccessCommand(-1);
+        quickAccessMoveDownButton.Click += (_, _) => MoveQuickAccessCommand(1);
+        quickAccessResetButton.Click += (_, _) =>
+        {
+            quickAccessCommandIds = QuickAccessToolbarCustomizationPlanner.Reset().ToList();
+            RefreshQuickAccessLists(selectedCommandId: quickAccessCommandIds[0]);
+        };
+
+        async Task ImportQuickAccessCustomizationAsync()
+        {
+            try
+            {
+                var picker = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+                    StorageProvider,
+                    AvaloniaFilePickerOpenRequest.FromFileTypes(
+                        OptionsText("Options_QuickAccessToolbar"),
+                        [new FilePickerFileType("FreeX Quick Access Toolbar")
+                        {
+                            Patterns = QuickAccessToolbarCustomizationFile.FilePickerPatterns,
+                        }]));
+                if (picker is null)
+                    return;
+                using (picker)
+                {
+                    if (string.IsNullOrWhiteSpace(picker.LocalPath))
+                    {
+                        ShowOptionsWarning("Quick Access Toolbar import requires a local file path.");
+                        return;
+                    }
+                    var result = QuickAccessToolbarCustomizationFile.TryLoad(picker.LocalPath);
+                    if (!result.Success || result.Customization is null)
+                    {
+                        ShowOptionsWarning(result.ErrorMessage ?? "Could not import Quick Access Toolbar customization.");
+                        return;
+                    }
+                    quickAccessCommandIds = result.Customization.CommandIds.ToList();
+                    quickAccessBelowRibbonBox.IsChecked = result.Customization.QuickAccessToolbarBelowRibbon;
+                    RefreshQuickAccessLists(selectedCommandId: quickAccessCommandIds[0]);
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowOptionsWarning(ex.Message);
+            }
+        }
+
+        async Task ExportQuickAccessCustomizationAsync()
+        {
+            try
+            {
+                var picker = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+                    StorageProvider,
+                    AvaloniaFilePickerSaveRequest.FromFileTypes(
+                        OptionsText("Options_QuickAccessToolbar"),
+                        [new FilePickerFileType("FreeX Quick Access Toolbar")
+                        {
+                            Patterns = QuickAccessToolbarCustomizationFile.FilePickerPatterns,
+                        }],
+                        QuickAccessToolbarCustomizationFile.DefaultFileName,
+                        "freex-qat.json",
+                        showOverwritePrompt: true,
+                        suggestFirstFileType: true));
+                if (picker is null)
+                    return;
+                using (picker)
+                {
+                    string? errorMessage = null;
+                    if (string.IsNullOrWhiteSpace(picker.LocalPath) ||
+                        !QuickAccessToolbarCustomizationFile.TrySave(
+                            picker.LocalPath,
+                            quickAccessCommandIds,
+                            quickAccessBelowRibbonBox.IsChecked == true,
+                            out errorMessage))
+                    {
+                        ShowOptionsWarning(errorMessage ?? "Quick Access Toolbar export requires a local file path.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowOptionsWarning(ex.Message);
+            }
+        }
+
+        var importItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ImportMenuHeader.TrimStart('_') };
+        AutomationProperties.SetAutomationId(importItem, "QuickAccessToolbarImportCustomizationMenuItem");
+        importItem.Click += async (_, _) => await ImportQuickAccessCustomizationAsync();
+        var exportItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ExportMenuHeader.TrimStart('_') };
+        AutomationProperties.SetAutomationId(exportItem, "QuickAccessToolbarExportCustomizationMenuItem");
+        exportItem.Click += async (_, _) => await ExportQuickAccessCustomizationAsync();
+        var quickAccessImportExportMenu = new ContextMenu { Items = { importItem, exportItem } };
+        quickAccessImportExportButton.Click += (_, _) => quickAccessImportExportMenu.Open(quickAccessImportExportButton);
+
+        var quickAccessGrid = new Grid
+        {
+            Width = 469,
+            ColumnDefinitions = new ColumnDefinitions("128,10,92,10,127,10,92"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,*"),
+        };
+        var availableLabel = new TextBlock { Text = OptionsText("Options_AvailableCommands"), FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };
+        Grid.SetColumn(availableLabel, 0);
+        Grid.SetRow(availableLabel, 0);
+        var searchRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(0, 0, 0, 8) };
+        var searchLabel = new TextBlock { Text = OptionsText("AutoFilter_Search2"), FontSize = 12, VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        Grid.SetColumn(searchLabel, 0);
+        Grid.SetColumn(quickAccessSearchBox, 1);
+        searchRow.Children.Add(searchLabel);
+        searchRow.Children.Add(quickAccessSearchBox);
+        Grid.SetColumn(searchRow, 0);
+        Grid.SetRow(searchRow, 1);
+        Grid.SetColumn(quickAccessAvailableList, 0);
+        Grid.SetRow(quickAccessAvailableList, 2);
+        var addRemovePanel = new StackPanel { Spacing = 6, VerticalAlignment = AvaloniaVerticalAlignment.Top, Children = { quickAccessAddButton, quickAccessRemoveButton } };
+        Grid.SetColumn(addRemovePanel, 2);
+        Grid.SetRow(addRemovePanel, 2);
+        var selectedLabel = new TextBlock { Text = OptionsText("Options_QuickAccessToolbarCommands"), FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };
+        Grid.SetColumn(selectedLabel, 4);
+        Grid.SetRow(selectedLabel, 0);
+        Grid.SetColumn(quickAccessSelectedList, 4);
+        Grid.SetRow(quickAccessSelectedList, 2);
+        var reorderPanel = new StackPanel { Spacing = 6, VerticalAlignment = AvaloniaVerticalAlignment.Top, Children = { quickAccessMoveUpButton, quickAccessMoveDownButton, quickAccessResetButton } };
+        Grid.SetColumn(reorderPanel, 6);
+        Grid.SetRow(reorderPanel, 2);
+        quickAccessGrid.Children.Add(availableLabel);
+        quickAccessGrid.Children.Add(searchRow);
+        quickAccessGrid.Children.Add(quickAccessAvailableList);
+        quickAccessGrid.Children.Add(addRemovePanel);
+        quickAccessGrid.Children.Add(selectedLabel);
+        quickAccessGrid.Children.Add(quickAccessSelectedList);
+        quickAccessGrid.Children.Add(reorderPanel);
+        RefreshQuickAccessLists();
+
         var quickAccessPanel = OptionsCategoryPanel(
-            OptionsSectionHeader(OptionsText("Options_CustomizeTheQuickAccessToolbar")),
-            OptionsCheckBox(OptionsText("Options_ShowQuickAccessToolbarBelowTheRibbon"), isEnabled: false),
-            OptionsDescription(OptionsText("Options_QuickAccessToolbarCommands")));
+            OptionsSectionHeader(OptionsText("Options_CustomizeTheQuickAccessToolbar"), topMargin: 0),
+            quickAccessBelowRibbonBox,
+            quickAccessGrid,
+            quickAccessImportExportButton);
 
         var addInsPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_ViewAndManageAddIns")),
@@ -455,14 +912,6 @@ public sealed partial class MainWindow
         }
 
         // ── Warning + buttons ─────────────────────────────────────────────────────
-        var warningText = new TextBlock
-        {
-            Foreground = Brush(180, 30, 30),
-            TextWrapping = TextWrapping.Wrap,
-            IsVisible = false,
-        };
-        AutomationProperties.SetAutomationId(warningText, "OptionsWarningText");
-
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
         ApplyOptionsButtonChrome(okButton, 84, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "OptionsOkButton");
@@ -507,8 +956,8 @@ public sealed partial class MainWindow
                     calcAutoButton.IsChecked == true,
                     r1c1Box.IsChecked == true,
                     errorCheckingBox.IsChecked == true,
-                    ignoreUppercaseBox.IsChecked == true,
-                    ignoreNumbersBox.IsChecked == true,
+                    current.ProofingIgnoreUppercase,
+                    current.ProofingIgnoreNumbers,
                     showFormulaBarBox.IsChecked == true,
                     showGridlinesBox.IsChecked == true,
                     showHeadingsBox.IsChecked == true,
@@ -542,6 +991,10 @@ public sealed partial class MainWindow
             }
 
             var projected = OptionsDialogPlanner.Project(current, input);
+            projected.QuickAccessToolbarBelowRibbon = quickAccessBelowRibbonBox.IsChecked == true;
+            projected.QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(quickAccessCommandIds).ToList();
+            projected.SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(customDictionaryWords);
+            projected.NormalizePersistedCollections();
             if (!AppOptionsStore.Save(projected))
             {
                 warningText.Text = projected.LastPersistenceError ?? UiText.Get("Options_SaveFailed");
@@ -550,6 +1003,8 @@ public sealed partial class MainWindow
             }
 
             current = projected;
+            _avaloniaQuickAccessOptions = AppOptionsStore.Load();
+            RebuildAvaloniaQuickAccessToolbar();
             if (!ApplyFormulaErrorCheckingOptions())
                 return false;
 
@@ -679,6 +1134,9 @@ public sealed partial class MainWindow
 
     private static void ApplyOptionsComboBoxChrome(ComboBox comboBox)
         => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, OptionsDialogChromeStyle);
+
+    private static void ApplyOptionsListBoxChrome(ListBox listBox)
+        => AvaloniaCompactDialogChrome.ApplyListBox(listBox, OptionsDialogChromeStyle);
 
     private static void ApplyOptionsCheckBoxChrome(CheckBox checkBox)
     {
@@ -820,10 +1278,15 @@ public sealed partial class MainWindow
     private static bool LooksLikeMissingResource(string text) =>
         text.StartsWith("[[", StringComparison.Ordinal) && text.EndsWith("]]", StringComparison.Ordinal);
 
-    private static Control OptionsSectionHeader(string text) =>
+    private sealed record OptionsQuickAccessCommandChoice(string Id, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
+    private static Control OptionsSectionHeader(string text, double topMargin = 10) =>
         new StackPanel
         {
-            Margin = new Thickness(0, 10, 0, 4),
+            Margin = new Thickness(0, topMargin, 0, 4),
             Children =
             {
                 new TextBlock { Text = text, FontWeight = FontWeight.SemiBold, FontSize = 13 },

@@ -72,4 +72,44 @@ public static class QuickAccessToolbarCustomizationPlanner
 
         return QuickAccessToolbarCatalog.NormalizeCommandIds(normalizedCommandIds);
     }
+
+    public static IReadOnlyList<QuickAccessToolbarCommandDefinition> FilterAvailable(
+        IEnumerable<string>? selectedCommandIds,
+        string? searchText,
+        Func<QuickAccessToolbarCommandDefinition, IEnumerable<string>>? localizedSearchText = null)
+    {
+        var selected = new HashSet<string>(
+            QuickAccessToolbarCatalog.NormalizeCommandIds(selectedCommandIds),
+            StringComparer.OrdinalIgnoreCase);
+        var filter = searchText?.Trim() ?? string.Empty;
+
+        return QuickAccessToolbarCatalog.Commands
+            .Where(command => !selected.Contains(command.Id))
+            .Where(command => string.IsNullOrEmpty(filter) ||
+                command.Id.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
+                command.CommandName.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
+                (localizedSearchText?.Invoke(command) ?? Array.Empty<string>())
+                    .Any(value => value.Contains(filter, StringComparison.CurrentCultureIgnoreCase)))
+            .ToList();
+    }
+
+    public static IReadOnlyList<string> Move(
+        IEnumerable<string>? currentCommandIds,
+        string commandId,
+        int delta)
+    {
+        var normalizedCommandIds = QuickAccessToolbarCatalog.NormalizeCommandIds(currentCommandIds).ToList();
+        var index = normalizedCommandIds.FindIndex(
+            id => string.Equals(id, commandId, StringComparison.OrdinalIgnoreCase));
+        var nextIndex = index + delta;
+        if (index < 0 || nextIndex < 0 || nextIndex >= normalizedCommandIds.Count)
+            return normalizedCommandIds;
+
+        (normalizedCommandIds[index], normalizedCommandIds[nextIndex]) =
+            (normalizedCommandIds[nextIndex], normalizedCommandIds[index]);
+        return normalizedCommandIds;
+    }
+
+    public static IReadOnlyList<string> Reset() =>
+        QuickAccessToolbarCatalog.DefaultCommandIds.ToList();
 }

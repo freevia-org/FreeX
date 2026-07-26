@@ -2,13 +2,13 @@ using System.IO;
 using System.Text.Json;
 using FreeX.App.Services;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services.Ribbon;
 
-internal sealed record QuickAccessToolbarCustomization(
+public sealed record QuickAccessToolbarCustomization(
     bool QuickAccessToolbarBelowRibbon,
     IReadOnlyList<string> CommandIds);
 
-internal sealed record QuickAccessToolbarCustomizationFileResult(
+public sealed record QuickAccessToolbarCustomizationFileResult(
     bool Success,
     QuickAccessToolbarCustomization? Customization,
     string? ErrorMessage)
@@ -20,12 +20,15 @@ internal sealed record QuickAccessToolbarCustomizationFileResult(
         new(false, null, errorMessage);
 }
 
-internal static class QuickAccessToolbarCustomizationFile
+public static class QuickAccessToolbarCustomizationFile
 {
     public const string FileFormat = "FreeX.QuickAccessToolbarCustomization";
     public const int CurrentVersion = 1;
     public const string DefaultExtension = ".freex-qat.json";
     public const string DefaultFileName = "FreeX Quick Access Toolbar.freex-qat.json";
+    public const string ImportMenuHeader = "_Import customization file...";
+    public const string ExportMenuHeader = "_Export customization file...";
+    public static readonly string[] FilePickerPatterns = ["*.freex-qat.json", "*.json", "*.*"];
     public const string DialogFilter =
         "FreeX Quick Access Toolbar (*.freex-qat.json)|*.freex-qat.json|JSON files (*.json)|*.json|All files (*.*)|*.*";
 

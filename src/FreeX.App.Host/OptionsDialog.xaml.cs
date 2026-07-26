@@ -60,8 +60,6 @@ public partial class OptionsDialog : Window
     private readonly List<string> _quickAccessCommandIds = [];
     private readonly List<string> _customDictionaryWords = [];
     private readonly OptionsDialogInitialSection _initialSection;
-    private const string QuickAccessImportMenuHeader = "_Import customization file...";
-    private const string QuickAccessExportMenuHeader = "_Export customization file...";
     public FreeXOptions Result { get; private set; }
     public IReadOnlySet<string> DisabledFormulaErrorCodesResult { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -134,6 +132,7 @@ public partial class OptionsDialog : Window
         UpdateIterativeCalculationFieldsState();
         OptR1C1.IsChecked = _opts.UseR1C1ReferenceStyle;
         OptFormulasAutocomplete.IsChecked = true;
+        OptProofingIgnoreUppercase.IsChecked = _opts.ProofingIgnoreUppercase;
         PopulateErrorCheckingRules();
         PopulateProofingCustomDictionaryWords();
 
@@ -277,11 +276,11 @@ public partial class OptionsDialog : Window
 
     private void RefreshQuickAccessToolbarCommandLists(string? selectedAvailableId = null, string? selectedQatId = null)
     {
-        var selectedSet = new HashSet<string>(_quickAccessCommandIds, StringComparer.OrdinalIgnoreCase);
         var filterText = QuickAccessSearchBox.Text ?? string.Empty;
-        QuickAccessAvailableCommandsList.ItemsSource = QuickAccessToolbarCatalog.Commands
-            .Where(command => !selectedSet.Contains(command.Id))
-            .Where(command => QuickAccessCommandMatchesFilter(command, filterText))
+        QuickAccessAvailableCommandsList.ItemsSource = QuickAccessToolbarCustomizationPlanner.FilterAvailable(
+                _quickAccessCommandIds,
+                filterText,
+                command => [UiText.Get(command.TitleResourceKey), UiText.Get(command.DescriptionResourceKey)])
             .Select(CreateQuickAccessCommandChoice)
             .ToList();
         QuickAccessSelectedCommandsList.ItemsSource = _quickAccessCommandIds
@@ -297,23 +296,6 @@ public partial class OptionsDialog : Window
 
     private static QuickAccessCommandChoice CreateQuickAccessCommandChoice(QuickAccessToolbarCommandDefinition command) =>
         new(command.Id, UiText.Get(command.TitleResourceKey));
-
-    private static bool QuickAccessCommandMatchesFilter(
-        QuickAccessToolbarCommandDefinition command,
-        string filterText)
-    {
-        var filter = filterText.Trim();
-        if (string.IsNullOrEmpty(filter))
-            return true;
-
-        return QuickAccessCommandTextMatches(command.Id, filter) ||
-            QuickAccessCommandTextMatches(command.CommandName, filter) ||
-            QuickAccessCommandTextMatches(UiText.Get(command.TitleResourceKey), filter) ||
-            QuickAccessCommandTextMatches(UiText.Get(command.DescriptionResourceKey), filter);
-    }
-
-    private static bool QuickAccessCommandTextMatches(string text, string filter) =>
-        text.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
 
     private static QuickAccessCommandChoice? FindQuickAccessCommandChoice(ListBox listBox, string commandId)
     {
@@ -378,7 +360,12 @@ public partial class OptionsDialog : Window
         if (QuickAccessAvailableCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
             return;
 
-        _quickAccessCommandIds.Add(choice.Id);
+        var updated = QuickAccessToolbarCustomizationPlanner.Apply(
+            _quickAccessCommandIds,
+            choice.Id,
+            QuickAccessToolbarCustomizationAction.Add);
+        _quickAccessCommandIds.Clear();
+        _quickAccessCommandIds.AddRange(updated);
         RefreshQuickAccessToolbarCommandLists(selectedQatId: choice.Id);
     }
 
@@ -394,7 +381,12 @@ public partial class OptionsDialog : Window
         if (removedIndex < 0)
             return;
 
-        _quickAccessCommandIds.RemoveAt(removedIndex);
+        var updated = QuickAccessToolbarCustomizationPlanner.Apply(
+            _quickAccessCommandIds,
+            choice.Id,
+            QuickAccessToolbarCustomizationAction.Remove);
+        _quickAccessCommandIds.Clear();
+        _quickAccessCommandIds.AddRange(updated);
         var nextIndex = Math.Clamp(removedIndex, 0, _quickAccessCommandIds.Count - 1);
         RefreshQuickAccessToolbarCommandLists(
             selectedAvailableId: choice.Id,
@@ -480,8 +472,9 @@ public partial class OptionsDialog : Window
         if (index <= 0)
             return;
 
-        (_quickAccessCommandIds[index - 1], _quickAccessCommandIds[index]) =
-            (_quickAccessCommandIds[index], _quickAccessCommandIds[index - 1]);
+        var updated = QuickAccessToolbarCustomizationPlanner.Move(_quickAccessCommandIds, choice.Id, -1);
+        _quickAccessCommandIds.Clear();
+        _quickAccessCommandIds.AddRange(updated);
         RefreshQuickAccessToolbarCommandLists(selectedQatId: choice.Id);
     }
 
@@ -494,8 +487,9 @@ public partial class OptionsDialog : Window
         if (index < 0 || index >= _quickAccessCommandIds.Count - 1)
             return;
 
-        (_quickAccessCommandIds[index + 1], _quickAccessCommandIds[index]) =
-            (_quickAccessCommandIds[index], _quickAccessCommandIds[index + 1]);
+        var updated = QuickAccessToolbarCustomizationPlanner.Move(_quickAccessCommandIds, choice.Id, 1);
+        _quickAccessCommandIds.Clear();
+        _quickAccessCommandIds.AddRange(updated);
         RefreshQuickAccessToolbarCommandLists(selectedQatId: choice.Id);
     }
 
@@ -558,6 +552,8 @@ public partial class OptionsDialog : Window
             DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? FreeXOptions.FreeXWorkbookDefaultFormat : FreeXOptions.XlsxDefaultFormat,
             QuickAccessToolbarBelowRibbon = QuickAccessBelowRibbonCheckBox.IsChecked == true,
             QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList(),
+            ProofingIgnoreUppercase = _opts.ProofingIgnoreUppercase,
+            ProofingIgnoreNumbers = _opts.ProofingIgnoreNumbers,
             AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),
             SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords),
             CrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true,
@@ -641,17 +637,6 @@ public partial class OptionsDialog : Window
         return null;
     }
 
-    private int IndexOfCustomDictionaryWord(string word)
-    {
-        for (var index = 0; index < _customDictionaryWords.Count; index++)
-        {
-            if (CustomDictionaryWordsEqual(_customDictionaryWords[index], word))
-                return index;
-        }
-
-        return -1;
-    }
-
     private static bool CustomDictionaryWordsEqual(string word, string otherWord) =>
         string.Equals(word, otherWord, StringComparison.OrdinalIgnoreCase);
 
@@ -706,14 +691,9 @@ public partial class OptionsDialog : Window
         if (ProofingCustomDictionaryWordsList.SelectedItem is not string selectedWord)
             return;
 
-        var removedIndex = IndexOfCustomDictionaryWord(selectedWord);
-        if (removedIndex < 0)
-            return;
-
-        _customDictionaryWords.RemoveAt(removedIndex);
-        var nextWord = _customDictionaryWords.Count == 0
-            ? null
-            : _customDictionaryWords[Math.Clamp(removedIndex, 0, _customDictionaryWords.Count - 1)];
+        var nextWord = SpellCheckWorkflowPlanner.RemoveCustomDictionaryWordAndSelectNext(
+            _customDictionaryWords,
+            selectedWord);
         RefreshProofingCustomDictionaryWordsList(nextWord);
     }
 
@@ -730,8 +710,9 @@ public partial class OptionsDialog : Window
 
     private void QuickAccessResetButton_Click(object sender, RoutedEventArgs e)
     {
+        var reset = QuickAccessToolbarCustomizationPlanner.Reset();
         _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(QuickAccessToolbarCatalog.DefaultCommandIds);
+        _quickAccessCommandIds.AddRange(reset);
         RefreshQuickAccessToolbarCommandLists(selectedQatId: _quickAccessCommandIds[0]);
     }
 
@@ -743,11 +724,11 @@ public partial class OptionsDialog : Window
             Placement = PlacementMode.Bottom
         };
 
-        var importItem = new MenuItem { Header = QuickAccessImportMenuHeader };
+        var importItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ImportMenuHeader };
         AutomationProperties.SetAutomationId(importItem, "QuickAccessToolbarImportCustomizationMenuItem");
         importItem.Click += QuickAccessImportCustomizationMenuItem_Click;
 
-        var exportItem = new MenuItem { Header = QuickAccessExportMenuHeader };
+        var exportItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ExportMenuHeader };
         AutomationProperties.SetAutomationId(exportItem, "QuickAccessToolbarExportCustomizationMenuItem");
         exportItem.Click += QuickAccessExportCustomizationMenuItem_Click;
 

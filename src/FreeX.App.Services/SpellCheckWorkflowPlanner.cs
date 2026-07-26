@@ -48,6 +48,50 @@ public static class SpellCheckWorkflowPlanner
         return true;
     }
 
+    public static bool RemoveCustomDictionaryWord(IList<string> persistedWords, string word)
+    {
+        ArgumentNullException.ThrowIfNull(persistedWords);
+
+        var normalizedWord = AppOptions.NormalizeSpellCheckCustomDictionaryWord(word);
+        if (normalizedWord is null)
+            return false;
+
+        var normalizedPersistedWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(persistedWords);
+        var removed = normalizedPersistedWords.RemoveAll(
+            candidate => string.Equals(candidate, normalizedWord, StringComparison.OrdinalIgnoreCase)) > 0;
+        ReplacePersistedWords(persistedWords, normalizedPersistedWords);
+        return removed;
+    }
+
+    public static string? RemoveCustomDictionaryWordAndSelectNext(
+        IList<string> persistedWords,
+        string word)
+    {
+        ArgumentNullException.ThrowIfNull(persistedWords);
+
+        var normalizedWord = AppOptions.NormalizeSpellCheckCustomDictionaryWord(word);
+        if (normalizedWord is null)
+            return null;
+
+        var normalizedPersistedWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(persistedWords);
+        var removedIndex = normalizedPersistedWords.FindIndex(
+            candidate => string.Equals(candidate, normalizedWord, StringComparison.OrdinalIgnoreCase));
+        if (removedIndex < 0)
+            return null;
+
+        normalizedPersistedWords.RemoveAt(removedIndex);
+        ReplacePersistedWords(persistedWords, normalizedPersistedWords);
+        return normalizedPersistedWords.Count == 0
+            ? null
+            : normalizedPersistedWords[Math.Clamp(removedIndex, 0, normalizedPersistedWords.Count - 1)];
+    }
+
+    public static void ClearCustomDictionaryWords(IList<string> persistedWords)
+    {
+        ArgumentNullException.ThrowIfNull(persistedWords);
+        persistedWords.Clear();
+    }
+
     private static void ReplacePersistedWords(
         IList<string> persistedWords,
         IReadOnlyList<string> normalizedPersistedWords)

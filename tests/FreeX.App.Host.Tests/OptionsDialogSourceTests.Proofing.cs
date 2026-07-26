@@ -39,6 +39,9 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("FreeXOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text)");
         source.Should().Contain("FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords.Append(word))");
         source.Should().Contain("SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
+        source.Should().Contain("OptProofingIgnoreUppercase.IsChecked = _opts.ProofingIgnoreUppercase;");
+        source.Should().Contain("ProofingIgnoreUppercase = _opts.ProofingIgnoreUppercase");
+        source.Should().Contain("ProofingIgnoreNumbers = _opts.ProofingIgnoreNumbers");
     }
 
     [Fact]

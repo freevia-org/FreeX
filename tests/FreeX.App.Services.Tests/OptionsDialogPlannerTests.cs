@@ -167,6 +167,10 @@ public sealed class OptionsDialogPlannerTests
         projected.CrashAnalyticsPrompted.Should().BeTrue();
         projected.PdfExportLanguage.Should().Be("de-DE");
         projected.SpellCheckCustomDictionaryWords.Should().Equal("Bar", "Foo");
+
+        // A cancelled editor works on copies and cannot mutate the persisted options object.
+        existing.QuickAccessToolbarCommands.Should().Equal("Save", "Undo");
+        existing.SpellCheckCustomDictionaryWords.Should().Equal("Foo", "Bar");
     }
 
     [Theory]

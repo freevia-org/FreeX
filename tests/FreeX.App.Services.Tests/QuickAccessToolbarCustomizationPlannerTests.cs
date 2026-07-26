@@ -83,4 +83,40 @@ public sealed class QuickAccessToolbarCustomizationPlannerTests
 
         QuickAccessToolbarCatalog.TryGetByCommandName("Not a QAT command", out _).Should().BeFalse();
     }
+
+    [Fact]
+    public void FilterAvailable_SearchesIdNameTitleAndDescriptionAndExcludesSelectedCommands()
+    {
+        var available = QuickAccessToolbarCustomizationPlanner.FilterAvailable(
+            [QuickAccessToolbarCommandIds.Save],
+            "clipboard",
+            command => command.Id == QuickAccessToolbarCommandIds.Copy
+                ? ["Clipboard command"]
+                : []);
+
+        available.Should().ContainSingle(command => command.Id == QuickAccessToolbarCommandIds.Copy);
+        available.Should().NotContain(command => command.Id == QuickAccessToolbarCommandIds.Save);
+    }
+
+    [Fact]
+    public void Move_ReordersOnlyWithinBoundsAndResetRestoresDefaults()
+    {
+        QuickAccessToolbarCustomizationPlanner.Move(
+            [QuickAccessToolbarCommandIds.Save, QuickAccessToolbarCommandIds.Undo, QuickAccessToolbarCommandIds.Redo],
+            QuickAccessToolbarCommandIds.Undo,
+            -1)
+            .Should()
+            .Equal(QuickAccessToolbarCommandIds.Undo, QuickAccessToolbarCommandIds.Save, QuickAccessToolbarCommandIds.Redo);
+
+        QuickAccessToolbarCustomizationPlanner.Move(
+            [QuickAccessToolbarCommandIds.Save],
+            QuickAccessToolbarCommandIds.Save,
+            1)
+            .Should()
+            .Equal(QuickAccessToolbarCommandIds.Save);
+
+        QuickAccessToolbarCustomizationPlanner.Reset()
+            .Should()
+            .Equal(QuickAccessToolbarCatalog.DefaultCommandIds);
+    }
 }

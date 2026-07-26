@@ -28,17 +28,36 @@ public sealed partial class MainWindow
         new(StringComparer.OrdinalIgnoreCase);
     private AppOptions? _avaloniaQuickAccessOptions;
     private Panel? _avaloniaQuickAccessTitleBarHost;
+    private Border? _avaloniaQuickAccessBelowRibbonHost;
 
     internal StackPanel AvaloniaQuickAccessToolbarForTest => _avaloniaQuickAccessToolbar;
     internal Panel? AvaloniaQuickAccessTitleBarHostForTest => _avaloniaQuickAccessTitleBarHost;
+    internal Border? AvaloniaQuickAccessBelowRibbonHostForTest => _avaloniaQuickAccessBelowRibbonHost;
 
-    private void PopulateQuickAccessToolbar(Panel titleBarHost)
+    private Border CreateAvaloniaQuickAccessBelowRibbonHost()
+    {
+        var host = new Border
+        {
+            Height = 0,
+            IsVisible = false,
+            Background = ChromeSurface,
+            BorderBrush = ToolbarBorder,
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        AutomationProperties.SetAutomationId(host, "BelowRibbonQuickAccessToolbarHost");
+        AutomationProperties.SetName(host, "Quick Access Toolbar below the Ribbon");
+        return host;
+    }
+
+    private void PopulateQuickAccessToolbar(Panel titleBarHost, Border belowRibbonHost)
     {
         ArgumentNullException.ThrowIfNull(titleBarHost);
+        ArgumentNullException.ThrowIfNull(belowRibbonHost);
 
         _avaloniaQuickAccessTitleBarHost = titleBarHost;
+        _avaloniaQuickAccessBelowRibbonHost = belowRibbonHost;
         titleBarHost.Children.Clear();
-        titleBarHost.Children.Add(_avaloniaQuickAccessToolbar);
         AutomationProperties.SetAutomationId(_avaloniaQuickAccessToolbar, "QuickAccessToolbar");
         AutomationProperties.SetName(_avaloniaQuickAccessToolbar, "Quick Access Toolbar");
         WindowDecorationProperties.SetElementRole(
@@ -49,31 +68,59 @@ public sealed partial class MainWindow
         RebuildAvaloniaQuickAccessToolbar();
     }
 
+    private void ApplyAvaloniaQuickAccessToolbarPlacement()
+    {
+        if (_avaloniaQuickAccessTitleBarHost is null || _avaloniaQuickAccessBelowRibbonHost is null)
+            return;
+
+        _avaloniaQuickAccessTitleBarHost.Children.Remove(_avaloniaQuickAccessToolbar);
+        if (ReferenceEquals(_avaloniaQuickAccessBelowRibbonHost.Child, _avaloniaQuickAccessToolbar))
+            _avaloniaQuickAccessBelowRibbonHost.Child = null;
+
+        var showBelowRibbon = _avaloniaQuickAccessOptions?.QuickAccessToolbarBelowRibbon == true;
+        if (showBelowRibbon)
+        {
+            _avaloniaQuickAccessBelowRibbonHost.Child = _avaloniaQuickAccessToolbar;
+            _avaloniaQuickAccessBelowRibbonHost.Height = 30;
+            _avaloniaQuickAccessBelowRibbonHost.IsVisible = true;
+            return;
+        }
+
+        _avaloniaQuickAccessBelowRibbonHost.Height = 0;
+        _avaloniaQuickAccessBelowRibbonHost.IsVisible = false;
+        _avaloniaQuickAccessTitleBarHost.Children.Add(_avaloniaQuickAccessToolbar);
+    }
+
     private void RebuildAvaloniaQuickAccessToolbar()
     {
         if (_avaloniaQuickAccessOptions is null)
             return;
 
+        ApplyAvaloniaQuickAccessToolbarPlacement();
         _avaloniaQuickAccessToolbar.Children.Clear();
         _avaloniaQuickAccessButtons.Clear();
         var commands = QuickAccessToolbarCatalog.Normalize(_avaloniaQuickAccessOptions.QuickAccessToolbarCommands);
         _avaloniaQuickAccessOptions.QuickAccessToolbarCommands = commands.Select(command => command.Id).ToList();
+        var showBelowRibbon = _avaloniaQuickAccessOptions.QuickAccessToolbarBelowRibbon;
 
         foreach (var command in commands)
         {
-            var button = CreateAvaloniaQuickAccessButton(command);
+            var button = CreateAvaloniaQuickAccessButton(command, showBelowRibbon);
             _avaloniaQuickAccessToolbar.Children.Add(button);
             _avaloniaQuickAccessButtons[command.Id] = button;
 
             if (IsAvaloniaQuickAccessHistoryCommand(command.Id))
-                _avaloniaQuickAccessToolbar.Children.Add(CreateAvaloniaQuickAccessHistoryButton(command));
+                _avaloniaQuickAccessToolbar.Children.Add(CreateAvaloniaQuickAccessHistoryButton(command, showBelowRibbon));
         }
 
         RefreshAvaloniaQuickAccessToolbarState();
     }
 
-    private Button CreateAvaloniaQuickAccessButton(QuickAccessToolbarCommandDefinition command)
+    private Button CreateAvaloniaQuickAccessButton(
+        QuickAccessToolbarCommandDefinition command,
+        bool showBelowRibbon)
     {
+        var foreground = showBelowRibbon ? PrimaryInk : StatusBarForeground;
         var button = new Button
         {
             Width = IsAvaloniaQuickAccessHistoryCommand(command.Id) ? 24 : 26,
@@ -81,7 +128,8 @@ public sealed partial class MainWindow
             Padding = new Thickness(3),
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
-            Content = AvaloniaRibbonIcons.BuildMonochrome(command.IconKind, 16, command.Id, StatusBarForeground),
+            Foreground = foreground,
+            Content = AvaloniaRibbonIcons.BuildMonochrome(command.IconKind, 16, command.Id, foreground),
             Tag = command.Id,
         };
         WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
@@ -93,8 +141,11 @@ public sealed partial class MainWindow
         return button;
     }
 
-    private Button CreateAvaloniaQuickAccessHistoryButton(QuickAccessToolbarCommandDefinition command)
+    private Button CreateAvaloniaQuickAccessHistoryButton(
+        QuickAccessToolbarCommandDefinition command,
+        bool showBelowRibbon)
     {
+        var foreground = showBelowRibbon ? PrimaryInk : StatusBarForeground;
         var button = new Button
         {
             Width = 14,
@@ -102,11 +153,12 @@ public sealed partial class MainWindow
             Padding = new Thickness(1),
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
+            Foreground = foreground,
             Content = AvaloniaRibbonIcons.BuildMonochrome(
                 RibbonCommandIconKind.ChevronDown,
                 8,
                 $"{command.Id}-history",
-                StatusBarForeground),
+                foreground),
             Tag = $"{command.Id}.History",
         };
         WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
@@ -192,6 +244,15 @@ public sealed partial class MainWindow
                 action.Value).ToList();
         AppOptionsStore.Save(latestOptions);
         _avaloniaQuickAccessOptions = latestOptions;
+        RebuildAvaloniaQuickAccessToolbar();
+    }
+
+    internal void SetAvaloniaQuickAccessPlacementForTest(bool belowRibbon)
+    {
+        if (_avaloniaQuickAccessOptions is null)
+            return;
+
+        _avaloniaQuickAccessOptions.QuickAccessToolbarBelowRibbon = belowRibbon;
         RebuildAvaloniaQuickAccessToolbar();
     }
 

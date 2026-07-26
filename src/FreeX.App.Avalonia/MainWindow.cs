@@ -1715,6 +1715,7 @@ public sealed partial class MainWindow : Window
         var formulaBar = BuildToolbar();
 
         var statusBar = BuildStatusBar();
+        var belowRibbonQatHost = CreateAvaloniaQuickAccessBelowRibbonHost();
 
         var sheetTabs = BuildSheetTabsChrome();
         var frame = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
@@ -1722,7 +1723,7 @@ public sealed partial class MainWindow : Window
             WorkArea: BuildWorkbookWorkArea(),
             StatusBar: statusBar,
             BottomPanelsAboveStatus: [sheetTabs],
-            TopPanelsBelowRibbon: [formulaBar]));
+            TopPanelsBelowRibbon: [belowRibbonQatHost, formulaBar]));
 
         var root = new AvaloniaGrid();
         root.Children.Add(frame.Root);
@@ -1733,7 +1734,7 @@ public sealed partial class MainWindow : Window
             Body: root,
             TitleBarBackground: TitleBarSurface,
             TitleBarForeground: StatusBarForeground));
-        PopulateQuickAccessToolbar(windowFrame.QatHost);
+        PopulateQuickAccessToolbar(windowFrame.QatHost, belowRibbonQatHost);
         return windowFrame.Root;
     }
 

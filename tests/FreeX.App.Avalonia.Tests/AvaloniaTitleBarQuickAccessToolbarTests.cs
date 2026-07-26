@@ -4,7 +4,11 @@ using Avalonia.Controls;
 using Avalonia.Controls.Chrome;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.VisualTree;
+using FreeX.App.Services;
+using FreeX.App.Services.Ribbon;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -60,5 +64,68 @@ public sealed class AvaloniaTitleBarQuickAccessToolbarTests
 
             window.Close();
         }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task MainWindowMovesOneQatBetweenTitleBarAndBelowRibbonHosts()
+    {
+        var previousEnv = Environment.GetEnvironmentVariable(AppOptionsStore.OptionsPathEnvironmentVariable);
+        var tempPath = Path.Combine(Path.GetTempPath(), $"freex-qat-placement-{Guid.NewGuid():N}.json");
+        try
+        {
+            var options = new AppOptions
+            {
+                QuickAccessToolbarBelowRibbon = true,
+                QuickAccessToolbarCommands = [QuickAccessToolbarCommandIds.Save, QuickAccessToolbarCommandIds.Bold],
+            };
+            AppOptionsStore.SaveToPath(options, tempPath).Should().BeTrue();
+            Environment.SetEnvironmentVariable(AppOptionsStore.OptionsPathEnvironmentVariable, tempPath);
+
+            await Session.Dispatch(() =>
+            {
+                var window = new MainWindow([]);
+                window.Show();
+                window.Measure(new Size(1120, 720));
+                window.Arrange(new Rect(0, 0, 1120, 720));
+                window.UpdateLayout();
+
+                var toolbar = window.AvaloniaQuickAccessToolbarForTest;
+                var titleHost = window.AvaloniaQuickAccessTitleBarHostForTest;
+                var belowHost = window.AvaloniaQuickAccessBelowRibbonHostForTest;
+                titleHost.Should().NotBeNull();
+                belowHost.Should().NotBeNull();
+                belowHost!.Child.Should().BeSameAs(toolbar);
+                belowHost.IsVisible.Should().BeTrue();
+                belowHost.Height.Should().Be(30);
+                titleHost!.Children.Should().NotContain(toolbar);
+                var belowButtons = toolbar.Children.OfType<Button>().ToArray();
+                belowButtons.Should().NotBeEmpty();
+                foreach (var button in belowButtons)
+                {
+                    button.Foreground.Should().BeOfType<ImmutableSolidColorBrush>();
+                    ((ImmutableSolidColorBrush)button.Foreground!).Color.Should().Be(Color.FromRgb(25, 31, 40));
+                }
+
+                window.SetAvaloniaQuickAccessPlacementForTest(false);
+                window.UpdateLayout();
+
+                belowHost.Child.Should().BeNull();
+                belowHost.IsVisible.Should().BeFalse();
+                belowHost.Height.Should().Be(0);
+                titleHost.Children.Should().ContainSingle().Which.Should().BeSameAs(toolbar);
+                foreach (var button in toolbar.Children.OfType<Button>())
+                {
+                    button.Foreground.Should().BeOfType<ImmutableSolidColorBrush>();
+                    ((ImmutableSolidColorBrush)button.Foreground!).Color.Should().Be(Colors.White);
+                }
+                window.Close();
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(AppOptionsStore.OptionsPathEnvironmentVariable, previousEnv);
+            if (File.Exists(tempPath))
+                File.Delete(tempPath);
+        }
     }
 }
