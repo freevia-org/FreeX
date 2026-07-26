@@ -87,6 +87,9 @@ public static class SmartArtLayoutEngine
         if (IsBasicTimelineLayout(data.LayoutUniqueId))
             return LayoutBasicTimeline(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsBasicRadialLayout(data.LayoutUniqueId))
+            return LayoutBasicRadial(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsStepDownProcessLayout(data.LayoutUniqueId))
             return LayoutStepDownProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1211,6 +1214,79 @@ public static class SmartArtLayoutEngine
         return shapes;
     }
 
+    /// <summary>
+    /// Basic Radial geometry: the first logical node is the central topic and the
+    /// remaining nodes radiate from it with direct spoke connectors. This preserves
+    /// the defining hub-and-spoke interaction of PowerPoint's radial1 layout while
+    /// keeping the output on the shared shape/connector contract.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutBasicRadial(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var shapes = new List<SlideShape>();
+        if (nodes.Count == 0) return shapes;
+
+        long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long padY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);
+        long innerCx = Math.Max(fcx - 2 * padX, 1L);
+        long innerCy = Math.Max(fcy - 2 * padY, 1L);
+        double centerX = fx + padX + innerCx / 2.0;
+        double centerY = fy + padY + innerCy / 2.0;
+
+        long centerW = Math.Max((long)(innerCx * 0.24), 1L);
+        long centerH = Math.Max((long)(innerCy * 0.24), 1L);
+        uint idCounter = 780;
+        var centerStyle = stylePlan.GetNodeStyle(0, nodes[0].Level, SmartArtFamily.Cycle);
+        shapes.Add(MakeBox(
+            idCounter++, nodes[0].Text, centerStyle,
+            (long)(centerX - centerW / 2.0),
+            (long)(centerY - centerH / 2.0),
+            centerW,
+            centerH,
+            NodeFontSizeLargePt,
+            DrawingShapeKind.Ellipse));
+
+        int spokeCount = nodes.Count - 1;
+        if (spokeCount == 0) return shapes;
+
+        double angleStep = 360.0 / spokeCount;
+        double radiusX = innerCx / 2.0 * 0.70;
+        double radiusY = innerCy / 2.0 * 0.70;
+        double halfChord = Math.Sin(Math.PI / spokeCount);
+        long boxW = Math.Max((long)(innerCx * Math.Min(0.28, halfChord * 0.80)), 1L);
+        long boxH = Math.Max((long)(innerCy * Math.Min(0.25, halfChord * 0.80)), 1L);
+        var outerCenters = new (double x, double y)[spokeCount];
+
+        for (int i = 0; i < spokeCount; i++)
+        {
+            double angle = (-90 + i * angleStep) * Math.PI / 180.0;
+            outerCenters[i] = (centerX + radiusX * Math.Cos(angle), centerY + radiusY * Math.Sin(angle));
+            shapes.Add(MakeConnector(
+                idCounter++,
+                (long)centerX,
+                (long)centerY,
+                (long)outerCenters[i].x,
+                (long)outerCenters[i].y,
+                stylePlan.Connector));
+        }
+
+        for (int i = 0; i < spokeCount; i++)
+        {
+            var node = nodes[i + 1];
+            var nodeStyle = stylePlan.GetNodeStyle(i + 1, node.Level, SmartArtFamily.Cycle);
+            shapes.Add(MakeBox(
+                idCounter++, node.Text, nodeStyle,
+                (long)(outerCenters[i].x - boxW / 2.0),
+                (long)(outerCenters[i].y - boxH / 2.0),
+                boxW,
+                boxH));
+        }
+
+        return shapes;
+    }
+
     private static IReadOnlyList<SlideShape> LayoutCycle(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
@@ -1655,6 +1731,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "basictimeline", StringComparison.Ordinal);
+    }
+
+    private static bool IsBasicRadialLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "radial1", StringComparison.Ordinal);
     }
 
     private static bool IsStepDownProcessLayout(string uniqueId)

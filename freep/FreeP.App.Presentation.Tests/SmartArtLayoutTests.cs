@@ -364,6 +364,26 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void BasicRadial_ReturnsHubAndSpokeLiveGeometry()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Core", "Branch A", "Branch B", "Branch C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radial1";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("radial1 is the native PowerPoint Basic Radial layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Should().ContainSingle("the first node is the central radial topic");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(3, "each remaining node is a spoke box");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(3, "each spoke is connected to the central topic");
+
+        shapes.Single(s => s.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .TextBody!.Paragraphs.First().Runs.First().Text.Should().Be("Core");
+    }
+
+    [Fact]
     public void GearCycle_ReturnsLiveCircularBoxesAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Cycle, "Initiate", "Coordinate", "Deliver", "Improve");

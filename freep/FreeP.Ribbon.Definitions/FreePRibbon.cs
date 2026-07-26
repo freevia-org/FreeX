@@ -548,6 +548,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
                 FreePRibbonText.SmartArtRadialCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtRadialCycleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
+                FreePRibbonText.SmartArtBasicRadialCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtBasicRadialCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.RadialListLayoutCommandId,
                 FreePRibbonText.SmartArtRadialListCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtRadialListCommand.KeyTip);

@@ -1048,6 +1048,12 @@
   <data name="Ribbon_Command_SmartArtRadialCycle_KeyTip" xml:space="preserve">
     <value>R</value>
   </data>
+  <data name="Ribbon_Command_SmartArtBasicRadial_Label" xml:space="preserve">
+    <value>Basic Radial</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicRadial_KeyTip" xml:space="preserve">
+    <value>B</value>
+  </data>
   <data name="Ribbon_Command_SmartArtBasicMatrix_Label" xml:space="preserve">
     <value>Basic Matrix</value>
   </data>

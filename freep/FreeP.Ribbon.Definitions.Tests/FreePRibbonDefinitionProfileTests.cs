@@ -979,6 +979,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.basic-process",
             "freep.smartart.basic-timeline",
             "freep.smartart.step-down-process",
+            "freep.smartart.basic-radial",
             "freep.smartart.segmented-process",
             "freep.smartart.chevron-process",
             "freep.smartart.bending-process",

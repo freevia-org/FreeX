@@ -1165,6 +1165,54 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "basicProcess now uses the bounded shared process live-layout path for parsed nodes while other unsupported process variants still fall back to cached drawing. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
         new(
+            EvidenceId: "freep.smartart.basic-timeline",
+            Area: "SmartArt basic timeline live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt timeline layout planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-basic-timeline-20260726.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "basicTimeline now has a shared editable rail, alternating timeline nodes, and deterministic stems while PowerPoint-authoritative artwork metrics and broader SmartArt authoring remain deferred."),
+        new(
+            EvidenceId: "freep.smartart.step-down-process",
+            Area: "SmartArt step down process live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt process-family planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-step-down-process-20260726.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "StepDownProcess now has a shared ordered staggered-box editing path while PowerPoint-authoritative geometry, broader SmartArt authoring, and pixel-level parity remain deferred."),
+        new(
+            EvidenceId: "freep.smartart.basic-radial",
+            Area: "SmartArt basic radial live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt radial layout planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-basic-radial-20260726.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "radial1 now has a shared hub-and-spoke editing path while PowerPoint-authoritative geometry, broader SmartArt authoring, and pixel-level parity remain deferred."),
+        new(
             EvidenceId: "freep.smartart.segmented-process",
             Area: "SmartArt segmented process live layout",
             Status: "shared-render-planner-evidence",
