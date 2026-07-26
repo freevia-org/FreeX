@@ -28,6 +28,7 @@ namespace FreeP.Core.Model;
 ///   <item><term>Parallelogram / Trapezoid</term><description>Slanted-edge midpoints using the authored inset guide.</description></item>
 ///   <item><term>Chevron / HomePlate</term><description>Notch/tip sites on the visible outline using the authored depth guide.</description></item>
 ///   <item><term>Star8</term><description>4 cardinal outer vertices.</description></item>
+///   <item><term>Ribbon / Wave</term><description>Sites follow the visible tail, crest, and trough outline rather than the bounding box.</description></item>
 ///   <item><term>Rectangle / RoundedRectangle</term><description>4 mid-edges + 4 corners (unchanged).</description></item>
 ///   <item><term>Others</term><description>Falls back to the 8-site bbox approximation.</description></item>
 /// </list>
@@ -237,6 +238,28 @@ public static class ConnectionSiteHelper
                     _ => (midX, midY)
                 };
             }
+
+            // These presets do not have a visible point at every bbox mid-edge. Use
+            // stable points from the shared outline so connectors stay on the shape.
+            case DrawingShapeKind.Ribbon:
+                return siteIndex switch
+                {
+                    0 => (left, top + (long)Math.Round(shape.ExtentCyEmu * 0.76)),
+                    1 => (midX, top + (long)Math.Round(shape.ExtentCyEmu * 0.22)),
+                    2 => (right, top + (long)Math.Round(shape.ExtentCyEmu * 0.24)),
+                    3 => (midX, top + (long)Math.Round(shape.ExtentCyEmu * 0.78)),
+                    _ => (midX, midY)
+                };
+
+            case DrawingShapeKind.Wave:
+                return siteIndex switch
+                {
+                    0 => (left, top + (long)Math.Round(shape.ExtentCyEmu * 0.45)),
+                    1 => (left + (long)Math.Round(shape.ExtentCxEmu * 0.22), top + (long)Math.Round(shape.ExtentCyEmu * 0.12)),
+                    2 => (right, top + (long)Math.Round(shape.ExtentCyEmu * 0.36)),
+                    3 => (left + (long)Math.Round(shape.ExtentCxEmu * 0.58), top + (long)Math.Round(shape.ExtentCyEmu * 0.88)),
+                    _ => (midX, midY)
+                };
 
             case DrawingShapeKind.Hexagon:
             case DrawingShapeKind.Octagon:
