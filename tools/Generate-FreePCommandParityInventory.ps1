@@ -517,7 +517,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/ChartDataDialogTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Selected-point value, percentage, category, series-name, legend-key, position, format, separator, and delete overrides now round-trip through c:dLbl entries and one undoable edit in both hosts. Per-point label text styling and PowerPoint-authoritative chart visual baselines remain deferred."),
+            RemainingWork: "Selected-point value, percentage, category, series-name, legend-key, position, format, separator, delete, and font styling overrides now round-trip through c:dLbl entries and one undoable edit in both hosts. PowerPoint-authoritative chart visual baselines remain deferred."),
         new(
             EvidenceId: "freep.chart.bubble-sizing-semantics",
             Area: "Chart bubble authored sizing semantics",

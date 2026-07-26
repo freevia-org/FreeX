@@ -530,6 +530,11 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetLabelPosition(DataLabelPosition.InsideEnd);
         planner.SetLabelNumberFormat("0.0%");
         planner.SetLabelSeparator(" | ");
+        planner.SetLabelFontFamily("Aptos");
+        planner.SetLabelFontSize(9);
+        planner.SetLabelBold(true);
+        planner.SetLabelItalic(false);
+        planner.SetLabelColor("#2F5496");
 
         var options = planner.BuildCommitPlan();
         options.SeriesIndex.Should().Be(1);
@@ -546,6 +551,12 @@ public sealed class ChartDataDialogPlannerTests
         options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         options.DataLabels.NumberFormat.Should().Be("0.0%");
         options.DataLabels.Separator.Should().Be(" | ");
+        options.DataLabels.TextStyle.Should().NotBeNull();
+        options.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        options.DataLabels.TextStyle.FontSizePt.Should().Be(9);
+        options.DataLabels.TextStyle.Bold.Should().BeTrue();
+        options.DataLabels.TextStyle.Italic.Should().BeFalse();
+        options.DataLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
         planner.PointOptions.Select(option => option.Label).Should().Equal("1: Q1", "2: Q2", "3: Q3");
         chart.Series[1].PointColors[1].Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
         ChartPointOptionsPlanner.BuildSurfacePlan().CommandId.Should().Be(ChartPointOptionsPlanner.CommandId);

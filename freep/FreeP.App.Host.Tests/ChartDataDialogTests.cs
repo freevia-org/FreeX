@@ -194,7 +194,8 @@ public sealed class ChartDataDialogTests : IDisposable
         var (sess, _) = MakeSession();
         var dialog = new ChartPointOptionsDialog(sess);
         dialog.SetOptionsForTests(1, 2, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7,
-            true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ");
+            true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
+            "Aptos", 9, true, false, "#2F5496");
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -210,6 +211,12 @@ public sealed class ChartDataDialogTests : IDisposable
         options.DataLabels.ShowCategoryName.Should().BeTrue();
         options.DataLabels.ShowLegendKey.Should().BeTrue();
         options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
+        options.DataLabels.TextStyle.Should().NotBeNull();
+        options.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        options.DataLabels.TextStyle.FontSizePt.Should().Be(9);
+        options.DataLabels.TextStyle.Bold.Should().BeTrue();
+        options.DataLabels.TextStyle.Italic.Should().BeFalse();
+        options.DataLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
     }
 
     [StaFact]
