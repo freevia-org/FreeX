@@ -18875,7 +18875,7 @@ public sealed partial class MainWindow : Window
         SortDialogOptions? result = null;
         var dialog = new Window
         {
-            Title = "Sort Options",
+            Title = UiText.Get("SortOptions_SortOptions"),
             Width = 330,
             Height = 260,
             MinWidth = 330,
@@ -18891,7 +18891,7 @@ public sealed partial class MainWindow : Window
 
         var caseSensitiveBox = new CheckBox
         {
-            Content = "Case sensitive",
+            Content = UiText.Get("SortOptions_CaseSensitive"),
             IsChecked = current.CaseSensitive,
             Margin = new Thickness(0, 0, 0, 10),
         };
@@ -18900,11 +18900,11 @@ public sealed partial class MainWindow : Window
 
         var firstKeyChoices = new[]
         {
-            new SortDialogComboItem<string>("Normal", normalFirstKeySortOrder),
-            new SortDialogComboItem<string>("Sun, Mon, Tue, Wed, Thu, Fri, Sat", "Sun, Mon, Tue, Wed, Thu, Fri, Sat"),
-            new SortDialogComboItem<string>("Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday", "Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday"),
-            new SortDialogComboItem<string>("Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec", "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec"),
-            new SortDialogComboItem<string>("January, February, March, April, May, June, July, August, September, October, November, December", "January, February, March, April, May, June, July, August, September, October, November, December"),
+            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeyNormal"), normalFirstKeySortOrder),
+            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeySunToSatShort"), "Sun, Mon, Tue, Wed, Thu, Fri, Sat"),
+            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeySundayToSaturday"), "Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday"),
+            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeyJanToDecShort"), "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec"),
+            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeyJanuaryToDecember"), "January, February, March, April, May, June, July, August, September, October, November, December"),
         };
         var normalizedFirstKey = firstKeyChoices.FirstOrDefault(choice =>
             string.Equals(choice.Value, current.FirstKeySortOrder, StringComparison.Ordinal) ||
@@ -18920,6 +18920,7 @@ public sealed partial class MainWindow : Window
             MaxHeight = 24,
             Padding = new Thickness(5, 0, 4, 0),
             FontSize = 12,
+            Background = Brush(230, 230, 230),
             BorderBrush = Brush(130, 130, 130),
             BorderThickness = new Thickness(1),
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
@@ -18928,14 +18929,14 @@ public sealed partial class MainWindow : Window
 
         var topToBottomButton = new RadioButton
         {
-            Content = "Sort top to bottom",
+            Content = UiText.Get("SortOptions_SortTopToBottom"),
             IsChecked = !current.LeftToRight,
             GroupName = "SortOptionsOrientation",
             Margin = new Thickness(0, 0, 0, 1),
         };
         var leftToRightButton = new RadioButton
         {
-            Content = "Sort left to right",
+            Content = UiText.Get("SortOptions_SortLeftToRight"),
             IsChecked = current.LeftToRight,
             GroupName = "SortOptionsOrientation",
         };
@@ -18948,6 +18949,8 @@ public sealed partial class MainWindow : Window
         var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
         ApplySortDialogButtonChrome(okButton, isDefault: true);
         ApplySortDialogButtonChrome(cancelButton);
+        okButton.Background = Brush(221, 221, 221);
+        cancelButton.Background = Brush(221, 221, 221);
         AutomationProperties.SetAutomationId(okButton, "SortOptionsOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "SortOptionsCancelButton");
 
@@ -18982,11 +18985,11 @@ public sealed partial class MainWindow : Window
             Children =
             {
                 caseSensitiveBox,
-                new TextBlock { Text = "First key sort order:", FontSize = 12, Margin = new Thickness(0, 0, 0, 3) },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("SortOptions_FirstKeySortOrderLabel")), FontSize = 12, Margin = new Thickness(0, 0, 0, 3) },
                 firstKeyBox,
                 new GroupBox
                 {
-                    Header = "Orientation",
+                    Header = StripDisplayMnemonic(UiText.Get("SortOptions_Orientation")),
                     Padding = new Thickness(8, 7, 8, 7),
                     Margin = new Thickness(0, 0, 0, 10),
                     BorderBrush = Brush(209, 218, 224),
