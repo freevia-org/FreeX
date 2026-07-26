@@ -376,16 +376,18 @@ public static class DocxReader
             }
         }
 
-        // Word custom Ribbon XML is rooted from the package relationship part rather than document.xml.rels.
-        // Preserve the root part and its local relationship graph (images and other Ribbon resources) so Word
-        // can rehydrate the same custom UI after a FreeW save.
+        // Some Word features are rooted from the package relationship part rather than document.xml.rels:
+        // custom Ribbons, thumbnails, and extension-specific package parts. Preserve every root-owned part
+        // FreeW does not write itself with its local relationship graph, so Word can rehydrate it after save.
         foreach (var relationship in OpcRelationships.Load(archive, "_rels/.rels"))
         {
-            if (relationship.IsExternal || string.IsNullOrEmpty(relationship.Target))
+            if (relationship.IsExternal
+                || string.IsNullOrEmpty(relationship.Target)
+                || IsWriterOwnedPackageRelationship(relationship.Type))
                 continue;
 
             var partName = OpcPathHelper.ResolveAbsolutePartName("/", relationship.Target);
-            if (partName is null || !partName.StartsWith("/customUI/", StringComparison.OrdinalIgnoreCase))
+            if (partName is null)
                 continue;
 
             if (CapturePreservedPart(
@@ -4702,6 +4704,13 @@ public static class DocxReader
         }
         return true;
     }
+
+    private static bool IsWriterOwnedPackageRelationship(string relationshipType) =>
+        relationshipType is
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+            or OpcPackageProperties.CorePropertiesRelationshipType
+            or OpcPackageProperties.CustomPropertiesRelationshipType
+            or OpcPackageProperties.ExtendedPropertiesRelationshipType;
 
     /// <summary>
     /// Follows a part's own <c>_rels</c> (e.g. <c>word/charts/_rels/chart1.xml.rels</c>), capturing the rels
