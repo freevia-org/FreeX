@@ -23,11 +23,16 @@ namespace FreeW.Core.Model;
 /// or null when no document relationship points at this part (e.g. an itemProps part is referenced from its
 /// item's own _rels, not from document.xml.rels).
 /// </param>
+/// <param name="PackageRelationshipType">
+/// The relationship type from package-root <c>_rels/.rels</c> to this part, or null when the part is not
+/// package-rooted (e.g. Word custom Ribbon XML is package-rooted while document drawings are not).
+/// </param>
 public sealed record PreservedPart(
     string PartName,
     byte[] Bytes,
     string? ContentTypeOverride = null,
-    string? RelationshipType = null);
+    string? RelationshipType = null,
+    string? PackageRelationshipType = null);
 
 /// <summary>
 /// One reference from a verbatim-preserved inline drawing (see <see cref="PreservedDrawing"/>) to a
@@ -159,7 +164,8 @@ public sealed class PreservedParts
                 part.PartName,
                 (byte[])part.Bytes.Clone(),
                 part.ContentTypeOverride,
-                part.RelationshipType));
+                part.RelationshipType,
+                part.PackageRelationshipType));
         }
 
         ContentTypeDefaults.Clear();

@@ -376,6 +376,31 @@ public static class DocxReader
             }
         }
 
+        // Word custom Ribbon XML is rooted from the package relationship part rather than document.xml.rels.
+        // Preserve the root part and its local relationship graph (images and other Ribbon resources) so Word
+        // can rehydrate the same custom UI after a FreeW save.
+        foreach (var relationship in OpcRelationships.Load(archive, "_rels/.rels"))
+        {
+            if (relationship.IsExternal || string.IsNullOrEmpty(relationship.Target))
+                continue;
+
+            var partName = OpcPathHelper.ResolveAbsolutePartName("/", relationship.Target);
+            if (partName is null || !partName.StartsWith("/customUI/", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (CapturePreservedPart(
+                    archive,
+                    document,
+                    partName,
+                    overrides,
+                    contentTypeDefaults,
+                    relationshipType: null,
+                    packageRelationshipType: relationship.Type))
+            {
+                CaptureReferencedParts(archive, document, partName, overrides, contentTypeDefaults);
+            }
+        }
+
         // customXml/* — items, their props and the items' own _rels. The document→item relationships live in
         // document.xml.rels with a customXml-relative Target (e.g. "../customXml/item1.xml"); item→props
         // relationships live in each item's own _rels (not document.xml.rels), so those parts carry no document
@@ -4648,15 +4673,22 @@ public static class DocxReader
         string partName,
         IReadOnlyDictionary<string, string> contentTypeOverrides,
         IReadOnlyDictionary<string, string> contentTypeDefaults,
-        string? relationshipType)
+        string? relationshipType,
+        string? packageRelationshipType = null)
     {
-        if (document.Preserved.Parts.Any(p => p.PartName == partName))
+        var existingIndex = document.Preserved.Parts.FindIndex(p => p.PartName == partName);
+        if (existingIndex >= 0)
+        {
+            var existing = document.Preserved.Parts[existingIndex];
+            if (packageRelationshipType is not null && existing.PackageRelationshipType is null)
+                document.Preserved.Parts[existingIndex] = existing with { PackageRelationshipType = packageRelationshipType };
             return true;
+        }
         var bytes = LoadMedia(archive, partName.TrimStart('/'));
         if (bytes is null)
             return false;
         contentTypeOverrides.TryGetValue(partName, out var contentType);
-        document.Preserved.Parts.Add(new PreservedPart(partName, bytes, contentType, relationshipType));
+        document.Preserved.Parts.Add(new PreservedPart(partName, bytes, contentType, relationshipType, packageRelationshipType));
 
         // A part covered only by a [Content_Types] Default (by extension — e.g. a chart's png/emf media) needs
         // that Default re-emitted, since FreeW only declares image Defaults for body/header/footer/comment media.
