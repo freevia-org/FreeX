@@ -66,7 +66,9 @@ public static class ShapeGeometryAdjustmentPlanner
     private const double MaxArrowAdjustment = 100000;
     private const double DefaultStarAdjustment = 42000;
     private const double DefaultStar8Adjustment = 46000;
+    private const double DefaultCrossAdjustment = 35000;
     private const double DefaultSlantAdjustment = 20000;
+    private const double MaxCrossAdjustment = 50000;
     private const double MaxStarAdjustment = 100000;
 
     public const string UnsupportedShapeMessage =
@@ -85,7 +87,8 @@ public static class ShapeGeometryAdjustmentPlanner
                 DrawingShapeKind.RightArrow or DrawingShapeKind.LeftArrow or DrawingShapeKind.UpArrow or DrawingShapeKind.DownArrow or
                 DrawingShapeKind.LeftRightArrow or DrawingShapeKind.UpDownArrow or
                 DrawingShapeKind.Chevron or DrawingShapeKind.HomePlate or
-                DrawingShapeKind.Parallelogram or DrawingShapeKind.Trapezoid))
+                DrawingShapeKind.Parallelogram or DrawingShapeKind.Trapezoid or
+                DrawingShapeKind.Cross or DrawingShapeKind.PlusSign))
         {
             return new ShapeGeometryAdjustmentPlan(
                 shape.Id,
@@ -298,6 +301,28 @@ public static class ShapeGeometryAdjustmentPlanner
                     maximum)]);
         }
 
+        if (shape.AutoShapeKind is DrawingShapeKind.Cross or DrawingShapeKind.PlusSign)
+        {
+            var adjustment = ReadAdjustment(
+                shape,
+                "adj",
+                DefaultCrossAdjustment,
+                MaxCrossAdjustment);
+            return new ShapeGeometryAdjustmentPlan(
+                shape.Id,
+                CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
+                boundsDip.Width > 0 && boundsDip.Height > 0 ? null : UnsupportedShapeMessage,
+                [new ShapeGeometryAdjustmentHandlePlan(
+                    "adj",
+                    "Bar inset",
+                    new LayoutPoint(
+                        boundsDip.Left + boundsDip.Width * adjustment / 100000.0,
+                        boundsDip.Top),
+                    adjustment,
+                    0,
+                    MaxCrossAdjustment)]);
+        }
+
         var start = ReadAngle(shape, "adj1", DefaultStartAngle);
         var end = ReadAngle(shape, "adj2", DefaultEndAngle);
         return new ShapeGeometryAdjustmentPlan(
@@ -485,6 +510,15 @@ public static class ShapeGeometryAdjustmentPlanner
             var maximum = GuideMaximum(boundsDip);
             var adjustment = (pointerDip.X - boundsDip.Left) / minimumDimension * 100000.0;
             return new(true, "adj", Math.Clamp(adjustment, 0, maximum), null);
+        }
+
+        if (shape.AutoShapeKind is DrawingShapeKind.Cross or DrawingShapeKind.PlusSign)
+        {
+            if (handleName != "adj")
+                return new(false, null, null, InvalidHandleMessage);
+
+            var adjustment = (pointerDip.X - boundsDip.Left) / boundsDip.Width * 100000.0;
+            return new(true, "adj", Math.Clamp(adjustment, 0, MaxCrossAdjustment), null);
         }
 
         if (handleName is not ("adj1" or "adj2"))

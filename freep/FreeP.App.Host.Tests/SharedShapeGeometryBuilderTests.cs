@@ -173,6 +173,22 @@ public sealed class SharedShapeGeometryBuilderTests
     }
 
     [Fact]
+    public void Cross_UsesAuthoredBarInsetAndRetainsLegacyFallback()
+    {
+        var defaultGeometry = ShapeGeometryBuilder.Build(DrawingShapeKind.Cross, Bounds);
+        var adjustedGeometry = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Cross,
+            Bounds,
+            new Dictionary<string, double> { ["adj"] = 50000 });
+
+        defaultGeometry.Contours.Should().ContainSingle();
+        adjustedGeometry.Contours.Should().ContainSingle();
+        defaultGeometry.Contours[0].Start.Should().Be(new LayoutPoint(128, Bounds.Top));
+        adjustedGeometry.Contours[0].Start.Should().Be(new LayoutPoint(140, Bounds.Top));
+        adjustedGeometry.Contours[0].Segments[1].End.Should().Be(new LayoutPoint(140, Bounds.Top + 30));
+    }
+
+    [Fact]
     public void Star8_UsesAuthoredPointDepthAdjustmentWhenPresent()
     {
         var defaultGeometry = ShapeGeometryBuilder.Build(DrawingShapeKind.Star8, Bounds);

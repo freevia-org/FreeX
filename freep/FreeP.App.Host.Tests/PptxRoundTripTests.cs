@@ -444,6 +444,39 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_CrossFamily_PreservesAuthoredBarInset()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        uint id = 1;
+        foreach (var kind in new[] { DrawingShapeKind.Cross, DrawingShapeKind.PlusSign })
+        {
+            var shape = new SlideShape
+            {
+                Id = id++,
+                Name = kind.ToString(),
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = kind,
+                ExtentCxEmu = 914400,
+                ExtentCyEmu = 457200,
+            };
+            shape.PresetGeometryAdjustments["adj"] = 45000;
+            slide.Shapes.Add(shape);
+        }
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        foreach (var kind in new[] { DrawingShapeKind.Cross, DrawingShapeKind.PlusSign })
+        {
+            var shape = reloaded.Slides[0].Shapes.Single(candidate => candidate.Name == kind.ToString());
+            shape.AutoShapeKind.Should().Be(kind);
+            shape.PresetGeometryAdjustments["adj"].Should().Be(45000);
+        }
+    }
+
+    [Fact]
     public void RoundTrip_TrapezoidAndParallelogram_PreserveAuthoredSlant()
     {
         var pres = new Presentation();

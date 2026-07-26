@@ -74,6 +74,51 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
         plan.Handles[0].Maximum.Should().Be(50000);
     }
 
+    [Theory]
+    [InlineData(DrawingShapeKind.Cross)]
+    [InlineData(DrawingShapeKind.PlusSign)]
+    public void Build_CrossFamily_ExposesBarInsetHandle(DrawingShapeKind kind)
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = kind,
+        };
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.CanEdit.Should().BeTrue();
+        plan.Handles.Should().ContainSingle();
+        plan.Handles[0].Name.Should().Be("adj");
+        plan.Handles[0].Label.Should().Be("Bar inset");
+        plan.Handles[0].Value.Should().Be(35000);
+        plan.Handles[0].PositionDip.Should().Be(new LayoutPoint(80, Bounds.Top));
+        plan.Handles[0].Maximum.Should().Be(50000);
+    }
+
+    [Fact]
+    public void BuildMutationPlan_CrossFamily_MapsTopEdgePointerToInset()
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Cross,
+        };
+
+        var plan = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape,
+            Bounds,
+            "adj",
+            new LayoutPoint(110, Bounds.Top));
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.Name.Should().Be("adj");
+        plan.Value.Should().BeApproximately(50000, 0.001);
+        plan.DisabledReason.Should().BeNull();
+    }
+
     [Fact]
     public void BuildMutationPlan_RoundedRectangle_MapsTopEdgePointerToAdjustment()
     {
