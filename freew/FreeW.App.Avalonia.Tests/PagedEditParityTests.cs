@@ -22,7 +22,7 @@ public sealed class PagedEditParityTests
     [Fact]
     public async Task PageEdit_toggle_uses_live_print_surface_and_restores_prior_view_and_selection()
     {
-        var ran = await OnUiThread(() =>
+        await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
             var editor = window.Editor;
@@ -62,14 +62,12 @@ public sealed class PagedEditParityTests
             ((ToggleButton)viewToggles[2]).IsChecked.Should().BeTrue();
             ((ToggleButton)viewToggles[4]).IsChecked.Should().BeFalse();
         });
-
-        ran.Should().BeTrue("the production Avalonia headless surface must be available for this gate");
     }
 
     [Fact]
     public async Task PageEdit_toggle_from_draft_restores_draft_and_checked_state()
     {
-        var ran = await OnUiThread(() =>
+        await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
             var editor = window.Editor;
@@ -94,14 +92,12 @@ public sealed class PagedEditParityTests
             ((ToggleButton)viewToggles[3]).IsChecked.Should().BeTrue();
             ((ToggleButton)viewToggles[4]).IsChecked.Should().BeFalse();
         });
-
-        ran.Should().BeTrue("the production Avalonia headless surface must be available for this gate");
     }
 
     [Fact]
     public async Task PrintLayout_page_edit_surface_reflows_real_model_and_supports_undo_redo()
     {
-        var ran = await OnUiThread(() =>
+        await OnUiThread(() =>
         {
             var document = BuildLongDocument();
             var editor = new DocumentView();
@@ -128,14 +124,12 @@ public sealed class PagedEditParityTests
             editor.Redo();
             editor.PlainText.Should().Be(before + new string('x', 5000));
         });
-
-        ran.Should().BeTrue("the production Avalonia headless surface must be available for this gate");
     }
 
     [Fact]
     public async Task PrintLayout_page_edit_surface_preserves_header_footer_editing()
     {
-        var ran = await OnUiThread(() =>
+        await OnUiThread(() =>
         {
             var document = BuildLongDocument();
             var editor = new DocumentView();
@@ -157,22 +151,9 @@ public sealed class PagedEditParityTests
                 .Should().Contain("Footer from Page Edit");
             editor.PageCount.Should().BeGreaterThan(1);
         });
-
-        ran.Should().BeTrue("the production Avalonia headless surface must be available for this gate");
     }
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    private static Task OnUiThread(Action action) => Session.Dispatch(action, CancellationToken.None);
 
     private static TextDocument BuildLongDocument()
     {
