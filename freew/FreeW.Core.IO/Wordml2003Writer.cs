@@ -116,10 +116,25 @@ public static class Wordml2003Writer
         {
             var r = BuildRun(run);
             if (r is not null)
-                p.Add(r);
+                p.Add(BuildHyperlink(run, r));
         }
 
         return p;
+    }
+
+    private static XElement BuildHyperlink(Run run, XElement content)
+    {
+        if (string.IsNullOrEmpty(run.HyperlinkUrl) && string.IsNullOrEmpty(run.HyperlinkAnchor))
+            return content;
+
+        var hyperlink = new XElement(W + "hlink", content);
+        if (!string.IsNullOrEmpty(run.HyperlinkUrl))
+            hyperlink.Add(new XAttribute(W + "dest", run.HyperlinkUrl!));
+        else
+            hyperlink.Add(new XAttribute(W + "bookmark", run.HyperlinkAnchor!));
+        if (!string.IsNullOrEmpty(run.HyperlinkTooltip))
+            hyperlink.Add(new XAttribute(W + "tooltip", run.HyperlinkTooltip));
+        return hyperlink;
     }
 
     private static XElement? BuildParagraphProperties(ParagraphFormatting fmt)
