@@ -23,6 +23,7 @@ public enum SmartArtColorPreset
 public enum SmartArtLayoutPreset
 {
     BasicProcess,
+    BasicTimeline,
     ContinuousBlockProcess,
     SegmentedProcess,
     ChevronProcess,
@@ -116,6 +117,7 @@ public static class SmartArtAuthoringPlanner
     public const string MonochromaticAccent6CommandId = "freep.smartart.colors.monochromatic-accent-6";
     public const string GrayscaleCommandId = "freep.smartart.colors.grayscale";
     public const string BasicProcessLayoutCommandId = "freep.smartart.layout.basic-process";
+    public const string BasicTimelineLayoutCommandId = "freep.smartart.layout.basic-timeline";
     public const string ContinuousBlockProcessLayoutCommandId = "freep.smartart.layout.continuous-block-process";
     public const string SegmentedProcessLayoutCommandId = "freep.smartart.layout.segmented-process";
     public const string ChevronProcessLayoutCommandId = "freep.smartart.layout.chevron-process";
@@ -283,6 +285,8 @@ public static class SmartArtAuthoringPlanner
         {
             SmartArtLayoutPreset.BasicProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.BasicTimeline =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/basicTimeline", SmartArtFamily.Process),
             SmartArtLayoutPreset.ContinuousBlockProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/continuousBlockProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.SegmentedProcess =>

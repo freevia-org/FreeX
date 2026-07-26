@@ -265,6 +265,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtGrayscaleCommand { get; } = new("Ribbon_Command_SmartArtGrayscale_Label", "Ribbon_Command_SmartArtGrayscale_KeyTip");
     public static RibbonText SmartArtLayoutsGroup { get; } = new("Ribbon_Group_SmartArtLayouts_Label", "Ribbon_Group_SmartArtLayouts_KeyTip");
     public static RibbonText SmartArtBasicProcessCommand { get; } = new("Ribbon_Command_SmartArtBasicProcess_Label", "Ribbon_Command_SmartArtBasicProcess_KeyTip");
+    public static RibbonText SmartArtBasicTimelineCommand { get; } = new("Ribbon_Command_SmartArtBasicTimeline_Label", "Ribbon_Command_SmartArtBasicTimeline_KeyTip");
     public static RibbonText SmartArtContinuousBlockProcessCommand { get; } = new("Ribbon_Command_SmartArtContinuousBlockProcess_Label", "Ribbon_Command_SmartArtContinuousBlockProcess_KeyTip");
     public static RibbonText SmartArtSegmentedProcessCommand { get; } = new("Ribbon_Command_SmartArtSegmentedProcess_Label", "Ribbon_Command_SmartArtSegmentedProcess_KeyTip");
     public static RibbonText SmartArtChevronProcessCommand { get; } = new("Ribbon_Command_SmartArtChevronProcess_Label", "Ribbon_Command_SmartArtChevronProcess_KeyTip");

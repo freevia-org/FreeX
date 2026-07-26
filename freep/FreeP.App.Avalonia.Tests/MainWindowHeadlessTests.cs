@@ -5294,6 +5294,13 @@ public sealed class MainWindowHeadlessTests
                 "urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList");
             window.Editor.Redo();
             smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
+
+            registry.TryGet(SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId, out var timelineCommand)
+                .Should().BeTrue();
+            timelineCommand!.Execute(RibbonCommandContext.Empty);
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/basicTimeline");
+            window.Editor.Undo();
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
         });
 
         if (!ran) return;
@@ -5311,6 +5318,7 @@ public sealed class MainWindowHeadlessTests
 
             foreach (var commandId in new[]
             {
+                SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
                 SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.SegmentedProcessLayoutCommandId,

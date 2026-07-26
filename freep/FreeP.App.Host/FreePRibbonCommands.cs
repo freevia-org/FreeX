@@ -166,6 +166,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.Grayscale)));
         registry.Register(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicProcess)));
+        registry.Register(SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicTimeline)));
         registry.Register(SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.ContinuousBlockProcess)));
         registry.Register(SmartArtAuthoringPlanner.SegmentedProcessLayoutCommandId,

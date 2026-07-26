@@ -886,6 +886,12 @@
   <data name="Ribbon_Command_SmartArtBasicProcess_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
+  <data name="Ribbon_Command_SmartArtBasicTimeline_Label" xml:space="preserve">
+    <value>Basic Timeline</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicTimeline_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
   <data name="Ribbon_Command_SmartArtContinuousBlockProcess_Label" xml:space="preserve">
     <value>Continuous Block Process</value>
   </data>

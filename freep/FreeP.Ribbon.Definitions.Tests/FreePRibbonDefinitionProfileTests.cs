@@ -977,6 +977,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.omml.border-box-side-strike-lines",
             "freep.smartart.continuous-block-process",
             "freep.smartart.basic-process",
+            "freep.smartart.basic-timeline",
             "freep.smartart.segmented-process",
             "freep.smartart.chevron-process",
             "freep.smartart.bending-process",

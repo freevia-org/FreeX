@@ -706,6 +706,29 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void BasicTimeline_ReturnsRailMarkersAlternatingBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Plan", "Build", "Test", "Ship");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicTimeline";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("basicTimeline is a bounded shared timeline layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "one live text box should be emitted per timeline node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Should().HaveCount(4, "one timeline marker should be emitted per node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(5, "the rail and node stems are shared live geometry");
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Plan", "Build", "Test", "Ship");
+        boxes[0].OffsetYEmu.Should().BeLessThan(boxes[1].OffsetYEmu);
+        boxes[1].OffsetYEmu.Should().BeGreaterThan(boxes[2].OffsetYEmu);
+    }
+
+    [Fact]
     public void VerticalProcess_ReturnsTopToBottomLiveBoxesAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C", "D");
