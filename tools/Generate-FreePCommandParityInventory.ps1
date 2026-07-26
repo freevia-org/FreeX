@@ -474,6 +474,28 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Bar and column c:gapWidth/c:overlap now round-trip through the model/package and drive shared primitive and data-label spacing for WPF/Avalonia. PowerPoint-authoritative chart visual baselines, 3-D bar/column spacing, and broader type-specific visual fidelity remain deferred."),
         new(
+            EvidenceId: "freep.chart.series-data-labels",
+            Area: "Chart per-series data-label authoring",
+            Status: "shared-model-and-host-evidence",
+            HostCoverage: "WPF/Avalonia consume one shared ChartSeriesOptions planner and undo command for series-scoped c:dLbls; no renderer-local chart-label policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-series-data-labels-20260726.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.Model/ChartSeriesOptions.cs",
+                "freep/FreeP.Core.Model/PresentationCommands.ChartSeriesOptions.cs",
+                "freep/FreeP.App.Presentation/ChartSeriesOptionsPlanner.cs",
+                "freep/FreeP.Core.IO/PptxChartReader.cs",
+                "freep/FreeP.Core.IO/PptxChartWriter.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartDataDialogPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartDataCommandTests.cs",
+                "freep/FreeP.App.Host.Tests/ChartDataDialogTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "Series-scoped value, percentage, category, series-name, legend-key, position, format, and separator controls now round-trip through c:dLbls and one undoable edit in both hosts. Per-point label overrides, full PowerPoint label text styling, and PowerPoint-authoritative chart visual baselines remain deferred."),
+        new(
             EvidenceId: "freep.chart.bubble-sizing-semantics",
             Area: "Chart bubble authored sizing semantics",
             Status: "shared-render-planner-evidence",

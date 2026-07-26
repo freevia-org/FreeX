@@ -19,6 +19,15 @@ public sealed record ChartSeriesOptionsSurfacePlan(
     string LineDashLabel,
     string NoLineLabel,
     string FillColorLabel,
+    string SeriesDataLabelsLabel,
+    string ValueLabelsLabel,
+    string PercentLabelsLabel,
+    string CategoryLabelsLabel,
+    string SeriesLabelsLabel,
+    string LegendKeysLabel,
+    string LabelPositionLabel,
+    string NumberFormatLabel,
+    string SeparatorLabel,
     string MarkerLabel,
     string MarkerSizeLabel,
     string AutoHint,
@@ -41,13 +50,22 @@ public sealed class ChartSeriesOptionsPlanner
     public const string LineDashLabel = "Line dash";
     public const string NoLineLabel = "No line";
     public const string FillColorLabel = "Fill color (#RRGGBB)";
+    public const string SeriesDataLabelsLabel = "Use series data labels";
+    public const string ValueLabelsLabel = "Value labels";
+    public const string PercentLabelsLabel = "Percentage labels";
+    public const string CategoryLabelsLabel = "Category labels";
+    public const string SeriesLabelsLabel = "Series labels";
+    public const string LegendKeysLabel = "Legend keys";
+    public const string LabelPositionLabel = "Label position";
+    public const string NumberFormatLabel = "Number format";
+    public const string SeparatorLabel = "Separator";
     public const string MarkerLabel = "Marker";
     public const string MarkerSizeLabel = "Marker size (pt)";
     public const string AutoHint = "Blank values preserve automatic series formatting.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
     public const double DefaultDialogWidth = 440;
-    public const double DefaultDialogHeight = 360;
+    public const double DefaultDialogHeight = 520;
 
     public static IReadOnlyList<ChartMarkerSymbolOption> MarkerOptions { get; } =
     [
@@ -86,6 +104,15 @@ public sealed class ChartSeriesOptionsPlanner
     private bool _noLine;
     private ThemeAwareColor? _fillColor;
     private ShapeFill? _fill;
+    private bool _useSeriesDataLabels;
+    private bool _showValueLabels;
+    private bool _showPercentLabels;
+    private bool _showCategoryLabels;
+    private bool _showSeriesLabels;
+    private bool _showLegendKeys;
+    private DataLabelPosition _labelPosition = DataLabelPosition.OutsideEnd;
+    private string _labelNumberFormat = string.Empty;
+    private string _labelSeparator = string.Empty;
     private ChartMarkerSymbol _markerSymbol;
     private double? _markerSizePt;
 
@@ -107,6 +134,15 @@ public sealed class ChartSeriesOptionsPlanner
             LineDashLabel,
             NoLineLabel,
             FillColorLabel,
+            SeriesDataLabelsLabel,
+            ValueLabelsLabel,
+            PercentLabelsLabel,
+            CategoryLabelsLabel,
+            SeriesLabelsLabel,
+            LegendKeysLabel,
+            LabelPositionLabel,
+            NumberFormatLabel,
+            SeparatorLabel,
             MarkerLabel,
             MarkerSizeLabel,
             AutoHint,
@@ -133,6 +169,15 @@ public sealed class ChartSeriesOptionsPlanner
     public OutlineDash LineDash => _lineDash;
     public bool NoLine => _noLine;
     public string FillColorText => FormatColor(_fillColor);
+    public bool UseSeriesDataLabels => _useSeriesDataLabels;
+    public bool ShowValueLabels => _showValueLabels;
+    public bool ShowPercentLabels => _showPercentLabels;
+    public bool ShowCategoryLabels => _showCategoryLabels;
+    public bool ShowSeriesLabels => _showSeriesLabels;
+    public bool ShowLegendKeys => _showLegendKeys;
+    public DataLabelPosition LabelPosition => _labelPosition;
+    public string LabelNumberFormat => _labelNumberFormat;
+    public string LabelSeparator => _labelSeparator;
     public ChartMarkerSymbol MarkerSymbol => _markerSymbol;
     public double? MarkerSizePt => _markerSizePt;
 
@@ -149,6 +194,15 @@ public sealed class ChartSeriesOptionsPlanner
             _noLine = false;
             _fillColor = null;
             _fill = null;
+            _useSeriesDataLabels = false;
+            _showValueLabels = false;
+            _showPercentLabels = false;
+            _showCategoryLabels = false;
+            _showSeriesLabels = false;
+            _showLegendKeys = false;
+            _labelPosition = DataLabelPosition.OutsideEnd;
+            _labelNumberFormat = string.Empty;
+            _labelSeparator = string.Empty;
             _markerSymbol = ChartMarkerSymbol.Auto;
             _markerSizePt = null;
             return;
@@ -164,6 +218,16 @@ public sealed class ChartSeriesOptionsPlanner
         _noLine = series.LineStyle?.NoFill == true;
         _fill = series.Fill;
         _fillColor = series.FillColor ?? (series.Fill is ShapeFill.Solid solid ? solid.Color : null);
+        var labels = series.DataLabels;
+        _useSeriesDataLabels = labels is not null;
+        _showValueLabels = labels?.ShowValue == true;
+        _showPercentLabels = labels?.ShowPercent == true;
+        _showCategoryLabels = labels?.ShowCategoryName == true;
+        _showSeriesLabels = labels?.ShowSeriesName == true;
+        _showLegendKeys = labels?.ShowLegendKey == true;
+        _labelPosition = labels?.Position ?? DataLabelPosition.OutsideEnd;
+        _labelNumberFormat = labels?.NumberFormat ?? string.Empty;
+        _labelSeparator = labels?.Separator ?? string.Empty;
         _markerSymbol = series.MarkerStyle?.Symbol ?? ChartMarkerSymbol.Auto;
         _markerSizePt = series.MarkerStyle?.SizePt;
     }
@@ -187,6 +251,15 @@ public sealed class ChartSeriesOptionsPlanner
         _fill = null;
         _fillColor = ChartPointOptionsPlanner.ParseColor(text, FillColorLabel);
     }
+    public void SetUseSeriesDataLabels(bool value) => _useSeriesDataLabels = value;
+    public void SetShowValueLabels(bool value) => _showValueLabels = value;
+    public void SetShowPercentLabels(bool value) => _showPercentLabels = value;
+    public void SetShowCategoryLabels(bool value) => _showCategoryLabels = value;
+    public void SetShowSeriesLabels(bool value) => _showSeriesLabels = value;
+    public void SetShowLegendKeys(bool value) => _showLegendKeys = value;
+    public void SetLabelPosition(DataLabelPosition value) => _labelPosition = value;
+    public void SetLabelNumberFormat(string? value) => _labelNumberFormat = value ?? string.Empty;
+    public void SetLabelSeparator(string? value) => _labelSeparator = value ?? string.Empty;
     public void SetMarkerSymbol(ChartMarkerSymbol value) => _markerSymbol = value;
     public void SetMarkerSize(double? value) => _markerSizePt = value;
 
@@ -201,7 +274,20 @@ public sealed class ChartSeriesOptionsPlanner
         _fill,
         _lineColor,
         _lineDash,
-        _noLine);
+        _noLine,
+        _useSeriesDataLabels
+            ? new ChartDataLabels
+            {
+                ShowValue = _showValueLabels,
+                ShowPercent = _showPercentLabels,
+                ShowCategoryName = _showCategoryLabels,
+                ShowSeriesName = _showSeriesLabels,
+                ShowLegendKey = _showLegendKeys,
+                Position = _labelPosition,
+                NumberFormat = string.IsNullOrWhiteSpace(_labelNumberFormat) ? null : _labelNumberFormat,
+                Separator = string.IsNullOrEmpty(_labelSeparator) ? null : _labelSeparator,
+            }
+            : null);
 
     private static string FormatColor(ThemeAwareColor? color) =>
         color is null ? string.Empty : color.Resolved.ToString();
