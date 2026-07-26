@@ -233,6 +233,9 @@ internal static class Ooxml
     public const string PeopleRelType = "http://schemas.microsoft.com/office/2011/relationships/people";
     public const string PeopleContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml";
 
+    public const string CommentsIdsRelType = "http://schemas.microsoft.com/office/2016/09/relationships/commentsIds";
+    public const string CommentsExtensibleRelType = "http://schemas.microsoft.com/office/2018/08/relationships/commentsExtensible";
+
     /// <summary>
     /// The bibliography namespace (b), used by word/bibliography/sources.xml — the legacy mirror for the
     /// document's citation sources (b:Sources/b:Source) and selected bibliography style. Word's active
