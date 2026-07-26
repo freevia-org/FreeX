@@ -2435,6 +2435,19 @@ public sealed class EditingSession
             options));
     }
 
+    /// <summary>Applies bubble-chart sizing and negative-value display options as one undo step.</summary>
+    public void ApplyChartBubbleOptions(ChartBubbleOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0)
+            return;
+
+        Bus.Execute(new SetChartBubbleOptionsCommand(
+            _currentSlideIndex,
+            _selectedShapeIds[0],
+            options));
+    }
+
     /// <summary>Applies chart-wide default text formatting as one undo step.</summary>
     public void ApplyChartTextOptions(ChartTextOptions options)
     {

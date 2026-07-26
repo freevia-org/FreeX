@@ -433,6 +433,7 @@ public sealed partial class MainWindow : Window
             onEditChartPointOptions: () => OpenChartPointOptionsDialog(),
             onEditChartLayoutOptions: () => OpenChartLayoutOptionsDialog(),
             onEditChartDataTableOptions: () => OpenChartDataTableOptionsDialog(),
+            onEditChartBubbleOptions: () => OpenChartBubbleOptionsDialog(),
             onEditChart3DViewOptions: () => OpenChart3DViewOptionsDialog(),
             onEditChartTextOptions: () => OpenChartTextOptionsDialog(),
             onEditChartAreaOptions: () => OpenChartAreaOptionsDialog(),
@@ -3830,6 +3831,16 @@ public sealed partial class MainWindow : Window
         if (Editor.SelectedChart is null) return;
 
         var dialog = new ChartDataTableOptionsDialog(Editor);
+        if (IsVisible)
+            dialog.Owner = this;
+        dialog.ShowDialog();
+    }
+
+    internal void OpenChartBubbleOptionsDialog()
+    {
+        if (Editor.SelectedChart is not { ChartType: ChartType.Bubble }) return;
+
+        var dialog = new ChartBubbleOptionsDialog(Editor);
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();

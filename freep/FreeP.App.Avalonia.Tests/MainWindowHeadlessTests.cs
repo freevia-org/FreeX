@@ -6172,6 +6172,26 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartBubbleOptionsDialog_constructs_and_commits_shared_options()
+    {
+        ChartBubbleOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.Bubble);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartBubbleOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(225, BubbleSizeRepresentation.Width, true);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().Be(new ChartBubbleOptions(225, BubbleSizeRepresentation.Width, true));
+    }
+
+    [Fact]
     public async Task ChartTextOptionsDialog_constructs_and_commits_shared_options()
     {
         ChartTextOptions? options = null;

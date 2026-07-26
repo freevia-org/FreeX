@@ -228,6 +228,20 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartBubbleOptionsDialog_ConstructsAndUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.ChartType = ChartType.Bubble;
+
+        var dialog = new ChartBubbleOptionsDialog(sess);
+        dialog.SetOptionsForTests(225, BubbleSizeRepresentation.Width, true);
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.Should().Be(new ChartBubbleOptions(225, BubbleSizeRepresentation.Width, true));
+    }
+
+    [StaFact]
     public void Chart3DViewOptionsDialog_ConstructsAndUsesSharedPlanner()
     {
         var (sess, _) = MakeSession();
@@ -377,6 +391,21 @@ public sealed class ChartDataDialogTests : IDisposable
         ribbonSource.Should().Contain("ChartTextOptionsPlanner.CommandId");
         windowSource.Should().Contain("OpenChart3DViewOptionsDialog");
         windowSource.Should().Contain("OpenChartTextOptionsDialog");
+    }
+
+    [Fact]
+    public void ChartBubbleOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartBubbleOptionsDialog.cs");
+        var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
+        var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+
+        source.Should().Contain("ChartBubbleOptionsPlanner.FromChart(chart)");
+        source.Should().Contain("_planner.BuildCommitPlan()");
+        source.Should().Contain("_editor.ApplyChartBubbleOptions");
+        source.Should().NotContain("new SetChartBubbleOptionsCommand");
+        ribbonSource.Should().Contain("ChartBubbleOptionsPlanner.CommandId");
+        windowSource.Should().Contain("OpenChartBubbleOptionsDialog");
     }
 
     [Fact]
