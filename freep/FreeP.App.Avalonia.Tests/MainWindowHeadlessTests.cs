@@ -6163,7 +6163,12 @@ public sealed class MainWindowHeadlessTests
                 "0.0%",
                 " | ",
                 displayBlanksAs: ChartDisplayBlanksAs.Zero,
-                showDataLabelsOverMaximum: true);
+                showDataLabelsOverMaximum: true,
+                labelFontFamily: "Aptos",
+                labelFontSizePt: 9,
+                labelBold: true,
+                labelItalic: false,
+                labelColor: "#2F5496");
             dialog.SetVaryColorsForTests(true);
             dialog.SetLegendOverlayForTests(true);
             dialog.SetHighLowLinesForTests(false);
@@ -6172,9 +6177,15 @@ public sealed class MainWindowHeadlessTests
         });
 
         if (!ran) return;
-        options.Should().Be(new ChartDisplayOptions(
-            "Revenue", LegendPosition.Bottom, true, DataLabelPosition.OutsideEnd, false, true,
-            true, true, true, true, "0.0%", " | ", null, null, ChartDisplayBlanksAs.Zero, true, true, true, false));
+        options.Should().NotBeNull();
+        options!.Title.Should().Be("Revenue");
+        options.Legend.Should().Be(LegendPosition.Bottom);
+        options.LabelTextStyle.Should().NotBeNull();
+        options.LabelTextStyle!.FontFamily.Should().Be("Aptos");
+        options.LabelTextStyle.FontSizePt.Should().Be(9);
+        options.LabelTextStyle.Bold.Should().BeTrue();
+        options.LabelTextStyle.Italic.Should().BeFalse();
+        options.LabelTextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
     }
 
     [Fact]

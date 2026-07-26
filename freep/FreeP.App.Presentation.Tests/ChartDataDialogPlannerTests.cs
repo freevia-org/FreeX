@@ -320,6 +320,11 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetLabelPosition(DataLabelPosition.OutsideEnd);
         planner.SetLabelNumberFormat("0.0%");
         planner.SetLabelSeparator(" | ");
+        planner.SetLabelFontFamily("Aptos");
+        planner.SetLabelFontSize(9);
+        planner.SetLabelBold(true);
+        planner.SetLabelItalic(false);
+        planner.SetLabelColor("#2F5496");
         planner.SetCategoryGridlines(false);
         planner.SetValueGridlines(true);
         planner.SetBarGapWidthPercent(40);
@@ -333,7 +338,14 @@ public sealed class ChartDataDialogPlannerTests
         var commit = planner.BuildCommitPlan();
         commit.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, false, DataLabelPosition.OutsideEnd, false, true,
-            true, true, true, true, "0.0%", " | ", 40, 55, ChartDisplayBlanksAs.Span, true, true, true, false));
+            true, true, true, true, "0.0%", " | ", 40, 55, ChartDisplayBlanksAs.Span, true, true, true, false,
+            commit.LabelTextStyle));
+        commit.LabelTextStyle.Should().NotBeNull();
+        commit.LabelTextStyle!.FontFamily.Should().Be("Aptos");
+        commit.LabelTextStyle.FontSizePt.Should().Be(9);
+        commit.LabelTextStyle.Bold.Should().BeTrue();
+        commit.LabelTextStyle.Italic.Should().BeFalse();
+        commit.LabelTextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
         chart.Title.Should().Be("Existing", "the dialog planner is a working copy");
         ChartDisplayOptionsPlanner.BuildSurfacePlan().CommandId
             .Should().Be(ChartDisplayOptionsPlanner.CommandId);

@@ -130,6 +130,7 @@ public sealed class ChartDataDialogTests : IDisposable
         dialog.SetVaryColorsForTests(true);
         dialog.SetLegendOverlayForTests(true);
         dialog.SetHighLowLinesForTests(false);
+        dialog.SetLabelTextStyleForTests("Aptos", 9, true, false, "#2F5496");
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -139,6 +140,12 @@ public sealed class ChartDataDialogTests : IDisposable
         options.VaryColors.Should().BeTrue();
         options.LegendOverlay.Should().BeTrue();
         options.HighLowLines.Should().BeFalse();
+        options.LabelTextStyle.Should().NotBeNull();
+        options.LabelTextStyle!.FontFamily.Should().Be("Aptos");
+        options.LabelTextStyle.FontSizePt.Should().Be(9);
+        options.LabelTextStyle.Bold.Should().BeTrue();
+        options.LabelTextStyle.Italic.Should().BeFalse();
+        options.LabelTextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
     }
 
     [StaFact]
