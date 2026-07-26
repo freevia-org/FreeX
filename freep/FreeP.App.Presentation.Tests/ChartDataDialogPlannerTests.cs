@@ -325,11 +325,12 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetBarOverlapPercent(55);
         planner.SetDisplayBlanksAs(ChartDisplayBlanksAs.Span);
         planner.SetShowDataLabelsOverMaximum(true);
+        planner.SetVaryColors(true);
 
         var commit = planner.BuildCommitPlan();
         commit.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, false, DataLabelPosition.OutsideEnd, false, true,
-            true, true, true, true, "0.0%", " | ", 40, 55, ChartDisplayBlanksAs.Span, true));
+            true, true, true, true, "0.0%", " | ", 40, 55, ChartDisplayBlanksAs.Span, true, true));
         chart.Title.Should().Be("Existing", "the dialog planner is a working copy");
         ChartDisplayOptionsPlanner.BuildSurfacePlan().CommandId
             .Should().Be(ChartDisplayOptionsPlanner.CommandId);

@@ -126,12 +126,14 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart.Legend = LegendPosition.Right;
 
         var dialog = new ChartDisplayOptionsDialog(sess);
+        dialog.SetVaryColorsForTests(true);
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
         options.Title.Should().Be("Existing");
         options.Legend.Should().Be(LegendPosition.Right);
         options.DisplayBlanksAs.Should().BeNull();
+        options.VaryColors.Should().BeTrue();
     }
 
     [StaFact]
