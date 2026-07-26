@@ -70,6 +70,17 @@ public readonly record struct PreservedDrawingReference(
 public sealed record PreservedDrawing(string Xml, IReadOnlyList<PreservedDrawingReference> References);
 
 /// <summary>
+/// One relationship reference from a verbatim-preserved document-level element to a preserved package part.
+/// </summary>
+public readonly record struct PreservedDocumentReference(string OriginalRelId, string PreservedPartName);
+
+/// <summary>
+/// The original <c>w:webExtensions</c> document child carrying Word task-pane add-in references. Its XML is
+/// re-emitted verbatim while the document relationship ids in <see cref="References"/> are remapped on write.
+/// </summary>
+public sealed record PreservedWebExtensions(string Xml, IReadOnlyList<PreservedDocumentReference> References);
+
+/// <summary>
 /// The original <c>w:numPr</c> a paragraph carried on read that FreeW does not model as one of its own lists:
 /// the source <c>w:numId</c> and <c>w:ilvl</c>. Captured per paragraph (see
 /// <see cref="Paragraph.PreservedNumbering"/>) so the writer can re-emit the paragraph's numbering pointing at
@@ -128,6 +139,12 @@ public sealed class PreservedParts
     public XElement? OriginalCustomProperties { get; set; }
 
     /// <summary>
+    /// The original <c>w:webExtensions</c> document child, preserved so Word task-pane add-ins remain attached
+    /// after FreeW saves the document. Null when the source package did not contain one.
+    /// </summary>
+    public PreservedWebExtensions? WebExtensions { get; set; }
+
+    /// <summary>
     /// The unmodelled parts preserved verbatim (customXml items / props / their rels, webSettings, and the
     /// chart/chartex parts + media referenced by a verbatim-preserved inline drawing), in the order they were
     /// captured. Empty for an authored-from-scratch document so nothing extra is emitted.
@@ -143,7 +160,8 @@ public sealed class PreservedParts
     public Dictionary<string, string> ContentTypeDefaults { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>True when nothing is preserved — the authored-from-scratch case.</summary>
-    public bool IsEmpty => OriginalSettings is null && OriginalNumbering is null && OriginalCustomProperties is null && Parts.Count == 0;
+    public bool IsEmpty => OriginalSettings is null && OriginalNumbering is null && OriginalCustomProperties is null
+        && WebExtensions is null && Parts.Count == 0;
 
     /// <summary>
     /// Replaces this preserved-package snapshot with a deep copy of <paramref name="source"/> so derived
@@ -156,6 +174,9 @@ public sealed class PreservedParts
         OriginalSettings = source.OriginalSettings is null ? null : new XElement(source.OriginalSettings);
         OriginalNumbering = source.OriginalNumbering is null ? null : new XElement(source.OriginalNumbering);
         OriginalCustomProperties = source.OriginalCustomProperties is null ? null : new XElement(source.OriginalCustomProperties);
+        WebExtensions = source.WebExtensions is null
+            ? null
+            : new PreservedWebExtensions(source.WebExtensions.Xml, source.WebExtensions.References.ToArray());
 
         Parts.Clear();
         foreach (var part in source.Parts)

@@ -94,7 +94,7 @@ public static class DocxReader
         ReadBibliography(archive, document);
         ReadTheme(archive, document);
         ReadEmbeddedFonts(archive, document);
-        ReadPreservedParts(archive, document);
+        ReadPreservedParts(archive, document, documentXml);
 
         return document;
     }
@@ -271,7 +271,7 @@ public static class DocxReader
     /// the part, its content type and its relationship unchanged. A document with none of these parts (authored
     /// from scratch) captures nothing, so it round-trips byte-equivalently to before.
     /// </summary>
-    private static void ReadPreservedParts(ZipArchive archive, TextDocument document)
+    private static void ReadPreservedParts(ZipArchive archive, TextDocument document, XDocument documentXml)
     {
         // Map each part name → its content-type Override (so a re-emitted part keeps its declared type), and
         // each document-relationship Target → its Type (so a re-emitted part keeps its document relationship).
@@ -400,6 +400,50 @@ public static class DocxReader
                     packageRelationshipType: relationship.Type))
             {
                 CaptureReferencedParts(archive, document, partName, overrides, contentTypeDefaults);
+            }
+        }
+
+        // Word task-pane add-ins place their document-level marker in w:webExtensions. The marker's r:id
+        // resolves to word/webextensions/taskpanes.xml, which in turn owns the extension payload graph.
+        // Preserve the marker and remap its document relationship when FreeW writes a fresh package.
+        if (documentXml.Root?.Element(W + "webExtensions") is { } webExtensions)
+        {
+            var documentRelationships = ReadDocumentRelationships(archive);
+            var references = new List<PreservedDocumentReference>();
+            var complete = true;
+            foreach (var relationshipId in webExtensions.DescendantsAndSelf()
+                         .Attributes(R + "id")
+                         .Select(attribute => attribute.Value)
+                         .Distinct(StringComparer.Ordinal))
+            {
+                if (!documentRelationships.TryGetValue(relationshipId, out var relationship))
+                {
+                    complete = false;
+                    break;
+                }
+
+                var partName = OpcPathHelper.ResolveAbsolutePartName("/word", relationship.Target);
+                if (partName is null || !CapturePreservedPart(
+                        archive,
+                        document,
+                        partName,
+                        overrides,
+                        contentTypeDefaults,
+                        relationship.Type))
+                {
+                    complete = false;
+                    break;
+                }
+
+                CaptureReferencedParts(archive, document, partName, overrides, contentTypeDefaults);
+                references.Add(new PreservedDocumentReference(relationshipId, partName));
+            }
+
+            if (complete)
+            {
+                document.Preserved.WebExtensions = new PreservedWebExtensions(
+                    webExtensions.ToString(SaveOptions.DisableFormatting),
+                    references);
             }
         }
 
