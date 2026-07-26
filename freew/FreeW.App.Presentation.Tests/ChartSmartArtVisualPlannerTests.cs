@@ -183,6 +183,24 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartScene_ImportedNativeColumnStyle_UsesCompactCenteredCategoryLegend()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2", "Q3", "Q4"], [1.4, 1.8, 1.6, 2.2]);
+        chart.StyleId = 7;
+        chart.ColorSchemeId = "mono-blue";
+        chart.QuickLayoutId = 9;
+        chart.ShowLegend = true;
+        chart.CategoryAxisTitle = "Quarter";
+        chart.ValueAxisTitle = "USD";
+        chart.NativeVisualSettings = new ChartNativeVisualSettings(true, false, false, false);
+
+        var legend = ChartSmartArtVisualPlanner.BuildChartScene(chart, 400, 224).Legend;
+        legend.Select(entry => entry.SwatchX).Should().Equal(136, 171, 206, 241);
+        legend.Select(entry => entry.SwatchY).Should().AllSatisfy(y => y.Should().Be(200));
+        legend.Select(entry => entry.SwatchSize).Should().AllSatisfy(size => size.Should().Be(9));
+    }
+
+    [Fact]
     public void ColumnScene_UsesWordSizedCategoryBarSlots()
     {
         var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2", "Q3", "Q4"], [1.0, 2.0, 1.5, 2.5]);

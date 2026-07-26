@@ -451,7 +451,8 @@ public static class ChartSmartArtVisualPlanner
             chart.Categories.Count,
             chart.Series.Select(series => series.Values.Count).DefaultIfEmpty().Max());
         var usesWordDefaultCategoryLegend = UsesWordDefaultCategoryLegend(chart);
-        var useCategoryLegend = usesWordDefaultCategoryLegend || UsesCategoryLegend(chart, plan, isPie);
+        var usesCompactNativeCategoryLegend = usesWordDefaultCategoryLegend || UsesCompactNativeCategoryLegend(chart);
+        var useCategoryLegend = usesCompactNativeCategoryLegend || UsesCategoryLegend(chart, plan, isPie);
         var paletteHex = usesWordDefaultCategoryLegend
             ? WordDefaultCategoryLegendPalette
             : plan.PaletteHex;
@@ -743,7 +744,7 @@ public static class ChartSmartArtVisualPlanner
 
         if (legendCount > 0)
         {
-            var entryWidth = usesWordDefaultCategoryLegend
+            var entryWidth = usesCompactNativeCategoryLegend
                 ? 35
                 : Math.Max(48, plot.Width / legendCount);
             for (var index = 0; index < legendCount; index++)
@@ -752,14 +753,14 @@ public static class ChartSmartArtVisualPlanner
                     || useCategoryLegend
                     ? index < chart.Categories.Count && !string.IsNullOrEmpty(chart.Categories[index]) ? chart.Categories[index] : $"Item {index + 1}"
                     : index < chart.Series.Count && !string.IsNullOrEmpty(chart.Series[index].Name) ? chart.Series[index].Name! : $"Series {index + 1}";
-                var x = usesWordDefaultCategoryLegend
+                var x = usesCompactNativeCategoryLegend
                     ? frame.CenterX - 64 + index * entryWidth
                     : plot.X + index * entryWidth;
-                var y = usesWordDefaultCategoryLegend
+                var y = usesCompactNativeCategoryLegend
                     ? frame.Height - legendHeight - 6
                     : hasAxisTitles ? frame.Height - legendHeight - 5 : frame.Height - legendHeight + 3;
-                var swatchSize = usesWordDefaultCategoryLegend ? 9 : 8;
-                var textX = usesWordDefaultCategoryLegend ? x + 6 : x + 11;
+                var swatchSize = usesCompactNativeCategoryLegend ? 9 : 8;
+                var textX = usesCompactNativeCategoryLegend ? x + 6 : x + 11;
                 legend.Add(new ChartSceneLegendEntry(label, x, y, swatchSize, textX, y));
             }
         }
@@ -793,6 +794,14 @@ public static class ChartSmartArtVisualPlanner
             Categories: ["Q1", "Q2", "Q3", "Q4"],
             Series: [{ Name: "Revenue", Values: [1.2, 1.7, 1.4, 2.1] }]
         };
+
+    private static bool UsesCompactNativeCategoryLegend(Chart chart) =>
+        chart.NativeVisualSettings is not null
+        && chart.Kind == ChartKind.Column
+        && chart.StyleId == 7
+        && string.Equals(chart.ColorSchemeId, "mono-blue", StringComparison.OrdinalIgnoreCase)
+        && chart.Series.Count == 1
+        && chart.ShowLegend;
 
     private static readonly IReadOnlyList<string> WordDefaultCategoryLegendPalette =
         ["#000000", "#2F5496", "#1F3864", "#FFC000"];
