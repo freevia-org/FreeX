@@ -6121,6 +6121,7 @@ public sealed class MainWindowHeadlessTests
         {
             var window = new MainWindow(Array.Empty<string>());
             var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            chartShape.Chart!.ChartType = ChartType.Stock;
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartDisplayOptionsDialog(window.Editor);
@@ -6141,6 +6142,7 @@ public sealed class MainWindowHeadlessTests
                 showDataLabelsOverMaximum: true);
             dialog.SetVaryColorsForTests(true);
             dialog.SetLegendOverlayForTests(true);
+            dialog.SetHighLowLinesForTests(false);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6148,7 +6150,7 @@ public sealed class MainWindowHeadlessTests
         if (!ran) return;
         options.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, true, DataLabelPosition.OutsideEnd, false, true,
-            true, true, true, true, "0.0%", " | ", null, null, ChartDisplayBlanksAs.Zero, true, true, true));
+            true, true, true, true, "0.0%", " | ", null, null, ChartDisplayBlanksAs.Zero, true, true, true, false));
     }
 
     [Fact]

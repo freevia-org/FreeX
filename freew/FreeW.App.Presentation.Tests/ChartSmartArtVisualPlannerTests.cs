@@ -195,6 +195,26 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartScene_ImportedNativeChartStyles_UseDarkAxisStrokes()
+    {
+        var column = Chart.Create(ChartKind.Column, ["Q1", "Q2"], [1.0, 2.0]);
+        column.StyleId = 7;
+        column.ColorSchemeId = "mono-blue";
+        column.NativeVisualSettings = new ChartNativeVisualSettings(false, false, false, false);
+
+        ChartSmartArtVisualPlanner.BuildChartScene(column, 240, 180).AxisLines
+            .Should().OnlyContain(line => line.StrokeHex == "#000000");
+
+        var scatter = Chart.Create(ChartKind.Scatter, ["155", "160"], [52.0, 58.0]);
+        scatter.StyleId = 4;
+        scatter.ColorSchemeId = "colorful1";
+        scatter.NativeVisualSettings = new ChartNativeVisualSettings(false, false, false, true);
+
+        ChartSmartArtVisualPlanner.BuildChartScene(scatter, 240, 180).AxisLines
+            .Should().OnlyContain(line => line.StrokeHex == "#000000");
+    }
+
+    [Fact]
     public void ChartScene_ImportedNativeColumnStyle_UsesCompactCenteredCategoryLegend()
     {
         var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2", "Q3", "Q4"], [1.4, 1.8, 1.6, 2.2]);

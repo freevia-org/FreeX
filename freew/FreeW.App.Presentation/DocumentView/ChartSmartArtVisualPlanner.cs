@@ -497,7 +497,7 @@ public static class ChartSmartArtVisualPlanner
         var texts = new List<ChartSceneText>();
         var legend = new List<ChartSceneLegendEntry>();
         var axis = plan.ValueAxis;
-        var axisStroke = "#BFBFBF";
+        var axisStroke = UsesDarkNativeAxisStroke(chart) ? "#000000" : "#BFBFBF";
         var gridStroke = "#E6E6E6";
         var textColor = "#000000";
 
@@ -810,6 +810,15 @@ public static class ChartSmartArtVisualPlanner
         && string.Equals(chart.ColorSchemeId, "mono-blue", StringComparison.OrdinalIgnoreCase)
         && chart.Series.Count == 1
         && chart.ShowLegend;
+
+    private static bool UsesDarkNativeAxisStroke(Chart chart) =>
+        chart.NativeVisualSettings is not null
+        && ((chart.Kind == ChartKind.Column
+             && chart.StyleId == 7
+             && string.Equals(chart.ColorSchemeId, "mono-blue", StringComparison.OrdinalIgnoreCase))
+            || (chart.Kind == ChartKind.Scatter
+                && chart.StyleId == 4
+                && string.Equals(chart.ColorSchemeId, "colorful1", StringComparison.OrdinalIgnoreCase)));
 
     private static readonly IReadOnlyList<string> WordDefaultCategoryLegendPalette =
         ["#000000", "#2F5496", "#1F3864", "#FFC000"];
