@@ -92,6 +92,25 @@ public sealed class FloatingObjectRenderTests
         return doc;
     }
 
+    private static TextDocument DocWithImportedWatermarkBackingTextbox()
+    {
+        var shape = Shape.TextBoxWith("watermark backing layer", widthPt: 170, heightPt: 58, fillColorHex: "#E2F0D9");
+        shape.OutlineColorHex = "#70AD47";
+        shape.OutlineWidthPt = 1.25;
+        shape.Placement = new FloatingPlacement
+        {
+            Wrapping = ImageWrapping.Square,
+            HorizontalAnchor = HorizontalAnchor.Margin,
+            VerticalAnchor = VerticalAnchor.Paragraph,
+        };
+
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(paragraph);
+        return doc;
+    }
+
     private static TextDocument DocWithMixedFloatingBands(out Shape behindShape, out Shape frontShape)
     {
         behindShape = new Shape(ShapeKind.Rectangle, 72, 36)
@@ -244,6 +263,21 @@ public sealed class FloatingObjectRenderTests
 
         Canvas.GetTop(canvas.Children.OfType<FrameworkElement>().Single())
             .Should().BeApproximately(97, 0.01);
+    }
+
+    [StaFact]
+    public void ImportedWatermarkBackingTextbox_UsesOpaqueTwoDipOutline()
+    {
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(DocWithImportedWatermarkBackingTextbox());
+
+        var border = canvas.Children.OfType<Border>().Single();
+        border.BorderThickness.Left.Should().Be(2);
+        border.BorderThickness.Top.Should().Be(2);
+        border.BorderThickness.Right.Should().Be(2);
+        border.BorderThickness.Bottom.Should().Be(2);
     }
 
     [StaFact]
@@ -566,6 +600,43 @@ public sealed class FloatingObjectRenderTests
             "Wave1 rises through the center");
         rotations.Select(angle => Math.Abs(angle)).Max().Should().BeGreaterThan(1.5,
             "the imported Wave1 signature carries visible per-glyph rotation");
+    }
+
+    [StaFact]
+    public void FloatingOverlay_ExtendsMaterialLayerForImportedReviewCopySignature()
+    {
+        var wordArt = new WordArt("Review Copy", WordArtStyle.FillGold, 26)
+        {
+            Warp = WordArtWarp.ArchUp,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 260,
+                VerticalOffsetPt = 142,
+                ZOrderIndex = 9
+            }
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromWordArt(wordArt));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Canvas>().Single();
+        root.Measure(new Size(236, 56));
+        root.Arrange(new Rect(0, 0, 236, 56));
+        root.UpdateLayout();
+
+        var materialLayer = root.Children.OfType<Border>().Single();
+        materialLayer.Width.Should().BeApproximately(root.ActualWidth + 1, 0.01);
+        materialLayer.Height.Should().BeApproximately(root.ActualHeight + 13, 0.01);
+        Canvas.GetLeft(materialLayer).Should().Be(-1);
+        Canvas.GetTop(materialLayer).Should().Be(-6);
+        root.Children.OfType<TextBlock>().Should().HaveCount(wordArt.Text.Length);
     }
 
     [StaFact]

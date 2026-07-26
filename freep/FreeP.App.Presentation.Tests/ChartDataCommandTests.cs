@@ -1274,6 +1274,40 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartBubbleOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.Bubble;
+        chart.BubbleScalePercent = 100;
+        chart.BubbleSizeRepresents = BubbleSizeRepresentation.Area;
+        chart.ShowNegativeBubbles = false;
+
+        bus.Execute(new SetChartBubbleOptionsCommand(
+            0,
+            id,
+            new ChartBubbleOptions(175, BubbleSizeRepresentation.Width, true)));
+
+        chart.BubbleScalePercent.Should().Be(175);
+        chart.BubbleSizeRepresents.Should().Be(BubbleSizeRepresentation.Width);
+        chart.ShowNegativeBubbles.Should().BeTrue();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.ChartType.Should().Be(ChartType.Bubble);
+        roundTripped.BubbleScalePercent.Should().Be(175);
+        roundTripped.BubbleSizeRepresents.Should().Be(BubbleSizeRepresentation.Width);
+        roundTripped.ShowNegativeBubbles.Should().BeTrue();
+
+        bus.Undo();
+        chart.BubbleScalePercent.Should().Be(100);
+        chart.BubbleSizeRepresents.Should().Be(BubbleSizeRepresentation.Area);
+        chart.ShowNegativeBubbles.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetChartPointOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
     {
         var (p, bus, id) = MakeChartPresentation();

@@ -467,6 +467,28 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void ChartBubbleOptionsPlanner_UsesWorkingCopyAndBuildsSizingOptions()
+    {
+        var chart = MakeChart();
+        chart.ChartType = ChartType.Bubble;
+        chart.BubbleScalePercent = 150;
+        chart.BubbleSizeRepresents = BubbleSizeRepresentation.Area;
+        chart.ShowNegativeBubbles = false;
+
+        var planner = ChartBubbleOptionsPlanner.FromChart(chart);
+        planner.SetBubbleScalePercent(225);
+        planner.SetSizeRepresents(BubbleSizeRepresentation.Width);
+        planner.SetShowNegativeBubbles(true);
+
+        planner.BuildCommitPlan().Should().Be(new ChartBubbleOptions(225, BubbleSizeRepresentation.Width, true));
+        chart.BubbleScalePercent.Should().Be(150, "bubble dialogs must edit a working copy");
+        chart.BubbleSizeRepresents.Should().Be(BubbleSizeRepresentation.Area);
+        chart.ShowNegativeBubbles.Should().BeFalse();
+        ChartBubbleOptionsPlanner.BuildSurfacePlan().CommandId
+            .Should().Be(ChartBubbleOptionsPlanner.CommandId);
+    }
+
+    [Fact]
     public void ChartPointOptionsPlanner_UsesWorkingCopyAndBuildsPointFormattingOptions()
     {
         var chart = MakeChart();
