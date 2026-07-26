@@ -389,7 +389,7 @@ public sealed partial class MainWindow
         // For an edited rule, seed from its existing FormatIfTrue so the format round-trips.
         CellStyle? customFormatStyle = existingRule?.FormatIfTrue?.Clone();
         var formatButton = new Button { Content = StripDisplayMnemonic(UiText.Get("ConditionalFormatDialog_FormatButton")) };
-        ApplyCfButtonChrome(formatButton, 96);
+        ApplyCfButtonChrome(formatButton, 84);
         AutomationProperties.SetAutomationId(formatButton, "ConditionalFormatFormatButton");
         formatButton.Click += async (_, _) =>
         {
@@ -417,13 +417,40 @@ public sealed partial class MainWindow
         var minColorField = CreateDataValidationField(UiText.Get("ConditionalFormat_MinColorLabel"), minColorBox);
         var midColorField = CreateDataValidationField(UiText.Get("ConditionalFormat_MidColorLabel"), midColorBox);
         var maxColorField = CreateDataValidationField(UiText.Get("ConditionalFormat_MaxColorLabel"), maxColorBox);
-        var highlightRow = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(formatButton, Dock.Right);
-        formatButton.Margin = new Thickness(8, 0, 0, 0);
-        highlightRow.Children.Add(formatButton);
-        highlightRow.Children.Add(highlightBox);
+        var highlightRow = new StackPanel
+        {
+            Spacing = 6,
+            Children = { highlightBox, formatButton },
+        };
         var highlightField = CreateDataValidationField(UiText.Get("ConditionalFormat_FormatLabel"), highlightRow);
         var presetField = CreateDataValidationField(UiText.Get("ConditionalFormat_PresetLabel"), presetBox);
+
+        // The WPF editor gives its rule description controls the full right-column width. Keep the
+        // same control instances and automation ids while letting the compact Avalonia column stretch.
+        foreach (var control in new Control[]
+                 {
+                     ruleTypeBox, presetBox, operatorBox, value1Box, value2Box, formulaBox, textBox,
+                     rankBox, topBottomBox, iconSetBox, minColorBox, midColorBox, maxColorBox, highlightBox,
+                 })
+        {
+            control.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+            switch (control)
+            {
+                case ComboBox combo:
+                    combo.Height = 21;
+                    combo.MinHeight = 21;
+                    combo.MaxHeight = 21;
+                    break;
+                case TextBox text:
+                    text.Height = 20;
+                    text.MinHeight = 20;
+                    text.MaxHeight = 20;
+                    break;
+            }
+        }
+        formatButton.Height = 21;
+        formatButton.MinHeight = 21;
+        formatButton.MaxHeight = 21;
 
         var errorText = new TextBlock
         {
@@ -624,9 +651,15 @@ public sealed partial class MainWindow
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
         ApplyCfButtonChrome(okButton, 84, isDefault: true);
+        okButton.Height = 21;
+        okButton.MinHeight = 21;
+        okButton.MaxHeight = 21;
         AutomationProperties.SetAutomationId(okButton, "ConditionalFormatOkButton");
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
         ApplyCfButtonChrome(cancelButton, 84);
+        cancelButton.Height = 21;
+        cancelButton.MinHeight = 21;
+        cancelButton.MaxHeight = 21;
         AutomationProperties.SetAutomationId(cancelButton, "ConditionalFormatCancelButton");
 
         okButton.Click += (_, _) =>
@@ -658,6 +691,8 @@ public sealed partial class MainWindow
         // Left column: "Select a Rule Type:" header + the Excel rule-type list.
         var leftColumn = new StackPanel
         {
+            Width = 218,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 12, 0),
             Children =
             {
@@ -679,18 +714,11 @@ public sealed partial class MainWindow
         {
             Content = new StackPanel
             {
-                Spacing = 10,
+                Margin = new Thickness(0, 12, 0, 0),
+                Spacing = 8,
                 Children =
                 {
-                    new TextBlock
-                    {
-                        Text = UiText.Format("ConditionalFormat_AppliesToFormat", FormatRangeReference(range)),
-                        Foreground = HeaderForeground,
-                        TextWrapping = TextWrapping.Wrap,
-                        FontSize = 12,
-                        FontFamily = FormulaBarFontFamily,
-                    },
-                    CreateDataValidationField(UiText.Get("ConditionalFormat_RuleTypeLabel"), ruleTypeBox),
+                    CreateDataValidationField(UiText.Get("ConditionalFormatDialog_FormatOnlyCellsWithLabel"), ruleTypeBox),
                     presetField,
                     operatorField,
                     value1Field,
@@ -732,8 +760,8 @@ public sealed partial class MainWindow
 
         var root = new AvaloniaGrid
         {
-            Margin = new Thickness(16),
-            ColumnDefinitions = new ColumnDefinitions("230,*"),
+            Margin = new Thickness(16, 16, 29, 29),
+            ColumnDefinitions = new ColumnDefinitions("244,*"),
             Children =
             {
                 leftColumn,

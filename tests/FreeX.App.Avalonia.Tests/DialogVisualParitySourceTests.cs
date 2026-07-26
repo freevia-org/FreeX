@@ -70,6 +70,30 @@ public sealed class DialogVisualParitySourceTests
     }
 
     [Fact]
+    public void ConditionalFormatNewRule_UsesCurrentWpfDescriptionChrome_WithoutChangingRuleBehavior()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ConditionalFormat.cs"));
+
+        source.Should().Contain("ConditionalFormatDialog_FormatOnlyCellsWithLabel");
+        source.Should().NotContain("ConditionalFormat_AppliesToFormat");
+        source.Should().Contain("ApplyCfButtonChrome(formatButton, 84);");
+        source.Should().Contain("Children = { highlightBox, formatButton },");
+        source.Should().Contain("control.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;");
+        source.Should().Contain("Width = 218,");
+        source.Should().Contain("Margin = new Thickness(16, 16, 29, 29),");
+        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"244,*\"),");
+        source.Should().Contain("Margin = new Thickness(0, 12, 0, 0),");
+        source.Should().Contain("Spacing = 8,");
+        source.Should().Contain("formatButton.Height = 21;");
+        source.Should().Contain("okButton.Height = 21;");
+        source.Should().Contain("cancelButton.Height = 21;");
+        source.Should().Contain("AutomationProperties.SetAutomationId(formatButton, \"ConditionalFormatFormatButton\")");
+        source.Should().Contain("ConditionalFormatRuleSchema.ForRuleType(ruleType)");
+        source.Should().Contain("ConditionalFormatRuleBuilder.TryBuildApplyCommand(");
+        source.Should().Contain("ConfigureDialogTabCycle(dialog, root);");
+    }
+
+    [Fact]
     public void SortOptionsDialog_UsesSharedLocalizationAndReferenceCaptureState()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
