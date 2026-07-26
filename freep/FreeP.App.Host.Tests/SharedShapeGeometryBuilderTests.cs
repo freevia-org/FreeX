@@ -205,6 +205,22 @@ public sealed class SharedShapeGeometryBuilderTests
     }
 
     [Fact]
+    public void Explosion_UsesAuthoredSpikeDepthAdjustmentWhenPresent()
+    {
+        var defaultGeometry = ShapeGeometryBuilder.Build(DrawingShapeKind.Explosion, Bounds);
+        var adjustedGeometry = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Explosion,
+            Bounds,
+            new Dictionary<string, double> { ["adj"] = 82000 });
+
+        defaultGeometry.Contours.Should().ContainSingle();
+        adjustedGeometry.Contours.Should().ContainSingle();
+        adjustedGeometry.Contours[0].Segments[0].End.Should().NotBe(defaultGeometry.Contours[0].Segments[0].End);
+        adjustedGeometry.Contours[0].Segments[0].End.Y.Should().BeLessThan(
+            defaultGeometry.Contours[0].Segments[0].End.Y);
+    }
+
+    [Fact]
     public void RightArrow_UsesAuthoredShaftAndHeadAdjustmentsWhenPresent()
     {
         var geometry = ShapeGeometryBuilder.Build(

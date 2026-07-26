@@ -90,7 +90,11 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.FlowchartTerminator => RoundedRectangle(rect, Math.Max(1, rect.Height / 2)),
             DrawingShapeKind.Star5 => Star(rect, 5, StarInnerRadius(adjustments, 0.42)),
             DrawingShapeKind.Star8 => Star(rect, 8, StarInnerRadius(adjustments, 0.46)),
-            DrawingShapeKind.Explosion => Star(rect, 12, 0.62, startAngle: (-Math.PI / 2) + 0.08),
+            DrawingShapeKind.Explosion => Star(
+                rect,
+                12,
+                StarInnerRadius(adjustments, 0.62),
+                startAngle: (-Math.PI / 2) + 0.08),
             DrawingShapeKind.Ribbon => Ribbon(rect),
             DrawingShapeKind.Wave => Wave(rect),
             DrawingShapeKind.RectangularCallout => RectangularCallout(rect),
