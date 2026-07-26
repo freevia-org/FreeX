@@ -224,6 +224,11 @@ internal static class Ooxml
     public const string SettingsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings";
     public const string SettingsPartName = "/word/settings.xml";
 
+    // word/stylesWithEffects.xml is Word 2013+'s supplemental rich-style payload. FreeW's modeled styles.xml
+    // remains authoritative; this second style part is retained verbatim for Word to rehydrate on reopen.
+    public const string StylesWithEffectsRelType = "http://schemas.microsoft.com/office/2007/relationships/stylesWithEffects";
+    public const string StylesWithEffectsContentType = "application/vnd.ms-word.stylesWithEffects+xml";
+
     /// <summary>
     /// The bibliography namespace (b), used by word/bibliography/sources.xml — the legacy mirror for the
     /// document's citation sources (b:Sources/b:Source) and selected bibliography style. Word's active
