@@ -46,7 +46,11 @@ public sealed class ParagraphDialog : FreeWDialogWindow
     public ParagraphDialog(ParagraphFormatting current)
     {
         ArgumentNullException.ThrowIfNull(current);
-        PageLayoutDialogChrome.Configure(this, "Paragraph", 400);
+        // Keep the outer authority size in lockstep with ParagraphBreaksDialog.Prompt. The harness
+        // reserves the native WPF frame and supplies the remaining client height, so these tab panes
+        // must consume the same two client-area heights as WPF rather than growing from Avalonia's
+        // default control templates.
+        PageLayoutDialogChrome.Configure(this, "Paragraph", 380);
         var state = ParagraphBreaksDialogPlanner.BuildInitialState(current, DialogCulture);
         _left = NumberBox(state.LeftText);
         _right = NumberBox(state.RightText);
@@ -55,6 +59,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
             state.SpecialIndex,
             120,
             DialogChromeStyle);
+        _special.HorizontalAlignment = HorizontalAlignment.Stretch;
         _specialAmount = NumberBox(state.SpecialAmountText);
         _specialAmount.IsEnabled = state.SpecialAmountEnabled;
         _special.SelectionChanged += (_, _) =>
@@ -76,12 +81,12 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         {
             Margin = new Thickness(12, 12, 11, 0),
             Padding = new Thickness(0),
-            Height = 234,
+            Height = 253,
         };
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(_tabs, DialogChromeStyle);
         _tabs.Items.Add(new TabItem { Header = "Indents and Spacing", Width = 123, Content = BuildIndentsTab() });
         _tabs.Items.Add(new TabItem { Header = "Line and Page Breaks", Width = 122, Content = BuildBreaksTab() });
-        _tabs.SelectionChanged += (_, _) => _tabs.Height = _tabs.SelectedIndex == 1 ? 249 : 234;
+        _tabs.SelectionChanged += (_, _) => _tabs.Height = _tabs.SelectedIndex == 1 ? 235 : 253;
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(12, 8, 11, 0));
 
         var root = new StackPanel();

@@ -32,6 +32,7 @@ public sealed class ParagraphDialogVisualParityTests
             var special = Field<ComboBox>(dialog, "_special");
             var suppressLineNumbers = Field<CheckBox>(dialog, "_suppressLineNumbers");
             var contextualSpacing = Field<CheckBox>(dialog, "_contextualSpacing");
+            var specialAmount = Field<TextBox>(dialog, "_specialAmount");
             var buttons = dialog.GetLogicalDescendants()
                 .OfType<Button>()
                 .Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton)
@@ -39,7 +40,8 @@ public sealed class ParagraphDialogVisualParityTests
 
             var tabItems = tabs.Items.Cast<TabItem>().ToArray();
             tabItems.Should().HaveCount(2);
-            tabs.Height.Should().Be(234);
+            dialog.Width.Should().Be(380);
+            tabs.Height.Should().Be(253);
             tabItems[0].Header.Should().Be("Indents and Spacing");
             tabItems[1].Header.Should().Be("Line and Page Breaks");
             tabItems[0].Width.Should().Be(123);
@@ -51,13 +53,32 @@ public sealed class ParagraphDialogVisualParityTests
             after.Text.Should().Be(expected.SpaceAfterText);
             lineSpacing.Text.Should().Be(expected.LineSpacingText);
             special.SelectedIndex.Should().Be(expected.SpecialIndex);
+            special.HorizontalAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Stretch);
+            specialAmount.IsEnabled.Should().BeFalse();
             suppressLineNumbers.IsChecked.Should().Be(expected.SuppressLineNumbers);
             contextualSpacing.IsChecked.Should().Be(expected.ContextualSpacing);
+            contextualSpacing.IsVisible.Should().BeTrue();
             AutomationProperties.GetAutomationId(left).Should().Be("paragraph-left-indent");
 
             buttons.Select(button => button.Content?.ToString()).Should().Equal(LocalizedUiText.Ok, LocalizedUiText.Cancel);
             buttons.Single(button => button.IsDefault).Content.Should().Be(LocalizedUiText.Ok);
             buttons.Single(button => button.IsCancel).Content.Should().Be(LocalizedUiText.Cancel);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Line_and_page_breaks_tab_uses_the_Wpf_authority_height()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new ParagraphDialog(ParagraphFormatting.Default);
+            var tabs = Field<TabControl>(dialog, "_tabs");
+
+            tabs.SelectedIndex = 1;
+
+            tabs.Height.Should().Be(235);
+            tabs.SelectedItem.Should().BeOfType<TabItem>();
+            ((TabItem)tabs.SelectedItem!).Header.Should().Be("Line and Page Breaks");
         }, CancellationToken.None);
     }
 
