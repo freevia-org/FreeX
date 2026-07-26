@@ -3,6 +3,8 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Presenters;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -29,6 +31,94 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private const double PivotFieldFilterWindowWidth = 380;
+    private const double PivotFieldFilterWindowHeight = 470;
+    private const double PivotFieldFilterClientWidth = 364;
+    private const double PivotFieldFilterClientHeight = 431;
+
+    private static void ApplyPivotFilterButtonChrome(Button button, double width, bool isDefault = false)
+    {
+        ApplyPivotButtonChrome(button, width, isDefault);
+        button.Width = width;
+        button.Height = 20;
+        button.MinHeight = 20;
+        button.MaxHeight = 20;
+        button.Padding = new Thickness(8, 0);
+        button.CornerRadius = new CornerRadius(0);
+    }
+
+    private static void ApplyPivotFilterTextBoxChrome(TextBox textBox)
+    {
+        ApplyPivotTextBoxChrome(textBox);
+        textBox.Height = 18;
+        textBox.MinHeight = 18;
+        textBox.MaxHeight = 18;
+        textBox.CornerRadius = new CornerRadius(0);
+    }
+
+    private static void ApplyPivotFilterCheckBoxChrome(CheckBox checkBox)
+    {
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, PivotDialogChromeStyle);
+        if (!checkBox.IsThreeState)
+            return;
+
+        var checkMark = new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse("M 2 6 L 5 9 L 11 2"),
+            Stroke = Brush(31, 31, 31),
+            StrokeThickness = 1.4,
+            Width = 11,
+            Height = 10,
+            IsVisible = checkBox.IsChecked == true,
+        };
+        var indeterminateMark = new Border
+        {
+            Width = 7,
+            Height = 2,
+            Background = Brush(31, 31, 31),
+            IsVisible = checkBox.IsChecked is null,
+        };
+        checkBox.PropertyChanged += (_, args) =>
+        {
+            if (args.Property != ToggleButton.IsCheckedProperty)
+                return;
+
+            checkMark.IsVisible = checkBox.IsChecked == true;
+            indeterminateMark.IsVisible = checkBox.IsChecked is null;
+        };
+
+        checkBox.Template = new global::Avalonia.Controls.Templates.FuncControlTemplate<CheckBox>((control, _) =>
+        {
+            var indicator = new Border
+            {
+                Width = 13,
+                Height = 13,
+                Background = Brushes.White,
+                BorderBrush = Brush(112, 112, 112),
+                BorderThickness = new Thickness(1),
+                Child = new Panel
+                {
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                    VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+                    Children = { checkMark, indeterminateMark },
+                },
+            };
+            var content = new ContentPresenter
+            {
+                VerticalContentAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+            };
+            content.Bind(ContentPresenter.ContentProperty, new global::Avalonia.Data.Binding(nameof(ContentControl.Content)) { Source = control });
+            content.Bind(ContentPresenter.ContentTemplateProperty, new global::Avalonia.Data.Binding(nameof(ContentControl.ContentTemplate)) { Source = control });
+            return new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+                Spacing = 4,
+                Children = { indicator, content },
+            };
+        });
+    }
+
     /// <summary>
     /// Entry point for the field pane's header dropdown. Opens the manual item (checkbox) filter, the label
     /// filter, or the value filter dialog for <paramref name="target"/> depending on <paramref name="action"/>.
@@ -71,7 +161,8 @@ public sealed partial class MainWindow
     private async Task OpenPivotItemFilterDialogAsync(
         PivotTableModel pivot,
         IReadOnlyList<string> headers,
-        PivotHeaderDropdownTargetModel target)
+        PivotHeaderDropdownTargetModel target,
+        bool exposeActiveFilterActions = true)
     {
         if (_isOpening || _isSaving)
             return;
@@ -87,7 +178,7 @@ public sealed partial class MainWindow
         var current = FindFieldSelection(pivot, target);
         // No explicit selection (or "(All)") means every item is shown.
         var currentSet = PivotFieldFilterPlanner.ResolveAllowedItems(current);
-        var hasItemFilter = currentSet is { Count: > 0 } && currentSet.Count < members.Count;
+        var hasItemFilter = exposeActiveFilterActions && currentSet is { Count: > 0 } && currentSet.Count < members.Count;
         var labelFilter = pivot.LabelFilters.LastOrDefault(filter => filter.SourceFieldIndex == target.SourceFieldIndex);
         var valueFilter = pivot.ValueFilters.LastOrDefault(filter => filter.SourceFieldIndex == target.SourceFieldIndex);
 
@@ -102,9 +193,8 @@ public sealed partial class MainWindow
                 IsChecked = currentSet is null || currentSet.Contains(member),
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
-                MinHeight = 24,
             };
-            ApplyPivotCheckBoxChrome(box);
+            ApplyPivotFilterCheckBoxChrome(box);
             checkBoxes.Add(box);
             listPanel.Children.Add(box);
         }
@@ -115,11 +205,10 @@ public sealed partial class MainWindow
             IsChecked = checkBoxes.All(box => box.IsChecked == true),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
-            MinHeight = 24,
             Margin = new Thickness(2, 0, 0, 6),
             IsThreeState = true,
         };
-        ApplyPivotCheckBoxChrome(selectAll);
+        ApplyPivotFilterCheckBoxChrome(selectAll);
         var updatingSelection = false;
         void UpdateSelectAllState()
         {
@@ -152,10 +241,9 @@ public sealed partial class MainWindow
         // ── Search box filters the checkbox list (matches WPF Select Items tab) ──
         var searchBox = new TextBox
         {
-            MinWidth = 200,
-            PlaceholderText = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_Search")),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
-        ApplyPivotTextBoxChrome(searchBox);
+        ApplyPivotFilterTextBoxChrome(searchBox);
         AutomationProperties.SetAutomationId(searchBox, "PivotItemFilterSearchBox");
         AutomationProperties.SetName(searchBox, UiText.Get("PivotFieldFilter_Search"));
         searchBox.PropertyChanged += (_, e) =>
@@ -174,23 +262,23 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Format("MainWindowMessage_PivotFieldFilterTitle", caption),
-            Width = 380,
-            Height = 470,
-            MinWidth = 320,
-            MinHeight = 380,
-            MaxWidth = 480,
-            MaxHeight = 580,
-            Background = Brushes.White,
+            Width = PivotFieldFilterWindowWidth,
+            Height = PivotFieldFilterWindowHeight,
+            MinWidth = PivotFieldFilterWindowWidth,
+            MinHeight = PivotFieldFilterWindowHeight,
+            MaxWidth = PivotFieldFilterWindowWidth,
+            MaxHeight = PivotFieldFilterWindowHeight,
+            Background = Brushes.Transparent,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
         AutomationProperties.SetAutomationId(dialog, "PivotItemFilterDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
-        ApplyPivotButtonChrome(ok, 80, isDefault: true);
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotFilterButtonChrome(ok, 74, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotItemFilterOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
-        ApplyPivotButtonChrome(cancel, 80);
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyPivotFilterButtonChrome(cancel, 74);
         AutomationProperties.SetAutomationId(cancel, "PivotItemFilterCancelButton");
         cancel.Click += (_, _) => dialog.Close(0);
         ok.Click += (_, _) => dialog.Close(1);
@@ -203,20 +291,27 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             IsEnabled = hasItemFilter,
         };
-        ApplyPivotButtonChrome(clearItemFilterBtn, 120);
+        ApplyPivotFilterButtonChrome(clearItemFilterBtn, 120);
         AutomationProperties.SetAutomationId(clearItemFilterBtn, "PivotItemFilterClearItemFilterButton");
         clearItemFilterBtn.Click += (_, _) => dialog.Close(4);
 
         // ── Select Items tab content ───────────────────────────────────────────
-        var selectItemsPanel = new StackPanel { Spacing = 8, Margin = new Thickness(10) };
-        selectItemsPanel.Children.Add(new TextBlock
+        var selectItemsPanel = new Grid
+        {
+            Margin = new Thickness(10),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,*"),
+        };
+        var chooseItemsText = new TextBlock
         {
             Text = UiText.Get("PivotFieldFilter_ChooseItemsToShow"),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,
-        });
-        selectItemsPanel.Children.Add(new TextBlock
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        Grid.SetRow(chooseItemsText, 0);
+        selectItemsPanel.Children.Add(chooseItemsText);
+        var itemSummaryText = new TextBlock
         {
             Text = UiText.Get("PivotFieldFilter_NoItemFilter"),
             FontSize = 12,
@@ -224,36 +319,53 @@ public sealed partial class MainWindow
             FontWeight = FontWeight.SemiBold,
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
-        });
-        selectItemsPanel.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_Search")), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        Grid.SetRow(itemSummaryText, 1);
+        selectItemsPanel.Children.Add(itemSummaryText);
+        var searchLabel = new TextBlock
+        {
+            Text = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_Search")),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Foreground = HeaderForeground,
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+        Grid.SetRow(searchLabel, 2);
+        selectItemsPanel.Children.Add(searchLabel);
+        searchBox.Margin = new Thickness(0, 0, 0, 8);
+        Grid.SetRow(searchBox, 3);
         selectItemsPanel.Children.Add(searchBox);
+        Grid.SetRow(selectAll, 4);
         selectItemsPanel.Children.Add(selectAll);
+        clearItemFilterBtn.Margin = new Thickness(0, 0, 0, 8);
+        Grid.SetRow(clearItemFilterBtn, 5);
         selectItemsPanel.Children.Add(clearItemFilterBtn);
-        selectItemsPanel.Children.Add(new Border
+        var itemListBorder = new Border
         {
             BorderBrush = Brush(189, 189, 189),
             BorderThickness = new Thickness(1),
-            MinHeight = 180,
             Child = new ScrollViewer
             {
-                MaxHeight = 220,
                 Padding = new Thickness(4),
                 Content = listPanel,
             },
-        });
+        };
+        Grid.SetRow(itemListBorder, 6);
+        selectItemsPanel.Children.Add(itemListBorder);
 
         // ── Label Filters / Value Filters tabs (route to dedicated dialogs) ─────
         var labelFilterBtn = new Button
         {
-            Content = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_LabelFilter")),
+            Content = labelFilter is null ? "Add Label Filter..." : "Edit Label Filter...",
             MinWidth = 140,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
-        ApplyPivotButtonChrome(labelFilterBtn, 140);
+        ApplyPivotFilterButtonChrome(labelFilterBtn, 140);
         AutomationProperties.SetAutomationId(labelFilterBtn, "PivotItemFilterLabelFilterButton");
         labelFilterBtn.Click += (_, _) => dialog.Close(2);
 
-        var labelFiltersPanel = new StackPanel { Spacing = 12, Margin = new Thickness(10) };
+        var labelFiltersPanel = new StackPanel { Margin = new Thickness(10) };
         labelFiltersPanel.Children.Add(new TextBlock
         {
             Text = UiText.Get("PivotFieldFilter_NoLabelFilter"),
@@ -262,6 +374,7 @@ public sealed partial class MainWindow
             FontWeight = FontWeight.SemiBold,
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8),
         });
         labelFiltersPanel.Children.Add(new TextBlock
         {
@@ -270,6 +383,7 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12),
         });
         var removeLabelFilterBtn = new Button
         {
@@ -278,7 +392,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             IsEnabled = labelFilter is not null,
         };
-        ApplyPivotButtonChrome(removeLabelFilterBtn, 140);
+        ApplyPivotFilterButtonChrome(removeLabelFilterBtn, 140);
         AutomationProperties.SetAutomationId(removeLabelFilterBtn, "PivotItemFilterRemoveLabelFilterButton");
         removeLabelFilterBtn.Click += (_, _) => dialog.Close(6);
         labelFiltersPanel.Children.Add(new StackPanel
@@ -290,16 +404,16 @@ public sealed partial class MainWindow
 
         var valueFilterBtn = new Button
         {
-            Content = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_ValueFilter")),
+            Content = valueFilter is null ? "Add Value Filter..." : "Edit Value Filter...",
             MinWidth = 140,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             IsEnabled = pivot.DataFields.Count > 0,
         };
-        ApplyPivotButtonChrome(valueFilterBtn, 140);
+        ApplyPivotFilterButtonChrome(valueFilterBtn, 140);
         AutomationProperties.SetAutomationId(valueFilterBtn, "PivotItemFilterValueFilterButton");
         valueFilterBtn.Click += (_, _) => dialog.Close(3);
 
-        var valueFiltersPanel = new StackPanel { Spacing = 12, Margin = new Thickness(10) };
+        var valueFiltersPanel = new StackPanel { Margin = new Thickness(10) };
         valueFiltersPanel.Children.Add(new TextBlock
         {
             Text = UiText.Get("PivotFieldFilter_NoValueFilter"),
@@ -308,6 +422,7 @@ public sealed partial class MainWindow
             FontWeight = FontWeight.SemiBold,
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8),
         });
         valueFiltersPanel.Children.Add(new TextBlock
         {
@@ -316,6 +431,7 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12),
         });
         var valueFilterUnavailable = new TextBlock
         {
@@ -334,7 +450,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             IsEnabled = pivot.DataFields.Count > 0 && valueFilter is not null,
         };
-        ApplyPivotButtonChrome(removeValueFilterBtn, 140);
+        ApplyPivotFilterButtonChrome(removeValueFilterBtn, 140);
         AutomationProperties.SetAutomationId(removeValueFilterBtn, "PivotItemFilterRemoveValueFilterButton");
         removeValueFilterBtn.Click += (_, _) => dialog.Close(7);
         valueFiltersPanel.Children.Add(new StackPanel
@@ -365,7 +481,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             IsEnabled = hasItemFilter || labelFilter is not null || valueFilter is not null,
         };
-        ApplyPivotButtonChrome(clearFiltersBtn, 160);
+        ApplyPivotFilterButtonChrome(clearFiltersBtn, 160);
         AutomationProperties.SetAutomationId(clearFiltersBtn, "PivotItemFilterClearFiltersButton");
         clearFiltersBtn.Click += (_, _) => dialog.Close(5);
 
@@ -395,7 +511,15 @@ public sealed partial class MainWindow
         content.Children.Add(bottomGrid);
         content.Children.Add(tabs);
         KeyboardNavigation.SetTabNavigation(content, KeyboardNavigationMode.Cycle);
-        dialog.Content = content;
+        dialog.Content = new Border
+        {
+            Width = PivotFieldFilterClientWidth,
+            Height = PivotFieldFilterClientHeight,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
+            Background = Brushes.White,
+            Child = content,
+        };
         ConfigurePivotDialogLifecycle(dialog, searchBox, selectAllText: true);
         dialog.Opened += (_, _) =>
         {
@@ -849,7 +973,7 @@ public sealed partial class MainWindow
                 members.Add(text);
         }
 
-        return members;
+        return members.OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
     // Mirrors PivotTableRefreshService.KeyText so checkbox labels match the engine's group keys.

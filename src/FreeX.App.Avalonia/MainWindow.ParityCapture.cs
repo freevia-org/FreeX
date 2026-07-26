@@ -1657,7 +1657,7 @@ public sealed partial class MainWindow
             PivotHeaderArea.Row,
             IsActive: false);
 
-        await OpenPivotItemFilterDialogAsync(pivot, headers, target);
+        await OpenPivotItemFilterDialogAsync(pivot, headers, target, exposeActiveFilterActions: false);
     }
 
     private async Task ShowPivotValueFieldSettingsParityDialogAsync()
@@ -2077,7 +2077,7 @@ public sealed partial class MainWindow
                 targetRange.Start,
                 new CellAddress(sheetId, targetRange.Start.Row + 4, targetRange.Start.Col + 2)),
         };
-        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(0, SelectedItems: ["North", "South"]));
         pivot.DataFields.Add(new PivotDataFieldModel(4, "Sum of Revenue", "sum"));
         sheet.PivotTables.Add(pivot);
 

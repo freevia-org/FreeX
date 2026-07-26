@@ -31,6 +31,40 @@ public sealed class PivotFieldFilterSourceTests
         source.Should().NotContain("filter.SourceFieldIndex is null || filter.SourceFieldIndex == target.SourceFieldIndex");
     }
 
+    [Fact]
+    public void ItemFilterDialog_EncodesWpfClientGeometryAndCompactControlsLocally()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs"));
+
+        source.Should().Contain("PivotFieldFilterWindowWidth = 380");
+        source.Should().Contain("PivotFieldFilterWindowHeight = 470");
+        source.Should().Contain("PivotFieldFilterClientWidth = 364");
+        source.Should().Contain("PivotFieldFilterClientHeight = 431");
+        source.Should().Contain("new Thickness(12)");
+        source.Should().Contain("new Thickness(10)");
+        source.Should().Contain("new Thickness(0, 10, 0, 0)");
+        source.Should().Contain("ApplyPivotFilterButtonChrome(ok, 74, isDefault: true)");
+        source.Should().Contain("ApplyPivotFilterButtonChrome(cancel, 74)");
+        source.Should().Contain("button.CornerRadius = new CornerRadius(0)");
+        source.Should().Contain("textBox.CornerRadius = new CornerRadius(0)");
+        source.Should().Contain("IsVisible = checkBox.IsChecked is null");
+        source.Should().Contain("Content = labelFilter is null ? \"Add Label Filter...\" : \"Edit Label Filter...\"");
+        source.Should().Contain("Content = valueFilter is null ? \"Add Value Filter...\" : \"Edit Value Filter...\"");
+        source.Should().NotContain("PlaceholderText = StripDisplayMnemonic(UiText.Get(\"PivotFieldFilter_Search\"))");
+    }
+
+    [Fact]
+    public void ParityPivotFixture_UsesWpfPartialSelectionAndMemberOrder()
+    {
+        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var filterSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs"));
+
+        captureSource.Should().Contain("new PivotFieldModel(0, SelectedItems: [\"North\", \"South\"])");
+        captureSource.Should().Contain("exposeActiveFilterActions: false");
+        filterSource.Should().Contain("ResolveSelectAllState(");
+        filterSource.Should().Contain("members.OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase)");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = AppContext.BaseDirectory;
