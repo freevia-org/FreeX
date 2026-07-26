@@ -155,6 +155,14 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     /// </summary>
     public byte[] PngBytes => Bytes;
 
+    /// <summary>
+    /// Creates an independent image model carrying the same source bytes and every placement, crop,
+    /// adjustment, effect, and accessibility property. The media bytes are immutable document content and may
+    /// be shared; the mutable image object itself is not shared, so commands such as resize or crop on an
+    /// inserted copy cannot alter the source document.
+    /// </summary>
+    public InlineImage Clone() => (InlineImage)MemberwiseClone();
+
     public double WidthPt { get; set; } = widthPt;
     public double HeightPt { get; set; } = heightPt;
 
