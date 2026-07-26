@@ -113,6 +113,7 @@ internal static class FreePRibbonCommands
         Action?             onEditChartDataTableOptions = null,
         Action?             onEditChartBubbleOptions = null,
         Action?             onEditChartPieOptions = null,
+        Action?             onEditChartPlotStyleOptions = null,
         Action?             onEditChart3DViewOptions = null,
         Action?             onEditChartTextOptions = null,
         Action?             onEditChartAreaOptions = null,
@@ -528,6 +529,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onEditChartBubbleOptions?.Invoke()));
         registry.Register(ChartPieOptionsPlanner.CommandId,
             new ActionRibbonCommand(() => onEditChartPieOptions?.Invoke()));
+        registry.Register(ChartPlotStyleOptionsPlanner.CommandId,
+            new ActionRibbonCommand(() => onEditChartPlotStyleOptions?.Invoke()));
         registry.Register(Chart3DViewOptionsPlanner.CommandId,
             new ActionRibbonCommand(() => onEditChart3DViewOptions?.Invoke()));
         registry.Register(ChartTextOptionsPlanner.CommandId,

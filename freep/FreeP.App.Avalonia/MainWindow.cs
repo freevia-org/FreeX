@@ -2237,6 +2237,7 @@ public sealed partial class MainWindow : Window
         r.Register(ChartDataTableOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDataTableOptionsDialog));
         r.Register(ChartBubbleOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartBubbleOptionsDialog));
         r.Register(ChartPieOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartPieOptionsDialog));
+        r.Register(ChartPlotStyleOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartPlotStyleOptionsDialog));
         r.Register(Chart3DViewOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChart3DViewOptionsDialog));
         r.Register(ChartTextOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartTextOptionsDialog));
         r.Register(ChartAreaOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAreaOptionsDialog));
@@ -3140,6 +3141,21 @@ public sealed partial class MainWindow : Window
             return;
 
         var dialog = new ChartPieOptionsDialog(Editor);
+        if (IsVisible)
+        {
+            _ = dialog.ShowDialog<bool?>(this);
+            return;
+        }
+
+        dialog.Show();
+    }
+
+    internal void OpenChartPlotStyleOptionsDialog()
+    {
+        if (Editor.SelectedChart is not { ChartType: ChartType.Scatter or ChartType.Radar })
+            return;
+
+        var dialog = new ChartPlotStyleOptionsDialog(Editor);
         if (IsVisible)
         {
             _ = dialog.ShowDialog<bool?>(this);
