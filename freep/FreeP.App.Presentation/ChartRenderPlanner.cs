@@ -380,7 +380,8 @@ public readonly record struct ChartTrendlinePrimitive(
     IReadOnlyList<ChartLineSegmentPrimitive> Segments,
     ChartStrokePlan Stroke,
     bool DisplayEquation,
-    bool DisplayRSquared);
+    bool DisplayRSquared,
+    IReadOnlyList<ChartTextPlan> Labels);
 
 public readonly record struct ChartAreaSeriesPrimitive(
     int SeriesIndex,
@@ -1693,6 +1694,13 @@ public static partial class ChartRenderPlanner
             if (values.Count < 2)
                 continue;
 
+            var labels = BuildTrendlineLabels(
+                plot,
+                seriesIndex,
+                samples,
+                trendline,
+                stroke);
+
             var segments = new List<ChartLineSegmentPrimitive>();
             ChartPlanPoint? previous = null;
             int segmentIndex = 0;
@@ -1736,7 +1744,8 @@ public static partial class ChartRenderPlanner
                     segments,
                     stroke,
                     trendline.DisplayEquation,
-                    trendline.DisplayRSquared));
+                    trendline.DisplayRSquared,
+                    labels));
             }
         }
 
@@ -1758,35 +1767,7 @@ public static partial class ChartRenderPlanner
             }).ToArray();
         }
 
-        var fitSamples = samples.ToList();
-        Func<double, double>? evaluator = null;
-        switch (trendline.Type)
-        {
-            case ChartTrendlineType.Exponential:
-                fitSamples = fitSamples.Where(item => item.Y > 0).ToList();
-                if (fitSamples.Count >= 2 && TryFitPolynomial(fitSamples.Select(item => (item.X, Math.Log(item.Y))).ToArray(), 1, out var exponential))
-                    evaluator = x => Math.Exp(EvaluatePolynomial(exponential, x));
-                break;
-            case ChartTrendlineType.Logarithmic:
-                fitSamples = fitSamples.Where(item => item.X > 0).ToList();
-                if (fitSamples.Count >= 2 && TryFitPolynomial(fitSamples.Select(item => (Math.Log(item.X), item.Y)).ToArray(), 1, out var logarithmic))
-                    evaluator = x => EvaluatePolynomial(logarithmic, Math.Log(Math.Max(double.Epsilon, x)));
-                break;
-            case ChartTrendlineType.Power:
-                fitSamples = fitSamples.Where(item => item.X > 0 && item.Y > 0).ToList();
-                if (fitSamples.Count >= 2 && TryFitPolynomial(fitSamples.Select(item => (Math.Log(item.X), Math.Log(item.Y))).ToArray(), 1, out var power))
-                    evaluator = x => Math.Exp(EvaluatePolynomial(power, Math.Log(Math.Max(double.Epsilon, x))));
-                break;
-            default:
-                int degree = trendline.Type == ChartTrendlineType.Polynomial
-                    ? Math.Clamp(trendline.PolynomialOrder ?? 2, 2, 6)
-                    : 1;
-                if (TryFitPolynomial(fitSamples, Math.Min(degree, fitSamples.Count - 1), out var coefficients))
-                    evaluator = x => EvaluatePolynomial(coefficients, x);
-                break;
-        }
-
-        if (evaluator is null || fitSamples.Count < 2)
+        if (!TryBuildTrendlineFit(samples, trendline, out var fitSamples, out var evaluator, out _))
             return Array.Empty<(double X, double Y)>();
 
         double minX = fitSamples.Min(item => item.X) - Math.Max(0, trendline.Backward ?? 0);
@@ -1796,13 +1777,152 @@ public static partial class ChartRenderPlanner
         for (int index = 0; index < sampleCount; index++)
         {
             double x = minX + (maxX - minX) * index / (sampleCount - 1);
-            double y = evaluator(x);
+            double y = evaluator!(x);
             if (double.IsFinite(x) && double.IsFinite(y))
                 result.Add((x, y));
         }
 
         return result;
     }
+
+    private static bool TryBuildTrendlineFit(
+        IReadOnlyList<(double X, double Y)> samples,
+        ChartTrendline trendline,
+        out List<(double X, double Y)> fitSamples,
+        out Func<double, double>? evaluator,
+        out string? equation)
+    {
+        fitSamples = samples.ToList();
+        evaluator = null;
+        equation = null;
+        switch (trendline.Type)
+        {
+            case ChartTrendlineType.Exponential:
+                fitSamples = fitSamples.Where(item => item.Y > 0).ToList();
+                if (fitSamples.Count >= 2 && TryFitPolynomial(
+                    fitSamples.Select(item => (item.X, Math.Log(item.Y))).ToArray(),
+                    1,
+                    out var exponential))
+                {
+                    evaluator = x => Math.Exp(EvaluatePolynomial(exponential, x));
+                    equation = $"y = {FormatTrendlineNumber(Math.Exp(exponential[0]))}e^({FormatTrendlineNumber(exponential[1])}x)";
+                }
+                break;
+            case ChartTrendlineType.Logarithmic:
+                fitSamples = fitSamples.Where(item => item.X > 0).ToList();
+                if (fitSamples.Count >= 2 && TryFitPolynomial(
+                    fitSamples.Select(item => (Math.Log(item.X), item.Y)).ToArray(),
+                    1,
+                    out var logarithmic))
+                {
+                    evaluator = x => EvaluatePolynomial(logarithmic, Math.Log(Math.Max(double.Epsilon, x)));
+                    equation = $"y = {FormatTrendlineNumber(logarithmic[0])} + {FormatTrendlineNumber(logarithmic[1])}ln(x)";
+                }
+                break;
+            case ChartTrendlineType.Power:
+                fitSamples = fitSamples.Where(item => item.X > 0 && item.Y > 0).ToList();
+                if (fitSamples.Count >= 2 && TryFitPolynomial(
+                    fitSamples.Select(item => (Math.Log(item.X), Math.Log(item.Y))).ToArray(),
+                    1,
+                    out var power))
+                {
+                    evaluator = x => Math.Exp(EvaluatePolynomial(power, Math.Log(Math.Max(double.Epsilon, x))));
+                    equation = $"y = {FormatTrendlineNumber(Math.Exp(power[0]))}x^{FormatTrendlineNumber(power[1])}";
+                }
+                break;
+            default:
+                int degree = trendline.Type == ChartTrendlineType.Polynomial
+                    ? Math.Clamp(trendline.PolynomialOrder ?? 2, 2, 6)
+                    : 1;
+                degree = Math.Min(degree, fitSamples.Count - 1);
+                if (TryFitPolynomial(fitSamples, degree, out var coefficients))
+                {
+                    evaluator = x => EvaluatePolynomial(coefficients, x);
+                    equation = BuildPolynomialEquation(coefficients);
+                }
+                break;
+        }
+
+        return evaluator is not null && fitSamples.Count >= 2;
+    }
+
+    private static IReadOnlyList<ChartTextPlan> BuildTrendlineLabels(
+        ChartPlanRect plot,
+        int seriesIndex,
+        IReadOnlyList<(double X, double Y)> samples,
+        ChartTrendline trendline,
+        ChartStrokePlan stroke)
+    {
+        if (trendline.Type == ChartTrendlineType.MovingAverage ||
+            (!trendline.DisplayEquation && !trendline.DisplayRSquared) ||
+            !TryBuildTrendlineFit(samples, trendline, out var fitSamples, out var evaluator, out var equation))
+        {
+            return Array.Empty<ChartTextPlan>();
+        }
+
+        var labels = new List<ChartTextPlan>();
+        double labelY = plot.Y + 4.0 + seriesIndex * 24.0;
+        var bounds = new ChartPlanRect(plot.X + 4.0, labelY, Math.Max(40.0, plot.Width - 8.0), 11.0);
+        if (trendline.DisplayEquation && !string.IsNullOrWhiteSpace(equation))
+        {
+            labels.Add(new ChartTextPlan(
+                equation,
+                bounds,
+                IsBold: false,
+                FontSize: 7.0,
+                Alignment: ChartPlanTextAlignment.Left)
+            {
+                TextColor = stroke.Color
+            });
+            labelY += 11.0;
+            bounds = bounds with { Y = labelY };
+        }
+
+        if (trendline.DisplayRSquared)
+        {
+            double mean = fitSamples.Average(item => item.Y);
+            double total = fitSamples.Sum(item => Math.Pow(item.Y - mean, 2));
+            double residual = fitSamples.Sum(item => Math.Pow(item.Y - evaluator!(item.X), 2));
+            double rSquared = total > 1e-12 ? Math.Clamp(1.0 - residual / total, 0.0, 1.0) : 1.0;
+            labels.Add(new ChartTextPlan(
+                $"R^2 = {rSquared.ToString("0.###", CultureInfo.InvariantCulture)}",
+                bounds,
+                IsBold: false,
+                FontSize: 7.0,
+                Alignment: ChartPlanTextAlignment.Left)
+            {
+                TextColor = stroke.Color
+            });
+        }
+
+        return labels;
+    }
+
+    private static string BuildPolynomialEquation(IReadOnlyList<double> coefficients)
+    {
+        var terms = new List<string>();
+        for (int power = coefficients.Count - 1; power >= 0; power--)
+        {
+            double coefficient = coefficients[power];
+            if (Math.Abs(coefficient) < 0.0005)
+                continue;
+            string magnitude = FormatTrendlineNumber(Math.Abs(coefficient));
+            string term = power switch
+            {
+                0 => magnitude,
+                1 => $"{magnitude}x",
+                _ => $"{magnitude}x^{power}"
+            };
+            terms.Add(terms.Count == 0
+                ? coefficient < 0 ? $"-{term}" : term
+                : coefficient < 0 ? $"- {term}" : $"+ {term}");
+        }
+
+        return terms.Count == 0 ? "y = 0" : $"y = {string.Join(" ", terms)}";
+    }
+
+    private static string FormatTrendlineNumber(double value) =>
+        value.ToString("0.###", CultureInfo.InvariantCulture);
 
     private static bool TryFitPolynomial(
         IReadOnlyList<(double X, double Y)> samples,

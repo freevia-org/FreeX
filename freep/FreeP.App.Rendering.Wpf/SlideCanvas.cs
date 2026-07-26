@@ -1194,6 +1194,20 @@ public sealed class SlideCanvas : FrameworkElement
                 textColor: item.Label.TextColor,
                 horizontalScale: item.Label.HorizontalScale);
         }
+
+        foreach (var trendline in scene.Trendlines)
+        {
+            foreach (var label in trendline.Labels)
+            {
+                DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
+                    label.IsBold,
+                    label.FontSize,
+                    ToTextAlignment(label.Alignment),
+                    textColor: label.TextColor,
+                    fontFamily: label.FontFamily,
+                    horizontalScale: label.HorizontalScale);
+            }
+        }
     }
 
     private static void RenderColumnChart(DrawingContext dc, ChartScenePlan scene)
