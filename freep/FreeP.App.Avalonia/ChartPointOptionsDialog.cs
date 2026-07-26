@@ -25,6 +25,7 @@ internal sealed class ChartPointOptionsDialog : Window
     private readonly CheckBox _showCategoryLabelsCheck;
     private readonly CheckBox _showSeriesLabelsCheck;
     private readonly CheckBox _showLegendKeysCheck;
+    private readonly CheckBox _showBubbleSizeCheck;
     private readonly ComboBox _labelPositionCombo;
     private readonly TextBox _labelNumberFormatBox;
     private readonly TextBox _labelSeparatorBox;
@@ -78,6 +79,7 @@ internal sealed class ChartPointOptionsDialog : Window
         _showCategoryLabelsCheck = new CheckBox { Content = surface.CategoryLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showSeriesLabelsCheck = new CheckBox { Content = surface.SeriesLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showLegendKeysCheck = new CheckBox { Content = surface.LegendKeysLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _showBubbleSizeCheck = new CheckBox { Content = surface.BubbleSizeLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
         _labelPositionCombo = new ComboBox
         {
             ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions.Select(option => option.Label).ToArray(),
@@ -129,6 +131,7 @@ internal sealed class ChartPointOptionsDialog : Window
                 _showCategoryLabelsCheck,
                 _showSeriesLabelsCheck,
                 _showLegendKeysCheck,
+                _showBubbleSizeCheck,
                 MakeRow(surface.LabelPositionLabel, _labelPositionCombo),
                 MakeRow(surface.NumberFormatLabel, _labelNumberFormatBox),
                 MakeRow(surface.SeparatorLabel, _labelSeparatorBox),
@@ -172,7 +175,8 @@ internal sealed class ChartPointOptionsDialog : Window
         double? labelFontSizePt = null,
         bool? labelBold = null,
         bool? labelItalic = null,
-        string? labelColor = null)
+        string? labelColor = null,
+        bool showBubbleSize = false)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         RefreshPoints();
@@ -186,6 +190,7 @@ internal sealed class ChartPointOptionsDialog : Window
         _showCategoryLabelsCheck.IsChecked = showCategoryLabels;
         _showSeriesLabelsCheck.IsChecked = showSeriesLabels;
         _showLegendKeysCheck.IsChecked = showLegendKeys;
+        _showBubbleSizeCheck.IsChecked = showBubbleSize;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
         _labelNumberFormatBox.Text = labelNumberFormat ?? string.Empty;
         _labelSeparatorBox.Text = labelSeparator ?? string.Empty;
@@ -228,6 +233,7 @@ internal sealed class ChartPointOptionsDialog : Window
         _showCategoryLabelsCheck.IsChecked = _planner.ShowCategoryLabels;
         _showSeriesLabelsCheck.IsChecked = _planner.ShowSeriesLabels;
         _showLegendKeysCheck.IsChecked = _planner.ShowLegendKeys;
+        _showBubbleSizeCheck.IsChecked = _planner.ShowBubbleSize;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(_planner.LabelPosition);
         _labelNumberFormatBox.Text = _planner.LabelNumberFormat;
         _labelSeparatorBox.Text = _planner.LabelSeparator;
@@ -251,6 +257,7 @@ internal sealed class ChartPointOptionsDialog : Window
         _planner.SetShowCategoryLabels(_showCategoryLabelsCheck.IsChecked == true);
         _planner.SetShowSeriesLabels(_showSeriesLabelsCheck.IsChecked == true);
         _planner.SetShowLegendKeys(_showLegendKeysCheck.IsChecked == true);
+        _planner.SetShowBubbleSize(_showBubbleSizeCheck.IsChecked == true);
         if (_labelPositionCombo.SelectedIndex >= 0 &&
             _labelPositionCombo.SelectedIndex < ChartDisplayOptionsPlanner.LabelPositionOptions.Count)
             _planner.SetLabelPosition(ChartDisplayOptionsPlanner.LabelPositionOptions[_labelPositionCombo.SelectedIndex].Value);

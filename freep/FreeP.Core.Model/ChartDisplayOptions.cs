@@ -24,4 +24,5 @@ public sealed record ChartDisplayOptions(
     bool? VaryColors = null,
     bool? LegendOverlay = null,
     bool? HighLowLines = null,
-    ChartTextStyle? LabelTextStyle = null);
+    ChartTextStyle? LabelTextStyle = null,
+    bool ShowBubbleSize = false);

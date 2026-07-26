@@ -496,6 +496,35 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Chart-level font family, size, color, bold, and italic controls now round-trip through c:txPr/c:rich and one undoable edit in both hosts; PowerPoint-authoritative chart visual baselines remain deferred."),
         new(
+            EvidenceId: "freep.chart.bubble-size-data-labels",
+            Area: "Chart bubble-size data-label authoring",
+            Status: "shared-model-and-host-evidence",
+            HostCoverage: "WPF/Avalonia consume shared chart, series, and point data-label planners and render bubble-size values from BubbleSizes; no renderer-local chart-label policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-bubble-size-data-labels-20260726.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.Model/ChartShape.cs",
+                "freep/FreeP.Core.Model/ChartDisplayOptions.cs",
+                "freep/FreeP.Core.Model/ChartSeriesOptions.cs",
+                "freep/FreeP.Core.Model/ChartPointOptions.cs",
+                "freep/FreeP.Core.IO/PptxChartReader.cs",
+                "freep/FreeP.Core.IO/PptxChartWriter.cs",
+                "freep/FreeP.App.Presentation/ChartRenderPlanner.cs",
+                "freep/FreeP.App.Presentation/ChartDisplayOptionsPlanner.cs",
+                "freep/FreeP.App.Presentation/ChartSeriesOptionsPlanner.cs",
+                "freep/FreeP.App.Presentation/ChartPointOptionsPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartDataCommandTests.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartDataDialogPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/ChartDataLabelsTests.cs",
+                "freep/FreeP.App.Host.Tests/ChartDataDialogTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "Chart, series, and point bubble-size authoring now round-trips through c:showBubbleSize, remains undoable, and renders from source BubbleSizes in both hosts. PowerPoint-authoritative bubble-label typography and placement baselines remain deferred."),
+        new(
             EvidenceId: "freep.chart.series-data-labels",
             Area: "Chart per-series data-label authoring",
             Status: "shared-model-and-host-evidence",

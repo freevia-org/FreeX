@@ -503,6 +503,19 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void FormatDataLabel_IncludesBubbleSizeWhenRequested()
+    {
+        var labels = new ChartDataLabels
+        {
+            ShowValue = true,
+            ShowBubbleSize = true,
+        };
+
+        ChartRenderPlanner.FormatDataLabel(labels, 4, 0, "Q1", "Bubbles", 12)
+            .Should().Be("4 12");
+    }
+
+    [Fact]
     public void FormatDataLabel_UsesAuthoredSeparatorForImportedPowerPointLabels()
     {
         var labels = new ChartDataLabels
