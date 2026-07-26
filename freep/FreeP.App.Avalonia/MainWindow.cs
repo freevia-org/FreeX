@@ -90,6 +90,8 @@ public sealed partial class MainWindow : Window
         (ShapeChangePlanner.TriangleCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Triangle)),
         (ShapeChangePlanner.DiamondCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Diamond)),
         (ShapeChangePlanner.RightArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.RightArrow)),
+        (ShapeChangePlanner.HexagonCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Hexagon)),
+        (ShapeChangePlanner.Star5CommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Star5)),
         ("freep.arrange.bring-to-front", static editor => editor.BringToFront()),
         ("freep.arrange.bring-forward", static editor => editor.BringForward()),
         ("freep.arrange.send-backward", static editor => editor.SendBackward()),
