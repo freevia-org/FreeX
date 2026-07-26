@@ -1416,7 +1416,7 @@ public sealed class DocumentView : RichTextBox
         foreach (var (id, style) in source.Styles)
             _model.Styles.TryAdd(id, style);
 
-        var clones = DocumentMerge.CloneBlocks(source);
+        var clones = DocumentMerge.CloneBlocksForInsertion(_model, source);
         if (clones.Count == 0)
             return;
 
@@ -1508,7 +1508,7 @@ public sealed class DocumentView : RichTextBox
         foreach (var (id, style) in source.Styles)
             _model.Styles.TryAdd(id, style);
 
-        var clones = DocumentMerge.CloneBlocks(source);
+        var clones = DocumentMerge.CloneBlocksForInsertion(_model, source);
         if (clones.Count == 0)
             return false;
 

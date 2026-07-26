@@ -375,6 +375,15 @@ public static class FreePRibbon
             group.Medium(ChartTextOptionsPlanner.CommandId, FreePRibbonText.ChartTextOptionsLabel, RibbonCommandIconKind.Font, FreePRibbonText.ChartTextOptionsKeyTip);
             group.Medium(ChartAreaOptionsPlanner.CommandId, FreePRibbonText.ChartAreaOptionsLabel, RibbonCommandIconKind.Color, FreePRibbonText.ChartAreaOptionsKeyTip);
         });
+        tab.Group("smartart-insert", FreePRibbonText.SmartArtLayoutsGroup.Label, FreePRibbonText.SmartArtLayoutsGroup.KeyTip, 91, group =>
+        {
+            group.Large(SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId,
+                FreePRibbonText.SmartArtBasicProcessCommand.Label,
+                RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtBasicProcessCommand.KeyTip,
+                dropdown: true,
+                menu: BuildSmartArtInsertMenu);
+        });
         tab.Group("links", FreePRibbonText.LinksGroupLabel, FreePRibbonText.LinksGroupKeyTip, 92, group =>
         {
             group.Large("freep.insert-link", FreePRibbonText.InsertLinkLabel, RibbonCommandIconKind.Link, FreePRibbonText.InsertLinkKeyTip);
@@ -414,6 +423,20 @@ public static class FreePRibbon
             group.Medium(SlideObjectInsertionPlanner.CurvedConnectorCommandId, FreePRibbonText.CurvedConnectorLabel,
                 RibbonCommandIconKind.Line, FreePRibbonText.CurvedConnectorKeyTip);
         });
+    }
+
+    private static void BuildSmartArtInsertMenu(RibbonMenuBuilder menu)
+    {
+        var index = 0;
+        foreach (var preset in SlideObjectInsertionPlanner.InsertableSmartArtLayouts)
+        {
+            menu.Item(
+                preset == SmartArtLayoutPreset.BasicProcess
+                    ? SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId
+                    : SlideObjectInsertionPlanner.SmartArtLayoutCommandId(preset),
+                SlideObjectInsertionPlanner.SmartArtLayoutDisplayName(preset),
+                $"S{++index}");
+        }
     }
 
     private static void AddDesignGroups(RibbonTabBuilder tab)

@@ -1,7 +1,263 @@
+using System.Xml.Linq;
+
 namespace FreeW.Core.Model.Tests;
 
 public class DocumentMergeTests
 {
+    [Fact]
+    public void Merge_TransfersPreservedNumberingWithCollisionSafeIds()
+    {
+        var wordprocessing = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var source = new TextDocument();
+        source.Preserved.OriginalNumbering = Numbering(wordprocessing, 12, 12, "source");
+        source.Styles["RawList"] = new DocumentStyle
+        {
+            Id = "RawList", Name = "Source raw list", PreservedNumbering = new PreservedNumbering(12, 2)
+        };
+        var sourceParagraph = new Paragraph("Source item")
+        {
+            StyleId = "RawList",
+            PreservedNumbering = new PreservedNumbering(12, 1)
+        };
+        sourceParagraph.Runs.Add(Run.FootnoteReference(1));
+        source.Blocks.Add(sourceParagraph);
+        var sourceFootnote = new Footnote(1, "Source note");
+        sourceFootnote.Content[0].PreservedNumbering = new PreservedNumbering(12, 0);
+        source.Footnotes[1] = sourceFootnote;
+
+        var target = new TextDocument();
+        target.Preserved.OriginalNumbering = Numbering(wordprocessing, 12, 12, "target");
+        target.Styles["RawList"] = new DocumentStyle { Id = "RawList", Name = "Target raw list" };
+        target.Blocks.Add(new Paragraph("Target item") { PreservedNumbering = new PreservedNumbering(12, 0) });
+
+        var inserted = DocumentMerge.Merge(target, target.Blocks.Count, source);
+
+        inserted.Single().Should().BeOfType<Paragraph>().Which.PreservedNumbering.Should().Be(new PreservedNumbering(13, 1));
+        inserted.Single().Should().BeOfType<Paragraph>().Which.StyleId.Should().Be("RawList_FreeW1");
+        target.Styles["RawList_FreeW1"].PreservedNumbering.Should().Be(new PreservedNumbering(13, 2));
+        target.Footnotes[1].Content.Single().PreservedNumbering.Should().Be(new PreservedNumbering(13, 0));
+        target.Blocks[0].Should().BeOfType<Paragraph>().Which.PreservedNumbering.Should().Be(new PreservedNumbering(12, 0));
+        target.Preserved.OriginalNumbering!.Elements(wordprocessing + "num")
+            .Select(element => (string?)element.Attribute(wordprocessing + "numId"))
+            .Should().Equal("12", "13");
+        source.Blocks.Single().Should().BeOfType<Paragraph>().Which.PreservedNumbering.Should().Be(new PreservedNumbering(12, 1));
+        source.Styles["RawList"].PreservedNumbering.Should().Be(new PreservedNumbering(12, 2));
+    }
+
+    [Fact]
+    public void Merge_TransfersConflictingStyleClosureWithoutOverwritingTargetStyles()
+    {
+        var source = new TextDocument();
+        source.Styles["Base"] = new DocumentStyle
+        {
+            Id = "Base", Name = "Source base", Run = new RunFormatting { ColorHex = "#AA0000" }
+        };
+        source.Styles["Follow"] = new DocumentStyle
+        {
+            Id = "Follow", Name = "Source follow", Paragraph = new ParagraphFormatting { SpaceAfterPt = 24 }
+        };
+        source.Styles["SourceStyle"] = new DocumentStyle
+        {
+            Id = "SourceStyle", Name = "Source style", BasedOnStyleId = "Base", NextStyleId = "Follow",
+            Run = new RunFormatting { Bold = true }
+        };
+        source.Styles["TableSource"] = new DocumentStyle
+        {
+            Id = "TableSource", Name = "Source table", Type = StyleType.Table, TableBorders = true
+        };
+        source.Blocks.Add(new Paragraph("Source paragraph") { StyleId = "SourceStyle" });
+        var sourceTable = Table.Create(1, 1);
+        sourceTable.TableStyleId = "TableSource";
+        sourceTable.PreferredWidthPt = 360;
+        sourceTable.Alignment = TableAlignment.Center;
+        sourceTable.TextWrapping = true;
+        sourceTable.DefaultCellMargins = new TableCellMargins(1, 2, 3, 4);
+        sourceTable.CellSpacingPt = 2;
+        sourceTable.AutoFit = AutoFitMode.Contents;
+        sourceTable.Rows[0].HeightPt = 42;
+        sourceTable.Rows[0].HeightRule = TableRowHeightRule.Exact;
+        sourceTable.Rows[0].AllowBreakAcrossPages = false;
+        sourceTable.Rows[0].Cells[0].VerticalAlignment = TableCellVerticalAlignment.Center;
+        sourceTable.Rows[0].Cells[0].Margins = new TableCellMargins(5, 6, 7, 8);
+        sourceTable.Rows[0].Cells[0].TextDirection = CellTextDirection.Rotate90;
+        source.Blocks.Add(sourceTable);
+
+        var target = new TextDocument();
+        target.Styles["Base"] = new DocumentStyle { Id = "Base", Name = "Target base", Run = new RunFormatting { ColorHex = "#0000AA" } };
+        target.Styles["Follow"] = new DocumentStyle { Id = "Follow", Name = "Target follow" };
+        target.Styles["SourceStyle"] = new DocumentStyle { Id = "SourceStyle", Name = "Target paragraph" };
+        target.Styles["TableSource"] = new DocumentStyle { Id = "TableSource", Name = "Target table", Type = StyleType.Table };
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        inserted[0].Should().BeOfType<Paragraph>().Which.StyleId.Should().Be("SourceStyle_FreeW1");
+        var insertedTable = inserted[1].Should().BeOfType<Table>().Subject;
+        insertedTable.TableStyleId.Should().Be("TableSource_FreeW1");
+        insertedTable.PreferredWidthPt.Should().Be(360);
+        insertedTable.Alignment.Should().Be(TableAlignment.Center);
+        insertedTable.TextWrapping.Should().BeTrue();
+        insertedTable.DefaultCellMargins.Should().Be(new TableCellMargins(1, 2, 3, 4));
+        insertedTable.CellSpacingPt.Should().Be(2);
+        insertedTable.AutoFit.Should().Be(AutoFitMode.Contents);
+        insertedTable.Rows[0].HeightPt.Should().Be(42);
+        insertedTable.Rows[0].HeightRule.Should().Be(TableRowHeightRule.Exact);
+        insertedTable.Rows[0].AllowBreakAcrossPages.Should().BeFalse();
+        insertedTable.Rows[0].Cells[0].VerticalAlignment.Should().Be(TableCellVerticalAlignment.Center);
+        insertedTable.Rows[0].Cells[0].Margins.Should().Be(new TableCellMargins(5, 6, 7, 8));
+        insertedTable.Rows[0].Cells[0].TextDirection.Should().Be(CellTextDirection.Rotate90);
+        target.Styles["SourceStyle_FreeW1"].BasedOnStyleId.Should().Be("Base_FreeW1");
+        target.Styles["SourceStyle_FreeW1"].NextStyleId.Should().Be("Follow_FreeW1");
+        target.Styles["Base_FreeW1"].Run.ColorHex.Should().Be("#AA0000");
+        target.Styles["TableSource_FreeW1"].TableBorders.Should().BeTrue();
+        target.Styles["SourceStyle"].Name.Should().Be("Target paragraph");
+        source.Styles["SourceStyle"].BasedOnStyleId.Should().Be("Base");
+    }
+
+    [Fact]
+    public void Merge_RemapsCollidingBookmarksAndTheirInternalReferences()
+    {
+        var source = new TextDocument();
+        var sourceParagraph = new Paragraph("Source target");
+        sourceParagraph.BookmarkNames.Add("Shared");
+        sourceParagraph.BookmarkNames.Add("SourceOnly");
+        sourceParagraph.Runs.Add(new Run("jump") { HyperlinkAnchor = "Shared" });
+        sourceParagraph.Runs.Add(Run.CrossReferenceFieldRun(
+            new CrossReferenceField(CrossRefFieldKind.Ref, "Shared", CrossRefInsertAs.Text, Hyperlink: true),
+            "Source target"));
+        sourceParagraph.Runs.Add(Run.FootnoteReference(1));
+        source.Blocks.Add(sourceParagraph);
+        var footnote = new Footnote(1, "Source note");
+        footnote.Content[0].Runs.Add(new Run("jump from note") { HyperlinkAnchor = "Shared" });
+        source.Footnotes[1] = footnote;
+
+        var target = new TextDocument();
+        var targetParagraph = new Paragraph("Target one");
+        targetParagraph.BookmarkNames.Add("Shared");
+        target.Blocks.Add(targetParagraph);
+        target.Blocks.Add(new Paragraph("Target two") { BookmarkName = "Shared_FreeW1" });
+
+        var inserted = DocumentMerge.Merge(target, target.Blocks.Count, source);
+
+        var merged = inserted.Single().Should().BeOfType<Paragraph>().Subject;
+        merged.BookmarkNames.Should().Equal("Shared_FreeW2", "SourceOnly");
+        merged.Runs.Single(run => run.Text == "jump").HyperlinkAnchor.Should().Be("Shared_FreeW2");
+        merged.Runs.Single(run => run.CrossReference is not null).CrossReference!.Target.Should().Be("Shared_FreeW2");
+        target.Footnotes[1].Content.Single().Runs.Last().HyperlinkAnchor.Should().Be("Shared_FreeW2");
+        target.Blocks[0].Should().BeOfType<Paragraph>().Which.BookmarkName.Should().Be("Shared");
+        sourceParagraph.BookmarkNames.Should().Equal("Shared", "SourceOnly");
+        sourceParagraph.Runs.Single(run => run.Text == "jump").HyperlinkAnchor.Should().Be("Shared");
+    }
+
+    [Fact]
+    public void Merge_TransfersAndRemapsReferencedNotesAndCommentThreads()
+    {
+        var source = new TextDocument();
+        var sourceParagraph = new Paragraph();
+        sourceParagraph.Runs.Add(Run.FootnoteReference(1));
+        sourceParagraph.Runs.Add(Run.EndnoteReference(1));
+        sourceParagraph.Runs.Add(new Run("Commented") { CommentId = 0 });
+        sourceParagraph.Runs.Add(Run.CommentReference(0));
+        source.Blocks.Add(sourceParagraph);
+        var footnote = new Footnote(1, "Source footnote");
+        footnote.Content[0].Runs.Add(Run.EndnoteReference(1));
+        source.Footnotes[1] = footnote;
+        source.Endnotes[1] = new Endnote(1, "Source endnote");
+        var comment = new Comment(0, "Source comment", "Ada", "A") { Resolved = true };
+        comment.AddReply(1, "Reply", "Ben", "B");
+        source.Comments[0] = comment;
+
+        var target = new TextDocument();
+        target.Footnotes[1] = new Footnote(1, "Target footnote");
+        target.Endnotes[1] = new Endnote(1, "Target endnote");
+        var targetComment = new Comment(0, "Target comment");
+        targetComment.AddReply(1, "Target reply");
+        target.Comments[0] = targetComment;
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        var runs = inserted.Single().Should().BeOfType<Paragraph>().Subject.Runs;
+        runs[0].FootnoteId.Should().Be(2);
+        runs[1].EndnoteId.Should().Be(2);
+        runs[2].CommentId.Should().Be(2);
+        runs[3].CommentId.Should().Be(2);
+        target.Footnotes[2].PlainText.Should().Be("Source footnote1");
+        target.Footnotes[2].Content.Single().Runs.Last().EndnoteId.Should().Be(2);
+        target.Endnotes[2].PlainText.Should().Be("Source endnote");
+        target.Comments[2].PlainText.Should().Be("Source comment");
+        target.Comments[2].Replies.Single().Id.Should().Be(3);
+        target.Comments[2].Resolved.Should().BeTrue();
+        source.Footnotes[1].PlainText.Should().Be("Source footnote1");
+        source.Comments[0].Replies.Single().Id.Should().Be(1);
+    }
+
+    [Fact]
+    public void Merge_TransfersAltChunkPackageGraph_WithCollisionSafeRelationshipRewrite()
+    {
+        const string altChunkRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk";
+        var source = new TextDocument();
+        source.Preserved.Parts.Add(new PreservedPart("/word/afchunk.docx", [1], RelationshipType: altChunkRel));
+        source.Preserved.Parts.Add(new PreservedPart(
+            "/word/_rels/afchunk.docx.rels",
+            System.Text.Encoding.UTF8.GetBytes("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"image\" Target=\"media/altchunk.png\" /></Relationships>")));
+        source.Preserved.Parts.Add(new PreservedPart("/word/media/altchunk.png", [2]));
+        source.Preserved.ContentTypeDefaults["png"] = "image/png";
+        source.Blocks.Add(new AltChunkBlock("/word/afchunk.docx"));
+
+        var target = new TextDocument();
+        target.Preserved.Parts.Add(new PreservedPart("/word/afchunk.docx", [9], RelationshipType: altChunkRel));
+        target.Preserved.Parts.Add(new PreservedPart("/word/_rels/afchunk.docx.rels", [8]));
+        target.Preserved.Parts.Add(new PreservedPart("/word/media/altchunk.png", [7]));
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        var copiedAltChunk = inserted.Single().Should().BeOfType<AltChunkBlock>().Subject;
+        copiedAltChunk.Should().NotBeSameAs(source.Blocks.Single());
+        copiedAltChunk.PreservedPartName.Should().Be("/word/afchunk-freew-import1.docx");
+        target.Preserved.Parts.Should().Contain(part => part.PartName == "/word/afchunk-freew-import1.docx");
+        target.Preserved.Parts.Should().Contain(part => part.PartName == "/word/_rels/afchunk-freew-import1.docx.rels");
+        target.Preserved.Parts.Should().Contain(part => part.PartName == "/word/media/altchunk-freew-import1.png");
+        var copiedRels = target.Preserved.Parts.Single(part => part.PartName == "/word/_rels/afchunk-freew-import1.docx.rels");
+        System.Text.Encoding.UTF8.GetString(copiedRels.Bytes)
+            .Should().Contain("Target=\"media/altchunk-freew-import1.png\"");
+        source.Blocks.Single().Should().BeOfType<AltChunkBlock>().Which.PreservedPartName.Should().Be("/word/afchunk.docx");
+    }
+
+    [Fact]
+    public void Merge_TransfersPreservedDrawingPackageGraph_WithCollisionSafeRelationshipRewrite()
+    {
+        const string chartRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+        var source = new TextDocument();
+        source.Preserved.Parts.Add(new PreservedPart("/word/charts/chart1.xml", [1], RelationshipType: chartRel));
+        source.Preserved.Parts.Add(new PreservedPart(
+            "/word/charts/_rels/chart1.xml.rels",
+            System.Text.Encoding.UTF8.GetBytes("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"image\" Target=\"../media/image1.png\" /></Relationships>")));
+        source.Preserved.Parts.Add(new PreservedPart("/word/media/image1.png", [2]));
+        source.Preserved.ContentTypeDefaults["png"] = "image/png";
+        var sourceParagraph = new Paragraph();
+        sourceParagraph.Runs.Add(Run.FromPreservedDrawing(new PreservedDrawing(
+            "<w:drawing />",
+            [new PreservedDrawingReference("rId7", "/word/charts/chart1.xml", chartRel)])));
+        source.Blocks.Add(sourceParagraph);
+
+        var target = new TextDocument();
+        target.Preserved.Parts.Add(new PreservedPart("/word/charts/chart1.xml", [9], RelationshipType: chartRel));
+        target.Preserved.Parts.Add(new PreservedPart("/word/charts/_rels/chart1.xml.rels", [8]));
+        target.Preserved.Parts.Add(new PreservedPart("/word/media/image1.png", [7]));
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        var copiedDrawing = inserted.Single().Should().BeOfType<Paragraph>().Subject.Runs.Single().PreservedDrawing!;
+        copiedDrawing.References.Single().PreservedPartName.Should().Be("/word/charts/chart1-freew-import1.xml");
+        target.Preserved.Parts.Should().Contain(part => part.PartName == "/word/charts/chart1-freew-import1.xml");
+        target.Preserved.Parts.Should().Contain(part => part.PartName == "/word/charts/_rels/chart1-freew-import1.xml.rels");
+        target.Preserved.Parts.Should().Contain(part => part.PartName == "/word/media/image1-freew-import1.png");
+        var copiedRels = target.Preserved.Parts.Single(part => part.PartName == "/word/charts/_rels/chart1-freew-import1.xml.rels");
+        System.Text.Encoding.UTF8.GetString(copiedRels.Bytes)
+            .Should().Contain("Target=\"../media/image1-freew-import1.png\"");
+        target.Preserved.ContentTypeDefaults.Should().Contain("png", "image/png");
+        source.Preserved.Parts.Should().HaveCount(3);
+    }
+
     [Fact]
     public void CloneBlocks_CopiesTextAndFormatting_AndLeavesSourceUntouched()
     {
@@ -439,4 +695,14 @@ public class DocumentMergeTests
         target.Blocks.OfType<Paragraph>().Select(p => p.PlainText)
             .Should().Equal("Only", "Appended");
     }
+
+    private static XElement Numbering(XNamespace wordprocessing, int abstractId, int numberId, string label) =>
+        new(wordprocessing + "numbering",
+            new XAttribute(XNamespace.Xmlns + "w", wordprocessing.NamespaceName),
+            new XElement(wordprocessing + "abstractNum",
+                new XAttribute(wordprocessing + "abstractNumId", abstractId),
+                new XElement(wordprocessing + "multiLevelType", new XAttribute(wordprocessing + "val", label))),
+            new XElement(wordprocessing + "num",
+                new XAttribute(wordprocessing + "numId", numberId),
+                new XElement(wordprocessing + "abstractNumId", new XAttribute(wordprocessing + "val", abstractId))));
 }

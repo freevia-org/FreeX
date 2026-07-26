@@ -14828,7 +14828,7 @@ public sealed class DocumentView : Control
             return false;
         }
 
-        var clones = DocumentMerge.CloneBlocks(source);
+        var clones = DocumentMerge.CloneBlocksForInsertion(_doc, source);
         if (clones.Count == 0)
             return false;
 

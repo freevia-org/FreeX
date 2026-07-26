@@ -11,7 +11,8 @@ public enum SlideObjectInsertionKind
     Picture,
     Media,
     Table,
-    Chart
+    Chart,
+    SmartArt
 }
 
 public sealed record SlideObjectPicturePayload(
@@ -29,7 +30,8 @@ public sealed record SlideObjectInsertionPlan(
     DrawingShapeKind? AutoShapeKind = null,
     int TableRows = 0,
     int TableColumns = 0,
-    ChartType ChartKind = ChartType.ColumnClustered)
+    ChartType ChartKind = ChartType.ColumnClustered,
+    SmartArtLayoutPreset SmartArtLayout = SmartArtLayoutPreset.BasicProcess)
 {
     public bool RequiresPicturePayload => Kind == SlideObjectInsertionKind.Picture;
 
@@ -73,8 +75,20 @@ public static class SlideObjectInsertionPlanner
     public const string ChartStockCommandId = "freep.insert-chart-stock";
     public const string ChartSurfaceCommandId = "freep.insert-chart-surface";
     public const string ChartSurface3DCommandId = "freep.insert-chart-surface-3d";
+    public const string SmartArtBasicProcessCommandId = "freep.insert-smartart-basic-process";
 
-    private static readonly SlideObjectInsertionPlan[] Plans =
+    public static IReadOnlyList<SmartArtLayoutPreset> InsertableSmartArtLayouts { get; } =
+        Enum.GetValues<SmartArtLayoutPreset>()
+            .Where(preset => preset != SmartArtLayoutPreset.PictureCaptionList)
+            .ToArray();
+
+    public static string SmartArtLayoutCommandId(SmartArtLayoutPreset preset) =>
+        $"freep.insert-smartart-{ToKebabCase(preset.ToString())}";
+
+    public static string SmartArtLayoutDisplayName(SmartArtLayoutPreset preset) =>
+        string.Join(' ', ToWords(preset.ToString()));
+
+    private static readonly SlideObjectInsertionPlan[] BasePlans =
     [
         new(TextBoxCommandId, SlideObjectInsertionKind.TextBox),
         new(RectangleCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Rectangle),
@@ -111,7 +125,21 @@ public static class SlideObjectInsertionPlanner
         new(ChartStockCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Stock),
         new(ChartSurfaceCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Surface),
         new(ChartSurface3DCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Surface3D),
+        new(SmartArtBasicProcessCommandId, SlideObjectInsertionKind.SmartArt,
+            SmartArtLayout: SmartArtLayoutPreset.BasicProcess),
     ];
+
+    private static readonly SlideObjectInsertionPlan[] SmartArtLayoutPlans =
+        InsertableSmartArtLayouts
+            .Where(preset => preset != SmartArtLayoutPreset.BasicProcess)
+            .Select(preset => new SlideObjectInsertionPlan(
+                SmartArtLayoutCommandId(preset),
+                SlideObjectInsertionKind.SmartArt,
+                SmartArtLayout: preset))
+            .ToArray();
+
+    private static readonly SlideObjectInsertionPlan[] Plans =
+        BasePlans.Concat(SmartArtLayoutPlans).ToArray();
 
     public static IReadOnlyList<SlideObjectInsertionPlan> BuiltInPlans { get; } =
         Array.AsReadOnly(Plans);
@@ -167,6 +195,7 @@ public static class SlideObjectInsertionPlanner
                     mediaPayload.ContentType),
             SlideObjectInsertionKind.Table => editor.InsertTable(plan.TableRows, plan.TableColumns),
             SlideObjectInsertionKind.Chart => editor.InsertChart(plan.ChartKind),
+            SlideObjectInsertionKind.SmartArt => editor.InsertSmartArt(plan.SmartArtLayout),
             _ => null,
         };
     }
@@ -253,5 +282,24 @@ public static class SlideObjectInsertionPlanner
         return shapeKind is { } kind && DrawingShapeKindSupport.IsLineLike(kind)
             ? editor.InsertDefaultConnector(kind)
             : null;
+    }
+
+    private static string ToKebabCase(string value) =>
+        string.Join('-', ToWords(value).Select(word => word.ToLowerInvariant()));
+
+    private static IEnumerable<string> ToWords(string value)
+    {
+        var start = 0;
+        for (var index = 1; index < value.Length; index++)
+        {
+            if (!char.IsUpper(value[index]))
+                continue;
+
+            yield return value[start..index];
+            start = index;
+        }
+
+        if (start < value.Length)
+            yield return value[start..];
     }
 }

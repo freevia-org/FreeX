@@ -40,6 +40,7 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.ChartBarCommandId, SlideObjectInsertionKind.Chart)]
     [InlineData(SlideObjectInsertionPlanner.ChartLineCommandId, SlideObjectInsertionKind.Chart)]
     [InlineData(SlideObjectInsertionPlanner.ChartPieCommandId, SlideObjectInsertionKind.Chart)]
+    [InlineData(SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId, SlideObjectInsertionKind.SmartArt)]
     public void TryCreatePlan_MapsKnownObjectCommandIds(
         string commandId,
         SlideObjectInsertionKind expectedKind)
@@ -168,6 +169,119 @@ public sealed class SlideObjectInsertionPlannerTests
 
         added.Should().BeNull();
         editor.CurrentSlide.Shapes.Should().HaveCount(before);
+    }
+
+    [Fact]
+    public void ApplyCommand_InsertsNativeSmartArt_WithUndoAndDistinctPartNames()
+    {
+        var editor = MakeSession();
+        var initialCount = editor.CurrentSlide!.Shapes.Count;
+
+        var first = SlideObjectInsertionPlanner.ApplyCommand(
+            editor, SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId);
+        var second = SlideObjectInsertionPlanner.ApplyCommand(
+            editor, SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId);
+
+        first.Should().NotBeNull();
+        second.Should().NotBeNull();
+        first!.Kind.Should().Be(SlideShapeKind.SmartArt);
+        first.SmartArt!.Data!.Family.Should().Be(SmartArtFamily.Process);
+        new[] { first.SmartArt.Data.Nodes[0].Text }
+            .Concat(first.SmartArt.Data.Nodes[0].Children.Select(node => node.Text))
+            .Should().Equal("Step 1", "Step 2", "Step 3");
+        first.SmartArt.Parts.Keys.Should().Contain("ppt/diagrams/data1.xml");
+        second!.SmartArt!.Parts.Keys.Should().Contain("ppt/diagrams/data2.xml");
+        first.SmartArt.PartRels.Should().ContainKey("ppt/diagrams/data1.xml");
+
+        editor.Undo();
+        editor.CurrentSlide!.Shapes.Should().HaveCount(initialCount + 1);
+        editor.Undo();
+        editor.CurrentSlide.Shapes.Should().HaveCount(initialCount);
+        editor.Redo();
+        editor.CurrentSlide.Shapes.Should().Contain(shape => shape.Kind == SlideShapeKind.SmartArt);
+    }
+
+    [Fact]
+    public void ApplyCommand_InsertsEveryLiveSmartArtLayoutPreset()
+    {
+        foreach (var preset in SlideObjectInsertionPlanner.InsertableSmartArtLayouts)
+        {
+            var editor = MakeSession();
+            var commandId = preset == SmartArtLayoutPreset.BasicProcess
+                ? SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId
+                : SlideObjectInsertionPlanner.SmartArtLayoutCommandId(preset);
+
+            var added = SlideObjectInsertionPlanner.ApplyCommand(editor, commandId);
+
+            added.Should().NotBeNull(preset.ToString());
+            added!.Kind.Should().Be(SlideShapeKind.SmartArt);
+            added.SmartArt!.Data!.Family.Should().NotBe(SmartArtFamily.Unknown, preset.ToString());
+            added.SmartArt.Data.LayoutUniqueId.Should().Contain("/layout/", preset.ToString());
+        }
+    }
+
+    [Fact]
+    public void ApplyCommand_InsertsEveryLiveSmartArtLayoutPreset_AndRoundTrips()
+    {
+        var editor = MakeSession();
+        foreach (var preset in SlideObjectInsertionPlanner.InsertableSmartArtLayouts)
+        {
+            var commandId = preset == SmartArtLayoutPreset.BasicProcess
+                ? SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId
+                : SlideObjectInsertionPlanner.SmartArtLayoutCommandId(preset);
+
+            SlideObjectInsertionPlanner.ApplyCommand(editor, commandId).Should().NotBeNull(preset.ToString());
+        }
+
+        using var package = new MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(editor.Presentation, package);
+        package.Position = 0;
+
+        var reopened = FreeP.Core.IO.PptxPackageReader.Read(package);
+        var smartArts = reopened.Slides[0].Shapes
+            .Where(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .Select(shape => shape.SmartArt!.Data!.LayoutUniqueId)
+            .ToArray();
+
+        smartArts.Should().HaveCount(SlideObjectInsertionPlanner.InsertableSmartArtLayouts.Count);
+        smartArts.Should().OnlyContain(layout => layout.Contains("/layout/"));
+    }
+
+    [Fact]
+    public void ApplyCommand_InsertsSmartArt_RoundTripsNativeDiagramParts()
+    {
+        var editor = MakeSession();
+        SlideObjectInsertionPlanner.ApplyCommand(
+            editor, SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId).Should().NotBeNull();
+
+        using var package = new MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(editor.Presentation, package);
+        package.Position = 0;
+
+        var reopened = FreeP.Core.IO.PptxPackageReader.Read(package);
+        var smart = reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        smart.Data!.Family.Should().Be(SmartArtFamily.Process);
+        smart.Data.LayoutUniqueId.Should().Contain("layout/process1");
+        Flatten(smart.Data.Nodes).Select(node => node.Text).Should().Equal("Step 1", "Step 2", "Step 3");
+        smart.Parts.Values.Should().Contain(part => part.ContentType.Contains("diagramData"));
+        smart.Parts.Values.Should().Contain(part => part.ContentType.Contains("diagramLayout"));
+        smart.Parts.Values.Should().Contain(part => part.ContentType.Contains("diagramStyle"));
+        smart.Parts.Values.Should().Contain(part => part.ContentType.Contains("diagramColors"));
+        smart.Parts.Values.Should().Contain(part => part.ContentType.Contains("diagramDrawing"));
+        smart.DrawingPartPath.Should().NotBeNull();
+        smart.Parts.Should().ContainKey(smart.DrawingPartPath!);
+        smart.PartRels.Keys.Should().Contain("ppt/diagrams/data1.xml");
+
+        static IEnumerable<SmartArtNode> Flatten(IEnumerable<SmartArtNode> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                yield return node;
+                foreach (var child in Flatten(node.Children))
+                    yield return child;
+            }
+        }
     }
 
     [Fact]

@@ -1046,6 +1046,42 @@ public sealed class EditingSession
         return slide.Shapes.Count == 0 ? 1u : slide.Shapes.Max(s => s.Id) + 1u;
     }
 
+    private int NextSmartArtPartIndex()
+    {
+        var max = 0;
+        foreach (var slide in Presentation.Slides)
+        {
+            foreach (var shape in EnumerateShapes(slide.Shapes))
+            {
+                if (shape.SmartArt is not { } smartArt)
+                    continue;
+
+                foreach (var path in smartArt.Parts.Keys)
+                {
+                    var fileName = path[(path.LastIndexOf('/') + 1)..];
+                    if (!fileName.StartsWith("data", StringComparison.OrdinalIgnoreCase) ||
+                        !fileName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                        !int.TryParse(fileName[4..^4], out var index))
+                        continue;
+
+                    max = Math.Max(max, index);
+                }
+            }
+        }
+
+        return max + 1;
+
+        static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
+        {
+            foreach (var shape in shapes)
+            {
+                yield return shape;
+                foreach (var child in EnumerateShapes(shape.Children))
+                    yield return child;
+            }
+        }
+    }
+
     /// <summary>Creates and inserts a default text-box shape onto the current slide.</summary>
     public SlideShape InsertDefaultTextBox()
     {
@@ -1578,6 +1614,32 @@ public sealed class EditingSession
     }
 
     // ── Hyperlinks ────────────────────────────────────────────────────────────────
+
+    public SlideShape InsertSmartArt(SmartArtLayoutPreset layout = SmartArtLayoutPreset.BasicProcess)
+    {
+        if (!SlideObjectInsertionPlanner.InsertableSmartArtLayouts.Contains(layout))
+            throw new ArgumentOutOfRangeException(nameof(layout), layout, "The requested SmartArt layout is not available for insertion.");
+
+        var (x, y, cx, cy) = DefaultShapeBounds();
+        var smartArt = SmartArtInsertionFactory.Create(
+            layout,
+            NextSmartArtPartIndex(),
+            ["Step 1", "Step 2", "Step 3"]);
+        var shape = new SlideShape
+        {
+            Id = NextShapeId(),
+            Name = "Basic Process",
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = x,
+            OffsetYEmu = y,
+            ExtentCxEmu = cx,
+            ExtentCyEmu = cy,
+            SmartArt = smartArt,
+        };
+
+        AddShape(shape);
+        return shape;
+    }
 
     /// <summary>
     /// Sets a shape-level hyperlink on every selected shape.  Undoable.
