@@ -30,6 +30,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly TextBox _barOverlapBox;
     private readonly ComboBox _displayBlanksCombo;
     private readonly CheckBox _showDataLabelsOverMaximumCheck;
+    private readonly CheckBox _varyColorsCheck;
+    private readonly CheckBox _legendOverlayCheck;
 
     internal ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -111,6 +113,17 @@ internal sealed class ChartDisplayOptionsDialog : Window
             IsThreeState = true,
             IsChecked = _planner.ShowDataLabelsOverMaximum,
         };
+        _varyColorsCheck = new CheckBox
+        {
+            Content = surface.VaryColorsLabel,
+            IsChecked = _planner.VaryColors,
+        };
+        _legendOverlayCheck = new CheckBox
+        {
+            Content = surface.LegendOverlayLabel,
+            IsThreeState = true,
+            IsChecked = _planner.LegendOverlay,
+        };
 
         var buttons = new StackPanel
         {
@@ -147,6 +160,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
                 MakeRow(surface.BarOverlapLabel, _barOverlapBox),
                 MakeRow(surface.DisplayBlanksAsLabel, _displayBlanksCombo),
                 _showDataLabelsOverMaximumCheck,
+                _varyColorsCheck,
+                _legendOverlayCheck,
                 new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 },
                 buttons,
             },
@@ -158,6 +173,10 @@ internal sealed class ChartDisplayOptionsDialog : Window
         UpdatePlannerFromControls();
         return _planner.BuildCommitPlan();
     }
+
+    internal void SetVaryColorsForTests(bool value) => _varyColorsCheck.IsChecked = value;
+
+    internal void SetLegendOverlayForTests(bool? value) => _legendOverlayCheck.IsChecked = value;
 
     internal void SetOptionsForTests(
         string title,
@@ -226,6 +245,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
         if (blanksIndex >= 0 && blanksIndex < ChartDisplayOptionsPlanner.DisplayBlanksOptions.Count)
             _planner.SetDisplayBlanksAs(ChartDisplayOptionsPlanner.DisplayBlanksOptions[blanksIndex].Value);
         _planner.SetShowDataLabelsOverMaximum(_showDataLabelsOverMaximumCheck.IsChecked);
+        _planner.SetVaryColors(_varyColorsCheck.IsChecked == true);
+        _planner.SetLegendOverlay(_legendOverlayCheck.IsChecked);
     }
 
     private static Control MakeRow(string label, Control control)

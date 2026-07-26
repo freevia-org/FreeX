@@ -27,6 +27,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly TextBox _barOverlapBox;
     private readonly ComboBox _displayBlanksCombo;
     private readonly CheckBox _showDataLabelsOverMaximumCheck;
+    private readonly CheckBox _varyColorsCheck;
+    private readonly CheckBox _legendOverlayCheck;
 
     public ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -110,6 +112,17 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             IsThreeState = true,
             IsChecked = _planner.ShowDataLabelsOverMaximum,
         };
+        _varyColorsCheck = new CheckBox
+        {
+            Content = surface.VaryColorsLabel,
+            IsChecked = _planner.VaryColors,
+        };
+        _legendOverlayCheck = new CheckBox
+        {
+            Content = surface.LegendOverlayLabel,
+            IsThreeState = true,
+            IsChecked = _planner.LegendOverlay,
+        };
 
         var buttons = new StackPanel
         {
@@ -141,6 +154,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         content.Children.Add(MakeRow(surface.BarOverlapLabel, _barOverlapBox));
         content.Children.Add(MakeRow(surface.DisplayBlanksAsLabel, _displayBlanksCombo));
         content.Children.Add(_showDataLabelsOverMaximumCheck);
+        content.Children.Add(_varyColorsCheck);
+        content.Children.Add(_legendOverlayCheck);
         content.Children.Add(new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -151,6 +166,10 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         UpdatePlannerFromControls();
         return _planner.BuildCommitPlan();
     }
+
+    internal void SetVaryColorsForTests(bool value) => _varyColorsCheck.IsChecked = value;
+
+    internal void SetLegendOverlayForTests(bool? value) => _legendOverlayCheck.IsChecked = value;
 
     private void OnOk()
     {
@@ -178,6 +197,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         if (_displayBlanksCombo.SelectedItem is ChartDisplayBlanksOption blanks)
             _planner.SetDisplayBlanksAs(blanks.Value);
         _planner.SetShowDataLabelsOverMaximum(_showDataLabelsOverMaximumCheck.IsChecked);
+        _planner.SetVaryColors(_varyColorsCheck.IsChecked == true);
+        _planner.SetLegendOverlay(_legendOverlayCheck.IsChecked);
     }
 
     private static StackPanel MakeRow(string label, Control control)

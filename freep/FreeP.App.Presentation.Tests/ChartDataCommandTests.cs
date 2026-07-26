@@ -903,6 +903,7 @@ public sealed class ChartDataCommandTests
         chart.BarOverlapPercent = -20;
         chart.DisplayBlanksAs = ChartDisplayBlanksAs.Gap;
         chart.ShowDataLabelsOverMaximum = null;
+        chart.VaryColors = false;
 
         bus.Execute(new SetChartDisplayOptionsCommand(
             0,
@@ -923,6 +924,8 @@ public sealed class ChartDataCommandTests
                 40,
                 55,
                 ChartDisplayBlanksAs.Zero,
+                true,
+                true,
                 true)));
 
         chart.Title.Should().Be("Revenue");
@@ -942,6 +945,8 @@ public sealed class ChartDataCommandTests
         chart.BarOverlapPercent.Should().Be(55);
         chart.DisplayBlanksAs.Should().Be(ChartDisplayBlanksAs.Zero);
         chart.ShowDataLabelsOverMaximum.Should().BeTrue();
+        chart.VaryColors.Should().BeTrue();
+        chart.LegendOverlay.Should().BeTrue();
 
         using var stream = new MemoryStream();
         PptxPackageWriter.Write(p, stream);
@@ -960,6 +965,8 @@ public sealed class ChartDataCommandTests
         roundTripped.BarOverlapPercent.Should().Be(55);
         roundTripped.DisplayBlanksAs.Should().Be(ChartDisplayBlanksAs.Zero);
         roundTripped.ShowDataLabelsOverMaximum.Should().BeTrue();
+        roundTripped.VaryColors.Should().BeTrue();
+        roundTripped.LegendOverlay.Should().BeTrue();
         roundTripped.CategoryAxis.HasMajorGridlines.Should().BeFalse();
         roundTripped.ValueAxis.HasMajorGridlines.Should().BeTrue();
 
@@ -981,6 +988,8 @@ public sealed class ChartDataCommandTests
         chart.BarOverlapPercent.Should().Be(-20);
         chart.DisplayBlanksAs.Should().Be(ChartDisplayBlanksAs.Gap);
         chart.ShowDataLabelsOverMaximum.Should().BeNull();
+        chart.VaryColors.Should().BeFalse();
+        chart.LegendOverlay.Should().BeNull();
     }
 
     [Fact]

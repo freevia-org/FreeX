@@ -437,6 +437,11 @@ public static class ChartSmartArtVisualPlanner
             && string.Equals(chart.ColorSchemeId, "mono-blue", StringComparison.OrdinalIgnoreCase))
             return ["#4679A7", "#5591C7", "#84AEDC", "#B8CDE8"];
 
+        if (chart.Kind == ChartKind.Scatter
+            && chart.StyleId == 4
+            && string.Equals(chart.ColorSchemeId, "colorful1", StringComparison.OrdinalIgnoreCase))
+            return ["#234075", "#2B4E8C", "#7180AA", "#B0B7CB"];
+
         return scheme.Colors.Select(NormalizeHex).ToList();
     }
 
