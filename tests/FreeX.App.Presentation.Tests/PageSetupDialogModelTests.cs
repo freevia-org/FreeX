@@ -575,6 +575,66 @@ public sealed class PageSetupDialogModelTests
     }
 
     [Fact]
+    public void BuildHeaderFooterCommand_RoundTripsAllScopesAndPictureSets()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new PageSetupTestCommandContext(workbook);
+        var fields = PageSetupDialogModel.FromSheet(sheet) with
+        {
+            Header = new WorksheetHeaderFooter("Header left", "Header center &[Picture]", "Header right"),
+            Footer = new WorksheetHeaderFooter("Footer left", "Footer center", "Footer right &[Picture]"),
+            FirstPageHeader = new WorksheetHeaderFooter("First header", "", ""),
+            FirstPageFooter = new WorksheetHeaderFooter("", "First footer", ""),
+            EvenPageHeader = new WorksheetHeaderFooter("", "Even header", ""),
+            EvenPageFooter = new WorksheetHeaderFooter("", "", "Even footer"),
+            HeaderPictures = new WorksheetHeaderFooterPictureSet(Picture("header-left.png"), Picture("header-center.png"), null),
+            FooterPictures = new WorksheetHeaderFooterPictureSet(null, null, Picture("footer-right.png")),
+            FirstPageHeaderPictures = new WorksheetHeaderFooterPictureSet(Picture("first-header.png"), null, null),
+            FirstPageFooterPictures = new WorksheetHeaderFooterPictureSet(null, Picture("first-footer.png"), null),
+            EvenPageHeaderPictures = new WorksheetHeaderFooterPictureSet(null, Picture("even-header.png"), null),
+            EvenPageFooterPictures = new WorksheetHeaderFooterPictureSet(null, null, Picture("even-footer.png")),
+            DifferentFirstPage = true,
+            DifferentOddEvenPages = true,
+            ScaleHeaderFooterWithDocument = false,
+            AlignHeaderFooterWithMargins = false,
+        };
+
+        var command = PageSetupDialogModel.BuildHeaderFooterCommand(sheet, fields);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.PageHeader.Should().Be(fields.Header);
+        sheet.PageFooter.Should().Be(fields.Footer);
+        sheet.FirstPageHeader.Should().Be(fields.FirstPageHeader);
+        sheet.FirstPageFooter.Should().Be(fields.FirstPageFooter);
+        sheet.EvenPageHeader.Should().Be(fields.EvenPageHeader);
+        sheet.EvenPageFooter.Should().Be(fields.EvenPageFooter);
+        sheet.PageHeaderPictures.Center!.FileName.Should().Be("header-center.png");
+        sheet.PageFooterPictures.Right!.FileName.Should().Be("footer-right.png");
+        sheet.FirstPageHeaderPictures.Left!.FileName.Should().Be("first-header.png");
+        sheet.FirstPageFooterPictures.Center!.FileName.Should().Be("first-footer.png");
+        sheet.EvenPageHeaderPictures.Center!.FileName.Should().Be("even-header.png");
+        sheet.EvenPageFooterPictures.Right!.FileName.Should().Be("even-footer.png");
+        sheet.DifferentFirstPageHeaderFooter.Should().BeTrue();
+        sheet.DifferentOddEvenHeaderFooter.Should().BeTrue();
+        sheet.HeaderFooterScaleWithDocument.Should().BeFalse();
+        sheet.HeaderFooterAlignWithMargins.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        sheet.PageHeader.Should().Be(new WorksheetHeaderFooter("", "", ""));
+        sheet.PageFooter.Should().Be(new WorksheetHeaderFooter("", "", ""));
+        sheet.FirstPageHeaderPictures.Should().Be(WorksheetHeaderFooterPictureSet.Empty);
+        sheet.FirstPageFooterPictures.Should().Be(WorksheetHeaderFooterPictureSet.Empty);
+        sheet.EvenPageHeaderPictures.Should().Be(WorksheetHeaderFooterPictureSet.Empty);
+        sheet.EvenPageFooterPictures.Should().Be(WorksheetHeaderFooterPictureSet.Empty);
+        sheet.DifferentFirstPageHeaderFooter.Should().BeFalse();
+        sheet.DifferentOddEvenHeaderFooter.Should().BeFalse();
+        sheet.HeaderFooterScaleWithDocument.Should().BeTrue();
+        sheet.HeaderFooterAlignWithMargins.Should().BeTrue();
+    }
+
+    [Fact]
     public void TryBuildCommandPlan_RemapsPrintAreaToTargetSheet()
     {
         var workbook = new Workbook("Book");
@@ -763,4 +823,7 @@ public sealed class PageSetupDialogModelTests
         public Sheet GetSheet(SheetId sheetId) =>
             Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
     }
+
+    private static WorksheetHeaderFooterPicture Picture(string fileName) =>
+        new([1, 2, 3], "image/png", fileName, 120, 48);
 }

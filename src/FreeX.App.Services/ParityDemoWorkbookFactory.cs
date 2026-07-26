@@ -76,6 +76,10 @@ public static class ParityDemoWorkbookFactory
             }
         }
 
+        // Keep the Page Setup Header/Footer capture deterministic across WPF and Avalonia.
+        sheet.PageHeader = new WorksheetHeaderFooter("", "Page Layout Tour", "");
+        sheet.PageFooter = new WorksheetHeaderFooter("", "Page &[Page] of &[Pages]", "");
+
         return workbook;
     }
 

@@ -115,7 +115,7 @@ public sealed class ParityCaptureTests
             ("dialog.ChartAreaLegendDialog", "dialog.FormatChartArea", "ShowFormatChartAreaDialog"),
             ("dialog.CommentListWindow", "dialog.CommentList", "ShowNotesListAsync"),
             ("dialog.ConfirmPasswordDialog", "dialog.ProtectSheet", "ShowProtectSheetDialogAsync (integrated confirmation field)"),
-            ("dialog.HeaderFooterDialog", "dialog.PageSetup.HeaderFooter", "ShowPageSetupDialogAsync (Header/Footer tab)"),
+            ("dialog.HeaderFooterDialog", "dialog.HeaderFooterDialog", "ShowHeaderFooterDialogAsync (dedicated editor)"),
             ("dialog.HyperlinkDialog", "dialog.InsertHyperlink", "ShowInsertHyperlinkInputDialogAsync"),
             ("dialog.NameDefinitionDialog", "dialog.NameDefinition", "ShowDefineNameDialogAsync"),
             ("dialog.NamedRangeDialog", "dialog.NamedRange", "ShowNameManagerDialogAsync"),
@@ -237,7 +237,7 @@ public sealed class ParityCaptureTests
     }
 
     [Fact]
-    public async Task HeaderFooterInteractionRoute_OpensTheProductionPageSetupHeaderFooterTab()
+    public async Task HeaderFooterInteractionRoute_OpensTheDedicatedProductionEditor()
     {
         var outputDirectory = Path.Combine(
             Path.GetTempPath(),
@@ -263,9 +263,9 @@ public sealed class ParityCaptureTests
                         interactionDialogCatalogIds: selectedIds);
 
                     surfaces.Should().ContainSingle(surface =>
-                        surface.Id == "dialog.PageSetup.HeaderFooter" && surface.Captured);
-                    window.DialogInteractionContracts["dialog.PageSetup.HeaderFooter"].InitialFocus
-                        .Should().Be("passed:ComboBox#PageSetupHeaderPresetBox");
+                        surface.Id == "dialog.HeaderFooterDialog" && surface.Captured);
+                    window.DialogInteractionContracts["dialog.HeaderFooterDialog"].InitialFocus
+                        .Should().Be("passed:TextBox#HeaderFooterHeaderCenterBox");
                     window.BuildDialogInteractionContractResults(selectedIds)
                         .Should().ContainSingle(result =>
                             result.Id == "dialog.HeaderFooterDialog" && result.Status == "passed");

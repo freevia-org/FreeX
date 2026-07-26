@@ -862,6 +862,67 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void HeaderFooterEditorRoute_PreservesSixPictureScopesAndUsesNamedDocking()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("ShowHeaderFooterEditorDialogAsync(");
+        source.Should().Contain("customHeaderButton.Click += async");
+        source.Should().Contain("customFooterButton.Click += async");
+        source.Should().Contain("openFooterTab: false");
+        source.Should().Contain("openFooterTab: true");
+        source.Should().Contain("SelectedIndex = openFooterTab ? 1 : 0");
+        source.Should().Contain("HeaderFooterEditorState(");
+        source.Should().Contain("headerPictures = edited.HeaderPictures");
+        source.Should().Contain("footerPictures = edited.FooterPictures");
+        source.Should().Contain("firstPageHeaderPictures = edited.FirstPageHeaderPictures");
+        source.Should().Contain("firstPageFooterPictures = edited.FirstPageFooterPictures");
+        source.Should().Contain("evenPageHeaderPictures = edited.EvenPageHeaderPictures");
+        source.Should().Contain("evenPageFooterPictures = edited.EvenPageFooterPictures");
+        source.Should().Contain("HeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
+        source.Should().Contain("FooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
+        source.Should().Contain("FirstPageHeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
+        source.Should().Contain("FirstPageFooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
+        source.Should().Contain("EvenPageHeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
+        source.Should().Contain("EvenPageFooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
+        source.Should().Contain("Width = 760");
+        source.Should().Contain("Height = 600");
+        source.Should().Contain("MinWidth = 700");
+        source.Should().Contain("MinHeight = 520");
+        source.Should().Contain("RowDefinitions = new RowDefinitions(\"*,Auto,Auto,Auto\")");
+        source.Should().Contain("var tokenToolbar = new Border");
+        source.Should().Contain("Grid.SetRow(tokenToolbar, 1);");
+        source.Should().NotContain("DockPanel.SetDock(root.Children[");
+        source.Should().NotContain("DockPanel.SetDock(tokenToolbar");
+
+        var editorStart = source.IndexOf("private async Task<HeaderFooterEditorState?> ShowHeaderFooterEditorDialogAsync", StringComparison.Ordinal);
+        editorStart.Should().BeGreaterThanOrEqualTo(0);
+        var editorEnd = source.IndexOf("\n    }\n}", editorStart, StringComparison.Ordinal);
+        editorEnd.Should().BeGreaterThan(editorStart);
+        source[editorStart..editorEnd].Should().NotContain(".Children[");
+        source.Should().Contain("var headerPresetLabel = PageSetupLabel");
+        source.Should().Contain("var headerPresetRow = new Grid");
+        source.Should().Contain("var headerScroll = new ScrollViewer");
+        source.Should().Contain("Grid.SetRow(headerScroll, 1);");
+        source.Should().Contain("var footerPresetLabel = PageSetupLabel");
+        source.Should().Contain("var footerPresetRow = new Grid");
+        source.Should().Contain("var footerScroll = new ScrollViewer");
+        source.Should().Contain("Grid.SetRow(footerScroll, 1);");
+    }
+
+    [Fact]
+    public void HeaderFooterRibbonRoute_UsesDedicatedUndoableGroupedCommandPath()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("private async Task ShowHeaderFooterDialogAsync()");
+        source.Should().Contain("GetCurrentGroupedEditSheetIds()");
+        source.Should().Contain("PageSetupCommandFactory.BuildHeaderFooterCommand(sheetId, request)");
+        source.Should().Contain("new CompositeWorkbookCommand(\"Header & Footer\", commands)");
+        source.Should().NotContain("ShowPageSetupDialogAsync(openHeaderFooterTab: true)");
+    }
+
+    [Fact]
     public void PageSetupFooterActions_ValidateApplyAndRouteEachWpfFollowUp()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));

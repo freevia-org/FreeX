@@ -6,8 +6,10 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -37,11 +39,78 @@ public sealed class DialogTabCycleFocusGraphTests
             initialAutomationId: "PageSetupOrientationBox");
 
     [Fact]
-    public async Task HeaderFooterRoute_UsesPageSetupScope_AndEscapeCloses() =>
-        await AssertPageSetupGraphAsync(
+    public async Task HeaderFooterRoute_UsesDedicatedEditorScope_AndEscapeCloses() =>
+        await AssertTabbedDialogAsync(
             "ShowHeaderFooterDialogAsync",
-            initialTabIndex: 2,
-            initialAutomationId: "PageSetupHeaderPresetBox");
+            "HeaderFooterTabs",
+            2,
+            "HeaderFooterHeaderCenterBox");
+
+    [Fact]
+    public async Task HeaderFooterRoute_AppliesAllEditorScopesThroughUndoableCommand()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var owner = new MainWindow([]);
+            owner.Show();
+            var opener = InvokeOpener(owner, "ShowHeaderFooterDialogAsync");
+            var dialog = await WaitForOwnedDialogAsync(owner);
+            try
+            {
+                var values = new Dictionary<string, string>
+                {
+                    ["HeaderFooterHeaderLeftBox"] = "header-left",
+                    ["HeaderFooterHeaderCenterBox"] = "header-center",
+                    ["HeaderFooterHeaderRightBox"] = "header-right",
+                    ["HeaderFooterFooterLeftBox"] = "footer-left",
+                    ["HeaderFooterFooterCenterBox"] = "footer-center",
+                    ["HeaderFooterFooterRightBox"] = "footer-right",
+                    ["HeaderFooterFirstPageHeaderLeftBox"] = "first-header-left",
+                    ["HeaderFooterFirstPageHeaderCenterBox"] = "first-header-center",
+                    ["HeaderFooterFirstPageHeaderRightBox"] = "first-header-right",
+                    ["HeaderFooterFirstPageFooterLeftBox"] = "first-footer-left",
+                    ["HeaderFooterFirstPageFooterCenterBox"] = "first-footer-center",
+                    ["HeaderFooterFirstPageFooterRightBox"] = "first-footer-right",
+                    ["HeaderFooterEvenPageHeaderLeftBox"] = "even-header-left",
+                    ["HeaderFooterEvenPageHeaderCenterBox"] = "even-header-center",
+                    ["HeaderFooterEvenPageHeaderRightBox"] = "even-header-right",
+                    ["HeaderFooterEvenPageFooterLeftBox"] = "even-footer-left",
+                    ["HeaderFooterEvenPageFooterCenterBox"] = "even-footer-center",
+                    ["HeaderFooterEvenPageFooterRightBox"] = "even-footer-right",
+                };
+                foreach (var (automationId, value) in values)
+                    FindByAutomationId<TextBox>(dialog, automationId)!.Text = value;
+
+                FindByAutomationId<CheckBox>(dialog, "HeaderFooterDifferentFirstPageCheck")!.IsChecked = true;
+                FindByAutomationId<CheckBox>(dialog, "HeaderFooterDifferentOddEvenCheck")!.IsChecked = true;
+                FindByAutomationId<Button>(dialog, "HeaderFooterEditorOkButton")!
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await AwaitClosedAsync(opener);
+
+                var session = (WorkbookSession)typeof(MainWindow)
+                    .GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .GetValue(owner)!;
+                var sheet = session.ActiveSheet;
+                sheet.PageHeader.Left.Should().Be("header-left");
+                sheet.PageHeader.Center.Should().Be("header-center");
+                sheet.PageFooter.Right.Should().Be("footer-right");
+                sheet.FirstPageHeader.Center.Should().Be("first-header-center");
+                sheet.FirstPageFooter.Right.Should().Be("first-footer-right");
+                sheet.EvenPageHeader.Left.Should().Be("even-header-left");
+                sheet.EvenPageFooter.Center.Should().Be("even-footer-center");
+                sheet.DifferentFirstPageHeaderFooter.Should().BeTrue();
+                sheet.DifferentOddEvenHeaderFooter.Should().BeTrue();
+                session.CanUndo.Should().BeTrue("the dedicated ribbon route must use the undoable command pipeline");
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
+                await AwaitClosedAsync(opener);
+                owner.Close();
+            }
+        }, CancellationToken.None);
+    }
 
     [Fact]
     public async Task SymbolPicker_UsesListFocus_CyclesBothTabs_AndEscapeCloses()

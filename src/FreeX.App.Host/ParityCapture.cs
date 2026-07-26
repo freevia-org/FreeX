@@ -500,8 +500,10 @@ internal static class ParityCapture
 
     private static void CaptureDialogs(string outDir, List<SurfaceResult> results, string? targetSurfaceId = null)
     {
-        var workbook = new Workbook("ParityDemo");
-        var sheet = workbook.SheetCount > 0 ? workbook.GetSheetAt(0) : workbook.AddSheet("Sheet1");
+        // Use the same seeded workbook as Avalonia so Page Setup Header/Footer captures compare
+        // resolved preview text rather than two unrelated blank-sheet states.
+        var workbook = ParityDemoWorkbookFactory.Create();
+        var sheet = workbook.Sheets.Single();
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 5, 5));
@@ -562,9 +564,21 @@ internal static class ParityCapture
                 },
                     ["LayoutAndFormat", "TotalsAndFilters", "Display", "Printing", "Data", "AltText"]);
             }
+            else if (string.Equals(targetSurfaceId, "dialog.PageSetup", StringComparison.Ordinal) ||
+                targetSurfaceId.StartsWith("dialog.PageSetup.", StringComparison.Ordinal))
+            {
+                CaptureDialogTabs(results, "dialog.PageSetup", outDir,
+                    () => new PageSetupDialog(sheet),
+                    ["Page", "Margins", "HeaderFooter", "Sheet"]);
+            }
+            else if (string.Equals(targetSurfaceId, "dialog.HeaderFooterDialog", StringComparison.Ordinal))
+            {
+                CaptureDialog(results, "dialog.HeaderFooterDialog", outDir,
+                    () => new HeaderFooterDialog(sheet));
+            }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, and dialog.PivotTableOptions in this lane.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, and dialog.HeaderFooterDialog in this lane.");
             }
 
             return;
@@ -781,6 +795,9 @@ internal static class ParityCapture
             () => new PageSetupDialog(sheet),
             ["Page", "Margins", "HeaderFooter", "Sheet"]);
 
+        CaptureDialog(results, "dialog.HeaderFooterDialog", outDir,
+            () => new HeaderFooterDialog(sheet));
+
         CaptureDialogTabs(results, "dialog.Options", outDir,
             () => new OptionsDialog(FreeXOptions.Load()),
             [
@@ -791,6 +808,7 @@ internal static class ParityCapture
 
     private static Func<string, SheetId?> ResolveSheetId(Workbook workbook) =>
         name => workbook.Sheets.FirstOrDefault(sheet => string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id;
+
 
     private static AutoFilterDialog CreateAutoFilterDialog(Workbook workbook, Sheet sheet)
     {

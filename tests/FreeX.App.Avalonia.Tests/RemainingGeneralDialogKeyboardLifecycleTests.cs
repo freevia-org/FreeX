@@ -36,7 +36,9 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
         await AssertProductionEscapeAsync(
             openerName,
             CreatePageSetupArguments(openerName),
-            "PageSetupCancelButton");
+            openerName == "ShowHeaderFooterDialogAsync"
+                ? "HeaderFooterEditorCancelButton"
+                : "PageSetupCancelButton");
     }
 
     [Fact]

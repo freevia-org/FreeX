@@ -456,6 +456,13 @@ public sealed class WorkbookSession
         _groupedSheetIds.Contains(ActiveSheet.Id) &&
         GetSelectableSheetIds().Count(_groupedSheetIds.Contains) > 1;
 
+    /// <summary>
+    /// Returns the sheets targeted by a grouped edit, preserving the active sheet as the first
+    /// target. Hosts use this to build the same undoable per-sheet command that WPF's grouped
+    /// ribbon actions execute.
+    /// </summary>
+    public IReadOnlyList<SheetId> GetCurrentGroupedEditSheetIds() => CurrentGroupedEditSheetIds();
+
     public bool IsShowingGridlines
     {
         get

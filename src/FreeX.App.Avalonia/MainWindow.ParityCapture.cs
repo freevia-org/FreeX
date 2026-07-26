@@ -153,7 +153,7 @@ public sealed partial class MainWindow
         Opened("GoalSeekStatusDialog", "dialog.GoalSeekStatus", "ShowGoalSeekStatusDialogAsync"),
         Opened("GoToDialog", "dialog.GoTo", "ShowGoToDialogAsync"),
         Opened("GoToSpecialDialog", "dialog.GoToSpecial", "ShowGoToSpecialDialogAsync"),
-        Opened("HeaderFooterDialog", "dialog.PageSetup.HeaderFooter", "ShowPageSetupDialogAsync (Header/Footer tab)"),
+        Opened("HeaderFooterDialog", "dialog.HeaderFooterDialog", "ShowHeaderFooterDialogAsync (dedicated editor)"),
         Opened("HeaderFooterPictureFormatDialog", "dialog.HeaderFooterPictureFormat", "ShowHeaderFooterPictureFormatDialogAsync"),
         Opened("HighlightCellsRuleDialog", "dialog.HighlightCellsRule", "ShowConditionalFormatNewRuleDialogAsync (CellValue)"),
         Opened("HyperlinkDialog", "dialog.InsertHyperlink", "ShowInsertHyperlinkInputDialogAsync"),
@@ -516,12 +516,10 @@ public sealed partial class MainWindow
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsParityDialogAsync()),
+        ("dialog.HeaderFooterDialog", ShowHeaderFooterDialogAsync),
     ];
 
-    private IReadOnlyList<(string SurfaceId, Func<Task> Opener)> ParityInteractionOnlyDialogOpeners() =>
-    [
-        ("dialog.PageSetup.HeaderFooter", ShowHeaderFooterDialogAsync),
-    ];
+    private IReadOnlyList<(string SurfaceId, Func<Task> Opener)> ParityInteractionOnlyDialogOpeners() => [];
 
     /// <summary>
     /// The multi-tab / multi-category dialog surfaces: each opens once and is rendered per tab
