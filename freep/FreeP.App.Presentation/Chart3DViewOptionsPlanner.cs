@@ -12,6 +12,7 @@ public sealed record Chart3DViewOptionsSurfacePlan(
     string PerspectiveLabel,
     string HeightPercentLabel,
     string DepthPercentLabel,
+    string BarGapDepthPercentLabel,
     string RightAngleAxesLabel,
     string WireframeLabel,
     string AutoHint,
@@ -31,9 +32,10 @@ public sealed class Chart3DViewOptionsPlanner
     public const string PerspectiveLabel = "Perspective";
     public const string HeightPercentLabel = "Height (%)";
     public const string DepthPercentLabel = "Depth (%)";
+    public const string BarGapDepthPercentLabel = "Gap depth (%)";
     public const string RightAngleAxesLabel = "Right-angle axes";
     public const string WireframeLabel = "Surface wireframe";
-    public const string AutoHint = "Blank values use the chart default. Wireframe applies to Surface3D charts.";
+    public const string AutoHint = "Blank values use the chart default. Gap depth applies to 3-D column/bar charts; wireframe applies to Surface3D charts.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
     public const double DefaultDialogWidth = 420;
@@ -51,6 +53,7 @@ public sealed class Chart3DViewOptionsPlanner
     private int? _perspective;
     private int? _heightPercent;
     private int? _depthPercent;
+    private int? _barGapDepthPercent;
     private bool? _rightAngleAxes;
     private bool? _wireframe;
 
@@ -66,6 +69,8 @@ public sealed class Chart3DViewOptionsPlanner
             _rightAngleAxes = view.RightAngleAxes;
         }
 
+        SupportsBarGapDepth = chart.ThreeDStyle is ChartThreeDStyle.Column or ChartThreeDStyle.Bar;
+        _barGapDepthPercent = SupportsBarGapDepth ? chart.BarGapDepthPercent : null;
         _wireframe = chart.WireframeSpecified ? chart.Wireframe : null;
     }
 
@@ -78,6 +83,7 @@ public sealed class Chart3DViewOptionsPlanner
             PerspectiveLabel,
             HeightPercentLabel,
             DepthPercentLabel,
+            BarGapDepthPercentLabel,
             RightAngleAxesLabel,
             WireframeLabel,
             AutoHint,
@@ -95,6 +101,8 @@ public sealed class Chart3DViewOptionsPlanner
     public int? Perspective => _perspective;
     public int? HeightPercent => _heightPercent;
     public int? DepthPercent => _depthPercent;
+    public int? BarGapDepthPercent => _barGapDepthPercent;
+    public bool SupportsBarGapDepth { get; }
     public bool? RightAngleAxes => _rightAngleAxes;
     public bool? Wireframe => _wireframe;
 
@@ -103,6 +111,9 @@ public sealed class Chart3DViewOptionsPlanner
     public void SetPerspective(int? value) => _perspective = Normalize(value, 0, 240);
     public void SetHeightPercent(int? value) => _heightPercent = Normalize(value, 0, 500);
     public void SetDepthPercent(int? value) => _depthPercent = Normalize(value, 0, 500);
+    public void SetBarGapDepthPercent(int? value) => _barGapDepthPercent = SupportsBarGapDepth
+        ? Normalize(value, 0, 500)
+        : null;
     public void SetRightAngleAxes(bool? value) => _rightAngleAxes = value;
     public void SetWireframe(bool? value) => _wireframe = value;
 
@@ -113,7 +124,8 @@ public sealed class Chart3DViewOptionsPlanner
         _heightPercent,
         _depthPercent,
         _rightAngleAxes,
-        _wireframe);
+        _wireframe,
+        _barGapDepthPercent);
 
     private static int? Normalize(int? value, int minimum, int maximum) =>
         value is null ? null : Math.Clamp(value.Value, minimum, maximum);

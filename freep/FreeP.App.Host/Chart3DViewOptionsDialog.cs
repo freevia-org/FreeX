@@ -16,6 +16,7 @@ public sealed class Chart3DViewOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly TextBox _perspectiveBox;
     private readonly TextBox _heightBox;
     private readonly TextBox _depthBox;
+    private readonly TextBox _barGapDepthBox;
     private readonly ComboBox _rightAngleCombo;
     private readonly ComboBox _wireframeCombo;
 
@@ -29,7 +30,7 @@ public sealed class Chart3DViewOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         Title = surface.Title;
         Width = Chart3DViewOptionsPlanner.DefaultDialogWidth;
-        Height = Chart3DViewOptionsPlanner.DefaultDialogHeight;
+        Height = Chart3DViewOptionsPlanner.DefaultDialogHeight + 36;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
@@ -38,6 +39,12 @@ public sealed class Chart3DViewOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _perspectiveBox = new TextBox { Text = Format(_planner.Perspective), MinWidth = 150 };
         _heightBox = new TextBox { Text = Format(_planner.HeightPercent), MinWidth = 150 };
         _depthBox = new TextBox { Text = Format(_planner.DepthPercent), MinWidth = 150 };
+        _barGapDepthBox = new TextBox
+        {
+            Text = Format(_planner.BarGapDepthPercent),
+            MinWidth = 150,
+            IsEnabled = _planner.SupportsBarGapDepth,
+        };
         _rightAngleCombo = BuildBooleanCombo(_planner.RightAngleAxes);
         _wireframeCombo = BuildBooleanCombo(_planner.Wireframe);
 
@@ -60,6 +67,7 @@ public sealed class Chart3DViewOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         content.Children.Add(MakeRow(surface.PerspectiveLabel, _perspectiveBox));
         content.Children.Add(MakeRow(surface.HeightPercentLabel, _heightBox));
         content.Children.Add(MakeRow(surface.DepthPercentLabel, _depthBox));
+        content.Children.Add(MakeRow(surface.BarGapDepthPercentLabel, _barGapDepthBox));
         content.Children.Add(MakeRow(surface.RightAngleAxesLabel, _rightAngleCombo));
         content.Children.Add(MakeRow(surface.WireframeLabel, _wireframeCombo));
         content.Children.Add(new TextBlock { Text = surface.AutoHint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
@@ -93,6 +101,7 @@ public sealed class Chart3DViewOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _planner.SetPerspective(ParseOptionalInt(_perspectiveBox.Text, surface: "Perspective", 0, 240));
         _planner.SetHeightPercent(ParseOptionalInt(_heightBox.Text, surface: "Height", 0, 500));
         _planner.SetDepthPercent(ParseOptionalInt(_depthBox.Text, surface: "Depth", 0, 500));
+        _planner.SetBarGapDepthPercent(ParseOptionalInt(_barGapDepthBox.Text, surface: "Gap depth", 0, 500));
         _planner.SetRightAngleAxes(ReadBoolean(_rightAngleCombo));
         _planner.SetWireframe(ReadBoolean(_wireframeCombo));
     }
