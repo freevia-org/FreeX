@@ -6140,6 +6140,7 @@ public sealed class MainWindowHeadlessTests
                 displayBlanksAs: ChartDisplayBlanksAs.Zero,
                 showDataLabelsOverMaximum: true);
             dialog.SetVaryColorsForTests(true);
+            dialog.SetLegendOverlayForTests(true);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6147,7 +6148,7 @@ public sealed class MainWindowHeadlessTests
         if (!ran) return;
         options.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, true, DataLabelPosition.OutsideEnd, false, true,
-            true, true, true, true, "0.0%", " | ", null, null, ChartDisplayBlanksAs.Zero, true, true));
+            true, true, true, true, "0.0%", " | ", null, null, ChartDisplayBlanksAs.Zero, true, true, true));
     }
 
     [Fact]

@@ -127,6 +127,7 @@ public sealed class ChartDataDialogTests : IDisposable
 
         var dialog = new ChartDisplayOptionsDialog(sess);
         dialog.SetVaryColorsForTests(true);
+        dialog.SetLegendOverlayForTests(true);
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -134,6 +135,7 @@ public sealed class ChartDataDialogTests : IDisposable
         options.Legend.Should().Be(LegendPosition.Right);
         options.DisplayBlanksAs.Should().BeNull();
         options.VaryColors.Should().BeTrue();
+        options.LegendOverlay.Should().BeTrue();
     }
 
     [StaFact]

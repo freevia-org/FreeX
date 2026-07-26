@@ -18,6 +18,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
     private ChartDisplayBlanksAs? _oldDisplayBlanksAs;
     private bool? _oldShowDataLabelsOverMaximum;
     private bool _oldVaryColors;
+    private bool? _oldLegendOverlay;
 
     public SetChartDisplayOptionsCommand(
         int slideIndex,
@@ -48,6 +49,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         _oldDisplayBlanksAs = chart.DisplayBlanksAs;
         _oldShowDataLabelsOverMaximum = chart.ShowDataLabelsOverMaximum;
         _oldVaryColors = chart.VaryColors;
+        _oldLegendOverlay = chart.LegendOverlay;
 
         chart.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title;
         chart.HasAutomaticTitle = false;
@@ -59,6 +61,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.DisplayBlanksAs = _newOptions.DisplayBlanksAs;
         chart.ShowDataLabelsOverMaximum = _newOptions.ShowDataLabelsOverMaximum;
         chart.VaryColors = _newOptions.VaryColors ?? chart.VaryColors;
+        chart.LegendOverlay = _newOptions.LegendOverlay;
 
         if (chart.DataLabels is not null)
         {
@@ -112,6 +115,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.DisplayBlanksAs = _oldDisplayBlanksAs;
         chart.ShowDataLabelsOverMaximum = _oldShowDataLabelsOverMaximum;
         chart.VaryColors = _oldVaryColors;
+        chart.LegendOverlay = _oldLegendOverlay;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
