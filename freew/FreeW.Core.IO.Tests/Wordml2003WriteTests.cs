@@ -206,6 +206,54 @@ public class Wordml2003WriteTests
         fmt.ColorHex.Should().Be("#0070C0");
     }
 
+    [Fact]
+    public void RoundTrip_PreservesExternalHyperlinkAndScreenTip()
+    {
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("FreeW")
+        {
+            HyperlinkUrl = "https://freew.dev/docs?q=wordml",
+            HyperlinkTooltip = "Open the FreeW docs",
+        });
+        source.Blocks.Add(paragraph);
+
+        var xml = WriteToXml(source);
+        var hlink = xml.Descendants(Wordml2003Reader.W + "hlink").Should().ContainSingle().Subject;
+        hlink.Attribute(Wordml2003Reader.W + "dest")!.Value.Should().Be("https://freew.dev/docs?q=wordml");
+        hlink.Attribute(Wordml2003Reader.W + "tooltip")!.Value.Should().Be("Open the FreeW docs");
+
+        var run = RoundTrip(source).Blocks.OfType<Paragraph>().Single().Runs.Single();
+        run.HyperlinkUrl.Should().Be("https://freew.dev/docs?q=wordml");
+        run.HyperlinkAnchor.Should().BeNull();
+        run.HyperlinkTooltip.Should().Be("Open the FreeW docs");
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesInternalHyperlinkAnchor()
+    {
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Jump to section")
+        {
+            HyperlinkAnchor = "Summary",
+            HyperlinkTooltip = "Go to the summary",
+        });
+        source.Blocks.Add(paragraph);
+
+        var xml = WriteToXml(source);
+        var hlink = xml.Descendants(Wordml2003Reader.W + "hlink").Should().ContainSingle().Subject;
+        hlink.Attribute(Wordml2003Reader.W + "bookmark")!.Value.Should().Be("Summary");
+        hlink.Attribute(Wordml2003Reader.W + "tooltip")!.Value.Should().Be("Go to the summary");
+
+        var run = RoundTrip(source).Blocks.OfType<Paragraph>().Single().Runs.Single();
+        run.HyperlinkUrl.Should().BeNull();
+        run.HyperlinkAnchor.Should().Be("Summary");
+        run.HyperlinkTooltip.Should().Be("Go to the summary");
+    }
+
     // -----------------------------------------------------------------------
     // R18 — super/subscript round-trip
     // -----------------------------------------------------------------------

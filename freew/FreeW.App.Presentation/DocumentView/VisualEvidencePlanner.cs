@@ -3404,7 +3404,14 @@ public static class FreeWVisualEvidencePlanner
         foreach (var blockIndex in sourceBlockIndexes)
         {
             if (blockIndex >= 0 && blockIndex < source.Blocks.Count)
-                document.Blocks.Add(DocumentMerge.CloneBlock(source.Blocks[blockIndex]));
+            {
+                var block = DocumentMerge.CloneBlock(source.Blocks[blockIndex]);
+                // The surface already represents the resolved section. Retaining a source section
+                // break here would create an additional page boundary inside the isolated capture.
+                if (block is Paragraph paragraph)
+                    paragraph.SectionBreak = null;
+                document.Blocks.Add(block);
+            }
         }
 
         if (document.Blocks.Count == 0)

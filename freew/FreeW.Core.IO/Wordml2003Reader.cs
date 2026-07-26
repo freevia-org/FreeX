@@ -122,11 +122,21 @@ public static class Wordml2003Reader
             }
             else if (element.Name == W + "hlink")
             {
+                var url = (string?)element.Attribute(W + "dest");
+                var anchor = (string?)element.Attribute(W + "bookmark");
+                var tooltip = (string?)element.Attribute(W + "tooltip");
                 foreach (var child in element.Elements(W + "r"))
                 {
                     var run = ReadRun(child);
                     if (run is not null)
+                    {
+                        if (!string.IsNullOrEmpty(url))
+                            run.HyperlinkUrl = url;
+                        else if (!string.IsNullOrEmpty(anchor))
+                            run.HyperlinkAnchor = anchor;
+                        run.HyperlinkTooltip = tooltip;
                         yield return run;
+                    }
                 }
             }
         }
