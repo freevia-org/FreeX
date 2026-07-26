@@ -3,6 +3,41 @@ namespace FreeW.Core.Model.Tests;
 public class DocumentMergeTests
 {
     [Fact]
+    public void Merge_RemapsCollidingBookmarksAndTheirInternalReferences()
+    {
+        var source = new TextDocument();
+        var sourceParagraph = new Paragraph("Source target");
+        sourceParagraph.BookmarkNames.Add("Shared");
+        sourceParagraph.BookmarkNames.Add("SourceOnly");
+        sourceParagraph.Runs.Add(new Run("jump") { HyperlinkAnchor = "Shared" });
+        sourceParagraph.Runs.Add(Run.CrossReferenceFieldRun(
+            new CrossReferenceField(CrossRefFieldKind.Ref, "Shared", CrossRefInsertAs.Text, Hyperlink: true),
+            "Source target"));
+        sourceParagraph.Runs.Add(Run.FootnoteReference(1));
+        source.Blocks.Add(sourceParagraph);
+        var footnote = new Footnote(1, "Source note");
+        footnote.Content[0].Runs.Add(new Run("jump from note") { HyperlinkAnchor = "Shared" });
+        source.Footnotes[1] = footnote;
+
+        var target = new TextDocument();
+        var targetParagraph = new Paragraph("Target one");
+        targetParagraph.BookmarkNames.Add("Shared");
+        target.Blocks.Add(targetParagraph);
+        target.Blocks.Add(new Paragraph("Target two") { BookmarkName = "Shared_FreeW1" });
+
+        var inserted = DocumentMerge.Merge(target, target.Blocks.Count, source);
+
+        var merged = inserted.Single().Should().BeOfType<Paragraph>().Subject;
+        merged.BookmarkNames.Should().Equal("Shared_FreeW2", "SourceOnly");
+        merged.Runs.Single(run => run.Text == "jump").HyperlinkAnchor.Should().Be("Shared_FreeW2");
+        merged.Runs.Single(run => run.CrossReference is not null).CrossReference!.Target.Should().Be("Shared_FreeW2");
+        target.Footnotes[1].Content.Single().Runs.Last().HyperlinkAnchor.Should().Be("Shared_FreeW2");
+        target.Blocks[0].Should().BeOfType<Paragraph>().Which.BookmarkName.Should().Be("Shared");
+        sourceParagraph.BookmarkNames.Should().Equal("Shared", "SourceOnly");
+        sourceParagraph.Runs.Single(run => run.Text == "jump").HyperlinkAnchor.Should().Be("Shared");
+    }
+
+    [Fact]
     public void Merge_TransfersAndRemapsReferencedNotesAndCommentThreads()
     {
         var source = new TextDocument();

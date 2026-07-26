@@ -43,7 +43,9 @@ public static class DocumentMerge
     {
         ArgumentNullException.ThrowIfNull(target);
         var clones = CloneBlocks(source);
+        var existingBookmarkNames = BookmarkNamesIn(target);
         var allParagraphs = TransferAnnotations(target, source, clones);
+        RemapBookmarksAndInternalReferences(allParagraphs, existingBookmarkNames);
         var roots = allParagraphs
             .SelectMany(paragraph => paragraph.Runs)
             .Select(run => run.PreservedDrawing)
@@ -288,6 +290,68 @@ public static class DocumentMerge
                             .ToArray());
     }
 
+    private static HashSet<string> BookmarkNamesIn(TextDocument document)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var paragraph in EnumerateParagraphs(document.Blocks).Concat(EnumerateAnnotationParagraphs(document)))
+            foreach (var name in paragraph.BookmarkNames)
+                if (!string.IsNullOrEmpty(name))
+                    names.Add(name);
+        return names;
+    }
+
+    private static void RemapBookmarksAndInternalReferences(
+        IReadOnlyList<Paragraph> paragraphs,
+        HashSet<string> usedBookmarkNames)
+    {
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var paragraph in paragraphs)
+        {
+            for (var index = 0; index < paragraph.BookmarkNames.Count; index++)
+            {
+                var name = paragraph.BookmarkNames[index];
+                if (string.IsNullOrEmpty(name))
+                    continue;
+
+                if (!names.TryGetValue(name, out var mapped))
+                {
+                    mapped = usedBookmarkNames.Add(name)
+                        ? name
+                        : AllocateBookmarkName(name, usedBookmarkNames);
+                    names[name] = mapped;
+                }
+                paragraph.BookmarkNames[index] = mapped;
+            }
+        }
+
+        if (names.Count == 0)
+            return;
+
+        foreach (var paragraph in paragraphs)
+            foreach (var run in paragraph.Runs)
+            {
+                if (run.HyperlinkAnchor is { } anchor && names.TryGetValue(anchor, out var mappedAnchor))
+                    run.HyperlinkAnchor = mappedAnchor;
+                if (run.CrossReference is { Kind: not CrossRefFieldKind.NoteRef } crossReference
+                    && names.TryGetValue(crossReference.Target, out var mappedTarget))
+                    run.CrossReference = crossReference with { Target = mappedTarget };
+            }
+    }
+
+    private static string AllocateBookmarkName(string sourceName, HashSet<string> usedNames)
+    {
+        for (var index = 1; ; index++)
+        {
+            var suffix = "_FreeW" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var prefixLength = Math.Max(1, 40 - suffix.Length);
+            var candidate = sourceName.Length <= prefixLength
+                ? sourceName + suffix
+                : sourceName[..prefixLength] + suffix;
+            if (usedNames.Add(candidate))
+                return candidate;
+        }
+    }
+
     private static IReadOnlyList<Paragraph> TransferAnnotations(
         TextDocument target,
         TextDocument source,
@@ -448,6 +512,19 @@ public static class DocumentMerge
                 foreach (var cellParagraph in cell.Paragraphs)
                     yield return cellParagraph;
         }
+    }
+
+    private static IEnumerable<Paragraph> EnumerateAnnotationParagraphs(TextDocument document)
+    {
+        foreach (var footnote in document.Footnotes.Values)
+            foreach (var paragraph in footnote.Content)
+                yield return paragraph;
+        foreach (var endnote in document.Endnotes.Values)
+            foreach (var paragraph in endnote.Content)
+                yield return paragraph;
+        foreach (var comment in document.Comments.Values.SelectMany(comment => comment.ThreadInOrder()))
+            foreach (var paragraph in comment.Content)
+                yield return paragraph;
     }
 
     private static IEnumerable<string> ReadInternalRelationshipTargets(string ownerPartName, byte[] relsBytes)

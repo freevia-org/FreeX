@@ -52,6 +52,39 @@ public class DocumentMergePreservedPartsTests
     }
 
     [Fact]
+    public void Merge_WritesRemappedBookmarksAndInternalReferences()
+    {
+        var source = new TextDocument();
+        var sourceParagraph = new Paragraph("Source target") { BookmarkName = "Shared" };
+        sourceParagraph.Runs.Add(new Run("jump") { HyperlinkAnchor = "Shared" });
+        sourceParagraph.Runs.Add(Run.CrossReferenceFieldRun(
+            new CrossReferenceField(CrossRefFieldKind.Ref, "Shared", CrossRefInsertAs.Text, Hyperlink: true),
+            "Source target"));
+        source.Blocks.Add(sourceParagraph);
+
+        var target = new TextDocument();
+        target.Blocks.Add(new Paragraph("Target") { BookmarkName = "Shared" });
+
+        DocumentMerge.Merge(target, target.Blocks.Count, source);
+        var bytes = WriteBytes(target);
+
+        using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        var document = ReadXml(zip, "word/document.xml");
+        document.Descendants(Wordprocessing + "bookmarkStart")
+            .Select(bookmark => (string?)bookmark.Attribute(Wordprocessing + "name"))
+            .Should().Contain(["Shared", "Shared_FreeW1"]);
+        document.Descendants(Wordprocessing + "hyperlink")
+            .Single().Attribute(Wordprocessing + "anchor")!.Value.Should().Be("Shared_FreeW1");
+        document.Descendants(Wordprocessing + "fldSimple")
+            .Single().Attribute(Wordprocessing + "instr")!.Value.Should().Contain("REF Shared_FreeW1");
+
+        var reread = DocxReader.Read(new MemoryStream(bytes));
+        reread.Blocks.OfType<Paragraph>().Last().BookmarkName.Should().Be("Shared_FreeW1");
+        reread.Blocks.OfType<Paragraph>().Last().Runs.Single(run => run.Text == "jump").HyperlinkAnchor.Should().Be("Shared_FreeW1");
+        reread.Blocks.OfType<Paragraph>().Last().Runs.Single(run => run.CrossReference is not null).CrossReference!.Target.Should().Be("Shared_FreeW1");
+    }
+
+    [Fact]
     public void Merge_PreservesRenamedAltChunkPackageGraph_WhenWritten()
     {
         const string altChunkRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk";
