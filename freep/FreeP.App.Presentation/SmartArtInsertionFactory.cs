@@ -18,14 +18,16 @@ internal static class SmartArtInsertionFactory
     public static SmartArtShape Create(
         SmartArtLayoutPreset preset,
         int partIndex,
-        IReadOnlyList<string> labels)
+        IReadOnlyList<string> labels,
+        IReadOnlyList<SlideObjectPicturePayload>? pictures = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(partIndex);
         ArgumentNullException.ThrowIfNull(labels);
         if (labels.Count == 0)
             throw new ArgumentException("A SmartArt process requires at least one node.", nameof(labels));
 
-        var ids = labels.Select(_ => $"{{{Guid.NewGuid()}}}").ToArray();
+        var ids = labels.Select((_, index) => (index + 1).ToString()).ToArray();
+        var nodePictures = NormalizePictures(preset, labels.Count, pictures);
         var (layoutId, family) = GetLayoutDefinition(preset);
         var smart = new SmartArtShape
         {
@@ -38,9 +40,16 @@ internal static class SmartArtInsertionFactory
         };
 
         var root = new SmartArtNode { ModelId = ids[0], Text = labels[0], Level = 0 };
+        if (nodePictures is not null)
+            root.Picture = ToImagePart(nodePictures[0]);
         smart.Data.Nodes.Add(root);
         for (var index = 1; index < labels.Count; index++)
-            root.Children.Add(new SmartArtNode { ModelId = ids[index], Text = labels[index], Level = 1 });
+        {
+            var node = new SmartArtNode { ModelId = ids[index], Text = labels[index], Level = 1 };
+            if (nodePictures is not null)
+                node.Picture = ToImagePart(nodePictures[index]);
+            root.Children.Add(node);
+        }
 
         var prefix = "ppt/diagrams/";
         var dataPath = $"{prefix}data{partIndex}.xml";
@@ -54,18 +63,71 @@ internal static class SmartArtInsertionFactory
         AddPart(smart, "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml", layoutPath,
             new XDocument(new XElement(Diagram + "layoutDef",
                 new XAttribute(XNamespace.Xmlns + "dgm", Diagram.NamespaceName),
-                new XAttribute("uniqueId", smart.Data.LayoutUniqueId))));
+                new XAttribute("uniqueId", smart.Data.LayoutUniqueId),
+                new XElement(Diagram + "title", new XAttribute("val", "")),
+                new XElement(Diagram + "desc", new XAttribute("val", "")),
+                new XElement(Diagram + "catLst",
+                    new XElement(Diagram + "cat", new XAttribute("type", "list"), new XAttribute("pri", "1000"))),
+                new XElement(Diagram + "sampData",
+                    new XElement(Diagram + "dataModel",
+                        new XElement(Diagram + "ptLst"),
+                        new XElement(Diagram + "bg"),
+                        new XElement(Diagram + "whole"))),
+                new XElement(Diagram + "styleData",
+                    new XElement(Diagram + "dataModel",
+                        new XElement(Diagram + "ptLst"),
+                        new XElement(Diagram + "bg"),
+                        new XElement(Diagram + "whole"))),
+                new XElement(Diagram + "clrData",
+                    new XElement(Diagram + "dataModel",
+                        new XElement(Diagram + "ptLst"),
+                        new XElement(Diagram + "bg"),
+                        new XElement(Diagram + "whole"))),
+                new XElement(Diagram + "layoutNode",
+                    new XAttribute("name", "root"),
+                    new XElement(Diagram + "alg", new XAttribute("type", "lin")),
+                    new XElement(Diagram + "shape", new XElement(Diagram + "adjLst")),
+                    new XElement(Diagram + "presOf"),
+                    new XElement(Diagram + "constrLst"),
+                    new XElement(Diagram + "ruleLst")))));
         AddPart(smart, "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml", stylePath,
             new XDocument(new XElement(Diagram + "styleDef",
-                new XAttribute(XNamespace.Xmlns + "dgm", Diagram.NamespaceName))));
+                new XAttribute(XNamespace.Xmlns + "dgm", Diagram.NamespaceName),
+                new XAttribute("uniqueId", "urn:freep:smartart:style:default"),
+                new XElement(Diagram + "title", new XAttribute("val", "Default")),
+                new XElement(Diagram + "catLst"),
+                new XElement(Diagram + "styleLbl", new XAttribute("name", "node0")))));
         AddPart(smart, "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml", colorsPath,
             new XDocument(new XElement(Diagram + "colorsDef",
                 new XAttribute(XNamespace.Xmlns + "dgm", Diagram.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "a", Drawing.NamespaceName))));
+                new XAttribute(XNamespace.Xmlns + "a", Drawing.NamespaceName),
+                new XAttribute("uniqueId", "urn:freep:smartart:colors:default"),
+                new XElement(Diagram + "styleLbl", new XAttribute("name", "node0")))));
         AddPart(smart, "application/vnd.ms-office.drawingml.diagramDrawing+xml", drawingPath,
-            new XDocument(new XElement(DrawingMl + "drawing",
-                new XAttribute(XNamespace.Xmlns + "dsp", DrawingMl.NamespaceName),
-                new XElement(DrawingMl + "spTree"))));
+            BuildDrawingXml(nodePictures));
+
+        if (nodePictures is not null)
+        {
+            var drawingRelationships = new List<(string id, string type, string target)>();
+            for (var index = 0; index < nodePictures.Count; index++)
+            {
+                var image = nodePictures[index];
+                var extension = GetImageExtension(image.ContentType);
+                var mediaPath = $"ppt/media/smartart{partIndex}_picture{index + 1}.{extension}";
+                smart.Parts[mediaPath] = new DiagramPart
+                {
+                    ContentType = image.ContentType,
+                    PartPath = mediaPath,
+                    Bytes = image.Bytes.ToArray(),
+                };
+                drawingRelationships.Add((
+                    $"rIdPic{index + 1}",
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+                    $"../media/smartart{partIndex}_picture{index + 1}.{extension}"));
+            }
+
+            smart.PartRels[drawingPath] = SerializeRelationships(drawingRelationships.ToArray());
+        }
 
         smart.DiagramRelIds["dm"] = $"rIdDm{partIndex}";
         smart.DiagramRelIds["lo"] = $"rIdLo{partIndex}";
@@ -79,6 +141,90 @@ internal static class SmartArtInsertionFactory
 
         return smart;
     }
+
+    private static IReadOnlyList<SlideObjectPicturePayload>? NormalizePictures(
+        SmartArtLayoutPreset preset,
+        int nodeCount,
+        IReadOnlyList<SlideObjectPicturePayload>? pictures)
+    {
+        if (preset != SmartArtLayoutPreset.PictureCaptionList)
+            return null;
+
+        if (pictures is null || pictures.Count == 0)
+            throw new ArgumentException("Picture Caption List requires at least one image.", nameof(pictures));
+
+        if (pictures.Count == nodeCount)
+            return pictures;
+
+        if (pictures.Count == 1)
+            return Enumerable.Repeat(pictures[0], nodeCount).ToArray();
+
+        throw new ArgumentException(
+            $"Picture Caption List requires one image or exactly {nodeCount} images.",
+            nameof(pictures));
+    }
+
+    private static ImagePart ToImagePart(SlideObjectPicturePayload payload) => new()
+    {
+        Bytes = payload.Bytes.ToArray(),
+        ContentType = payload.ContentType,
+    };
+
+    private static XDocument BuildDrawingXml(IReadOnlyList<SlideObjectPicturePayload>? pictures)
+    {
+        var drawing = new XElement(DrawingMl + "drawing",
+            new XAttribute(XNamespace.Xmlns + "dsp", DrawingMl.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "a", Drawing.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"),
+            new XElement(DrawingMl + "spTree",
+                new XElement(DrawingMl + "nvGrpSpPr",
+                    new XElement(DrawingMl + "cNvPr",
+                        new XAttribute("id", "1"), new XAttribute("name", "SmartArt Picture Caption List")),
+                    new XElement(DrawingMl + "cNvGrpSpPr")),
+                new XElement(DrawingMl + "grpSpPr",
+                    new XElement(Drawing + "xfrm",
+                        new XElement(Drawing + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                        new XElement(Drawing + "ext", new XAttribute("cx", "1"), new XAttribute("cy", "1")),
+                        new XElement(Drawing + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                        new XElement(Drawing + "chExt", new XAttribute("cx", "1"), new XAttribute("cy", "1"))))));
+
+        if (pictures is not null)
+        {
+            var tree = drawing.Element(DrawingMl + "spTree")!;
+            for (var index = 0; index < pictures.Count; index++)
+            {
+                tree.Add(new XElement(DrawingMl + "sp",
+                    new XAttribute("modelId", (index + 1).ToString()),
+                    new XElement(DrawingMl + "nvSpPr",
+                        new XElement(DrawingMl + "cNvPr",
+                            new XAttribute("id", (index + 1).ToString()),
+                            new XAttribute("name", $"Picture {index + 1}")),
+                        new XElement(DrawingMl + "cNvSpPr")),
+                    new XElement(DrawingMl + "spPr",
+                        new XElement(Drawing + "xfrm",
+                            new XElement(Drawing + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                            new XElement(Drawing + "ext", new XAttribute("cx", "1"), new XAttribute("cy", "1"))),
+                        new XElement(Drawing + "prstGeom", new XAttribute("prst", "rect"), new XElement(Drawing + "avLst")),
+                        new XElement(Drawing + "blipFill",
+                            new XElement(Drawing + "blip",
+                                new XAttribute(XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships") + "embed",
+                                    $"rIdPic{index + 1}")),
+                            new XElement(Drawing + "stretch", new XElement(Drawing + "fillRect"))))));
+            }
+        }
+
+        return new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), drawing);
+    }
+
+    private static string GetImageExtension(string contentType) =>
+        contentType.ToLowerInvariant() switch
+        {
+            "image/jpeg" => "jpg",
+            "image/gif" => "gif",
+            "image/bmp" => "bmp",
+            "image/svg+xml" => "svg",
+            _ => "png",
+        };
 
     private static (string layoutId, SmartArtFamily family) GetLayoutDefinition(SmartArtLayoutPreset preset) =>
         preset switch
@@ -135,13 +281,16 @@ internal static class SmartArtInsertionFactory
     {
         var points = labels.Select((label, index) => new XElement(Diagram + "pt",
             new XAttribute("modelId", ids[index]), new XAttribute("type", "node"),
-            new XElement(Diagram + "t", new XElement(Drawing + "p",
+            new XElement(Diagram + "t", new XElement(Drawing + "bodyPr"),
+                new XElement(Drawing + "lstStyle"), new XElement(Drawing + "p",
                 new XElement(Drawing + "r", new XElement(Drawing + "rPr", new XAttribute("lang", "en-US")),
                     new XElement(Drawing + "t", label)))))).ToArray();
 
         var connections = Enumerable.Range(1, labels.Count - 1).Select(index => new XElement(Diagram + "cxn",
+            new XAttribute("modelId", (labels.Count + index).ToString()),
             new XAttribute("type", "parOf"), new XAttribute("srcId", ids[0]),
-            new XAttribute("destId", ids[index]))).ToArray();
+            new XAttribute("destId", ids[index]), new XAttribute("srcOrd", index - 1),
+            new XAttribute("destOrd", 0))).ToArray();
 
         return new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(Diagram + "dataModel",

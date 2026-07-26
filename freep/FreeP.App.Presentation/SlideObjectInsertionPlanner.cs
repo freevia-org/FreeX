@@ -24,6 +24,12 @@ public sealed record SlideObjectMediaPayload(
     bool IsVideo,
     string ContentType);
 
+public sealed record SlideObjectSmartArtPicturePayload(
+    IReadOnlyList<SlideObjectPicturePayload> Pictures)
+{
+    public bool HasPictures => Pictures.Count > 0;
+}
+
 public sealed record SlideObjectInsertionPlan(
     string CommandId,
     SlideObjectInsertionKind Kind,
@@ -36,6 +42,10 @@ public sealed record SlideObjectInsertionPlan(
     public bool RequiresPicturePayload => Kind == SlideObjectInsertionKind.Picture;
 
     public bool RequiresMediaPayload => Kind == SlideObjectInsertionKind.Media;
+
+    public bool RequiresSmartArtPicturePayload =>
+        Kind == SlideObjectInsertionKind.SmartArt &&
+        SmartArtLayout == SmartArtLayoutPreset.PictureCaptionList;
 }
 
 public static class SlideObjectInsertionPlanner
@@ -78,9 +88,7 @@ public static class SlideObjectInsertionPlanner
     public const string SmartArtBasicProcessCommandId = "freep.insert-smartart-basic-process";
 
     public static IReadOnlyList<SmartArtLayoutPreset> InsertableSmartArtLayouts { get; } =
-        Enum.GetValues<SmartArtLayoutPreset>()
-            .Where(preset => preset != SmartArtLayoutPreset.PictureCaptionList)
-            .ToArray();
+        Enum.GetValues<SmartArtLayoutPreset>().ToArray();
 
     public static string SmartArtLayoutCommandId(SmartArtLayoutPreset preset) =>
         $"freep.insert-smartart-{ToKebabCase(preset.ToString())}";
@@ -160,13 +168,14 @@ public static class SlideObjectInsertionPlanner
         EditingSession editor,
         string commandId,
         SlideObjectPicturePayload? picturePayload = null,
-        SlideObjectMediaPayload? mediaPayload = null)
+        SlideObjectMediaPayload? mediaPayload = null,
+        SlideObjectSmartArtPicturePayload? smartArtPicturePayload = null)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(commandId);
 
         return TryCreatePlan(commandId, out var plan)
-            ? Apply(editor, plan, picturePayload, mediaPayload)
+            ? Apply(editor, plan, picturePayload, mediaPayload, smartArtPicturePayload)
             : null;
     }
 
@@ -174,7 +183,8 @@ public static class SlideObjectInsertionPlanner
         EditingSession editor,
         SlideObjectInsertionPlan plan,
         SlideObjectPicturePayload? picturePayload = null,
-        SlideObjectMediaPayload? mediaPayload = null)
+        SlideObjectMediaPayload? mediaPayload = null,
+        SlideObjectSmartArtPicturePayload? smartArtPicturePayload = null)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(plan);
@@ -195,7 +205,11 @@ public static class SlideObjectInsertionPlanner
                     mediaPayload.ContentType),
             SlideObjectInsertionKind.Table => editor.InsertTable(plan.TableRows, plan.TableColumns),
             SlideObjectInsertionKind.Chart => editor.InsertChart(plan.ChartKind),
-            SlideObjectInsertionKind.SmartArt => editor.InsertSmartArt(plan.SmartArtLayout),
+            SlideObjectInsertionKind.SmartArt => plan.RequiresSmartArtPicturePayload
+                ? smartArtPicturePayload is null || !smartArtPicturePayload.HasPictures
+                    ? null
+                    : editor.InsertSmartArt(plan.SmartArtLayout, smartArtPicturePayload.Pictures)
+                : editor.InsertSmartArt(plan.SmartArtLayout),
             _ => null,
         };
     }
@@ -220,6 +234,17 @@ public static class SlideObjectInsertionPlanner
             mediaBytes,
             isVideo,
             InferMediaContentType(fileNameOrExtension, isVideo));
+    }
+
+    public static SlideObjectSmartArtPicturePayload CreateSmartArtPicturePayload(
+        IEnumerable<SlideObjectPicturePayload> pictures)
+    {
+        ArgumentNullException.ThrowIfNull(pictures);
+        var materialized = pictures.ToArray();
+        if (materialized.Length == 0)
+            throw new ArgumentException("At least one picture is required for Picture Caption List.", nameof(pictures));
+
+        return new SlideObjectSmartArtPicturePayload(materialized);
     }
 
     public static string InferPictureContentType(string? fileNameOrExtension)
