@@ -1,3 +1,8 @@
+using System.Text;
+using System.Xml;
+using System.Xml.Linq;
+using Free.Shared.Opc;
+
 namespace FreeW.Core.Model;
 
 /// <summary>
@@ -27,6 +32,19 @@ public static class DocumentMerge
     }
 
     /// <summary>
+    /// Clones source body blocks for insertion into <paramref name="target"/>, carrying every preserved package
+    /// part reachable from a verbatim drawing. Part-name collisions are resolved without overwriting the target
+    /// package, and copied relationship parts are rewritten to their renamed descendants.
+    /// </summary>
+    public static IReadOnlyList<Block> CloneBlocksForInsertion(TextDocument target, TextDocument source)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        var clones = CloneBlocks(source);
+        TransferPreservedDrawingParts(target, source, clones);
+        return clones;
+    }
+
+    /// <summary>
     /// Insert <paramref name="blocks"/> into <paramref name="target"/>'s body starting at
     /// <paramref name="index"/> (clamped to the body), preserving their order. The blocks are inserted
     /// as-is (callers that need independence from another document pass the result of
@@ -49,7 +67,7 @@ public static class DocumentMerge
     public static IReadOnlyList<Block> Merge(TextDocument target, int index, TextDocument source)
     {
         ArgumentNullException.ThrowIfNull(target);
-        var clones = CloneBlocks(source);
+        var clones = CloneBlocksForInsertion(target, source);
         InsertBlocksAt(target, index, clones);
         return clones;
     }
@@ -135,5 +153,217 @@ public static class DocumentMerge
         foreach (var paragraph in source.Paragraphs)
             clone.Paragraphs.Add(CloneParagraph(paragraph));
         return clone;
+    }
+
+    private static void TransferPreservedDrawingParts(
+        TextDocument target,
+        TextDocument source,
+        IReadOnlyList<Block> clones)
+    {
+        var sourceParts = source.Preserved.Parts
+            .ToDictionary(part => part.PartName, StringComparer.OrdinalIgnoreCase);
+        if (sourceParts.Count == 0)
+            return;
+
+        var roots = EnumerateParagraphs(clones)
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.PreservedDrawing)
+            .Where(drawing => drawing is not null)
+            .SelectMany(drawing => drawing!.References)
+            .Select(reference => reference.PreservedPartName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (roots.Count == 0)
+            return;
+
+        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var queue = new Queue<string>(roots);
+        while (queue.Count > 0)
+        {
+            var partName = queue.Dequeue();
+            if (!selected.Add(partName) || !sourceParts.TryGetValue(partName, out var part))
+                continue;
+
+            var relsName = OpcPathHelper.GetRelationshipPartName(part.PartName);
+            if (!sourceParts.TryGetValue(relsName, out var relsPart))
+                continue;
+
+            selected.Add(relsName);
+            foreach (var targetPartName in ReadInternalRelationshipTargets(part.PartName, relsPart.Bytes))
+                if (!selected.Contains(targetPartName))
+                    queue.Enqueue(targetPartName);
+        }
+
+        var sourceOwnersByRelsPart = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sourceName in selected)
+        {
+            var relsName = OpcPathHelper.GetRelationshipPartName(sourceName);
+            if (selected.Contains(relsName) && sourceParts.ContainsKey(relsName))
+                sourceOwnersByRelsPart.TryAdd(relsName, sourceName);
+        }
+
+        var targetParts = target.Preserved.Parts
+            .ToDictionary(part => part.PartName, StringComparer.OrdinalIgnoreCase);
+        var reservedNames = new HashSet<string>(targetParts.Keys, StringComparer.OrdinalIgnoreCase);
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sourceName in selected
+                     .Where(sourceName => !sourceOwnersByRelsPart.ContainsKey(sourceName))
+                     .OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
+        {
+            var sourcePart = sourceParts[sourceName];
+            var sourceRelsName = OpcPathHelper.GetRelationshipPartName(sourceName);
+            var hasRels = sourceParts.TryGetValue(sourceRelsName, out var sourceRels)
+                && selected.Contains(sourceRelsName);
+            var canReuse = targetParts.TryGetValue(sourceName, out var existing)
+                && existing.RelationshipType == sourcePart.RelationshipType
+                && existing.PackageRelationshipType == sourcePart.PackageRelationshipType
+                && existing.Bytes.AsSpan().SequenceEqual(sourcePart.Bytes)
+                && (!hasRels || (targetParts.TryGetValue(sourceRelsName, out var existingRels)
+                    && existingRels.Bytes.AsSpan().SequenceEqual(sourceRels!.Bytes)));
+            if (canReuse)
+            {
+                names[sourceName] = existing!.PartName;
+                if (hasRels)
+                    names[sourceRelsName] = sourceRelsName;
+                continue;
+            }
+
+            var targetName = AllocatePartName(sourceName, reservedNames, hasRels);
+            names[sourceName] = targetName;
+            reservedNames.Add(targetName);
+            if (hasRels)
+            {
+                var targetRelsName = OpcPathHelper.GetRelationshipPartName(targetName);
+                names[sourceRelsName] = targetRelsName;
+                reservedNames.Add(targetRelsName);
+            }
+        }
+
+        foreach (var sourceName in selected.OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
+        {
+            var targetName = names[sourceName];
+            if (targetParts.ContainsKey(targetName))
+                continue;
+
+            var sourcePart = sourceParts[sourceName];
+            var bytes = sourceOwnersByRelsPart.TryGetValue(sourceName, out var sourceOwner)
+                ? RewriteRelationshipTargets(sourcePart.Bytes, sourceOwner, names)
+                : (byte[])sourcePart.Bytes.Clone();
+            target.Preserved.Parts.Add(sourcePart with { PartName = targetName, Bytes = bytes });
+            targetParts[targetName] = target.Preserved.Parts[^1];
+        }
+
+        foreach (var (extension, contentType) in source.Preserved.ContentTypeDefaults)
+            target.Preserved.ContentTypeDefaults.TryAdd(extension, contentType);
+
+        foreach (var paragraph in EnumerateParagraphs(clones))
+            foreach (var run in paragraph.Runs)
+                if (run.PreservedDrawing is { } drawing)
+                    run.PreservedDrawing = new PreservedDrawing(
+                        drawing.Xml,
+                        drawing.References
+                            .Select(reference => names.TryGetValue(reference.PreservedPartName, out var partName)
+                                ? reference with { PreservedPartName = partName }
+                                : reference)
+                            .ToArray());
+    }
+
+    private static IEnumerable<Paragraph> EnumerateParagraphs(IEnumerable<Block> blocks)
+    {
+        foreach (var block in blocks)
+        {
+            if (block is Paragraph paragraph)
+            {
+                yield return paragraph;
+                continue;
+            }
+
+            if (block is not Table table)
+                continue;
+            foreach (var cell in table.Rows.SelectMany(row => row.Cells))
+                foreach (var cellParagraph in cell.Paragraphs)
+                    yield return cellParagraph;
+        }
+    }
+
+    private static IEnumerable<string> ReadInternalRelationshipTargets(string ownerPartName, byte[] relsBytes)
+    {
+        XDocument document;
+        try
+        {
+            document = XDocument.Parse(Encoding.UTF8.GetString(relsBytes), LoadOptions.PreserveWhitespace);
+        }
+        catch (XmlException)
+        {
+            yield break;
+        }
+
+        var baseDirectory = OpcPathHelper.GetPartDirectoryName(ownerPartName);
+        foreach (var relationship in OpcRelationships.Load(document))
+        {
+            if (relationship.IsExternal || string.IsNullOrWhiteSpace(relationship.Target))
+                continue;
+            var target = OpcPathHelper.ResolveAbsolutePartName(baseDirectory, relationship.Target);
+            if (target is not null)
+                yield return target;
+        }
+    }
+
+    private static byte[] RewriteRelationshipTargets(
+        byte[] relsBytes,
+        string sourceOwnerPartName,
+        IReadOnlyDictionary<string, string> names)
+    {
+        XDocument document;
+        try
+        {
+            document = XDocument.Parse(Encoding.UTF8.GetString(relsBytes), LoadOptions.PreserveWhitespace);
+        }
+        catch (XmlException)
+        {
+            return (byte[])relsBytes.Clone();
+        }
+
+        var baseDirectory = OpcPathHelper.GetPartDirectoryName(sourceOwnerPartName);
+        foreach (var relationship in document.Root?.Elements(OpcRelationships.Namespace + "Relationship") ?? [])
+        {
+            if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                continue;
+            var target = relationship.Attribute("Target");
+            if (target is null)
+                continue;
+            var sourceTarget = OpcPathHelper.ResolveAbsolutePartName(baseDirectory, target.Value);
+            if (sourceTarget is null || !names.TryGetValue(sourceTarget, out var destinationTarget))
+                continue;
+            var relativeTarget = OpcPathHelper.GetRelativeZipPath(baseDirectory, destinationTarget);
+            target.Value = OpcPathHelper.EscapeRelationshipPathSegments(relativeTarget);
+        }
+
+        using var output = new MemoryStream();
+        document.Save(output, SaveOptions.DisableFormatting);
+        return output.ToArray();
+    }
+
+    private static string AllocatePartName(
+        string sourceName,
+        IReadOnlySet<string> reservedNames,
+        bool requiresRelationshipPart)
+    {
+        if (!reservedNames.Contains(sourceName)
+            && (!requiresRelationshipPart || !reservedNames.Contains(OpcPathHelper.GetRelationshipPartName(sourceName))))
+            return sourceName;
+
+        var slash = sourceName.LastIndexOf('/');
+        var prefix = slash < 0 ? string.Empty : sourceName[..(slash + 1)];
+        var fileName = slash < 0 ? sourceName : sourceName[(slash + 1)..];
+        var extension = Path.GetExtension(fileName);
+        var stem = extension.Length == 0 ? fileName : fileName[..^extension.Length];
+        for (var number = 1; ; number++)
+        {
+            var candidate = $"{prefix}{stem}-freew-import{number}{extension}";
+            if (!reservedNames.Contains(candidate)
+                && (!requiresRelationshipPart || !reservedNames.Contains(OpcPathHelper.GetRelationshipPartName(candidate))))
+                return candidate;
+        }
     }
 }

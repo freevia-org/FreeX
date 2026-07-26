@@ -3,6 +3,42 @@ namespace FreeW.Core.Model.Tests;
 public class DocumentMergeTests
 {
     [Fact]
+    public void Merge_TransfersPreservedDrawingPackageGraph_WithCollisionSafeRelationshipRewrite()
+    {
+        const string chartRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+        var source = new TextDocument();
+        source.Preserved.Parts.Add(new PreservedPart("/word/charts/chart1.xml", [1], RelationshipType: chartRel));
+        source.Preserved.Parts.Add(new PreservedPart(
+            "/word/charts/_rels/chart1.xml.rels",
+            System.Text.Encoding.UTF8.GetBytes("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"image\" Target=\"../media/image1.png\" /></Relationships>")));
+        source.Preserved.Parts.Add(new PreservedPart("/word/media/image1.png", [2]));
+        source.Preserved.ContentTypeDefaults["png"] = "image/png";
+        var sourceParagraph = new Paragraph();
+        sourceParagraph.Runs.Add(Run.FromPreservedDrawing(new PreservedDrawing(
+            "<w:drawing />",
+            [new PreservedDrawingReference("rId7", "/word/charts/chart1.xml", chartRel)])));
+        source.Blocks.Add(sourceParagraph);
+
+        var target = new TextDocument();
+        target.Preserved.Parts.Add(new PreservedPart("/word/charts/chart1.xml", [9], RelationshipType: chartRel));
+        target.Preserved.Parts.Add(new PreservedPart("/word/charts/_rels/chart1.xml.rels", [8]));
+        target.Preserved.Parts.Add(new PreservedPart("/word/media/image1.png", [7]));
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        var copiedDrawing = inserted.Single().Should().BeOfType<Paragraph>().Subject.Runs.Single().PreservedDrawing!;
+        copiedDrawing.References.Single().PreservedPartName.Should().Be("/word/charts/chart1-freew-import1.xml");
+        target.Preserved.Parts.Should().Contain(part => part.PartName == "/word/charts/chart1-freew-import1.xml");
+        target.Preserved.Parts.Should().Contain(part => part.PartName == "/word/charts/_rels/chart1-freew-import1.xml.rels");
+        target.Preserved.Parts.Should().Contain(part => part.PartName == "/word/media/image1-freew-import1.png");
+        var copiedRels = target.Preserved.Parts.Single(part => part.PartName == "/word/charts/_rels/chart1-freew-import1.xml.rels");
+        System.Text.Encoding.UTF8.GetString(copiedRels.Bytes)
+            .Should().Contain("Target=\"../media/image1-freew-import1.png\"");
+        target.Preserved.ContentTypeDefaults.Should().Contain("png", "image/png");
+        source.Preserved.Parts.Should().HaveCount(3);
+    }
+
+    [Fact]
     public void CloneBlocks_CopiesTextAndFormatting_AndLeavesSourceUntouched()
     {
         var source = new TextDocument();
