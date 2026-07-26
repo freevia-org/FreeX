@@ -1682,7 +1682,7 @@ public static class DocxReader
             var relationshipId = element.Attribute(R + "id")?.Value;
             if (relationshipId is not null && altChunkRelationships.TryGetValue(relationshipId, out var partName))
             {
-                if (TryMaterializeAltChunk(archive, partName, out var importedBlocks))
+                if (TryMaterializeAltChunk(archive, document, partName, out var importedBlocks))
                 {
                     foreach (var importedBlock in importedBlocks)
                     {
@@ -1726,12 +1726,13 @@ public static class DocxReader
 
     /// <summary>
     /// Word resolves supported body-level altChunks into ordinary editable blocks when the document opens.
-    /// Materialize package-local HTML, MHTML, and RTF payloads; nested Word packages, malformed content,
-    /// and unknown chunk types remain represented by <see cref="AltChunkBlock"/> so their payload graph is
-    /// retained verbatim on save.
+    /// Materialize package-local HTML, MHTML, RTF, and self-contained nested Word-package payloads.
+    /// Malformed content, packages with document-global references, and unknown chunk types remain represented
+    /// by <see cref="AltChunkBlock"/> so their payload graph is retained verbatim on save.
     /// </summary>
     private static bool TryMaterializeAltChunk(
         ZipArchive archive,
+        TextDocument target,
         string partName,
         out IReadOnlyList<Block> blocks)
     {
@@ -1747,6 +1748,13 @@ public static class DocxReader
 
         try
         {
+            if (IsNestedWordPackageContentType(contentType))
+            {
+                using var nestedStream = new MemoryStream(bytes, writable: false);
+                var nested = Read(nestedStream);
+                return TryMergeNestedWordPackage(target, nested, out blocks);
+            }
+
             if (string.Equals(contentType, "message/rfc822", StringComparison.OrdinalIgnoreCase))
             {
                 using var mhtmlStream = new MemoryStream(bytes, writable: false);
@@ -1799,6 +1807,109 @@ public static class DocxReader
             return false;
         }
     }
+
+    private static bool IsNestedWordPackageContentType(string? contentType) =>
+        string.Equals(contentType, "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(contentType, "application/vnd.ms-word.document.macroEnabled.main+xml", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A nested Word altChunk imports its body into the host document, not its package-level state.  Only
+    /// materialize the self-contained subset whose formatting can be carried by body blocks and styles;
+    /// retaining the remaining packages intact is safer than creating dangling note, numbering, or relationship
+    /// references in the host package.
+    /// </summary>
+    private static bool TryMergeNestedWordPackage(
+        TextDocument target,
+        TextDocument nested,
+        out IReadOnlyList<Block> blocks)
+    {
+        blocks = [];
+        if (!Equals(target.DefaultRun, nested.DefaultRun)
+            || !Equals(target.DefaultParagraph, nested.DefaultParagraph)
+            || nested.Footnotes.Count != 0
+            || nested.Endnotes.Count != 0
+            || nested.Comments.Count != 0
+            || nested.Preserved.Parts.Count != 0
+            || nested.Preserved.WebExtensions is not null
+            || nested.Blocks.Any(ContainsPackageBoundContent)
+            || nested.Styles.Values.Any(style => style.PreservedNumbering is not null))
+        {
+            return false;
+        }
+
+        var styleMap = CopyNestedStyles(target, nested);
+        foreach (var block in nested.Blocks)
+            RemapStyleIds(block, styleMap);
+
+        blocks = nested.Blocks;
+        return true;
+    }
+
+    private static bool ContainsPackageBoundContent(Block block) => block switch
+    {
+        AltChunkBlock => true,
+        Paragraph paragraph => paragraph.SectionBreak is not null
+            || paragraph.PreservedNumbering is not null
+            || paragraph.BookmarkNames.Count != 0
+            || paragraph.Runs.Any(run => run.FootnoteId is not null
+                || run.EndnoteId is not null
+                || run.CommentId is not null
+                || run.IsCommentReference
+                || run.PreservedDrawing is not null),
+        Table table => table.Rows.SelectMany(row => row.Cells)
+            .SelectMany(cell => cell.Paragraphs)
+            .Any(paragraph => ContainsPackageBoundContent(paragraph)),
+        _ => true
+    };
+
+    private static Dictionary<string, string> CopyNestedStyles(TextDocument target, TextDocument nested)
+    {
+        var prefix = "AltChunk";
+        var sequence = 1;
+        while (target.Styles.Keys.Any(id => id.StartsWith(prefix + sequence + "_", StringComparison.Ordinal)))
+            sequence++;
+        prefix += sequence + "_";
+
+        var styleMap = nested.Styles.Keys.ToDictionary(
+            id => id,
+            id => target.Styles.ContainsKey(id) ? prefix + id : id,
+            StringComparer.Ordinal);
+        foreach (var style in nested.Styles.Values)
+        {
+            var id = styleMap[style.Id];
+            target.Styles[id] = new DocumentStyle
+            {
+                Id = id,
+                Name = style.Name,
+                Type = style.Type,
+                BasedOnStyleId = RemapStyleId(style.BasedOnStyleId, styleMap),
+                NextStyleId = RemapStyleId(style.NextStyleId, styleMap),
+                Run = style.Run,
+                Paragraph = style.Paragraph,
+                TableBorders = style.TableBorders
+            };
+        }
+
+        return styleMap;
+    }
+
+    private static void RemapStyleIds(Block block, IReadOnlyDictionary<string, string> styleMap)
+    {
+        switch (block)
+        {
+            case Paragraph paragraph:
+                paragraph.StyleId = RemapStyleId(paragraph.StyleId, styleMap);
+                break;
+            case Table table:
+                table.TableStyleId = RemapStyleId(table.TableStyleId, styleMap);
+                foreach (var paragraph in table.Rows.SelectMany(row => row.Cells).SelectMany(cell => cell.Paragraphs))
+                    paragraph.StyleId = RemapStyleId(paragraph.StyleId, styleMap);
+                break;
+        }
+    }
+
+    private static string? RemapStyleId(string? styleId, IReadOnlyDictionary<string, string> styleMap) =>
+        styleId is not null && styleMap.TryGetValue(styleId, out var mapped) ? mapped : styleId;
 
     private static void AddParagraphRuns(
         Paragraph paragraph,
