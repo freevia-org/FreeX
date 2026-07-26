@@ -350,6 +350,7 @@ public sealed class PptxRoundTripTests : IDisposable
             DrawingShapeKind.RoundedRectangle,
             DrawingShapeKind.Chevron,
             DrawingShapeKind.Pentagon,
+            DrawingShapeKind.Hexagon,
             DrawingShapeKind.Star5
         };
 

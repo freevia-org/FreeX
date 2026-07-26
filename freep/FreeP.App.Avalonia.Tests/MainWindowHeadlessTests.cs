@@ -5988,6 +5988,8 @@ public sealed class MainWindowHeadlessTests
     [InlineData("freep.arrange.change-shape.triangle")]
     [InlineData("freep.arrange.change-shape.diamond")]
     [InlineData("freep.arrange.change-shape.right-arrow")]
+    [InlineData("freep.arrange.change-shape.hexagon")]
+    [InlineData("freep.arrange.change-shape.star5")]
     [InlineData("freep.object.open-embedded")]
     [InlineData("freep.arrange.edit-points")]
     [InlineData("freep.arrange.bring-to-front")]
