@@ -307,6 +307,7 @@ public sealed class ChartDataDialogPlannerTests
         chart.DataLabels = new ChartDataLabels { ShowValue = true, Position = DataLabelPosition.Center };
         chart.CategoryAxis.HasMajorGridlines = true;
         chart.ValueAxis.HasMajorGridlines = false;
+        chart.ChartType = ChartType.Stock;
 
         var planner = ChartDisplayOptionsPlanner.FromChart(chart);
         planner.SetTitle("Revenue");
@@ -327,11 +328,12 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetShowDataLabelsOverMaximum(true);
         planner.SetVaryColors(true);
         planner.SetLegendOverlay(true);
+        planner.SetHighLowLines(false);
 
         var commit = planner.BuildCommitPlan();
         commit.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, false, DataLabelPosition.OutsideEnd, false, true,
-            true, true, true, true, "0.0%", " | ", 40, 55, ChartDisplayBlanksAs.Span, true, true, true));
+            true, true, true, true, "0.0%", " | ", 40, 55, ChartDisplayBlanksAs.Span, true, true, true, false));
         chart.Title.Should().Be("Existing", "the dialog planner is a working copy");
         ChartDisplayOptionsPlanner.BuildSurfacePlan().CommandId
             .Should().Be(ChartDisplayOptionsPlanner.CommandId);

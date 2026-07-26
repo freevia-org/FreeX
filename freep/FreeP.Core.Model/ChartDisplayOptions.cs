@@ -22,4 +22,5 @@ public sealed record ChartDisplayOptions(
     ChartDisplayBlanksAs? DisplayBlanksAs = null,
     bool? ShowDataLabelsOverMaximum = null,
     bool? VaryColors = null,
-    bool? LegendOverlay = null);
+    bool? LegendOverlay = null,
+    bool? HighLowLines = null);

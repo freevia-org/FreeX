@@ -29,6 +29,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly CheckBox _showDataLabelsOverMaximumCheck;
     private readonly CheckBox _varyColorsCheck;
     private readonly CheckBox _legendOverlayCheck;
+    private readonly CheckBox _highLowLinesCheck;
 
     public ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -123,6 +124,13 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             IsThreeState = true,
             IsChecked = _planner.LegendOverlay,
         };
+        _highLowLinesCheck = new CheckBox
+        {
+            Content = surface.HighLowLinesLabel,
+            IsThreeState = true,
+            IsChecked = _planner.HighLowLines,
+            IsEnabled = _planner.SupportsHighLowLines,
+        };
 
         var buttons = new StackPanel
         {
@@ -156,6 +164,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         content.Children.Add(_showDataLabelsOverMaximumCheck);
         content.Children.Add(_varyColorsCheck);
         content.Children.Add(_legendOverlayCheck);
+        content.Children.Add(_highLowLinesCheck);
         content.Children.Add(new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -170,6 +179,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     internal void SetVaryColorsForTests(bool value) => _varyColorsCheck.IsChecked = value;
 
     internal void SetLegendOverlayForTests(bool? value) => _legendOverlayCheck.IsChecked = value;
+
+    internal void SetHighLowLinesForTests(bool? value) => _highLowLinesCheck.IsChecked = value;
 
     private void OnOk()
     {
@@ -199,6 +210,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _planner.SetShowDataLabelsOverMaximum(_showDataLabelsOverMaximumCheck.IsChecked);
         _planner.SetVaryColors(_varyColorsCheck.IsChecked == true);
         _planner.SetLegendOverlay(_legendOverlayCheck.IsChecked);
+        _planner.SetHighLowLines(_highLowLinesCheck.IsChecked);
     }
 
     private static StackPanel MakeRow(string label, Control control)

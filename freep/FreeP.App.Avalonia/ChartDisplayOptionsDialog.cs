@@ -32,6 +32,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly CheckBox _showDataLabelsOverMaximumCheck;
     private readonly CheckBox _varyColorsCheck;
     private readonly CheckBox _legendOverlayCheck;
+    private readonly CheckBox _highLowLinesCheck;
 
     internal ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -124,6 +125,13 @@ internal sealed class ChartDisplayOptionsDialog : Window
             IsThreeState = true,
             IsChecked = _planner.LegendOverlay,
         };
+        _highLowLinesCheck = new CheckBox
+        {
+            Content = surface.HighLowLinesLabel,
+            IsThreeState = true,
+            IsChecked = _planner.HighLowLines,
+            IsEnabled = _planner.SupportsHighLowLines,
+        };
 
         var buttons = new StackPanel
         {
@@ -162,6 +170,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
                 _showDataLabelsOverMaximumCheck,
                 _varyColorsCheck,
                 _legendOverlayCheck,
+                _highLowLinesCheck,
                 new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 },
                 buttons,
             },
@@ -177,6 +186,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
     internal void SetVaryColorsForTests(bool value) => _varyColorsCheck.IsChecked = value;
 
     internal void SetLegendOverlayForTests(bool? value) => _legendOverlayCheck.IsChecked = value;
+
+    internal void SetHighLowLinesForTests(bool? value) => _highLowLinesCheck.IsChecked = value;
 
     internal void SetOptionsForTests(
         string title,
@@ -247,6 +258,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _planner.SetShowDataLabelsOverMaximum(_showDataLabelsOverMaximumCheck.IsChecked);
         _planner.SetVaryColors(_varyColorsCheck.IsChecked == true);
         _planner.SetLegendOverlay(_legendOverlayCheck.IsChecked);
+        _planner.SetHighLowLines(_highLowLinesCheck.IsChecked);
     }
 
     private static Control MakeRow(string label, Control control)
