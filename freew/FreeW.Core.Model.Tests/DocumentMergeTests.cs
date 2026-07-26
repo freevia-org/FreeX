@@ -3,6 +3,75 @@ namespace FreeW.Core.Model.Tests;
 public class DocumentMergeTests
 {
     [Fact]
+    public void Merge_TransfersConflictingStyleClosureWithoutOverwritingTargetStyles()
+    {
+        var source = new TextDocument();
+        source.Styles["Base"] = new DocumentStyle
+        {
+            Id = "Base", Name = "Source base", Run = new RunFormatting { ColorHex = "#AA0000" }
+        };
+        source.Styles["Follow"] = new DocumentStyle
+        {
+            Id = "Follow", Name = "Source follow", Paragraph = new ParagraphFormatting { SpaceAfterPt = 24 }
+        };
+        source.Styles["SourceStyle"] = new DocumentStyle
+        {
+            Id = "SourceStyle", Name = "Source style", BasedOnStyleId = "Base", NextStyleId = "Follow",
+            Run = new RunFormatting { Bold = true }
+        };
+        source.Styles["TableSource"] = new DocumentStyle
+        {
+            Id = "TableSource", Name = "Source table", Type = StyleType.Table, TableBorders = true
+        };
+        source.Blocks.Add(new Paragraph("Source paragraph") { StyleId = "SourceStyle" });
+        var sourceTable = Table.Create(1, 1);
+        sourceTable.TableStyleId = "TableSource";
+        sourceTable.PreferredWidthPt = 360;
+        sourceTable.Alignment = TableAlignment.Center;
+        sourceTable.TextWrapping = true;
+        sourceTable.DefaultCellMargins = new TableCellMargins(1, 2, 3, 4);
+        sourceTable.CellSpacingPt = 2;
+        sourceTable.AutoFit = AutoFitMode.Contents;
+        sourceTable.Rows[0].HeightPt = 42;
+        sourceTable.Rows[0].HeightRule = TableRowHeightRule.Exact;
+        sourceTable.Rows[0].AllowBreakAcrossPages = false;
+        sourceTable.Rows[0].Cells[0].VerticalAlignment = TableCellVerticalAlignment.Center;
+        sourceTable.Rows[0].Cells[0].Margins = new TableCellMargins(5, 6, 7, 8);
+        sourceTable.Rows[0].Cells[0].TextDirection = CellTextDirection.Rotate90;
+        source.Blocks.Add(sourceTable);
+
+        var target = new TextDocument();
+        target.Styles["Base"] = new DocumentStyle { Id = "Base", Name = "Target base", Run = new RunFormatting { ColorHex = "#0000AA" } };
+        target.Styles["Follow"] = new DocumentStyle { Id = "Follow", Name = "Target follow" };
+        target.Styles["SourceStyle"] = new DocumentStyle { Id = "SourceStyle", Name = "Target paragraph" };
+        target.Styles["TableSource"] = new DocumentStyle { Id = "TableSource", Name = "Target table", Type = StyleType.Table };
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        inserted[0].Should().BeOfType<Paragraph>().Which.StyleId.Should().Be("SourceStyle_FreeW1");
+        var insertedTable = inserted[1].Should().BeOfType<Table>().Subject;
+        insertedTable.TableStyleId.Should().Be("TableSource_FreeW1");
+        insertedTable.PreferredWidthPt.Should().Be(360);
+        insertedTable.Alignment.Should().Be(TableAlignment.Center);
+        insertedTable.TextWrapping.Should().BeTrue();
+        insertedTable.DefaultCellMargins.Should().Be(new TableCellMargins(1, 2, 3, 4));
+        insertedTable.CellSpacingPt.Should().Be(2);
+        insertedTable.AutoFit.Should().Be(AutoFitMode.Contents);
+        insertedTable.Rows[0].HeightPt.Should().Be(42);
+        insertedTable.Rows[0].HeightRule.Should().Be(TableRowHeightRule.Exact);
+        insertedTable.Rows[0].AllowBreakAcrossPages.Should().BeFalse();
+        insertedTable.Rows[0].Cells[0].VerticalAlignment.Should().Be(TableCellVerticalAlignment.Center);
+        insertedTable.Rows[0].Cells[0].Margins.Should().Be(new TableCellMargins(5, 6, 7, 8));
+        insertedTable.Rows[0].Cells[0].TextDirection.Should().Be(CellTextDirection.Rotate90);
+        target.Styles["SourceStyle_FreeW1"].BasedOnStyleId.Should().Be("Base_FreeW1");
+        target.Styles["SourceStyle_FreeW1"].NextStyleId.Should().Be("Follow_FreeW1");
+        target.Styles["Base_FreeW1"].Run.ColorHex.Should().Be("#AA0000");
+        target.Styles["TableSource_FreeW1"].TableBorders.Should().BeTrue();
+        target.Styles["SourceStyle"].Name.Should().Be("Target paragraph");
+        source.Styles["SourceStyle"].BasedOnStyleId.Should().Be("Base");
+    }
+
+    [Fact]
     public void Merge_RemapsCollidingBookmarksAndTheirInternalReferences()
     {
         var source = new TextDocument();

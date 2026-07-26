@@ -85,6 +85,41 @@ public class DocumentMergePreservedPartsTests
     }
 
     [Fact]
+    public void Merge_WritesRemappedSourceStyleWithoutReplacingTargetDefinition()
+    {
+        var source = new TextDocument();
+        source.Styles["SharedStyle"] = new DocumentStyle
+        {
+            Id = "SharedStyle", Name = "Source style", Run = new RunFormatting { Bold = true, ColorHex = "#AA0000" }
+        };
+        source.Blocks.Add(new Paragraph("Source") { StyleId = "SharedStyle" });
+
+        var target = new TextDocument();
+        target.Styles["SharedStyle"] = new DocumentStyle
+        {
+            Id = "SharedStyle", Name = "Target style", Run = new RunFormatting { Italic = true, ColorHex = "#0000AA" }
+        };
+        target.Blocks.Add(new Paragraph("Target") { StyleId = "SharedStyle" });
+
+        DocumentMerge.Merge(target, target.Blocks.Count, source);
+        var bytes = WriteBytes(target);
+
+        using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        var document = ReadXml(zip, "word/document.xml");
+        document.Descendants(Wordprocessing + "pStyle").Last().Attribute(Wordprocessing + "val")!.Value.Should().Be("SharedStyle_FreeW1");
+        var styles = ReadXml(zip, "word/styles.xml").Root!.Elements(Wordprocessing + "style").ToList();
+        styles.Single(style => (string?)style.Attribute(Wordprocessing + "styleId") == "SharedStyle")
+            .Element(Wordprocessing + "name")!.Attribute(Wordprocessing + "val")!.Value.Should().Be("Target style");
+        styles.Single(style => (string?)style.Attribute(Wordprocessing + "styleId") == "SharedStyle_FreeW1")
+            .Element(Wordprocessing + "name")!.Attribute(Wordprocessing + "val")!.Value.Should().Be("Source style");
+
+        var reread = DocxReader.Read(new MemoryStream(bytes));
+        reread.Blocks.OfType<Paragraph>().Last().StyleId.Should().Be("SharedStyle_FreeW1");
+        reread.Styles["SharedStyle_FreeW1"].Run.ColorHex.Should().Be("#AA0000");
+        reread.Styles["SharedStyle"].Run.ColorHex.Should().Be("#0000AA");
+    }
+
+    [Fact]
     public void Merge_PreservesRenamedAltChunkPackageGraph_WhenWritten()
     {
         const string altChunkRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk";

@@ -45,6 +45,7 @@ public static class DocumentMerge
         var clones = CloneBlocks(source);
         var existingBookmarkNames = BookmarkNamesIn(target);
         var allParagraphs = TransferAnnotations(target, source, clones);
+        TransferStyles(target, source, clones, allParagraphs);
         RemapBookmarksAndInternalReferences(allParagraphs, existingBookmarkNames);
         var roots = allParagraphs
             .SelectMany(paragraph => paragraph.Runs)
@@ -147,12 +148,25 @@ public static class DocumentMerge
         {
             BlockContentControl = source.BlockContentControl,
             Formatting = source.Formatting,
-            Borders = source.Borders
+            TableStyleId = source.TableStyleId,
+            Borders = source.Borders,
+            PreferredWidthPt = source.PreferredWidthPt,
+            Alignment = source.Alignment,
+            IndentFromLeftPt = source.IndentFromLeftPt,
+            TextWrapping = source.TextWrapping,
+            DefaultCellMargins = source.DefaultCellMargins,
+            CellSpacingPt = source.CellSpacingPt,
+            AutoFit = source.AutoFit,
         };
         clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
         foreach (var row in source.Rows)
         {
-            var rowClone = new TableRow();
+            var rowClone = new TableRow
+            {
+                HeightPt = row.HeightPt,
+                HeightRule = row.HeightRule,
+                AllowBreakAcrossPages = row.AllowBreakAcrossPages,
+            };
             foreach (var cell in row.Cells)
                 rowClone.Cells.Add(CloneCell(cell));
             clone.Rows.Add(rowClone);
@@ -167,7 +181,11 @@ public static class DocumentMerge
             ShadingColorHex = source.ShadingColorHex,
             WidthPt = source.WidthPt,
             GridSpan = source.GridSpan,
-            VerticalMerge = source.VerticalMerge
+            VerticalMerge = source.VerticalMerge,
+            VerticalAlignment = source.VerticalAlignment,
+            Margins = source.Margins,
+            Borders = source.Borders,
+            TextDirection = source.TextDirection,
         };
         foreach (var paragraph in source.Paragraphs)
             clone.Paragraphs.Add(CloneParagraph(paragraph));
@@ -288,6 +306,79 @@ public static class DocumentMerge
                                 ? reference with { PreservedPartName = partName }
                                 : reference)
                             .ToArray());
+    }
+
+    private static void TransferStyles(
+        TextDocument target,
+        TextDocument source,
+        IReadOnlyList<Block> clones,
+        IReadOnlyList<Paragraph> paragraphs)
+    {
+        var sourceStyles = new Dictionary<string, DocumentStyle>(source.Styles, StringComparer.OrdinalIgnoreCase);
+        var styleIds = new List<string>();
+        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void AddStyle(string? id)
+        {
+            if (string.IsNullOrEmpty(id) || !sourceStyles.TryGetValue(id, out var style) || !selected.Add(id))
+                return;
+            styleIds.Add(id);
+            AddStyle(style.BasedOnStyleId);
+            AddStyle(style.NextStyleId);
+        }
+
+        foreach (var paragraph in paragraphs)
+            AddStyle(paragraph.StyleId);
+        foreach (var table in clones.OfType<Table>())
+            AddStyle(table.TableStyleId);
+        if (styleIds.Count == 0)
+            return;
+
+        var usedIds = new HashSet<string>(target.Styles.Keys, StringComparer.OrdinalIgnoreCase);
+        var styleNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sourceId in styleIds)
+            styleNames[sourceId] = usedIds.Add(sourceId)
+                ? sourceId
+                : AllocateStyleId(sourceId, usedIds);
+
+        foreach (var sourceId in styleIds)
+        {
+            var sourceStyle = sourceStyles[sourceId];
+            target.Styles[styleNames[sourceId]] = new DocumentStyle
+            {
+                Id = styleNames[sourceId],
+                Name = sourceStyle.Name,
+                Type = sourceStyle.Type,
+                BasedOnStyleId = RemapStyleReference(sourceStyle.BasedOnStyleId, styleNames),
+                NextStyleId = RemapStyleReference(sourceStyle.NextStyleId, styleNames),
+                Run = sourceStyle.Run,
+                Paragraph = sourceStyle.Paragraph,
+                TableBorders = sourceStyle.TableBorders,
+                PreservedNumbering = sourceStyle.PreservedNumbering,
+            };
+        }
+
+        foreach (var paragraph in paragraphs)
+            if (paragraph.StyleId is { } styleId && styleNames.TryGetValue(styleId, out var mappedStyleId))
+                paragraph.StyleId = mappedStyleId;
+        foreach (var table in clones.OfType<Table>())
+            if (table.TableStyleId is { } styleId && styleNames.TryGetValue(styleId, out var mappedStyleId))
+                table.TableStyleId = mappedStyleId;
+    }
+
+    private static string? RemapStyleReference(string? styleId, IReadOnlyDictionary<string, string> styleNames) =>
+        styleId is not null && styleNames.TryGetValue(styleId, out var mappedStyleId)
+            ? mappedStyleId
+            : styleId;
+
+    private static string AllocateStyleId(string sourceId, HashSet<string> usedIds)
+    {
+        for (var index = 1; ; index++)
+        {
+            var candidate = sourceId + "_FreeW" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (usedIds.Add(candidate))
+                return candidate;
+        }
     }
 
     private static HashSet<string> BookmarkNamesIn(TextDocument document)
