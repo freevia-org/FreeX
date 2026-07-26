@@ -29,6 +29,12 @@ internal sealed class ChartSeriesOptionsDialog : Window
     private readonly CheckBox _showSeriesLabelsCheck;
     private readonly CheckBox _showLegendKeysCheck;
     private readonly CheckBox _showBubbleSizeCheck;
+    private readonly CheckBox _errorBarsCheck;
+    private readonly ComboBox _errorDirectionCombo;
+    private readonly ComboBox _errorBarTypeCombo;
+    private readonly ComboBox _errorValueTypeCombo;
+    private readonly TextBox _errorValueBox;
+    private readonly CheckBox _errorNoEndCapCheck;
     private readonly ComboBox _labelPositionCombo;
     private readonly TextBox _labelNumberFormatBox;
     private readonly TextBox _labelSeparatorBox;
@@ -88,6 +94,12 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _showSeriesLabelsCheck = new CheckBox { Content = surface.SeriesLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showLegendKeysCheck = new CheckBox { Content = surface.LegendKeysLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showBubbleSizeCheck = new CheckBox { Content = surface.BubbleSizeLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _errorBarsCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.ErrorBarsLabel };
+        _errorDirectionCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.ErrorDirectionOptions.Select(option => option.Label).ToArray(), MinWidth = 160 };
+        _errorBarTypeCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.ErrorBarTypeOptions.Select(option => option.Label).ToArray(), MinWidth = 160 };
+        _errorValueTypeCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.ErrorValueTypeOptions.Select(option => option.Label).ToArray(), MinWidth = 160 };
+        _errorValueBox = new TextBox { MinWidth = 130 };
+        _errorNoEndCapCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.ErrorNoEndCapLabel, Margin = new Thickness(20, 0, 0, 0) };
         _labelPositionCombo = new ComboBox
         {
             ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions.Select(option => option.Label).ToArray(),
@@ -142,6 +154,12 @@ internal sealed class ChartSeriesOptionsDialog : Window
                 _showSeriesLabelsCheck,
                 _showLegendKeysCheck,
                 _showBubbleSizeCheck,
+                _errorBarsCheck,
+                MakeRow(ChartSeriesOptionsPlanner.ErrorDirectionLabel, _errorDirectionCombo),
+                MakeRow(ChartSeriesOptionsPlanner.ErrorBarTypeLabel, _errorBarTypeCombo),
+                MakeRow(ChartSeriesOptionsPlanner.ErrorValueTypeLabel, _errorValueTypeCombo),
+                MakeRow(ChartSeriesOptionsPlanner.ErrorValueLabel, _errorValueBox),
+                _errorNoEndCapCheck,
                 MakeRow(surface.LabelPositionLabel, _labelPositionCombo),
                 MakeRow(surface.NumberFormatLabel, _labelNumberFormatBox),
                 MakeRow(surface.SeparatorLabel, _labelSeparatorBox),
@@ -189,7 +207,8 @@ internal sealed class ChartSeriesOptionsDialog : Window
         bool? labelBold = null,
         bool? labelItalic = null,
         string? labelColor = null,
-        bool showBubbleSize = false)
+        bool showBubbleSize = false,
+        bool errorBars = false)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         _smoothLineCheck.IsChecked = smoothLine;
@@ -208,6 +227,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _showSeriesLabelsCheck.IsChecked = showSeriesLabels;
         _showLegendKeysCheck.IsChecked = showLegendKeys;
         _showBubbleSizeCheck.IsChecked = showBubbleSize;
+        _errorBarsCheck.IsChecked = errorBars;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
         _labelNumberFormatBox.Text = labelNumberFormat ?? string.Empty;
         _labelSeparatorBox.Text = labelSeparator ?? string.Empty;
@@ -247,6 +267,12 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _showSeriesLabelsCheck.IsChecked = _planner.ShowSeriesLabels;
         _showLegendKeysCheck.IsChecked = _planner.ShowLegendKeys;
         _showBubbleSizeCheck.IsChecked = _planner.ShowBubbleSize;
+        _errorBarsCheck.IsChecked = _planner.ErrorBarsEnabled;
+        _errorDirectionCombo.SelectedIndex = FindErrorDirectionIndex(_planner.ErrorDirection);
+        _errorBarTypeCombo.SelectedIndex = FindErrorBarTypeIndex(_planner.ErrorBarType);
+        _errorValueTypeCombo.SelectedIndex = FindErrorValueTypeIndex(_planner.ErrorValueType);
+        _errorValueBox.Text = Format(_planner.ErrorValue);
+        _errorNoEndCapCheck.IsChecked = _planner.ErrorNoEndCap;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(_planner.LabelPosition);
         _labelNumberFormatBox.Text = _planner.LabelNumberFormat;
         _labelSeparatorBox.Text = _planner.LabelSeparator;
@@ -276,6 +302,15 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _planner.SetShowSeriesLabels(_showSeriesLabelsCheck.IsChecked == true);
         _planner.SetShowLegendKeys(_showLegendKeysCheck.IsChecked == true);
         _planner.SetShowBubbleSize(_showBubbleSizeCheck.IsChecked == true);
+        _planner.SetErrorBarsEnabled(_errorBarsCheck.IsChecked == true);
+        if (_errorDirectionCombo.SelectedIndex >= 0 && _errorDirectionCombo.SelectedIndex < ChartSeriesOptionsPlanner.ErrorDirectionOptions.Count)
+            _planner.SetErrorDirection(ChartSeriesOptionsPlanner.ErrorDirectionOptions[_errorDirectionCombo.SelectedIndex].Value);
+        if (_errorBarTypeCombo.SelectedIndex >= 0 && _errorBarTypeCombo.SelectedIndex < ChartSeriesOptionsPlanner.ErrorBarTypeOptions.Count)
+            _planner.SetErrorBarType(ChartSeriesOptionsPlanner.ErrorBarTypeOptions[_errorBarTypeCombo.SelectedIndex].Value);
+        if (_errorValueTypeCombo.SelectedIndex >= 0 && _errorValueTypeCombo.SelectedIndex < ChartSeriesOptionsPlanner.ErrorValueTypeOptions.Count)
+            _planner.SetErrorValueType(ChartSeriesOptionsPlanner.ErrorValueTypeOptions[_errorValueTypeCombo.SelectedIndex].Value);
+        _planner.SetErrorValue(ParseOptional(_errorValueBox.Text, "Error bar value") ?? 0);
+        _planner.SetErrorNoEndCap(_errorNoEndCapCheck.IsChecked == true);
         if (_labelPositionCombo.SelectedIndex >= 0 &&
             _labelPositionCombo.SelectedIndex < ChartDisplayOptionsPlanner.LabelPositionOptions.Count)
             _planner.SetLabelPosition(ChartDisplayOptionsPlanner.LabelPositionOptions[_labelPositionCombo.SelectedIndex].Value);
@@ -313,6 +348,21 @@ internal sealed class ChartSeriesOptionsDialog : Window
         Math.Max(0, ChartSeriesOptionsPlanner.DashOptions
             .Select((option, index) => (option, index))
             .FirstOrDefault(item => item.option.Value == dash).index);
+
+    private static int FindErrorDirectionIndex(ChartErrorDirection value) =>
+        Math.Max(0, ChartSeriesOptionsPlanner.ErrorDirectionOptions
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == value).index);
+
+    private static int FindErrorBarTypeIndex(ChartErrorBarType value) =>
+        Math.Max(0, ChartSeriesOptionsPlanner.ErrorBarTypeOptions
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == value).index);
+
+    private static int FindErrorValueTypeIndex(ChartErrorValueType value) =>
+        Math.Max(0, ChartSeriesOptionsPlanner.ErrorValueTypeOptions
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == value).index);
 
     private static int FindLabelPositionIndex(DataLabelPosition position) =>
         Math.Max(0, ChartDisplayOptionsPlanner.LabelPositionOptions

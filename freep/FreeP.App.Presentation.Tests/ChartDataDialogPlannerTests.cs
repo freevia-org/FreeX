@@ -658,6 +658,29 @@ public sealed class ChartDataDialogPlannerTests
         ChartPlotStyleOptionsPlanner.BuildSurfacePlan().CommandId.Should().Be(ChartPlotStyleOptionsPlanner.CommandId);
     }
 
+    [Fact]
+    public void ChartSeriesOptionsPlanner_UsesWorkingCopyForErrorBars()
+    {
+        var chart = MakeChart();
+        var planner = ChartSeriesOptionsPlanner.FromChart(chart);
+
+        planner.SetErrorBarsEnabled(true);
+        planner.SetErrorDirection(ChartErrorDirection.X);
+        planner.SetErrorBarType(ChartErrorBarType.Plus);
+        planner.SetErrorValueType(ChartErrorValueType.Percentage);
+        planner.SetErrorValue(-4);
+        planner.SetErrorNoEndCap(true);
+
+        var options = planner.BuildCommitPlan();
+        options.ErrorBars.Should().NotBeNull();
+        options.ErrorBars!.Direction.Should().Be(ChartErrorDirection.X);
+        options.ErrorBars.BarType.Should().Be(ChartErrorBarType.Plus);
+        options.ErrorBars.ValueType.Should().Be(ChartErrorValueType.Percentage);
+        options.ErrorBars.Value.Should().Be(0);
+        options.ErrorBars.NoEndCap.Should().BeTrue();
+        chart.Series[0].ErrorBars.Should().BeNull();
+    }
+
     private static ChartShape MakeChart()
     {
         var chart = new ChartShape();
