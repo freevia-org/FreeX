@@ -775,6 +775,49 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task TableCellTextEditor_TextReplacementPreservesMixedRunsAndParagraphMetadata()
+    {
+        SlideShape? shape = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeTableShape(12, "Hello");
+                var body = shape!.Table!.Rows[0].Cells[0].TextBody!;
+                body.Paragraphs[0].Runs.Add(new Run
+                {
+                    Text = "World",
+                    Italic = true,
+                    ItalicSet = true,
+                });
+                body.Paragraphs[0].Align = TextAlign.Center;
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+            var box = RichInput(overlay);
+            box.Text.Should().Be("HelloWorld");
+            box.SelectionStart = 3;
+            box.SelectionEnd = 5;
+            box.Text = "HelXloWorld";
+
+            textEditor.CommitCellEdit();
+        });
+
+        var paragraph = shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs.Single();
+        paragraph.Align.Should().Be(TextAlign.Center);
+        paragraph.Runs.Select(run => (run.Text, run.Bold, run.Italic))
+            .Should().Equal(("HelXlo", false, false), ("World", false, true));
+    }
+
+    [Fact]
     public async Task TableCellTextEditor_FormatActiveOverlay_UsesSharedPlanAndMirrorsTextBox()
     {
         SlideShape? shape = null;

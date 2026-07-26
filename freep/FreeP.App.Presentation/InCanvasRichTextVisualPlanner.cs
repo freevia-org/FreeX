@@ -55,8 +55,10 @@ public static class InCanvasRichTextVisualPlanner
 
         var paragraphs = new List<InCanvasRichTextVisualParagraph>(body.Paragraphs.Count);
         int globalStart = 0;
-        int[] autoNumberCounters = new int[9];
-        int previousAutoNumberLevel = 0;
+        // The editable overlay must show the same marker sequence as the slide renderer and
+        // WPF FlowDocument conversion. Keep the continuation state shared rather than allowing
+        // a second, simplified counter to drift after restarts and level transitions.
+        var markerState = new PresentationListMarkerContinuationState();
 
         for (int paragraphIndex = 0; paragraphIndex < body.Paragraphs.Count; paragraphIndex++)
         {
@@ -93,24 +95,25 @@ public static class InCanvasRichTextVisualPlanner
                         break;
                     case BulletKind.Auto:
                     {
-                        int level = Math.Clamp(paragraph.Level, 0, autoNumberCounters.Length - 1);
-                        if (level < previousAutoNumberLevel)
-                        {
-                            for (int index = level + 1; index < autoNumberCounters.Length; index++)
-                                autoNumberCounters[index] = 0;
-                        }
-
-                        autoNumberCounters[level] = autoNumberCounters[level] == 0
-                            ? Math.Max(1, paragraph.AutoNumStartAt)
-                            : autoNumberCounters[level] + 1;
-                        previousAutoNumberLevel = level;
-                        bulletText = SlideCompositor.FormatAutoNum(
+                        int value = markerState.Next(
+                            paragraph.Level,
                             paragraph.AutoNumType,
-                            autoNumberCounters[level]);
+                            paragraph.AutoNumStartAt,
+                            paragraph.AutoNumStartAtSpecified);
+                        bulletText = PresentationListMarkerPlanner.FormatAutoNumber(
+                            paragraph.AutoNumType,
+                            value);
                         break;
                     }
+                    default:
+                        markerState.Break();
+                        break;
                 }
             }
+
+            if (paragraph.BulletKind is BulletKind.Char or BulletKind.Image
+                || paragraph.BulletSuppressed)
+                markerState.Break();
 
             double indentDip = paragraph.MarginLeftEmu is { } marginLeft
                 ? Math.Max(0, marginLeft / EmuPerDip)

@@ -90,6 +90,53 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void WpfTableCellRichEditor_RoundTripsMixedRunsAndKeepsSelectionCaretOnRichText()
+    {
+        var original = new TextBody();
+        original.Paragraphs.Add(new ModelParagraph
+        {
+            Align = TextAlign.Center,
+            Runs =
+            {
+                new ModelRun { Text = "Bold", Bold = true, BoldSet = true },
+                new ModelRun { Text = " italic", Italic = true, ItalicSet = true },
+            },
+        });
+        original.Paragraphs.Add(new ModelParagraph
+        {
+            Runs = { new ModelRun { Text = "Second", Underline = true } },
+        });
+
+        var document = TextBodyFlowDocumentConverter.ToFlowDocument(original, fallbackFontSizePt: 13);
+        var editor = new RichTextBox(document)
+        {
+            Width = 320,
+            Height = 120,
+            IsUndoEnabled = false,
+        };
+        editor.Measure(new System.Windows.Size(320, 120));
+        editor.Arrange(new Rect(0, 0, 320, 120));
+
+        var firstRun = document.Blocks.OfType<WpfParagraph>().First().Inlines
+            .OfType<WpfRun>().First();
+        var secondRun = document.Blocks.OfType<WpfParagraph>().First().Inlines
+            .OfType<WpfRun>().Skip(1).First();
+        var selectionStart = firstRun.ContentStart.GetPositionAtOffset(1)!;
+        var selectionEnd = secondRun.ContentStart.GetPositionAtOffset(3)!;
+        editor.Selection.Select(selectionStart, selectionEnd);
+
+        editor.Selection.Text.Should().Be("old it");
+        editor.Selection.Start.GetCharacterRect(LogicalDirection.Forward).Height
+            .Should().BeGreaterThan(0);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(document, original);
+        restored.Paragraphs.Should().HaveCount(2);
+        restored.Paragraphs[0].Runs.Select(run => (run.Text, run.Bold, run.Italic))
+            .Should().Equal(("Bold", true, false), (" italic", false, true));
+        restored.Paragraphs[1].Runs.Single().Underline.Should().BeTrue();
+    }
+
+    [StaFact]
     public void WpfSplitFirstParagraph_UsesTextLineageForFollowingMetadata()
     {
         var original = DistinctParagraphBody();

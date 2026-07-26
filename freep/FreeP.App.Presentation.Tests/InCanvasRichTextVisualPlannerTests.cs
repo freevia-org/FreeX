@@ -130,6 +130,23 @@ public sealed class InCanvasRichTextVisualPlannerTests
     }
 
     [Fact]
+    public void Create_UsesSharedMarkerContinuationAcrossRestartsLevelsAndNonLists()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(Numbered("First", AutoNumType.ArabicPeriod, 4, startSpecified: true));
+        body.Paragraphs.Add(Numbered("Nested", AutoNumType.ArabicPeriod, 1, level: 1));
+        body.Paragraphs.Add(Numbered("Sibling", AutoNumType.ArabicPeriod, 1));
+        body.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = "Plain" } } });
+        body.Paragraphs.Add(Numbered("Restart", AutoNumType.ArabicPeriod, 7, startSpecified: true));
+        body.Paragraphs.Add(Numbered("After", AutoNumType.ArabicPeriod, 1));
+
+        var plan = InCanvasRichTextVisualPlanner.Create(body);
+
+        plan.Paragraphs.Select(paragraph => paragraph.BulletText)
+            .Should().Equal("4.", "1.", "5.", "", "7.", "8.");
+    }
+
+    [Fact]
     public void Create_HonorsWpfAuthorityParagraphSpacingWithoutIntroducingIndent()
     {
         var body = new TextBody();
@@ -147,5 +164,23 @@ public sealed class InCanvasRichTextVisualPlannerTests
 
         paragraph.SpaceBeforeDip.Should().BeApproximately(4, 0.01);
         paragraph.SpaceAfterDip.Should().BeApproximately(8, 0.01);
+    }
+
+    private static Paragraph Numbered(
+        string text,
+        AutoNumType type,
+        int startAt,
+        int level = 0,
+        bool startSpecified = false)
+    {
+        return new Paragraph
+        {
+            Level = level,
+            BulletKind = BulletKind.Auto,
+            AutoNumType = type,
+            AutoNumStartAt = startAt,
+            AutoNumStartAtSpecified = startSpecified,
+            Runs = { new Run { Text = text } },
+        };
     }
 }

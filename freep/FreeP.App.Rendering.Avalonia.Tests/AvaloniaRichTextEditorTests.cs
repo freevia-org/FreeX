@@ -401,6 +401,40 @@ public sealed class AvaloniaRichTextEditorTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task RichSurface_UsesSharedMarkerContinuationForMixedParagraphEditing()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(Numbered("First", AutoNumType.ArabicPeriod, 4, startSpecified: true));
+            body.Paragraphs.Add(Numbered("Nested", AutoNumType.ArabicPeriod, 1, level: 1));
+            body.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = "Plain" } } });
+            body.Paragraphs.Add(Numbered("Restart", AutoNumType.ArabicPeriod, 7, startSpecified: true));
+
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 160,
+            };
+            var window = Show(editor, 320, 160);
+            try
+            {
+                editor.RichTextView.VisualPlan.Paragraphs
+                    .Select(paragraph => paragraph.BulletText)
+                    .Should().Equal("4.", "1.", "", "7.");
+
+                editor.SelectionStart = "First\nNested\nPlain\nRestart".Length;
+                editor.SelectionEnd = editor.SelectionStart;
+                editor.RichTextView.CaretRect.Height.Should().BeGreaterThan(0);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static ResolvedTextLayout ComposeText(TextBody body)
     {
         var presentation = FreeP.Core.Model.Presentation.CreateEmpty();
@@ -497,6 +531,24 @@ public sealed class AvaloniaRichTextEditorTests
             Runs = { new Run { Text = "Centered numbered paragraph", FontFamily = "Calibri", FontSizePt = 16, Italic = true } },
         });
         return body;
+    }
+
+    private static Paragraph Numbered(
+        string text,
+        AutoNumType type,
+        int startAt,
+        int level = 0,
+        bool startSpecified = false)
+    {
+        return new Paragraph
+        {
+            Level = level,
+            BulletKind = BulletKind.Auto,
+            AutoNumType = type,
+            AutoNumStartAt = startAt,
+            AutoNumStartAtSpecified = startSpecified,
+            Runs = { new Run { Text = text } },
+        };
     }
 
 }
