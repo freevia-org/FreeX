@@ -10,4 +10,5 @@ public sealed record ChartPointOptions(
     double? StrokeWidthPt,
     ChartMarkerSymbol? MarkerSymbol,
     double? MarkerSizePt,
-    ChartDataLabels? DataLabels = null);
+    ChartDataLabels? DataLabels = null,
+    bool ShowBubbleSize = false);

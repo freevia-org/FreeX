@@ -21,6 +21,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly CheckBox _categoryLabelsCheck;
     private readonly CheckBox _seriesLabelsCheck;
     private readonly CheckBox _legendKeysCheck;
+    private readonly CheckBox _bubbleSizeLabelsCheck;
     private readonly TextBox _numberFormatBox;
     private readonly TextBox _separatorBox;
     private readonly TextBox _labelFontFamilyBox;
@@ -86,6 +87,11 @@ internal sealed class ChartDisplayOptionsDialog : Window
         {
             Content = surface.LegendKeysLabel,
             IsChecked = _planner.ShowLegendKeys,
+        };
+        _bubbleSizeLabelsCheck = new CheckBox
+        {
+            Content = surface.BubbleSizeLabelsLabel,
+            IsChecked = _planner.ShowBubbleSize,
         };
         _numberFormatBox = new TextBox { Text = _planner.LabelNumberFormat, MinWidth = 150 };
         _separatorBox = new TextBox { Text = _planner.LabelSeparator, MinWidth = 150 };
@@ -170,6 +176,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
                 _categoryLabelsCheck,
                 _seriesLabelsCheck,
                 _legendKeysCheck,
+                _bubbleSizeLabelsCheck,
                 MakeRow(surface.NumberFormatLabel, _numberFormatBox),
                 MakeRow(surface.SeparatorLabel, _separatorBox),
                 MakeRow(surface.FontFamilyLabel, _labelFontFamilyBox),
@@ -225,7 +232,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
         double? labelFontSizePt = null,
         bool? labelBold = null,
         bool? labelItalic = null,
-        string? labelColor = null)
+        string? labelColor = null,
+        bool showBubbleSize = false)
     {
         _titleBox.Text = title;
         _legendCombo.SelectedIndex = FindLegendIndex(legend);
@@ -234,6 +242,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _categoryLabelsCheck.IsChecked = showCategoryLabels;
         _seriesLabelsCheck.IsChecked = showSeriesLabels;
         _legendKeysCheck.IsChecked = showLegendKeys;
+        _bubbleSizeLabelsCheck.IsChecked = showBubbleSize;
         _numberFormatBox.Text = numberFormat ?? string.Empty;
         _separatorBox.Text = separator ?? string.Empty;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
@@ -268,6 +277,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _planner.SetShowCategoryLabels(_categoryLabelsCheck.IsChecked == true);
         _planner.SetShowSeriesLabels(_seriesLabelsCheck.IsChecked == true);
         _planner.SetShowLegendKeys(_legendKeysCheck.IsChecked == true);
+        _planner.SetShowBubbleSize(_bubbleSizeLabelsCheck.IsChecked == true);
         var labelIndex = _labelPositionCombo.SelectedIndex;
         if (labelIndex >= 0 && labelIndex < ChartDisplayOptionsPlanner.LabelPositionOptions.Count)
             _planner.SetLabelPosition(ChartDisplayOptionsPlanner.LabelPositionOptions[labelIndex].Value);

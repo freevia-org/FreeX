@@ -18,6 +18,7 @@ public sealed record ChartDisplayOptionsSurfacePlan(
     string CategoryLabelsLabel,
     string SeriesLabelsLabel,
     string LegendKeysLabel,
+    string BubbleSizeLabelsLabel,
     string NumberFormatLabel,
     string SeparatorLabel,
     string FontFamilyLabel,
@@ -54,6 +55,7 @@ public sealed class ChartDisplayOptionsPlanner
     public const string CategoryLabelsLabel = "Category Labels";
     public const string SeriesLabelsLabel = "Series Labels";
     public const string LegendKeysLabel = "Legend Keys";
+    public const string BubbleSizeLabelsLabel = "Bubble size labels";
     public const string NumberFormatLabel = "Number Format";
     public const string SeparatorLabel = "Separator";
     public const string FontFamilyLabel = "Font Family";
@@ -106,6 +108,7 @@ public sealed class ChartDisplayOptionsPlanner
     private bool _showCategoryLabels;
     private bool _showSeriesLabels;
     private bool _showLegendKeys;
+    private bool _showBubbleSize;
     private DataLabelPosition _labelPosition = DataLabelPosition.OutsideEnd;
     private string _labelNumberFormat = string.Empty;
     private string _labelSeparator = string.Empty;
@@ -134,6 +137,7 @@ public sealed class ChartDisplayOptionsPlanner
         _showCategoryLabels = chart.DataLabels?.ShowCategoryName == true;
         _showSeriesLabels = chart.DataLabels?.ShowSeriesName == true;
         _showLegendKeys = chart.DataLabels?.ShowLegendKey == true;
+        _showBubbleSize = chart.DataLabels?.ShowBubbleSize == true;
         _labelPosition = chart.DataLabels?.Position ?? DataLabelPosition.OutsideEnd;
         _labelNumberFormat = chart.DataLabels?.NumberFormat ?? string.Empty;
         _labelSeparator = chart.DataLabels?.Separator ?? string.Empty;
@@ -165,6 +169,7 @@ public sealed class ChartDisplayOptionsPlanner
             CategoryLabelsLabel,
             SeriesLabelsLabel,
             LegendKeysLabel,
+            BubbleSizeLabelsLabel,
             NumberFormatLabel,
             SeparatorLabel,
             FontFamilyLabel,
@@ -199,6 +204,7 @@ public sealed class ChartDisplayOptionsPlanner
     public bool ShowCategoryLabels => _showCategoryLabels;
     public bool ShowSeriesLabels => _showSeriesLabels;
     public bool ShowLegendKeys => _showLegendKeys;
+    public bool ShowBubbleSize => _showBubbleSize;
     public DataLabelPosition LabelPosition => _labelPosition;
     public string LabelNumberFormat => _labelNumberFormat;
     public string LabelSeparator => _labelSeparator;
@@ -233,6 +239,7 @@ public sealed class ChartDisplayOptionsPlanner
     public void SetShowCategoryLabels(bool show) => _showCategoryLabels = show;
     public void SetShowSeriesLabels(bool show) => _showSeriesLabels = show;
     public void SetShowLegendKeys(bool show) => _showLegendKeys = show;
+    public void SetShowBubbleSize(bool show) => _showBubbleSize = show;
     public void SetLabelPosition(DataLabelPosition position) => _labelPosition = position;
     public void SetLabelNumberFormat(string? format) => _labelNumberFormat = format ?? string.Empty;
     public void SetLabelSeparator(string? separator) => _labelSeparator = separator ?? string.Empty;
@@ -273,7 +280,8 @@ public sealed class ChartDisplayOptionsPlanner
         _varyColors,
         _legendOverlay,
         _highLowLines,
-        BuildLabelTextStyle());
+        BuildLabelTextStyle(),
+        _showBubbleSize);
 
     private ChartTextStyle? BuildLabelTextStyle()
     {

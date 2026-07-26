@@ -6109,7 +6109,8 @@ public static partial class ChartRenderPlanner
         double value,
         double total,
         string? categoryName,
-        string? seriesName)
+        string? seriesName,
+        double? bubbleSize = null)
     {
         string formattedValue = string.IsNullOrEmpty(labels.NumberFormat)
             ? FormatAxisValue(value)
@@ -6128,6 +6129,10 @@ public static partial class ChartRenderPlanner
             parts.Add(formattedValue);
         if (labels.ShowPercent)
             parts.Add(percent);
+        if (labels.ShowBubbleSize && bubbleSize.HasValue)
+            parts.Add(string.IsNullOrEmpty(labels.NumberFormat)
+                ? FormatAxisValue(bubbleSize.Value)
+                : FormatWithCode(bubbleSize.Value, labels.NumberFormat!));
 
         return string.Join(labels.Separator ?? " ", parts);
     }
@@ -7183,7 +7188,10 @@ public static partial class ChartRenderPlanner
                 : pointIndex < series.XValues.Count && series.XValues[pointIndex].HasValue
                     ? FormatAxisValue(series.XValues[pointIndex]!.Value)
                     : string.Empty;
-            string text = FormatDataLabel(labels, value.Value, total, categoryName, series.Name);
+            double? bubbleSize = pointIndex < series.BubbleSizes.Count
+                ? series.BubbleSizes[pointIndex]
+                : null;
+            string text = FormatDataLabel(labels, value.Value, total, categoryName, series.Name, bubbleSize);
             if (string.IsNullOrEmpty(text) && !labels.ShowLegendKey)
                 continue;
 

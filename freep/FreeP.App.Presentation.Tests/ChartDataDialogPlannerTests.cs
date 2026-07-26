@@ -317,6 +317,7 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetShowCategoryLabels(true);
         planner.SetShowSeriesLabels(true);
         planner.SetShowLegendKeys(true);
+        planner.SetShowBubbleSize(true);
         planner.SetLabelPosition(DataLabelPosition.OutsideEnd);
         planner.SetLabelNumberFormat("0.0%");
         planner.SetLabelSeparator(" | ");
@@ -339,7 +340,7 @@ public sealed class ChartDataDialogPlannerTests
         commit.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, false, DataLabelPosition.OutsideEnd, false, true,
             true, true, true, true, "0.0%", " | ", 40, 55, ChartDisplayBlanksAs.Span, true, true, true, false,
-            commit.LabelTextStyle));
+            commit.LabelTextStyle, true));
         commit.LabelTextStyle.Should().NotBeNull();
         commit.LabelTextStyle!.FontFamily.Should().Be("Aptos");
         commit.LabelTextStyle.FontSizePt.Should().Be(9);

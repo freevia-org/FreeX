@@ -934,7 +934,8 @@ public sealed class ChartDataCommandTests
                     Bold = true,
                     Italic = false,
                     Color = new ThemeAwareColor(SrgbColor.FromRgb(0x2F5496)),
-                })));
+                },
+                ShowBubbleSize: true)));
 
         chart.Title.Should().Be("Revenue");
         chart.HasAutomaticTitle.Should().BeFalse();
@@ -944,6 +945,7 @@ public sealed class ChartDataCommandTests
         chart.DataLabels.ShowPercent.Should().BeTrue();
         chart.DataLabels.ShowSeriesName.Should().BeFalse();
         chart.DataLabels.ShowLegendKey.Should().BeTrue();
+        chart.DataLabels.ShowBubbleSize.Should().BeTrue();
         chart.DataLabels.NumberFormat.Should().Be("0.0%");
         chart.DataLabels.Separator.Should().Be(" | ");
         chart.DataLabels.Position.Should().Be(DataLabelPosition.OutsideEnd);
@@ -973,6 +975,7 @@ public sealed class ChartDataCommandTests
         roundTripped.DataLabels.ShowPercent.Should().BeTrue();
         roundTripped.DataLabels.ShowCategoryName.Should().BeTrue();
         roundTripped.DataLabels.ShowLegendKey.Should().BeTrue();
+        roundTripped.DataLabels.ShowBubbleSize.Should().BeTrue();
         roundTripped.DataLabels.NumberFormat.Should().Be("0.0%");
         roundTripped.DataLabels.Separator.Should().Be(" | ");
         roundTripped.DataLabels.TextStyle.Should().NotBeNull();
@@ -999,6 +1002,7 @@ public sealed class ChartDataCommandTests
         chart.DataLabels.ShowPercent.Should().BeFalse();
         chart.DataLabels.ShowSeriesName.Should().BeFalse();
         chart.DataLabels.ShowLegendKey.Should().BeFalse();
+        chart.DataLabels.ShowBubbleSize.Should().BeFalse();
         chart.DataLabels.NumberFormat.Should().Be("0.0");
         chart.DataLabels.Separator.Should().BeNull();
         chart.DataLabels.Position.Should().Be(DataLabelPosition.Center);
@@ -1313,6 +1317,7 @@ public sealed class ChartDataCommandTests
                         Italic = false,
                         Color = new ThemeAwareColor(SrgbColor.FromRgb(0x2F5496)),
                     },
+                    ShowBubbleSize = true,
                 })));
 
         var series = chart.Series[1];
@@ -1328,6 +1333,7 @@ public sealed class ChartDataCommandTests
         series.DataLabels!.ShowValue.Should().BeTrue();
         series.DataLabels.ShowCategoryName.Should().BeTrue();
         series.DataLabels.ShowLegendKey.Should().BeTrue();
+        series.DataLabels.ShowBubbleSize.Should().BeTrue();
         series.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         series.DataLabels.NumberFormat.Should().Be("0.0%");
         series.DataLabels.Separator.Should().Be(" | ");
@@ -1557,6 +1563,7 @@ public sealed class ChartDataCommandTests
                         Italic = false,
                         Color = new ThemeAwareColor(SrgbColor.FromRgb(0x2F5496)),
                     },
+                    ShowBubbleSize = true,
                 })));
 
         var style = chart.Series[0].PointStyles[1];
@@ -1570,6 +1577,7 @@ public sealed class ChartDataCommandTests
         style.DataLabels!.ShowValue.Should().BeTrue();
         style.DataLabels.ShowCategoryName.Should().BeTrue();
         style.DataLabels.ShowLegendKey.Should().BeTrue();
+        style.DataLabels.ShowBubbleSize.Should().BeTrue();
         style.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         style.DataLabels.TextStyle.Should().NotBeNull();
         style.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");

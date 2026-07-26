@@ -74,6 +74,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
             chart.DataLabels.ShowCategoryName = _newOptions.ShowCategoryLabels;
             chart.DataLabels.ShowSeriesName = _newOptions.ShowSeriesLabels;
             chart.DataLabels.ShowLegendKey = _newOptions.ShowLegendKeys;
+            chart.DataLabels.ShowBubbleSize = _newOptions.ShowBubbleSize;
             chart.DataLabels.Position = _newOptions.LabelPosition;
             chart.DataLabels.NumberFormat = _newOptions.LabelNumberFormat;
             chart.DataLabels.Separator = _newOptions.LabelSeparator;
@@ -82,9 +83,10 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         else if (_newOptions.ShowValueLabels ||
                  _newOptions.ShowPercentLabels ||
                  _newOptions.ShowCategoryLabels ||
-                 _newOptions.ShowSeriesLabels ||
-                 _newOptions.ShowLegendKeys ||
-                 !string.IsNullOrWhiteSpace(_newOptions.LabelNumberFormat) ||
+                  _newOptions.ShowSeriesLabels ||
+                  _newOptions.ShowLegendKeys ||
+                  _newOptions.ShowBubbleSize ||
+                  !string.IsNullOrWhiteSpace(_newOptions.LabelNumberFormat) ||
                  !string.IsNullOrEmpty(_newOptions.LabelSeparator) ||
                  _newOptions.LabelTextStyle is not null)
         {
@@ -95,6 +97,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
                 ShowCategoryName = _newOptions.ShowCategoryLabels,
                 ShowSeriesName = _newOptions.ShowSeriesLabels,
                 ShowLegendKey = _newOptions.ShowLegendKeys,
+                ShowBubbleSize = _newOptions.ShowBubbleSize,
                 Position = _newOptions.LabelPosition,
                 NumberFormat = _newOptions.LabelNumberFormat,
                 Separator = _newOptions.LabelSeparator,
@@ -137,6 +140,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
             ShowCategoryName = source.ShowCategoryName,
             ShowSeriesName = source.ShowSeriesName,
             ShowLegendKey = source.ShowLegendKey,
+            ShowBubbleSize = source.ShowBubbleSize,
             Position = source.Position,
             NumberFormat = source.NumberFormat,
             Separator = source.Separator,

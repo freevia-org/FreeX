@@ -25,6 +25,7 @@ public sealed record ChartSeriesOptionsSurfacePlan(
     string CategoryLabelsLabel,
     string SeriesLabelsLabel,
     string LegendKeysLabel,
+    string BubbleSizeLabelsLabel,
     string LabelPositionLabel,
     string NumberFormatLabel,
     string SeparatorLabel,
@@ -61,6 +62,7 @@ public sealed class ChartSeriesOptionsPlanner
     public const string CategoryLabelsLabel = "Category labels";
     public const string SeriesLabelsLabel = "Series labels";
     public const string LegendKeysLabel = "Legend keys";
+    public const string BubbleSizeLabelsLabel = "Bubble size labels";
     public const string LabelPositionLabel = "Label position";
     public const string NumberFormatLabel = "Number format";
     public const string SeparatorLabel = "Separator";
@@ -120,6 +122,7 @@ public sealed class ChartSeriesOptionsPlanner
     private bool _showCategoryLabels;
     private bool _showSeriesLabels;
     private bool _showLegendKeys;
+    private bool _showBubbleSize;
     private DataLabelPosition _labelPosition = DataLabelPosition.OutsideEnd;
     private string _labelNumberFormat = string.Empty;
     private string _labelSeparator = string.Empty;
@@ -155,6 +158,7 @@ public sealed class ChartSeriesOptionsPlanner
             CategoryLabelsLabel,
             SeriesLabelsLabel,
             LegendKeysLabel,
+            BubbleSizeLabelsLabel,
             LabelPositionLabel,
             NumberFormatLabel,
             SeparatorLabel,
@@ -195,6 +199,7 @@ public sealed class ChartSeriesOptionsPlanner
     public bool ShowCategoryLabels => _showCategoryLabels;
     public bool ShowSeriesLabels => _showSeriesLabels;
     public bool ShowLegendKeys => _showLegendKeys;
+    public bool ShowBubbleSize => _showBubbleSize;
     public DataLabelPosition LabelPosition => _labelPosition;
     public string LabelNumberFormat => _labelNumberFormat;
     public string LabelSeparator => _labelSeparator;
@@ -225,6 +230,7 @@ public sealed class ChartSeriesOptionsPlanner
             _showCategoryLabels = false;
             _showSeriesLabels = false;
             _showLegendKeys = false;
+            _showBubbleSize = false;
             _labelPosition = DataLabelPosition.OutsideEnd;
             _labelNumberFormat = string.Empty;
             _labelSeparator = string.Empty;
@@ -255,6 +261,7 @@ public sealed class ChartSeriesOptionsPlanner
         _showCategoryLabels = labels?.ShowCategoryName == true;
         _showSeriesLabels = labels?.ShowSeriesName == true;
         _showLegendKeys = labels?.ShowLegendKey == true;
+        _showBubbleSize = labels?.ShowBubbleSize == true;
         _labelPosition = labels?.Position ?? DataLabelPosition.OutsideEnd;
         _labelNumberFormat = labels?.NumberFormat ?? string.Empty;
         _labelSeparator = labels?.Separator ?? string.Empty;
@@ -292,6 +299,7 @@ public sealed class ChartSeriesOptionsPlanner
     public void SetShowCategoryLabels(bool value) => _showCategoryLabels = value;
     public void SetShowSeriesLabels(bool value) => _showSeriesLabels = value;
     public void SetShowLegendKeys(bool value) => _showLegendKeys = value;
+    public void SetShowBubbleSize(bool value) => _showBubbleSize = value;
     public void SetLabelPosition(DataLabelPosition value) => _labelPosition = value;
     public void SetLabelNumberFormat(string? value) => _labelNumberFormat = value ?? string.Empty;
     public void SetLabelSeparator(string? value) => _labelSeparator = value ?? string.Empty;
@@ -325,6 +333,7 @@ public sealed class ChartSeriesOptionsPlanner
                 ShowCategoryName = _showCategoryLabels,
                 ShowSeriesName = _showSeriesLabels,
                 ShowLegendKey = _showLegendKeys,
+                ShowBubbleSize = _showBubbleSize,
                 Position = _labelPosition,
                 NumberFormat = string.IsNullOrWhiteSpace(_labelNumberFormat) ? null : _labelNumberFormat,
                 Separator = string.IsNullOrEmpty(_labelSeparator) ? null : _labelSeparator,

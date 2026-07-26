@@ -6168,7 +6168,8 @@ public sealed class MainWindowHeadlessTests
                 labelFontSizePt: 9,
                 labelBold: true,
                 labelItalic: false,
-                labelColor: "#2F5496");
+                labelColor: "#2F5496",
+                showBubbleSize: true);
             dialog.SetVaryColorsForTests(true);
             dialog.SetLegendOverlayForTests(true);
             dialog.SetHighLowLinesForTests(false);
@@ -6186,6 +6187,7 @@ public sealed class MainWindowHeadlessTests
         options.LabelTextStyle.Bold.Should().BeTrue();
         options.LabelTextStyle.Italic.Should().BeFalse();
         options.LabelTextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
+        options.ShowBubbleSize.Should().BeTrue();
     }
 
     [Fact]
@@ -6389,7 +6391,7 @@ public sealed class MainWindowHeadlessTests
             var dialog = new ChartSeriesOptionsDialog(window.Editor);
             dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4", "#1F4E79", OutlineDash.DashDot, true,
                 true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
-                "Aptos", 9, true, false, "#2F5496");
+                "Aptos", 9, true, false, "#2F5496", showBubbleSize: true);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6410,6 +6412,7 @@ public sealed class MainWindowHeadlessTests
         options.DataLabels!.ShowValue.Should().BeTrue();
         options.DataLabels.ShowCategoryName.Should().BeTrue();
         options.DataLabels.ShowLegendKey.Should().BeTrue();
+        options.DataLabels.ShowBubbleSize.Should().BeTrue();
         options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         options.DataLabels.TextStyle.Should().NotBeNull();
         options.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
@@ -6432,7 +6435,7 @@ public sealed class MainWindowHeadlessTests
             var dialog = new ChartPointOptionsDialog(window.Editor);
             dialog.SetOptionsForTests(0, 0, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7,
                 true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
-                "Aptos", 9, true, false, "#2F5496");
+                "Aptos", 9, true, false, "#2F5496", showBubbleSize: true);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6450,6 +6453,7 @@ public sealed class MainWindowHeadlessTests
         options.DataLabels!.ShowValue.Should().BeTrue();
         options.DataLabels.ShowCategoryName.Should().BeTrue();
         options.DataLabels.ShowLegendKey.Should().BeTrue();
+        options.DataLabels.ShowBubbleSize.Should().BeTrue();
         options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         options.DataLabels.TextStyle.Should().NotBeNull();
         options.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
