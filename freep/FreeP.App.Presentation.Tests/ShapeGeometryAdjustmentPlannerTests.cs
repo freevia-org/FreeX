@@ -416,6 +416,52 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     }
 
     [Fact]
+    public void Build_Explosion_ExposesSpikeDepthGuide()
+    {
+        var shape = new SlideShape
+        {
+            Id = 10,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Explosion,
+        };
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.CanEdit.Should().BeTrue();
+        plan.Handles.Should().ContainSingle();
+        plan.Handles[0].Name.Should().Be("adj");
+        plan.Handles[0].Label.Should().Be("Explosion spike depth");
+        plan.Handles[0].Value.Should().Be(62000);
+        plan.Handles[0].Maximum.Should().Be(100000);
+    }
+
+    [Fact]
+    public void BuildMutationPlan_Explosion_MapsInnerPointToDepthGuide()
+    {
+        var shape = new SlideShape
+        {
+            Id = 10,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Explosion,
+        };
+
+        var angle = -Math.PI / 2 + 0.08 + Math.PI / 12;
+        var radial = 0.5 * 0.74;
+        var plan = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape,
+            Bounds,
+            "adj",
+            new LayoutPoint(
+                Bounds.Left + Bounds.Width * (0.5 + Math.Cos(angle) * radial),
+                Bounds.Top + Bounds.Height * (0.5 + Math.Sin(angle) * radial)));
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.Name.Should().Be("adj");
+        plan.Value.Should().BeApproximately(74000, 0.001);
+        plan.DisabledReason.Should().BeNull();
+    }
+
+    [Fact]
     public void Build_RightArrow_ExposesShaftAndHeadGuides()
     {
         var shape = new SlideShape
