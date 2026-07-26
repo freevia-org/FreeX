@@ -236,6 +236,7 @@ internal static class Ooxml
     public const string CommentsIdsRelType = "http://schemas.microsoft.com/office/2016/09/relationships/commentsIds";
     public const string CommentsExtensibleRelType = "http://schemas.microsoft.com/office/2018/08/relationships/commentsExtensible";
     public const string KeyMapCustomizationRelType = "http://schemas.microsoft.com/office/2006/relationships/keyMapCustomizations";
+    public const string DocumentTasksRelType = "http://schemas.microsoft.com/office/2019/05/relationships/documenttasks";
 
     /// <summary>
     /// The bibliography namespace (b), used by word/bibliography/sources.xml — the legacy mirror for the
