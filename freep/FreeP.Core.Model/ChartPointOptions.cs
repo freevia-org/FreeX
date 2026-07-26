@@ -9,4 +9,5 @@ public sealed record ChartPointOptions(
     ThemeAwareColor? StrokeColor,
     double? StrokeWidthPt,
     ChartMarkerSymbol? MarkerSymbol,
-    double? MarkerSizePt);
+    double? MarkerSizePt,
+    ChartDataLabels? DataLabels = null);

@@ -6412,7 +6412,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartPointOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(0, 0, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7);
+            dialog.SetOptionsForTests(0, 0, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7,
+                true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ");
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6426,6 +6427,11 @@ public sealed class MainWindowHeadlessTests
         options.StrokeWidthPt.Should().Be(1.5);
         options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
         options.MarkerSizePt.Should().Be(7);
+        options.DataLabels.Should().NotBeNull();
+        options.DataLabels!.ShowValue.Should().BeTrue();
+        options.DataLabels.ShowCategoryName.Should().BeTrue();
+        options.DataLabels.ShowLegendKey.Should().BeTrue();
+        options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
     }
 
     [Fact]

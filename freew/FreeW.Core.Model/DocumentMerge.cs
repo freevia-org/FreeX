@@ -80,6 +80,8 @@ public static class DocumentMerge
     private static Run CloneRun(Run source) => new(source.Text, source.Formatting)
     {
         Image = source.Image?.Clone(),
+        WordArt = source.WordArt?.Clone(),
+        SmartArt = source.SmartArt is { } smartArt ? SmartArtCommandCopy.Clone(smartArt) : null,
         HyperlinkUrl = source.HyperlinkUrl,
         HyperlinkAnchor = source.HyperlinkAnchor,
         HyperlinkTooltip = source.HyperlinkTooltip,

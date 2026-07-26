@@ -34,4 +34,15 @@ public sealed class FloatingPlacement
     /// Defaults to 0. Ignored when <see cref="IsFloating"/> is false.
     /// </summary>
     public int ZOrderIndex { get; set; }
+
+    /// <summary>Creates an independent copy for document merge and undo snapshots.</summary>
+    public FloatingPlacement Clone() => new()
+    {
+        Wrapping = Wrapping,
+        HorizontalOffsetPt = HorizontalOffsetPt,
+        VerticalOffsetPt = VerticalOffsetPt,
+        HorizontalAnchor = HorizontalAnchor,
+        VerticalAnchor = VerticalAnchor,
+        ZOrderIndex = ZOrderIndex
+    };
 }

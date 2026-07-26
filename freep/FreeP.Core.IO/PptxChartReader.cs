@@ -584,7 +584,9 @@ internal static class PptxChartReader
             }
 
             // Per-series data labels override
-            series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"), scheme);
+            var dataLabelsEl = serEl.Element(C + "dLbls");
+            series.DataLabels = ReadDataLabels(dataLabelsEl, scheme);
+            ReadPointDataLabels(dataLabelsEl, scheme, series);
 
             shape.Series.Add(series);
 
@@ -637,7 +639,9 @@ internal static class PptxChartReader
             ReadPointStyles(serEl, scheme, series);
 
             // Per-series data labels override
-            series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"), scheme);
+            var dataLabelsEl = serEl.Element(C + "dLbls");
+            series.DataLabels = ReadDataLabels(dataLabelsEl, scheme);
+            ReadPointDataLabels(dataLabelsEl, scheme, series);
 
             shape.Series.Add(series);
 
@@ -781,7 +785,9 @@ internal static class PptxChartReader
             }
 
             // Per-series data labels override
-            series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"), scheme);
+            var dataLabelsEl = serEl.Element(C + "dLbls");
+            series.DataLabels = ReadDataLabels(dataLabelsEl, scheme);
+            ReadPointDataLabels(dataLabelsEl, scheme, series);
 
             shape.Series.Add(series);
 
@@ -1201,6 +1207,37 @@ internal static class PptxChartReader
     private static ChartDataLabels? ReadDataLabels(
         XElement? dLblsEl,
         PresentationColorScheme scheme)
+        => ReadDataLabelValues(dLblsEl, scheme, allowEmpty: false);
+
+    private static void ReadPointDataLabels(
+        XElement? dLblsEl,
+        PresentationColorScheme scheme,
+        ChartSeries series)
+    {
+        if (dLblsEl is null)
+            return;
+
+        foreach (var pointLabelEl in dLblsEl.Elements(C + "dLbl"))
+        {
+            var indexText = pointLabelEl.Element(C + "idx")?.Attribute("val")?.Value;
+            if (!int.TryParse(indexText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) || index < 0)
+                continue;
+
+            var labels = ReadDataLabelValues(pointLabelEl, scheme, allowEmpty: true);
+            if (labels is null)
+                continue;
+
+            if (!series.PointStyles.TryGetValue(index, out var style))
+                style = new ChartPointStyle();
+            style.DataLabels = labels;
+            series.PointStyles[index] = style;
+        }
+    }
+
+    private static ChartDataLabels? ReadDataLabelValues(
+        XElement? dLblsEl,
+        PresentationColorScheme scheme,
+        bool allowEmpty)
     {
         if (dLblsEl is null) return null;
 
@@ -1210,9 +1247,12 @@ internal static class PptxChartReader
         bool showCat     = ParseBoolAttr(dLblsEl.Element(C + "showCatName"));
         bool showSer     = ParseBoolAttr(dLblsEl.Element(C + "showSerName"));
         bool showLegend  = ParseBoolAttr(dLblsEl.Element(C + "showLegendKey"));
+        bool? deleted = dLblsEl.Element(C + "delete") is { } deleteEl
+            ? ParseBoolAttr(deleteEl)
+            : null;
 
         // If nothing is shown this is a no-op element — return null to keep model clean.
-        if (!showVal && !showPct && !showCat && !showSer && !showLegend)
+        if (!allowEmpty && !deleted.HasValue && !showVal && !showPct && !showCat && !showSer && !showLegend)
             return null;
 
         var posStr = dLblsEl.Element(C + "dLblPos")?.Attribute("val")?.Value;
@@ -1220,6 +1260,7 @@ internal static class PptxChartReader
 
         return new ChartDataLabels
         {
+            Delete            = deleted,
             ShowValue        = showVal,
             ShowPercent      = showPct,
             ShowCategoryName = showCat,
