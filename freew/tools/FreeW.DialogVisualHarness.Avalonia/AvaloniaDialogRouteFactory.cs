@@ -149,38 +149,53 @@ internal static class AvaloniaDialogRouteFactory
     {
         var assembly = typeof(MainWindow).Assembly;
         var type = assembly.GetType("FreeW.App.Avalonia.Backstage.BackstageView", true)!;
-        var callbacksType = assembly.GetType("FreeW.App.Avalonia.Backstage.BackstageCallbacks", true)!;
-        var callbackConstructor = callbacksType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).OrderByDescending(candidate => candidate.GetParameters().Length).First();
-        var callbackValues = callbackConstructor.GetParameters()
-            .Select(parameter => BackstageCallbackValue(parameter.ParameterType, parameter.Name))
-            .ToArray();
-        var callbacks = callbackConstructor.Invoke(callbackValues);
-        var paneType = assembly.GetType("FreeW.App.Avalonia.Backstage.BackstagePane", true)!;
+        // Use the real production shell to obtain the same sample document,
+        // recent-file workflow, file formats, and persisted options as the WPF
+        // authority. Synthesizing empty callbacks makes the panes look unlike
+        // the application users actually see.
+        var shell = new MainWindow();
+        var callbacks = typeof(MainWindow)
+            .GetMethod("BuildBackstageCallbacks", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            ?.Invoke(shell, null)
+            ?? throw new MissingMethodException(typeof(MainWindow).FullName, "BuildBackstageCallbacks");
         var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).OrderByDescending(candidate => candidate.GetParameters().Length).First();
-        if (routeId.Equals("backstage-print", StringComparison.OrdinalIgnoreCase))
+        // Keep this capture contract aligned with the WPF authority: invoke the
+        // production pane builder and capture the pane in a neutral host. Capturing
+        // the full Avalonia Backstage window here would compare the navigation rail
+        // and frame chrome instead of the actual pane surface.
+        var methodName = routeId switch
         {
-            // Build the real app-owned pane without activating the action-bearing Backstage entry.
-            // The entry invokes host print plumbing when activated; the pane itself is safe to render.
-            var home = Enum.Parse(paneType, "Home");
-            var backstage = (Window)constructor.Invoke([callbacks, home]);
-            var buildPrintPane = type.GetMethod("BuildPrintPane", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(type.FullName, "BuildPrintPane");
-            var control = (Control)buildPrintPane.Invoke(backstage, null)!;
-            backstage.Close();
+            "backstage-home" => "BuildHomePane",
+            "backstage-new" => "BuildNewPane",
+            "backstage-open" => "BuildOpenPane",
+            "backstage-info" => "BuildInfoPane",
+            "backstage-share" => "BuildSharePane",
+            "backstage-save-as" => "BuildSaveAsPane",
+            "backstage-print" => "BuildPrintPane",
+            "backstage-export" => "BuildExportPane",
+            "backstage-account" => "BuildAccountPane",
+            "backstage-options" => "BuildOptionsPane",
+            _ => null,
+        };
+        if (methodName is null) throw new ArgumentOutOfRangeException(nameof(routeId));
+
+        var home = Enum.Parse(assembly.GetType("FreeW.App.Avalonia.Backstage.BackstagePane", true)!, "Home");
+        Window? backstage = null;
+        try
+        {
+            backstage = (Window)constructor.Invoke([callbacks, home]);
+            var method = type.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic)
+                .SingleOrDefault(candidate => candidate.Name.Equals(methodName, StringComparison.Ordinal)
+                    && candidate.GetParameters().Length == 0)
+                ?? throw new MissingMethodException(type.FullName, methodName);
+            var control = (Control)method.Invoke(backstage, null)!;
             return WrapControl(control);
         }
-        var pane = Enum.Parse(paneType, routeId switch
+        finally
         {
-            "backstage-open" => "Open",
-            "backstage-save-as" => "SaveAs",
-            "backstage-print" => "Print",
-            "backstage-share" => "Share",
-            "backstage-export" => "Export",
-            "backstage-info" => "Info",
-            "backstage-account" => "Account",
-            _ => "Home",
-        });
-        return (Window)constructor.Invoke([callbacks, pane]);
+            backstage?.Close();
+            shell.Close();
+        }
     }
 
     private static Window CreateNotesPane()
