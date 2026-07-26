@@ -266,7 +266,7 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
-    public void ImportedWatermarkBackingTextbox_UsesOpaqueTwoDipOutline()
+    public void ImportedWatermarkBackingTextbox_UsesMeasuredOutlineRasterFit()
     {
         var view = new DocumentView();
         var canvas = new Canvas();
@@ -274,10 +274,10 @@ public sealed class FloatingObjectRenderTests
         view.LoadModel(DocWithImportedWatermarkBackingTextbox());
 
         var border = canvas.Children.OfType<Border>().Single();
-        border.BorderThickness.Left.Should().Be(2);
-        border.BorderThickness.Top.Should().Be(2);
-        border.BorderThickness.Right.Should().Be(2);
-        border.BorderThickness.Bottom.Should().Be(2);
+        border.BorderThickness.Left.Should().Be(2.5);
+        border.BorderThickness.Top.Should().Be(2.5);
+        border.BorderThickness.Right.Should().Be(2.5);
+        border.BorderThickness.Bottom.Should().Be(2.5);
     }
 
     [StaFact]

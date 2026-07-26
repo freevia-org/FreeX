@@ -2448,6 +2448,19 @@ public sealed class EditingSession
             options));
     }
 
+    /// <summary>Applies pie/doughnut rotation and hole options as one undo step.</summary>
+    public void ApplyChartPieOptions(ChartPieOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0)
+            return;
+
+        Bus.Execute(new SetChartPieOptionsCommand(
+            _currentSlideIndex,
+            _selectedShapeIds[0],
+            options));
+    }
+
     /// <summary>Applies chart-wide default text formatting as one undo step.</summary>
     public void ApplyChartTextOptions(ChartTextOptions options)
     {

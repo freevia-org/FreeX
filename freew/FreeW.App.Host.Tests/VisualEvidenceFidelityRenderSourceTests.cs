@@ -66,7 +66,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("visual.Width += 3;");
         source.Should().Contain("visual.Height += 4;");
         source.Should().Contain("topDip -= 1;");
-        source.Should().Contain("watermarkBacking.BorderThickness = new Thickness(2);");
+        source.Should().Contain("watermarkBacking.BorderThickness = new Thickness(2.5);");
     }
 
     [Fact]

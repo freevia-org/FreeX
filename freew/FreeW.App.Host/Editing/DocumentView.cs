@@ -5671,9 +5671,9 @@ public sealed class DocumentView : RichTextBox
             }
             && root is Border watermarkBacking)
         {
-            // Word rasterizes this authored 1.67-DIP outline as two opaque pixels; WPF blends the
-            // fractional Border edge into the fill instead.
-            watermarkBacking.BorderThickness = new Thickness(2);
+            // Word rasterizes this authored 1.67-DIP outline more densely than WPF's fractional
+            // Border edge, so this exact imported signature needs the measured 2.5-DIP raster fit.
+            watermarkBacking.BorderThickness = new Thickness(2.5);
         }
         root.Tag = modelObject;
         root.Cursor = Cursors.SizeAll;
