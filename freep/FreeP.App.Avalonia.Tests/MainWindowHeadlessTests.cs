@@ -5308,6 +5308,13 @@ public sealed class MainWindowHeadlessTests
             smartArt.Data.LayoutUniqueId.Should().EndWith("/StepDownProcess");
             window.Editor.Undo();
             smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
+
+            registry.TryGet(SmartArtAuthoringPlanner.BasicRadialLayoutCommandId, out var radialCommand)
+                .Should().BeTrue();
+            radialCommand!.Execute(RibbonCommandContext.Empty);
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/radial1");
+            window.Editor.Undo();
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
         });
 
         if (!ran) return;
@@ -5345,6 +5352,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
                 SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
+                SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialListLayoutCommandId,
                 SmartArtAuthoringPlanner.GearCycleLayoutCommandId,
                 SmartArtAuthoringPlanner.TextCycleLayoutCommandId,

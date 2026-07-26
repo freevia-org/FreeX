@@ -51,6 +51,7 @@ public enum SmartArtLayoutPreset
     BasicPyramid,
     PyramidList,
     RadialCycle,
+    BasicRadial,
     RadialList,
     BasicMatrix,
     TitledMatrix,
@@ -146,6 +147,7 @@ public static class SmartArtAuthoringPlanner
     public const string BasicPyramidLayoutCommandId = "freep.smartart.layout.basic-pyramid";
     public const string PyramidListLayoutCommandId = "freep.smartart.layout.pyramid-list";
     public const string RadialCycleLayoutCommandId = "freep.smartart.layout.radial-cycle";
+    public const string BasicRadialLayoutCommandId = "freep.smartart.layout.basic-radial";
     public const string RadialListLayoutCommandId = "freep.smartart.layout.radial-list";
     public const string BasicMatrixLayoutCommandId = "freep.smartart.layout.basic-matrix";
     public const string TitledMatrixLayoutCommandId = "freep.smartart.layout.titled-matrix";
@@ -343,6 +345,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/pyramidList", SmartArtFamily.List),
             SmartArtLayoutPreset.RadialCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/radialCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.BasicRadial =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/radial1", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.RadialList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/radialList", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicMatrix =>
