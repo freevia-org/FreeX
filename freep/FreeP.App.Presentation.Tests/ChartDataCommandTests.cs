@@ -1511,6 +1511,14 @@ public sealed class ChartDataCommandTests
                     Position = DataLabelPosition.InsideEnd,
                     NumberFormat = "0.0%",
                     Separator = " | ",
+                    TextStyle = new ChartTextStyle
+                    {
+                        FontFamily = "Aptos",
+                        FontSizePt = 9,
+                        Bold = true,
+                        Italic = false,
+                        Color = new ThemeAwareColor(SrgbColor.FromRgb(0x2F5496)),
+                    },
                 })));
 
         var style = chart.Series[0].PointStyles[1];
@@ -1525,6 +1533,11 @@ public sealed class ChartDataCommandTests
         style.DataLabels.ShowCategoryName.Should().BeTrue();
         style.DataLabels.ShowLegendKey.Should().BeTrue();
         style.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
+        style.DataLabels.TextStyle.Should().NotBeNull();
+        style.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        style.DataLabels.TextStyle.FontSizePt.Should().Be(9);
+        style.DataLabels.TextStyle.Bold.Should().BeTrue();
+        style.DataLabels.TextStyle.Italic.Should().BeFalse();
 
         using var stream = new MemoryStream();
         PptxPackageWriter.Write(p, stream);
@@ -1543,6 +1556,12 @@ public sealed class ChartDataCommandTests
         roundTrippedLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         roundTrippedLabels.NumberFormat.Should().Be("0.0%");
         roundTrippedLabels.Separator.Should().Be(" | ");
+        roundTrippedLabels.TextStyle.Should().NotBeNull();
+        roundTrippedLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        roundTrippedLabels.TextStyle.FontSizePt.Should().Be(9);
+        roundTrippedLabels.TextStyle.Bold.Should().BeTrue();
+        roundTrippedLabels.TextStyle.Italic.Should().BeFalse();
+        roundTrippedLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
 
         bus.Undo();
         chart.Series[0].PointColors[1].Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
@@ -1550,6 +1569,17 @@ public sealed class ChartDataCommandTests
         chart.Series[0].PointStyles[1].StrokeWidthPt.Should().Be(0.75);
         chart.Series[0].PointStyles[1].Marker!.Symbol.Should().Be(ChartMarkerSymbol.Circle);
         chart.Series[0].PointStyles[1].DataLabels.Should().BeNull();
+    }
+
+    [Fact]
+    public void ChartDataLabels_TextStyleOnly_IsAValidAuthoredOverride()
+    {
+        var labels = new ChartDataLabels
+        {
+            TextStyle = new ChartTextStyle { FontFamily = "Aptos", FontSizePt = 9 },
+        };
+
+        labels.HasAny.Should().BeTrue();
     }
 
     [Fact]

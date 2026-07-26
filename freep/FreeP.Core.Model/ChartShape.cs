@@ -201,7 +201,17 @@ public sealed class ChartDataLabels
     public ChartTextStyle? TextStyle { get; set; }
 
     /// <summary>Returns true if any label component is enabled.</summary>
-    public bool HasAny => Delete.HasValue || ShowValue || ShowPercent || ShowCategoryName || ShowSeriesName || ShowLegendKey;
+    public bool HasAny =>
+        Delete.HasValue ||
+        ShowValue ||
+        ShowPercent ||
+        ShowCategoryName ||
+        ShowSeriesName ||
+        ShowLegendKey ||
+        Position.HasValue ||
+        NumberFormat is not null ||
+        Separator is not null ||
+        TextStyle is not null;
 }
 
 /// <summary>Data table settings for charts that render source values below the plot.</summary>
