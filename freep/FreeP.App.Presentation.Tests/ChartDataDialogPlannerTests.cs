@@ -397,6 +397,7 @@ public sealed class ChartDataDialogPlannerTests
     {
         var chart = MakeChart();
         chart.ValueAxis.Title = "Amount";
+        chart.ValueAxis.Delete = true;
         chart.ValueAxis.Min = 0;
         chart.ValueAxis.Max = 100;
         chart.ValueAxis.MajorUnit = 20;
@@ -404,6 +405,7 @@ public sealed class ChartDataDialogPlannerTests
 
         var planner = ChartAxisOptionsPlanner.FromChart(chart);
         planner.SetTitle("Revenue");
+        planner.SetShowAxis(false);
         planner.SetMinimum(10);
         planner.SetMaximum(90);
         planner.SetMajorUnit(10);
@@ -419,8 +421,9 @@ public sealed class ChartDataDialogPlannerTests
         planner.BuildCommitPlan().Should().Be(new ChartAxisOptions(
             ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false,
             ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
-            null, 10));
+            null, 10, false));
         chart.ValueAxis.Title.Should().Be("Amount", "axis dialogs must edit a working copy");
+        chart.ValueAxis.Delete.Should().BeTrue("axis dialogs must edit a working copy");
         ChartAxisOptionsPlanner.BuildSurfacePlan().CommandId
             .Should().Be(ChartAxisOptionsPlanner.CommandId);
     }

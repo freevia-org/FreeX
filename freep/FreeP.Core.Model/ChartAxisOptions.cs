@@ -21,4 +21,5 @@ public sealed record ChartAxisOptions(
     ChartTickMark? MinorTickMark = null,
     ChartTickLabelPosition? TickLabelPosition = null,
     ChartAxisCrossing? Crosses = null,
-    double? CrossesAt = null);
+    double? CrossesAt = null,
+    bool ShowAxis = true);

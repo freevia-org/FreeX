@@ -13,6 +13,7 @@ public sealed record ChartAxisOptionsSurfacePlan(
     string AxisLabel,
     string CategoryAxisLabel,
     string ValueAxisLabel,
+    string ShowAxisLabel,
     string AxisTitleLabel,
     string MinimumLabel,
     string MaximumLabel,
@@ -40,6 +41,7 @@ public sealed class ChartAxisOptionsPlanner
     public const string AxisLabel = "Axis";
     public const string CategoryAxisLabel = "Category axis";
     public const string ValueAxisLabel = "Value axis";
+    public const string ShowAxisLabel = "Show axis";
     public const string AxisTitleLabel = "Axis title";
     public const string MinimumLabel = "Minimum";
     public const string MaximumLabel = "Maximum";
@@ -93,6 +95,7 @@ public sealed class ChartAxisOptionsPlanner
     private readonly ChartShape _chart;
     private ChartAxisKind _axisKind;
     private string _title = string.Empty;
+    private bool _showAxis;
     private double? _minimum;
     private double? _maximum;
     private double? _majorUnit;
@@ -118,6 +121,7 @@ public sealed class ChartAxisOptionsPlanner
             AxisLabel,
             CategoryAxisLabel,
             ValueAxisLabel,
+            ShowAxisLabel,
             AxisTitleLabel,
             MinimumLabel,
             MaximumLabel,
@@ -142,6 +146,7 @@ public sealed class ChartAxisOptionsPlanner
 
     public ChartAxisKind Axis => _axisKind;
     public string Title => _title;
+    public bool ShowAxis => _showAxis;
     public double? Minimum => _minimum;
     public double? Maximum => _maximum;
     public double? MajorUnit => _majorUnit;
@@ -159,6 +164,7 @@ public sealed class ChartAxisOptionsPlanner
         _axisKind = axisKind;
         var axis = ResolveAxis();
         _title = axis.Title ?? string.Empty;
+        _showAxis = !axis.Delete;
         _minimum = axis.Min;
         _maximum = axis.Max;
         _majorUnit = axis.MajorUnit;
@@ -173,6 +179,7 @@ public sealed class ChartAxisOptionsPlanner
     }
 
     public void SetTitle(string? title) => _title = title ?? string.Empty;
+    public void SetShowAxis(bool show) => _showAxis = show;
     public void SetMinimum(double? minimum) => _minimum = minimum;
     public void SetMaximum(double? maximum) => _maximum = maximum;
     public void SetMajorUnit(double? majorUnit) => _majorUnit = majorUnit;
@@ -198,7 +205,8 @@ public sealed class ChartAxisOptionsPlanner
         _minorTickMark,
         _tickLabelPosition,
         _crossesAt is null ? _crosses : null,
-        _crossesAt);
+        _crossesAt,
+        _showAxis);
 
     private ChartAxis ResolveAxis() =>
         _axisKind == ChartAxisKind.Category ? _chart.CategoryAxis : _chart.ValueAxis;
