@@ -26,6 +26,7 @@ public sealed record ChartDisplayOptionsSurfacePlan(
     string BarGapWidthLabel,
     string BarOverlapLabel,
     string DisplayBlanksAsLabel,
+    string ShowDataLabelsOverMaximumLabel,
     string PlotHint,
     string OkLabel,
     string CancelLabel);
@@ -53,6 +54,7 @@ public sealed class ChartDisplayOptionsPlanner
     public const string BarGapWidthLabel = "Bar gap width (%)";
     public const string BarOverlapLabel = "Bar overlap (%)";
     public const string DisplayBlanksAsLabel = "Show empty cells as";
+    public const string ShowDataLabelsOverMaximumLabel = "Show labels over maximum";
     public const string PlotHint = "Bar gap width accepts 0-500; overlap accepts -100 to 100. Blank uses the chart default.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
@@ -96,6 +98,7 @@ public sealed class ChartDisplayOptionsPlanner
     private int? _barGapWidthPercent;
     private int? _barOverlapPercent;
     private ChartDisplayBlanksAs? _displayBlanksAs;
+    private bool? _showDataLabelsOverMaximum;
 
     private ChartDisplayOptionsPlanner(ChartShape chart)
     {
@@ -114,6 +117,7 @@ public sealed class ChartDisplayOptionsPlanner
         _barGapWidthPercent = chart.BarGapWidthPercent;
         _barOverlapPercent = chart.BarOverlapPercent;
         _displayBlanksAs = chart.DisplayBlanksAs;
+        _showDataLabelsOverMaximum = chart.ShowDataLabelsOverMaximum;
     }
 
     public static ChartDisplayOptionsSurfacePlan BuildSurfacePlan() =>
@@ -135,6 +139,7 @@ public sealed class ChartDisplayOptionsPlanner
             BarGapWidthLabel,
             BarOverlapLabel,
             DisplayBlanksAsLabel,
+            ShowDataLabelsOverMaximumLabel,
             PlotHint,
             OkLabel,
             CancelLabel);
@@ -160,6 +165,7 @@ public sealed class ChartDisplayOptionsPlanner
     public int? BarGapWidthPercent => _barGapWidthPercent;
     public int? BarOverlapPercent => _barOverlapPercent;
     public ChartDisplayBlanksAs? DisplayBlanksAs => _displayBlanksAs;
+    public bool? ShowDataLabelsOverMaximum => _showDataLabelsOverMaximum;
 
     public static IReadOnlyList<ChartDisplayBlanksOption> DisplayBlanksOptions { get; } =
     [
@@ -184,6 +190,7 @@ public sealed class ChartDisplayOptionsPlanner
     public void SetBarGapWidthPercent(int? value) => _barGapWidthPercent = Normalize(value, 0, 500);
     public void SetBarOverlapPercent(int? value) => _barOverlapPercent = Normalize(value, -100, 100);
     public void SetDisplayBlanksAs(ChartDisplayBlanksAs? value) => _displayBlanksAs = value;
+    public void SetShowDataLabelsOverMaximum(bool? value) => _showDataLabelsOverMaximum = value;
 
     public ChartDisplayOptions BuildCommitPlan() => new(
         string.IsNullOrWhiteSpace(_title) ? null : _title,
@@ -200,7 +207,8 @@ public sealed class ChartDisplayOptionsPlanner
         string.IsNullOrEmpty(_labelSeparator) ? null : _labelSeparator,
         _barGapWidthPercent,
         _barOverlapPercent,
-        _displayBlanksAs);
+        _displayBlanksAs,
+        _showDataLabelsOverMaximum);
 
     private static int? Normalize(int? value, int minimum, int maximum) =>
         value is null ? null : Math.Clamp(value.Value, minimum, maximum);

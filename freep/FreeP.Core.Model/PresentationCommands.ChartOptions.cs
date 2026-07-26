@@ -16,6 +16,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
     private int? _oldBarGapWidthPercent;
     private int? _oldBarOverlapPercent;
     private ChartDisplayBlanksAs? _oldDisplayBlanksAs;
+    private bool? _oldShowDataLabelsOverMaximum;
 
     public SetChartDisplayOptionsCommand(
         int slideIndex,
@@ -44,6 +45,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         _oldBarGapWidthPercent = chart.BarGapWidthPercent;
         _oldBarOverlapPercent = chart.BarOverlapPercent;
         _oldDisplayBlanksAs = chart.DisplayBlanksAs;
+        _oldShowDataLabelsOverMaximum = chart.ShowDataLabelsOverMaximum;
 
         chart.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title;
         chart.HasAutomaticTitle = false;
@@ -53,6 +55,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.BarGapWidthPercent = Normalize(_newOptions.BarGapWidthPercent, 0, 500);
         chart.BarOverlapPercent = Normalize(_newOptions.BarOverlapPercent, -100, 100);
         chart.DisplayBlanksAs = _newOptions.DisplayBlanksAs;
+        chart.ShowDataLabelsOverMaximum = _newOptions.ShowDataLabelsOverMaximum;
 
         if (chart.DataLabels is not null)
         {
@@ -104,6 +107,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.BarGapWidthPercent = _oldBarGapWidthPercent;
         chart.BarOverlapPercent = _oldBarOverlapPercent;
         chart.DisplayBlanksAs = _oldDisplayBlanksAs;
+        chart.ShowDataLabelsOverMaximum = _oldShowDataLabelsOverMaximum;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
