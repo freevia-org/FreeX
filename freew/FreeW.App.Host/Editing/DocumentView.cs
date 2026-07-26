@@ -5981,7 +5981,8 @@ public sealed class DocumentView : RichTextBox
         {
             materialLayer = new Border
             {
-                Background = fillBrush,
+                // Word holds the top material band for several device pixels before its gold ramp begins.
+                Background = BuildSecondaryFillGoldMaterialBrush(),
                 IsHitTestVisible = false
             };
             canvas.Children.Add(materialLayer);
@@ -6067,6 +6068,19 @@ public sealed class DocumentView : RichTextBox
         };
         return canvas;
     }
+
+    private static System.Windows.Media.Brush BuildSecondaryFillGoldMaterialBrush() =>
+        new LinearGradientBrush
+        {
+            StartPoint = new Point(0.5, 0),
+            EndPoint = new Point(0.5, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(Color.FromRgb(0xC0, 0x90, 0x00), 0),
+                new System.Windows.Media.GradientStop(Color.FromRgb(0xC0, 0x90, 0x00), 0.08),
+                new System.Windows.Media.GradientStop(Color.FromRgb(0x8B, 0x62, 0x00), 1)
+            }
+        };
 
     private static System.Windows.Media.Brush BuildDrawingWordArtTextBrush(DrawingObjectWordArtPlan wordArt)
     {

@@ -71,7 +71,7 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.Pentagon => Polygon(rect, [(0.5, 0), (1, 0.38), (0.82, 1), (0.18, 1), (0, 0.38)]),
             DrawingShapeKind.Hexagon => Polygon(rect, [(0.25, 0), (0.75, 0), (1, 0.5), (0.75, 1), (0.25, 1), (0, 0.5)]),
             DrawingShapeKind.Octagon => Polygon(rect, [(0.3, 0), (0.7, 0), (1, 0.3), (1, 0.7), (0.7, 1), (0.3, 1), (0, 0.7), (0, 0.3)]),
-            DrawingShapeKind.Cross or DrawingShapeKind.PlusSign => Plus(rect),
+            DrawingShapeKind.Cross or DrawingShapeKind.PlusSign => Plus(rect, adjustments),
             DrawingShapeKind.RightArrow => Arrow(rect, adjustments, DrawingShapeKind.RightArrow),
             DrawingShapeKind.LeftArrow => Arrow(rect, adjustments, DrawingShapeKind.LeftArrow),
             DrawingShapeKind.UpArrow => Arrow(rect, adjustments, DrawingShapeKind.UpArrow),
@@ -560,8 +560,21 @@ public static class ShapeGeometryBuilder
         return new ShapeGeometry([bodyContour, topCapContour]);
     }
 
-    private static ShapeGeometry Plus(LayoutRect rect) =>
-        Polygon(rect, [(0.35, 0), (0.65, 0), (0.65, 0.35), (1, 0.35), (1, 0.65), (0.65, 0.65), (0.65, 1), (0.35, 1), (0.35, 0.65), (0, 0.65), (0, 0.35), (0.35, 0.35)]);
+    private static ShapeGeometry Plus(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments = null)
+    {
+        // The preset cross/plus guide is the inset from each edge to the central bar.
+        // Keep the existing 35% fallback for new and legacy shapes without an authored guide.
+        var inset = Math.Clamp(GetAdjustment(adjustments, "adj", 35000), 0, 50000) / 100000.0;
+        var opposite = 1 - inset;
+        return Polygon(rect,
+        [
+            (inset, 0), (opposite, 0), (opposite, inset), (1, inset),
+            (1, opposite), (opposite, opposite), (opposite, 1), (inset, 1),
+            (inset, opposite), (0, opposite), (0, inset), (inset, inset)
+        ]);
+    }
 
     private static ShapeContour MinusContour(LayoutRect rect) =>
         RectangleContour(rect.Left, rect.Top + (rect.Height * 0.38), rect.Width, rect.Height * 0.24);

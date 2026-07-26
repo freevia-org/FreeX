@@ -924,6 +924,81 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Fact]
+    public void MotionPathEffectOptions_ExposeReversePathAndReverseCubicGeometry()
+    {
+        var slide = new Slide();
+        var motion = new MotionPath { Origin = "parent", PtsTypes = "F" };
+        motion.Segments.Add(MotionPathSegment.MoveTo(0, 0));
+        motion.Segments.Add(MotionPathSegment.LineTo(0.25, 0.1));
+        motion.Segments.Add(MotionPathSegment.CubicTo(0.4, 0.2, 0.6, 0.3, 0.8, 0.5));
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 10u,
+            Kind = AnimationKind.Motion,
+            Motion = motion,
+        });
+
+        var options = AnimationPanePlanner.BuildEffectOptionsPlan(slide.Animations, 0);
+        options.CanApply.Should().BeTrue();
+        options.Options.Should().ContainSingle(option =>
+            option.Id == "reverse-path"
+            && option.ReversesMotionPath
+            && option.IsSelected);
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            slide.Animations,
+            0,
+            "reverse-path");
+        mutation.ShouldApply.Should().BeTrue();
+        mutation.ReversesMotionPath.Should().BeTrue();
+
+        var reversed = MotionPath.ReversedClone(motion);
+        reversed.Segments.Select(segment => segment.Kind)
+            .Should()
+            .Equal(
+                MotionPathSegmentKind.Move,
+                MotionPathSegmentKind.Cubic,
+                MotionPathSegmentKind.Line);
+        reversed.Segments[0].X.Should().BeApproximately(0.8, 1e-9);
+        reversed.Segments[0].Y.Should().BeApproximately(0.5, 1e-9);
+        reversed.Segments[1].X1.Should().BeApproximately(0.6, 1e-9);
+        reversed.Segments[1].Y1.Should().BeApproximately(0.3, 1e-9);
+        reversed.Segments[1].X2.Should().BeApproximately(0.4, 1e-9);
+        reversed.Segments[1].Y2.Should().BeApproximately(0.2, 1e-9);
+        reversed.Segments[1].X.Should().BeApproximately(0.25, 1e-9);
+        reversed.Segments[1].Y.Should().BeApproximately(0.1, 1e-9);
+    }
+
+    [Fact]
+    public void TryApplyMotionPathReverse_UsesAnimationCommandAndSupportsUndo()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var motion = new MotionPath();
+        motion.Segments.Add(MotionPathSegment.MoveTo(0, 0));
+        motion.Segments.Add(MotionPathSegment.LineTo(0.5, 0.25));
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = presentation.Slides[0].Shapes[0].Id,
+            Kind = AnimationKind.Motion,
+            Motion = motion,
+        });
+
+        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "reverse-path");
+
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, plan).Should().BeTrue();
+        editor.CurrentSlideAnimations[0].Motion!.Segments[0].X.Should().BeApproximately(0.5, 1e-9);
+        editor.CurrentSlideAnimations[0].Motion!.Segments[0].Y.Should().BeApproximately(0.25, 1e-9);
+
+        editor.Undo();
+        editor.CurrentSlideAnimations[0].Motion!.Segments[0].X.Should().Be(0);
+        editor.CurrentSlideAnimations[0].Motion!.Segments[0].Y.Should().Be(0);
+    }
+
+    [Fact]
     public void TryApplyEffectOptionMutation_UpdatesSelectedAnimation()
     {
         var presentation = Presentation.CreateEmpty();

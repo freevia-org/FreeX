@@ -21,7 +21,10 @@ public sealed record AnimationPaneEffectOptionDescriptor(
     AnimationDirection? Direction,
     bool IsSelected,
     int? WheelSpokeCount = null,
-    string? EffectSubtype = null);
+    string? EffectSubtype = null)
+{
+    public bool ReversesMotionPath { get; init; }
+}
 
 public sealed record AnimationPaneEffectOptionsPlan(
     bool CanApply,
@@ -42,7 +45,10 @@ public sealed record AnimationPaneEffectOptionMutationPlan(
     string DisplayText,
     string? DisabledReason,
     int? WheelSpokeCount = null,
-    string? EffectSubtype = null);
+    string? EffectSubtype = null)
+{
+    public bool ReversesMotionPath { get; init; }
+}
 
 public sealed record AnimationPaneRepeatMutationPlan(
     bool ShouldApply,
@@ -931,6 +937,20 @@ public static class AnimationPanePlanner
         }
 
         var animation = animations[animationIndex];
+        if (option.ReversesMotionPath)
+        {
+            return new AnimationPaneEffectOptionMutationPlan(
+                animation.Motion is { Segments.Count: > 1 },
+                animationIndex,
+                null,
+                option.DisplayText,
+                animation.Motion is { Segments.Count: > 1 } ? null : MissingEffectOptionMessage,
+                null)
+            {
+                ReversesMotionPath = true,
+            };
+        }
+
         var currentWheelSpokeCount = ResolveWheelSpokeCount(animation);
         var direction = option.Direction ?? animation.Direction;
         var effectSubtype = option.EffectSubtype ?? animation.EffectSubtype;
@@ -964,6 +984,16 @@ public static class AnimationPanePlanner
         }
 
         var updated = PresentationAnimationCommandPlanner.CloneAnimation(current);
+        if (plan.ReversesMotionPath)
+        {
+            if (current.Kind != AnimationKind.Motion || current.Motion is not { Segments.Count: > 1 })
+                return false;
+
+            updated.Motion = MotionPath.ReversedClone(current.Motion);
+            editor.SetAnimation(plan.AnimationIndex, updated);
+            return true;
+        }
+
         updated.Direction = plan.Direction;
         updated.EffectSubtype = plan.EffectSubtype;
         if (current.Preset == AnimationPreset.Wheel)
@@ -1508,6 +1538,18 @@ public static class AnimationPanePlanner
     {
         if (animation.Kind == AnimationKind.Motion)
         {
+            if (animation.Motion is { Segments.Count: > 1 })
+            {
+                yield return new AnimationPaneEffectOptionDescriptor(
+                    "reverse-path",
+                    "Reverse Path",
+                    null,
+                    true)
+                {
+                    ReversesMotionPath = true,
+                };
+            }
+
             yield break;
         }
 
