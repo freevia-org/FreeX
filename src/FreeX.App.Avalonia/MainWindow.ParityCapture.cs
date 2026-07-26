@@ -464,7 +464,13 @@ public sealed partial class MainWindow
         ("dialog.CreateTable", () => ShowCreateTableParityDialogAsync()),
         ("dialog.RecommendedPivotTables", async () => { await ShowRecommendedPivotTablesDialogAsync(); }),
         ("dialog.Sort", () => ShowSortDialogAsync()),
-        ("dialog.SortOptions", async () => { await ShowSortOptionsDialogAsync(new SortDialogOptions()); }),
+        ("dialog.SortOptions", async () =>
+        {
+            await ShowSortOptionsDialogAsync(new SortDialogOptions(
+                CaseSensitive: true,
+                LeftToRight: true,
+                FirstKeySortOrder: "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec"));
+        }),
         ("dialog.AutoFilter", () => ShowAutoFilterParityDialogAsync()),
         ("dialog.TextToColumns", () => ShowTextToColumnsParityDialogAsync()),
         ("dialog.AdvancedFilter", () => ShowAdvancedFilterParityDialogAsync()),
