@@ -2,6 +2,8 @@ using System.Threading;
 
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media.Imaging;
+using FreeX.App.Presentation.Consolidate;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -73,6 +75,65 @@ public sealed class ConsolidateDialogLifecycleRegressionTests
             catch
             {
                 // Temp cleanup must not hide the dialog focus regression.
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ConsolidateCapture_UsesFixtureStateAndProducesFixedNonBlankSurface()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-consolidate-capture-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                try
+                {
+                    window.Show();
+                    var results = await window.CaptureParitySurfacesAsync(
+                        outputDirectory,
+                        targetSurfaceId: "dialog.Consolidate");
+
+                    var result = results.Should().ContainSingle().Subject;
+                    result.Id.Should().Be("dialog.Consolidate");
+                    result.Captured.Should().BeTrue(result.Note);
+
+                    var pngPath = Path.Combine(outputDirectory, result.PngFileName);
+                    using var bitmap = new Bitmap(pngPath);
+                    bitmap.PixelSize.Width.Should().Be((int)ConsolidateDialogPlanner.CaptureWidth);
+                    bitmap.PixelSize.Height.Should().Be((int)ConsolidateDialogPlanner.CaptureHeight);
+                    bitmap.Dpi.X.Should().Be(96);
+                    bitmap.Dpi.Y.Should().Be(96);
+                    ConsolidateParityFixture.SourceReference.Should().Be("A1:C4");
+                    ConsolidateParityFixture.DestinationReference.Should().Be("H2");
+                }
+                finally
+                {
+                    foreach (var owned in window.OwnedWindows.ToArray())
+                    {
+                        if (owned.IsVisible)
+                            owned.Close();
+                    }
+
+                    if (window.IsVisible)
+                        window.Close();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(outputDirectory))
+                    Directory.Delete(outputDirectory, recursive: true);
+            }
+            catch
+            {
+                // Temp cleanup must not hide the capture regression.
             }
         }
     }

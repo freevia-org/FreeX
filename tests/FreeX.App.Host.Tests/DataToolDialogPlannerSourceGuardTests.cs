@@ -19,6 +19,16 @@ public sealed class DataToolDialogPlannerSourceGuardTests
         consolidate.Should().Contain("SharedConsolidateDialogPlanner.CreateRangeSelectionRequest(");
         consolidate.Should().NotContain("WorkbookRangeTextCodec.TryParse");
 
+        var parityCapture = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+        parityCapture.Should().Contain("ConsolidateParityFixture.SourceReference");
+        parityCapture.Should().Contain("ConsolidateParityFixture.DestinationReference");
+        parityCapture.Should().Contain("requireForeground: true");
+
+        var screenshotTour = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        screenshotTour.Should().Contain("ConsolidateParityFixture.CreateSourceRange(sheet.Id)");
+        screenshotTour.Should().Contain("ConsolidateParityFixture.SourceReference");
+        screenshotTour.Should().Contain("ConsolidateParityFixture.DestinationReference");
+
         var dataValidation = DialogSourceTestSupport.ReadHostSources("DataValidationDialog.Planning.cs");
         dataValidation.Should().Contain("DataValidationDialogPlanner.ValidateCriteria(");
         dataValidation.Should().Contain("DataValidationDialogPlanner.FocusTargetForInvalidCriteria(");

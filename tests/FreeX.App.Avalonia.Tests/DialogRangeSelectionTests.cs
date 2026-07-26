@@ -107,6 +107,21 @@ public sealed class DialogRangeSelectionTests
     }
 
     [Fact]
+    public void ConsolidateCapture_UsesExplicitFixtureStateWhileProductionRemainsSelectionDerived()
+    {
+        var consolidate = ReadSource("MainWindow.Consolidate.cs");
+        var parityCapture = ReadSource("MainWindow.ParityCapture.cs");
+
+        consolidate.Should().Contain("ConsolidateDialogInitialState? initialState = null");
+        consolidate.Should().Contain("initialState?.SourceReference ?? FormatRangeReference(selectedRange)");
+        consolidate.Should().Contain("initialState?.DestinationReference ?? FormatCellReference(selectedRange.Start)");
+        consolidate.Should().Contain("ConsolidateDeleteReferenceButton");
+        consolidate.Should().Contain("ConsolidateDialogPlanner.HasPendingReferenceText(references, referenceBox.Text)");
+        consolidate.Should().Contain("rejectDuplicateReferences: false");
+        parityCapture.Should().Contain("ConsolidateParityFixture.CreateDialogInitialState()");
+    }
+
+    [Fact]
     public void SharedSession_CoversAcceptCancelRestoreAndCloseCleanup()
     {
         var source = ReadSource("MainWindow.DialogRangeSelection.cs");

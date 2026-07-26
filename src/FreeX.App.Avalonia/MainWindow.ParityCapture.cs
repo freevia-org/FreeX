@@ -18,6 +18,7 @@ using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Consolidate;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Filtering;
@@ -474,7 +475,11 @@ public sealed partial class MainWindow
         ("dialog.AutoFilter", () => ShowAutoFilterParityDialogAsync()),
         ("dialog.TextToColumns", () => ShowTextToColumnsParityDialogAsync()),
         ("dialog.AdvancedFilter", () => ShowAdvancedFilterParityDialogAsync()),
-        ("dialog.Consolidate", () => ShowConsolidateDialogAsync()),
+        ("dialog.Consolidate", () =>
+        {
+            PrepareConsolidateParityCaptureState();
+            return ShowConsolidateDialogAsync(ConsolidateParityFixture.CreateDialogInitialState());
+        }),
         ("dialog.RemoveDuplicates", () => ShowRemoveDuplicatesParityDialogAsync()),
         ("dialog.GoalSeek", () => ShowGoalSeekParityDialogAsync()),
         ("dialog.GoalSeekStatus", () => ShowGoalSeekStatusParityDialogAsync()),

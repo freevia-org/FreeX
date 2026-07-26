@@ -11,6 +11,10 @@ public sealed record ConsolidateDialogResult(
     bool UseLeftColumnLabels = false,
     bool CreateLinksToSourceData = false);
 
+public sealed record ConsolidateDialogInitialState(
+    string SourceReference,
+    string DestinationReference);
+
 public enum ConsolidateRangeSelectionTarget
 {
     Reference,

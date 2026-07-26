@@ -29,7 +29,7 @@ public sealed partial class MainWindow
     /// the result is applied through the shared session command path (undoable + refreshing). Overwriting non-empty
     /// destination cells requires a second Apply click.
     /// </summary>
-    private async Task ShowConsolidateDialogAsync()
+    private async Task ShowConsolidateDialogAsync(ConsolidateDialogInitialState? initialState = null)
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -53,50 +53,82 @@ public sealed partial class MainWindow
         };
         ApplyDataOpsComboBoxChrome(functionBox);
         AutomationProperties.SetAutomationId(functionBox, "ConsolidateFunctionBox");
+        AutomationProperties.SetName(functionBox, StripDisplayMnemonic(UiText.Get("Consolidate_FunctionAutomationName")));
+        AutomationProperties.SetHelpText(functionBox, StripDisplayMnemonic(UiText.Get("Consolidate_ChooseTheFunctionUsedToCombineSourceRanges")));
 
-        var referenceBox = new TextBox { PlaceholderText = UiText.Get("TableLoc_ConsolidateReferencePlaceholder"), MinWidth = 220 };
+        var selectedRange = _session.SelectedRange;
+        var defaultSource = initialState?.SourceReference ?? FormatRangeReference(selectedRange);
+        var defaultDestination = initialState?.DestinationReference ?? FormatCellReference(selectedRange.Start);
+        var referenceBox = new TextBox
+        {
+            Text = defaultSource,
+            PlaceholderText = UiText.Get("TableLoc_ConsolidateReferencePlaceholder"),
+            MinWidth = 220,
+        };
         ApplyDataOpsTextBoxChrome(referenceBox);
         AutomationProperties.SetAutomationId(referenceBox, "ConsolidateReferenceBox");
+        AutomationProperties.SetName(referenceBox, StripDisplayMnemonic(UiText.Get("Consolidate_Reference2")));
+        AutomationProperties.SetHelpText(referenceBox, StripDisplayMnemonic(UiText.Get("Consolidate_EnterASourceRangeToAddToTheAllReferencesList")));
 
         // Windows places an ellipsis ("...") range-picker next to the Reference field (matches the WPF host's
         // DialogReferencePicker which uses a literal "..." button, width 28, docked left of the text box).
         var browseButton = new Button { Content = "...", Width = 28, MinWidth = 28 };
         ApplyDataOpsButtonChrome(browseButton);
         AutomationProperties.SetAutomationId(browseButton, "ConsolidateBrowseReferenceButton");
+        AutomationProperties.SetName(browseButton, StripDisplayMnemonic(UiText.Get("Consolidate_SelectReferenceRange")));
 
-        var referencesList = new ListBox { MinHeight = ConsolidateDialogPlanner.ReferencesListHeight };
+        var referencesList = new ListBox
+        {
+            MinHeight = ConsolidateDialogPlanner.ReferencesListHeight,
+            Height = ConsolidateDialogPlanner.ReferencesListHeight,
+        };
         ApplyDataOpsListBoxChrome(referencesList);
         AutomationProperties.SetAutomationId(referencesList, "ConsolidateAllReferencesList");
+        AutomationProperties.SetName(referencesList, StripDisplayMnemonic(UiText.Get("Consolidate_AllReferences2")));
+        AutomationProperties.SetHelpText(referencesList, StripDisplayMnemonic(UiText.Get("Consolidate_ListsTheSourceRangesThatWillBeConsolidated")));
 
-        var addButton = new Button { Content = UiText.Get("TableLoc_Add"), MinWidth = 76 };
+        var addButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Consolidate_Add")), MinWidth = 76 };
         ApplyDataOpsButtonChrome(addButton);
         AutomationProperties.SetAutomationId(addButton, "ConsolidateAddReferenceButton");
-        var removeButton = new Button { Content = UiText.Get("TableLoc_Remove"), MinWidth = 76, IsEnabled = false };
+        AutomationProperties.SetName(addButton, StripDisplayMnemonic(UiText.Get("Consolidate_AddReferenceAutomationName")));
+        AutomationProperties.SetHelpText(addButton, StripDisplayMnemonic(UiText.Get("Consolidate_AddTheReferenceRangeToTheAllReferencesList")));
+        var removeButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Consolidate_Delete")), MinWidth = 76, IsEnabled = false };
         ApplyDataOpsButtonChrome(removeButton);
-        AutomationProperties.SetAutomationId(removeButton, "ConsolidateRemoveReferenceButton");
+        AutomationProperties.SetAutomationId(removeButton, "ConsolidateDeleteReferenceButton");
+        AutomationProperties.SetName(removeButton, StripDisplayMnemonic(UiText.Get("Consolidate_DeleteReferenceAutomationName")));
+        AutomationProperties.SetHelpText(removeButton, StripDisplayMnemonic(UiText.Get("Consolidate_DeleteTheSelectedReferenceRange")));
 
         var destinationBox = new TextBox
         {
-            Text = FormatRangeReference(_session.SelectedRange),
+            Text = defaultDestination,
             MinWidth = 220,
         };
         ApplyDataOpsTextBoxChrome(destinationBox);
         AutomationProperties.SetAutomationId(destinationBox, "ConsolidateDestinationCellBox");
+        AutomationProperties.SetName(destinationBox, StripDisplayMnemonic(UiText.Get("Consolidate_DestinationCell2")));
+        AutomationProperties.SetHelpText(destinationBox, StripDisplayMnemonic(UiText.Get("Consolidate_EnterTheUpperLeftDestinationCellForTheConsolidatedResult")));
 
         var destinationBrowseButton = new Button { Content = "...", Width = 28, MinWidth = 28 };
         ApplyDataOpsButtonChrome(destinationBrowseButton);
         AutomationProperties.SetAutomationId(destinationBrowseButton, "ConsolidateBrowseDestinationButton");
+        AutomationProperties.SetName(destinationBrowseButton, StripDisplayMnemonic(UiText.Get("Consolidate_SelectDestinationCell")));
 
-        var topRowBox = new CheckBox { Content = UiText.Get("TableLoc_ConsolidateTopRow") };
+        var topRowBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Consolidate_TopRow")) };
         ApplyDataOpsCheckBoxChrome(topRowBox);
         AutomationProperties.SetAutomationId(topRowBox, "ConsolidateTopRowLabelsBox");
-        var leftColumnBox = new CheckBox { Content = UiText.Get("TableLoc_ConsolidateLeftColumn") };
+        AutomationProperties.SetName(topRowBox, StripDisplayMnemonic(UiText.Get("Consolidate_TopRowLabelsAutomationName")));
+        AutomationProperties.SetHelpText(topRowBox, StripDisplayMnemonic(UiText.Get("Consolidate_UseLabelsFromTheTopRowOfEachSourceRange")));
+        var leftColumnBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Consolidate_LeftColumn")) };
         ApplyDataOpsCheckBoxChrome(leftColumnBox);
         AutomationProperties.SetAutomationId(leftColumnBox, "ConsolidateLeftColumnLabelsBox");
+        AutomationProperties.SetName(leftColumnBox, StripDisplayMnemonic(UiText.Get("Consolidate_LeftColumnLabelsAutomationName")));
+        AutomationProperties.SetHelpText(leftColumnBox, StripDisplayMnemonic(UiText.Get("Consolidate_UseLabelsFromTheLeftColumnOfEachSourceRange")));
         // WPF has a "Create links to source data" checkbox below the Use labels row
-        var createLinksBox = new CheckBox { Content = UiText.Get("TableLoc_ConsolidateCreateLinks") };
+        var createLinksBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Consolidate_CreateLinksToSourceData")) };
         ApplyDataOpsCheckBoxChrome(createLinksBox);
         AutomationProperties.SetAutomationId(createLinksBox, "ConsolidateCreateLinksBox");
+        AutomationProperties.SetName(createLinksBox, StripDisplayMnemonic(UiText.Get("Consolidate_CreateLinksToSourceDataAutomationName")));
+        AutomationProperties.SetHelpText(createLinksBox, StripDisplayMnemonic(UiText.Get("Consolidate_CreateFormulasThatLinkTheResultToTheSourceCells")));
 
         var warningText = new TextBlock
         {
@@ -108,7 +140,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(warningText, "ConsolidateWarningText");
 
-        var references = new List<string>();
+        var references = ConsolidateDialogPlanner.SplitSourceRangeText(defaultSource).ToList();
         var overwriteConfirmed = false;
 
         void RefreshReferences()
@@ -116,6 +148,8 @@ public sealed partial class MainWindow
             referencesList.ItemsSource = references.ToList();
             overwriteConfirmed = false;
         }
+
+        RefreshReferences();
 
         referencesList.SelectionChanged += (_, _) =>
             removeButton.IsEnabled = referencesList.SelectedItem is not null;
@@ -128,7 +162,9 @@ public sealed partial class MainWindow
                     references,
                     text,
                     TryParseConsolidateSourceRanges,
-                    rejectDuplicateReferences: true,
+                    // WPF intentionally accepts a duplicate source entry. Keep the portable dialog on
+                    // the same side of this product decision rather than introducing a platform-only rule.
+                    rejectDuplicateReferences: false,
                     out var updatedReferences,
                     out var issue))
             {
@@ -152,16 +188,25 @@ public sealed partial class MainWindow
             }
         };
 
-        var applyButton = new Button { Content = UiText.Get("TableLoc_Apply"), IsDefault = true, MinWidth = 84 };
+        var applyButton = new Button { Content = UiText.Ok, IsDefault = true, MinWidth = 72 };
         ApplyDataOpsButtonChrome(applyButton, isDefault: true);
         AutomationProperties.SetAutomationId(applyButton, "ConsolidateApplyButton");
-        var cancelButton = new Button { Content = UiText.Get("TableLoc_Cancel"), IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Cancel, IsCancel = true, MinWidth = 72 };
         ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "ConsolidateCancelButton");
 
         applyButton.Click += (_, _) =>
         {
             warningText.IsVisible = false;
+
+            if (ConsolidateDialogPlanner.HasPendingReferenceText(references, referenceBox.Text))
+            {
+                warningText.Text = UiText.Get("Consolidate_AddTheReferenceBeforeClickingOk");
+                warningText.IsVisible = true;
+                referenceBox.Focus();
+                referenceBox.SelectAll();
+                return;
+            }
 
             var options = new ConsolidateOptions
             {
@@ -222,10 +267,10 @@ public sealed partial class MainWindow
         var labelRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 16,
+            Spacing = 12,
             Children =
             {
-                new TextBlock { Text = UiText.Get("TableLoc_ConsolidateUseLabelsIn"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_UseLabelsIn")), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 topRowBox,
                 leftColumnBox,
             },
@@ -237,7 +282,7 @@ public sealed partial class MainWindow
 
         var root = new DockPanel
         {
-            Margin = new Thickness(12),
+            Margin = new Thickness(12, 10, 12, 10),
             Children =
             {
                 buttonRow,
@@ -245,17 +290,17 @@ public sealed partial class MainWindow
                 {
                     Content = new StackPanel
                     {
-                        Spacing = 8,
+                        Spacing = 4,
                         Children =
                         {
-                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateFunctionLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_Function")), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             functionBox,
-                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateReferenceLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_Reference")), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             referenceRow,
                             addRemoveRow,
-                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateAllReferencesLabel"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_AllReferences")), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             referencesList,
-                            new TextBlock { Text = UiText.Get("TableLoc_ConsolidateDestinationLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_DestinationCell")), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             destinationRow,
                             labelRow,
                             createLinksBox,
@@ -276,6 +321,17 @@ public sealed partial class MainWindow
         ConfigureNativeDialogInitialFocus(dialog, root, functionBox);
 
         await dialog.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Seeds the production selection used by the deterministic parity capture. The dialog itself remains
+    /// selection-derived, so this helper is deliberately called only by the capture opener.
+    /// </summary>
+    private void PrepareConsolidateParityCaptureState()
+    {
+        var sourceRange = ConsolidateParityFixture.CreateSourceRange(_session.ActiveSheet.Id);
+        _session.SelectRange(sourceRange);
+        RefreshShell("Ready");
     }
 
     /// <summary>
@@ -342,6 +398,7 @@ public sealed partial class MainWindow
             return false;
         }
 
+        SelectCell(plan.DestinationCell);
         RefreshShell(UiText.Format("TableLoc_ConsolidatedInto", FormatCellReference(plan.DestinationCell)));
         return true;
     }

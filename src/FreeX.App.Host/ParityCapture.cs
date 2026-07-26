@@ -11,6 +11,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Consolidate;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
@@ -576,9 +577,13 @@ internal static class ParityCapture
                 CaptureDialog(results, "dialog.HeaderFooterDialog", outDir,
                     () => new HeaderFooterDialog(sheet));
             }
+            else if (string.Equals(targetSurfaceId, "dialog.Consolidate", StringComparison.Ordinal))
+            {
+                CaptureConsolidateDialogDirect(results, outDir, sheet.Id, ResolveSheetId(workbook));
+            }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, and dialog.HeaderFooterDialog in this lane.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, and dialog.Consolidate in this lane.");
             }
 
             return;
@@ -625,8 +630,7 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.AdvancedFilter", outDir, () =>
             new AdvancedFilterDialog(sheet.Id, "Sheet1!$A$1:$D$5", ResolveSheetId(workbook)));
 
-        CaptureDialog(results, "dialog.Consolidate", outDir, () =>
-            new ConsolidateDialog(sheet.Id, "Sheet1!$B$2:$D$5", "Sheet1!$G$2", resolveSheetId: ResolveSheetId(workbook)));
+        CaptureConsolidateDialogDirect(results, outDir, sheet.Id, ResolveSheetId(workbook));
 
         CaptureDialog(results, "dialog.RemoveDuplicates", outDir, () =>
             new RemoveDuplicatesDialog(CreateColumnChoices("Region", "Product", "Revenue", "Units")));
@@ -808,6 +812,25 @@ internal static class ParityCapture
 
     private static Func<string, SheetId?> ResolveSheetId(Workbook workbook) =>
         name => workbook.Sheets.FirstOrDefault(sheet => string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id;
+
+    private static void CaptureConsolidateDialogDirect(
+        List<SurfaceResult> results,
+        string outDir,
+        SheetId sheetId,
+        Func<string, SheetId?> resolveSheetId)
+    {
+        CaptureDialog(
+            results,
+            "dialog.Consolidate",
+            outDir,
+            () => new ConsolidateDialog(
+                sheetId,
+                ConsolidateParityFixture.SourceReference,
+                ConsolidateParityFixture.DestinationReference,
+                resolveSheetId: resolveSheetId),
+            requireForeground: true,
+            note: "Direct foreground WPF ConsolidateDialog capture from the production window; seeded by ConsolidateParityFixture A1:C4/H2.");
+    }
 
 
     private static AutoFilterDialog CreateAutoFilterDialog(Workbook workbook, Sheet sheet)
@@ -1127,7 +1150,12 @@ internal static class ParityCapture
     }
 
     private static void CaptureDialog(
-        List<SurfaceResult> results, string surfaceId, string outDir, Func<Window> factory)
+        List<SurfaceResult> results,
+        string surfaceId,
+        string outDir,
+        Func<Window> factory,
+        bool requireForeground = false,
+        string note = "")
     {
         CaptureSurface(results, surfaceId, "dialog", outDir, () =>
         {
@@ -1135,13 +1163,24 @@ internal static class ParityCapture
             try
             {
                 dialog = factory();
-                dialog.WindowStartupLocation = WindowStartupLocation.Manual;
+                dialog.WindowStartupLocation = requireForeground
+                    ? WindowStartupLocation.CenterScreen
+                    : WindowStartupLocation.Manual;
                 dialog.ShowInTaskbar = false;
-                dialog.ShowActivated = false;
-                dialog.Left = -10000;
-                dialog.Top = -10000;
+                dialog.ShowActivated = requireForeground;
+                if (!requireForeground)
+                {
+                    dialog.Left = -10000;
+                    dialog.Top = -10000;
+                }
                 dialog.Show();
                 PumpDispatcher();
+                if (requireForeground)
+                {
+                    dialog.Activate();
+                    dialog.Focus();
+                    PumpDispatcher();
+                }
                 dialog.UpdateLayout();
                 PumpDispatcher();
 
@@ -1168,7 +1207,7 @@ internal static class ParityCapture
                 try { dialog?.Close(); } catch { /* best-effort teardown */ }
                 PumpDispatcher();
             }
-        });
+        }, note);
     }
 
     private static bool TryGetFixedDialogCaptureSize(string surfaceId, out double width, out double height)
@@ -1178,6 +1217,7 @@ internal static class ParityCapture
             "dialog.ExportOptions" => (ExportOptionsDialogSurfacePlanner.CaptureWidth, ExportOptionsDialogSurfacePlanner.CaptureHeight),
             "dialog.ProtectWorkbook" => (ProtectionDialogPlanner.ProtectWorkbookCaptureWidth, ProtectionDialogPlanner.ProtectWorkbookCaptureHeight),
             "dialog.Sparkline" => (SparklinePlanner.InsertDialogCaptureWidth, SparklinePlanner.InsertDialogCaptureHeight),
+            "dialog.Consolidate" => (ConsolidateDialogPlanner.CaptureWidth, ConsolidateDialogPlanner.CaptureHeight),
             _ => (0, 0)
         };
 

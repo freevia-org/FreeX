@@ -18,6 +18,40 @@ public sealed class ConsolidateDialogPlannerTests
     }
 
     [Fact]
+    public void ParityFixture_UsesTheSharedSourceAndDestinationState()
+    {
+        ConsolidateParityFixture.SourceReference.Should().Be("A1:C4");
+        ConsolidateParityFixture.DestinationReference.Should().Be("H2");
+
+        var sheetId = SheetId.New();
+        ConsolidateParityFixture.CreateSourceRange(sheetId).Should().Be(
+            new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 3)));
+        ConsolidateParityFixture.CreateDestinationCell(sheetId).Should().Be(new CellAddress(sheetId, 2, 8));
+
+        ConsolidateParityFixture.CreateDialogInitialState().Should().Be(
+            new ConsolidateDialogInitialState("A1:C4", "H2"));
+    }
+
+    [Fact]
+    public void TryAddReference_AcceptsDuplicatesWhenConfiguredLikeWpf()
+    {
+        var sheetId = SheetId.New();
+
+        var added = ConsolidateDialogPlanner.TryAddReference(
+            ["A1:B2"],
+            "a1:b2",
+            (string input, out IReadOnlyList<GridRange> ranges, out string? invalidPart) =>
+                ConsolidateInputParser.TryParseSourceRanges(input, sheetId, out ranges, out invalidPart),
+            rejectDuplicateReferences: false,
+            out var updated,
+            out var issue);
+
+        added.Should().BeTrue();
+        issue.HasIssue.Should().BeFalse();
+        updated.Should().Equal("A1:B2", "a1:b2");
+    }
+
+    [Fact]
     public void TryAddReference_CanRejectDuplicateReferencesForShellsThatRequireUniqueListItems()
     {
         var sheetId = SheetId.New();

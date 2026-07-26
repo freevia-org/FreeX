@@ -20,6 +20,7 @@ using System.Windows.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
 using FreeX.Core.Calc;
+using FreeX.App.Presentation.Consolidate;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Editing;
@@ -7815,7 +7816,11 @@ public partial class MainWindow
             CloseDataToolsTourDialog(openDialog);
             openDialog = null;
 
-            openDialog = new ConsolidateDialog(context.Sheet.Id, context.ConsolidateSourceRange.ToString(), "H2", _ => { }) { Owner = this };
+            openDialog = new ConsolidateDialog(
+                context.Sheet.Id,
+                ConsolidateParityFixture.SourceReference,
+                ConsolidateParityFixture.DestinationReference,
+                _ => { }) { Owner = this };
             await ShowDataToolsTourDialogAsync(openDialog);
             captures.Add(await CaptureDataToolsDialogWindowAsync(
                 openDialog,
@@ -7914,7 +7919,7 @@ public partial class MainWindow
         var removeDuplicatesRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 4));
         var textToColumnsRange = new GridRange(new CellAddress(sheet.Id, 6, 1), new CellAddress(sheet.Id, 8, 1));
         var dataTableRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 4, 4));
-        var consolidateSourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3));
+        var consolidateSourceRange = ConsolidateParityFixture.CreateSourceRange(sheet.Id);
         SetSelectionRange(removeDuplicatesRange, removeDuplicatesRange.Start);
         EnsureCellVisible(removeDuplicatesRange.Start);
         UpdateViewport();
