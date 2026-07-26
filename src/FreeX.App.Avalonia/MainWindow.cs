@@ -12900,9 +12900,18 @@ public sealed partial class MainWindow : Window
         {
             Items = { findTabItem, replaceTabItem },
             SelectedIndex = replaceMode ? 1 : 0,
+            Height = 108,
+            MinHeight = 108,
+            MaxHeight = 108,
         };
         AutomationProperties.SetAutomationId(tabs, "FindReplaceTabs");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
+        var findReplaceTabStyle = new Style(selector => selector.OfType<TabItem>());
+        findReplaceTabStyle.Setters.Add(new Setter(Layoutable.HeightProperty, 22d));
+        findReplaceTabStyle.Setters.Add(new Setter(Layoutable.MinHeightProperty, 22d));
+        findReplaceTabStyle.Setters.Add(new Setter(Layoutable.MaxHeightProperty, 22d));
+        findReplaceTabStyle.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(6, 1)));
+        tabs.Styles.Add(findReplaceTabStyle);
 
         // ── Shared options ──────────────────────────────────────────────────────
         StyleDiff? findFormat = null;
@@ -13039,8 +13048,9 @@ public sealed partial class MainWindow : Window
         resultsPanel.Children.Add(resultsList);
         var resultsBorder = new Border
         {
-            BorderBrush = FormulaBarControlBorder,
+            BorderBrush = Brush(68, 114, 196),
             BorderThickness = new Thickness(1),
+            Background = Brush(242, 242, 242),
             Child = resultsPanel,
         };
 
@@ -13064,6 +13074,22 @@ public sealed partial class MainWindow : Window
         var closeButton = new Button { Content = Fr("FindReplace_Close", "Close"), Width = 60, MinWidth = 60, Padding = new Thickness(4, 1), IsCancel = true };
         AutomationProperties.SetAutomationId(closeButton, "FindReplaceCloseButton");
         ApplyDialogButtonChrome(closeButton);
+
+        foreach (var button in new[] { findAllButton, findNextButton, replaceButton, replaceAllButton, closeButton,
+                                       findFormatButton, findFormatClearButton, findChooseFormatButton,
+                                       replaceFindFormatButton, replaceFindFormatClearButton, replaceFindChooseFormatButton,
+                                       replaceWithFormatButton, replaceWithFormatClearButton, replaceWithChooseFormatButton })
+        {
+            button.Height = 20;
+            button.MinHeight = 20;
+            button.MaxHeight = 20;
+            button.Padding = new Thickness(4, 0);
+            button.CornerRadius = new CornerRadius(0);
+            button.Background = Brush(221, 221, 221);
+            button.BorderBrush = button.IsDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        }
+        foreach (var textBox in new[] { findBox, replaceFindBox, replaceWithBox })
+            textBox.CornerRadius = new CornerRadius(0);
 
         bool OnReplaceTab() => tabs.SelectedItem == replaceTabItem;
         string CurrentFindText() => (OnReplaceTab() ? replaceFindBox.Text : findBox.Text) ?? "";
@@ -13187,30 +13213,101 @@ public sealed partial class MainWindow : Window
             Children = { findAllButton, findNextButton, replaceButton, replaceAllButton, closeButton },
         };
 
-        var optionsExpander = new Expander
+        var optionsGlyph = new Border
         {
-            Header = Fr("FindReplace_Options", "Options >>"),
-            IsExpanded = false,
-            Content = optionsControls.Panel,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Stretch,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
+            Width = 18,
+            Height = 18,
+            CornerRadius = new CornerRadius(9),
+            BorderBrush = Brush(64, 64, 64),
+            BorderThickness = new Thickness(1),
+            Child = new TextBlock
+            {
+                Text = "⌄",
+                FontSize = 12,
+                Foreground = Brushes.Black,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                Margin = new Thickness(0, -2, 0, 0),
+            },
         };
-        AutomationProperties.SetAutomationId(optionsExpander, "FindReplaceOptionsExpander");
-        optionsExpander.PropertyChanged += (_, args) =>
+        var optionsHeaderText = new TextBlock
         {
-            if (args.Property != Expander.IsExpandedProperty)
-                return;
+            Text = Fr("FindReplace_Options", "Options >>"),
+            FontSize = 12,
+            Foreground = Brushes.Black,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        var optionsHeader = new Button
+        {
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 4,
+                Children =
+                {
+                    optionsGlyph,
+                    optionsHeaderText,
+                },
+            },
+            Width = 88,
+            MinWidth = 88,
+            MaxWidth = 88,
+            Height = 20,
+            MinHeight = 20,
+            MaxHeight = 20,
+            Padding = new Thickness(1, 0),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        AutomationProperties.SetName(optionsHeader, Fr("FindReplace_Options", "Options"));
+        AutomationProperties.SetAutomationId(optionsHeader, "FindReplaceOptionsExpander");
+        ApplyDialogButtonChrome(optionsHeader);
+        optionsHeader.Height = 20;
+        optionsHeader.MinHeight = 20;
+        optionsHeader.MaxHeight = 20;
+        optionsHeader.Padding = new Thickness(1, 0);
+        optionsHeader.Width = 88;
+        optionsHeader.MinWidth = 88;
+        optionsHeader.MaxWidth = 88;
+        optionsHeader.Background = Brushes.White;
+        optionsHeader.BorderBrush = Brushes.White;
+        optionsHeader.BorderThickness = new Thickness(0);
+        optionsHeader.CornerRadius = new CornerRadius(0);
 
-            optionsExpander.Height = optionsExpander.IsExpanded ? double.NaN : 24;
-            optionsExpander.MaxHeight = optionsExpander.IsExpanded ? double.PositiveInfinity : 24;
+        var optionsContent = new Border
+        {
+            Child = optionsControls.Panel,
+            IsVisible = false,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        var optionsExpander = new Grid { RowDefinitions = new RowDefinitions("20,Auto") };
+        Grid.SetRow(optionsHeader, 0);
+        Grid.SetRow(optionsContent, 1);
+        optionsExpander.Children.Add(optionsHeader);
+        optionsExpander.Children.Add(optionsContent);
+        optionsHeader.Click += (_, _) =>
+        {
+            optionsContent.IsVisible = !optionsContent.IsVisible;
+            optionsHeaderText.Text = optionsContent.IsVisible
+                ? Fr("FindReplace_OptionsExpanded", "Options <<")
+                : Fr("FindReplace_Options", "Options >>");
+            AutomationProperties.SetName(optionsHeader, optionsHeaderText.Text);
+            optionsGlyph.Child = new TextBlock
+            {
+                Text = optionsContent.IsVisible ? "⌃" : "⌄",
+                FontSize = 12,
+                Foreground = Brushes.Black,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                Margin = new Thickness(0, optionsContent.IsVisible ? 2 : -2, 0, 0),
+            };
         };
 
         var root = new Grid
         {
-            Margin = new Thickness(12, 12, 28, 48),
+            Margin = new Thickness(12, 12, 28, 49),
             RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto"),
         };
         ConfigureDialogTabCycle(dialog, root);
@@ -13218,7 +13315,11 @@ public sealed partial class MainWindow : Window
         tabs.Margin = new Thickness(0, 0, 0, 10);
         optionsExpander.Margin = new Thickness(0, 0, 0, 10);
         resultsBorder.MinHeight = 120;
-        resultsBorder.Margin = new Thickness(0, 0, 0, 8);
+        resultsBorder.Margin = new Thickness(0, 0, 0, 7);
+        resultsHeader.Height = 24;
+        resultsHeader.MinHeight = 24;
+        resultsHeader.MaxHeight = 24;
+        resultsPanel.Background = Brush(242, 242, 242);
         statusLabel.Margin = new Thickness(0, 0, 0, 8);
         buttonRow.Margin = new Thickness(0);
 

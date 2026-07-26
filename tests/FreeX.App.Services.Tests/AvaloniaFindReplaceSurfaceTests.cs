@@ -22,8 +22,12 @@ public sealed class AvaloniaFindReplaceSurfaceTests
         source.Should().Contain("var replaceFindChooseFormatButton = CreateFindReplaceFormatButton(\"FindReplaceReplaceFindChooseFormatFromCellButton\"");
         source.Should().Contain("var replaceWithFormatButton = CreateFindReplaceFormatButton(\"FindReplaceReplaceWithFormatButton\"");
         source.Should().Contain("var replaceWithChooseFormatButton = CreateFindReplaceFormatButton(\"FindReplaceReplaceWithChooseFormatFromCellButton\"");
-        source.Should().Contain("Header = Fr(\"FindReplace_Options\", \"Options >>\")");
-        source.Should().Contain("IsExpanded = false");
+        source.Should().Contain("var optionsHeader = new Button");
+        source.Should().Contain("AutomationProperties.SetAutomationId(optionsHeader, \"FindReplaceOptionsExpander\")");
+        source.Should().Contain("optionsContent.IsVisible = !optionsContent.IsVisible;");
+        source.Should().Contain("? Fr(\"FindReplace_OptionsExpanded\", \"Options <<\")");
+        source.Should().Contain(": Fr(\"FindReplace_Options\", \"Options >>\")");
+        source.Should().Contain("AutomationProperties.SetName(optionsHeader, optionsHeaderText.Text);");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"110,100,90,70,*,*\")");
         source.Should().Contain("RowDefinitions = new RowDefinitions(\"Auto,Auto,*,Auto,Auto\")");
         source.Should().Contain("resultsBorder.MinHeight = 120");

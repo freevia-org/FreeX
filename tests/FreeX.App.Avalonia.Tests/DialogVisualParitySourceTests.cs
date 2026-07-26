@@ -13,6 +13,20 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("var findBox = new TextBox { Text = _session.LastFindText, MinWidth = 260 };");
         source.Should().Contain("findFormatButton.Margin = new Thickness(8, 0, 0, 0);");
         source.Should().Contain("findChooseFormatButton.Margin = new Thickness(6, 0, 0, 0);");
+        source.Should().Contain("Height = 108,");
+        source.Should().Contain("Width = 88,");
+        source.Should().Contain("new Thickness(6, 1)");
+        source.Should().Contain("BorderBrush = Brush(68, 114, 196)");
+        source.Should().Contain("Background = Brush(242, 242, 242)");
+        source.Should().Contain("optionsHeader");
+        source.Should().Contain("resultsHeader.Height = 24;");
+        source.Should().Contain("button.CornerRadius = new CornerRadius(0);");
+        source.Should().Contain("textBox.CornerRadius = new CornerRadius(0);");
+        source.Should().Contain("optionsHeader.Width = 88;");
+        source.Should().Contain("optionsHeader.Background = Brushes.White;");
+        source.Should().Contain("? Fr(\"FindReplace_OptionsExpanded\", \"Options <<\")");
+        source.Should().Contain(": Fr(\"FindReplace_Options\", \"Options >>\")");
+        source.Should().Contain("AutomationProperties.SetName(optionsHeader, optionsHeaderText.Text);");
         source.Should().Contain("dialog.Opened += (_, _) => resultsList.Background = Brush(242, 242, 242);");
     }
 
