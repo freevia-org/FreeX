@@ -1320,6 +1320,35 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartSeriesOptions_CreatesSecondaryAxisForNewComboAndUndoRemovesIt()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.SecondaryValueAxis.Should().BeNull();
+        chart.Series[1].OnSecondaryAxis.Should().BeFalse();
+
+        bus.Execute(new SetChartSeriesOptionsCommand(
+            0,
+            id,
+            new ChartSeriesOptions(
+                1, false, true, null, ChartMarkerSymbol.Auto, null)));
+
+        chart.Series[1].OnSecondaryAxis.Should().BeTrue();
+        chart.SecondaryValueAxis.Should().NotBeNull();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.SecondaryValueAxis.Should().NotBeNull();
+        roundTripped.Series[1].OnSecondaryAxis.Should().BeTrue();
+
+        bus.Undo();
+        chart.Series[1].OnSecondaryAxis.Should().BeFalse();
+        chart.SecondaryValueAxis.Should().BeNull();
+    }
+
+    [Fact]
     public void SetChartBubbleOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
     {
         var (p, bus, id) = MakeChartPresentation();
