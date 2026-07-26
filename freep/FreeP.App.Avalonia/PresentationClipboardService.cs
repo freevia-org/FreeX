@@ -38,6 +38,10 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
         DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.Selection);
     internal static readonly DataFormat<string> OwnerTokenPlatformFormat =
         DataFormat.CreateStringPlatformFormat(PresentationClipboardFormats.OwnerToken);
+    internal static readonly DataFormat<byte[]> RichTextFormat =
+        DataFormat.CreateBytesApplicationFormat(PresentationClipboardFormats.RichText);
+    internal static readonly DataFormat<byte[]> RichTextPlatformFormat =
+        DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.RichText);
 
     public async Task WriteAsync(PresentationClipboardContent content)
     {
@@ -79,11 +83,15 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
             // without depending on Avalonia's private application-format prefix.
             item.Set(SelectionPlatformFormat, content.SelectionBytes);
             item.Set(OwnerTokenPlatformFormat, content.OwnerToken);
+            if (content.RichTextBytes is { Length: > 0 })
+                item.Set(RichTextPlatformFormat, content.RichTextBytes);
         }
         else
         {
             item.Set(SelectionFormat, content.SelectionBytes);
             item.Set(OwnerTokenFormat, content.OwnerToken);
+            if (content.RichTextBytes is { Length: > 0 })
+                item.Set(RichTextFormat, content.RichTextBytes);
         }
         item.SetText(content.Text);
         bitmap = null;
@@ -121,11 +129,14 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
     {
         byte[]? selection = null;
         string? ownerToken = null;
+        byte[]? richText = null;
         string? text = null;
         selection = await TryGetValueAsync(transfer, SelectionPlatformFormat)
             ?? await TryGetValueAsync(transfer, SelectionFormat);
         ownerToken = await TryGetValueAsync(transfer, OwnerTokenPlatformFormat)
             ?? await TryGetValueAsync(transfer, OwnerTokenFormat);
+        richText = await TryGetValueAsync(transfer, RichTextPlatformFormat)
+            ?? await TryGetValueAsync(transfer, RichTextFormat);
         try { text = await transfer.TryGetTextAsync(); }
         catch { }
 
@@ -144,7 +155,7 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
         {
         }
 
-        return new PresentationClipboardContent(selection, png, text, ownerToken);
+        return new PresentationClipboardContent(selection, png, text, ownerToken, richText);
     }
 
     private static async Task<T?> TryGetValueAsync<T>(

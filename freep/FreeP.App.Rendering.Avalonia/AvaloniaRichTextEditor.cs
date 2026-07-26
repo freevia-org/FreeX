@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using FreeP.App.Compositor;
@@ -15,6 +16,11 @@ namespace FreeP.App.Rendering.Avalonia;
 /// </summary>
 internal sealed class AvaloniaRichTextEditor : Grid
 {
+    private static readonly DataFormat<byte[]> RichTextFormat =
+        DataFormat.CreateBytesApplicationFormat(PresentationClipboardFormats.RichText);
+    private static readonly DataFormat<byte[]> RichTextPlatformFormat =
+        DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.RichText);
+
     private readonly InCanvasRichTextEditBuffer _buffer;
     private readonly AvaloniaRichTextEditingSurface _richTextView;
     private readonly string _fallbackFontFamily;
@@ -129,6 +135,57 @@ internal sealed class AvaloniaRichTextEditor : Grid
         new(SelectionStart, SelectionEnd);
 
     internal bool FocusEditor() => InputBox.Focus();
+
+    internal async Task<bool> CopySelectionAsync() =>
+        await WriteRichClipboardAsync(_buffer.CreateClipboardPayload(Selection));
+
+    internal async Task<bool> CutSelectionAsync()
+    {
+        if (Selection.IsCollapsed)
+            return false;
+
+        if (!await WriteRichClipboardAsync(_buffer.CreateClipboardPayload(Selection)))
+            return false;
+        int caret;
+        _buffer.ReplaceSelectionWithPlainText(Selection, string.Empty, out caret);
+        ApplyBufferText(caret);
+        return true;
+    }
+
+    internal async Task<bool> PasteClipboardAsync()
+    {
+        var clipboard = TopLevel.GetTopLevel(InputBox)?.Clipboard;
+        if (clipboard is null)
+            return false;
+
+        using var transfer = await clipboard.TryGetDataAsync();
+        if (transfer is null)
+            return false;
+
+        byte[]? richBytes = await TryGetValueAsync(
+            transfer,
+            OperatingSystem.IsWindows() ? RichTextPlatformFormat : RichTextFormat);
+        richBytes ??= await TryGetValueAsync(
+            transfer,
+            OperatingSystem.IsWindows() ? RichTextFormat : RichTextPlatformFormat);
+        var payload = InCanvasRichClipboardPlanner.Deserialize(richBytes);
+        if (payload is not null)
+        {
+            _buffer.ApplyClipboardPayload(payload, Selection, out var caret);
+            ApplyBufferText(caret);
+            return true;
+        }
+
+        string? text = null;
+        try { text = await transfer.TryGetTextAsync(); }
+        catch { }
+        if (text is null)
+            return false;
+
+        _buffer.ReplaceSelectionWithPlainText(Selection, text, out var textCaret);
+        ApplyBufferText(textCaret);
+        return true;
+    }
 
     internal InCanvasTableCellRichTextEditPlan CurrentPlan()
     {
@@ -331,8 +388,27 @@ internal sealed class AvaloniaRichTextEditor : Grid
         UpdateSurfaceSelection();
     }
 
-    private void OnInputNavigationKeyDown(object? sender, KeyEventArgs e)
+    private async void OnInputNavigationKeyDown(object? sender, KeyEventArgs e)
     {
+        if ((e.KeyModifiers & KeyModifiers.Control) != 0)
+        {
+            switch (e.Key)
+            {
+                case Key.C:
+                    e.Handled = true;
+                    await CopySelectionAsync();
+                    return;
+                case Key.X:
+                    e.Handled = true;
+                    await CutSelectionAsync();
+                    return;
+                case Key.V:
+                    e.Handled = true;
+                    await PasteClipboardAsync();
+                    return;
+            }
+        }
+
         if (e.Key == Key.Enter
             && (e.KeyModifiers & KeyModifiers.Shift) != 0
             && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) == 0)
@@ -370,6 +446,66 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
         e.Handled = true;
         UpdateSurfaceSelection();
+    }
+
+    private void ApplyBufferText(int caret)
+    {
+        _synchronizing = true;
+        try
+        {
+            InputBox.Text = _buffer.PlainText;
+        }
+        finally
+        {
+            _synchronizing = false;
+        }
+
+        SelectionStart = Math.Clamp(caret, 0, InputBox.Text?.Length ?? 0);
+        SelectionEnd = SelectionStart;
+        RenderBody();
+        FocusEditor();
+    }
+
+    private async Task<bool> WriteRichClipboardAsync(InCanvasRichClipboardPayload payload)
+    {
+        if (payload.PlainText.Length == 0)
+            return false;
+
+        var clipboard = TopLevel.GetTopLevel(InputBox)?.Clipboard;
+        if (clipboard is null)
+            return false;
+
+        var item = new DataTransferItem();
+        var bytes = InCanvasRichClipboardPlanner.Serialize(payload);
+        if (OperatingSystem.IsWindows())
+            item.Set(RichTextPlatformFormat, bytes);
+        else
+            item.Set(RichTextFormat, bytes);
+        item.SetText(payload.PlainText);
+
+        var transfer = new DataTransfer();
+        transfer.Add(item);
+        try
+        {
+            await clipboard.SetDataAsync(transfer);
+            try { await clipboard.FlushAsync(); }
+            catch { }
+            return true;
+        }
+        catch
+        {
+            ((IDisposable)transfer).Dispose();
+            return false;
+        }
+    }
+
+    private static async Task<T?> TryGetValueAsync<T>(
+        IAsyncDataTransfer transfer,
+        DataFormat<T> format)
+        where T : class
+    {
+        try { return await transfer.TryGetValueAsync(format); }
+        catch { return null; }
     }
 
     private void SelectWord(int logicalPosition)

@@ -466,7 +466,22 @@ public sealed class InCanvasTextEditor : IDisposable
         if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) == 0)
             return;
 
-        if (e.Key == Key.B)
+        if (e.Key == Key.C)
+        {
+            e.Handled = WpfRichTextClipboardAdapter.TryCopy(_richBox!, _shapeParagraphBody);
+        }
+        else if (e.Key == Key.X)
+        {
+            e.Handled = WpfRichTextClipboardAdapter.TryCut(_richBox!, _shapeParagraphBody);
+        }
+        else if (e.Key == Key.V)
+        {
+            e.Handled = WpfRichTextClipboardAdapter.TryPaste(
+                _richBox!,
+                _shapeParagraphBody,
+                out _shapeParagraphBody);
+        }
+        else if (e.Key == Key.B)
         {
             ApplyBold();
             e.Handled = true;
