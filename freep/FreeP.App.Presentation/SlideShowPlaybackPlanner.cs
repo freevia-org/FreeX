@@ -343,7 +343,7 @@ public static class SlideShowPlaybackPlanner
             fromScale,
             toScale,
             ResolvePeakScale(animation),
-            RotationDegrees: 360,
+            RotationDegrees: ResolveRotationDegrees(animation),
             offsetX,
             offsetY,
             IsHorizontalWipe(animation.Direction),
@@ -482,6 +482,12 @@ public static class SlideShowPlaybackPlanner
         animation.Preset == AnimationPreset.Shrink
             ? 0.8
             : 1.2;
+
+    private static double ResolveRotationDegrees(ShapeAnimation animation) =>
+        animation.Direction == AnimationDirection.Out
+            && animation.Preset is AnimationPreset.Spiral or AnimationPreset.Swivel
+            ? -360
+            : 360;
 
     private static (double X, double Y) ResolveFlyInOffset(AnimationDirection? direction) =>
         direction switch

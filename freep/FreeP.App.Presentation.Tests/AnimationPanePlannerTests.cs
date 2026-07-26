@@ -827,6 +827,33 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Theory]
+    [InlineData(AnimationPreset.Spiral, AnimationDirection.Out, "Out")]
+    [InlineData(AnimationPreset.Swivel, AnimationDirection.In, "In")]
+    public void BuildEffectOptionsPlan_ProjectsSpiralAndSwivelInOutOptions(
+        AnimationPreset preset,
+        AnimationDirection direction,
+        string expectedSelected)
+    {
+        var animations = new[]
+        {
+            new ShapeAnimation
+            {
+                ShapeId = 10u,
+                Kind = AnimationKind.Entrance,
+                Preset = preset,
+                Direction = direction,
+            },
+        };
+
+        var plan = AnimationPanePlanner.BuildEffectOptionsPlan(animations, 0);
+
+        plan.CanApply.Should().BeTrue();
+        plan.Options.Select(option => option.DisplayText).Should().Equal("In", "Out");
+        plan.SelectedOptionText.Should().Be(expectedSelected);
+        plan.Options.Should().ContainSingle(option => option.IsSelected && option.DisplayText == expectedSelected);
+    }
+
+    [Theory]
     [InlineData(AnimationPreset.Wipe, "from-top", AnimationDirection.FromTop)]
     [InlineData(AnimationPreset.Zoom, "out", AnimationDirection.Out)]
     [InlineData(AnimationPreset.Split, "vertical", AnimationDirection.Vertical)]
@@ -835,6 +862,8 @@ public sealed class AnimationPanePlannerTests
     [InlineData(AnimationPreset.Checkerboard, "horizontal", AnimationDirection.Horizontal)]
     [InlineData(AnimationPreset.Circle, "out", AnimationDirection.Out)]
     [InlineData(AnimationPreset.Wheel, "in", AnimationDirection.In)]
+    [InlineData(AnimationPreset.Spiral, "out", AnimationDirection.Out)]
+    [InlineData(AnimationPreset.Swivel, "in", AnimationDirection.In)]
     [InlineData(AnimationPreset.Peek, "from-left", AnimationDirection.FromLeft)]
     [InlineData(AnimationPreset.Crawl, "from-top", AnimationDirection.FromTop)]
     [InlineData(AnimationPreset.Bounce, "from-bottom", AnimationDirection.FromBottom)]
