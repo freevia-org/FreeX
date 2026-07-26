@@ -127,7 +127,25 @@ function Invoke-ToolGeneratedProject {
 "@)
         [IO.File]::WriteAllText($programPath, $Options.Source)
         $outputPaths = @($Options.Outputs.GetEnumerator() | ForEach-Object { [pscustomobject]@{ TempPath = Join-Path $tempRoot (Split-Path -Leaf $_.Key); DestinationPath = $_.Key; Label = $_.Value } })
-        & $Options.DotNetPath (@("run", "--project", $projectPath, "--configuration", "Release", "--") + @(& $Options.Arguments $outputPaths))
+        & $Options.DotNetPath @(
+            "build", $projectPath,
+            "--configuration", "Release",
+            "--disable-build-servers",
+            "-p:UseSharedCompilation=false",
+            "-p:NodeReuse=false",
+            "/nr:false",
+            "-m:1"
+        )
+        if ($LASTEXITCODE -ne 0) {
+            throw $Options.Failure
+        }
+        & $Options.DotNetPath (@(
+            "run",
+            "--no-build",
+            "--project", $projectPath,
+            "--configuration", "Release",
+            "--"
+        ) + @(& $Options.Arguments $outputPaths))
         if ($LASTEXITCODE -ne 0) {
             throw $Options.Failure
         }

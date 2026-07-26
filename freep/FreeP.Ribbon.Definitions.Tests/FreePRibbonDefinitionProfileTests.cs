@@ -1087,8 +1087,18 @@ public sealed class FreePRibbonDefinitionProfileTests
             .Select(path => path.GetString())
             .ToArray();
         tableInlineTextVerification.Should().Contain("freep/FreeP.App.Presentation.Tests/TableCellEditPlannerTests.cs");
+        tableInlineTextVerification.Should().Contain("freep/FreeP.App.Presentation.Tests/InCanvasRichClipboardTests.cs");
         tableInlineTextVerification.Should().Contain("freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs");
+        tableInlineTextVerification.Should().Contain("freep/FreeP.App.Host.Tests/WpfRichTextClipboardAdapterTests.cs");
         tableInlineTextVerification.Should().Contain("freep/FreeP.App.Host.Tests/CanvasEditingTests.cs");
+        tableInlineText.GetProperty("evidenceDocs")
+            .EnumerateArray()
+            .Select(path => path.GetString())
+            .Should()
+            .Contain("docs/parity/freep-rich-clipboard-wave15-20260727.md");
+        tableInlineText.GetProperty("remainingWork").GetString()
+            .Should()
+            .NotContain("rich clipboard formats");
 
         var animationPane = workflowEvidence.Single(row =>
             row.GetProperty("evidenceId").GetString() == "freep.animation-pane.workflow-depth");
