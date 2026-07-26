@@ -87,6 +87,9 @@ public static class SmartArtLayoutEngine
         if (IsBasicTimelineLayout(data.LayoutUniqueId))
             return LayoutBasicTimeline(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsStepDownProcessLayout(data.LayoutUniqueId))
+            return LayoutStepDownProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsArrowRibbonLayout(data.LayoutUniqueId))
             return LayoutArrowRibbon(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -419,6 +422,58 @@ public static class SmartArtLayoutEngine
             long boxEdgeY = aboveRail ? boxY + boxH : boxY;
             shapes.Add(MakeConnector(idCounter++, centerX, railY, centerX, boxEdgeY, stylePlan.Connector));
             shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, boxX, boxY, boxW, boxH));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Step Down Process geometry: ordered stages descend diagonally through the frame,
+    /// with each connector attached to the preceding stage. This is distinct from the
+    /// single-row process layout while keeping the same renderer-neutral shape contract.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutStepDownProcess(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>();
+        if (n == 0) return shapes;
+
+        long padX = Math.Max((long)(fcx * 0.06), 1L);
+        long padY = Math.Max((long)(fcy * 0.08), 1L);
+        long gapX = Math.Max((long)(fcx * 0.035), 1L);
+        long gapY = Math.Max((long)(fcy * 0.035), 1L);
+        long boxW = Math.Max((fcx - 2 * padX - Math.Min(n - 1, 3) * gapX) / Math.Min(n, 4), 1L);
+        long boxH = Math.Max((fcy - 2 * padY - Math.Min(n - 1, 3) * gapY) / Math.Min(n, 4), 1L);
+        boxH = Math.Min(boxH, (long)(fcy * 0.23));
+        long stepX = boxW + gapX;
+        long stepY = boxH + gapY;
+        uint idCounter = 270;
+        var centers = new (long x, long y)[n];
+
+        for (int i = 0; i < n; i++)
+        {
+            int row = i / 4;
+            int column = i % 4;
+            long x = fx + padX + column * stepX;
+            long y = fy + padY + (row * stepY) + column * Math.Max(gapY / 2, 1L);
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Process);
+            shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, x, y, boxW, boxH));
+            centers[i] = (x + boxW / 2, y + boxH / 2);
+
+            if (i > 0)
+            {
+                var previous = centers[i - 1];
+                shapes.Add(MakeConnector(
+                    idCounter++,
+                    previous.x + boxW / 2,
+                    previous.y,
+                    centers[i].x - boxW / 2,
+                    centers[i].y,
+                    stylePlan.Connector));
+            }
         }
 
         return shapes;
@@ -1600,6 +1655,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "basictimeline", StringComparison.Ordinal);
+    }
+
+    private static bool IsStepDownProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "stepdownprocess", StringComparison.Ordinal);
     }
 
     private static bool IsArrowRibbonLayout(string uniqueId)

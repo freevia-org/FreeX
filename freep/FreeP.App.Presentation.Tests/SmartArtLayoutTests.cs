@@ -729,6 +729,25 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void StepDownProcess_ReturnsDescendingLiveBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "One", "Two", "Three", "Four");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/StepDownProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("StepDownProcess is a native PowerPoint process layout");
+        var boxes = shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Should().HaveCount(4);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(3, "each step after the first connects to its predecessor");
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("One", "Two", "Three", "Four");
+        boxes.Select(s => s.OffsetYEmu).Should().BeInAscendingOrder(
+            "StepDownProcess should descend in display order");
+    }
+
+    [Fact]
     public void VerticalProcess_ReturnsTopToBottomLiveBoxesAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C", "D");
