@@ -24,7 +24,7 @@ public sealed partial class MainWindow
     // ── Review ▸ Protect entry point ───────────────────────────────────────────
     private void AllowEditRanges() => _ = ShowAllowEditRangeDialogAsync();
 
-    private async Task ShowAllowEditRangeDialogAsync()
+    private async Task ShowAllowEditRangeDialogAsync(string? initialRangeText = null)
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -35,9 +35,9 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("AllowEditRange_Title"),
             Width = 430,
-            Height = 400,
+            Height = 420,
             MinWidth = 390,
-            MinHeight = 360,
+            MinHeight = 380,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -49,7 +49,7 @@ public sealed partial class MainWindow
 
         var rangeBox = new TextBox
         {
-            Text = FormatRangeReference(_session.SelectedRange),
+            Text = initialRangeText ?? FormatRangeReference(_session.SelectedRange),
             MinWidth = 220,
         };
         ApplyDataOpsTextBoxChrome(rangeBox);
@@ -274,19 +274,25 @@ public sealed partial class MainWindow
         {
             Header = StripDisplayMnemonic(UiText.Get("AllowEditRange_ExistingRangesLabel")),
             Content = existingRangesGroupContent,
-            Margin = new Thickness(0, 4, 0, 8),
+            Margin = new Thickness(0, 0, 0, 10),
         };
 
-        // WPF: second GroupBox with "Range" header containing the cell-reference textbox.
-        var rangeGroup = new GroupBox
+        // WPF: the Range section is a bare label and editor. Keep the picker in the editor row for
+        // Avalonia interaction parity even though the current WPF capture does not show that button.
+        var rangeGroup = new StackPanel
         {
-            Header = StripDisplayMnemonic(UiText.Get("AllowEditRange_RangeLabel")),
-            Content = new Border
+            Spacing = 4,
+            Children =
             {
-                Padding = new Thickness(4),
-                Child = BuildDialogRangePickerRow(rangeBox, rangePicker),
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(UiText.Get("AllowEditRange_RangeLabel")),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                },
+                BuildDialogRangePickerRow(rangeBox, rangePicker),
             },
-            Margin = new Thickness(0, 0, 0, 6),
+            Margin = new Thickness(0, 0, 0, 10),
         };
 
         // Range-specific password label + box (WPF parity: AllowEditRangeDialog.cs's Protection_Password
@@ -311,24 +317,30 @@ public sealed partial class MainWindow
         var bottomRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, closeButton], new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(bottomRow, Dock.Bottom);
 
+        var dialogBody = new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = UiText.Get("AllowEditRange_Intro"), Foreground = HeaderForeground, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 4) },
+                existingRangesGroup,
+                rangeGroup,
+                new TextBlock { Text = UiText.Get("AllowEditRange_Example"), Foreground = SecondaryInk, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                rangePasswordPanel,
+                warningText,
+            },
+        };
+
         dialog.Content = new DockPanel
         {
             Margin = new Thickness(12),
             Children =
             {
                 bottomRow,
-                new StackPanel
+                new ScrollViewer
                 {
-                    Spacing = 4,
-                    Children =
-                    {
-                        new TextBlock { Text = UiText.Get("AllowEditRange_Intro"), Foreground = HeaderForeground, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 4) },
-                        existingRangesGroup,
-                        rangeGroup,
-                        new TextBlock { Text = UiText.Get("AllowEditRange_Example"), Foreground = SecondaryInk, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                        rangePasswordPanel,
-                        warningText,
-                    },
+                    VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden,
+                    Content = dialogBody,
                 },
             },
         };
