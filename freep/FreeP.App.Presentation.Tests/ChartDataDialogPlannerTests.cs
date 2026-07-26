@@ -570,6 +570,24 @@ public sealed class ChartDataDialogPlannerTests
         ChartPieOptionsPlanner.BuildSurfacePlan().CommandId.Should().Be(ChartPieOptionsPlanner.CommandId);
     }
 
+    [Fact]
+    public void ChartPlotStyleOptionsPlanner_UsesWorkingCopyForScatterAndRadarStyles()
+    {
+        var chart = MakeChart();
+        chart.ChartType = ChartType.Scatter;
+        chart.ScatterStyle = ScatterStyle.Marker;
+        chart.RadarStyle = RadarStyle.Standard;
+
+        var planner = ChartPlotStyleOptionsPlanner.FromChart(chart);
+        planner.SetScatterStyle(ScatterStyle.SmoothMarker);
+        planner.SetRadarStyle(RadarStyle.Filled);
+
+        planner.BuildCommitPlan().Should().Be(new ChartPlotStyleOptions(ScatterStyle.SmoothMarker, RadarStyle.Filled));
+        chart.ScatterStyle.Should().Be(ScatterStyle.Marker);
+        chart.RadarStyle.Should().Be(RadarStyle.Standard);
+        ChartPlotStyleOptionsPlanner.BuildSurfacePlan().CommandId.Should().Be(ChartPlotStyleOptionsPlanner.CommandId);
+    }
+
     private static ChartShape MakeChart()
     {
         var chart = new ChartShape();
