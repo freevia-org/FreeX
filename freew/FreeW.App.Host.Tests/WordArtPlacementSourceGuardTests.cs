@@ -48,6 +48,8 @@ public sealed class WordArtPlacementSourceGuardTests
         wpf.Should().Contain("materialLayer.Height = canvas.ActualHeight + 13;");
         wpf.Should().Contain("Canvas.SetLeft(materialLayer, -1);");
         wpf.Should().Contain("Canvas.SetTop(materialLayer, -6);");
+        wpf.Should().Contain("BuildSecondaryFillGoldMaterialBrush()");
+        wpf.Should().Contain("new System.Windows.Media.GradientStop(Color.FromRgb(0xC0, 0x90, 0x00), 0.08)");
         wpf.Should().Contain("var preserveOpaqueGlowGoldFill = wordArt is");
         wpf.Should().Contain("Text: \"FORMAT\",");
         wpf.Should().Contain("Style: WordArtStyle.GlowGold,");
