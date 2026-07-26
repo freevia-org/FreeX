@@ -25,6 +25,9 @@ namespace FreeP.Core.Model;
 ///   <item><term>Triangle (isosceles)</term><description>apex (top-mid), base-left, base-right, plus edge midpoints.</description></item>
 ///   <item><term>RightTriangle</term><description>top-left apex, bottom-left, bottom-right, plus edge midpoints.</description></item>
 ///   <item><term>Diamond</term><description>4 vertices (top/right/bottom/left = OOXML indices 0-3).</description></item>
+///   <item><term>Parallelogram / Trapezoid</term><description>Slanted-edge midpoints using the authored inset guide.</description></item>
+///   <item><term>Chevron / HomePlate</term><description>Notch/tip sites on the visible outline using the authored depth guide.</description></item>
+///   <item><term>Star8</term><description>4 cardinal outer vertices.</description></item>
 ///   <item><term>Rectangle / RoundedRectangle</term><description>4 mid-edges + 4 corners (unchanged).</description></item>
 ///   <item><term>Others</term><description>Falls back to the 8-site bbox approximation.</description></item>
 /// </list>
@@ -171,6 +174,70 @@ public static class ConnectionSiteHelper
                     _ => (midX, midY)
                 };
 
+            // These four-site mappings follow the shared preset outlines rather
+            // than the bounding box. This keeps attached connectors on the
+            // visible edge when an authored slant/depth guide is present.
+            case DrawingShapeKind.Parallelogram:
+            case DrawingShapeKind.Trapezoid:
+            {
+                var inset = ResolveSlantInset(shape);
+                var leftMidX = inset / 2;
+                var rightMidX = right - inset / 2;
+                return siteIndex switch
+                {
+                    0 => (left + leftMidX, midY),
+                    1 => (midX, top),
+                    2 => (rightMidX, midY),
+                    3 => (midX, bottom),
+                    _ => (midX, midY)
+                };
+            }
+
+            case DrawingShapeKind.Chevron:
+            {
+                var depth = ResolvePointDepth(shape, fallback: 0.24);
+                var x1 = (long)Math.Round(shape.ExtentCxEmu * depth);
+                var x2 = right - (long)Math.Round(shape.ExtentCxEmu * depth);
+                return siteIndex switch
+                {
+                    0 => (left + x1, midY),
+                    1 => (left + (x2 - left) / 2, top),
+                    2 => (right, midY),
+                    3 => (left + (x2 - left) / 2, bottom),
+                    _ => (midX, midY)
+                };
+            }
+
+            case DrawingShapeKind.HomePlate:
+            {
+                var depth = ResolvePointDepth(shape, fallback: 0.24);
+                var x1 = right - (long)Math.Round(shape.ExtentCxEmu * depth);
+                return siteIndex switch
+                {
+                    0 => (left, midY),
+                    1 => (left + (x1 - left) / 2, top),
+                    2 => (right, midY),
+                    3 => (left + (x1 - left) / 2, bottom),
+                    _ => (midX, midY)
+                };
+            }
+
+            case DrawingShapeKind.Star8:
+            {
+                var topStar8 = StarPoint(midX, midY, shape.ExtentCxEmu / 2.0, shape.ExtentCyEmu / 2.0, -90);
+                var rightStar8 = StarPoint(midX, midY, shape.ExtentCxEmu / 2.0, shape.ExtentCyEmu / 2.0, 0);
+                var bottomStar8 = StarPoint(midX, midY, shape.ExtentCxEmu / 2.0, shape.ExtentCyEmu / 2.0, 90);
+                var leftStar8 = StarPoint(midX, midY, shape.ExtentCxEmu / 2.0, shape.ExtentCyEmu / 2.0, 180);
+                return siteIndex switch
+                {
+                    0 => leftStar8,
+                    1 => topStar8,
+                    2 => rightStar8,
+                    3 => bottomStar8,
+                    _ => (midX, midY)
+                };
+            }
+
             case DrawingShapeKind.Hexagon:
             case DrawingShapeKind.Octagon:
             case DrawingShapeKind.Cross:
@@ -206,6 +273,27 @@ public static class ConnectionSiteHelper
             default:
                 return null; // use bbox resolver
         }
+    }
+
+    private static long ResolveSlantInset(SlideShape shape)
+    {
+        if (!shape.PresetGeometryAdjustments.TryGetValue("adj", out var adjustment))
+            return (long)Math.Round(shape.ExtentCxEmu * 0.2);
+
+        var maximumInset = shape.ExtentCxEmu / 2;
+        var inset = Math.Min(shape.ExtentCxEmu, shape.ExtentCyEmu) *
+            Math.Clamp(adjustment, 0, 100000) / 100000.0;
+        return Math.Clamp((long)Math.Round(inset), 0, maximumInset);
+    }
+
+    private static double ResolvePointDepth(SlideShape shape, double fallback)
+    {
+        if (!shape.PresetGeometryAdjustments.TryGetValue("adj", out var adjustment))
+            return fallback;
+
+        var maximum = 100000.0 * shape.ExtentCxEmu / Math.Max(1, Math.Min(shape.ExtentCxEmu, shape.ExtentCyEmu));
+        var depth = Math.Clamp(adjustment, 0, maximum) / 100000.0;
+        return Math.Clamp(depth, 0, 1);
     }
 
     private static (long X, long Y) StarPoint(
