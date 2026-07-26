@@ -42,6 +42,31 @@ public class ChartRoundTripTests
         return XDocument.Load(entry);
     }
 
+    private static byte[] ReplaceEntryXml(byte[] docx, string entryPath, XDocument replacement)
+    {
+        using var source = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read);
+        using var output = new MemoryStream();
+        using (var destination = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in source.Entries)
+            {
+                var target = destination.CreateEntry(entry.FullName);
+                using var targetStream = target.Open();
+                if (entry.FullName == entryPath)
+                {
+                    replacement.Save(targetStream);
+                }
+                else
+                {
+                    using var sourceStream = entry.Open();
+                    sourceStream.CopyTo(targetStream);
+                }
+            }
+        }
+
+        return output.ToArray();
+    }
+
     private static TextDocument SingleColumnChartDocument()
     {
         var chart = Chart.Create(
@@ -411,11 +436,11 @@ public class ChartRoundTripTests
 
         var docx = WriteBytes(doc);
 
-        // The chart part must carry a freew:colorScheme element inside a c:extLst.
+        // The chart part must carry a schema-valid private c:ext URI.
         var chartXml = EntryXml(docx, "word/charts/chart1.xml");
-        XNamespace freew = "http://schemas.freew.dev/chart-design/2026";
-        var colorElem = chartXml.Descendants(freew + "colorScheme").Should().ContainSingle().Subject;
-        colorElem.Attribute("id")!.Value.Should().Be("mono-blue");
+        var extensionUri = chartXml.Descendants(C + "ext").Should().ContainSingle()
+            .Which.Attribute("uri")!.Value;
+        extensionUri.Should().Be("urn:freew:chart-design:2026#colorScheme=mono-blue");
         var series = chartXml.Descendants(C + "ser").Should().ContainSingle().Subject;
         series.Elements(C + "dPt").Should().HaveCount(2);
         series
@@ -442,16 +467,37 @@ public class ChartRoundTripTests
 
         var docx = WriteBytes(doc);
 
-        // The chart part must carry a freew:quickLayout element.
+        // The chart part must carry a schema-valid private c:ext URI.
         var chartXml = EntryXml(docx, "word/charts/chart1.xml");
-        XNamespace freew = "http://schemas.freew.dev/chart-design/2026";
-        var qlElem = chartXml.Descendants(freew + "quickLayout").Should().ContainSingle().Subject;
-        qlElem.Attribute("id")!.Value.Should().Be("5");
+        var extensionUri = chartXml.Descendants(C + "ext").Should().ContainSingle()
+            .Which.Attribute("uri")!.Value;
+        extensionUri.Should().Be("urn:freew:chart-design:2026#quickLayout=5");
 
         // And the reader must recover it.
         var read = RoundTrip(doc);
         var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Chart is not null).Chart!;
         roundTripped.QuickLayoutId.Should().Be(5);
+    }
+
+    [Fact]
+    public void LegacyChartDesignExtension_IsStillRead()
+    {
+        var docx = WriteBytes(SingleColumnChartDocument());
+        var chartXml = EntryXml(docx, "word/charts/chart1.xml");
+        XNamespace freew = "http://schemas.freew.dev/chart-design/2026";
+        chartXml.Root!.Add(new XElement(C + "extLst",
+            new XElement(C + "ext",
+                new XAttribute("uri", "{FW-ChartDesign-2026}"),
+                new XElement(freew + "colorScheme", new XAttribute("id", "colorful3")),
+                new XElement(freew + "quickLayout", new XAttribute("id", "9")))));
+
+        docx = ReplaceEntryXml(docx, "word/charts/chart1.xml", chartXml);
+        using var stream = new MemoryStream(docx);
+        var read = DocxReader.Read(stream);
+        var chart = read.Paragraphs.Single().Runs.Single(run => run.Chart is not null).Chart!;
+
+        chart.ColorSchemeId.Should().Be("colorful3");
+        chart.QuickLayoutId.Should().Be(9);
     }
 
     [Fact]
