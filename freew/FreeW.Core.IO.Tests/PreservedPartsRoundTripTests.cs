@@ -36,6 +36,8 @@ public class PreservedPartsRoundTripTests
     private const string WebExtensionRelType = "http://schemas.microsoft.com/office/2011/relationships/webextension";
     private const string WebExtensionTaskpanesContentType = "application/vnd.ms-office.webextensiontaskpanes+xml";
     private const string WebExtensionContentType = "application/vnd.ms-office.webextension+xml";
+    private const string StylesWithEffectsRelType = "http://schemas.microsoft.com/office/2007/relationships/stylesWithEffects";
+    private const string StylesWithEffectsContentType = "application/vnd.ms-word.stylesWithEffects+xml";
 
     private static byte[] WriteBytes(TextDocument document)
     {
@@ -79,8 +81,8 @@ public class PreservedPartsRoundTripTests
     /// <summary>
     /// Hand-authors a minimal-but-valid docx package carrying: a body paragraph; a settings.xml with an
     /// unmodelled element (w:defaultTabStop) AND a FreeW-modelled toggle (w:autoHyphenation); a customXml item
-    /// (item1.xml + itemProps1.xml + customXml/_rels/item1.xml.rels); and a word/webSettings.xml — all wired up
-    /// through [Content_Types].xml and word/_rels/document.xml.rels exactly as Word emits them.
+    /// (item1.xml + itemProps1.xml + customXml/_rels/item1.xml.rels); a Word 2013+ stylesWithEffects part;
+    /// and a word/webSettings.xml — all wired up through [Content_Types].xml and word/_rels/document.xml.rels.
     /// </summary>
     private static byte[] AuthorPackage()
     {
@@ -104,6 +106,7 @@ public class PreservedPartsRoundTripTests
                   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
                   <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
                   <Override PartName="/word/webSettings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml"/>
+                  <Override PartName="/word/stylesWithEffects.xml" ContentType="application/vnd.ms-word.stylesWithEffects+xml"/>
                   <Override PartName="/customXml/itemProps1.xml" ContentType="application/vnd.openxmlformats-officedocument.customXmlProperties+xml"/>
                 </Types>
                 """);
@@ -123,6 +126,7 @@ public class PreservedPartsRoundTripTests
                   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
                   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings" Target="webSettings.xml"/>
                   <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../customXml/item1.xml"/>
+                  <Relationship Id="rId4" Type="http://schemas.microsoft.com/office/2007/relationships/stylesWithEffects" Target="stylesWithEffects.xml"/>
                 </Relationships>
                 """);
 
@@ -164,6 +168,14 @@ public class PreservedPartsRoundTripTests
                 <w:webSettings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
                   <w:optimizeForBrowser/>
                 </w:webSettings>
+                """);
+
+            Add("word/stylesWithEffects.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">
+                  <w:style w:type="paragraph" w:styleId="EffectHeading"><w:name w:val="Effect Heading"/><w:rPr><w14:glow w14:rad="12700"/></w:rPr></w:style>
+                </w:styles>
                 """);
 
             Add("customXml/item1.xml",
@@ -487,6 +499,33 @@ public class PreservedPartsRoundTripTests
             .Attribute(R + "id")!.Value.Should().Be("rIdAttachedTemplate");
         EntryBytes(twice, "word/_rels/settings.xml.rels")
             .Should().Equal(EntryBytes(rewritten, "word/_rels/settings.xml.rels"));
+    }
+
+    [Fact]
+    public void StylesWithEffectsPart_SurvivesWithDocumentRelationshipAndContentType()
+    {
+        var source = AuthorPackage();
+        var read = ReadDoc(source);
+
+        read.Preserved.Parts.Should().ContainSingle(part =>
+            part.PartName == "/word/stylesWithEffects.xml"
+            && part.RelationshipType == StylesWithEffectsRelType);
+
+        var rewritten = WriteBytes(read);
+        HasEntry(rewritten, "word/stylesWithEffects.xml").Should().BeTrue();
+        EntryBytes(rewritten, "word/stylesWithEffects.xml")
+            .Should().Equal(EntryBytes(source, "word/stylesWithEffects.xml"));
+
+        EntryXml(rewritten, "word/_rels/document.xml.rels").Root!.Elements(Rel + "Relationship").Should().Contain(element =>
+            element.Attribute("Type")!.Value == StylesWithEffectsRelType
+            && element.Attribute("Target")!.Value == "stylesWithEffects.xml");
+        EntryXml(rewritten, "[Content_Types].xml").Root!.Elements(Ct + "Override").Should().Contain(element =>
+            element.Attribute("PartName")!.Value == "/word/stylesWithEffects.xml"
+            && element.Attribute("ContentType")!.Value == StylesWithEffectsContentType);
+
+        var twice = WriteBytes(ReadDoc(rewritten));
+        EntryBytes(twice, "word/stylesWithEffects.xml")
+            .Should().Equal(EntryBytes(rewritten, "word/stylesWithEffects.xml"));
     }
 
     // --- customXml + webSettings: verbatim pass-through ---------------------------------------------

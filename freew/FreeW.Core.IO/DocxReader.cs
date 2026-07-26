@@ -295,6 +295,27 @@ public static class DocxReader
             Capture("/word/webSettings.xml",
                 docRelTypesByTarget.GetValueOrDefault("webSettings.xml") ?? WebSettingsRelType);
 
+        // Word 2013+ stores an additional stylesWithEffects part beside styles.xml. FreeW reads and writes its
+        // modeled style table from styles.xml, but must retain this supplemental effect payload and relationship
+        // so Word does not discard richer style rendering after a FreeW save.
+        foreach (var relationship in ReadDocumentRelationships(archive).Values)
+        {
+            if (relationship.Type != StylesWithEffectsRelType)
+                continue;
+
+            var partName = OpcPathHelper.ResolveAbsolutePartName("/word", relationship.Target);
+            if (partName is not null && CapturePreservedPart(
+                    archive,
+                    document,
+                    partName,
+                    overrides,
+                    contentTypeDefaults,
+                    relationship.Type))
+            {
+                CaptureReferencedParts(archive, document, partName, overrides, contentTypeDefaults);
+            }
+        }
+
         // w:settings itself is overlaid from OriginalSettings on write, but its local relationship graph is
         // not modelled. In particular, w:attachedTemplate/@r:id depends on settings.xml.rels. Preserve that
         // graph verbatim so a Word-attached template remains connected after FreeW saves the document.
