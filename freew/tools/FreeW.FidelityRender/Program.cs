@@ -633,7 +633,7 @@ static void RenderDocumentComposite(
                 double edgeInset = Math.Min(
                     PageLayout.PointsToDip(24),
                     Math.Min(thisPixW, thisPixH) / 4.0);
-                var borderWidth = Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0));
+                var borderWidth = Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint);
                 if (pb.LineStyle == BorderLineStyle.Double)
                 {
                     // Word's double page frame uses two narrower strokes separated by one full
