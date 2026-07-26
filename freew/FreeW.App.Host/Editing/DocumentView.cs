@@ -6002,9 +6002,9 @@ public sealed class DocumentView : RichTextBox
                 if (isPrimaryGlowBlueStress)
                 {
                     fillLayer.Width = canvas.ActualWidth + 8;
-                    fillLayer.Height = canvas.ActualHeight + 7;
+                    fillLayer.Height = canvas.ActualHeight + 10;
                     Canvas.SetLeft(fillLayer, -4);
-                    Canvas.SetTop(fillLayer, -1);
+                    Canvas.SetTop(fillLayer, -2);
                 }
                 else if (isImportedFreeWGlowBlue)
                 {
