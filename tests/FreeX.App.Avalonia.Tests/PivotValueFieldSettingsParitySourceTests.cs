@@ -6,6 +6,7 @@ public sealed class PivotValueFieldSettingsParitySourceTests
     public void AvaloniaValueFieldSettings_MatchesWpfClientGeometryAndControlMetrics()
     {
         var avalonia = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFieldSettings.cs"));
+        var visual = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "PivotValueFieldSettingsVisual.cs"));
         var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml"));
 
         wpf.Should().Contain("Width=\"430\"");
@@ -16,20 +17,30 @@ public sealed class PivotValueFieldSettingsParitySourceTests
         wpf.Should().Contain("Height=\"24\"");
 
         avalonia.Should().Contain("Background = Brushes.Transparent,");
-        avalonia.Should().Contain("Width = 414,");
-        avalonia.Should().Contain("Height = 391,");
-        avalonia.Should().Contain("Child = new Grid { Margin = new Thickness(14), Children = { bodyGrid } }");
+        avalonia.Should().Contain("Width = PivotValueFieldSettingsVisual.ClientWidth,");
+        avalonia.Should().Contain("Height = PivotValueFieldSettingsVisual.ClientHeight,");
+        avalonia.Should().Contain("Child = new Grid { Margin = new Thickness(PivotValueFieldSettingsVisual.OuterMargin), Children = { bodyGrid } }");
         avalonia.Should().Contain("SetWpfValueFieldTextBoxHeight(nameBox);");
+        avalonia.Should().Contain("PivotValueFieldSettingsVisual.ApplyTextBox(baseItemBox, PivotValueFieldSettingsVisual.ControlHeight);");
         avalonia.Should().Contain("SetWpfValueFieldButtonHeight(ok);");
         avalonia.Should().Contain("SetWpfValueFieldButtonHeight(cancel);");
-        avalonia.Should().Contain("textBox.Height = 18;");
-        avalonia.Should().Contain("button.Height = 20;");
+        avalonia.Should().Contain("SetWpfValueFieldButtonHeight(numberFormatButton);");
+        visual.Should().Contain("public const double TabContentMargin = 10;");
+        visual.Should().Contain("public const double ControlHeight = 24;");
+        visual.Should().Contain("public const double TextBoxHeight = 18;");
+        visual.Should().Contain("public const double ButtonHeight = 20;");
+        visual.Should().Contain("public const double ButtonWidth = 78;");
+        visual.Should().Contain("public const double NumberFormatButtonWidth = 128;");
         avalonia.Should().Contain("PivotDialogChromeStyle with { ControlHeight = 20 }");
-        avalonia.Should().Contain("new StackPanel { Spacing = 6, Margin = new Thickness(0) }");
+        CountOccurrences(avalonia, "Margin = new Thickness(PivotValueFieldSettingsVisual.TabContentMargin)").Should().Be(3);
+        CountOccurrences(avalonia, "Margin = new Thickness(0, 0, 0, PivotValueFieldSettingsVisual.LabelControlSpacing)").Should().Be(3);
+        avalonia.Should().NotContain("Spacing = 6, Margin = new Thickness(0)");
         avalonia.Should().Contain("HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch");
         avalonia.Should().Contain("new Thickness(0, 10, 0, 6)");
-        avalonia.Should().Contain("ApplyPivotButtonChrome(ok, 78, isDefault: true);");
-        avalonia.Should().Contain("ApplyPivotButtonChrome(cancel, 78);");
+        avalonia.Should().Contain("ApplyPivotButtonChrome(ok, PivotValueFieldSettingsVisual.ButtonWidth, isDefault: true);");
+        avalonia.Should().Contain("ApplyPivotButtonChrome(cancel, PivotValueFieldSettingsVisual.ButtonWidth);");
+        avalonia.Should().Contain("ApplyPivotButtonChrome(numberFormatButton, PivotValueFieldSettingsVisual.NumberFormatButtonWidth);");
+        avalonia.Should().Contain("AvaloniaCompactDialogChrome.ApplyClassicTabChrome(");
     }
 
     [Fact]
@@ -126,4 +137,7 @@ public sealed class PivotValueFieldSettingsParitySourceTests
 
         return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
     }
+
+    private static int CountOccurrences(string source, string value) =>
+        source.Split(value, StringSplitOptions.None).Length - 1;
 }
