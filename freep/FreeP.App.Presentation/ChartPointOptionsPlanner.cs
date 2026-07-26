@@ -13,6 +13,15 @@ public sealed record ChartPointOptionsSurfacePlan(
     string FillColorLabel,
     string StrokeColorLabel,
     string StrokeWidthLabel,
+    string PointDataLabelsLabel,
+    string ValueLabelsLabel,
+    string PercentLabelsLabel,
+    string CategoryLabelsLabel,
+    string SeriesLabelsLabel,
+    string LegendKeysLabel,
+    string LabelPositionLabel,
+    string NumberFormatLabel,
+    string SeparatorLabel,
     string MarkerLabel,
     string MarkerSizeLabel,
     string AutoHint,
@@ -32,13 +41,22 @@ public sealed class ChartPointOptionsPlanner
     public const string FillColorLabel = "Fill color (#RRGGBB)";
     public const string StrokeColorLabel = "Outline color (#RRGGBB)";
     public const string StrokeWidthLabel = "Outline width (pt)";
+    public const string PointDataLabelsLabel = "Use point data labels";
+    public const string ValueLabelsLabel = "Value labels";
+    public const string PercentLabelsLabel = "Percentage labels";
+    public const string CategoryLabelsLabel = "Category labels";
+    public const string SeriesLabelsLabel = "Series labels";
+    public const string LegendKeysLabel = "Legend keys";
+    public const string LabelPositionLabel = "Label position";
+    public const string NumberFormatLabel = "Number format";
+    public const string SeparatorLabel = "Separator";
     public const string MarkerLabel = "Marker";
     public const string MarkerSizeLabel = "Marker size (pt)";
     public const string AutoHint = "Blank colors and sizes preserve automatic point formatting.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
     public const double DefaultDialogWidth = 460;
-    public const double DefaultDialogHeight = 420;
+    public const double DefaultDialogHeight = 560;
 
     public static IReadOnlyList<ChartMarkerSymbolOption> MarkerOptions =>
         ChartSeriesOptionsPlanner.MarkerOptions;
@@ -50,6 +68,15 @@ public sealed class ChartPointOptionsPlanner
     private ShapeFill? _fill;
     private ThemeAwareColor? _strokeColor;
     private double? _strokeWidthPt;
+    private bool _usePointDataLabels;
+    private bool _showValueLabels;
+    private bool _showPercentLabels;
+    private bool _showCategoryLabels;
+    private bool _showSeriesLabels;
+    private bool _showLegendKeys;
+    private DataLabelPosition _labelPosition = DataLabelPosition.OutsideEnd;
+    private string _labelNumberFormat = string.Empty;
+    private string _labelSeparator = string.Empty;
     private ChartMarkerSymbol? _markerSymbol;
     private double? _markerSizePt;
 
@@ -67,6 +94,15 @@ public sealed class ChartPointOptionsPlanner
         FillColorLabel,
         StrokeColorLabel,
         StrokeWidthLabel,
+        PointDataLabelsLabel,
+        ValueLabelsLabel,
+        PercentLabelsLabel,
+        CategoryLabelsLabel,
+        SeriesLabelsLabel,
+        LegendKeysLabel,
+        LabelPositionLabel,
+        NumberFormatLabel,
+        SeparatorLabel,
         MarkerLabel,
         MarkerSizeLabel,
         AutoHint,
@@ -94,6 +130,15 @@ public sealed class ChartPointOptionsPlanner
     public string FillColorText => FormatColor(_fillColor);
     public string StrokeColorText => FormatColor(_strokeColor);
     public double? StrokeWidthPt => _strokeWidthPt;
+    public bool UsePointDataLabels => _usePointDataLabels;
+    public bool ShowValueLabels => _showValueLabels;
+    public bool ShowPercentLabels => _showPercentLabels;
+    public bool ShowCategoryLabels => _showCategoryLabels;
+    public bool ShowSeriesLabels => _showSeriesLabels;
+    public bool ShowLegendKeys => _showLegendKeys;
+    public DataLabelPosition LabelPosition => _labelPosition;
+    public string LabelNumberFormat => _labelNumberFormat;
+    public string LabelSeparator => _labelSeparator;
     public ChartMarkerSymbol? MarkerSymbol => _markerSymbol;
     public double? MarkerSizePt => _markerSizePt;
 
@@ -130,6 +175,15 @@ public sealed class ChartPointOptionsPlanner
     }
     public void SetStrokeColor(string? text) => _strokeColor = ParseColor(text, StrokeColorLabel);
     public void SetStrokeWidth(double? value) => _strokeWidthPt = value;
+    public void SetUsePointDataLabels(bool value) => _usePointDataLabels = value;
+    public void SetShowValueLabels(bool value) => _showValueLabels = value;
+    public void SetShowPercentLabels(bool value) => _showPercentLabels = value;
+    public void SetShowCategoryLabels(bool value) => _showCategoryLabels = value;
+    public void SetShowSeriesLabels(bool value) => _showSeriesLabels = value;
+    public void SetShowLegendKeys(bool value) => _showLegendKeys = value;
+    public void SetLabelPosition(DataLabelPosition value) => _labelPosition = value;
+    public void SetLabelNumberFormat(string? value) => _labelNumberFormat = value ?? string.Empty;
+    public void SetLabelSeparator(string? value) => _labelSeparator = value ?? string.Empty;
     public void SetMarkerSymbol(ChartMarkerSymbol? value) => _markerSymbol = value;
     public void SetMarkerSize(double? value) => _markerSizePt = value;
 
@@ -141,7 +195,20 @@ public sealed class ChartPointOptionsPlanner
         _strokeColor,
         _strokeWidthPt,
         _markerSymbol,
-        _markerSizePt);
+        _markerSizePt,
+        _usePointDataLabels
+            ? new ChartDataLabels
+            {
+                ShowValue = _showValueLabels,
+                ShowPercent = _showPercentLabels,
+                ShowCategoryName = _showCategoryLabels,
+                ShowSeriesName = _showSeriesLabels,
+                ShowLegendKey = _showLegendKeys,
+                Position = _labelPosition,
+                NumberFormat = string.IsNullOrWhiteSpace(_labelNumberFormat) ? null : _labelNumberFormat,
+                Separator = string.IsNullOrEmpty(_labelSeparator) ? null : _labelSeparator,
+            }
+            : null);
 
     public static ThemeAwareColor? ParseColor(string? text, string label)
     {
@@ -163,6 +230,15 @@ public sealed class ChartPointOptionsPlanner
         _fill = null;
         _strokeColor = null;
         _strokeWidthPt = null;
+        _usePointDataLabels = false;
+        _showValueLabels = false;
+        _showPercentLabels = false;
+        _showCategoryLabels = false;
+        _showSeriesLabels = false;
+        _showLegendKeys = false;
+        _labelPosition = DataLabelPosition.OutsideEnd;
+        _labelNumberFormat = string.Empty;
+        _labelSeparator = string.Empty;
         _markerSymbol = null;
         _markerSizePt = null;
 
@@ -178,6 +254,16 @@ public sealed class ChartPointOptionsPlanner
         _fill = style.Fill;
         _strokeColor = style.StrokeColor;
         _strokeWidthPt = style.StrokeWidthPt;
+        var labels = style.DataLabels;
+        _usePointDataLabels = labels is not null;
+        _showValueLabels = labels?.ShowValue == true;
+        _showPercentLabels = labels?.ShowPercent == true;
+        _showCategoryLabels = labels?.ShowCategoryName == true;
+        _showSeriesLabels = labels?.ShowSeriesName == true;
+        _showLegendKeys = labels?.ShowLegendKey == true;
+        _labelPosition = labels?.Position ?? DataLabelPosition.OutsideEnd;
+        _labelNumberFormat = labels?.NumberFormat ?? string.Empty;
+        _labelSeparator = labels?.Separator ?? string.Empty;
         _markerSymbol = style.Marker?.Symbol;
         _markerSizePt = style.Marker?.SizePt;
     }
