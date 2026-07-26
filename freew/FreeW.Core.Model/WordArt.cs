@@ -186,6 +186,30 @@ public sealed class WordArt
         FontSizePt = fontSizePt;
     }
 
+    /// <summary>
+    /// Creates an independent WordArt model for document merge. Its floating placement is mutable, so it is
+    /// cloned rather than shared with the source document.
+    /// </summary>
+    public WordArt Clone() => new()
+    {
+        Text = Text,
+        Style = Style,
+        FontSizePt = FontSizePt,
+        FontFamily = FontFamily,
+        Bold = Bold,
+        WidthPt = WidthPt,
+        HeightPt = HeightPt,
+        RotationAngle = RotationAngle,
+        FlipH = FlipH,
+        FlipV = FlipV,
+        AltText = AltText,
+        Placement = Placement?.Clone(),
+        Warp = Warp,
+        TextFitMode = TextFitMode,
+        NormalAutoFitFontScale = NormalAutoFitFontScale,
+        NormalAutoFitLineSpacingReduction = NormalAutoFitLineSpacingReduction
+    };
+
     /// <summary>Creates a WordArt with the given text, style preset and (optional) font size.</summary>
     public static WordArt Create(string text, WordArtStyle style = WordArtStyle.FillBlue, double fontSizePt = 36) =>
         new(text, style, fontSizePt);

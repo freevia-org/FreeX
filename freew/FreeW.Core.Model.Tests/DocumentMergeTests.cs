@@ -133,6 +133,65 @@ public class DocumentMergeTests
     }
 
     [Fact]
+    public void CloneBlocks_PreservesFloatingWordArt_WithoutSharingItsPlacement()
+    {
+        var wordArt = new WordArt("Merged WordArt", WordArtStyle.GlowGold, 32)
+        {
+            FontFamily = "Aptos Display",
+            Bold = true,
+            WidthPt = 220,
+            HeightPt = 48,
+            RotationAngle = 12,
+            FlipH = true,
+            AltText = "Decorative merged heading",
+            Warp = WordArtWarp.Wave2,
+            TextFitMode = WordArtTextFitMode.NormalAutoFit,
+            NormalAutoFitFontScale = 85000,
+            NormalAutoFitLineSpacingReduction = 12000,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalOffsetPt = 24,
+                VerticalOffsetPt = 18,
+                HorizontalAnchor = HorizontalAnchor.Margin,
+                VerticalAnchor = VerticalAnchor.Page,
+                ZOrderIndex = 5
+            }
+        };
+        var source = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromWordArt(wordArt));
+        source.Blocks.Add(paragraph);
+
+        var clone = DocumentMerge.CloneBlocks(source).Single().Should().BeOfType<Paragraph>().Subject.Runs.Single().WordArt!;
+
+        clone.Should().NotBeSameAs(wordArt);
+        clone.Text.Should().Be("Merged WordArt");
+        clone.Style.Should().Be(WordArtStyle.GlowGold);
+        clone.FontFamily.Should().Be("Aptos Display");
+        clone.Bold.Should().BeTrue();
+        clone.WidthPt.Should().Be(220);
+        clone.HeightPt.Should().Be(48);
+        clone.RotationAngle.Should().Be(12);
+        clone.FlipH.Should().BeTrue();
+        clone.AltText.Should().Be("Decorative merged heading");
+        clone.Warp.Should().Be(WordArtWarp.Wave2);
+        clone.TextFitMode.Should().Be(WordArtTextFitMode.NormalAutoFit);
+        clone.NormalAutoFitFontScale.Should().Be(85000);
+        clone.NormalAutoFitLineSpacingReduction.Should().Be(12000);
+        clone.Placement.Should().NotBeSameAs(wordArt.Placement);
+        clone.Placement!.Wrapping.Should().Be(ImageWrapping.InFront);
+        clone.Placement.HorizontalOffsetPt.Should().Be(24);
+        clone.Placement.VerticalOffsetPt.Should().Be(18);
+        clone.Placement.HorizontalAnchor.Should().Be(HorizontalAnchor.Margin);
+        clone.Placement.VerticalAnchor.Should().Be(VerticalAnchor.Page);
+        clone.Placement.ZOrderIndex.Should().Be(5);
+
+        clone.Placement.HorizontalOffsetPt = 0;
+        wordArt.Placement!.HorizontalOffsetPt.Should().Be(24);
+    }
+
+    [Fact]
     public void Merge_AppendsSourceBlocks_WithTextIntact_AndSourceUnchanged()
     {
         var target = new TextDocument();
