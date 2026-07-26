@@ -687,15 +687,10 @@ public static class SlideShowHostPlanner
                 continue;
             }
 
-            foreach (var para in shape.TextBody.Paragraphs)
+            var textResult = SlideShowTextHyperlinkHitTestPlanner.HitTest(shape, slidePoint);
+            if (textResult is not null)
             {
-                foreach (var run in para.Runs)
-                {
-                    if (run.Hyperlink is not null)
-                    {
-                        return run.Hyperlink;
-                    }
-                }
+                return textResult;
             }
         }
 
