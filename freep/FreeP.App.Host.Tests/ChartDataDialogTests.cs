@@ -193,7 +193,8 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var (sess, _) = MakeSession();
         var dialog = new ChartPointOptionsDialog(sess);
-        dialog.SetOptionsForTests(1, 2, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7);
+        dialog.SetOptionsForTests(1, 2, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7,
+            true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ");
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -204,6 +205,11 @@ public sealed class ChartDataDialogTests : IDisposable
         options.StrokeWidthPt.Should().Be(1.5);
         options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
         options.MarkerSizePt.Should().Be(7);
+        options.DataLabels.Should().NotBeNull();
+        options.DataLabels!.ShowValue.Should().BeTrue();
+        options.DataLabels.ShowCategoryName.Should().BeTrue();
+        options.DataLabels.ShowLegendKey.Should().BeTrue();
+        options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
     }
 
     [StaFact]

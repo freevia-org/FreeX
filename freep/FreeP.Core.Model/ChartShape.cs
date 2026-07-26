@@ -170,6 +170,9 @@ public enum DataLabelPosition
 /// </summary>
 public sealed class ChartDataLabels
 {
+    /// <summary>Optional explicit delete token for a native point-label override.</summary>
+    public bool? Delete { get; set; }
+
     /// <summary>Show the numeric value of the data point.</summary>
     public bool ShowValue { get; set; }
 
@@ -198,7 +201,7 @@ public sealed class ChartDataLabels
     public ChartTextStyle? TextStyle { get; set; }
 
     /// <summary>Returns true if any label component is enabled.</summary>
-    public bool HasAny => ShowValue || ShowPercent || ShowCategoryName || ShowSeriesName || ShowLegendKey;
+    public bool HasAny => Delete.HasValue || ShowValue || ShowPercent || ShowCategoryName || ShowSeriesName || ShowLegendKey;
 }
 
 /// <summary>Data table settings for charts that render source values below the plot.</summary>
@@ -299,6 +302,9 @@ public sealed class ChartMarkerStyle
 /// <summary>Point-level authored chart style override, keyed by zero-based point index.</summary>
 public sealed class ChartPointStyle
 {
+    /// <summary>Optional data-label override for this individual point.</summary>
+    public ChartDataLabels? DataLabels { get; set; }
+
     /// <summary>Point fill color. Null means inherit from the series marker/series fill.</summary>
     public ThemeAwareColor? FillColor { get; set; }
 

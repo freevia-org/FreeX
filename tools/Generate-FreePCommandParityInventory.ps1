@@ -494,7 +494,30 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/ChartDataDialogTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Series-scoped value, percentage, category, series-name, legend-key, position, format, and separator controls now round-trip through c:dLbls and one undoable edit in both hosts. Per-point label overrides, full PowerPoint label text styling, and PowerPoint-authoritative chart visual baselines remain deferred."),
+            RemainingWork: "Series-scoped value, percentage, category, series-name, legend-key, position, format, and separator controls now round-trip through c:dLbls and one undoable edit in both hosts. Per-point label text styling, full PowerPoint label text styling, and PowerPoint-authoritative chart visual baselines remain deferred."),
+        new(
+            EvidenceId: "freep.chart.point-data-labels",
+            Area: "Chart per-point data-label authoring",
+            Status: "shared-model-and-host-evidence",
+            HostCoverage: "WPF/Avalonia consume one shared ChartPointOptions planner and undo command for point-scoped c:dLbl overrides; no renderer-local chart-label policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-point-data-labels-20260726.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.Model/ChartShape.cs",
+                "freep/FreeP.Core.Model/ChartPointOptions.cs",
+                "freep/FreeP.Core.Model/PresentationCommands.ChartPointOptions.cs",
+                "freep/FreeP.App.Presentation/ChartPointOptionsPlanner.cs",
+                "freep/FreeP.Core.IO/PptxChartReader.cs",
+                "freep/FreeP.Core.IO/PptxChartWriter.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartDataDialogPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartDataCommandTests.cs",
+                "freep/FreeP.App.Host.Tests/ChartDataDialogTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "Selected-point value, percentage, category, series-name, legend-key, position, format, separator, and delete overrides now round-trip through c:dLbl entries and one undoable edit in both hosts. Per-point label text styling and PowerPoint-authoritative chart visual baselines remain deferred."),
         new(
             EvidenceId: "freep.chart.bubble-sizing-semantics",
             Area: "Chart bubble authored sizing semantics",

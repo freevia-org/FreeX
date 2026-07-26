@@ -1502,7 +1502,16 @@ public sealed class ChartDataCommandTests
                 null,
                 2.25,
                 ChartMarkerSymbol.Diamond,
-                8)));
+                8,
+                new ChartDataLabels
+                {
+                    ShowValue = true,
+                    ShowCategoryName = true,
+                    ShowLegendKey = true,
+                    Position = DataLabelPosition.InsideEnd,
+                    NumberFormat = "0.0%",
+                    Separator = " | ",
+                })));
 
         var style = chart.Series[0].PointStyles[1];
         chart.Series[0].PointColors[1].Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
@@ -1511,6 +1520,11 @@ public sealed class ChartDataCommandTests
         style.StrokeWidthPt.Should().Be(2.25);
         style.Marker!.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
         style.Marker.SizePt.Should().Be(8);
+        style.DataLabels.Should().NotBeNull();
+        style.DataLabels!.ShowValue.Should().BeTrue();
+        style.DataLabels.ShowCategoryName.Should().BeTrue();
+        style.DataLabels.ShowLegendKey.Should().BeTrue();
+        style.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
 
         using var stream = new MemoryStream();
         PptxPackageWriter.Write(p, stream);
@@ -1521,12 +1535,21 @@ public sealed class ChartDataCommandTests
         roundTrippedSeries.PointStyles[1].FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
         roundTrippedSeries.PointStyles[1].StrokeWidthPt.Should().Be(2.25);
         roundTrippedSeries.PointStyles[1].Marker!.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
+        var roundTrippedLabels = roundTrippedSeries.PointStyles[1].DataLabels;
+        roundTrippedLabels.Should().NotBeNull();
+        roundTrippedLabels!.ShowValue.Should().BeTrue();
+        roundTrippedLabels.ShowCategoryName.Should().BeTrue();
+        roundTrippedLabels.ShowLegendKey.Should().BeTrue();
+        roundTrippedLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
+        roundTrippedLabels.NumberFormat.Should().Be("0.0%");
+        roundTrippedLabels.Separator.Should().Be(" | ");
 
         bus.Undo();
         chart.Series[0].PointColors[1].Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
         chart.Series[0].PointStyles[1].StrokeColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x808080));
         chart.Series[0].PointStyles[1].StrokeWidthPt.Should().Be(0.75);
         chart.Series[0].PointStyles[1].Marker!.Symbol.Should().Be(ChartMarkerSymbol.Circle);
+        chart.Series[0].PointStyles[1].DataLabels.Should().BeNull();
     }
 
     [Fact]

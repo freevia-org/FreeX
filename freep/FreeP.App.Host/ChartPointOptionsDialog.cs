@@ -16,6 +16,15 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     private readonly TextBox _fillColorBox;
     private readonly TextBox _strokeColorBox;
     private readonly TextBox _strokeWidthBox;
+    private readonly CheckBox _usePointDataLabelsCheck;
+    private readonly CheckBox _showValueLabelsCheck;
+    private readonly CheckBox _showPercentLabelsCheck;
+    private readonly CheckBox _showCategoryLabelsCheck;
+    private readonly CheckBox _showSeriesLabelsCheck;
+    private readonly CheckBox _showLegendKeysCheck;
+    private readonly ComboBox _labelPositionCombo;
+    private readonly TextBox _labelNumberFormatBox;
+    private readonly TextBox _labelSeparatorBox;
     private readonly ComboBox _markerCombo;
     private readonly TextBox _markerSizeBox;
 
@@ -62,6 +71,20 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _fillColorBox = new TextBox { MinWidth = 140 };
         _strokeColorBox = new TextBox { MinWidth = 140 };
         _strokeWidthBox = new TextBox { MinWidth = 120 };
+        _usePointDataLabelsCheck = new CheckBox { Content = surface.PointDataLabelsLabel };
+        _showValueLabelsCheck = new CheckBox { Content = surface.ValueLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _showPercentLabelsCheck = new CheckBox { Content = surface.PercentLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _showCategoryLabelsCheck = new CheckBox { Content = surface.CategoryLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _showSeriesLabelsCheck = new CheckBox { Content = surface.SeriesLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _showLegendKeysCheck = new CheckBox { Content = surface.LegendKeysLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _labelPositionCombo = new ComboBox
+        {
+            ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions,
+            DisplayMemberPath = nameof(ChartDisplayLabelPositionOption.Label),
+            MinWidth = 150,
+        };
+        _labelNumberFormatBox = new TextBox { MinWidth = 140 };
+        _labelSeparatorBox = new TextBox { MinWidth = 140 };
         _markerCombo = new ComboBox
         {
             ItemsSource = ChartPointOptionsPlanner.MarkerOptions,
@@ -91,6 +114,15 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         content.Children.Add(MakeRow(surface.FillColorLabel, _fillColorBox));
         content.Children.Add(MakeRow(surface.StrokeColorLabel, _strokeColorBox));
         content.Children.Add(MakeRow(surface.StrokeWidthLabel, _strokeWidthBox));
+        content.Children.Add(_usePointDataLabelsCheck);
+        content.Children.Add(_showValueLabelsCheck);
+        content.Children.Add(_showPercentLabelsCheck);
+        content.Children.Add(_showCategoryLabelsCheck);
+        content.Children.Add(_showSeriesLabelsCheck);
+        content.Children.Add(_showLegendKeysCheck);
+        content.Children.Add(MakeRow(surface.LabelPositionLabel, _labelPositionCombo));
+        content.Children.Add(MakeRow(surface.NumberFormatLabel, _labelNumberFormatBox));
+        content.Children.Add(MakeRow(surface.SeparatorLabel, _labelSeparatorBox));
         content.Children.Add(MakeRow(surface.MarkerLabel, _markerCombo));
         content.Children.Add(MakeRow(surface.MarkerSizeLabel, _markerSizeBox));
         content.Children.Add(new TextBlock { Text = surface.AutoHint, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
@@ -111,7 +143,16 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         string? strokeColor,
         double? strokeWidthPt,
         ChartMarkerSymbol? markerSymbol,
-        double? markerSizePt)
+        double? markerSizePt,
+        bool usePointDataLabels = false,
+        bool showValueLabels = false,
+        bool showPercentLabels = false,
+        bool showCategoryLabels = false,
+        bool showSeriesLabels = false,
+        bool showLegendKeys = false,
+        DataLabelPosition labelPosition = DataLabelPosition.OutsideEnd,
+        string? labelNumberFormat = null,
+        string? labelSeparator = null)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         RefreshPoints();
@@ -119,6 +160,15 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _fillColorBox.Text = fillColor ?? string.Empty;
         _strokeColorBox.Text = strokeColor ?? string.Empty;
         _strokeWidthBox.Text = Format(strokeWidthPt);
+        _usePointDataLabelsCheck.IsChecked = usePointDataLabels;
+        _showValueLabelsCheck.IsChecked = showValueLabels;
+        _showPercentLabelsCheck.IsChecked = showPercentLabels;
+        _showCategoryLabelsCheck.IsChecked = showCategoryLabels;
+        _showSeriesLabelsCheck.IsChecked = showSeriesLabels;
+        _showLegendKeysCheck.IsChecked = showLegendKeys;
+        _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
+        _labelNumberFormatBox.Text = labelNumberFormat ?? string.Empty;
+        _labelSeparatorBox.Text = labelSeparator ?? string.Empty;
         _markerCombo.SelectedIndex = FindMarkerIndex(markerSymbol);
         _markerSizeBox.Text = Format(markerSizePt);
     }
@@ -147,6 +197,15 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _fillColorBox.Text = _planner.FillColorText;
         _strokeColorBox.Text = _planner.StrokeColorText;
         _strokeWidthBox.Text = Format(_planner.StrokeWidthPt);
+        _usePointDataLabelsCheck.IsChecked = _planner.UsePointDataLabels;
+        _showValueLabelsCheck.IsChecked = _planner.ShowValueLabels;
+        _showPercentLabelsCheck.IsChecked = _planner.ShowPercentLabels;
+        _showCategoryLabelsCheck.IsChecked = _planner.ShowCategoryLabels;
+        _showSeriesLabelsCheck.IsChecked = _planner.ShowSeriesLabels;
+        _showLegendKeysCheck.IsChecked = _planner.ShowLegendKeys;
+        _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(_planner.LabelPosition);
+        _labelNumberFormatBox.Text = _planner.LabelNumberFormat;
+        _labelSeparatorBox.Text = _planner.LabelSeparator;
         _markerCombo.SelectedIndex = FindMarkerIndex(_planner.MarkerSymbol);
         _markerSizeBox.Text = Format(_planner.MarkerSizePt);
     }
@@ -156,6 +215,16 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _planner.SetFillColor(_fillColorBox.Text);
         _planner.SetStrokeColor(_strokeColorBox.Text);
         _planner.SetStrokeWidth(ParseOptional(_strokeWidthBox.Text, "Outline width"));
+        _planner.SetUsePointDataLabels(_usePointDataLabelsCheck.IsChecked == true);
+        _planner.SetShowValueLabels(_showValueLabelsCheck.IsChecked == true);
+        _planner.SetShowPercentLabels(_showPercentLabelsCheck.IsChecked == true);
+        _planner.SetShowCategoryLabels(_showCategoryLabelsCheck.IsChecked == true);
+        _planner.SetShowSeriesLabels(_showSeriesLabelsCheck.IsChecked == true);
+        _planner.SetShowLegendKeys(_showLegendKeysCheck.IsChecked == true);
+        if (_labelPositionCombo.SelectedItem is ChartDisplayLabelPositionOption position)
+            _planner.SetLabelPosition(position.Value);
+        _planner.SetLabelNumberFormat(_labelNumberFormatBox.Text);
+        _planner.SetLabelSeparator(_labelSeparatorBox.Text);
         var marker = _markerCombo.SelectedItem as ChartMarkerSymbolOption;
         _planner.SetMarkerSymbol(marker is null || marker.Value == ChartMarkerSymbol.Auto ? null : marker.Value);
         _planner.SetMarkerSize(ParseOptional(_markerSizeBox.Text, "Marker size"));
@@ -180,6 +249,11 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
             .Select((option, index) => (option, index))
             .FirstOrDefault(item => item.option.Value == value).index);
     }
+
+    private static int FindLabelPositionIndex(DataLabelPosition position) =>
+        Math.Max(0, ChartDisplayOptionsPlanner.LabelPositionOptions
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == position).index);
 
     private static StackPanel MakeRow(string label, Control control)
     {

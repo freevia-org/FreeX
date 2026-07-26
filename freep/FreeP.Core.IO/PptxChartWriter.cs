@@ -541,14 +541,35 @@ internal static class PptxChartWriter
     // CA2+CA3: Build dLbls in CT_DLbls schema order and gate dLblPos by chart type.
     // CT_DLbls order: numFmt, spPr, txPr, dLblPos, showLegendKey, showVal,
     //                 showCatName, showSerName, showPercent, showBubbleSize, separator.
-    private static XElement? BuildDataLabelsEl(ChartDataLabels? labels,
-        ChartType chartType = ChartType.ColumnClustered)
+    private static XElement? BuildDataLabelsEl(
+        ChartDataLabels? labels,
+        ChartType chartType = ChartType.ColumnClustered,
+        IReadOnlyDictionary<int, ChartDataLabels>? pointLabels = null)
     {
-        if (labels is null || !labels.HasAny) return null;
+        if ((labels is null || !labels.HasAny) && (pointLabels is null || pointLabels.Count == 0))
+            return null;
 
         var el = new XElement(C + "dLbls");
 
+        if (labels is null || !labels.HasAny)
+        {
+            foreach (var pair in pointLabels!.OrderBy(pair => pair.Key))
+            {
+                var pointPayload = BuildDataLabelsEl(pair.Value, chartType);
+                if (pointPayload is null)
+                    continue;
+
+                el.Add(new XElement(C + "dLbl",
+                    new XElement(C + "idx", new XAttribute("val", pair.Key)),
+                    pointPayload.Elements().Select(element => new XElement(element))));
+            }
+            return el;
+        }
+
         // CA2: numFmt FIRST (before dLblPos and show* flags).
+        if (labels.Delete is { } deleted)
+            el.Add(new XElement(C + "delete", new XAttribute("val", BoolValue(deleted))));
+
         if (!string.IsNullOrEmpty(labels.NumberFormat))
             el.Add(new XElement(C + "numFmt",
                 new XAttribute("formatCode", labels.NumberFormat),
@@ -595,6 +616,20 @@ internal static class PptxChartWriter
             el.Add(new XElement(C + "showPercent", new XAttribute("val", "1")));
         if (labels.Separator is not null)
             el.Add(new XElement(C + "separator", labels.Separator));
+
+        if (pointLabels is not null)
+        {
+            foreach (var pair in pointLabels.OrderBy(pair => pair.Key))
+            {
+                var pointPayload = BuildDataLabelsEl(pair.Value, chartType);
+                if (pointPayload is null)
+                    continue;
+
+                el.Add(new XElement(C + "dLbl",
+                    new XElement(C + "idx", new XAttribute("val", pair.Key)),
+                    pointPayload.Elements().Select(element => new XElement(element))));
+            }
+        }
 
         return el;
     }
@@ -892,7 +927,7 @@ internal static class PptxChartWriter
         AddPointStyleElements(el, series);
 
         // Per-series data labels
-        var serDlblsEl2 = BuildDataLabelsEl(series.DataLabels, chart.ChartType);
+        var serDlblsEl2 = BuildDataLabelsEl(series.DataLabels, chart.ChartType, PointDataLabels(series));
         if (serDlblsEl2 is not null) el.Add(serDlblsEl2);
 
         // X values (c:xVal)
@@ -995,7 +1030,7 @@ internal static class PptxChartWriter
         AddPointStyleElements(el, series);
 
         // Per-series data labels
-        var serDlblsEl = BuildDataLabelsEl(series.DataLabels, chart.ChartType);
+        var serDlblsEl = BuildDataLabelsEl(series.DataLabels, chart.ChartType, PointDataLabels(series));
         if (serDlblsEl is not null) el.Add(serDlblsEl);
 
         // Categories
@@ -1151,6 +1186,14 @@ internal static class PptxChartWriter
             if (dPt.Elements().Skip(1).Any())
                 seriesEl.Add(dPt);
         }
+    }
+
+    private static IReadOnlyDictionary<int, ChartDataLabels>? PointDataLabels(ChartSeries series)
+    {
+        var labels = series.PointStyles
+            .Where(pair => pair.Value.DataLabels is not null)
+            .ToDictionary(pair => pair.Key, pair => pair.Value.DataLabels!);
+        return labels.Count == 0 ? null : labels;
     }
 
     private static XElement? BuildPointShapePropertiesEl(ThemeAwareColor? pointColor, ChartPointStyle? style)

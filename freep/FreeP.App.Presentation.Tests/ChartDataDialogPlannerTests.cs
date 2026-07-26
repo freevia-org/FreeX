@@ -523,6 +523,13 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetStrokeWidth(1.5);
         planner.SetMarkerSymbol(ChartMarkerSymbol.Diamond);
         planner.SetMarkerSize(7);
+        planner.SetUsePointDataLabels(true);
+        planner.SetShowValueLabels(true);
+        planner.SetShowCategoryLabels(true);
+        planner.SetShowLegendKeys(true);
+        planner.SetLabelPosition(DataLabelPosition.InsideEnd);
+        planner.SetLabelNumberFormat("0.0%");
+        planner.SetLabelSeparator(" | ");
 
         var options = planner.BuildCommitPlan();
         options.SeriesIndex.Should().Be(1);
@@ -532,6 +539,13 @@ public sealed class ChartDataDialogPlannerTests
         options.StrokeWidthPt.Should().Be(1.5);
         options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
         options.MarkerSizePt.Should().Be(7);
+        options.DataLabels.Should().NotBeNull();
+        options.DataLabels!.ShowValue.Should().BeTrue();
+        options.DataLabels.ShowCategoryName.Should().BeTrue();
+        options.DataLabels.ShowLegendKey.Should().BeTrue();
+        options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
+        options.DataLabels.NumberFormat.Should().Be("0.0%");
+        options.DataLabels.Separator.Should().Be(" | ");
         planner.PointOptions.Select(option => option.Label).Should().Equal("1: Q1", "2: Q2", "3: Q3");
         chart.Series[1].PointColors[1].Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
         ChartPointOptionsPlanner.BuildSurfacePlan().CommandId.Should().Be(ChartPointOptionsPlanner.CommandId);

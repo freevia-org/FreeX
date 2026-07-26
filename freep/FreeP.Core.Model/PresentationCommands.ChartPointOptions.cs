@@ -41,6 +41,7 @@ public sealed class SetChartPointOptionsCommand : IPresentationCommand
         style.Fill = _newOptions.Fill;
         style.StrokeColor = _newOptions.StrokeColor;
         style.StrokeWidthPt = _newOptions.StrokeWidthPt;
+        style.DataLabels = CloneDataLabels(_newOptions.DataLabels);
 
         var symbol = _newOptions.MarkerSymbol;
         if (symbol is not null || _newOptions.MarkerSizePt is not null)
@@ -90,12 +91,14 @@ public sealed class SetChartPointOptionsCommand : IPresentationCommand
         style.Fill is not null ||
         style.StrokeColor is not null ||
         style.StrokeWidthPt is not null ||
+        style.DataLabels is not null ||
         style.Marker is not null;
 
     private static ChartPointStyle? ClonePointStyle(ChartPointStyle? source) => source is null
         ? null
         : new ChartPointStyle
         {
+            DataLabels = CloneDataLabels(source.DataLabels),
             FillColor = source.FillColor,
             Fill = source.Fill,
             StrokeColor = source.StrokeColor,
@@ -115,5 +118,31 @@ public sealed class SetChartPointOptionsCommand : IPresentationCommand
             StrokeWidthPt = source.StrokeWidthPt,
             NoFill = source.NoFill,
             NoStroke = source.NoStroke,
+        };
+
+    private static ChartDataLabels? CloneDataLabels(ChartDataLabels? source) => source is null
+        ? null
+        : new ChartDataLabels
+        {
+            Delete = source.Delete,
+            ShowValue = source.ShowValue,
+            ShowPercent = source.ShowPercent,
+            ShowCategoryName = source.ShowCategoryName,
+            ShowSeriesName = source.ShowSeriesName,
+            ShowLegendKey = source.ShowLegendKey,
+            Position = source.Position,
+            NumberFormat = source.NumberFormat,
+            Separator = source.Separator,
+            TextStyle = source.TextStyle is null
+                ? null
+                : new ChartTextStyle
+                {
+                    IsImplicitDefault = source.TextStyle.IsImplicitDefault,
+                    FontSizePt = source.TextStyle.FontSizePt,
+                    Bold = source.TextStyle.Bold,
+                    Italic = source.TextStyle.Italic,
+                    Color = source.TextStyle.Color,
+                    FontFamily = source.TextStyle.FontFamily,
+                },
         };
 }
