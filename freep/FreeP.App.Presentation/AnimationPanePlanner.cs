@@ -1547,6 +1547,12 @@ public static class AnimationPanePlanner
                     yield return option;
                 break;
 
+            case AnimationPreset.Spiral:
+            case AnimationPreset.Swivel:
+                foreach (var option in InOutOptions())
+                    yield return option;
+                break;
+
             case AnimationPreset.Peek:
             case AnimationPreset.Crawl:
             case AnimationPreset.Bounce:

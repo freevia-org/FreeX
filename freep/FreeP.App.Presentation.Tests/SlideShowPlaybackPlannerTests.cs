@@ -1618,6 +1618,18 @@ public sealed class SlideShowPlaybackPlannerTests
         spiral.RotationDegrees.Should().Be(360);
         spiral.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
 
+        var spiralOut = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 251,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Spiral,
+                Direction = AnimationDirection.Out
+            },
+            startDelayMs: 0);
+
+        spiralOut.RotationDegrees.Should().Be(-360);
+
         var swivelExit = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
@@ -1629,6 +1641,18 @@ public sealed class SlideShowPlaybackPlannerTests
 
         swivelExit.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Swivel);
         swivelExit.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var swivelOut = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 261,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Swivel,
+                Direction = AnimationDirection.Out
+            },
+            startDelayMs: 0);
+
+        swivelOut.RotationDegrees.Should().Be(-360);
 
         var bounce = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
