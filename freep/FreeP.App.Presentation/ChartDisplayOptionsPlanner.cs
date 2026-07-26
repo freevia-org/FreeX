@@ -28,6 +28,7 @@ public sealed record ChartDisplayOptionsSurfacePlan(
     string DisplayBlanksAsLabel,
     string ShowDataLabelsOverMaximumLabel,
     string VaryColorsLabel,
+    string LegendOverlayLabel,
     string PlotHint,
     string OkLabel,
     string CancelLabel);
@@ -57,6 +58,7 @@ public sealed class ChartDisplayOptionsPlanner
     public const string DisplayBlanksAsLabel = "Show empty cells as";
     public const string ShowDataLabelsOverMaximumLabel = "Show labels over maximum";
     public const string VaryColorsLabel = "Vary colors by point";
+    public const string LegendOverlayLabel = "Overlay legend";
     public const string PlotHint = "Bar gap width accepts 0-500; overlap accepts -100 to 100. Blank uses the chart default.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
@@ -102,6 +104,7 @@ public sealed class ChartDisplayOptionsPlanner
     private ChartDisplayBlanksAs? _displayBlanksAs;
     private bool? _showDataLabelsOverMaximum;
     private bool _varyColors;
+    private bool? _legendOverlay;
 
     private ChartDisplayOptionsPlanner(ChartShape chart)
     {
@@ -122,6 +125,7 @@ public sealed class ChartDisplayOptionsPlanner
         _displayBlanksAs = chart.DisplayBlanksAs;
         _showDataLabelsOverMaximum = chart.ShowDataLabelsOverMaximum;
         _varyColors = chart.VaryColors;
+        _legendOverlay = chart.LegendOverlay;
     }
 
     public static ChartDisplayOptionsSurfacePlan BuildSurfacePlan() =>
@@ -145,6 +149,7 @@ public sealed class ChartDisplayOptionsPlanner
             DisplayBlanksAsLabel,
             ShowDataLabelsOverMaximumLabel,
             VaryColorsLabel,
+            LegendOverlayLabel,
             PlotHint,
             OkLabel,
             CancelLabel);
@@ -172,6 +177,7 @@ public sealed class ChartDisplayOptionsPlanner
     public ChartDisplayBlanksAs? DisplayBlanksAs => _displayBlanksAs;
     public bool? ShowDataLabelsOverMaximum => _showDataLabelsOverMaximum;
     public bool VaryColors => _varyColors;
+    public bool? LegendOverlay => _legendOverlay;
 
     public static IReadOnlyList<ChartDisplayBlanksOption> DisplayBlanksOptions { get; } =
     [
@@ -198,6 +204,7 @@ public sealed class ChartDisplayOptionsPlanner
     public void SetDisplayBlanksAs(ChartDisplayBlanksAs? value) => _displayBlanksAs = value;
     public void SetShowDataLabelsOverMaximum(bool? value) => _showDataLabelsOverMaximum = value;
     public void SetVaryColors(bool value) => _varyColors = value;
+    public void SetLegendOverlay(bool? value) => _legendOverlay = value;
 
     public ChartDisplayOptions BuildCommitPlan() => new(
         string.IsNullOrWhiteSpace(_title) ? null : _title,
@@ -216,7 +223,8 @@ public sealed class ChartDisplayOptionsPlanner
         _barOverlapPercent,
         _displayBlanksAs,
         _showDataLabelsOverMaximum,
-        _varyColors);
+        _varyColors,
+        _legendOverlay);
 
     private static int? Normalize(int? value, int minimum, int maximum) =>
         value is null ? null : Math.Clamp(value.Value, minimum, maximum);

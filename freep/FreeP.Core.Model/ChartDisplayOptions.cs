@@ -21,4 +21,5 @@ public sealed record ChartDisplayOptions(
     int? BarOverlapPercent = null,
     ChartDisplayBlanksAs? DisplayBlanksAs = null,
     bool? ShowDataLabelsOverMaximum = null,
-    bool? VaryColors = null);
+    bool? VaryColors = null,
+    bool? LegendOverlay = null);
