@@ -238,6 +238,15 @@ public static class PptxPackageWriter
 
             foreach (var shape in AllShapes(slide.Shapes))
             {
+                if (shape.Kind == SlideShapeKind.SmartArt && shape.SmartArt is { } smartArt)
+                {
+                    foreach (var part in smartArt.Parts.Values)
+                    {
+                        if (part.Bytes.Length > 0 && part.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                            mediaExtensions.Add(OpcMediaTypes.GetDrawingMediaExtension(part.ContentType));
+                    }
+                }
+
                 if ((shape.Kind == SlideShapeKind.Picture || shape.Kind == SlideShapeKind.Media)
                     && shape.Picture?.Bytes is { Length: > 0 })
                 {

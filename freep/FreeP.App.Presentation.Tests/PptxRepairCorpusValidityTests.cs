@@ -103,6 +103,33 @@ public sealed class PptxRepairCorpusValidityTests
     }
 
     [Fact]
+    public void PictureCaptionListInsertion_RoundTripsWithSchemaValidMediaParts()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var picture = SlideObjectInsertionPlanner.CreatePicturePayload(
+            Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="),
+            "sample.png");
+
+        SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.SmartArtLayoutCommandId(SmartArtLayoutPreset.PictureCaptionList),
+            smartArtPicturePayload: SlideObjectInsertionPlanner.CreateSmartArtPicturePayload([picture]))
+            .Should().NotBeNull();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        ValidateSlideSchema(stream.ToArray()).Should().BeEmpty();
+
+        stream.Position = 0;
+        var reopened = PptxPackageReader.Read(stream);
+        var smart = reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        smart.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        smart.Data.Nodes[0].Picture!.Bytes.Should().Equal(picture.Bytes);
+    }
+
+    [Fact]
     public void SmartArtLiveCorpus_PreservesChordPresetAdjustments()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");

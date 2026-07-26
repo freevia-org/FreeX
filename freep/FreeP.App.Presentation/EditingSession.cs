@@ -1615,7 +1615,9 @@ public sealed class EditingSession
 
     // ── Hyperlinks ────────────────────────────────────────────────────────────────
 
-    public SlideShape InsertSmartArt(SmartArtLayoutPreset layout = SmartArtLayoutPreset.BasicProcess)
+    public SlideShape InsertSmartArt(
+        SmartArtLayoutPreset layout = SmartArtLayoutPreset.BasicProcess,
+        IReadOnlyList<SlideObjectPicturePayload>? picturePayloads = null)
     {
         if (!SlideObjectInsertionPlanner.InsertableSmartArtLayouts.Contains(layout))
             throw new ArgumentOutOfRangeException(nameof(layout), layout, "The requested SmartArt layout is not available for insertion.");
@@ -1624,7 +1626,8 @@ public sealed class EditingSession
         var smartArt = SmartArtInsertionFactory.Create(
             layout,
             NextSmartArtPartIndex(),
-            ["Step 1", "Step 2", "Step 3"]);
+            ["Step 1", "Step 2", "Step 3"],
+            picturePayloads);
         var shape = new SlideShape
         {
             Id = NextShapeId(),

@@ -211,13 +211,88 @@ public sealed class SlideObjectInsertionPlannerTests
                 ? SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId
                 : SlideObjectInsertionPlanner.SmartArtLayoutCommandId(preset);
 
-            var added = SlideObjectInsertionPlanner.ApplyCommand(editor, commandId);
+            var added = SlideObjectInsertionPlanner.ApplyCommand(
+                editor,
+                commandId,
+                smartArtPicturePayload: preset == SmartArtLayoutPreset.PictureCaptionList
+                    ? SlideObjectInsertionPlanner.CreateSmartArtPicturePayload(
+                        [SlideObjectInsertionPlanner.CreatePicturePayload([1, 2, 3], "sample.png")])
+                    : null);
 
             added.Should().NotBeNull(preset.ToString());
             added!.Kind.Should().Be(SlideShapeKind.SmartArt);
             added.SmartArt!.Data!.Family.Should().NotBe(SmartArtFamily.Unknown, preset.ToString());
             added.SmartArt.Data.LayoutUniqueId.Should().Contain("/layout/", preset.ToString());
         }
+    }
+
+    [Fact]
+    public void ApplyCommand_InsertsPictureCaptionListWithOneImagePerNode()
+    {
+        var editor = MakeSession();
+        var payload = SlideObjectInsertionPlanner.CreateSmartArtPicturePayload(
+            [SlideObjectInsertionPlanner.CreatePicturePayload([1, 2, 3], "sample.png")]);
+
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.SmartArtLayoutCommandId(SmartArtLayoutPreset.PictureCaptionList),
+            smartArtPicturePayload: payload);
+
+        added.Should().NotBeNull();
+        added!.SmartArt!.Data!.LayoutUniqueId.Should().Contain("pictureCaptionList");
+        added.SmartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
+        Flatten(added.SmartArt.Data.Nodes).Select(node => node.Picture).Should()
+            .AllSatisfy(picture => picture.Should().NotBeNull());
+        added.SmartArt.Parts.Values.Should().Contain(part => part.ContentType == "image/png");
+
+        using var package = new MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(editor.Presentation, package);
+        package.Position = 0;
+        var reopened = FreeP.Core.IO.PptxPackageReader.Read(package);
+        var reopenedSmartArt = reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        reopenedSmartArt.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        Flatten(reopenedSmartArt.Data.Nodes).Select(node => node.Picture!.Bytes).Should()
+            .AllSatisfy(bytes => bytes.Should().Equal(1, 2, 3));
+
+        static IEnumerable<SmartArtNode> Flatten(IEnumerable<SmartArtNode> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                yield return node;
+                foreach (var child in Flatten(node.Children))
+                    yield return child;
+            }
+        }
+    }
+
+    [Fact]
+    public void ApplyCommand_PictureCaptionListWithoutPayload_IsNoOp()
+    {
+        var editor = MakeSession();
+
+        SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.SmartArtLayoutCommandId(SmartArtLayoutPreset.PictureCaptionList))
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void ApplyCommand_PictureCaptionList_IsUndoable()
+    {
+        var editor = MakeSession();
+        var payload = SlideObjectInsertionPlanner.CreateSmartArtPicturePayload(
+            [SlideObjectInsertionPlanner.CreatePicturePayload([1, 2, 3], "sample.png")]);
+
+        SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.SmartArtLayoutCommandId(SmartArtLayoutPreset.PictureCaptionList),
+            smartArtPicturePayload: payload).Should().NotBeNull();
+        editor.CurrentSlide!.Shapes.Should().ContainSingle(shape => shape.Kind == SlideShapeKind.SmartArt);
+
+        editor.Undo();
+        editor.CurrentSlide.Shapes.Should().NotContain(shape => shape.Kind == SlideShapeKind.SmartArt);
+        editor.Redo();
+        editor.CurrentSlide.Shapes.Should().ContainSingle(shape => shape.Kind == SlideShapeKind.SmartArt);
     }
 
     [Fact]
@@ -230,7 +305,13 @@ public sealed class SlideObjectInsertionPlannerTests
                 ? SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId
                 : SlideObjectInsertionPlanner.SmartArtLayoutCommandId(preset);
 
-            SlideObjectInsertionPlanner.ApplyCommand(editor, commandId).Should().NotBeNull(preset.ToString());
+            SlideObjectInsertionPlanner.ApplyCommand(
+                editor,
+                commandId,
+                smartArtPicturePayload: preset == SmartArtLayoutPreset.PictureCaptionList
+                    ? SlideObjectInsertionPlanner.CreateSmartArtPicturePayload(
+                        [SlideObjectInsertionPlanner.CreatePicturePayload([1, 2, 3], "sample.png")])
+                    : null).Should().NotBeNull(preset.ToString());
         }
 
         using var package = new MemoryStream();
