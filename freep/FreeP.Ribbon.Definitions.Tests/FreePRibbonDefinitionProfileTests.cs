@@ -940,6 +940,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.chart.number-format-rendering",
             "freep.chart.edge-manual-layout",
             "freep.chart.bar-gap-overlap",
+            "freep.chart.series-data-labels",
             "freep.chart.bubble-sizing-semantics",
             "freep.chart.pie-first-slice-angle",
             "freep.chart.pie3d-depth-rendering",

@@ -6376,7 +6376,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartSeriesOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4", "#1F4E79", OutlineDash.DashDot, true);
+            dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4", "#1F4E79", OutlineDash.DashDot, true,
+                true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ");
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6393,6 +6394,11 @@ public sealed class MainWindowHeadlessTests
         options.LineColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
         options.LineDash.Should().Be(OutlineDash.DashDot);
         options.NoLine.Should().BeTrue();
+        options.DataLabels.Should().NotBeNull();
+        options.DataLabels!.ShowValue.Should().BeTrue();
+        options.DataLabels.ShowCategoryName.Should().BeTrue();
+        options.DataLabels.ShowLegendKey.Should().BeTrue();
+        options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
     }
 
     [Fact]

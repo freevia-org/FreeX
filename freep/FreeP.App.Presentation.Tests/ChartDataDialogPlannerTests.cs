@@ -452,6 +452,13 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetLineDash(OutlineDash.DashDot);
         planner.SetNoLine(true);
         planner.SetFillColor("#4472C4");
+        planner.SetUseSeriesDataLabels(true);
+        planner.SetShowValueLabels(true);
+        planner.SetShowCategoryLabels(true);
+        planner.SetShowLegendKeys(true);
+        planner.SetLabelPosition(DataLabelPosition.InsideEnd);
+        planner.SetLabelNumberFormat("0.0%");
+        planner.SetLabelSeparator(" | ");
         planner.SetMarkerSymbol(ChartMarkerSymbol.Diamond);
         planner.SetMarkerSize(8);
 
@@ -466,6 +473,13 @@ public sealed class ChartDataDialogPlannerTests
         options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
         options.MarkerSizePt.Should().Be(8);
         options.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
+        options.DataLabels.Should().NotBeNull();
+        options.DataLabels!.ShowValue.Should().BeTrue();
+        options.DataLabels.ShowCategoryName.Should().BeTrue();
+        options.DataLabels.ShowLegendKey.Should().BeTrue();
+        options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
+        options.DataLabels.NumberFormat.Should().Be("0.0%");
+        options.DataLabels.Separator.Should().Be(" | ");
         planner.SeriesOptions.Select(option => option.Label)
             .Should().Equal("Revenue", "Margin");
         chart.Series[1].SmoothLine.Should().BeTrue("series dialogs must edit a working copy");

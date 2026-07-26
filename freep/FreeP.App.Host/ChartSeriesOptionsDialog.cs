@@ -19,6 +19,15 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly ComboBox _lineDashCombo;
     private readonly CheckBox _noLineCheck;
     private readonly TextBox _fillColorBox;
+    private readonly CheckBox _useSeriesDataLabelsCheck;
+    private readonly CheckBox _showValueLabelsCheck;
+    private readonly CheckBox _showPercentLabelsCheck;
+    private readonly CheckBox _showCategoryLabelsCheck;
+    private readonly CheckBox _showSeriesLabelsCheck;
+    private readonly CheckBox _showLegendKeysCheck;
+    private readonly ComboBox _labelPositionCombo;
+    private readonly TextBox _labelNumberFormatBox;
+    private readonly TextBox _labelSeparatorBox;
     private readonly ComboBox _markerCombo;
     private readonly TextBox _markerSizeBox;
 
@@ -63,6 +72,20 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         };
         _noLineCheck = new CheckBox { Content = surface.NoLineLabel };
         _fillColorBox = new TextBox { MinWidth = 140 };
+        _useSeriesDataLabelsCheck = new CheckBox { Content = surface.SeriesDataLabelsLabel };
+        _showValueLabelsCheck = new CheckBox { Content = surface.ValueLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _showPercentLabelsCheck = new CheckBox { Content = surface.PercentLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _showCategoryLabelsCheck = new CheckBox { Content = surface.CategoryLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _showSeriesLabelsCheck = new CheckBox { Content = surface.SeriesLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _showLegendKeysCheck = new CheckBox { Content = surface.LegendKeysLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _labelPositionCombo = new ComboBox
+        {
+            ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions,
+            DisplayMemberPath = nameof(ChartDisplayLabelPositionOption.Label),
+            MinWidth = 150,
+        };
+        _labelNumberFormatBox = new TextBox { MinWidth = 140 };
+        _labelSeparatorBox = new TextBox { MinWidth = 140 };
         _markerCombo = new ComboBox
         {
             ItemsSource = ChartSeriesOptionsPlanner.MarkerOptions,
@@ -94,6 +117,15 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         content.Children.Add(MakeRow(surface.LineDashLabel, _lineDashCombo));
         content.Children.Add(_noLineCheck);
         content.Children.Add(MakeRow(surface.FillColorLabel, _fillColorBox));
+        content.Children.Add(_useSeriesDataLabelsCheck);
+        content.Children.Add(_showValueLabelsCheck);
+        content.Children.Add(_showPercentLabelsCheck);
+        content.Children.Add(_showCategoryLabelsCheck);
+        content.Children.Add(_showSeriesLabelsCheck);
+        content.Children.Add(_showLegendKeysCheck);
+        content.Children.Add(MakeRow(surface.LabelPositionLabel, _labelPositionCombo));
+        content.Children.Add(MakeRow(surface.NumberFormatLabel, _labelNumberFormatBox));
+        content.Children.Add(MakeRow(surface.SeparatorLabel, _labelSeparatorBox));
         content.Children.Add(MakeRow(surface.MarkerLabel, _markerCombo));
         content.Children.Add(MakeRow(surface.MarkerSizeLabel, _markerSizeBox));
         content.Children.Add(new TextBlock { Text = surface.AutoHint, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
@@ -117,7 +149,16 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         string? fillColor = null,
         string? lineColor = null,
         OutlineDash lineDash = OutlineDash.Solid,
-        bool noLine = false)
+        bool noLine = false,
+        bool useSeriesDataLabels = false,
+        bool showValueLabels = false,
+        bool showPercentLabels = false,
+        bool showCategoryLabels = false,
+        bool showSeriesLabels = false,
+        bool showLegendKeys = false,
+        DataLabelPosition labelPosition = DataLabelPosition.OutsideEnd,
+        string? labelNumberFormat = null,
+        string? labelSeparator = null)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         _smoothLineCheck.IsChecked = smoothLine;
@@ -129,6 +170,15 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _markerCombo.SelectedIndex = FindMarkerIndex(markerSymbol);
         _markerSizeBox.Text = Format(markerSizePt);
         _fillColorBox.Text = fillColor ?? string.Empty;
+        _useSeriesDataLabelsCheck.IsChecked = useSeriesDataLabels;
+        _showValueLabelsCheck.IsChecked = showValueLabels;
+        _showPercentLabelsCheck.IsChecked = showPercentLabels;
+        _showCategoryLabelsCheck.IsChecked = showCategoryLabels;
+        _showSeriesLabelsCheck.IsChecked = showSeriesLabels;
+        _showLegendKeysCheck.IsChecked = showLegendKeys;
+        _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
+        _labelNumberFormatBox.Text = labelNumberFormat ?? string.Empty;
+        _labelSeparatorBox.Text = labelSeparator ?? string.Empty;
     }
 
     private void OnOk()
@@ -153,6 +203,15 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _lineDashCombo.SelectedIndex = FindDashIndex(_planner.LineDash);
         _noLineCheck.IsChecked = _planner.NoLine;
         _fillColorBox.Text = _planner.FillColorText;
+        _useSeriesDataLabelsCheck.IsChecked = _planner.UseSeriesDataLabels;
+        _showValueLabelsCheck.IsChecked = _planner.ShowValueLabels;
+        _showPercentLabelsCheck.IsChecked = _planner.ShowPercentLabels;
+        _showCategoryLabelsCheck.IsChecked = _planner.ShowCategoryLabels;
+        _showSeriesLabelsCheck.IsChecked = _planner.ShowSeriesLabels;
+        _showLegendKeysCheck.IsChecked = _planner.ShowLegendKeys;
+        _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(_planner.LabelPosition);
+        _labelNumberFormatBox.Text = _planner.LabelNumberFormat;
+        _labelSeparatorBox.Text = _planner.LabelSeparator;
         _markerCombo.SelectedIndex = FindMarkerIndex(_planner.MarkerSymbol);
         _markerSizeBox.Text = Format(_planner.MarkerSizePt);
     }
@@ -167,6 +226,16 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             _planner.SetLineDash(dash.Value);
         _planner.SetNoLine(_noLineCheck.IsChecked == true);
         _planner.SetFillColor(_fillColorBox.Text);
+        _planner.SetUseSeriesDataLabels(_useSeriesDataLabelsCheck.IsChecked == true);
+        _planner.SetShowValueLabels(_showValueLabelsCheck.IsChecked == true);
+        _planner.SetShowPercentLabels(_showPercentLabelsCheck.IsChecked == true);
+        _planner.SetShowCategoryLabels(_showCategoryLabelsCheck.IsChecked == true);
+        _planner.SetShowSeriesLabels(_showSeriesLabelsCheck.IsChecked == true);
+        _planner.SetShowLegendKeys(_showLegendKeysCheck.IsChecked == true);
+        if (_labelPositionCombo.SelectedItem is ChartDisplayLabelPositionOption position)
+            _planner.SetLabelPosition(position.Value);
+        _planner.SetLabelNumberFormat(_labelNumberFormatBox.Text);
+        _planner.SetLabelSeparator(_labelSeparatorBox.Text);
         if (_markerCombo.SelectedItem is ChartMarkerSymbolOption marker)
             _planner.SetMarkerSymbol(marker.Value);
         _planner.SetMarkerSize(ParseOptional(_markerSizeBox.Text, "Marker size"));
@@ -194,6 +263,11 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         Math.Max(0, ChartSeriesOptionsPlanner.DashOptions
             .Select((option, index) => (option, index))
             .FirstOrDefault(item => item.option.Value == dash).index);
+
+    private static int FindLabelPositionIndex(DataLabelPosition position) =>
+        Math.Max(0, ChartDisplayOptionsPlanner.LabelPositionOptions
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == position).index);
 
     private static StackPanel MakeRow(string label, Control control)
     {
