@@ -2250,6 +2250,42 @@ public sealed class SlideCanvasAvaloniaTests
     /// The label Y must match the marker Y — both must use effMin/effRange from the secondary scale.
     /// </summary>
     [Fact]
+    public async Task ChartErrorBars_RenderAsAdditionalPixelsInAvaloniaCanvas()
+    {
+        int changedPixels = 0;
+        await Run(() =>
+        {
+            var chart = new ChartShape { ChartType = ChartType.LineMarkers };
+            chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+            var series = new ChartSeries { Name = "Revenue" };
+            series.Values.AddRange(new double?[] { 10, 20, 30 });
+            chart.Series.Add(series);
+
+            var presentation = MakePresentation(presence =>
+            {
+                presence.Slides[0].Shapes.Clear();
+                presence.Slides[0].Shapes.Add(new SlideShape
+                {
+                    Id = 1,
+                    Kind = SlideShapeKind.Chart,
+                    OffsetXEmu = 914400,
+                    OffsetYEmu = 457200,
+                    ExtentCxEmu = 5486400,
+                    ExtentCyEmu = 3657600,
+                    Chart = chart,
+                });
+            });
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var baseline = RenderPixels(canvas, 960, 540);
+            series.ErrorBars = new ChartErrorBars { Value = 2 };
+            var candidate = RenderPixels(canvas, 960, 540);
+            changedPixels = CountPixelDifferences(baseline, candidate, 960, 0, 0, 960, 540);
+        });
+
+        changedPixels.Should().BeGreaterThan(0, "error bars must reach the shared Avalonia canvas paint path");
+    }
+
+    [Fact]
     public void CC2_LineDataLabel_SecondaryAxisSeries_UsesSecondaryRange()
     {
         // Primary series: values 0–100. Secondary series: values 0–1_000_000.

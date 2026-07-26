@@ -1042,6 +1042,8 @@ public sealed class SlideCanvas : FrameworkElement
         if (scene.ComboLineSeries.Count > 0)
             RenderComboOverrideSeries(dc, scene);
 
+        RenderErrorBars(dc, scene.ErrorBars);
+
         if (scene.AxisTicks.CategoryTicks.Count > 0 || scene.AxisTicks.ValueTicks.Count > 0)
         {
             var tickPen = CreateChartAxisTickPen(scene.AxisTicks);
@@ -1263,6 +1265,43 @@ public sealed class SlideCanvas : FrameworkElement
     {
         foreach (var primitive in scene.ComboLineSeries)
             RenderLineSeriesPrimitive(dc, primitive);
+    }
+
+    private static void RenderErrorBars(
+        DrawingContext dc,
+        IReadOnlyList<ChartErrorBarPrimitive> errorBars)
+    {
+        foreach (var errorBar in errorBars)
+        {
+            var pen = ToPen(errorBar.Stroke);
+            var center = ToPoint(errorBar.Center);
+            if (errorBar.MinusEnd is { } minus)
+            {
+                dc.DrawLine(pen, center, ToPoint(minus));
+                if (!errorBar.NoEndCap)
+                    DrawErrorBarCap(dc, pen, minus, errorBar.Direction);
+            }
+            if (errorBar.PlusEnd is { } plus)
+            {
+                dc.DrawLine(pen, center, ToPoint(plus));
+                if (!errorBar.NoEndCap)
+                    DrawErrorBarCap(dc, pen, plus, errorBar.Direction);
+            }
+        }
+    }
+
+    private static void DrawErrorBarCap(
+        DrawingContext dc,
+        Pen pen,
+        ChartPlanPoint endpoint,
+        ChartErrorDirection direction)
+    {
+        const double capHalfLength = 3.0;
+        var point = ToPoint(endpoint);
+        if (direction == ChartErrorDirection.Y)
+            dc.DrawLine(pen, new Point(point.X - capHalfLength, point.Y), new Point(point.X + capHalfLength, point.Y));
+        else
+            dc.DrawLine(pen, new Point(point.X, point.Y - capHalfLength), new Point(point.X, point.Y + capHalfLength));
     }
 
     // ── Bar (horizontal) chart ────────────────────────────────────────────────
