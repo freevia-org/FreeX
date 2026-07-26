@@ -52,6 +52,8 @@ public sealed class HyperlinkDialogTests
 
         source.Should().Contain("HyperlinkDialogPlanner.BuildDialogRequest(");
         source.Should().Contain("HyperlinkDialogPlanner.BuildApplyPlan(");
+        source.Should().Contain("TryGetSelectedShapeRunHyperlink");
+        source.Should().Contain("TryApplySelectedShapeRunHyperlink");
         source.Should().Contain("Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip)");
         source.Should().NotContain("new HyperlinkDialog(slides, current)");
         source.Should().NotContain("dialog.Result.Url");

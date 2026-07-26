@@ -136,6 +136,15 @@ internal sealed class AvaloniaRichTextEditor : Grid
         return _buffer.Plan(Selection);
     }
 
+    internal Hyperlink? SelectedRunHyperlink()
+    {
+        SynchronizeText();
+        return _buffer.GetSelectedRunHyperlink(Selection);
+    }
+
+    internal bool ApplyHyperlink(Hyperlink? hyperlink) =>
+        ApplyMutation(() => _buffer.ApplyHyperlink(hyperlink, Selection));
+
     internal bool ToggleTextFormat(TableCellTextFormatKind kind) =>
         ApplyMutation(() => _buffer.ToggleTextFormat(kind, Selection));
 

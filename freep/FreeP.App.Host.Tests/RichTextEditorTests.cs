@@ -11,6 +11,7 @@ using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 using ModelParagraph = FreeP.Core.Model.Paragraph;
 using ModelRun       = FreeP.Core.Model.Run;
+using ModelHyperlink = FreeP.Core.Model.Hyperlink;
 using WpfParagraph  = System.Windows.Documents.Paragraph;
 using WpfRun        = System.Windows.Documents.Run;
 
@@ -275,6 +276,42 @@ public sealed class RichTextEditorTests
                 "bullet metadata must not enter editable model text");
         restored.Paragraphs[0].BulletKind.Should().Be(BulletKind.Char);
         restored.Paragraphs[1].BulletKind.Should().Be(BulletKind.Auto);
+    }
+
+    [StaFact]
+    public void Converter_RunHyperlinks_RoundTripExternalAndInternalTargets()
+    {
+        var body = new TextBody();
+        var paragraph = new ModelParagraph { Align = TextAlign.Left };
+        paragraph.Runs.Add(new ModelRun
+        {
+            Text = "web",
+            Hyperlink = new ModelHyperlink
+            {
+                Url = "https://example.test/path",
+                Tooltip = "Open web",
+            },
+        });
+        paragraph.Runs.Add(new ModelRun
+        {
+            Text = "slide",
+            Hyperlink = new ModelHyperlink
+            {
+                TargetSlideId = "slide-2",
+                Tooltip = "Go slide",
+            },
+        });
+        body.Paragraphs.Add(paragraph);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(
+            TextBodyFlowDocumentConverter.ToFlowDocument(body),
+            body);
+
+        restored.Paragraphs[0].Runs.Should().HaveCount(2);
+        restored.Paragraphs[0].Runs[0].Hyperlink.Should().BeEquivalentTo(
+            body.Paragraphs[0].Runs[0].Hyperlink);
+        restored.Paragraphs[0].Runs[1].Hyperlink.Should().BeEquivalentTo(
+            body.Paragraphs[0].Runs[1].Hyperlink);
     }
 
     [StaFact]

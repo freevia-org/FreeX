@@ -18,6 +18,50 @@ public sealed class AvaloniaRichTextEditorTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(SlideHeadlessApp).Assembly);
 
     [Fact]
+    public async Task SelectedRunHyperlink_UsesRichTextBufferAndRoundTripsThroughEditedBody()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs = { new Run { Text = "AlphaBeta" } },
+            });
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.SelectionStart = 1;
+                editor.SelectionEnd = 6;
+                editor.ApplyHyperlink(new Hyperlink
+                {
+                    TargetSlideId = "slide-2",
+                    Tooltip = "Jump",
+                }).Should().BeTrue();
+
+                editor.SelectedRunHyperlink()!.TargetSlideId.Should().Be("slide-2");
+                editor.EditedBody.Paragraphs[0].Runs
+                    .Where(run => run.Text.Length > 0)
+                    .Any(run => run.Hyperlink?.TargetSlideId == "slide-2")
+                    .Should().BeTrue();
+
+                editor.ApplyHyperlink(null).Should().BeTrue();
+                editor.EditedBody.Paragraphs[0].Runs
+                    .All(run => run.Hyperlink is null)
+                    .Should().BeTrue();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task EnterSplit_PreservesNumberingMetadataThroughHostBuffer()
     {
         await Session.Dispatch(async () =>

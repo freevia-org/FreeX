@@ -52,6 +52,27 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             Math.Min(_textBox.SelectionStart, _textBox.SelectionEnd)..
             Math.Max(_textBox.SelectionStart, _textBox.SelectionEnd)];
 
+    public bool TryGetSelectedShapeRunHyperlink(out Hyperlink? hyperlink)
+    {
+        hyperlink = null;
+        if (!_active || _textBox is null || _textBox.SelectionStart == _textBox.SelectionEnd)
+            return false;
+
+        hyperlink = _textBox.SelectedRunHyperlink();
+        return true;
+    }
+
+    public bool TryApplySelectedShapeRunHyperlink(Hyperlink? hyperlink)
+    {
+        if (!_active || _textBox is null || _textBox.SelectionStart == _textBox.SelectionEnd)
+            return false;
+
+        bool changed = _textBox.ApplyHyperlink(hyperlink);
+        if (changed)
+            RefreshShapeOverlayRichTextPlan();
+        return changed;
+    }
+
     /// <summary>Selects a logical model-text range in the active editor.</summary>
     public bool TrySelectTextRange(int start, int end)
     {

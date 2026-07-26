@@ -7,6 +7,7 @@ using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun       = System.Windows.Documents.Run;
 using ModelParagraph = FreeP.Core.Model.Paragraph;
 using ModelRun       = FreeP.Core.Model.Run;
+using WpfHyperlink  = System.Windows.Documents.Hyperlink;
 
 namespace FreeP.App.Rendering.Wpf;
 
@@ -354,7 +355,20 @@ internal static class TextBodyFlowDocumentConverter
         if (color.HasValue)
             wr.Foreground = new SolidColorBrush(color.Value);
 
-        return wr;
+        if (mr.Hyperlink is not { } link)
+            return wr;
+
+        var hyperlink = new WpfHyperlink(wr)
+        {
+            ToolTip = link.Tooltip,
+        };
+        if (link.IsExternal && Uri.TryCreate(link.Url, UriKind.Absolute, out var url))
+            hyperlink.NavigateUri = url;
+        else if (!string.IsNullOrWhiteSpace(link.TargetSlideId))
+            hyperlink.NavigateUri = new Uri(
+                "freep-slide:" + Uri.EscapeDataString(link.TargetSlideId),
+                UriKind.Absolute);
+        return hyperlink;
     }
 
     /// <summary>
@@ -504,6 +518,33 @@ internal static class TextBodyFlowDocumentConverter
             // Foreground is inherited — preserve the original run's Color (may be null or a
             // SchemeColor ref such as accent1) rather than synthesizing a new sRGB.
             mr.Color = originalRun?.Color;
+        }
+
+        for (DependencyObject? parent = inline.Parent;
+             parent is not null;
+             parent = (parent as FrameworkContentElement)?.Parent)
+        {
+            if (parent is not WpfHyperlink hyperlink)
+                continue;
+
+            var navigateUri = hyperlink.NavigateUri?.OriginalString;
+            if (navigateUri?.StartsWith("freep-slide:", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                mr.Hyperlink = new FreeP.Core.Model.Hyperlink
+                {
+                    TargetSlideId = Uri.UnescapeDataString(navigateUri["freep-slide:".Length..]),
+                    Tooltip = hyperlink.ToolTip as string,
+                };
+            }
+            else if (!string.IsNullOrWhiteSpace(navigateUri) || hyperlink.ToolTip is string)
+            {
+                mr.Hyperlink = new FreeP.Core.Model.Hyperlink
+                {
+                    Url = navigateUri,
+                    Tooltip = hyperlink.ToolTip as string,
+                };
+            }
+            break;
         }
 
         return mr;
