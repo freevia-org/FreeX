@@ -1,6 +1,6 @@
 namespace FreeP.Core.Model;
 
-/// <summary>Atomically updates chart camera and Surface3D wireframe options.</summary>
+/// <summary>Atomically updates chart camera, Surface3D wireframe, and 3-D bar depth options.</summary>
 public sealed class SetChart3DViewOptionsCommand : IPresentationCommand
 {
     private readonly int _slideIndex;
@@ -30,6 +30,8 @@ public sealed class SetChart3DViewOptionsCommand : IPresentationCommand
         chart.View3D = BuildView(_newOptions);
         chart.WireframeSpecified = _newOptions.Wireframe.HasValue;
         chart.Wireframe = _newOptions.Wireframe == true;
+        if (SupportsBarGapDepth(chart))
+            chart.BarGapDepthPercent = Normalize(_newOptions.BarGapDepthPercent, 0, 500);
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -42,6 +44,8 @@ public sealed class SetChart3DViewOptionsCommand : IPresentationCommand
         chart.View3D = BuildView(_oldOptions);
         chart.WireframeSpecified = _oldOptions.Wireframe.HasValue;
         chart.Wireframe = _oldOptions.Wireframe == true;
+        if (SupportsBarGapDepth(chart))
+            chart.BarGapDepthPercent = _oldOptions.BarGapDepthPercent;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -55,8 +59,12 @@ public sealed class SetChart3DViewOptionsCommand : IPresentationCommand
             view?.HeightPercent,
             view?.DepthPercent,
             view?.RightAngleAxes,
-            chart.WireframeSpecified ? chart.Wireframe : null);
+            chart.WireframeSpecified ? chart.Wireframe : null,
+            SupportsBarGapDepth(chart) ? chart.BarGapDepthPercent : null);
     }
+
+    private static bool SupportsBarGapDepth(ChartShape chart) =>
+        chart.ThreeDStyle is ChartThreeDStyle.Column or ChartThreeDStyle.Bar;
 
     private static Chart3DView? BuildView(Chart3DViewOptions options)
     {

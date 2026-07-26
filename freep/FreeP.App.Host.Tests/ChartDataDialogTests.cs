@@ -293,6 +293,8 @@ public sealed class ChartDataDialogTests : IDisposable
             DepthPercent = 125,
             RightAngleAxes = true,
         };
+        sess.SelectedChart.ThreeDStyle = ChartThreeDStyle.Column;
+        sess.SelectedChart.BarGapDepthPercent = 140;
         sess.SelectedChart.Wireframe = true;
         sess.SelectedChart.WireframeSpecified = true;
 
@@ -300,7 +302,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
-        options.Should().Be(new Chart3DViewOptions(25, 35, 54, 100, 125, true, true));
+        options.Should().Be(new Chart3DViewOptions(25, 35, 54, 100, 125, true, true, 140));
     }
 
     [StaFact]

@@ -6266,17 +6266,19 @@ public sealed class MainWindowHeadlessTests
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
-            var chartShape = window.Editor.InsertChart(ChartType.Surface3D);
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            chartShape.Chart!.ThreeDStyle = ChartThreeDStyle.Column;
+            chartShape.Chart.BarGapDepthPercent = 150;
             window.Editor.Select(chartShape.Id);
 
             var dialog = new Chart3DViewOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(25, 35, 54, 100, 125, true, false);
+            dialog.SetOptionsForTests(25, 35, 54, 100, 125, true, false, 275);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
 
         if (!ran) return;
-        options.Should().Be(new Chart3DViewOptions(25, 35, 54, 100, 125, true, false));
+        options.Should().Be(new Chart3DViewOptions(25, 35, 54, 100, 125, true, false, 275));
     }
 
     [Fact]

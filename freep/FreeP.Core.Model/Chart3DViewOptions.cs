@@ -1,6 +1,6 @@
 namespace FreeP.Core.Model;
 
-/// <summary>Undoable chart camera and surface-wireframe settings edited by the 3-D view dialog.</summary>
+/// <summary>Undoable chart camera, surface-wireframe, and 3-D bar depth settings edited by the 3-D view dialog.</summary>
 public sealed record Chart3DViewOptions(
     int? RotationX,
     int? RotationY,
@@ -8,4 +8,5 @@ public sealed record Chart3DViewOptions(
     int? HeightPercent,
     int? DepthPercent,
     bool? RightAngleAxes,
-    bool? Wireframe);
+    bool? Wireframe,
+    int? BarGapDepthPercent = null);
