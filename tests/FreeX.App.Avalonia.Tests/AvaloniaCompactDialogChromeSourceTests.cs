@@ -206,6 +206,18 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
     }
 
     [Fact]
+    public void ConsolidateDialog_MatchesWpfFunctionAndRangePickerLayout()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Consolidate.cs"));
+
+        source.Should().Contain("HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,");
+        source.Should().Contain("ApplyDataOpsRangePickerButtonChrome(browseButton);");
+        source.Should().Contain("ApplyDataOpsRangePickerButtonChrome(destinationBrowseButton);");
+        source.Should().Contain("button.Padding = new Thickness(0, 3);");
+        source.Should().NotContain("FontWeight = FontWeight.SemiBold");
+    }
+
+    [Fact]
     public void ResidualClusterCDialogs_DelegateRemainingChromeToSharedHelper()
     {
         var allowEditRangeSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AllowEditRange.cs"));

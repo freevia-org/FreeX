@@ -10,6 +10,7 @@ using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
+using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
@@ -50,6 +51,7 @@ public sealed partial class MainWindow
             ItemsSource = ConsolidateDialogPlanner.FunctionChoices.Select(c => c.Label).ToList(),
             SelectedIndex = 0,
             MinWidth = 160,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         ApplyDataOpsComboBoxChrome(functionBox);
         AutomationProperties.SetAutomationId(functionBox, "ConsolidateFunctionBox");
@@ -73,7 +75,7 @@ public sealed partial class MainWindow
         // Windows places an ellipsis ("...") range-picker next to the Reference field (matches the WPF host's
         // DialogReferencePicker which uses a literal "..." button, width 28, docked left of the text box).
         var browseButton = new Button { Content = "...", Width = 28, MinWidth = 28 };
-        ApplyDataOpsButtonChrome(browseButton);
+        ApplyDataOpsRangePickerButtonChrome(browseButton);
         AutomationProperties.SetAutomationId(browseButton, "ConsolidateBrowseReferenceButton");
         AutomationProperties.SetName(browseButton, StripDisplayMnemonic(UiText.Get("Consolidate_SelectReferenceRange")));
 
@@ -109,7 +111,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetHelpText(destinationBox, StripDisplayMnemonic(UiText.Get("Consolidate_EnterTheUpperLeftDestinationCellForTheConsolidatedResult")));
 
         var destinationBrowseButton = new Button { Content = "...", Width = 28, MinWidth = 28 };
-        ApplyDataOpsButtonChrome(destinationBrowseButton);
+        ApplyDataOpsRangePickerButtonChrome(destinationBrowseButton);
         AutomationProperties.SetAutomationId(destinationBrowseButton, "ConsolidateBrowseDestinationButton");
         AutomationProperties.SetName(destinationBrowseButton, StripDisplayMnemonic(UiText.Get("Consolidate_SelectDestinationCell")));
 
@@ -293,14 +295,14 @@ public sealed partial class MainWindow
                         Spacing = 4,
                         Children =
                         {
-                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_Function")), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_Function")), FontSize = 12, FontFamily = FormulaBarFontFamily },
                             functionBox,
-                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_Reference")), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_Reference")), FontSize = 12, FontFamily = FormulaBarFontFamily },
                             referenceRow,
                             addRemoveRow,
                             new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_AllReferences")), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             referencesList,
-                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_DestinationCell")), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_DestinationCell")), FontSize = 12, FontFamily = FormulaBarFontFamily },
                             destinationRow,
                             labelRow,
                             createLinksBox,
@@ -415,6 +417,12 @@ public sealed partial class MainWindow
     /// </summary>
     private static void ApplyDataOpsButtonChrome(Button button, bool isDefault = false)
         => AvaloniaCompactDialogChrome.ApplyButton(button, DataOpsDialogChromeStyle, button.MinWidth, isDefault);
+
+    private static void ApplyDataOpsRangePickerButtonChrome(Button button)
+    {
+        ApplyDataOpsButtonChrome(button);
+        button.Padding = new Thickness(0, 3);
+    }
 
     /// <summary>
     /// Applies standard text box chrome: Height=24, Padding=(4,1), FontSize=12,
