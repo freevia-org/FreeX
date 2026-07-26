@@ -22,6 +22,11 @@ internal sealed class ChartAxisOptionsDialog : Window
     private readonly TextBox _minorUnitBox;
     private readonly TextBox _numberFormatBox;
     private readonly CheckBox _majorGridlinesCheck;
+    private readonly ComboBox _majorTickMarkCombo;
+    private readonly ComboBox _minorTickMarkCombo;
+    private readonly ComboBox _tickLabelPositionCombo;
+    private readonly ComboBox _crossesCombo;
+    private readonly TextBox _crossesAtBox;
 
     internal ChartAxisOptionsDialog(EditingSession editor)
     {
@@ -60,6 +65,11 @@ internal sealed class ChartAxisOptionsDialog : Window
         _minorUnitBox = new TextBox { MinWidth = 130 };
         _numberFormatBox = new TextBox { MinWidth = 180 };
         _majorGridlinesCheck = new CheckBox { Content = surface.MajorGridlinesLabel };
+        _majorTickMarkCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickMarkOptions.Select(x => x.Label));
+        _minorTickMarkCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickMarkOptions.Select(x => x.Label));
+        _tickLabelPositionCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickLabelPositionOptions.Select(x => x.Label));
+        _crossesCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.CrossingOptions.Select(x => x.Label));
+        _crossesAtBox = new TextBox { MinWidth = 130 };
         LoadControls();
 
         var buttons = new StackPanel
@@ -90,6 +100,11 @@ internal sealed class ChartAxisOptionsDialog : Window
                 MakeRow(surface.NumberFormatLabel, _numberFormatBox),
                 new TextBlock { Text = surface.AutoHint, Opacity = 0.7 },
                 _majorGridlinesCheck,
+                MakeRow(surface.MajorTickMarkLabel, _majorTickMarkCombo),
+                MakeRow(surface.MinorTickMarkLabel, _minorTickMarkCombo),
+                MakeRow(surface.TickLabelPositionLabel, _tickLabelPositionCombo),
+                MakeRow(surface.CrossingLabel, _crossesCombo),
+                MakeRow(surface.CrossesAtLabel, _crossesAtBox),
                 buttons,
             },
         };
@@ -109,7 +124,12 @@ internal sealed class ChartAxisOptionsDialog : Window
         double? majorUnit,
         double? minorUnit,
         string numberFormatCode,
-        bool majorGridlines)
+        bool majorGridlines,
+        ChartTickMark? majorTickMark = null,
+        ChartTickMark? minorTickMark = null,
+        ChartTickLabelPosition? tickLabelPosition = null,
+        ChartAxisCrossing? crosses = null,
+        double? crossesAt = null)
     {
         _axisCombo.SelectedIndex = (int)axis;
         _titleBox.Text = title;
@@ -119,6 +139,11 @@ internal sealed class ChartAxisOptionsDialog : Window
         _minorUnitBox.Text = Format(minorUnit);
         _numberFormatBox.Text = numberFormatCode;
         _majorGridlinesCheck.IsChecked = majorGridlines;
+        _majorTickMarkCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, majorTickMark);
+        _minorTickMarkCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, minorTickMark);
+        _tickLabelPositionCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickLabelPositionOptions, tickLabelPosition);
+        _crossesCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.CrossingOptions, crosses);
+        _crossesAtBox.Text = Format(crossesAt);
     }
 
     private void OnOk()
@@ -143,6 +168,11 @@ internal sealed class ChartAxisOptionsDialog : Window
         _minorUnitBox.Text = Format(_planner.MinorUnit);
         _numberFormatBox.Text = _planner.NumberFormatCode;
         _majorGridlinesCheck.IsChecked = _planner.MajorGridlines;
+        _majorTickMarkCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, _planner.MajorTickMark);
+        _minorTickMarkCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, _planner.MinorTickMark);
+        _tickLabelPositionCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickLabelPositionOptions, _planner.TickLabelPosition);
+        _crossesCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.CrossingOptions, _planner.Crosses);
+        _crossesAtBox.Text = Format(_planner.CrossesAt);
     }
 
     private void UpdatePlannerFromControls()
@@ -154,6 +184,11 @@ internal sealed class ChartAxisOptionsDialog : Window
         _planner.SetMinorUnit(ParseOptional(_minorUnitBox.Text, "Minor unit"));
         _planner.SetNumberFormatCode(_numberFormatBox.Text);
         _planner.SetMajorGridlines(_majorGridlinesCheck.IsChecked == true);
+        _planner.SetMajorTickMark(ChartAxisOptionsPlanner.TickMarkOptions[_majorTickMarkCombo.SelectedIndex].Value);
+        _planner.SetMinorTickMark(ChartAxisOptionsPlanner.TickMarkOptions[_minorTickMarkCombo.SelectedIndex].Value);
+        _planner.SetTickLabelPosition(ChartAxisOptionsPlanner.TickLabelPositionOptions[_tickLabelPositionCombo.SelectedIndex].Value);
+        _planner.SetCrosses(ChartAxisOptionsPlanner.CrossingOptions[_crossesCombo.SelectedIndex].Value);
+        _planner.SetCrossesAt(ParseOptional(_crossesAtBox.Text, "Crosses at"));
     }
 
     private static double? ParseOptional(string? text, string label)
@@ -182,6 +217,23 @@ internal sealed class ChartAxisOptionsDialog : Window
         row.Children.Add(control);
         return row;
     }
+
+    private static ComboBox MakeChoiceCombo(IEnumerable<string> labels) => new()
+    {
+        ItemsSource = labels.ToArray(),
+        SelectedIndex = 0,
+        MinWidth = 150,
+    };
+
+    private static int FindIndex<T>(IReadOnlyList<T> options, object? value) where T : class =>
+        options.Select((option, index) => (option, index))
+            .FirstOrDefault(pair => pair.option switch
+            {
+                ChartTickMarkOption tick => Equals(tick.Value, value),
+                ChartTickLabelPositionOption position => Equals(position.Value, value),
+                ChartAxisCrossingOption crossing => Equals(crossing.Value, value),
+                _ => false,
+            }).index;
 
     private static Button MakeButton(string label, bool isDefault, Action action)
     {

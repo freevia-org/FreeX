@@ -3,6 +3,9 @@ using FreeP.Core.Model;
 namespace FreeP.App.Compositor;
 
 public sealed record ChartAxisKindOption(ChartAxisKind Value, string Label);
+public sealed record ChartTickMarkOption(ChartTickMark? Value, string Label);
+public sealed record ChartTickLabelPositionOption(ChartTickLabelPosition? Value, string Label);
+public sealed record ChartAxisCrossingOption(ChartAxisCrossing? Value, string Label);
 
 public sealed record ChartAxisOptionsSurfacePlan(
     string CommandId,
@@ -17,6 +20,11 @@ public sealed record ChartAxisOptionsSurfacePlan(
     string MinorUnitLabel,
     string NumberFormatLabel,
     string MajorGridlinesLabel,
+    string MajorTickMarkLabel,
+    string MinorTickMarkLabel,
+    string TickLabelPositionLabel,
+    string CrossingLabel,
+    string CrossesAtLabel,
     string AutoHint,
     string OkLabel,
     string CancelLabel);
@@ -39,6 +47,11 @@ public sealed class ChartAxisOptionsPlanner
     public const string MinorUnitLabel = "Minor unit";
     public const string NumberFormatLabel = "Number format";
     public const string MajorGridlinesLabel = "Major gridlines";
+    public const string MajorTickMarkLabel = "Major tick marks";
+    public const string MinorTickMarkLabel = "Minor tick marks";
+    public const string TickLabelPositionLabel = "Tick labels";
+    public const string CrossingLabel = "Axis crosses";
+    public const string CrossesAtLabel = "Crosses at";
     public const string AutoHint = "Blank values use automatic chart scaling.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
@@ -51,6 +64,32 @@ public sealed class ChartAxisOptionsPlanner
         new(ChartAxisKind.Value, ValueAxisLabel),
     ];
 
+    public static IReadOnlyList<ChartTickMarkOption> TickMarkOptions { get; } =
+    [
+        new(null, "Automatic"),
+        new(ChartTickMark.None, "None"),
+        new(ChartTickMark.In, "Inside"),
+        new(ChartTickMark.Out, "Outside"),
+        new(ChartTickMark.Cross, "Cross"),
+    ];
+
+    public static IReadOnlyList<ChartTickLabelPositionOption> TickLabelPositionOptions { get; } =
+    [
+        new(null, "Automatic"),
+        new(ChartTickLabelPosition.None, "None"),
+        new(ChartTickLabelPosition.Low, "Low"),
+        new(ChartTickLabelPosition.High, "High"),
+        new(ChartTickLabelPosition.NextTo, "Next to axis"),
+    ];
+
+    public static IReadOnlyList<ChartAxisCrossingOption> CrossingOptions { get; } =
+    [
+        new(null, "Automatic"),
+        new(ChartAxisCrossing.AutoZero, "Automatic zero"),
+        new(ChartAxisCrossing.Min, "Minimum"),
+        new(ChartAxisCrossing.Max, "Maximum"),
+    ];
+
     private readonly ChartShape _chart;
     private ChartAxisKind _axisKind;
     private string _title = string.Empty;
@@ -60,6 +99,11 @@ public sealed class ChartAxisOptionsPlanner
     private double? _minorUnit;
     private string _numberFormat = string.Empty;
     private bool _majorGridlines;
+    private ChartTickMark? _majorTickMark;
+    private ChartTickMark? _minorTickMark;
+    private ChartTickLabelPosition? _tickLabelPosition;
+    private ChartAxisCrossing? _crosses;
+    private double? _crossesAt;
 
     private ChartAxisOptionsPlanner(ChartShape chart)
     {
@@ -81,6 +125,11 @@ public sealed class ChartAxisOptionsPlanner
             MinorUnitLabel,
             NumberFormatLabel,
             MajorGridlinesLabel,
+            MajorTickMarkLabel,
+            MinorTickMarkLabel,
+            TickLabelPositionLabel,
+            CrossingLabel,
+            CrossesAtLabel,
             AutoHint,
             OkLabel,
             CancelLabel);
@@ -99,6 +148,11 @@ public sealed class ChartAxisOptionsPlanner
     public double? MinorUnit => _minorUnit;
     public string NumberFormatCode => _numberFormat;
     public bool MajorGridlines => _majorGridlines;
+    public ChartTickMark? MajorTickMark => _majorTickMark;
+    public ChartTickMark? MinorTickMark => _minorTickMark;
+    public ChartTickLabelPosition? TickLabelPosition => _tickLabelPosition;
+    public ChartAxisCrossing? Crosses => _crosses;
+    public double? CrossesAt => _crossesAt;
 
     public void SetAxis(ChartAxisKind axisKind)
     {
@@ -111,6 +165,11 @@ public sealed class ChartAxisOptionsPlanner
         _minorUnit = axis.MinorUnit;
         _numberFormat = axis.NumberFormatCode ?? string.Empty;
         _majorGridlines = axis.HasMajorGridlines;
+        _majorTickMark = axis.MajorTickMark;
+        _minorTickMark = axis.MinorTickMark;
+        _tickLabelPosition = axis.TickLabelPosition;
+        _crosses = axis.Crosses;
+        _crossesAt = axis.CrossesAt;
     }
 
     public void SetTitle(string? title) => _title = title ?? string.Empty;
@@ -120,6 +179,11 @@ public sealed class ChartAxisOptionsPlanner
     public void SetMinorUnit(double? minorUnit) => _minorUnit = minorUnit;
     public void SetNumberFormatCode(string? formatCode) => _numberFormat = formatCode ?? string.Empty;
     public void SetMajorGridlines(bool show) => _majorGridlines = show;
+    public void SetMajorTickMark(ChartTickMark? value) => _majorTickMark = value;
+    public void SetMinorTickMark(ChartTickMark? value) => _minorTickMark = value;
+    public void SetTickLabelPosition(ChartTickLabelPosition? value) => _tickLabelPosition = value;
+    public void SetCrosses(ChartAxisCrossing? value) => _crosses = value;
+    public void SetCrossesAt(double? value) => _crossesAt = value;
 
     public ChartAxisOptions BuildCommitPlan() => new(
         _axisKind,
@@ -129,7 +193,12 @@ public sealed class ChartAxisOptionsPlanner
         _majorUnit,
         _minorUnit,
         string.IsNullOrWhiteSpace(_numberFormat) ? null : _numberFormat.Trim(),
-        _majorGridlines);
+        _majorGridlines,
+        _majorTickMark,
+        _minorTickMark,
+        _tickLabelPosition,
+        _crossesAt is null ? _crosses : null,
+        _crossesAt);
 
     private ChartAxis ResolveAxis() =>
         _axisKind == ChartAxisKind.Category ? _chart.CategoryAxis : _chart.ValueAxis;

@@ -19,6 +19,11 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _minorUnitBox;
     private readonly TextBox _numberFormatBox;
     private readonly CheckBox _majorGridlinesCheck;
+    private readonly ComboBox _majorTickMarkCombo;
+    private readonly ComboBox _minorTickMarkCombo;
+    private readonly ComboBox _tickLabelPositionCombo;
+    private readonly ComboBox _crossesCombo;
+    private readonly TextBox _crossesAtBox;
 
     public ChartAxisOptionsDialog(EditingSession editor)
     {
@@ -56,6 +61,11 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _minorUnitBox = new TextBox { MinWidth = 120 };
         _numberFormatBox = new TextBox { MinWidth = 180 };
         _majorGridlinesCheck = new CheckBox { Content = surface.MajorGridlinesLabel };
+        _majorTickMarkCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickMarkOptions);
+        _minorTickMarkCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickMarkOptions);
+        _tickLabelPositionCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickLabelPositionOptions);
+        _crossesCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.CrossingOptions);
+        _crossesAtBox = new TextBox { MinWidth = 120 };
         LoadControls();
 
         var buttons = new StackPanel
@@ -81,6 +91,11 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         content.Children.Add(MakeRow(surface.NumberFormatLabel, _numberFormatBox));
         content.Children.Add(new TextBlock { Text = surface.AutoHint, Margin = new Thickness(150, -4, 0, 8), Opacity = 0.7 });
         content.Children.Add(_majorGridlinesCheck);
+        content.Children.Add(MakeRow(surface.MajorTickMarkLabel, _majorTickMarkCombo));
+        content.Children.Add(MakeRow(surface.MinorTickMarkLabel, _minorTickMarkCombo));
+        content.Children.Add(MakeRow(surface.TickLabelPositionLabel, _tickLabelPositionCombo));
+        content.Children.Add(MakeRow(surface.CrossingLabel, _crossesCombo));
+        content.Children.Add(MakeRow(surface.CrossesAtLabel, _crossesAtBox));
         content.Children.Add(buttons);
         Content = content;
     }
@@ -113,6 +128,11 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _minorUnitBox.Text = Format(_planner.MinorUnit);
         _numberFormatBox.Text = _planner.NumberFormatCode;
         _majorGridlinesCheck.IsChecked = _planner.MajorGridlines;
+        _majorTickMarkCombo.SelectedItem = ChartAxisOptionsPlanner.TickMarkOptions.FirstOrDefault(x => x.Value == _planner.MajorTickMark);
+        _minorTickMarkCombo.SelectedItem = ChartAxisOptionsPlanner.TickMarkOptions.FirstOrDefault(x => x.Value == _planner.MinorTickMark);
+        _tickLabelPositionCombo.SelectedItem = ChartAxisOptionsPlanner.TickLabelPositionOptions.FirstOrDefault(x => x.Value == _planner.TickLabelPosition);
+        _crossesCombo.SelectedItem = ChartAxisOptionsPlanner.CrossingOptions.FirstOrDefault(x => x.Value == _planner.Crosses);
+        _crossesAtBox.Text = Format(_planner.CrossesAt);
     }
 
     private void UpdatePlannerFromControls()
@@ -124,6 +144,11 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _planner.SetMinorUnit(ParseOptional(_minorUnitBox.Text, "Minor unit"));
         _planner.SetNumberFormatCode(_numberFormatBox.Text);
         _planner.SetMajorGridlines(_majorGridlinesCheck.IsChecked == true);
+        _planner.SetMajorTickMark(((ChartTickMarkOption)_majorTickMarkCombo.SelectedItem).Value);
+        _planner.SetMinorTickMark(((ChartTickMarkOption)_minorTickMarkCombo.SelectedItem).Value);
+        _planner.SetTickLabelPosition(((ChartTickLabelPositionOption)_tickLabelPositionCombo.SelectedItem).Value);
+        _planner.SetCrosses(((ChartAxisCrossingOption)_crossesCombo.SelectedItem).Value);
+        _planner.SetCrossesAt(ParseOptional(_crossesAtBox.Text, "Crosses at"));
     }
 
     private static double? ParseOptional(string text, string label)
@@ -150,4 +175,12 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         row.Children.Add(control);
         return row;
     }
+
+    private static ComboBox MakeChoiceCombo<T>(IReadOnlyList<T> options) where T : class =>
+        new()
+        {
+            ItemsSource = options,
+            DisplayMemberPath = "Label",
+            MinWidth = 150,
+        };
 }

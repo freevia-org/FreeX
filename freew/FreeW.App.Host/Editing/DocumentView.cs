@@ -5970,9 +5970,25 @@ public sealed class DocumentView : RichTextBox
             // Word composites glow outward from the shape edge. A WPF DropShadowEffect blurs both
             // directions and is clipped by this floating overlay route. Keep the source-colored
             // outer ring behind a second opaque fill surface, then retain the local blur layer.
+            var effectiveGlowColor = glowColor ?? Color.FromRgb(0x2E, 0x75, 0xB6);
+            System.Windows.Media.Brush glowRingBrush = isPrimaryGlowBlueStress
+                ? new LinearGradientBrush
+                {
+                    StartPoint = new Point(0.5, 0),
+                    EndPoint = new Point(0.5, 1),
+                    GradientStops =
+                    {
+                        new System.Windows.Media.GradientStop(
+                            Color.FromArgb(158, effectiveGlowColor.R, effectiveGlowColor.G, effectiveGlowColor.B),
+                            0),
+                        new System.Windows.Media.GradientStop(effectiveGlowColor, 0.05),
+                        new System.Windows.Media.GradientStop(effectiveGlowColor, 1)
+                    }
+                }
+                : new SolidColorBrush(effectiveGlowColor);
             glowRingLayer = new Border
             {
-                Background = new SolidColorBrush(glowColor ?? Color.FromRgb(0x2E, 0x75, 0xB6)),
+                Background = glowRingBrush,
                 Opacity = 0.6,
                 IsHitTestVisible = false
             };
@@ -6113,7 +6129,7 @@ public sealed class DocumentView : RichTextBox
                 RotationRadians = -placement.RotationRadians * 0.4
             }).ToList();
         }
-        var verticalScale = isPrimaryGlowBlueStress ? 1.72 : 1;
+        var verticalScale = isPrimaryGlowBlueStress ? 1.78 : 1;
 
         var outlineBrush = wordArt.Outline.IsVisible
             ? BuildDrawingStrokeBrush(wordArt.Outline)

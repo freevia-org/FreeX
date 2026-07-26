@@ -15,6 +15,11 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
     private string? _oldNumberFormatCode;
     private bool? _oldNumberFormatSourceLinked;
     private bool _oldMajorGridlines;
+    private ChartTickMark? _oldMajorTickMark;
+    private ChartTickMark? _oldMinorTickMark;
+    private ChartTickLabelPosition? _oldTickLabelPosition;
+    private ChartAxisCrossing? _oldCrosses;
+    private double? _oldCrossesAt;
 
     public SetChartAxisOptionsCommand(int slideIndex, uint shapeId, ChartAxisOptions options)
     {
@@ -43,6 +48,11 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
             : _newOptions.NumberFormatCode.Trim();
         axis.NumberFormatSourceLinked = axis.NumberFormatCode is null ? null : false;
         axis.HasMajorGridlines = _newOptions.MajorGridlines;
+        axis.MajorTickMark = _newOptions.MajorTickMark;
+        axis.MinorTickMark = _newOptions.MinorTickMark;
+        axis.TickLabelPosition = _newOptions.TickLabelPosition;
+        axis.Crosses = _newOptions.CrossesAt is null ? _newOptions.Crosses : null;
+        axis.CrossesAt = _newOptions.CrossesAt;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -61,6 +71,11 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         axis.NumberFormatCode = _oldNumberFormatCode;
         axis.NumberFormatSourceLinked = _oldNumberFormatSourceLinked;
         axis.HasMajorGridlines = _oldMajorGridlines;
+        axis.MajorTickMark = _oldMajorTickMark;
+        axis.MinorTickMark = _oldMinorTickMark;
+        axis.TickLabelPosition = _oldTickLabelPosition;
+        axis.Crosses = _oldCrosses;
+        axis.CrossesAt = _oldCrossesAt;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -74,6 +89,11 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         _oldNumberFormatCode = axis.NumberFormatCode;
         _oldNumberFormatSourceLinked = axis.NumberFormatSourceLinked;
         _oldMajorGridlines = axis.HasMajorGridlines;
+        _oldMajorTickMark = axis.MajorTickMark;
+        _oldMinorTickMark = axis.MinorTickMark;
+        _oldTickLabelPosition = axis.TickLabelPosition;
+        _oldCrosses = axis.Crosses;
+        _oldCrossesAt = axis.CrossesAt;
     }
 
     private static ChartAxis ResolveAxis(ChartShape chart, ChartAxisKind kind) =>
