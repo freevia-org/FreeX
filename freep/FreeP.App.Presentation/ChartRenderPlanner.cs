@@ -373,6 +373,15 @@ public readonly record struct ChartLineSeriesPrimitive(
     public ChartClassicThreeDDepthPlan? Depth { get; init; }
 }
 
+/// <summary>Renderer-neutral line segments for one authored chart trendline.</summary>
+public readonly record struct ChartTrendlinePrimitive(
+    int SeriesIndex,
+    ChartTrendlineType Type,
+    IReadOnlyList<ChartLineSegmentPrimitive> Segments,
+    ChartStrokePlan Stroke,
+    bool DisplayEquation,
+    bool DisplayRSquared);
+
 public readonly record struct ChartAreaSeriesPrimitive(
     int SeriesIndex,
     ChartPlanPoint BaselineStart,
@@ -563,6 +572,7 @@ public sealed class ChartScenePlan
     public ChartBubblePrimitivePlan? Bubble { get; init; }
     public ChartRadarPrimitivePlan? Radar { get; init; }
     public IReadOnlyList<ChartLineSeriesPrimitive> ComboLineSeries { get; init; } = Array.Empty<ChartLineSeriesPrimitive>();
+    public IReadOnlyList<ChartTrendlinePrimitive> Trendlines { get; init; } = Array.Empty<ChartTrendlinePrimitive>();
     public IReadOnlyList<ChartErrorBarPrimitive> ErrorBars { get; init; } = Array.Empty<ChartErrorBarPrimitive>();
 }
 
@@ -1564,6 +1574,7 @@ public static partial class ChartRenderPlanner
             scatter,
             bubble,
             seriesColors);
+        var trendlines = BuildTrendlinePrimitives(chart, plot, geometryKind, seriesColors);
 
         return new ChartScenePlan
         {
@@ -1602,8 +1613,255 @@ public static partial class ChartRenderPlanner
             Bubble = bubble,
             Radar = radar,
             ComboLineSeries = comboLineSeries,
+            Trendlines = trendlines,
             ErrorBars = errorBars
         };
+    }
+
+    /// <summary>
+    /// Resolves the authored trendline into plot-space segments. The regression
+    /// math stays here so WPF and Avalonia consume identical points and axis
+    /// ranges; equation/R-squared labels remain a separate text-plan concern.
+    /// </summary>
+    public static IReadOnlyList<ChartTrendlinePrimitive> BuildTrendlinePrimitives(
+        ChartShape chart,
+        ChartPlanRect plot,
+        ChartSceneGeometryKind geometryKind,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
+    {
+        if (chart.Series.Count == 0 || !plot.HasPositiveArea ||
+            geometryKind is ChartSceneGeometryKind.Pie or ChartSceneGeometryKind.Doughnut or
+            ChartSceneGeometryKind.Radar or ChartSceneGeometryKind.Stock or ChartSceneGeometryKind.Surface)
+        {
+            return Array.Empty<ChartTrendlinePrimitive>();
+        }
+
+        bool scatter = geometryKind is ChartSceneGeometryKind.Scatter or ChartSceneGeometryKind.Bubble;
+        int categoryCount = Math.Max(1, ResolveChartCategoryCount(chart));
+        var (primaryMin, primaryMax, _) = ComputePrimaryValueAxisRange(chart);
+        var (secondaryMin, secondaryMax, _) = ComputeSecondaryValueAxisRange(chart);
+        var (scatterXMin, scatterXMax, _) = scatter
+            ? ComputeScatterAxisRange(chart, useX: true)
+            : (0.0, 1.0, 1.0);
+        double scatterXRange = Math.Max(1e-9, scatterXMax - scatterXMin);
+        var result = new List<ChartTrendlinePrimitive>();
+
+        for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+        {
+            var series = chart.Series[seriesIndex];
+            var trendline = series.Trendline;
+            if (trendline is null)
+                continue;
+
+            double yMin = series.OnSecondaryAxis ? secondaryMin : primaryMin;
+            double yMax = series.OnSecondaryAxis ? secondaryMax : primaryMax;
+            double yRange = yMax - yMin;
+            if (yRange <= 0)
+                continue;
+
+            var samples = new List<(double X, double Y)>();
+            int pointCount = scatter
+                ? Math.Min(series.XValues.Count, series.Values.Count)
+                : Math.Min(categoryCount, series.Values.Count);
+            for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
+            {
+                double? value = ResolveBlankSensitiveValue(chart, series.Values[pointIndex]);
+                if (!value.HasValue || !double.IsFinite(value.Value))
+                    continue;
+
+                double x = scatter
+                    ? series.XValues[pointIndex] ?? double.NaN
+                    : pointIndex;
+                if (double.IsFinite(x))
+                    samples.Add((x, value.Value));
+            }
+
+            if (samples.Count < 2)
+                continue;
+
+            samples.Sort((left, right) => left.X.CompareTo(right.X));
+            var stroke = (ResolveAuthoredSeriesStroke(series, seriesIndex, seriesColors, 1.0)
+                ?? ResolveSeriesStroke(seriesIndex, seriesColors, 1.0)) with
+            {
+                Alpha = 220,
+                Thickness = Math.Max(1.0, Math.Min(2.0, (ResolveAuthoredSeriesStroke(series, seriesIndex, seriesColors, 1.0)
+                    ?? ResolveSeriesStroke(seriesIndex, seriesColors, 1.0)).Thickness)),
+                Dash = OutlineDash.Dash
+            };
+
+            var values = BuildTrendlineValues(samples, trendline);
+            if (values.Count < 2)
+                continue;
+
+            var segments = new List<ChartLineSegmentPrimitive>();
+            ChartPlanPoint? previous = null;
+            int segmentIndex = 0;
+            foreach (var value in values)
+            {
+                double xFraction = scatter
+                    ? (value.X - scatterXMin) / scatterXRange
+                    : chart.ChartType is ChartType.Line or ChartType.LineMarkers
+                        ? value.X / Math.Max(1, categoryCount - 1)
+                        : (value.X + 0.5) / categoryCount;
+                double yFraction = (value.Y - yMin) / yRange;
+                if (!double.IsFinite(xFraction) || !double.IsFinite(yFraction) ||
+                    xFraction < 0 || xFraction > 1)
+                {
+                    previous = null;
+                    continue;
+                }
+
+                var current = new ChartPlanPoint(
+                    plot.X + xFraction * plot.Width,
+                    plot.Bottom - yFraction * plot.Height);
+                if (previous is { } start)
+                {
+                    segments.Add(new ChartLineSegmentPrimitive(
+                        seriesIndex,
+                        segmentIndex++,
+                        segmentIndex,
+                        start,
+                        current,
+                        stroke));
+                }
+
+                previous = current;
+            }
+
+            if (segments.Count > 0)
+            {
+                result.Add(new ChartTrendlinePrimitive(
+                    seriesIndex,
+                    trendline.Type,
+                    segments,
+                    stroke,
+                    trendline.DisplayEquation,
+                    trendline.DisplayRSquared));
+            }
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<(double X, double Y)> BuildTrendlineValues(
+        IReadOnlyList<(double X, double Y)> samples,
+        ChartTrendline trendline)
+    {
+        if (trendline.Type == ChartTrendlineType.MovingAverage)
+        {
+            int period = Math.Clamp(trendline.MovingAveragePeriod ?? 2, 2, samples.Count);
+            return samples.Select((sample, index) =>
+            {
+                int start = Math.Max(0, index - period + 1);
+                double average = samples.Skip(start).Take(index - start + 1).Average(item => item.Y);
+                return (sample.X, average);
+            }).ToArray();
+        }
+
+        var fitSamples = samples.ToList();
+        Func<double, double>? evaluator = null;
+        switch (trendline.Type)
+        {
+            case ChartTrendlineType.Exponential:
+                fitSamples = fitSamples.Where(item => item.Y > 0).ToList();
+                if (fitSamples.Count >= 2 && TryFitPolynomial(fitSamples.Select(item => (item.X, Math.Log(item.Y))).ToArray(), 1, out var exponential))
+                    evaluator = x => Math.Exp(EvaluatePolynomial(exponential, x));
+                break;
+            case ChartTrendlineType.Logarithmic:
+                fitSamples = fitSamples.Where(item => item.X > 0).ToList();
+                if (fitSamples.Count >= 2 && TryFitPolynomial(fitSamples.Select(item => (Math.Log(item.X), item.Y)).ToArray(), 1, out var logarithmic))
+                    evaluator = x => EvaluatePolynomial(logarithmic, Math.Log(Math.Max(double.Epsilon, x)));
+                break;
+            case ChartTrendlineType.Power:
+                fitSamples = fitSamples.Where(item => item.X > 0 && item.Y > 0).ToList();
+                if (fitSamples.Count >= 2 && TryFitPolynomial(fitSamples.Select(item => (Math.Log(item.X), Math.Log(item.Y))).ToArray(), 1, out var power))
+                    evaluator = x => Math.Exp(EvaluatePolynomial(power, Math.Log(Math.Max(double.Epsilon, x))));
+                break;
+            default:
+                int degree = trendline.Type == ChartTrendlineType.Polynomial
+                    ? Math.Clamp(trendline.PolynomialOrder ?? 2, 2, 6)
+                    : 1;
+                if (TryFitPolynomial(fitSamples, Math.Min(degree, fitSamples.Count - 1), out var coefficients))
+                    evaluator = x => EvaluatePolynomial(coefficients, x);
+                break;
+        }
+
+        if (evaluator is null || fitSamples.Count < 2)
+            return Array.Empty<(double X, double Y)>();
+
+        double minX = fitSamples.Min(item => item.X) - Math.Max(0, trendline.Backward ?? 0);
+        double maxX = fitSamples.Max(item => item.X) + Math.Max(0, trendline.Forward ?? 0);
+        int sampleCount = 48;
+        var result = new List<(double X, double Y)>(sampleCount);
+        for (int index = 0; index < sampleCount; index++)
+        {
+            double x = minX + (maxX - minX) * index / (sampleCount - 1);
+            double y = evaluator(x);
+            if (double.IsFinite(x) && double.IsFinite(y))
+                result.Add((x, y));
+        }
+
+        return result;
+    }
+
+    private static bool TryFitPolynomial(
+        IReadOnlyList<(double X, double Y)> samples,
+        int degree,
+        out double[] coefficients)
+    {
+        int size = degree + 1;
+        coefficients = new double[size];
+        if (samples.Count < size)
+            return false;
+
+        var matrix = new double[size, size + 1];
+        for (int row = 0; row < size; row++)
+        {
+            for (int column = 0; column < size; column++)
+                matrix[row, column] = samples.Sum(sample => Math.Pow(sample.X, row + column));
+            matrix[row, size] = samples.Sum(sample => Math.Pow(sample.X, row) * sample.Y);
+        }
+
+        for (int pivot = 0; pivot < size; pivot++)
+        {
+            int best = pivot;
+            for (int row = pivot + 1; row < size; row++)
+            {
+                if (Math.Abs(matrix[row, pivot]) > Math.Abs(matrix[best, pivot]))
+                    best = row;
+            }
+            if (Math.Abs(matrix[best, pivot]) < 1e-12)
+                return false;
+            if (best != pivot)
+            {
+                for (int column = pivot; column <= size; column++)
+                    (matrix[pivot, column], matrix[best, column]) = (matrix[best, column], matrix[pivot, column]);
+            }
+
+            double divisor = matrix[pivot, pivot];
+            for (int column = pivot; column <= size; column++)
+                matrix[pivot, column] /= divisor;
+            for (int row = 0; row < size; row++)
+            {
+                if (row == pivot)
+                    continue;
+                double factor = matrix[row, pivot];
+                for (int column = pivot; column <= size; column++)
+                    matrix[row, column] -= factor * matrix[pivot, column];
+            }
+        }
+
+        for (int index = 0; index < size; index++)
+            coefficients[index] = matrix[index, size];
+        return true;
+    }
+
+    private static double EvaluatePolynomial(IReadOnlyList<double> coefficients, double x)
+    {
+        double result = 0;
+        for (int index = coefficients.Count - 1; index >= 0; index--)
+            result = result * x + coefficients[index];
+        return result;
     }
 
     private static IReadOnlyList<ChartErrorBarPrimitive> BuildErrorBarPrimitives(

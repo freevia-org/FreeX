@@ -1042,6 +1042,7 @@ public sealed class SlideCanvas : FrameworkElement
         if (scene.ComboLineSeries.Count > 0)
             RenderComboOverrideSeries(dc, scene);
 
+        RenderTrendlines(dc, scene.Trendlines);
         RenderErrorBars(dc, scene.ErrorBars);
 
         if (scene.AxisTicks.CategoryTicks.Count > 0 || scene.AxisTicks.ValueTicks.Count > 0)
@@ -1287,6 +1288,17 @@ public sealed class SlideCanvas : FrameworkElement
                 if (!errorBar.NoEndCap)
                     DrawErrorBarCap(dc, pen, plus, errorBar.Direction);
             }
+        }
+    }
+
+    private static void RenderTrendlines(
+        DrawingContext dc,
+        IReadOnlyList<ChartTrendlinePrimitive> trendlines)
+    {
+        foreach (var trendline in trendlines)
+        {
+            foreach (var segment in trendline.Segments)
+                dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
         }
     }
 
