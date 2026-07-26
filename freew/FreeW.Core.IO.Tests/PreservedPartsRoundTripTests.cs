@@ -142,11 +142,20 @@ public class PreservedPartsRoundTripTests
             Add("word/settings.xml",
                 """
                 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-                <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <w:attachedTemplate r:id="rIdAttachedTemplate"/>
                   <w:defaultTabStop w:val="708"/>
                   <w:autoHyphenation/>
                   <w:compat><w:doNotExpandShiftReturn/></w:compat>
                 </w:settings>
+                """);
+
+            Add("word/_rels/settings.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdAttachedTemplate" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="file:///C:/Templates/Contoso.dotm" TargetMode="External"/>
+                </Relationships>
                 """);
 
             Add("word/webSettings.xml",
@@ -457,6 +466,27 @@ public class PreservedPartsRoundTripTests
         // Unmodelled settings are still all present.
         settings.Element(W + "defaultTabStop").Should().NotBeNull();
         settings.Element(W + "compat").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Settings_AttachedTemplateRelationshipSurvives()
+    {
+        var source = AuthorPackage();
+        var rewritten = WriteBytes(ReadDoc(source));
+
+        EntryXml(rewritten, "word/settings.xml").Root!
+            .Element(W + "attachedTemplate")!
+            .Attribute(R + "id")!.Value.Should().Be("rIdAttachedTemplate");
+        HasEntry(rewritten, "word/_rels/settings.xml.rels").Should().BeTrue();
+        EntryBytes(rewritten, "word/_rels/settings.xml.rels")
+            .Should().Equal(EntryBytes(source, "word/_rels/settings.xml.rels"));
+
+        var twice = WriteBytes(ReadDoc(rewritten));
+        EntryXml(twice, "word/settings.xml").Root!
+            .Element(W + "attachedTemplate")!
+            .Attribute(R + "id")!.Value.Should().Be("rIdAttachedTemplate");
+        EntryBytes(twice, "word/_rels/settings.xml.rels")
+            .Should().Equal(EntryBytes(rewritten, "word/_rels/settings.xml.rels"));
     }
 
     // --- customXml + webSettings: verbatim pass-through ---------------------------------------------

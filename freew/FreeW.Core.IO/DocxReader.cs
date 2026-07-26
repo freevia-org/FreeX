@@ -266,7 +266,8 @@ public static class DocxReader
     /// <summary>
     /// Captures the package parts FreeW does not model but preserves verbatim (preserve-and-re-emit):
     /// <c>word/webSettings.xml</c>, every <c>customXml/*</c> part (each item, its props, and the item's own
-    /// <c>_rels</c>), and <c>word/glossary/*</c> building-block parts. Each captured part records its raw bytes plus — when it has them — its
+    /// <c>_rels</c>), the local relationship graph of preserved <c>word/settings.xml</c>, and
+    /// <c>word/glossary/*</c> building-block parts. Each captured part records its raw bytes plus — when it has them — its
     /// <c>[Content_Types].xml</c> Override and the document→part relationship type, so the writer can re-emit
     /// the part, its content type and its relationship unchanged. A document with none of these parts (authored
     /// from scratch) captures nothing, so it round-trips byte-equivalently to before.
@@ -293,6 +294,12 @@ public static class DocxReader
         if (archive.GetEntry("word/webSettings.xml") is not null)
             Capture("/word/webSettings.xml",
                 docRelTypesByTarget.GetValueOrDefault("webSettings.xml") ?? WebSettingsRelType);
+
+        // w:settings itself is overlaid from OriginalSettings on write, but its local relationship graph is
+        // not modelled. In particular, w:attachedTemplate/@r:id depends on settings.xml.rels. Preserve that
+        // graph verbatim so a Word-attached template remains connected after FreeW saves the document.
+        if (document.Preserved.OriginalSettings is not null)
+            CaptureReferencedParts(archive, document, SettingsPartName, overrides, contentTypeDefaults);
 
         // Body-level altChunk imports are unresolved source payloads (HTML, RTF, or a nested Word package) that
         // Word imports on open. Keep the body marker plus its payload and any local relationship graph intact.
