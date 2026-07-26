@@ -111,6 +111,19 @@ public sealed class PresentationAnimationCommandPlannerTests
     }
 
     [Fact]
+    public void TryApply_EffectCommand_RejectsMissingSelectionWithoutUndoEntry()
+    {
+        var editor = MakeSession(out _, out _);
+        editor.ClearSelection();
+        PresentationAnimationCommandPlanner.TryPlan("freep.anim.entrance.fade", out var plan)
+            .Should().BeTrue();
+
+        PresentationAnimationCommandPlanner.TryApply(editor, plan).Should().BeFalse();
+        editor.CurrentSlideAnimations.Should().BeEmpty();
+        editor.Bus.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void TryApply_NoneCommand_RemovesSelectedShapeAnimationsOnly()
     {
         var editor = MakeSession(out var presentation, out var shapeId);
