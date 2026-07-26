@@ -1127,12 +1127,19 @@ public sealed class ChartDataCommandTests
         chart.ValueAxis.NumberFormatCode = "0";
         chart.ValueAxis.NumberFormatSourceLinked = true;
         chart.ValueAxis.HasMajorGridlines = true;
+        chart.ValueAxis.MajorTickMark = ChartTickMark.Cross;
+        chart.ValueAxis.MinorTickMark = ChartTickMark.Out;
+        chart.ValueAxis.TickLabelPosition = ChartTickLabelPosition.High;
+        chart.ValueAxis.Crosses = ChartAxisCrossing.Max;
+        chart.ValueAxis.CrossesAt = 40;
 
         bus.Execute(new SetChartAxisOptionsCommand(
             0,
             id,
             new ChartAxisOptions(
-                ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false)));
+                ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false,
+                ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
+                ChartAxisCrossing.Min, 10)));
 
         chart.ValueAxis.Title.Should().Be("Revenue");
         chart.ValueAxis.Min.Should().Be(10);
@@ -1142,6 +1149,11 @@ public sealed class ChartDataCommandTests
         chart.ValueAxis.NumberFormatCode.Should().Be("$#,##0");
         chart.ValueAxis.NumberFormatSourceLinked.Should().BeFalse();
         chart.ValueAxis.HasMajorGridlines.Should().BeFalse();
+        chart.ValueAxis.MajorTickMark.Should().Be(ChartTickMark.Out);
+        chart.ValueAxis.MinorTickMark.Should().Be(ChartTickMark.In);
+        chart.ValueAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.NextTo);
+        chart.ValueAxis.Crosses.Should().BeNull();
+        chart.ValueAxis.CrossesAt.Should().Be(10);
 
         using var stream = new MemoryStream();
         PptxPackageWriter.Write(p, stream);
@@ -1154,6 +1166,11 @@ public sealed class ChartDataCommandTests
         roundTripped.ValueAxis.MinorUnit.Should().Be(5);
         roundTripped.ValueAxis.NumberFormatCode.Should().Be("$#,##0");
         roundTripped.ValueAxis.HasMajorGridlines.Should().BeFalse();
+        roundTripped.ValueAxis.MajorTickMark.Should().Be(ChartTickMark.Out);
+        roundTripped.ValueAxis.MinorTickMark.Should().Be(ChartTickMark.In);
+        roundTripped.ValueAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.NextTo);
+        roundTripped.ValueAxis.Crosses.Should().BeNull();
+        roundTripped.ValueAxis.CrossesAt.Should().Be(10);
 
         bus.Undo();
         chart.ValueAxis.Title.Should().Be("Old axis");
@@ -1163,6 +1180,11 @@ public sealed class ChartDataCommandTests
         chart.ValueAxis.NumberFormatCode.Should().Be("0");
         chart.ValueAxis.NumberFormatSourceLinked.Should().BeTrue();
         chart.ValueAxis.HasMajorGridlines.Should().BeTrue();
+        chart.ValueAxis.MajorTickMark.Should().Be(ChartTickMark.Cross);
+        chart.ValueAxis.MinorTickMark.Should().Be(ChartTickMark.Out);
+        chart.ValueAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.High);
+        chart.ValueAxis.Crosses.Should().Be(ChartAxisCrossing.Max);
+        chart.ValueAxis.CrossesAt.Should().Be(40);
     }
 
     [Fact]

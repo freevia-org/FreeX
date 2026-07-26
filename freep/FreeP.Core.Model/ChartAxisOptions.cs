@@ -16,4 +16,9 @@ public sealed record ChartAxisOptions(
     double? MajorUnit,
     double? MinorUnit,
     string? NumberFormatCode,
-    bool MajorGridlines);
+    bool MajorGridlines,
+    ChartTickMark? MajorTickMark = null,
+    ChartTickMark? MinorTickMark = null,
+    ChartTickLabelPosition? TickLabelPosition = null,
+    ChartAxisCrossing? Crosses = null,
+    double? CrossesAt = null);
