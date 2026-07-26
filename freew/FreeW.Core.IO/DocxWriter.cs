@@ -1388,6 +1388,7 @@ public static class DocxWriter
         var background = document.Page.BackgroundColorHex is { Length: > 0 } bg
             ? new XElement(W + "background", new XAttribute(W + "color", bg.TrimStart('#')))
             : null;
+        var webExtensions = BuildPreservedWebExtensions(document.Preserved.WebExtensions, preservedDrawingRelIds);
 
         return new XDocument(
             new XElement(W + "document",
@@ -1408,7 +1409,31 @@ public static class DocxWriter
                 new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
                 // w:background (page background colour) must precede w:body in the document schema order.
                 background,
-                body));
+                body,
+                webExtensions));
+    }
+
+    private static XElement? BuildPreservedWebExtensions(
+        PreservedWebExtensions? webExtensions,
+        IReadOnlyDictionary<string, string> preservedPartRelIds)
+    {
+        if (webExtensions is null)
+            return null;
+
+        var element = XElement.Parse(webExtensions.Xml, LoadOptions.PreserveWhitespace);
+        foreach (var reference in webExtensions.References)
+        {
+            if (!preservedPartRelIds.TryGetValue(reference.PreservedPartName, out var newRelId))
+                continue;
+            foreach (var attribute in element.DescendantsAndSelf()
+                         .Attributes(R + "id")
+                         .Where(attribute => attribute.Value == reference.OriginalRelId))
+            {
+                attribute.Value = newRelId;
+            }
+        }
+
+        return element;
     }
 
     /// <summary>
