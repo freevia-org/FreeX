@@ -156,7 +156,7 @@ public sealed class FidelityRenderCompositeTests
             {
                 var bc  = ParseHexColor(pb.ColorHex, Colors.Black);
                 var edgeInset = Math.Min(PageLayout.PointsToDip(24), Math.Min(pixW, pixH) / 4.0);
-                var borderWidth = Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0));
+                var borderWidth = Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint);
                 if (pb.LineStyle == BorderLineStyle.Double)
                 {
                     var pen = new Pen(new SolidColorBrush(bc), borderWidth * 0.75);

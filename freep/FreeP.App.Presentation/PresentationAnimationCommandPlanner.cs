@@ -103,6 +103,11 @@ public static class PresentationAnimationCommandPlanner
                     return false;
                 }
 
+                if (!TryGetSelectedShapeId(editor, out _))
+                {
+                    return false;
+                }
+
                 editor.AddAnimation(0, BuildAnimation(kind, preset));
                 return true;
 

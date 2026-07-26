@@ -48,7 +48,10 @@ public static class DocumentMerge
         ArgumentNullException.ThrowIfNull(target);
         var clones = CloneBlocks(source);
         var existingBookmarkNames = BookmarkNamesIn(target);
-        var allParagraphs = TransferAnnotations(target, source, clones);
+        var allParagraphs = TransferAnnotations(target, source, clones)
+            .Concat(EnumerateSectionHeaderFooterParagraphs(clones))
+            .ToList();
+        allParagraphs.AddRange(EnumerateShapeTextParagraphs(allParagraphs).ToList());
         TransferCitationSources(target, source, allParagraphs);
         var sourceStyleIds = SourceStyleClosure(source, clones, allParagraphs);
         var numberingIds = TransferPreservedNumbering(target, source, allParagraphs, sourceStyleIds);
@@ -115,7 +118,9 @@ public static class DocumentMerge
             Formatting = source.Formatting,
             StyleId = source.StyleId,
             DropCap = source.DropCap,
+            SectionBreak = source.SectionBreak is { } section ? CloneSection(section) : null,
             PreservedNumbering = source.PreservedNumbering,
+            ParagraphFormatRevision = source.ParagraphFormatRevision,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
         foreach (var run in source.Runs)
@@ -127,27 +132,133 @@ public static class DocumentMerge
     {
         Image = source.Image?.Clone(),
         Equation = source.Equation?.Clone(),
+        Shape = source.Shape is { } shape ? CloneShape(shape) : null,
         WordArt = source.WordArt?.Clone(),
         SmartArt = source.SmartArt is { } smartArt ? SmartArtCommandCopy.Clone(smartArt) : null,
         Chart = source.Chart?.Clone(),
         EmbeddedObject = source.EmbeddedObject?.Clone(),
         Ruby = source.Ruby?.Clone(),
         PreservedDrawing = source.PreservedDrawing?.Duplicate(),
+        DrawingGroup = source.DrawingGroup is { } drawingGroup ? CloneDrawingGroup(drawingGroup) : null,
         HyperlinkUrl = source.HyperlinkUrl,
         HyperlinkAnchor = source.HyperlinkAnchor,
         HyperlinkTooltip = source.HyperlinkTooltip,
         FieldKind = source.FieldKind,
+        TableFormula = source.TableFormula,
         FootnoteId = source.FootnoteId,
         EndnoteId = source.EndnoteId,
         CommentId = source.CommentId,
         IsCommentReference = source.IsCommentReference,
+        IsPageBreak = source.IsPageBreak,
         Revision = source.Revision,
         Control = source.Control, // immutable record — safe to share
         Citation = source.Citation, // immutable — safe to share
         CrossReference = source.CrossReference, // immutable record — safe to share
         ComplexField = source.ComplexField, // immutable record — safe to share
         RevisionAuthor = source.RevisionAuthor,
-        RevisionDateXml = source.RevisionDateXml
+        RevisionDateXml = source.RevisionDateXml,
+        MoveRevisionId = source.MoveRevisionId,
+        FormatRevision = source.FormatRevision
+    };
+
+    private static Shape CloneShape(Shape source)
+    {
+        var clone = new Shape
+        {
+            Kind = source.Kind,
+            WidthPt = source.WidthPt,
+            HeightPt = source.HeightPt,
+            FillColorHex = source.FillColorHex,
+            OutlineColorHex = source.OutlineColorHex,
+            OutlineWidthPt = source.OutlineWidthPt,
+            OutlineDash = source.OutlineDash,
+            AltText = source.AltText,
+            TextDirection = source.TextDirection,
+            Placement = source.Placement?.Clone(),
+            ExtendedFill = source.ExtendedFill is { } fill ? CloneShapeFill(fill) : null,
+            Effects = source.Effects is { } effects ? CloneShapeEffects(effects) : null,
+            CustomGeometry = source.CustomGeometry is { } geometry ? CloneCustomGeometry(geometry) : null,
+            RotationAngle = source.RotationAngle,
+            FlipH = source.FlipH,
+            FlipV = source.FlipV
+        };
+        foreach (var paragraph in source.TextParagraphs)
+            clone.TextParagraphs.Add(CloneParagraph(paragraph));
+        return clone;
+    }
+
+    private static ShapeFill CloneShapeFill(ShapeFill source)
+    {
+        var clone = new ShapeFill
+        {
+            Kind = source.Kind,
+            GradientAngle = source.GradientAngle,
+            PatternPreset = source.PatternPreset,
+            PatternFgColorHex = source.PatternFgColorHex,
+            PatternBgColorHex = source.PatternBgColorHex
+        };
+        clone.GradientStops.AddRange(source.GradientStops);
+        return clone;
+    }
+
+    private static ShapeEffectLst CloneShapeEffects(ShapeEffectLst source) => new()
+    {
+        HasShadow = source.HasShadow,
+        ShadowBlurRad = source.ShadowBlurRad,
+        ShadowDist = source.ShadowDist,
+        ShadowDir = source.ShadowDir,
+        ShadowColorHex = source.ShadowColorHex,
+        ShadowAlpha = source.ShadowAlpha,
+        HasGlow = source.HasGlow,
+        GlowRad = source.GlowRad,
+        GlowColorHex = source.GlowColorHex,
+        GlowAlpha = source.GlowAlpha,
+        HasSoftEdge = source.HasSoftEdge,
+        SoftEdgeRad = source.SoftEdgeRad,
+        HasReflection = source.HasReflection,
+        ReflectionBlurRad = source.ReflectionBlurRad,
+        ReflectionAlpha = source.ReflectionAlpha,
+        ReflectionDir = source.ReflectionDir,
+        ReflectionDist = source.ReflectionDist,
+        HasBevel = source.HasBevel,
+        BevelW = source.BevelW,
+        BevelH = source.BevelH,
+        BevelPresetType = source.BevelPresetType
+    };
+
+    private static CustomGeometry CloneCustomGeometry(CustomGeometry source)
+    {
+        var clone = new CustomGeometry { Width = source.Width, Height = source.Height };
+        clone.Segments.AddRange(source.Segments);
+        return clone;
+    }
+
+    private static DrawingGroup CloneDrawingGroup(DrawingGroup source)
+    {
+        var clone = new DrawingGroup
+        {
+            Placement = source.Placement.Clone(),
+            WidthPt = source.WidthPt,
+            HeightPt = source.HeightPt,
+            RotationAngle = source.RotationAngle,
+            FlipH = source.FlipH,
+            FlipV = source.FlipV
+        };
+        foreach (var child in source.Children)
+            clone.Children.Add(CloneDrawingGroupChild(child));
+        clone.ChildOffsets.AddRange(source.ChildOffsets);
+        return clone;
+    }
+
+    private static object CloneDrawingGroupChild(object source) => source switch
+    {
+        InlineImage image => image.Clone(),
+        Shape shape => CloneShape(shape),
+        Chart chart => chart.Clone(),
+        SmartArt smartArt => SmartArtCommandCopy.Clone(smartArt),
+        WordArt wordArt => wordArt.Clone(),
+        DrawingGroup drawingGroup => CloneDrawingGroup(drawingGroup),
+        _ => source
     };
 
     private static Table CloneTable(Table source)
@@ -195,6 +306,32 @@ public static class DocumentMerge
             Borders = source.Borders,
             TextDirection = source.TextDirection,
         };
+        foreach (var paragraph in source.Paragraphs)
+            clone.Paragraphs.Add(CloneParagraph(paragraph));
+        return clone;
+    }
+
+    private static Section CloneSection(Section source) => new(source.Page.Clone(), source.BreakKind)
+    {
+        HeadersFooters = CloneSectionHeadersFooters(source.HeadersFooters)
+    };
+
+    private static SectionHeadersFooters CloneSectionHeadersFooters(SectionHeadersFooters source) => new()
+    {
+        Header = CloneHeaderFooter(source.Header),
+        Footer = CloneHeaderFooter(source.Footer),
+        EvenHeader = CloneHeaderFooter(source.EvenHeader),
+        EvenFooter = CloneHeaderFooter(source.EvenFooter),
+        FirstHeader = CloneHeaderFooter(source.FirstHeader),
+        FirstFooter = CloneHeaderFooter(source.FirstFooter)
+    };
+
+    private static HeaderFooter? CloneHeaderFooter(HeaderFooter? source)
+    {
+        if (source is null)
+            return null;
+
+        var clone = new HeaderFooter();
         foreach (var paragraph in source.Paragraphs)
             clone.Paragraphs.Add(CloneParagraph(paragraph));
         return clone;
@@ -859,6 +996,84 @@ public static class DocumentMerge
             foreach (var cell in table.Rows.SelectMany(row => row.Cells))
                 foreach (var cellParagraph in cell.Paragraphs)
                     yield return cellParagraph;
+        }
+    }
+
+    private static IEnumerable<Paragraph> EnumerateSectionHeaderFooterParagraphs(IEnumerable<Block> blocks)
+    {
+        foreach (var section in blocks.OfType<Paragraph>().Select(paragraph => paragraph.SectionBreak))
+        {
+            if (section is null)
+                continue;
+
+            foreach (var headerFooter in new[]
+            {
+                section.HeadersFooters.Header,
+                section.HeadersFooters.Footer,
+                section.HeadersFooters.EvenHeader,
+                section.HeadersFooters.EvenFooter,
+                section.HeadersFooters.FirstHeader,
+                section.HeadersFooters.FirstFooter
+            })
+            {
+                if (headerFooter is null)
+                    continue;
+
+                foreach (var paragraph in headerFooter.Paragraphs)
+                    yield return paragraph;
+            }
+        }
+    }
+
+    private static IEnumerable<Paragraph> EnumerateShapeTextParagraphs(IEnumerable<Paragraph> paragraphs)
+    {
+        var seen = new HashSet<Paragraph>();
+        foreach (var paragraph in paragraphs)
+        {
+            foreach (var shape in paragraph.Runs.SelectMany(EnumerateShapes))
+            {
+                foreach (var shapeParagraph in EnumerateShapeTextParagraphs(shape, seen))
+                    yield return shapeParagraph;
+            }
+        }
+    }
+
+    private static IEnumerable<Paragraph> EnumerateShapeTextParagraphs(Shape shape, ISet<Paragraph> seen)
+    {
+        foreach (var paragraph in shape.TextParagraphs)
+        {
+            if (!seen.Add(paragraph))
+                continue;
+
+            yield return paragraph;
+            foreach (var nestedShape in paragraph.Runs.SelectMany(EnumerateShapes))
+            {
+                foreach (var nestedParagraph in EnumerateShapeTextParagraphs(nestedShape, seen))
+                    yield return nestedParagraph;
+            }
+        }
+    }
+
+    private static IEnumerable<Shape> EnumerateShapes(Run run)
+    {
+        if (run.Shape is { } shape)
+            yield return shape;
+        if (run.DrawingGroup is not { } group)
+            yield break;
+
+        foreach (var groupShape in EnumerateGroupShapes(group))
+            yield return groupShape;
+    }
+
+    private static IEnumerable<Shape> EnumerateGroupShapes(DrawingGroup group)
+    {
+        foreach (var child in group.Children)
+        {
+            if (child is Shape shape)
+                yield return shape;
+            else if (child is DrawingGroup nestedGroup)
+                foreach (var nestedShape in EnumerateGroupShapes(nestedGroup))
+                    yield return nestedShape;
         }
     }
 

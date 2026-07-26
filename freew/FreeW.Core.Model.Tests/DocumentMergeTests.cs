@@ -108,6 +108,137 @@ public class DocumentMergeTests
     }
 
     [Fact]
+    public void Merge_TransfersSectionBreakHeadersAndStyles_WithoutAliasingTheSource()
+    {
+        var source = new TextDocument();
+        source.Styles["HeaderStyle"] = new DocumentStyle
+        {
+            Id = "HeaderStyle", Name = "Source header", Run = new RunFormatting { Bold = true, ColorHex = "#0066AA" }
+        };
+        var section = new Section(new PageSettings
+        {
+            WidthPt = 792,
+            HeightPt = 612,
+            Landscape = true,
+            MarginLeftPt = 54,
+            MarginRightPt = 63,
+            DifferentFirstPage = true
+        }, SectionBreakKind.OddPage);
+        section.HeadersFooters.Header = new HeaderFooter();
+        section.HeadersFooters.Header.Paragraphs.Add(new Paragraph("Source header") { StyleId = "HeaderStyle" });
+        section.HeadersFooters.FirstFooter = new HeaderFooter("Source first footer");
+        source.Blocks.Add(new Paragraph("Section one end") { SectionBreak = section });
+        source.Blocks.Add(new Paragraph("Section two body"));
+
+        var target = new TextDocument();
+        target.Styles["HeaderStyle"] = new DocumentStyle
+        {
+            Id = "HeaderStyle", Name = "Target header", Run = new RunFormatting { Italic = true, ColorHex = "#AA0000" }
+        };
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        var copiedSection = inserted[0].Should().BeOfType<Paragraph>().Which.SectionBreak!;
+        copiedSection.Should().NotBeNull();
+        copiedSection.Should().NotBeSameAs(section);
+        copiedSection.Page.Should().NotBeSameAs(section.Page);
+        copiedSection.BreakKind.Should().Be(SectionBreakKind.OddPage);
+        copiedSection.Page.WidthPt.Should().Be(792);
+        copiedSection.Page.Landscape.Should().BeTrue();
+        copiedSection.Page.MarginRightPt.Should().Be(63);
+        copiedSection.HeadersFooters.Header.Should().NotBeSameAs(section.HeadersFooters.Header);
+        copiedSection.HeadersFooters.Header!.Paragraphs.Single().StyleId.Should().Be("HeaderStyle_FreeW1");
+        copiedSection.HeadersFooters.FirstFooter!.Paragraphs.Single().PlainText.Should().Be("Source first footer");
+        target.Styles["HeaderStyle_FreeW1"].Run.ColorHex.Should().Be("#0066AA");
+        target.Styles["HeaderStyle"].Run.ColorHex.Should().Be("#AA0000");
+
+        copiedSection.Page.MarginLeftPt = 108;
+        copiedSection.HeadersFooters.Header.Paragraphs.Single().Runs.Single().Text = "Changed header";
+        section.Page.MarginLeftPt.Should().Be(54);
+        section.HeadersFooters.Header.Paragraphs.Single().PlainText.Should().Be("Source header");
+    }
+
+    [Fact]
+    public void Merge_ClonesDrawingRunsAndRunMarks_AndTransfersShapeTextStyles()
+    {
+        var source = new TextDocument();
+        source.Styles["ShapeText"] = new DocumentStyle
+        {
+            Id = "ShapeText", Name = "Source shape text", Run = new RunFormatting { Bold = true, ColorHex = "#0066AA" }
+        };
+        var shape = Shape.TextBoxWith("Shape text", 144, 72, "#4472C4");
+        shape.TextParagraphs.Single().StyleId = "ShapeText";
+        shape.Placement = new FloatingPlacement { Wrapping = ImageWrapping.Square, HorizontalOffsetPt = 18, ZOrderIndex = 5 };
+        shape.ExtendedFill = ShapeFill.LinearGradient(5400000, new GradientStop(0, "#4472C4"), new GradientStop(100000, "#FFFFFF"));
+        shape.Effects = new ShapeEffectLst { HasGlow = true, GlowRad = 64000 };
+        shape.CustomGeometry = CustomGeometry.RectanglePoly();
+
+        var group = new DrawingGroup
+        {
+            WidthPt = 180,
+            HeightPt = 90,
+            Placement = new FloatingPlacement { Wrapping = ImageWrapping.InFront, HorizontalOffsetPt = 36, ZOrderIndex = 8 }
+        };
+        var groupShape = Shape.Preset(ShapeKind.Ellipse, 36, 24, "#ED7D31");
+        group.Children.Add(groupShape);
+        group.Children.Add(WordArt.Create("Group label"));
+        group.ChildOffsets.Add((0, 0));
+        group.ChildOffsets.Add((54, 12));
+
+        var sourceParagraph = new Paragraph();
+        sourceParagraph.Runs.Add(Run.FromShape(shape));
+        sourceParagraph.Runs.Add(Run.FromDrawingGroup(group));
+        sourceParagraph.Runs.Add(Run.TableFormulaFieldRun(new TableFormulaField("=SUM(ABOVE)"), "12"));
+        sourceParagraph.Runs.Add(Run.PageBreak());
+        sourceParagraph.Runs.Add(new Run("Moved")
+        {
+            Revision = RevisionKind.Inserted,
+            MoveRevisionId = 42,
+            FormatRevision = new FormatRevision(RunFormatting.Default, "Reviewer", "2026-07-26T00:00:00Z")
+        });
+        sourceParagraph.ParagraphFormatRevision = new ParagraphFormatRevision(
+            ParagraphFormatting.Default, "Reviewer", "2026-07-26T00:00:00Z");
+        source.Blocks.Add(sourceParagraph);
+
+        var target = new TextDocument();
+        target.Styles["ShapeText"] = new DocumentStyle
+        {
+            Id = "ShapeText", Name = "Target shape text", Run = new RunFormatting { Italic = true, ColorHex = "#AA0000" }
+        };
+
+        var copied = DocumentMerge.Merge(target, 0, source).Single().Should().BeOfType<Paragraph>().Which;
+        var copiedShape = copied.Runs[0].Shape!;
+        var copiedGroup = copied.Runs[1].DrawingGroup!;
+
+        copiedShape.Should().NotBeSameAs(shape);
+        copiedShape.Placement.Should().NotBeSameAs(shape.Placement);
+        copiedShape.ExtendedFill.Should().NotBeSameAs(shape.ExtendedFill);
+        copiedShape.Effects.Should().NotBeSameAs(shape.Effects);
+        copiedShape.CustomGeometry.Should().NotBeSameAs(shape.CustomGeometry);
+        copiedShape.TextParagraphs.Single().StyleId.Should().Be("ShapeText_FreeW1");
+        target.Styles["ShapeText_FreeW1"].Run.ColorHex.Should().Be("#0066AA");
+        copiedGroup.Should().NotBeSameAs(group);
+        copiedGroup.Placement.Should().NotBeSameAs(group.Placement);
+        copiedGroup.Children[0].Should().BeOfType<Shape>().Which.Should().NotBeSameAs(groupShape);
+        copiedGroup.ChildOffsets.Should().Equal((0d, 0d), (54d, 12d));
+        copied.Runs[2].TableFormula.Should().Be(new TableFormulaField("=SUM(ABOVE)"));
+        copied.Runs[3].IsPageBreak.Should().BeTrue();
+        copied.Runs[4].MoveRevisionId.Should().Be(42);
+        copied.Runs[4].FormatRevision.Should().Be(new FormatRevision(RunFormatting.Default, "Reviewer", "2026-07-26T00:00:00Z"));
+        copied.ParagraphFormatRevision.Should().Be(new ParagraphFormatRevision(
+            ParagraphFormatting.Default, "Reviewer", "2026-07-26T00:00:00Z"));
+
+        copiedShape.Placement.HorizontalOffsetPt = 72;
+        copiedShape.ExtendedFill.GradientStops[0] = new GradientStop(0, "#000000");
+        copiedGroup.Placement.HorizontalOffsetPt = 72;
+        ((Shape)copiedGroup.Children[0]).FillColorHex = "#000000";
+        shape.Placement.HorizontalOffsetPt.Should().Be(18);
+        shape.ExtendedFill.GradientStops[0].ColorHex.Should().Be("#4472C4");
+        group.Placement.HorizontalOffsetPt.Should().Be(36);
+        groupShape.FillColorHex.Should().Be("#ED7D31");
+    }
+
+    [Fact]
     public void Merge_TransfersConflictingStyleClosureWithoutOverwritingTargetStyles()
     {
         var source = new TextDocument();

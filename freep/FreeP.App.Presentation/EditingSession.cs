@@ -325,8 +325,11 @@ public sealed class EditingSession
             if (!edit(smartArt))
                 return false;
 
-            SmartArtEditingPlanner.RewriteDataPart(smartArt);
-            SmartArtEditingPlanner.RegenerateDrawingCache(
+            var dataRewrite = SmartArtEditingPlanner.RewriteDataPart(smartArt);
+            if (!dataRewrite.Applied)
+                return false;
+
+            var cacheRefresh = SmartArtEditingPlanner.RegenerateDrawingCache(
                 smartArt,
                 shape.OffsetXEmu,
                 shape.OffsetYEmu,
@@ -334,7 +337,7 @@ public sealed class EditingSession
                 shape.ExtentCyEmu,
                 Presentation.Theme,
                 CurrentSlide?.ColorMapOverride);
-            return true;
+            return cacheRefresh.Applied;
         });
     }
 

@@ -144,6 +144,20 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void ApplySmartArtLayout_WhenCacheRefreshFails_DoesNotCommitPartialEdit()
+    {
+        var (session, _) = MakeSmartArtSession();
+        var smartArt = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        var originalLayout = smartArt.Data!.LayoutUniqueId;
+        smartArt.Parts.Remove("ppt/diagrams/drawing1.xml");
+
+        session.ApplySmartArtLayout(7, SmartArtLayoutPreset.BasicCycle).Should().BeFalse();
+
+        smartArt.Data.LayoutUniqueId.Should().Be(originalLayout);
+        session.Bus.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void ConvertSmartArtToShapes_ReplacesAtSameSlotAndUndoRestoresGraphic()
     {
         var (session, _) = MakeSmartArtSession();
