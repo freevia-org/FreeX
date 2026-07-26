@@ -196,8 +196,8 @@ public sealed class ChartSmartArtVisualPlannerTests
 
         var legend = ChartSmartArtVisualPlanner.BuildChartScene(chart, 400, 224).Legend;
         legend.Select(entry => entry.SwatchX).Should().Equal(136, 171, 206, 241);
-        legend.Select(entry => entry.SwatchY).Should().AllSatisfy(y => y.Should().Be(200));
-        legend.Select(entry => entry.SwatchSize).Should().AllSatisfy(size => size.Should().Be(9));
+        legend.Select(entry => entry.SwatchY).Should().AllSatisfy(y => y.Should().Be(199));
+        legend.Select(entry => entry.SwatchSize).Should().AllSatisfy(size => size.Should().Be(8));
     }
 
     [Fact]

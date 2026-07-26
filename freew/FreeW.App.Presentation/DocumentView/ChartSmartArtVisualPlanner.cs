@@ -451,8 +451,9 @@ public static class ChartSmartArtVisualPlanner
             chart.Categories.Count,
             chart.Series.Select(series => series.Values.Count).DefaultIfEmpty().Max());
         var usesWordDefaultCategoryLegend = UsesWordDefaultCategoryLegend(chart);
-        var usesCompactNativeCategoryLegend = usesWordDefaultCategoryLegend || UsesCompactNativeCategoryLegend(chart);
-        var useCategoryLegend = usesCompactNativeCategoryLegend || UsesCategoryLegend(chart, plan, isPie);
+        var usesImportedCompactCategoryLegend = UsesCompactNativeCategoryLegend(chart);
+        var usesCompactCategoryLegend = usesWordDefaultCategoryLegend || usesImportedCompactCategoryLegend;
+        var useCategoryLegend = usesCompactCategoryLegend || UsesCategoryLegend(chart, plan, isPie);
         var paletteHex = usesWordDefaultCategoryLegend
             ? WordDefaultCategoryLegendPalette
             : plan.PaletteHex;
@@ -744,7 +745,7 @@ public static class ChartSmartArtVisualPlanner
 
         if (legendCount > 0)
         {
-            var entryWidth = usesCompactNativeCategoryLegend
+            var entryWidth = usesCompactCategoryLegend
                 ? 35
                 : Math.Max(48, plot.Width / legendCount);
             for (var index = 0; index < legendCount; index++)
@@ -753,14 +754,16 @@ public static class ChartSmartArtVisualPlanner
                     || useCategoryLegend
                     ? index < chart.Categories.Count && !string.IsNullOrEmpty(chart.Categories[index]) ? chart.Categories[index] : $"Item {index + 1}"
                     : index < chart.Series.Count && !string.IsNullOrEmpty(chart.Series[index].Name) ? chart.Series[index].Name! : $"Series {index + 1}";
-                var x = usesCompactNativeCategoryLegend
+                var x = usesCompactCategoryLegend
                     ? frame.CenterX - 64 + index * entryWidth
                     : plot.X + index * entryWidth;
-                var y = usesCompactNativeCategoryLegend
+                var y = usesWordDefaultCategoryLegend
                     ? frame.Height - legendHeight - 6
+                    : usesImportedCompactCategoryLegend
+                        ? frame.Height - legendHeight - 7
                     : hasAxisTitles ? frame.Height - legendHeight - 5 : frame.Height - legendHeight + 3;
-                var swatchSize = usesCompactNativeCategoryLegend ? 9 : 8;
-                var textX = usesCompactNativeCategoryLegend ? x + 6 : x + 11;
+                var swatchSize = usesWordDefaultCategoryLegend ? 9 : 8;
+                var textX = usesCompactCategoryLegend ? x + 6 : x + 11;
                 legend.Add(new ChartSceneLegendEntry(label, x, y, swatchSize, textX, y));
             }
         }
