@@ -3276,12 +3276,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var selection = await ShowSubtotalInputDialogAsync();");
         source.Should().Contain("_session.RemoveSelectedRangeSubtotals()");
         source.Should().Contain("_session.ExecuteSubtotalOptions(selection.Options!)");
-        source.Should().Contain("private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()");
+        source.Should().Contain("private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(");
+        source.Should().Contain("SubtotalParityFixtureState? parityFixture = null");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"SubtotalCompactDialog\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(rangeText, \"SubtotalRangeSummaryText\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(groupColumnBox, \"SubtotalGroupColumnBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(functionBox, \"SubtotalFunctionBox\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(columnsPanel, \"SubtotalColumnsPanel\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(columnsList, \"SubtotalColumnsPanel\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(box, $\"SubtotalColumn{column.Offset}Box\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(replaceBox, \"SubtotalReplaceCurrentBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(pageBreakBox, \"SubtotalPageBreakBox\");");
@@ -3291,7 +3291,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(removeAllButton, \"SubtotalRemoveAllButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"SubtotalCancelButton\");");
         source.Should().Contain("SubtotalDialogPlanner.BuildColumnChoices(");
-        source.Should().Contain("SubtotalDialogPlanner.CreateFunctionChoices()");
+        source.Should().Contain("SubtotalDialogPlanner.CreateFunctionChoices(plannerText)");
         source.Should().Contain("SubtotalDialogPlanner.TryCreateResult(");
         source.Should().Contain("plan.ToInputOptions()");
 
@@ -3305,7 +3305,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_subtotal_menu_item={FormatBool(snapshot.HasNativeSubtotalMenuItem)}");
         parityCaptureSource.Should().Contain("(\"dialog.Subtotal\", () => ShowSubtotalParityDialogAsync()),");
         parityCaptureSource.Should().Contain("private Task ShowSubtotalParityDialogAsync()");
-        parityCaptureSource.Should().Contain("async () => { await ShowSubtotalInputDialogAsync(); }");
+        parityCaptureSource.Should().Contain("var fixture = SubtotalParityFixture.CreateState(_session.ActiveSheet);");
+        parityCaptureSource.Should().Contain("async () => { await ShowSubtotalInputDialogAsync(fixture); }");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowSubtotalDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
