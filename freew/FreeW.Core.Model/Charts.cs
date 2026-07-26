@@ -318,4 +318,28 @@ public sealed class Chart
         chart.Series.Add(new ChartSeries(seriesName, values));
         return chart;
     }
+
+    /// <summary>Creates an independent copy for document merge and undo snapshots.</summary>
+    public Chart Clone()
+    {
+        var clone = new Chart
+        {
+            Kind = Kind,
+            Title = Title,
+            ShowLegend = ShowLegend,
+            CategoryAxisTitle = CategoryAxisTitle,
+            ValueAxisTitle = ValueAxisTitle,
+            WidthPt = WidthPt,
+            HeightPt = HeightPt,
+            Placement = Placement?.Clone(),
+            StyleId = StyleId,
+            ColorSchemeId = ColorSchemeId,
+            QuickLayoutId = QuickLayoutId,
+            NativeVisualSettings = NativeVisualSettings
+        };
+        clone.Categories.AddRange(Categories);
+        foreach (var series in Series)
+            clone.Series.Add(new ChartSeries(series.Name, series.Values));
+        return clone;
+    }
 }

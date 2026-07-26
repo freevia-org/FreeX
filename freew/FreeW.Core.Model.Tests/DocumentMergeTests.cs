@@ -242,6 +242,82 @@ public class DocumentMergeTests
     }
 
     [Fact]
+    public void CloneBlocks_PreservesFloatingChart_WithoutSharingDataOrPlacement()
+    {
+        var chart = new Chart
+        {
+            Kind = ChartKind.Line,
+            Title = "Merged chart",
+            ShowLegend = true,
+            CategoryAxisTitle = "Month",
+            ValueAxisTitle = "Revenue",
+            WidthPt = 360,
+            HeightPt = 216,
+            StyleId = 6,
+            ColorSchemeId = "mono-blue",
+            QuickLayoutId = 4,
+            NativeVisualSettings = new ChartNativeVisualSettings(
+                ShowGridlines: true,
+                HasPlotAreaFill: true,
+                ShowDataLabels: false,
+                ScatterConnectsPoints: false),
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 20,
+                HorizontalAnchor = HorizontalAnchor.Margin,
+                VerticalAnchor = VerticalAnchor.Page,
+                ZOrderIndex = 4
+            }
+        };
+        chart.Categories.AddRange(["Jan", "Feb"]);
+        chart.Series.Add(new ChartSeries("Actual", [10, 20]));
+        chart.Series.Add(new ChartSeries("Plan", [12, 24]));
+
+        var source = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(chart));
+        source.Blocks.Add(paragraph);
+
+        var clone = DocumentMerge.CloneBlocks(source).Single().Should().BeOfType<Paragraph>().Subject.Runs.Single().Chart!;
+
+        clone.Should().NotBeSameAs(chart);
+        clone.Kind.Should().Be(ChartKind.Line);
+        clone.Title.Should().Be("Merged chart");
+        clone.ShowLegend.Should().BeTrue();
+        clone.CategoryAxisTitle.Should().Be("Month");
+        clone.ValueAxisTitle.Should().Be("Revenue");
+        clone.WidthPt.Should().Be(360);
+        clone.HeightPt.Should().Be(216);
+        clone.StyleId.Should().Be(6);
+        clone.ColorSchemeId.Should().Be("mono-blue");
+        clone.QuickLayoutId.Should().Be(4);
+        clone.NativeVisualSettings.Should().Be(chart.NativeVisualSettings);
+        clone.Placement.Should().NotBeSameAs(chart.Placement);
+        clone.Placement!.Wrapping.Should().Be(ImageWrapping.Square);
+        clone.Placement.HorizontalOffsetPt.Should().Be(36);
+        clone.Placement.VerticalOffsetPt.Should().Be(20);
+        clone.Placement.HorizontalAnchor.Should().Be(HorizontalAnchor.Margin);
+        clone.Placement.VerticalAnchor.Should().Be(VerticalAnchor.Page);
+        clone.Placement.ZOrderIndex.Should().Be(4);
+        clone.Categories.Should().Equal("Jan", "Feb");
+        clone.Series.Should().HaveCount(2);
+        clone.Series[0].Should().NotBeSameAs(chart.Series[0]);
+        clone.Series[0].Name.Should().Be("Actual");
+        clone.Series[0].Values.Should().Equal(10, 20);
+        clone.Series[1].Name.Should().Be("Plan");
+        clone.Series[1].Values.Should().Equal(12, 24);
+
+        clone.Categories[0] = "Changed";
+        clone.Series[0].Values[0] = 99;
+        clone.Placement.HorizontalOffsetPt = 0;
+        chart.Categories[0].Should().Be("Jan");
+        chart.Series[0].Values[0].Should().Be(10);
+        chart.Placement!.HorizontalOffsetPt.Should().Be(36);
+    }
+
+    [Fact]
     public void Merge_AppendsSourceBlocks_WithTextIntact_AndSourceUnchanged()
     {
         var target = new TextDocument();

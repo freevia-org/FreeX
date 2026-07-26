@@ -82,6 +82,7 @@ public static class DocumentMerge
         Image = source.Image?.Clone(),
         WordArt = source.WordArt?.Clone(),
         SmartArt = source.SmartArt is { } smartArt ? SmartArtCommandCopy.Clone(smartArt) : null,
+        Chart = source.Chart?.Clone(),
         HyperlinkUrl = source.HyperlinkUrl,
         HyperlinkAnchor = source.HyperlinkAnchor,
         HyperlinkTooltip = source.HyperlinkTooltip,
