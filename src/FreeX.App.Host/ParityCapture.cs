@@ -633,8 +633,15 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.ForecastSheet", outDir, () =>
             new ForecastSheetDialog());
 
+        var subtotalWorkbook = ParityDemoWorkbookFactory.Create();
+        var subtotalSheet = subtotalWorkbook.Sheets.Single();
+        SubtotalParityFixture.ApplySheetState(subtotalSheet);
+        var subtotalFixture = SubtotalParityFixture.CreateState(subtotalSheet);
         CaptureDialog(results, "dialog.Subtotal", outDir, () =>
-            new SubtotalDialog(CreateSubtotalChoices("Region", "Product", "Revenue", "Units")));
+            new SubtotalDialog(
+                subtotalFixture.Columns,
+                subtotalFixture.SummaryBelowData,
+                subtotalFixture.CreatePlan()));
 
         CaptureDialog(results, "dialog.Sparkline", outDir, () =>
             new SparklineDialog("Sheet1!$D$2:$D$5", "Sheet1!$H$2:$H$5", SparklineKind.Line, sheetId: sheet.Id));
@@ -975,9 +982,6 @@ internal static class ParityCapture
 
     private static IReadOnlyList<RemoveDuplicateColumnChoice> CreateColumnChoices(params string[] headers) =>
         headers.Select((header, index) => new RemoveDuplicateColumnChoice((uint)index, header, true)).ToArray();
-
-    private static IReadOnlyList<SubtotalColumnChoice> CreateSubtotalChoices(params string[] headers) =>
-        headers.Select((header, index) => new SubtotalColumnChoice((uint)index, header, index >= 2)).ToArray();
 
     private static FormulaEvaluationSummary CreateFormulaEvaluationSummary(SheetId sheetId)
     {

@@ -20021,105 +20021,128 @@ public sealed partial class MainWindow : Window
             : UiText.Format("MainLoc_AddedSubtotalsTo", rangeReference));
     }
 
-    private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()
+    private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(
+        SubtotalParityFixtureState? parityFixture = null)
     {
         SubtotalDialogResult? result = null;
-        var range = _session.SelectedRange;
-        var columns = SubtotalDialogPlanner.BuildColumnChoices(
+        var range = parityFixture?.SelectedRange ?? _session.SelectedRange;
+        var columns = parityFixture?.Columns ?? SubtotalDialogPlanner.BuildColumnChoices(
             range,
             absoluteColumn => FormatScalarValue(_session.ActiveSheet.GetValue(range.Start.Row, absoluteColumn)));
+        var plannerText = SubtotalDialogPlannerText.From(UiText.Get);
+        var functions = SubtotalDialogPlanner.CreateFunctionChoices(plannerText);
+        var initialGroupColumnOffset = parityFixture?.GroupColumnOffset ?? 0;
+        var initialSubtotalColumnOffsets = parityFixture?.SubtotalColumnOffsets
+            ?? columns.Where(static column => column.IsSelected).Select(static column => column.Offset).ToArray();
+        var summaryBelowData = parityFixture?.SummaryBelowData ?? _session.ActiveSheet.OutlineSummaryBelow ?? true;
 
         var dialog = new Window
         {
-            Title = "Subtotal",
+            Title = UiText.Get("Subtotal_Subtotal"),
             Width = SubtotalParityDialogWidth,
             Height = SubtotalParityDialogHeight,
             MinWidth = SubtotalParityDialogWidth,
             MinHeight = SubtotalParityDialogHeight,
+            MaxWidth = SubtotalParityDialogWidth,
+            MaxHeight = SubtotalParityDialogHeight,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "SubtotalCompactDialog");
 
-        var rangeText = new TextBlock
-        {
-            Text = $"Range: {FormatRangeReference(range)}",
-            Foreground = HeaderForeground,
-            TextWrapping = TextWrapping.Wrap,
-        };
-        AutomationProperties.SetName(rangeText, "Subtotal range");
-        AutomationProperties.SetAutomationId(rangeText, "SubtotalRangeSummaryText");
-        AutomationProperties.SetHelpText(rangeText, "Shows the selected range for subtotaling.");
-
         var groupColumnBox = new ComboBox
         {
             ItemsSource = columns,
-            SelectedIndex = 0,
-            MinWidth = 240,
+            SelectedItem = columns.FirstOrDefault(column => column.Offset == initialGroupColumnOffset) ?? columns[0],
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
-        AutomationProperties.SetName(groupColumnBox, "At each change in");
+        ApplyDialogComboBoxChrome(groupColumnBox);
+        ApplySubtotalComboBoxChrome(groupColumnBox);
+        AutomationProperties.SetName(groupColumnBox, StripDisplayMnemonic(UiText.Get("Subtotal_AtEachChangeInAutomationName")));
         AutomationProperties.SetAutomationId(groupColumnBox, "SubtotalGroupColumnBox");
-        AutomationProperties.SetHelpText(groupColumnBox, "Choose the column used to group subtotal rows.");
+        AutomationProperties.SetHelpText(groupColumnBox, UiText.Get("Subtotal_AtEachChangeInHelpText"));
 
         var functionBox = new ComboBox
         {
-            ItemsSource = SubtotalDialogPlanner.CreateFunctionChoices(),
-            SelectedIndex = 0,
-            MinWidth = 240,
+            ItemsSource = functions,
+            SelectedItem = functions.FirstOrDefault(function =>
+                string.Equals(function.FunctionText, parityFixture?.FunctionText ?? SubtotalDialogPlanner.DefaultFunctionText, StringComparison.Ordinal))
+                ?? functions[0],
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
-        AutomationProperties.SetName(functionBox, "Use function");
+        ApplyDialogComboBoxChrome(functionBox);
+        ApplySubtotalComboBoxChrome(functionBox);
+        AutomationProperties.SetName(functionBox, StripDisplayMnemonic(UiText.Get("Subtotal_UseFunctionAutomationName")));
         AutomationProperties.SetAutomationId(functionBox, "SubtotalFunctionBox");
-        AutomationProperties.SetHelpText(functionBox, "Choose the subtotal calculation function.");
+        AutomationProperties.SetHelpText(functionBox, UiText.Get("Subtotal_UseFunctionHelpText"));
 
-        var columnsPanel = new StackPanel
+        var selectedOffsets = initialSubtotalColumnOffsets.ToHashSet();
+        var columnsList = new ListBox
         {
-            Spacing = 4,
+            ItemsSource = columns,
+            Height = 98,
+            MinHeight = 98,
+            MaxHeight = 98,
+            Padding = new Thickness(0),
+            BorderThickness = new Thickness(0),
         };
-        AutomationProperties.SetName(columnsPanel, "Add subtotal to");
-        AutomationProperties.SetAutomationId(columnsPanel, "SubtotalColumnsPanel");
-        AutomationProperties.SetHelpText(columnsPanel, "Columns that receive subtotal calculations.");
-
-        var columnBoxes = new List<CheckBox>();
-        foreach (var column in columns)
+        columnsList.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Hidden);
+        columnsList.ItemTemplate = new FuncDataTemplate<SubtotalDialogColumnChoice>((column, _) =>
         {
             var box = new CheckBox
             {
                 Content = column.Header,
-                IsChecked = column.IsSelected,
+                IsChecked = selectedOffsets.Contains(column.Offset),
+                Margin = new Thickness(0, 0, 0, 4),
             };
-            AutomationProperties.SetName(box, $"{column.Header} subtotal column");
+            ApplySubtotalCheckBoxChrome(box);
+            AutomationProperties.SetName(box, UiText.Format("Subtotal_ColumnAutomationNameFormat", column.Header));
             AutomationProperties.SetAutomationId(box, $"SubtotalColumn{column.Offset}Box");
-            AutomationProperties.SetHelpText(box, "Select to add a subtotal calculation to this column.");
-            columnBoxes.Add(box);
-            columnsPanel.Children.Add(box);
-        }
+            AutomationProperties.SetHelpText(box, UiText.Get("Subtotal_ColumnHelpText"));
+            box.IsCheckedChanged += (_, _) =>
+            {
+                if (box.IsChecked == true)
+                    selectedOffsets.Add(column.Offset);
+                else
+                    selectedOffsets.Remove(column.Offset);
+            };
+            return box;
+        }, supportsRecycling: false);
+        AutomationProperties.SetName(columnsList, StripDisplayMnemonic(UiText.Get("Subtotal_AddSubtotalToAutomationName")));
+        AutomationProperties.SetAutomationId(columnsList, "SubtotalColumnsPanel");
+        AutomationProperties.SetHelpText(columnsList, UiText.Get("Subtotal_AddSubtotalToHelpText"));
 
         var replaceBox = new CheckBox
         {
-            Content = "Replace current subtotals",
-            IsChecked = true,
+            Content = UiText.Get("Subtotal_ReplaceCurrentSubtotals"),
+            IsChecked = parityFixture?.ReplaceCurrentSubtotals ?? true,
         };
-        AutomationProperties.SetName(replaceBox, "Replace current subtotals");
+        ApplySubtotalCheckBoxChrome(replaceBox);
+        AutomationProperties.SetName(replaceBox, StripDisplayMnemonic(UiText.Get("Subtotal_ReplaceCurrentSubtotalsAutomationName")));
         AutomationProperties.SetAutomationId(replaceBox, "SubtotalReplaceCurrentBox");
-        AutomationProperties.SetHelpText(replaceBox, "Replace existing subtotals before applying new ones.");
+        AutomationProperties.SetHelpText(replaceBox, UiText.Get("Subtotal_ReplaceCurrentSubtotalsHelpText"));
 
         var pageBreakBox = new CheckBox
         {
-            Content = "Page break between groups",
-            IsChecked = false,
+            Content = UiText.Get("Subtotal_PageBreakBetweenGroups"),
+            IsChecked = parityFixture?.PageBreakBetweenGroups ?? false,
         };
-        AutomationProperties.SetName(pageBreakBox, "Page break between groups");
+        ApplySubtotalCheckBoxChrome(pageBreakBox);
+        AutomationProperties.SetName(pageBreakBox, StripDisplayMnemonic(UiText.Get("Subtotal_PageBreakBetweenGroupsAutomationName")));
         AutomationProperties.SetAutomationId(pageBreakBox, "SubtotalPageBreakBox");
-        AutomationProperties.SetHelpText(pageBreakBox, "Insert a page break after each subtotal group.");
+        AutomationProperties.SetHelpText(pageBreakBox, UiText.Get("Subtotal_PageBreakBetweenGroupsHelpText"));
 
         var summaryBelowBox = new CheckBox
         {
-            Content = "Summary below data",
-            IsChecked = true,
+            Content = UiText.Get("Subtotal_SummaryBelowData"),
+            IsChecked = summaryBelowData,
         };
-        AutomationProperties.SetName(summaryBelowBox, "Summary below data");
+        ApplySubtotalCheckBoxChrome(summaryBelowBox);
+        AutomationProperties.SetName(summaryBelowBox, StripDisplayMnemonic(UiText.Get("Subtotal_SummaryBelowDataAutomationName")));
         AutomationProperties.SetAutomationId(summaryBelowBox, "SubtotalSummaryBelowBox");
-        AutomationProperties.SetHelpText(summaryBelowBox, "Place summary rows below the grouped data.");
+        AutomationProperties.SetHelpText(summaryBelowBox, UiText.Get("Subtotal_SummaryBelowDataHelpText"));
 
         var errorText = new TextBlock
         {
@@ -20132,65 +20155,53 @@ public sealed partial class MainWindow : Window
 
         var okButton = new Button
         {
-            Content = "OK",
-            MinWidth = 84,
+            Content = UiText.Ok,
+            IsDefault = true,
+            MinWidth = 76,
             Padding = new Thickness(10, 4),
         };
-        AutomationProperties.SetName(okButton, "OK");
+        ApplyDialogButtonChrome(okButton, 72, isDefault: true);
+        AutomationProperties.SetName(okButton, UiText.Ok);
         AutomationProperties.SetAutomationId(okButton, "SubtotalOkButton");
-        AutomationProperties.SetHelpText(okButton, "Apply subtotal options.");
+        AutomationProperties.SetHelpText(okButton, UiText.Get("Subtotal_Subtotal"));
 
         var removeAllButton = new Button
         {
-            Content = "Remove All",
+            Content = UiText.Get("Subtotal_RemoveAll"),
             MinWidth = 96,
             Padding = new Thickness(10, 4),
         };
-        AutomationProperties.SetName(removeAllButton, "Remove All");
+        ApplyDialogButtonChrome(removeAllButton, 92);
+        AutomationProperties.SetName(removeAllButton, UiText.Get("Subtotal_RemoveAllAutomationName"));
         AutomationProperties.SetAutomationId(removeAllButton, "SubtotalRemoveAllButton");
-        AutomationProperties.SetHelpText(removeAllButton, "Remove subtotals from the selected range.");
+        AutomationProperties.SetHelpText(removeAllButton, UiText.Get("Subtotal_RemoveAllHelpText"));
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
-            MinWidth = 84,
+            Content = UiText.Cancel,
+            IsCancel = true,
+            MinWidth = 76,
             Padding = new Thickness(10, 4),
         };
-        AutomationProperties.SetName(cancelButton, "Cancel");
+        ApplyDialogButtonChrome(cancelButton, 72);
+        AutomationProperties.SetName(cancelButton, UiText.Cancel);
         AutomationProperties.SetAutomationId(cancelButton, "SubtotalCancelButton");
-        AutomationProperties.SetHelpText(cancelButton, "Close Subtotal without applying changes.");
-
-        // Use the shared white-bordered dialog button chrome (OK = blue default border) so these match
-        // every other dialog instead of rendering as the default gray Fluent buttons.
-        ApplyDialogButtonChrome(okButton, 84, isDefault: true);
-        ApplyDialogButtonChrome(removeAllButton, 96);
-        ApplyDialogButtonChrome(cancelButton, 84);
+        AutomationProperties.SetHelpText(cancelButton, UiText.Cancel);
 
         void Accept()
         {
             if (groupColumnBox.SelectedItem is not SubtotalDialogColumnChoice groupColumn ||
                 functionBox.SelectedItem is not SubtotalDialogFunctionChoice functionChoice)
             {
-                errorText.Text = "Choose a group column and subtotal function.";
+                errorText.Text = UiText.Get("Subtotal_UnsupportedSubtotalFunction");
                 groupColumnBox.Focus();
                 return;
             }
 
-            var selectedOffsets = columns
-                .Where((_, index) => columnBoxes.ElementAtOrDefault(index)?.IsChecked == true)
-                .Select(static column => column.Offset)
-                .ToArray();
-            if (selectedOffsets.Length == 0)
+            if (selectedOffsets.Count == 0)
             {
-                errorText.Text = "Select at least one subtotal column.";
-                Control focusTarget = okButton;
-                foreach (var columnBox in columnBoxes)
-                {
-                    focusTarget = columnBox;
-                    break;
-                }
-
-                focusTarget.Focus();
+                errorText.Text = UiText.Get("Subtotal_AtLeastOneSubtotalColumnIsRequired");
+                columnsList.Focus();
                 return;
             }
 
@@ -20200,11 +20211,11 @@ public sealed partial class MainWindow : Window
                     functionChoice.FunctionText,
                     replaceBox.IsChecked == true,
                     pageBreakBox.IsChecked == true,
-                    summaryBelowBox.IsChecked != false,
+                    summaryBelowBox.IsChecked == true,
                     out var plan,
                     out _))
             {
-                errorText.Text = "Choose a group column and subtotal function.";
+                errorText.Text = UiText.Get("Subtotal_UnsupportedSubtotalFunction");
                 functionBox.Focus();
                 return;
             }
@@ -20235,48 +20246,57 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        // WPF order: [Remove All] [OK] [Cancel]
-        var buttonRow = new StackPanel
+        // WPF order: [Remove All] on the left, [OK] and [Cancel] on the right.
+        var actionButtons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children =
             {
-                removeAllButton,
                 okButton,
                 cancelButton,
             },
         };
+        var buttonRow = new Grid
+        {
+            Height = 21,
+            Margin = new Thickness(0, 0, 0, 76),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+            Children =
+            {
+                removeAllButton,
+                actionButtons,
+            },
+        };
+        Grid.SetColumn(actionButtons, 2);
 
         dialog.Content = new DockPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(12, 12, 27, 12),
             Children =
             {
                 buttonRow,
-                new ScrollViewer
+                new StackPanel
                 {
-                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                    Content = new StackPanel
+                    Spacing = 0,
+                    Children =
                     {
-                        Spacing = 10,
-                        Children =
+                        CreateSubtotalField(UiText.Get("Subtotal_AtEachChangeIn"), groupColumnBox),
+                        CreateSubtotalField(UiText.Get("Subtotal_UseFunction"), functionBox, topMargin: 7),
+                        CreateSubtotalLabel(UiText.Get("Subtotal_AddSubtotalTo"), columnsList, topMargin: 10),
+                        new GroupBox
                         {
-                            rangeText,
-                            CreateSubtotalField("At each change in", groupColumnBox),
-                            CreateSubtotalField("Use function", functionBox),
-                            new GroupBox
-                            {
-                                Header = "Add subtotal to",
-                                Content = columnsPanel,
-                            },
-                            replaceBox,
-                            pageBreakBox,
-                            summaryBelowBox,
-                            errorText,
+                            Content = columnsList,
+                            Height = 100,
+                            MinHeight = 100,
+                            MaxHeight = 100,
+                            Padding = new Thickness(0),
                         },
+                        replaceBox,
+                        pageBreakBox,
+                        summaryBelowBox,
+                        errorText,
                     },
                 },
             },
@@ -20288,16 +20308,47 @@ public sealed partial class MainWindow : Window
         return result;
     }
 
-    private static StackPanel CreateSubtotalField(string label, Control control) =>
+    private static StackPanel CreateSubtotalField(string label, Control control, double topMargin = 0) =>
         new()
         {
-            Spacing = 4,
+            Margin = new Thickness(0, topMargin, 0, 0),
+            Spacing = 2,
             Children =
             {
-                new TextBlock { Text = StripDisplayMnemonic(label) },
+                CreateSubtotalLabel(label, control),
                 control,
             },
         };
+
+    private static Label CreateSubtotalLabel(string label, Control target, double topMargin = 0) =>
+        new()
+        {
+            Content = CreateSubtotalAccessText(label),
+            Target = target,
+            Height = 14,
+            MinHeight = 14,
+            MaxHeight = 14,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, topMargin, 0, 0),
+        };
+
+    private static void ApplySubtotalComboBoxChrome(ComboBox comboBox)
+    {
+        comboBox.Height = 22;
+        comboBox.MinHeight = 22;
+        comboBox.MaxHeight = 22;
+    }
+
+    private static AccessText CreateSubtotalAccessText(string label) =>
+        new() { Text = label };
+
+    private static void ApplySubtotalCheckBoxChrome(CheckBox checkBox)
+    {
+        checkBox.MinHeight = 20;
+        checkBox.MaxHeight = 20;
+        checkBox.FontSize = 12;
+        checkBox.FontFamily = FormulaBarFontFamily;
+    }
 
     private async Task ShowRemoveDuplicatesDialogAsync()
     {

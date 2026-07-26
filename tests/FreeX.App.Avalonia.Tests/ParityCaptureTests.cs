@@ -452,6 +452,44 @@ public sealed class ParityCaptureTests
     }
 
     [Fact]
+    public async Task CaptureParitySurfaces_CapturesSubtotalAtCanonicalFixedSize()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-parity-capture-subtotal-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                window.Show();
+                window.Measure(new global::Avalonia.Size(1120, 720));
+                window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
+                window.UpdateLayout();
+
+                var results = await window.CaptureParitySurfacesAsync(
+                    outputDirectory,
+                    targetSurfaceId: "dialog.Subtotal");
+
+                results.Should().ContainSingle();
+                var dialog = results.Single();
+                dialog.Id.Should().Be("dialog.Subtotal");
+                dialog.Captured.Should().BeTrue(dialog.Note);
+                AssertCapturedPng(outputDirectory, dialog);
+                ReadPngDimensions(Path.Combine(outputDirectory, dialog.PngFileName))
+                    .Should().Be((380, 390));
+
+                window.Close();
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
     public async Task CaptureParitySurfaces_CapturesChartStyleCatalogDialog()
     {
         var outputDirectory = Path.Combine(

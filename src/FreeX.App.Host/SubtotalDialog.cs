@@ -74,7 +74,10 @@ public sealed class SubtotalDialog : Window
     /// when unset) rather than always defaulting to checked, so callers should pass
     /// <c>sheet.OutlineSummaryBelow ?? true</c> here.
     /// </param>
-    public SubtotalDialog(IEnumerable<SubtotalColumnChoice>? columns = null, bool summaryBelowData = true)
+    public SubtotalDialog(
+        IEnumerable<SubtotalColumnChoice>? columns = null,
+        bool summaryBelowData = true,
+        SubtotalDialogPlanResult? initialPlan = null)
     {
         var columnChoices = NormalizeColumnChoices(columns);
         _subtotalColumns = columnChoices.Select(static column => new SubtotalColumnSelection(column)).ToList();
@@ -92,9 +95,17 @@ public sealed class SubtotalDialog : Window
         ConfigureVirtualizedItemsControl(_groupColumnBox);
         _groupColumnBox.MaxDropDownHeight = 220;
         _groupColumnBox.ItemsSource = columnChoices;
-        _groupColumnBox.SelectedValue = columnChoices[0].Offset;
+        _groupColumnBox.SelectedValue = initialPlan?.GroupColumnOffset ?? columnChoices[0].Offset;
         root.Children.Add(_groupColumnBox);
         root.Children.Add(new Label { Content = UiText.Get("Subtotal_UseFunction"), Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
+        if (initialPlan is not null)
+        {
+            var initialFunction = SharedSubtotalDialogPlanner.CreateFunctionChoices(PlannerText)
+                .FirstOrDefault(choice =>
+                    SubtotalFunctionService.TryParse(choice.FunctionText, out var number) &&
+                    number == initialPlan.FunctionNumber);
+            _functionBox.SelectedValue = initialFunction?.FunctionText ?? SharedSubtotalDialogPlanner.DefaultFunctionText;
+        }
         root.Children.Add(_functionBox);
         root.Children.Add(new Label { Content = UiText.Get("Subtotal_AddSubtotalTo"), Target = _subtotalColumnList, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
         ConfigureVirtualizedItemsControl(_subtotalColumnList);
@@ -104,6 +115,14 @@ public sealed class SubtotalDialog : Window
         _replaceBox.Content = UiText.Get("Subtotal_ReplaceCurrentSubtotals");
         _pageBreakBox.Content = UiText.Get("Subtotal_PageBreakBetweenGroups");
         _summaryBelowBox.Content = UiText.Get("Subtotal_SummaryBelowData");
+        if (initialPlan is not null)
+        {
+            var selectedOffsets = initialPlan.SubtotalColumnOffsets.ToHashSet();
+            foreach (var column in _subtotalColumns)
+                column.IsSelected = selectedOffsets.Contains(column.Offset);
+        }
+        _replaceBox.IsChecked = initialPlan?.ReplaceCurrentSubtotals ?? true;
+        _pageBreakBox.IsChecked = initialPlan?.PageBreakBetweenGroups ?? false;
         _summaryBelowBox.IsChecked = summaryBelowData;
         root.Children.Add(_replaceBox);
         root.Children.Add(_pageBreakBox);
@@ -374,18 +393,5 @@ public sealed class SubtotalDialog : Window
             _ => null
         };
 
-    private static SubtotalDialogPlannerText PlannerText =>
-        new(
-            UiText.Get("Subtotal_ColumnLabel"),
-            UiText.Get("Subtotal_FunctionSum"),
-            UiText.Get("Subtotal_FunctionCount"),
-            UiText.Get("Subtotal_FunctionAverage"),
-            UiText.Get("Subtotal_FunctionMax"),
-            UiText.Get("Subtotal_FunctionMin"),
-            UiText.Get("Subtotal_FunctionProduct"),
-            UiText.Get("Subtotal_FunctionCountNumbers"),
-            UiText.Get("Subtotal_FunctionStdDev"),
-            UiText.Get("Subtotal_FunctionStdDevp"),
-            UiText.Get("Subtotal_FunctionVar"),
-            UiText.Get("Subtotal_FunctionVarp"));
+    private static SubtotalDialogPlannerText PlannerText => SubtotalDialogPlannerText.From(UiText.Get);
 }

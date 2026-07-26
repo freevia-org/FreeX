@@ -34,6 +34,25 @@ public sealed record SubtotalDialogPlannerText(
     string FunctionVar,
     string FunctionVarp)
 {
+    public static SubtotalDialogPlannerText From(Func<string, string> getText)
+    {
+        ArgumentNullException.ThrowIfNull(getText);
+
+        return new(
+            getText("Subtotal_ColumnLabel"),
+            getText("Subtotal_FunctionSum"),
+            getText("Subtotal_FunctionCount"),
+            getText("Subtotal_FunctionAverage"),
+            getText("Subtotal_FunctionMax"),
+            getText("Subtotal_FunctionMin"),
+            getText("Subtotal_FunctionProduct"),
+            getText("Subtotal_FunctionCountNumbers"),
+            getText("Subtotal_FunctionStdDev"),
+            getText("Subtotal_FunctionStdDevp"),
+            getText("Subtotal_FunctionVar"),
+            getText("Subtotal_FunctionVarp"));
+    }
+
     public static SubtotalDialogPlannerText Default { get; } = new(
         "Column {0}",
         "Sum",

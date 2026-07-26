@@ -1498,11 +1498,15 @@ public sealed partial class MainWindow
             new CellAddress(_session.ActiveSheet.Id, 4, 2),
             async () => { await ShowForecastSheetInputDialogAsync(); });
 
-    private Task ShowSubtotalParityDialogAsync() =>
-        ShowWithParitySelectionAsync(
-            new CellAddress(_session.ActiveSheet.Id, 1, 1),
-            new CellAddress(_session.ActiveSheet.Id, 4, 4),
-            async () => { await ShowSubtotalInputDialogAsync(); });
+    private Task ShowSubtotalParityDialogAsync()
+    {
+        SubtotalParityFixture.ApplySheetState(_session.ActiveSheet);
+        var fixture = SubtotalParityFixture.CreateState(_session.ActiveSheet);
+        return ShowWithParitySelectionAsync(
+            fixture.SelectedRange.Start,
+            fixture.SelectedRange.End,
+            async () => { await ShowSubtotalInputDialogAsync(fixture); });
+    }
 
     private Task ShowSparklineParityDialogAsync() =>
         ShowInsertSparklineDialogAsync(
