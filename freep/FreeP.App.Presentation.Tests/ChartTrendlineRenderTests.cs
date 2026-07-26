@@ -57,6 +57,16 @@ public sealed class ChartTrendlineRenderTests
         trendline.Segments.Should().NotBeEmpty();
         trendline.DisplayEquation.Should().BeTrue();
         trendline.DisplayRSquared.Should().BeTrue();
+        if (type == ChartTrendlineType.MovingAverage)
+        {
+            trendline.Labels.Should().BeEmpty();
+        }
+        else
+        {
+            trendline.Labels.Should().HaveCount(2);
+            trendline.Labels[0].Text.Should().StartWith("y = ");
+            trendline.Labels[1].Text.Should().StartWith("R^2 = ");
+        }
     }
 
     [Fact]
