@@ -572,6 +572,36 @@ public sealed class SlideShowHostPlannerTests
     }
 
     [Fact]
+    public void HitTestHyperlink_ResolvesTheRunUnderThePointer()
+    {
+        var first = new Hyperlink { Url = "https://first.example.com" };
+        var second = new Hyperlink { Url = "https://second.example.com" };
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = "First", Hyperlink = first, FontSizePt = 18 });
+        paragraph.Runs.Add(new Run { Text = "Second", Hyperlink = second, FontSizePt = 18 });
+        body.Paragraphs.Add(paragraph);
+
+        var slide = new Slide();
+        var shape = new SlideShape
+        {
+            OffsetXEmu = (long)(100 * 9525),
+            OffsetYEmu = (long)(100 * 9525),
+            ExtentCxEmu = (long)(300 * 9525),
+            ExtentCyEmu = (long)(100 * 9525),
+            TextBody = body
+        };
+        slide.Shapes.Add(shape);
+
+        SlideShowHostPlanner.HitTestHyperlink(slide, new SlideShowPoint(125, 110))
+            .Should().BeSameAs(first);
+        SlideShowHostPlanner.HitTestHyperlink(slide, new SlideShowPoint(205, 110))
+            .Should().BeSameAs(second);
+        SlideShowHostPlanner.HitTestHyperlink(slide, new SlideShowPoint(380, 110))
+            .Should().BeNull("empty shape space must not activate a run hyperlink");
+    }
+
+    [Fact]
     public void PlanPointerClick_PrefersTriggerThenHyperlinkThenAdvance()
     {
         var slide = new Slide();
