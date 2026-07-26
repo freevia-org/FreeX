@@ -375,6 +375,13 @@ public static class FreePRibbon
             group.Medium(ChartTextOptionsPlanner.CommandId, FreePRibbonText.ChartTextOptionsLabel, RibbonCommandIconKind.Font, FreePRibbonText.ChartTextOptionsKeyTip);
             group.Medium(ChartAreaOptionsPlanner.CommandId, FreePRibbonText.ChartAreaOptionsLabel, RibbonCommandIconKind.Color, FreePRibbonText.ChartAreaOptionsKeyTip);
         });
+        tab.Group("smartart-insert", FreePRibbonText.SmartArtLayoutsGroup.Label, FreePRibbonText.SmartArtLayoutsGroup.KeyTip, 91, group =>
+        {
+            group.Large(SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId,
+                FreePRibbonText.SmartArtBasicProcessCommand.Label,
+                RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtBasicProcessCommand.KeyTip);
+        });
         tab.Group("links", FreePRibbonText.LinksGroupLabel, FreePRibbonText.LinksGroupKeyTip, 92, group =>
         {
             group.Large("freep.insert-link", FreePRibbonText.InsertLinkLabel, RibbonCommandIconKind.Link, FreePRibbonText.InsertLinkKeyTip);
