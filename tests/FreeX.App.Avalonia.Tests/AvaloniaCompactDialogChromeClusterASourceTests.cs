@@ -52,6 +52,15 @@ public sealed class AvaloniaCompactDialogChromeClusterASourceTests
         sparklineSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, SparklineDialogChromeStyle, width, isDefault);");
         sparklineSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, SparklineDialogChromeStyle);");
         sparklineSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, SparklineDialogChromeStyle);");
+        sparklineSource.Should().Contain("Width = 190,");
+        sparklineSource.Should().Contain("ApplySparklineButtonChrome(selectDataRangeButton, 132);");
+        sparklineSource.Should().Contain("ApplySparklineButtonChrome(selectLocationRangeButton, 152);");
+        sparklineSource.Should().Contain("typeBox.Width = 333;");
+        sparklineSource.Should().Contain("ApplySparklineButtonChrome(ok, 72, isDefault: true);");
+        sparklineSource.Should().Contain("ApplySparklineButtonChrome(cancel, 72);");
+        sparklineSource.Should().Contain("button.CornerRadius = new CornerRadius(0);");
+        sparklineSource.Should().Contain("textBox.CornerRadius = new CornerRadius(0);");
+        sparklineSource.Should().Contain("comboBox.CornerRadius = new CornerRadius(0);");
 
         textToColumnsSource.Should().Contain("using Free.Shared.Shell.Avalonia;");
         textToColumnsSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(");

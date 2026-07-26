@@ -69,7 +69,7 @@ public sealed partial class MainWindow
 
         var dataRangeBox = new TextBox
         {
-            MinWidth = 220,
+            Width = 190,
             Text = initialDataRangeText ?? (selection.CellCount > 1 ? FormatRangeReference(selection) : string.Empty),
         };
         ApplySparklineTextBoxChrome(dataRangeBox);
@@ -77,24 +77,25 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(dataRangeBox, UiText.Get("Sparkline_DataRange"));
 
         // Windows shows a range-picker button to the right of each range field.
-        var selectDataRangeButton = new Button { Content = UiText.Get("Sparkline_SelectDataRange"), MinWidth = 140 };
-        ApplySparklineButtonChrome(selectDataRangeButton, 140);
+        var selectDataRangeButton = new Button { Content = UiText.Get("Sparkline_SelectDataRange"), Width = 132 };
+        ApplySparklineButtonChrome(selectDataRangeButton, 132);
         AutomationProperties.SetAutomationId(selectDataRangeButton, "SparklineSelectDataRangeButton");
 
         var locationBox = new TextBox
         {
-            MinWidth = 220,
+            Width = 190,
             Text = initialLocationText ?? FormatCellReference(_session.ActiveCell),
         };
         ApplySparklineTextBoxChrome(locationBox);
         AutomationProperties.SetAutomationId(locationBox, "SparklineLocationRangeBox");
         AutomationProperties.SetName(locationBox, UiText.Get("Sparkline_LocationRange"));
 
-        var selectLocationRangeButton = new Button { Content = UiText.Get("Sparkline_SelectLocationRange"), MinWidth = 140 };
-        ApplySparklineButtonChrome(selectLocationRangeButton, 140);
+        var selectLocationRangeButton = new Button { Content = UiText.Get("Sparkline_SelectLocationRange"), Width = 152 };
+        ApplySparklineButtonChrome(selectLocationRangeButton, 152);
         AutomationProperties.SetAutomationId(selectLocationRangeButton, "SparklineSelectLocationRangeButton");
 
         var typeBox = BuildKindComboBox("SparklineTypeBox", kind);
+        typeBox.Width = 333;
         ApplySparklineComboBoxChrome(typeBox);
 
         // Explicit Width+Height (rather than SizeToContent.WidthAndHeight) keeps the dialog as compact as
@@ -114,11 +115,11 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "InsertSparklineDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
-        ApplySparklineButtonChrome(ok, 80, isDefault: true);
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, Width = 72 };
+        ApplySparklineButtonChrome(ok, 72, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "InsertSparklineOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
-        ApplySparklineButtonChrome(cancel, 80);
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, Width = 72 };
+        ApplySparklineButtonChrome(cancel, 72);
         AutomationProperties.SetAutomationId(cancel, "InsertSparklineCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -144,7 +145,7 @@ public sealed partial class MainWindow
             }
         };
 
-        var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
+        var content = new StackPanel { Spacing = 8, Margin = new Thickness(16) };
         content.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Sparkline_DataRange")), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
         content.Children.Add(BuildSparklineRangeRow(dataRangeBox, selectDataRangeButton));
         content.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Sparkline_LocationRange")), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
@@ -368,12 +369,11 @@ public sealed partial class MainWindow
         {
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = GridLength.Star },
+                new ColumnDefinition { Width = new GridLength(190) },
                 new ColumnDefinition { Width = GridLength.Auto },
             },
         };
-        rangeBox.MinWidth = 200;
-        pickerButton.Margin = new Thickness(8, 0, 0, 0);
+        pickerButton.Margin = new Thickness(6, 0, 0, 0);
         Grid.SetColumn(rangeBox, 0);
         Grid.SetColumn(pickerButton, 1);
         row.Children.Add(rangeBox);
@@ -401,12 +401,19 @@ public sealed partial class MainWindow
     private static void ApplySparklineButtonChrome(Button button, double width, bool isDefault = false)
     {
         button.Width = width;
+        button.CornerRadius = new CornerRadius(0);
         AvaloniaCompactDialogChrome.ApplyButton(button, SparklineDialogChromeStyle, width, isDefault);
     }
 
     private static void ApplySparklineTextBoxChrome(TextBox textBox)
-        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, SparklineDialogChromeStyle);
+    {
+        textBox.CornerRadius = new CornerRadius(0);
+        AvaloniaCompactDialogChrome.ApplyTextBox(textBox, SparklineDialogChromeStyle);
+    }
 
     private static void ApplySparklineComboBoxChrome(ComboBox comboBox)
-        => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, SparklineDialogChromeStyle);
+    {
+        comboBox.CornerRadius = new CornerRadius(0);
+        AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, SparklineDialogChromeStyle);
+    }
 }
