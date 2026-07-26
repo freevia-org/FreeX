@@ -1281,6 +1281,14 @@ public sealed class ChartDataCommandTests
                     Position = DataLabelPosition.InsideEnd,
                     NumberFormat = "0.0%",
                     Separator = " | ",
+                    TextStyle = new ChartTextStyle
+                    {
+                        FontFamily = "Aptos",
+                        FontSizePt = 9,
+                        Bold = true,
+                        Italic = false,
+                        Color = new ThemeAwareColor(SrgbColor.FromRgb(0x2F5496)),
+                    },
                 })));
 
         var series = chart.Series[1];
@@ -1323,6 +1331,12 @@ public sealed class ChartDataCommandTests
         roundTrippedLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         roundTrippedLabels.NumberFormat.Should().Be("0.0%");
         roundTrippedLabels.Separator.Should().Be(" | ");
+        roundTrippedLabels.TextStyle.Should().NotBeNull();
+        roundTrippedLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        roundTrippedLabels.TextStyle.FontSizePt.Should().Be(9);
+        roundTrippedLabels.TextStyle.Bold.Should().BeTrue();
+        roundTrippedLabels.TextStyle.Italic.Should().BeFalse();
+        roundTrippedLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
         var roundTrippedMarker = roundTripped.Series[1].MarkerStyle!;
         roundTrippedMarker.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
         roundTrippedMarker.SizePt.Should().Be(8);

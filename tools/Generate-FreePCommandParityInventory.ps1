@@ -494,7 +494,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/ChartDataDialogTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Series-scoped value, percentage, category, series-name, legend-key, position, format, and separator controls now round-trip through c:dLbls and one undoable edit in both hosts. Per-point label text styling, full PowerPoint label text styling, and PowerPoint-authoritative chart visual baselines remain deferred."),
+            RemainingWork: "Series-scoped value, percentage, category, series-name, legend-key, position, format, separator, and font styling controls now round-trip through c:dLbls and one undoable edit in both hosts. PowerPoint-authoritative chart visual baselines remain deferred."),
         new(
             EvidenceId: "freep.chart.point-data-labels",
             Area: "Chart per-point data-label authoring",
