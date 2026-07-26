@@ -5301,6 +5301,13 @@ public sealed class MainWindowHeadlessTests
             smartArt.Data.LayoutUniqueId.Should().EndWith("/basicTimeline");
             window.Editor.Undo();
             smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
+
+            registry.TryGet(SmartArtAuthoringPlanner.StepDownProcessLayoutCommandId, out var stepDownCommand)
+                .Should().BeTrue();
+            stepDownCommand!.Execute(RibbonCommandContext.Empty);
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/StepDownProcess");
+            window.Editor.Undo();
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
         });
 
         if (!ran) return;
@@ -5319,6 +5326,7 @@ public sealed class MainWindowHeadlessTests
             foreach (var commandId in new[]
             {
                 SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
+                SmartArtAuthoringPlanner.StepDownProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.SegmentedProcessLayoutCommandId,
