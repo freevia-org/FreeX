@@ -14,4 +14,5 @@ public sealed record ChartSeriesOptions(
     OutlineDash LineDash = OutlineDash.Solid,
     bool NoLine = false,
     ChartDataLabels? DataLabels = null,
-    bool ShowBubbleSize = false);
+    bool ShowBubbleSize = false,
+    ChartErrorBars? ErrorBars = null);
