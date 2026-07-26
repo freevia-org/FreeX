@@ -222,9 +222,11 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("browseButton.Margin = new Thickness(0, 0, 6, 0);");
         source.Should().Contain("destinationBrowseButton.Margin = new Thickness(0, 0, 6, 0);");
         source.Should().Contain("Spacing = 0,");
+        source.Should().Contain("functionBox.Margin = new Thickness(0, 0, 0, 8);");
+        source.Should().Contain("new Thickness(0, 6, 0, 13)");
+        source.Should().Contain("Margin = new Thickness(0, 0, 0, 1),");
         source.Should().Contain("topRowBox.Margin = new Thickness(0, 0, 16, 0);");
-        source.Should().Contain("new Thickness(0, 0, 0, 0)");
-        source.Should().Contain("new Thickness(0, 12, 0, 0)");
+        source.Should().NotContain("new Thickness(0, 0, 0, 0)");
         source.Should().NotContain("DockPanel.SetDock(buttonRow, Dock.Bottom);");
         source.Should().NotContain("FontWeight = FontWeight.SemiBold");
     }

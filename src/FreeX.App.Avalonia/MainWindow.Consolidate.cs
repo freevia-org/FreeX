@@ -63,6 +63,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         ApplyConsolidateFunctionComboBoxChrome(functionBox);
+        functionBox.Margin = new Thickness(0, 0, 0, 8);
         AutomationProperties.SetAutomationId(functionBox, "ConsolidateFunctionBox");
         AutomationProperties.SetName(functionBox, StripDisplayMnemonic(UiText.Get("Consolidate_FunctionAutomationName")));
         AutomationProperties.SetHelpText(functionBox, StripDisplayMnemonic(UiText.Get("Consolidate_ChooseTheFunctionUsedToCombineSourceRanges")));
@@ -267,7 +268,7 @@ public sealed partial class MainWindow
         // right-aligned side by side (matches the WPF ConsolidateDialog layout / win.png ground truth).
         var addRemoveRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [addButton, removeButton],
-            new Thickness(0, 0, 0, 0));
+            new Thickness(0, 6, 0, 13));
 
         // Windows: "[...] <Destination textbox>" — Browse (ellipsis) sits left of the destination field.
         var destinationRow = new DockPanel { LastChildFill = true };
@@ -286,7 +287,7 @@ public sealed partial class MainWindow
         var labelOptions = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = new Thickness(0, 0, 0, 1),
             Children =
             {
                 topRowBox,
