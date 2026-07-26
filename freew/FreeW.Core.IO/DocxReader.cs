@@ -295,12 +295,12 @@ public static class DocxReader
             Capture("/word/webSettings.xml",
                 docRelTypesByTarget.GetValueOrDefault("webSettings.xml") ?? WebSettingsRelType);
 
-        // Word 2013+ stores an additional stylesWithEffects part beside styles.xml. FreeW reads and writes its
-        // modeled style table from styles.xml, but must retain this supplemental effect payload and relationship
-        // so Word does not discard richer style rendering after a FreeW save.
+        // Word 2013+ stores supplemental style-effect and comment-author parts beside FreeW's modeled content.
+        // Preserve their package graphs so Word can rehydrate richer style rendering and author identity after
+        // a FreeW save.
         foreach (var relationship in ReadDocumentRelationships(archive).Values)
         {
-            if (relationship.Type != StylesWithEffectsRelType)
+            if (relationship.Type is not (StylesWithEffectsRelType or PeopleRelType))
                 continue;
 
             var partName = OpcPathHelper.ResolveAbsolutePartName("/word", relationship.Target);
