@@ -551,6 +551,9 @@ public sealed class FloatingObjectRenderTests
             .Effect.Should().BeOfType<DropShadowEffect>();
         var glyphs = root.Children.OfType<TextBlock>().ToList();
         glyphs.Should().HaveCount(wordArt.Text.Length);
+        glyphs.Select(glyph => ((TransformGroup)glyph.RenderTransform).Children
+                .OfType<ScaleTransform>().Single().ScaleY)
+            .Should().OnlyContain(scale => Math.Abs(scale - 1.78) < 0.01);
         var rotations = glyphs.Select(glyph => ((TransformGroup)glyph.RenderTransform).Children
                 .OfType<RotateTransform>().Single().Angle)
             .ToList();

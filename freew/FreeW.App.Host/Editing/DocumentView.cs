@@ -6129,7 +6129,7 @@ public sealed class DocumentView : RichTextBox
                 RotationRadians = -placement.RotationRadians * 0.4
             }).ToList();
         }
-        var verticalScale = isPrimaryGlowBlueStress ? 1.72 : 1;
+        var verticalScale = isPrimaryGlowBlueStress ? 1.78 : 1;
 
         var outlineBrush = wordArt.Outline.IsVisible
             ? BuildDrawingStrokeBrush(wordArt.Outline)
