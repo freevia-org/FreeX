@@ -125,6 +125,53 @@ public class DocumentMergePreservedPartsTests
     }
 
     [Fact]
+    public void Merge_WritesTransferredSectionBreakAndHeaderFooter()
+    {
+        var source = new TextDocument();
+        var section = new Section(new PageSettings
+        {
+            WidthPt = 792,
+            HeightPt = 612,
+            Landscape = true,
+            MarginLeftPt = 54,
+            MarginRightPt = 63,
+            DifferentFirstPage = true
+        }, SectionBreakKind.OddPage);
+        section.HeadersFooters.Header = new HeaderFooter("Source section header");
+        section.HeadersFooters.FirstFooter = new HeaderFooter("Source first footer");
+        source.Blocks.Add(new Paragraph("Source section end") { SectionBreak = section });
+        source.Blocks.Add(new Paragraph("Source following section"));
+
+        var target = new TextDocument();
+        DocumentMerge.Merge(target, 0, source);
+        var bytes = WriteBytes(target);
+
+        using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        var document = ReadXml(zip, "word/document.xml");
+        var sectionProperties = document.Descendants(Wordprocessing + "pPr").ElementAt(0).Element(Wordprocessing + "sectPr")!;
+        sectionProperties.Element(Wordprocessing + "type")!.Attribute(Wordprocessing + "val")!.Value.Should().Be("oddPage");
+        sectionProperties.Element(Wordprocessing + "pgSz")!.Attribute(Wordprocessing + "orient")!.Value.Should().Be("landscape");
+        sectionProperties.Elements(Wordprocessing + "headerReference").Should().ContainSingle();
+        sectionProperties.Elements(Wordprocessing + "footerReference")
+            .Should().Contain(reference => (string?)reference.Attribute(Wordprocessing + "type") == "first");
+        zip.Entries.Where(entry => entry.FullName.StartsWith("word/header", StringComparison.Ordinal))
+            .Select(entry => ReadXml(zip, entry.FullName).Root!.Value)
+            .Should().Contain(value => value.Contains("Source section header"));
+        zip.Entries.Where(entry => entry.FullName.StartsWith("word/footer", StringComparison.Ordinal))
+            .Select(entry => ReadXml(zip, entry.FullName).Root!.Value)
+            .Should().Contain(value => value.Contains("Source first footer"));
+
+        var reread = DocxReader.Read(new MemoryStream(bytes));
+        var rereadSection = reread.Blocks.OfType<Paragraph>().First().SectionBreak!;
+        rereadSection.Should().NotBeNull();
+        rereadSection.BreakKind.Should().Be(SectionBreakKind.OddPage);
+        rereadSection.Page.Landscape.Should().BeTrue();
+        rereadSection.Page.MarginRightPt.Should().Be(63);
+        rereadSection.HeadersFooters.Header!.Paragraphs.Single().PlainText.Should().Be("Source section header");
+        rereadSection.HeadersFooters.FirstFooter!.Paragraphs.Single().PlainText.Should().Be("Source first footer");
+    }
+
+    [Fact]
     public void Merge_WritesRemappedSourceStyleWithoutReplacingTargetDefinition()
     {
         var source = new TextDocument();
