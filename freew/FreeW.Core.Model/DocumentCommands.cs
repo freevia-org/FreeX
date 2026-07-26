@@ -94,6 +94,9 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
     public bool CanUndo => _stack.CanUndo;
     public bool CanRedo => _stack.CanRedo;
 
+    /// <summary>True while an outer caller is collecting commands into one undoable edit.</summary>
+    public bool IsUndoGroupOpen => _batch is not null;
+
     public DocumentCommandMutationKind? NextUndoMutationKind =>
         _stack.TryPeekUndo(out var entry) ? entry.Command.MutationKind : null;
 

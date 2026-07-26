@@ -9811,11 +9811,63 @@ public sealed class DocumentView : Control
         }
 
         // AV-TBL: route into table cell when the caret is inside a cell.
+        if (SelectedCellRange is not null || HasCellTextSelection())
+        {
+            // Word treats replacement of a table selection as one edit (the deletion and the typed
+            // text undo together). Keep that atomicity for same-cell, cross-cell, and rectangular
+            // selections alike.
+            var ownsUndoGroup = !_bus.IsUndoGroupOpen;
+            if (ownsUndoGroup)
+                _bus.BeginUndoGroup();
+            try
+            {
+                if (SelectedCellRange is not null)
+                    DeleteSelectedCellBlock(beginUndoGroup: false);
+                else if (_cellCaret is { } selectedCell)
+                    DeleteCellSelection(selectedCell, beginUndoGroup: false);
+
+                if (_cellCaret is not { } replacementCaret)
+                    return;
+                var para = GetCellParagraph(replacementCaret.TableBlock, replacementCaret.Row,
+                    replacementCaret.Col, replacementCaret.ParaIdx);
+                if (para == null || !IsEditable(para))
+                    return;
+                var offset = replacementCaret.Offset;
+                var fmt = ActiveFormatting(para, offset);
+                _bus.Execute(new ReplaceCellParagraphRunsCommand(
+                    replacementCaret.TableBlock, replacementCaret.Row, replacementCaret.Col,
+                    replacementCaret.ParaIdx, p =>
+                    {
+                        RevisionEditPlanner.InsertText(
+                            p,
+                            offset,
+                            text,
+                            fmt,
+                            TrackChangesEnabled
+                                ? new RevisionEditPlanner.InsertOptions(
+                                    RevisionKind.Inserted,
+                                    RevisionAuthor,
+                                    CurrentRevisionDateXml())
+                                : default);
+                    }));
+                _cellCaret = replacementCaret with { Offset = offset + text.Length };
+                _cellAnchor = _cellCaret;
+                _caret = new DocPosition(
+                    replacementCaret.TableBlock,
+                    FindCellGlyphOffset(replacementCaret.TableBlock, replacementCaret.Row,
+                        replacementCaret.Col, replacementCaret.ParaIdx, offset + text.Length));
+                _selectionAnchor = _caret;
+            }
+            finally
+            {
+                if (ownsUndoGroup)
+                    _bus.CommitUndoGroup("Replace table selection");
+            }
+            return;
+        }
+
         if (_cellCaret is { } cc)
         {
-            // BE3: replace active in-cell selection before inserting (mirrors body-text DeleteSelection path).
-            DeleteCellSelection(cc);
-            cc = _cellCaret!.Value; // re-read after potential selection delete
             var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
             if (para == null || !IsEditable(para))
                 return;
@@ -10149,9 +10201,15 @@ public sealed class DocumentView : Control
         }
 
         // AV-TBL: route into table cell.
+        if (SelectedCellRange is not null)
+        {
+            DeleteSelectedCellBlock();
+            return;
+        }
+
         if (_cellCaret is { } cc)
         {
-            // BE3: if there is an in-cell selection, delete it and return (mirrors body NormalizedSelection path).
+            // Delete any in-cell, cross-paragraph, or cross-cell selection as one edit.
             if (DeleteCellSelection(cc)) return;
             cc = _cellCaret!.Value; // re-read in case anchor was updated
             if (cc.Offset > 0)
@@ -10239,9 +10297,15 @@ public sealed class DocumentView : Control
         }
 
         // AV-TBL: route into table cell.
+        if (SelectedCellRange is not null)
+        {
+            DeleteSelectedCellBlock();
+            return;
+        }
+
         if (_cellCaret is { } cc)
         {
-            // BE3: if there is an in-cell selection, delete it and return.
+            // Delete any in-cell, cross-paragraph, or cross-cell selection as one edit.
             if (DeleteCellSelection(cc)) return;
             cc = _cellCaret!.Value; // re-read after potential anchor update
             var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
@@ -10356,10 +10420,53 @@ public sealed class DocumentView : Control
             return;
         }
 
+        // AV-TBL: deletion plus Enter is one replacement edit in Word. Keep the outer group owned by
+        // this operation (or join a paste/dialog group already in progress) so the two model commands
+        // undo together.
+        if (SelectedCellRange is not null || HasCellTextSelection())
+        {
+            var ownsUndoGroup = !_bus.IsUndoGroupOpen;
+            if (ownsUndoGroup)
+                _bus.BeginUndoGroup();
+            try
+            {
+                if (SelectedCellRange is not null)
+                    DeleteSelectedCellBlock(beginUndoGroup: false);
+                if (_cellCaret is not { } selectedCaret)
+                    return;
+                if (HasCellTextSelection() && DeleteCellSelection(selectedCaret, beginUndoGroup: false))
+                    selectedCaret = _cellCaret!.Value;
+
+                var para = GetCellParagraph(selectedCaret.TableBlock, selectedCaret.Row,
+                    selectedCaret.Col, selectedCaret.ParaIdx);
+                if (para == null || !IsEditable(para))
+                    return;
+                var chars = ParaCells(para);
+                var first = new Paragraph { Formatting = para.Formatting, StyleId = para.StyleId };
+                SetRuns(first, chars.Take(selectedCaret.Offset).ToList());
+                var second = new Paragraph { Formatting = para.Formatting };
+                SetRuns(second, chars.Skip(selectedCaret.Offset).ToList());
+                _bus.Execute(new SpliceCellParagraphsCommand(
+                    selectedCaret.TableBlock, selectedCaret.Row, selectedCaret.Col,
+                    selectedCaret.ParaIdx, 1, [first, second]));
+                _cellCaret = selectedCaret with { ParaIdx = selectedCaret.ParaIdx + 1, Offset = 0 };
+                _cellAnchor = _cellCaret;
+                _caret = new DocPosition(selectedCaret.TableBlock,
+                    FindCellGlyphOffset(selectedCaret.TableBlock, selectedCaret.Row, selectedCaret.Col,
+                        selectedCaret.ParaIdx + 1, 0));
+                _selectionAnchor = _caret;
+            }
+            finally
+            {
+                if (ownsUndoGroup)
+                    _bus.CommitUndoGroup("Replace table selection with paragraph break");
+            }
+            return;
+        }
+
         // AV-TBL: route into table cell.
         if (_cellCaret is { } cc)
         {
-            // BE3: delete active selection before splitting paragraph.
             if (DeleteCellSelection(cc))
                 cc = _cellCaret!.Value;
             var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
@@ -10459,44 +10566,322 @@ public sealed class DocumentView : Control
         _selectionAnchor = _caret;
     }
 
-    // BE3: Delete the active in-cell selection (same-paragraph only) and collapse the caret to the
-    // selection start. Returns true if a selection was deleted, false if there was no selection or
-    // the anchors span different paragraphs (caller must decide what to do in that case).
-    private bool DeleteCellSelection((int TableBlock, int Row, int Col, int ParaIdx, int Offset) cc)
-    {
-        if (_cellAnchor is not { } anchor)
-            return false;
-        // Only handle same-paragraph cell selections (cross-paragraph cross-cell not supported here).
-        if (anchor.TableBlock != cc.TableBlock || anchor.Row != cc.Row || anchor.Col != cc.Col
-            || anchor.ParaIdx != cc.ParaIdx)
-            return false;
-        if (anchor.Offset == cc.Offset)
-            return false; // collapsed — nothing to delete
+    // AV-TBL-DELETE: Word's RichTextBox selection editor deletes text across paragraph and cell
+    // boundaries without deleting the table structure. A rectangular cell selection is a separate
+    // state from a text selection, so both routes converge here and are committed as one undo edit.
+    private bool HasCellTextSelection() =>
+        _cellAnchor is { } anchor
+        && _cellCaret is { } caret
+        && CompareCellEndpoints(anchor, caret) != 0;
 
-        var lo = Math.Min(anchor.Offset, cc.Offset);
-        var hi = Math.Max(anchor.Offset, cc.Offset);
-        _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+    private bool DeleteCellSelection(
+        (int TableBlock, int Row, int Col, int ParaIdx, int Offset) cc,
+        bool beginUndoGroup = true)
+    {
+        if (SelectedCellRange is not null)
+            return DeleteSelectedCellBlock(beginUndoGroup);
+
+        if (_cellAnchor is not { } anchor
+            || anchor.TableBlock != cc.TableBlock
+            || CompareCellEndpoints(anchor, cc) == 0)
+            return false;
+
+        if (_doc.Blocks[cc.TableBlock] is not Table table)
+            return false;
+
+        var start = anchor;
+        var end = cc;
+        if (CompareCellEndpoints(start, end) > 0)
+            (start, end) = (end, start);
+
+        var startEntry = CanonicalCellEntry(table, start.TableBlock, start.Row, start.Col);
+        var endEntry = CanonicalCellEntry(table, end.TableBlock, end.Row, end.Col);
+        if (startEntry is not { } first || endEntry is not { } last)
+            return false;
+
+        var ownsUndoGroup = beginUndoGroup && !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        var handled = false;
+        try
         {
-            if (TrackChangesEnabled)
-            {
-                // AV-TRACKEDIT: mark the in-cell selection as a tracked deletion (keep struck) rather than
-                // removing it; own pending insertions collapse away (handled inside MarkCellsDeleted).
-                var (marked, _) = MarkCellsDeleted(ParaCells(p), lo, hi);
-                SetRuns(p, marked);
-                return;
-            }
-            var chars = ParaCells(p);
-            var clo = Math.Clamp(lo, 0, chars.Count);
-            var chi = Math.Clamp(hi, 0, chars.Count);
-            chars.RemoveRange(clo, Math.Max(0, chi - clo));
-            SetRuns(p, chars);
-        }));
-        _cellCaret = cc with { Offset = lo };
+            if (ReferenceEquals(first.Cell, last.Cell))
+                handled = DeleteWithinCell(first, start.ParaIdx, start.Offset, end.ParaIdx, end.Offset);
+            else
+                handled = DeleteAcrossCells(table, first, last, end.Offset);
+        }
+        finally
+        {
+            if (ownsUndoGroup)
+                _bus.CommitUndoGroup("Delete table selection");
+        }
+
+        if (!handled)
+            return false;
+
+        var collapsedParaIndex = ReferenceEquals(first.Cell, last.Cell) ? start.ParaIdx : 0;
+        var collapsedOffset = ReferenceEquals(first.Cell, last.Cell)
+            ? Math.Clamp(start.Offset, 0, ParaLength(first.Cell, collapsedParaIndex))
+            : 0;
+        _cellCaret = (start.TableBlock, first.Row, first.Col, collapsedParaIndex, collapsedOffset);
         _cellAnchor = _cellCaret;
-        _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, lo));
+        _caret = new DocPosition(
+            start.TableBlock,
+            FindCellGlyphOffset(start.TableBlock, first.Row, first.Col, collapsedParaIndex, collapsedOffset));
         _selectionAnchor = _caret;
         return true;
     }
+
+    private bool DeleteSelectedCellBlock(bool beginUndoGroup = true)
+    {
+        if (SelectedCellRange is not { } selection
+            || selection.TableBlock < 0
+            || selection.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[selection.TableBlock] is not Table table)
+            return false;
+
+        var targets = new List<TableCellEntry>();
+        var visited = new HashSet<TableCell>();
+        for (var rowIndex = selection.MinRow; rowIndex <= selection.MaxRow && rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var row = table.Rows[rowIndex];
+            var gridCol = 0;
+            foreach (var cell in row.Cells)
+            {
+                var span = Math.Max(1, cell.GridSpan);
+                var overlaps = gridCol <= selection.MaxCol
+                    && gridCol + span - 1 >= selection.MinCol
+                    && cell.VerticalMerge != VerticalMergeState.Continue;
+                if (overlaps && visited.Add(cell))
+                    targets.Add(new TableCellEntry(selection.TableBlock, rowIndex, gridCol, cell));
+                gridCol += span;
+            }
+        }
+
+        if (targets.Count == 0)
+            return false;
+
+        var ownsUndoGroup = beginUndoGroup && !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        try
+        {
+            foreach (var target in targets)
+                DeleteWholeCell(target);
+        }
+        finally
+        {
+            if (ownsUndoGroup)
+                _bus.CommitUndoGroup("Delete table block");
+        }
+
+        _cellBlockAnchor = null;
+        _cellBlockFocus = null;
+        var caretEntry = CanonicalCellEntry(table, selection.TableBlock, selection.MinRow, selection.MinCol);
+        if (caretEntry is { } entry)
+            PlaceCaretInCell(selection.TableBlock, entry.Row, entry.Col, 0, 0);
+        else
+            ClampCaret();
+        return true;
+    }
+
+    private bool DeleteWithinCell(
+        TableCellEntry entry,
+        int startParaIndex,
+        int startOffset,
+        int endParaIndex,
+        int endOffset)
+    {
+        var cell = entry.Cell;
+        if (cell.Paragraphs.Count == 0)
+            return false;
+        startParaIndex = Math.Clamp(startParaIndex, 0, cell.Paragraphs.Count - 1);
+        endParaIndex = Math.Clamp(endParaIndex, startParaIndex, cell.Paragraphs.Count - 1);
+        startOffset = Math.Clamp(startOffset, 0, ParaCells(cell.Paragraphs[startParaIndex]).Count);
+        endOffset = Math.Clamp(endOffset, 0, ParaCells(cell.Paragraphs[endParaIndex]).Count);
+
+        if (TrackChangesEnabled)
+        {
+            for (var paraIndex = startParaIndex; paraIndex <= endParaIndex; paraIndex++)
+            {
+                var para = cell.Paragraphs[paraIndex];
+                var cells = ParaCells(para);
+                var lo = paraIndex == startParaIndex ? startOffset : 0;
+                var hi = paraIndex == endParaIndex ? endOffset : cells.Count;
+                if (hi <= lo)
+                    continue;
+                _bus.Execute(new ReplaceCellParagraphRunsCommand(
+                    entry.TableBlock, entry.Row, entry.Col, paraIndex,
+                    p =>
+                    {
+                        var (marked, _) = MarkCellsDeleted(ParaCells(p), lo, hi);
+                        SetRuns(p, marked);
+                    }));
+            }
+            return endParaIndex > startParaIndex || endOffset > startOffset;
+        }
+
+        var startPara = cell.Paragraphs[startParaIndex];
+        var endPara = cell.Paragraphs[endParaIndex];
+        var mergedCells = ParaCells(startPara).Take(startOffset).ToList();
+        mergedCells.AddRange(ParaCells(endPara).Skip(endOffset));
+        var merged = ParagraphWithFormatting(startPara);
+        SetRuns(merged, mergedCells);
+        _bus.Execute(new SpliceCellParagraphsCommand(
+            entry.TableBlock,
+            entry.Row,
+            entry.Col,
+            startParaIndex,
+            endParaIndex - startParaIndex + 1,
+            [merged]));
+        return true;
+    }
+
+    private bool DeleteAcrossCells(
+        Table table,
+        TableCellEntry startEntry,
+        TableCellEntry endEntry,
+        int endOffset)
+    {
+        var entries = EnumerateLogicalCells(table, startEntry.TableBlock).ToList();
+        var startIndex = entries.FindIndex(entry => ReferenceEquals(entry.Cell, startEntry.Cell));
+        var endIndex = entries.FindIndex(entry => ReferenceEquals(entry.Cell, endEntry.Cell));
+        if (startIndex < 0 || endIndex < 0 || startIndex >= endIndex)
+            return false;
+
+        // WPF RichTextBox normalizes a text selection that crosses a cell boundary to whole logical
+        // cells. The final cell is included when the endpoint is inside its text; an endpoint at zero
+        // is the boundary before that cell. Preserve the table graph while clearing those cells.
+        var lastSelectedIndex = endOffset > 0 ? endIndex : endIndex - 1;
+        if (lastSelectedIndex < startIndex)
+            return false;
+
+        for (var index = startIndex; index <= lastSelectedIndex; index++)
+            DeleteWholeCell(entries[index]);
+        return true;
+    }
+
+    private bool DeleteCellCharactersAsRevision(TableCellEntry entry, int paraIndex, int lo, int hi)
+    {
+        if (hi <= lo)
+            return false;
+        _bus.Execute(new ReplaceCellParagraphRunsCommand(
+            entry.TableBlock, entry.Row, entry.Col, paraIndex,
+            p =>
+            {
+                var (marked, _) = MarkCellsDeleted(ParaCells(p), lo, hi);
+                SetRuns(p, marked);
+            }));
+        return true;
+    }
+
+    private bool DeleteWholeCell(TableCellEntry entry)
+    {
+        if (entry.Cell.Paragraphs.Count == 0)
+            return false;
+
+        if (TrackChangesEnabled)
+        {
+            var mutated = false;
+            for (var paraIndex = 0; paraIndex < entry.Cell.Paragraphs.Count; paraIndex++)
+                mutated |= DeleteCellCharactersAsRevision(
+                    entry,
+                    paraIndex,
+                    0,
+                    ParaLength(entry.Cell, paraIndex));
+            return mutated;
+        }
+
+        if (entry.Cell.Paragraphs.Count == 1 && ParaLength(entry.Cell, 0) == 0)
+            return false;
+
+        var first = entry.Cell.Paragraphs[0];
+        var empty = ParagraphWithFormatting(first);
+        _bus.Execute(new SpliceCellParagraphsCommand(
+            entry.TableBlock, entry.Row, entry.Col, 0, entry.Cell.Paragraphs.Count, [empty]));
+        return true;
+    }
+
+    private static Paragraph ParagraphWithFormatting(Paragraph source)
+    {
+        // This shell is intentionally local to same-document deletion. The source paragraph is
+        // consumed by the splice command, so retaining its mutable section/revision metadata does
+        // not create a second live owner. DocumentMerge's independent-clone contract remains deep.
+        var clone = new Paragraph
+        {
+            BlockContentControl = source.BlockContentControl,
+            Formatting = source.Formatting,
+            StyleId = source.StyleId,
+            DropCap = source.DropCap,
+            SectionBreak = source.SectionBreak,
+            PreservedNumbering = source.PreservedNumbering,
+            ParagraphFormatRevision = source.ParagraphFormatRevision
+        };
+        clone.BookmarkNames.AddRange(source.BookmarkNames);
+        return clone;
+    }
+
+    private static int ParaLength(TableCell cell, int paraIndex) =>
+        paraIndex >= 0 && paraIndex < cell.Paragraphs.Count
+            ? ParaCells(cell.Paragraphs[paraIndex]).Count
+            : 0;
+
+    private static int CompareCellEndpoints(
+        (int TableBlock, int Row, int Col, int ParaIdx, int Offset) left,
+        (int TableBlock, int Row, int Col, int ParaIdx, int Offset) right)
+    {
+        var result = left.TableBlock.CompareTo(right.TableBlock);
+        if (result != 0) return result;
+        result = left.Row.CompareTo(right.Row);
+        if (result != 0) return result;
+        result = left.Col.CompareTo(right.Col);
+        if (result != 0) return result;
+        result = left.ParaIdx.CompareTo(right.ParaIdx);
+        return result != 0 ? result : left.Offset.CompareTo(right.Offset);
+    }
+
+    private static IEnumerable<TableCellEntry> EnumerateLogicalCells(Table table, int tableBlock)
+    {
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var gridCol = 0;
+            foreach (var cell in table.Rows[rowIndex].Cells)
+            {
+                if (cell.VerticalMerge != VerticalMergeState.Continue)
+                    yield return new TableCellEntry(tableBlock, rowIndex, gridCol, cell);
+                gridCol += Math.Max(1, cell.GridSpan);
+            }
+        }
+    }
+
+    private static TableCellEntry? CanonicalCellEntry(Table table, int tableBlock, int row, int gridCol)
+    {
+        if (row < 0 || row >= table.Rows.Count)
+            return null;
+        var cell = GetCellModelGridCol(table, row, gridCol);
+        if (cell is null)
+            return null;
+
+        var logicalRow = row;
+        while (cell.VerticalMerge == VerticalMergeState.Continue && logicalRow > 0)
+        {
+            logicalRow--;
+            cell = GetCellModelGridCol(table, logicalRow, gridCol);
+            if (cell is null)
+                return null;
+        }
+
+        var startCol = 0;
+        foreach (var candidate in table.Rows[logicalRow].Cells)
+        {
+            if (ReferenceEquals(candidate, cell))
+                return new TableCellEntry(tableBlock, logicalRow, startCol, cell);
+            startCol += Math.Max(1, candidate.GridSpan);
+        }
+        return null;
+    }
+
+    private readonly record struct TableCellEntry(int TableBlock, int Row, int Col, TableCell Cell);
 
     private void DeleteSelection()
     {
