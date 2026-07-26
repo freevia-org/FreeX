@@ -580,6 +580,90 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void PictureCaptionListCacheRefresh_PreservesPictureRelationshipsAndSchemaRequiredMetadata()
+    {
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.List,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList",
+            IsLiveLayoutSupported = true
+        };
+        data.Nodes.Add(new SmartArtNode
+        {
+            ModelId = "one",
+            Text = "One",
+            Level = 0,
+            Picture = new ImagePart { Bytes = [1, 2, 3], ContentType = "image/png" }
+        });
+        data.Nodes.Add(new SmartArtNode
+        {
+            ModelId = "two",
+            Text = "Two",
+            Level = 0,
+            Picture = new ImagePart { Bytes = [4, 5, 6], ContentType = "image/png" }
+        });
+
+        var smartArt = new SmartArtShape
+        {
+            Data = data,
+            DrawingPartPath = "ppt/diagrams/drawing1.xml"
+        };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+        const string relationshipsNamespace = "http://schemas.openxmlformats.org/package/2006/relationships";
+        smartArt.PartRels["ppt/diagrams/drawing1.xml"] = Encoding.UTF8.GetBytes($"""
+            <Relationships xmlns="{relationshipsNamespace}">
+              <Relationship Id="rIdPic1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/one.png" />
+              <Relationship Id="rIdPic2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/two.png" />
+            </Relationships>
+            """);
+
+        SmartArtEditingPlanner.ApplyTextPaneOutline(data,
+        [
+            new("One revised", 0, ModelId: "one"),
+            new("Two revised", 0, ModelId: "two")
+        ]).Applied.Should().BeTrue();
+
+        var dataResult = SmartArtEditingPlanner.RewriteDataPart(smartArt);
+        var cacheResult = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme());
+
+        dataResult.Applied.Should().BeTrue();
+        cacheResult.Applied.Should().BeTrue();
+        cacheResult.ShapeCount.Should().Be(4);
+
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        var dataDocument = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/data1.xml"].Bytes));
+        dataDocument.Descendants(dgm + "t")
+            .Select(t => t.Element(a + "bodyPr") is not null && t.Element(a + "lstStyle") is not null)
+            .Should().OnlyContain(value => value);
+        var cacheDocument = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
+        cacheDocument.Descendants(dsp + "sp")
+            .SelectMany(shape => shape.Descendants(a + "blip"))
+            .Select(blip => (string?)blip.Attribute(r + "embed"))
+            .Where(id => id is not null)
+            .Should().Equal("rIdPic1", "rIdPic2");
+    }
+
+    [Fact]
     public void TextPaneOutline_DataPartAndDrawingCacheRegenerationShareAppliedModel()
     {
         var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"), ("manager", "Manager"));
@@ -622,9 +706,11 @@ public sealed class SmartArtEditingPlannerTests
         var dataDoc = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/data1.xml"].Bytes));
         dataDoc.Descendants(a + "t").Select(t => t.Value)
             .Should().Equal("Executive", "Delivery Lead");
-        dataDoc.Descendants(dgm + "cxn")
-            .Should().ContainSingle()
-            .Which.Attribute("destId")!.Value.Should().Be("manager");
+        var connection = dataDoc.Descendants(dgm + "cxn").Should().ContainSingle().Which;
+        connection.Attribute("destId")!.Value.Should().Be("manager");
+        connection.Attribute("modelId").Should().NotBeNull();
+        connection.Attribute("srcOrd").Should().NotBeNull();
+        connection.Attribute("destOrd").Should().NotBeNull();
 
         smartArt.FallbackShapes.Select(shape => shape.PlainText)
             .Where(text => !string.IsNullOrWhiteSpace(text))

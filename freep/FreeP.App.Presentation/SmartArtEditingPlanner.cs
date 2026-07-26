@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
@@ -136,6 +137,7 @@ public static class SmartArtEditingPlanner
     private static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
     private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace Dsp = "http://schemas.microsoft.com/office/drawing/2008/diagram";
+    private static readonly XNamespace R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
     public static SmartArtTextPaneKeyboardRoute? PlanTextPaneKeyboardRoute(
         SmartArtTextPaneShortcutKey key,
@@ -456,17 +458,31 @@ public static class SmartArtEditingPlanner
         }
 
         var shapes = plannedShapes.ToList();
-        if (shapes.Any(shape => shape.Kind != SlideShapeKind.AutoShape))
+        if (shapes.Any(shape => shape.Kind is not (SlideShapeKind.AutoShape or SlideShapeKind.Picture)))
         {
             return new SmartArtDrawingCacheRegenerationResult(
                 false,
-                "SmartArt drawing cache regeneration currently supports auto-shape layouts only.",
+                "SmartArt drawing cache regeneration does not support this shape kind.",
                 drawingPart.PartPath,
                 CountNodes(smartArt.Data),
                 shapes.Count);
         }
 
-        drawingPart.Bytes = SerializeXml(BuildDrawingCacheDocument(shapes));
+        var pictureRelIds = GetPictureRelationshipIds(smartArt, drawingPart.PartPath);
+        var pictureCount = shapes.Count(shape => shape.Kind == SlideShapeKind.Picture);
+        if (pictureCount != pictureRelIds.Count ||
+            shapes.Any(shape => shape.Kind == SlideShapeKind.Picture &&
+                                shape.Picture?.Bytes is not { Length: > 0 }))
+        {
+            return new SmartArtDrawingCacheRegenerationResult(
+                false,
+                "SmartArt picture cache relationships do not match the planned picture nodes.",
+                drawingPart.PartPath,
+                CountNodes(smartArt.Data),
+                shapes.Count);
+        }
+
+        drawingPart.Bytes = SerializeXml(BuildDrawingCacheDocument(shapes, pictureRelIds));
         smartArt.DrawingPartPath = drawingPart.PartPath;
         smartArt.FallbackShapes.Clear();
         foreach (var shape in shapes)
@@ -856,19 +872,45 @@ public static class SmartArtEditingPlanner
             part.PartPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static XDocument BuildDrawingCacheDocument(IReadOnlyList<SlideShape> shapes) =>
-        new(
+    private static XDocument BuildDrawingCacheDocument(
+        IReadOnlyList<SlideShape> shapes,
+        IReadOnlyList<string> pictureRelIds)
+    {
+        var shapeElements = new List<XElement>();
+        var pictureIndex = 0;
+        foreach (var shape in shapes)
+        {
+            shapeElements.Add(shape.Kind == SlideShapeKind.Picture
+                ? BuildDrawingCachePicture(shape, pictureRelIds[pictureIndex++])
+                : BuildDrawingCacheShape(shape));
+        }
+
+        return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(Dsp + "drawing",
                 new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
                 new XElement(Dsp + "spTree",
-                    shapes.Select(BuildDrawingCacheShape))));
+                    new XElement(Dsp + "nvGrpSpPr",
+                        new XElement(Dsp + "cNvPr",
+                            new XAttribute("id", "1"),
+                            new XAttribute("name", "SmartArt Cache")),
+                        new XElement(Dsp + "cNvGrpSpPr")),
+                    new XElement(Dsp + "grpSpPr",
+                        new XElement(A + "xfrm",
+                            new XElement(A + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                            new XElement(A + "ext", new XAttribute("cx", "1"), new XAttribute("cy", "1")),
+                            new XElement(A + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                            new XElement(A + "chExt", new XAttribute("cx", "1"), new XAttribute("cy", "1")))),
+                    shapeElements)));
+    }
 
     private static XElement BuildDrawingCacheShape(SlideShape shape)
     {
         var id = shape.Id == 0 ? 1u : shape.Id;
         return new XElement(Dsp + "sp",
+            new XAttribute("modelId", id),
             new XElement(Dsp + "nvSpPr",
                 new XElement(Dsp + "cNvPr",
                     new XAttribute("id", id),
@@ -876,6 +918,60 @@ public static class SmartArtEditingPlanner
                 new XElement(Dsp + "cNvSpPr")),
             BuildShapeProperties(shape),
             BuildTextBody(shape.TextBody));
+    }
+
+    private static XElement BuildDrawingCachePicture(SlideShape shape, string relationshipId)
+    {
+        var id = shape.Id == 0 ? 1u : shape.Id;
+        return new XElement(Dsp + "sp",
+            new XAttribute("modelId", id),
+            new XElement(Dsp + "nvSpPr",
+                new XElement(Dsp + "cNvPr",
+                    new XAttribute("id", id),
+                    new XAttribute("name", string.IsNullOrWhiteSpace(shape.Name) ? $"SmartArt Picture {id}" : shape.Name)),
+                new XElement(Dsp + "cNvSpPr")),
+            new XElement(Dsp + "spPr",
+                new XElement(A + "xfrm",
+                    new XElement(A + "off",
+                        new XAttribute("x", shape.OffsetXEmu),
+                        new XAttribute("y", shape.OffsetYEmu)),
+                    new XElement(A + "ext",
+                        new XAttribute("cx", shape.ExtentCxEmu),
+                        new XAttribute("cy", shape.ExtentCyEmu))),
+                new XElement(A + "prstGeom",
+                    new XAttribute("prst", "rect"),
+                    new XElement(A + "avLst")),
+                new XElement(A + "blipFill",
+                    new XElement(A + "blip", new XAttribute(R + "embed", relationshipId)),
+                    new XElement(A + "stretch", new XElement(A + "fillRect")))));
+    }
+
+    private static IReadOnlyList<string> GetPictureRelationshipIds(
+        SmartArtShape smartArt,
+        string drawingPartPath)
+    {
+        if (!smartArt.PartRels.TryGetValue(drawingPartPath, out var relationshipBytes) ||
+            relationshipBytes.Length == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            var document = XDocument.Parse(Encoding.UTF8.GetString(relationshipBytes));
+            return document.Descendants()
+                .Where(element =>
+                    element.Name.LocalName == "Relationship" &&
+                    element.Attribute("Type")?.Value.EndsWith("/image", StringComparison.OrdinalIgnoreCase) == true)
+                .Select(element => element.Attribute("Id")?.Value)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Cast<string>()
+                .ToArray();
+        }
+        catch (XmlException)
+        {
+            return Array.Empty<string>();
+        }
     }
 
     private static XElement BuildShapeProperties(SlideShape shape)
@@ -979,7 +1075,8 @@ public static class SmartArtEditingPlanner
         var generatedIdIndex = 1;
 
         foreach (var root in data.Nodes)
-            CollectDataPartElements(root, null, points, connections, nodeIds, ref generatedIdIndex, ref nodeCount, ref connectionCount);
+            CollectDataPartElements(root, null, 0, points, connections, nodeIds,
+                ref generatedIdIndex, ref nodeCount, ref connectionCount);
 
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -993,6 +1090,7 @@ public static class SmartArtEditingPlanner
     private static void CollectDataPartElements(
         SmartArtNode node,
         SmartArtNode? parent,
+        int sourceOrder,
         List<XElement> points,
         List<XElement> connections,
         Dictionary<SmartArtNode, string> nodeIds,
@@ -1008,14 +1106,20 @@ public static class SmartArtEditingPlanner
         {
             var parentId = GetNodeId(parent, nodeIds, ref generatedIdIndex);
             connections.Add(new XElement(Dgm + "cxn",
+                new XAttribute("modelId", (connectionCount + 1).ToString(CultureInfo.InvariantCulture)),
                 new XAttribute("type", "parOf"),
                 new XAttribute("srcId", parentId),
-                new XAttribute("destId", id)));
+                new XAttribute("destId", id),
+                new XAttribute("srcOrd", sourceOrder),
+                new XAttribute("destOrd", 0)));
             connectionCount++;
         }
 
-        foreach (var child in node.Children)
-            CollectDataPartElements(child, node, points, connections, nodeIds, ref generatedIdIndex, ref nodeCount, ref connectionCount);
+        for (var index = 0; index < node.Children.Count; index++)
+        {
+            CollectDataPartElements(node.Children[index], node, index, points, connections, nodeIds,
+                ref generatedIdIndex, ref nodeCount, ref connectionCount);
+        }
     }
 
     private static XElement BuildPointElement(SmartArtNode node, string id)
@@ -1024,6 +1128,8 @@ public static class SmartArtEditingPlanner
             new XAttribute("modelId", id),
             new XAttribute("type", node.IsAssistant ? "asst" : "node"),
             new XElement(Dgm + "t",
+                new XElement(A + "bodyPr"),
+                new XElement(A + "lstStyle"),
                 NormalizeText(node.Text)
                     .Split('\n')
                     .Select(paragraph => new XElement(A + "p",
