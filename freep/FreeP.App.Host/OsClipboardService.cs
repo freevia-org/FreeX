@@ -34,6 +34,7 @@ public sealed class WpfOsClipboard : IOsClipboard
 {
     internal const string SelectionFormat = PresentationClipboardFormats.Selection;
     internal const string OwnerTokenFormat = PresentationClipboardFormats.OwnerToken;
+    internal const string RichTextFormat = PresentationClipboardFormats.RichText;
 
     // Backward-read aliases for Avalonia application formats. This value is proven
     // against pinned Avalonia 12.0.4 tag a8dd6417fd8918570edefdbecd92d16ac7620069,
@@ -111,6 +112,9 @@ public sealed class WpfOsClipboard : IOsClipboard
         if (content.SelectionBytes is { Length: > 0 })
             SetRawBytes(data, SelectionFormat, content.SelectionBytes);
 
+        if (content.RichTextBytes is { Length: > 0 })
+            SetRawBytes(data, RichTextFormat, content.RichTextBytes);
+
         if (!string.IsNullOrEmpty(content.OwnerToken))
         {
             // Avalonia's Win32 clipboard backend serializes custom strings as a
@@ -150,6 +154,7 @@ public sealed class WpfOsClipboard : IOsClipboard
 
         var selection = TryReadBytes(data, SelectionFormat)
             ?? TryReadBytes(data, LegacyAvaloniaSelectionFormat);
+        var richText = TryReadBytes(data, RichTextFormat);
         var ownerToken = TryReadCustomString(data, OwnerTokenFormat)
             ?? TryReadCustomString(data, LegacyAvaloniaOwnerTokenFormat);
 
@@ -176,7 +181,7 @@ public sealed class WpfOsClipboard : IOsClipboard
         {
         }
 
-        return new PresentationClipboardContent(selection, png, text, ownerToken);
+        return new PresentationClipboardContent(selection, png, text, ownerToken, richText);
     }
 
     private static void SetRawBytes(DataObject data, string format, byte[] bytes) =>

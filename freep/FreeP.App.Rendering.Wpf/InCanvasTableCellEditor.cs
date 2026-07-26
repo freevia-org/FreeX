@@ -426,6 +426,32 @@ public sealed class InCanvasTableCellEditor
     private void OnCellTextBoxPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) != 0 &&
+            _cellTextBox is not null &&
+            TryGetCurrentCellTextBody() is { } currentBody)
+        {
+            if (e.Key == Key.C)
+            {
+                e.Handled = WpfRichTextClipboardAdapter.TryCopy(_cellTextBox, currentBody);
+                return;
+            }
+
+            if (e.Key == Key.X)
+            {
+                e.Handled = WpfRichTextClipboardAdapter.TryCut(_cellTextBox, currentBody);
+                return;
+            }
+
+            if (e.Key == Key.V)
+            {
+                e.Handled = WpfRichTextClipboardAdapter.TryPaste(
+                    _cellTextBox,
+                    currentBody,
+                    out _);
+                return;
+            }
+        }
+
+        if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) != 0 &&
             e.Key is Key.OemPlus or Key.Add)
         {
             if ((e.KeyboardDevice.Modifiers & ModifierKeys.Shift) != 0)
@@ -471,6 +497,12 @@ public sealed class InCanvasTableCellEditor
             }
             e.Handled = true;
         }
+    }
+
+    private TextBody? TryGetCurrentCellTextBody()
+    {
+        var shape = _editor.CurrentSlide?.Shapes.FirstOrDefault(s => s.Id == _editShapeId);
+        return shape?.Table?.Rows.ElementAtOrDefault(_editRow)?.Cells.ElementAtOrDefault(_editCol)?.TextBody;
     }
 
     private static TableCellEditKeyboardKey ToTableCellEditKeyboardKey(Key key) => key switch
