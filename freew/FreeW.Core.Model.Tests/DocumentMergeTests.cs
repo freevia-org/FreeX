@@ -3,6 +3,38 @@ namespace FreeW.Core.Model.Tests;
 public class DocumentMergeTests
 {
     [Fact]
+    public void Merge_TransfersAltChunkPackageGraph_WithCollisionSafeRelationshipRewrite()
+    {
+        const string altChunkRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk";
+        var source = new TextDocument();
+        source.Preserved.Parts.Add(new PreservedPart("/word/afchunk.docx", [1], RelationshipType: altChunkRel));
+        source.Preserved.Parts.Add(new PreservedPart(
+            "/word/_rels/afchunk.docx.rels",
+            System.Text.Encoding.UTF8.GetBytes("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"image\" Target=\"media/altchunk.png\" /></Relationships>")));
+        source.Preserved.Parts.Add(new PreservedPart("/word/media/altchunk.png", [2]));
+        source.Preserved.ContentTypeDefaults["png"] = "image/png";
+        source.Blocks.Add(new AltChunkBlock("/word/afchunk.docx"));
+
+        var target = new TextDocument();
+        target.Preserved.Parts.Add(new PreservedPart("/word/afchunk.docx", [9], RelationshipType: altChunkRel));
+        target.Preserved.Parts.Add(new PreservedPart("/word/_rels/afchunk.docx.rels", [8]));
+        target.Preserved.Parts.Add(new PreservedPart("/word/media/altchunk.png", [7]));
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        var copiedAltChunk = inserted.Single().Should().BeOfType<AltChunkBlock>().Subject;
+        copiedAltChunk.Should().NotBeSameAs(source.Blocks.Single());
+        copiedAltChunk.PreservedPartName.Should().Be("/word/afchunk-freew-import1.docx");
+        target.Preserved.Parts.Should().Contain(part => part.PartName == "/word/afchunk-freew-import1.docx");
+        target.Preserved.Parts.Should().Contain(part => part.PartName == "/word/_rels/afchunk-freew-import1.docx.rels");
+        target.Preserved.Parts.Should().Contain(part => part.PartName == "/word/media/altchunk-freew-import1.png");
+        var copiedRels = target.Preserved.Parts.Single(part => part.PartName == "/word/_rels/afchunk-freew-import1.docx.rels");
+        System.Text.Encoding.UTF8.GetString(copiedRels.Bytes)
+            .Should().Contain("Target=\"media/altchunk-freew-import1.png\"");
+        source.Blocks.Single().Should().BeOfType<AltChunkBlock>().Which.PreservedPartName.Should().Be("/word/afchunk.docx");
+    }
+
+    [Fact]
     public void Merge_TransfersPreservedDrawingPackageGraph_WithCollisionSafeRelationshipRewrite()
     {
         const string chartRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";

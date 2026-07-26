@@ -13,6 +13,44 @@ public class DocumentMergePreservedPartsTests
         "http://schemas.openxmlformats.org/package/2006/relationships";
 
     [Fact]
+    public void Merge_PreservesRenamedAltChunkPackageGraph_WhenWritten()
+    {
+        const string altChunkRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk";
+        const string altChunkContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml";
+        var source = new TextDocument();
+        source.Preserved.Parts.Add(new PreservedPart(
+            "/word/afchunk.docx",
+            [1],
+            altChunkContentType,
+            altChunkRelationship));
+        source.Preserved.Parts.Add(new PreservedPart(
+            "/word/_rels/afchunk.docx.rels",
+            Encoding.UTF8.GetBytes("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"image\" Target=\"media/altchunk.png\" /></Relationships>")));
+        source.Preserved.Parts.Add(new PreservedPart("/word/media/altchunk.png", [2]));
+        source.Preserved.ContentTypeDefaults["png"] = "image/png";
+        source.Blocks.Add(new AltChunkBlock("/word/afchunk.docx"));
+
+        var target = new TextDocument();
+        target.Preserved.Parts.Add(new PreservedPart("/word/afchunk.docx", [9], altChunkContentType, altChunkRelationship));
+        target.Preserved.Parts.Add(new PreservedPart("/word/_rels/afchunk.docx.rels", [8]));
+        target.Preserved.Parts.Add(new PreservedPart("/word/media/altchunk.png", [7]));
+
+        DocumentMerge.Merge(target, 0, source);
+        var bytes = WriteBytes(target);
+
+        using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        zip.GetEntry("word/afchunk-freew-import1.docx").Should().NotBeNull();
+        zip.GetEntry("word/_rels/afchunk-freew-import1.docx.rels").Should().NotBeNull();
+        zip.GetEntry("word/media/altchunk-freew-import1.png").Should().NotBeNull();
+        var documentRelationships = ReadXml(zip, "word/_rels/document.xml.rels");
+        documentRelationships.Root!.Elements(Relationships + "Relationship")
+            .Should().Contain(relationship => relationship.Attribute("Target")!.Value == "afchunk-freew-import1.docx");
+        var chunkRelationships = ReadXml(zip, "word/_rels/afchunk-freew-import1.docx.rels");
+        chunkRelationships.Root!.Elements(Relationships + "Relationship")
+            .Should().Contain(relationship => relationship.Attribute("Target")!.Value == "media/altchunk-freew-import1.png");
+    }
+
+    [Fact]
     public void Merge_PreservesRenamedDrawingPackageGraph_WhenWritten()
     {
         const string chartRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";

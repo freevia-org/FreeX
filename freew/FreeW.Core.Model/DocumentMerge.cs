@@ -17,6 +17,9 @@ namespace FreeW.Core.Model;
 /// </summary>
 public static class DocumentMerge
 {
+    private static readonly IReadOnlyDictionary<string, string> EmptyPartNameMap =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Deep-clone the body blocks of <paramref name="source"/> so they can be inserted into another
     /// document without aliasing the source. Paragraphs and tables are copied; the source is left
@@ -33,14 +36,23 @@ public static class DocumentMerge
 
     /// <summary>
     /// Clones source body blocks for insertion into <paramref name="target"/>, carrying every preserved package
-    /// part reachable from a verbatim drawing. Part-name collisions are resolved without overwriting the target
-    /// package, and copied relationship parts are rewritten to their renamed descendants.
+    /// part reachable from a verbatim drawing or unresolved altChunk. Part-name collisions are resolved without
+    /// overwriting the target package, and copied relationship parts are rewritten to their renamed descendants.
     /// </summary>
     public static IReadOnlyList<Block> CloneBlocksForInsertion(TextDocument target, TextDocument source)
     {
         ArgumentNullException.ThrowIfNull(target);
         var clones = CloneBlocks(source);
-        TransferPreservedDrawingParts(target, source, clones);
+        var roots = EnumerateParagraphs(clones)
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.PreservedDrawing)
+            .Where(drawing => drawing is not null)
+            .SelectMany(drawing => drawing!.References)
+            .Select(reference => reference.PreservedPartName)
+            .Concat(clones.OfType<AltChunkBlock>().Select(altChunk => altChunk.PreservedPartName));
+        var partNames = TransferPreservedPartGraph(target, source, roots);
+        RewritePreservedDrawingReferences(clones, partNames);
+        RewriteAltChunkPartNames(clones, partNames);
         return clones;
     }
 
@@ -77,6 +89,10 @@ public static class DocumentMerge
     {
         Paragraph p => CloneParagraph(p),
         Table t => CloneTable(t),
+        AltChunkBlock altChunk => new AltChunkBlock(altChunk.PreservedPartName)
+        {
+            BlockContentControl = altChunk.BlockContentControl
+        },
         _ => block
     };
 
@@ -155,26 +171,22 @@ public static class DocumentMerge
         return clone;
     }
 
-    private static void TransferPreservedDrawingParts(
+    private static IReadOnlyDictionary<string, string> TransferPreservedPartGraph(
         TextDocument target,
         TextDocument source,
-        IReadOnlyList<Block> clones)
+        IEnumerable<string> rootPartNames)
     {
         var sourceParts = source.Preserved.Parts
             .ToDictionary(part => part.PartName, StringComparer.OrdinalIgnoreCase);
         if (sourceParts.Count == 0)
-            return;
+            return EmptyPartNameMap;
 
-        var roots = EnumerateParagraphs(clones)
-            .SelectMany(paragraph => paragraph.Runs)
-            .Select(run => run.PreservedDrawing)
-            .Where(drawing => drawing is not null)
-            .SelectMany(drawing => drawing!.References)
-            .Select(reference => reference.PreservedPartName)
+        var roots = rootPartNames
+            .Where(sourceParts.ContainsKey)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         if (roots.Count == 0)
-            return;
+            return EmptyPartNameMap;
 
         var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var queue = new Queue<string>(roots);
@@ -256,16 +268,42 @@ public static class DocumentMerge
         foreach (var (extension, contentType) in source.Preserved.ContentTypeDefaults)
             target.Preserved.ContentTypeDefaults.TryAdd(extension, contentType);
 
+        return names;
+    }
+
+    private static void RewritePreservedDrawingReferences(
+        IReadOnlyList<Block> clones,
+        IReadOnlyDictionary<string, string> partNames)
+    {
         foreach (var paragraph in EnumerateParagraphs(clones))
             foreach (var run in paragraph.Runs)
                 if (run.PreservedDrawing is { } drawing)
                     run.PreservedDrawing = new PreservedDrawing(
                         drawing.Xml,
                         drawing.References
-                            .Select(reference => names.TryGetValue(reference.PreservedPartName, out var partName)
+                            .Select(reference => partNames.TryGetValue(reference.PreservedPartName, out var partName)
                                 ? reference with { PreservedPartName = partName }
                                 : reference)
                             .ToArray());
+    }
+
+    private static void RewriteAltChunkPartNames(
+        IReadOnlyList<Block> clones,
+        IReadOnlyDictionary<string, string> partNames)
+    {
+        if (clones is not IList<Block> mutableBlocks)
+            return;
+
+        for (var index = 0; index < mutableBlocks.Count; index++)
+        {
+            if (mutableBlocks[index] is not AltChunkBlock altChunk
+                || !partNames.TryGetValue(altChunk.PreservedPartName, out var partName))
+                continue;
+            mutableBlocks[index] = new AltChunkBlock(partName)
+            {
+                BlockContentControl = altChunk.BlockContentControl
+            };
+        }
     }
 
     private static IEnumerable<Paragraph> EnumerateParagraphs(IEnumerable<Block> blocks)
