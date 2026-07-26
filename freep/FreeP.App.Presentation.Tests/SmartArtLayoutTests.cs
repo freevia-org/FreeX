@@ -349,6 +349,21 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void RadialList_ReturnsLiveCircularBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Discover", "Plan", "Build", "Review");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radialList";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("radialList is a bounded shared cycle-family layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "one live box should be emitted per radial-list node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(4, "radialList should reuse the shared circular connector planner");
+    }
+
+    [Fact]
     public void GearCycle_ReturnsLiveCircularBoxesAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Cycle, "Initiate", "Coordinate", "Deliver", "Improve");
