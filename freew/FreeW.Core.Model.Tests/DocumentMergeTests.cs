@@ -318,6 +318,78 @@ public class DocumentMergeTests
     }
 
     [Fact]
+    public void CloneBlocks_PreservesSemanticInlinePayloads_WithoutSharingMutableState()
+    {
+        var numerator = new Equation([MathRun.Superscript("x", "2")]);
+        var denominator = new Equation([MathRun.Subscript("y", "1")]);
+        var equation = new Equation([MathRun.Fraction(numerator, denominator)]);
+        var embedded = new EmbeddedObject([1, 2, 3], "Excel.Sheet.12")
+        {
+            Icon = new InlineImage([4, 5, 6], 48, 36) { AltText = "Workbook" },
+            WidthPt = 72,
+            HeightPt = 54
+        };
+        var ruby = new RubyAnnotation
+        {
+            Alignment = RubyAlignment.DistributeSpace,
+            PhoneticSizeHalfPoints = 12,
+            RaiseHalfPoints = 9
+        };
+        ruby.BaseFragments.Add(new RubyTextFragment("漢字", new RunFormatting { Bold = true }));
+        ruby.PhoneticFragments.Add(new RubyTextFragment("かんじ", new RunFormatting { FontSizePt = 6 }));
+        var references = new List<PreservedDrawingReference>
+        {
+            new("rId7", "/word/charts/chart42.xml", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart")
+        };
+        var drawing = new PreservedDrawing("<w:drawing />", references);
+
+        var source = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        paragraph.Runs.Add(Run.FromEmbeddedObject(embedded));
+        paragraph.Runs.Add(Run.FromRuby(ruby));
+        paragraph.Runs.Add(Run.FromPreservedDrawing(drawing));
+        source.Blocks.Add(paragraph);
+
+        var clone = DocumentMerge.CloneBlocks(source).Single().Should().BeOfType<Paragraph>().Subject.Runs;
+        var clonedEquation = clone[0].Equation!;
+        var clonedEmbedded = clone[1].EmbeddedObject!;
+        var clonedRuby = clone[2].Ruby!;
+        var clonedDrawing = clone[3].PreservedDrawing!;
+
+        clonedEquation.Should().NotBeSameAs(equation);
+        clonedEquation.LinearText.Should().Be("x^2/y_1");
+        clonedEquation.Runs.Single().NumeratorEquation.Should().NotBeSameAs(numerator);
+        clonedEquation.Runs.Single().DenominatorEquation.Should().NotBeSameAs(denominator);
+        clonedEmbedded.Should().NotBeSameAs(embedded);
+        clonedEmbedded.Payload.Should().Equal([1, 2, 3]);
+        clonedEmbedded.ProgId.Should().Be("Excel.Sheet.12");
+        clonedEmbedded.Icon.Should().NotBeSameAs(embedded.Icon);
+        clonedEmbedded.Icon!.AltText.Should().Be("Workbook");
+        clonedEmbedded.WidthPt.Should().Be(72);
+        clonedEmbedded.HeightPt.Should().Be(54);
+        clonedRuby.Should().NotBeSameAs(ruby);
+        clonedRuby.Alignment.Should().Be(RubyAlignment.DistributeSpace);
+        clonedRuby.PhoneticSizeHalfPoints.Should().Be(12);
+        clonedRuby.RaiseHalfPoints.Should().Be(9);
+        clonedRuby.BaseFragments.Should().Equal(ruby.BaseFragments);
+        clonedRuby.PhoneticFragments.Should().Equal(ruby.PhoneticFragments);
+        clonedDrawing.Should().NotBeSameAs(drawing);
+        clonedDrawing.Xml.Should().Be("<w:drawing />");
+        clonedDrawing.References.Should().Equal(drawing.References);
+        clonedDrawing.References.Should().NotBeSameAs(drawing.References);
+
+        clonedEquation.Runs.Single().NumeratorEquation!.Runs.Add(MathRun.PlainText("+1"));
+        clonedEmbedded.Payload[0] = 9;
+        clonedRuby.BaseFragments[0] = new RubyTextFragment("変更", new RunFormatting());
+        references.Add(new PreservedDrawingReference("rId8", "/word/charts/chart43.xml"));
+        numerator.LinearText.Should().Be("x^2");
+        embedded.Payload[0].Should().Be(1);
+        ruby.BaseText.Should().Be("漢字");
+        clonedDrawing.References.Should().ContainSingle();
+    }
+
+    [Fact]
     public void Merge_AppendsSourceBlocks_WithTextIntact_AndSourceUnchanged()
     {
         var target = new TextDocument();

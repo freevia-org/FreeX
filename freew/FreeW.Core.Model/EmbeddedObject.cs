@@ -78,4 +78,12 @@ public sealed class EmbeddedObject
         obj.HeightPt = heightPt ?? icon?.HeightPt ?? obj.HeightPt;
         return obj;
     }
+
+    /// <summary>Creates an independent copy for document merge and undo snapshots.</summary>
+    public EmbeddedObject Clone() => new([.. Payload], ProgId)
+    {
+        Icon = Icon?.Clone(),
+        WidthPt = WidthPt,
+        HeightPt = HeightPt
+    };
 }

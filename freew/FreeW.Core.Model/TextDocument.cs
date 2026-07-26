@@ -1084,6 +1084,20 @@ public sealed class RubyAnnotation
 
     /// <summary>Concatenated base text, used by <see cref="Run.Text"/> as the visible fallback.</summary>
     public string BaseText => string.Concat(BaseFragments.Select(fragment => fragment.Text));
+
+    /// <summary>Creates an independent copy for document merge and undo snapshots.</summary>
+    public RubyAnnotation Clone()
+    {
+        var clone = new RubyAnnotation
+        {
+            Alignment = Alignment,
+            PhoneticSizeHalfPoints = PhoneticSizeHalfPoints,
+            RaiseHalfPoints = RaiseHalfPoints
+        };
+        clone.BaseFragments.AddRange(BaseFragments);
+        clone.PhoneticFragments.AddRange(PhoneticFragments);
+        return clone;
+    }
 }
 
 /// <summary>Alignment values for WordprocessingML <c>w:rubyPr/w:rubyAlign</c>.</summary>
