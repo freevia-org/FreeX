@@ -146,6 +146,7 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var (sess, _) = MakeSession();
         sess.SelectedChart!.ValueAxis.Title = "Amount";
+        sess.SelectedChart.ValueAxis.Delete = true;
         sess.SelectedChart.ValueAxis.Min = 0;
         sess.SelectedChart.ValueAxis.Max = 100;
 
@@ -155,6 +156,7 @@ public sealed class ChartDataDialogTests : IDisposable
         dialog.Should().NotBeNull();
         options.Axis.Should().Be(ChartAxisKind.Value);
         options.Title.Should().Be("Amount");
+        options.ShowAxis.Should().BeFalse();
         options.Minimum.Should().Be(0);
         options.Maximum.Should().Be(100);
     }
@@ -293,6 +295,8 @@ public sealed class ChartDataDialogTests : IDisposable
             DepthPercent = 125,
             RightAngleAxes = true,
         };
+        sess.SelectedChart.ThreeDStyle = ChartThreeDStyle.Column;
+        sess.SelectedChart.BarGapDepthPercent = 140;
         sess.SelectedChart.Wireframe = true;
         sess.SelectedChart.WireframeSpecified = true;
 
@@ -300,7 +304,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
-        options.Should().Be(new Chart3DViewOptions(25, 35, 54, 100, 125, true, true));
+        options.Should().Be(new Chart3DViewOptions(25, 35, 54, 100, 125, true, true, 140));
     }
 
     [StaFact]

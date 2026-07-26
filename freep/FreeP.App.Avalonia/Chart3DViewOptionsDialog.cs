@@ -19,6 +19,7 @@ internal sealed class Chart3DViewOptionsDialog : Window
     private readonly TextBox _perspectiveBox;
     private readonly TextBox _heightBox;
     private readonly TextBox _depthBox;
+    private readonly TextBox _barGapDepthBox;
     private readonly ComboBox _rightAngleCombo;
     private readonly ComboBox _wireframeCombo;
 
@@ -32,7 +33,7 @@ internal sealed class Chart3DViewOptionsDialog : Window
 
         Title = surface.Title;
         Width = Chart3DViewOptionsPlanner.DefaultDialogWidth;
-        Height = Chart3DViewOptionsPlanner.DefaultDialogHeight;
+        Height = Chart3DViewOptionsPlanner.DefaultDialogHeight + 36;
         MinWidth = 360;
         MinHeight = 300;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -43,6 +44,12 @@ internal sealed class Chart3DViewOptionsDialog : Window
         _perspectiveBox = new TextBox { Text = Format(_planner.Perspective), MinWidth = 150 };
         _heightBox = new TextBox { Text = Format(_planner.HeightPercent), MinWidth = 150 };
         _depthBox = new TextBox { Text = Format(_planner.DepthPercent), MinWidth = 150 };
+        _barGapDepthBox = new TextBox
+        {
+            Text = Format(_planner.BarGapDepthPercent),
+            MinWidth = 150,
+            IsEnabled = _planner.SupportsBarGapDepth,
+        };
         _rightAngleCombo = BuildBooleanCombo(_planner.RightAngleAxes);
         _wireframeCombo = BuildBooleanCombo(_planner.Wireframe);
 
@@ -70,6 +77,7 @@ internal sealed class Chart3DViewOptionsDialog : Window
                 MakeRow(surface.PerspectiveLabel, _perspectiveBox),
                 MakeRow(surface.HeightPercentLabel, _heightBox),
                 MakeRow(surface.DepthPercentLabel, _depthBox),
+                MakeRow(surface.BarGapDepthPercentLabel, _barGapDepthBox),
                 MakeRow(surface.RightAngleAxesLabel, _rightAngleCombo),
                 MakeRow(surface.WireframeLabel, _wireframeCombo),
                 new TextBlock { Text = surface.AutoHint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 },
@@ -91,13 +99,15 @@ internal sealed class Chart3DViewOptionsDialog : Window
         int? heightPercent,
         int? depthPercent,
         bool? rightAngleAxes,
-        bool? wireframe)
+        bool? wireframe,
+        int? barGapDepthPercent = null)
     {
         _rotationXBox.Text = Format(rotationX);
         _rotationYBox.Text = Format(rotationY);
         _perspectiveBox.Text = Format(perspective);
         _heightBox.Text = Format(heightPercent);
         _depthBox.Text = Format(depthPercent);
+        _barGapDepthBox.Text = Format(barGapDepthPercent);
         _rightAngleCombo.SelectedIndex = FindBooleanIndex(rightAngleAxes);
         _wireframeCombo.SelectedIndex = FindBooleanIndex(wireframe);
     }
@@ -122,6 +132,7 @@ internal sealed class Chart3DViewOptionsDialog : Window
         _planner.SetPerspective(ParseOptionalInt(_perspectiveBox.Text, "Perspective", 0, 240));
         _planner.SetHeightPercent(ParseOptionalInt(_heightBox.Text, "Height", 0, 500));
         _planner.SetDepthPercent(ParseOptionalInt(_depthBox.Text, "Depth", 0, 500));
+        _planner.SetBarGapDepthPercent(ParseOptionalInt(_barGapDepthBox.Text, "Gap depth", 0, 500));
         _planner.SetRightAngleAxes(ReadBoolean(_rightAngleCombo));
         _planner.SetWireframe(ReadBoolean(_wireframeCombo));
     }

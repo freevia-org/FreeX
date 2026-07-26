@@ -16,6 +16,7 @@ internal sealed class ChartAxisOptionsDialog : Window
     private readonly ChartAxisOptionsPlanner _planner;
     private readonly ComboBox _axisCombo;
     private readonly TextBox _titleBox;
+    private readonly CheckBox _showAxisCheck;
     private readonly TextBox _minimumBox;
     private readonly TextBox _maximumBox;
     private readonly TextBox _majorUnitBox;
@@ -38,7 +39,7 @@ internal sealed class ChartAxisOptionsDialog : Window
 
         Title = surface.Title;
         Width = ChartAxisOptionsPlanner.DefaultDialogWidth;
-        Height = ChartAxisOptionsPlanner.DefaultDialogHeight;
+        Height = ChartAxisOptionsPlanner.DefaultDialogHeight + 28;
         MinWidth = 400;
         MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -59,6 +60,7 @@ internal sealed class ChartAxisOptionsDialog : Window
             }
         };
         _titleBox = new TextBox { MinWidth = 230 };
+        _showAxisCheck = new CheckBox { Content = surface.ShowAxisLabel };
         _minimumBox = new TextBox { MinWidth = 130 };
         _maximumBox = new TextBox { MinWidth = 130 };
         _majorUnitBox = new TextBox { MinWidth = 130 };
@@ -93,6 +95,7 @@ internal sealed class ChartAxisOptionsDialog : Window
             {
                 MakeRow(surface.AxisLabel, _axisCombo),
                 MakeRow(surface.AxisTitleLabel, _titleBox),
+                _showAxisCheck,
                 MakeRow(surface.MinimumLabel, _minimumBox),
                 MakeRow(surface.MaximumLabel, _maximumBox),
                 MakeRow(surface.MajorUnitLabel, _majorUnitBox),
@@ -129,10 +132,12 @@ internal sealed class ChartAxisOptionsDialog : Window
         ChartTickMark? minorTickMark = null,
         ChartTickLabelPosition? tickLabelPosition = null,
         ChartAxisCrossing? crosses = null,
-        double? crossesAt = null)
+        double? crossesAt = null,
+        bool showAxis = true)
     {
         _axisCombo.SelectedIndex = (int)axis;
         _titleBox.Text = title;
+        _showAxisCheck.IsChecked = showAxis;
         _minimumBox.Text = Format(minimum);
         _maximumBox.Text = Format(maximum);
         _majorUnitBox.Text = Format(majorUnit);
@@ -162,6 +167,7 @@ internal sealed class ChartAxisOptionsDialog : Window
     private void LoadControls()
     {
         _titleBox.Text = _planner.Title;
+        _showAxisCheck.IsChecked = _planner.ShowAxis;
         _minimumBox.Text = Format(_planner.Minimum);
         _maximumBox.Text = Format(_planner.Maximum);
         _majorUnitBox.Text = Format(_planner.MajorUnit);
@@ -178,6 +184,7 @@ internal sealed class ChartAxisOptionsDialog : Window
     private void UpdatePlannerFromControls()
     {
         _planner.SetTitle(_titleBox.Text);
+        _planner.SetShowAxis(_showAxisCheck.IsChecked == true);
         _planner.SetMinimum(ParseOptional(_minimumBox.Text, "Minimum"));
         _planner.SetMaximum(ParseOptional(_maximumBox.Text, "Maximum"));
         _planner.SetMajorUnit(ParseOptional(_majorUnitBox.Text, "Major unit"));

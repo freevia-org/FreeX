@@ -29,6 +29,8 @@ public class PreservedPartsRoundTripTests
     private const string ExtendedPropertiesContentType = "application/vnd.openxmlformats-officedocument.extended-properties+xml";
     private const string CustomPropertiesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
     private const string ExtendedPropertiesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
+    private const string CustomUiContentType = "application/vnd.ms-office.customUI+xml";
+    private const string CustomUiRelType = "http://schemas.microsoft.com/office/2006/relationships/ui/extensibility";
 
     private static byte[] WriteBytes(TextDocument document)
     {
@@ -238,6 +240,83 @@ public class PreservedPartsRoundTripTests
         return stream.ToArray();
     }
 
+    private static byte[] AuthorPackageWithCustomUi()
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Add(string path, string content)
+            {
+                var entry = zip.CreateEntry(path, CompressionLevel.Optimal);
+                using var entryStream = entry.Open();
+                var bytes = Encoding.UTF8.GetBytes(content);
+                entryStream.Write(bytes, 0, bytes.Length);
+            }
+
+            void AddBytes(string path, byte[] bytes)
+            {
+                var entry = zip.CreateEntry(path, CompressionLevel.Optimal);
+                using var entryStream = entry.Open();
+                entryStream.Write(bytes, 0, bytes.Length);
+            }
+
+            Add("[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="png" ContentType="image/png"/>
+                  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+                  <Override PartName="/customUI/customUI.xml" ContentType="application/vnd.ms-office.customUI+xml"/>
+                </Types>
+                """);
+
+            Add("_rels/.rels",
+                $"""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+                  <Relationship Id="rIdRibbon" Type="{CustomUiRelType}" Target="customUI/customUI.xml"/>
+                </Relationships>
+                """);
+
+            Add("word/document.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:body>
+                    <w:p><w:r><w:t>Ribbon body</w:t></w:r></w:p>
+                    <w:sectPr/>
+                  </w:body>
+                </w:document>
+                """);
+
+            Add("customUI/customUI.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <customUI xmlns="http://schemas.microsoft.com/office/2006/01/customui" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <ribbon><tabs><tab id="freewTab" label="Partner"><group id="partnerGroup" label="Partner"><button id="partnerButton" label="Action" image="PartnerIcon" onAction="OnAction"/></group></tab></tabs></ribbon>
+                  <images><image id="PartnerIcon" r:embed="rIdImage"/></images>
+                </customUI>
+                """);
+
+            Add("customUI/_rels/customUI.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="images/partner.png"/>
+                </Relationships>
+                """);
+
+            AddBytes("customUI/images/partner.png", new byte[]
+            {
+                0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x50, 0x41, 0x52, 0x54, 0x4E, 0x45, 0x52
+            });
+        }
+        return stream.ToArray();
+    }
+
     // --- settings.xml: preserve + overlay -----------------------------------------------------------
 
     [Fact]
@@ -344,6 +423,43 @@ public class PreservedPartsRoundTripTests
         EntryBytes(twice, "customXml/item1.xml").Should().Equal(EntryBytes(once, "customXml/item1.xml"));
         EntryBytes(twice, "word/webSettings.xml").Should().Equal(EntryBytes(once, "word/webSettings.xml"));
         HasEntry(twice, "customXml/_rels/item1.xml.rels").Should().BeTrue();
+    }
+
+    [Fact]
+    public void CustomUi_RootRelationshipAndLocalResourcesSurviveRoundTrip()
+    {
+        var source = AuthorPackageWithCustomUi();
+        var read = ReadDoc(source);
+
+        read.Preserved.Parts.Should().Contain(part =>
+            part.PartName == "/customUI/customUI.xml"
+            && part.PackageRelationshipType == CustomUiRelType);
+        read.Preserved.Parts.Select(part => part.PartName).Should().Contain(new[]
+        {
+            "/customUI/_rels/customUI.xml.rels",
+            "/customUI/images/partner.png"
+        });
+
+        var rewritten = WriteBytes(read);
+        EntryBytes(rewritten, "customUI/customUI.xml").Should().Equal(EntryBytes(source, "customUI/customUI.xml"));
+        EntryBytes(rewritten, "customUI/_rels/customUI.xml.rels").Should().Equal(EntryBytes(source, "customUI/_rels/customUI.xml.rels"));
+        EntryBytes(rewritten, "customUI/images/partner.png").Should().Equal(EntryBytes(source, "customUI/images/partner.png"));
+
+        var contentTypes = EntryXml(rewritten, "[Content_Types].xml").Root!;
+        contentTypes.Elements(Ct + "Override").Should().Contain(element =>
+            element.Attribute("PartName")!.Value == "/customUI/customUI.xml"
+            && element.Attribute("ContentType")!.Value == CustomUiContentType);
+        contentTypes.Elements(Ct + "Default").Should().Contain(element =>
+            element.Attribute("Extension")!.Value == "png"
+            && element.Attribute("ContentType")!.Value == "image/png");
+
+        EntryXml(rewritten, "_rels/.rels").Root!.Elements(Rel + "Relationship").Should().Contain(element =>
+            element.Attribute("Type")!.Value == CustomUiRelType
+            && element.Attribute("Target")!.Value == "customUI/customUI.xml");
+
+        var twice = WriteBytes(ReadDoc(rewritten));
+        EntryBytes(twice, "customUI/customUI.xml").Should().Equal(EntryBytes(rewritten, "customUI/customUI.xml"));
+        EntryBytes(twice, "customUI/images/partner.png").Should().Equal(EntryBytes(rewritten, "customUI/images/partner.png"));
     }
 
     [Fact]

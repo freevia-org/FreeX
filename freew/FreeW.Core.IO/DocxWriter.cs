@@ -229,7 +229,7 @@ public static class DocxWriter
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
         WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasCustomProps, hasSettings, hasBibliography, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, preservedParts, document.Preserved.ContentTypeDefaults, options.MainDocumentContentType));
-        WritePart(archive, "_rels/.rels", BuildPackageRels(hasCustomProps, hasExtendedProps));
+        WritePart(archive, "_rels/.rels", BuildPackageRels(hasCustomProps, hasExtendedProps, preservedParts));
         WritePart(
             archive,
             OpcPackageProperties.CorePropertiesZipEntry,
@@ -1075,7 +1075,7 @@ public static class DocxWriter
                     new XAttribute("PartName", p.PartName),
                     new XAttribute("ContentType", p.ContentTypeOverride!)))));
 
-    private static XDocument BuildPackageRels(bool hasCustomProps, bool hasExtendedProps) => new(
+    private static XDocument BuildPackageRels(bool hasCustomProps, bool hasExtendedProps, IReadOnlyList<PreservedPart> preservedParts) => new(
         OpcRelationships.CreateRoot(
             OpcRelationships.CreateRelationship("rId1", OfficeDocumentRel, "word/document.xml"),
             OpcRelationships.CreateRelationship(
@@ -1093,7 +1093,13 @@ public static class DocxWriter
                     "rIdExtended",
                     OpcPackageProperties.ExtendedPropertiesRelationshipType,
                     OpcPackageProperties.ExtendedPropertiesZipEntry)
-                : null));
+                : null,
+            preservedParts
+                .Where(part => part.PackageRelationshipType is not null)
+                .Select((part, index) => OpcRelationships.CreateRelationship(
+                    $"rIdPreservedPackage{index + 1}",
+                    part.PackageRelationshipType!,
+                    part.PartName.TrimStart('/')))));
 
     /// <summary>
     /// Builds docProps/custom.xml carrying the FreeW watermark properties and/or Word's "Mark as Final"
