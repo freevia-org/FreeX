@@ -141,6 +141,16 @@ public readonly record struct ChartLineSegmentPrimitive(
     ChartPlanPoint End,
     ChartStrokePlan Stroke);
 
+public readonly record struct ChartErrorBarPrimitive(
+    int SeriesIndex,
+    int PointIndex,
+    ChartPlanPoint Center,
+    ChartPlanPoint? MinusEnd,
+    ChartPlanPoint? PlusEnd,
+    ChartStrokePlan Stroke,
+    ChartErrorDirection Direction,
+    bool NoEndCap);
+
 public enum ChartLinePathSegmentKind
 {
     Line,
@@ -371,6 +381,7 @@ public readonly record struct ChartAreaSeriesPrimitive(
     ChartPathPrimitive AreaPath,
     ChartFillPlan Fill)
 {
+    public IReadOnlyList<int> PointIndices { get; init; } = Array.Empty<int>();
     public ChartClassicThreeDDepthPlan? Depth { get; init; }
 }
 
@@ -439,6 +450,10 @@ public readonly record struct ChartRadarPrimitivePlan(
     IReadOnlyList<ChartTextPlan> CategoryLabels,
     IReadOnlyList<ChartRadarSeriesPrimitive> Series)
 {
+    public ChartPlanPoint Center { get; init; }
+    public double Radius { get; init; }
+    public double ValueMaximum { get; init; }
+
     // Radar value labels are separate from category labels because PowerPoint
     // places them on the vertical value axis, not on the category spokes.
     public IReadOnlyList<ChartTextPlan> ValueLabels { get; init; } = Array.Empty<ChartTextPlan>();
@@ -548,6 +563,7 @@ public sealed class ChartScenePlan
     public ChartBubblePrimitivePlan? Bubble { get; init; }
     public ChartRadarPrimitivePlan? Radar { get; init; }
     public IReadOnlyList<ChartLineSeriesPrimitive> ComboLineSeries { get; init; } = Array.Empty<ChartLineSeriesPrimitive>();
+    public IReadOnlyList<ChartErrorBarPrimitive> ErrorBars { get; init; } = Array.Empty<ChartErrorBarPrimitive>();
 }
 
 /// <summary>
@@ -1537,6 +1553,17 @@ public static partial class ChartRenderPlanner
         var comboLineSeries = canHaveComboOverlay && chart.Series.Any(series => series.OverrideChartType.HasValue)
             ? BuildComboOverrideLineSeriesPrimitives(chart, plot, seriesColors, fillPlans)
             : Array.Empty<ChartLineSeriesPrimitive>();
+        var errorBars = BuildErrorBarPrimitives(
+            chart,
+            plot,
+            geometryKind,
+            rectangles,
+            lineSeries,
+            areaSeries,
+            radar,
+            scatter,
+            bubble,
+            seriesColors);
 
         return new ChartScenePlan
         {
@@ -1574,8 +1601,210 @@ public static partial class ChartRenderPlanner
             Scatter = scatter,
             Bubble = bubble,
             Radar = radar,
-            ComboLineSeries = comboLineSeries
+            ComboLineSeries = comboLineSeries,
+            ErrorBars = errorBars
         };
+    }
+
+    private static IReadOnlyList<ChartErrorBarPrimitive> BuildErrorBarPrimitives(
+        ChartShape chart,
+        ChartPlanRect plot,
+        ChartSceneGeometryKind geometryKind,
+        IReadOnlyList<ChartRectPrimitive> rectangles,
+        IReadOnlyList<ChartLineSeriesPrimitive> lineSeries,
+        IReadOnlyList<ChartAreaSeriesPrimitive> areaSeries,
+        ChartRadarPrimitivePlan? radar,
+        ChartScatterPrimitivePlan? scatter,
+        ChartBubblePrimitivePlan? bubble,
+        IReadOnlyList<SrgbColor>? seriesColors)
+    {
+        if (chart.Series.Count == 0 || !plot.HasPositiveArea)
+            return Array.Empty<ChartErrorBarPrimitive>();
+
+        var result = new List<ChartErrorBarPrimitive>();
+        var (primaryMin, primaryMax, _) = ComputePrimaryValueAxisRange(chart);
+        var (secondaryMin, secondaryMax, _) = ComputeSecondaryValueAxisRange(chart);
+        double primaryRange = Math.Max(1e-9, primaryMax - primaryMin);
+        double secondaryRange = Math.Max(1e-9, secondaryMax - secondaryMin);
+        var (scatterXMin, scatterXMax, _) = geometryKind == ChartSceneGeometryKind.Scatter
+            ? ComputeScatterAxisRange(chart, useX: true)
+            : geometryKind == ChartSceneGeometryKind.Bubble
+                ? ComputeBubbleXAxisRange(chart)
+            : (0.0, 1.0, 1.0);
+        double scatterXRange = Math.Max(1e-9, scatterXMax - scatterXMin);
+        double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
+        double categoryHeight = plot.Height / Math.Max(1, chart.Categories.Count);
+
+        foreach (var (series, seriesIndex) in chart.Series.Select((value, index) => (value, index)))
+        {
+            if (series.ErrorBars is not { } bars)
+                continue;
+
+            var stroke = ResolveAuthoredSeriesStroke(series, seriesIndex, seriesColors, 1.0)
+                ?? ResolveSeriesStroke(seriesIndex, seriesColors, 1.0);
+            for (int pointIndex = 0; pointIndex < series.Values.Count; pointIndex++)
+            {
+                var value = ResolveBlankSensitiveValue(chart, series.Values[pointIndex]);
+                if (!value.HasValue)
+                    continue;
+
+                var center = FindErrorBarCenter(
+                    geometryKind,
+                    seriesIndex,
+                    pointIndex,
+                    value.Value,
+                    rectangles,
+                    lineSeries,
+                    areaSeries,
+                    radar,
+                    scatter,
+                    bubble);
+                if (!center.HasValue)
+                    continue;
+
+                double delta = bars.ValueType == ChartErrorValueType.Percentage
+                    ? Math.Abs(value.Value) * Math.Abs(bars.Value) / 100.0
+                    : Math.Abs(bars.Value);
+                double pixels;
+                if (bars.Direction == ChartErrorDirection.Y)
+                {
+                    double range = series.OnSecondaryAxis ? secondaryRange : primaryRange;
+                    pixels = geometryKind == ChartSceneGeometryKind.Radar && radar is { Radius: > 0, ValueMaximum: > 0 }
+                        ? delta / radar.Value.ValueMaximum * radar.Value.Radius
+                        : geometryKind == ChartSceneGeometryKind.Bar
+                        ? delta / Math.Max(1, chart.Categories.Count) * categoryHeight
+                        : delta / range * plot.Height;
+                }
+                else if (geometryKind is ChartSceneGeometryKind.Scatter or ChartSceneGeometryKind.Bubble)
+                {
+                    pixels = delta / scatterXRange * plot.Width;
+                }
+                else if (geometryKind == ChartSceneGeometryKind.Bar)
+                {
+                    pixels = delta / (series.OnSecondaryAxis ? secondaryRange : primaryRange) * plot.Width;
+                }
+                else
+                {
+                    // Category charts have a discrete X axis. Treat a fixed amount as
+                    // category units, which keeps the marker centered in its category band.
+                    pixels = delta * categoryStep;
+                }
+
+                var point = center.Value;
+                ChartPlanPoint? minus = null;
+                ChartPlanPoint? plus = null;
+                bool radarValueAxis = geometryKind == ChartSceneGeometryKind.Radar &&
+                    bars.Direction == ChartErrorDirection.Y && radar is { Radius: > 0 };
+                if (radarValueAxis)
+                {
+                    var radial = new ChartPlanPoint(
+                        point.X - radar!.Value.Center.X,
+                        point.Y - radar.Value.Center.Y);
+                    double length = Math.Sqrt(radial.X * radial.X + radial.Y * radial.Y);
+                    if (length < 1e-9)
+                        continue;
+
+                    var unit = new ChartPlanPoint(radial.X / length, radial.Y / length);
+                    if (bars.BarType != ChartErrorBarType.Plus)
+                        minus = new ChartPlanPoint(
+                            point.X + unit.X * pixels,
+                            point.Y + unit.Y * pixels);
+                    if (bars.BarType != ChartErrorBarType.Minus)
+                        plus = new ChartPlanPoint(
+                            point.X - unit.X * pixels,
+                            point.Y - unit.Y * pixels);
+                }
+                else
+                {
+                    if (bars.BarType != ChartErrorBarType.Plus)
+                        minus = bars.Direction == ChartErrorDirection.Y
+                            ? point with { Y = point.Y + pixels }
+                            : point with { X = point.X - pixels };
+                    if (bars.BarType != ChartErrorBarType.Minus)
+                        plus = bars.Direction == ChartErrorDirection.Y
+                            ? point with { Y = point.Y - pixels }
+                            : point with { X = point.X + pixels };
+                }
+
+                result.Add(new ChartErrorBarPrimitive(
+                    seriesIndex,
+                    pointIndex,
+                    point,
+                    minus,
+                    plus,
+                    stroke,
+                    bars.Direction,
+                    bars.NoEndCap));
+            }
+        }
+
+        return result;
+    }
+
+    private static ChartPlanPoint? FindErrorBarCenter(
+        ChartSceneGeometryKind geometryKind,
+        int seriesIndex,
+        int pointIndex,
+        double value,
+        IReadOnlyList<ChartRectPrimitive> rectangles,
+        IReadOnlyList<ChartLineSeriesPrimitive> lineSeries,
+        IReadOnlyList<ChartAreaSeriesPrimitive> areaSeries,
+        ChartRadarPrimitivePlan? radar,
+        ChartScatterPrimitivePlan? scatter,
+        ChartBubblePrimitivePlan? bubble)
+    {
+        switch (geometryKind)
+        {
+            case ChartSceneGeometryKind.Line:
+            case ChartSceneGeometryKind.Stock:
+                var line = lineSeries.FirstOrDefault(item => item.SeriesIndex == seriesIndex);
+                return line.Points is not null && pointIndex < line.Points.Count
+                    ? line.Points[pointIndex]
+                    : null;
+            case ChartSceneGeometryKind.Area:
+                foreach (var area in areaSeries.Where(item => item.SeriesIndex == seriesIndex))
+                {
+                    int slot = -1;
+                    for (int candidate = 0; candidate < area.PointIndices.Count; candidate++)
+                    {
+                        if (area.PointIndices[candidate] == pointIndex)
+                        {
+                            slot = candidate;
+                            break;
+                        }
+                    }
+                    if (slot >= 0 && slot < area.Points.Count)
+                        return area.Points[slot];
+                }
+                return null;
+            case ChartSceneGeometryKind.Radar:
+                var radarSeries = radar?.Series.FirstOrDefault(item => item.SeriesIndex == seriesIndex);
+                return radarSeries is { } rs && pointIndex < rs.Points.Count
+                    ? rs.Points[pointIndex]
+                    : null;
+            case ChartSceneGeometryKind.Column:
+                var column = rectangles.FirstOrDefault(item => item.SeriesIndex == seriesIndex && item.CategoryIndex == pointIndex);
+                if (column.Bounds.HasPositiveArea)
+                    return new ChartPlanPoint(column.Bounds.X + column.Bounds.Width / 2.0,
+                        value >= 0 ? column.Bounds.Y : column.Bounds.Bottom);
+                return null;
+            case ChartSceneGeometryKind.Bar:
+                var bar = rectangles.FirstOrDefault(item => item.SeriesIndex == seriesIndex && item.CategoryIndex == pointIndex);
+                if (bar.Bounds.HasPositiveArea)
+                    return new ChartPlanPoint(value >= 0 ? bar.Bounds.Right : bar.Bounds.X,
+                        bar.Bounds.Y + bar.Bounds.Height / 2.0);
+                return null;
+            case ChartSceneGeometryKind.Scatter:
+                var scatterSeries = scatter?.Series.FirstOrDefault(item => item.SeriesIndex == seriesIndex);
+                return scatterSeries is { } ss && ss.Points is not null && pointIndex < ss.Points.Count
+                    ? ss.Points[pointIndex]
+                    : null;
+            case ChartSceneGeometryKind.Bubble:
+                var bubblePoint = bubble?.Bubbles.FirstOrDefault(item => item.SeriesIndex == seriesIndex && item.PointIndex == pointIndex);
+                return bubblePoint is { } bp ? bp.Center : null;
+            default:
+                return null;
+        }
     }
 
     public static ChartRenderFamily GetRenderFamily(ChartType chartType) =>
@@ -5055,26 +5284,29 @@ public static partial class ChartRenderPlanner
         ChartClassicThreeDDepthPlan? depth)
     {
         var segment = new List<ChartPlanPoint>();
+        var segmentIndices = new List<int>();
         for (int pointIndex = 0; pointIndex < pointSlots.Count; pointIndex++)
         {
             var point = pointSlots[pointIndex];
             if (point.HasValue)
             {
                 segment.Add(point.Value);
+                segmentIndices.Add(pointIndex);
                 continue;
             }
 
             if (splitAtBlankSlots)
-                AddAreaSegmentPrimitive(primitives, seriesIndex, segment, baselineSlots, baselineY, fill, depth);
+                AddAreaSegmentPrimitive(primitives, seriesIndex, segment, segmentIndices, baselineSlots, baselineY, fill, depth);
         }
 
-        AddAreaSegmentPrimitive(primitives, seriesIndex, segment, baselineSlots, baselineY, fill, depth);
+        AddAreaSegmentPrimitive(primitives, seriesIndex, segment, segmentIndices, baselineSlots, baselineY, fill, depth);
     }
 
     private static void AddAreaSegmentPrimitive(
         List<ChartAreaSeriesPrimitive> primitives,
         int seriesIndex,
         List<ChartPlanPoint> segment,
+        List<int> segmentIndices,
         IReadOnlyList<ChartPlanPoint?>? baselineSlots,
         double baselineY,
         ChartFillPlan fill,
@@ -5099,10 +5331,12 @@ public static partial class ChartRenderPlanner
                 Fill: fill),
             fill)
         {
+            PointIndices = segmentIndices.ToArray(),
             Depth = depth
         });
 
         segment.Clear();
+        segmentIndices.Clear();
     }
 
     private static IReadOnlyList<ChartPlanPoint> ResolveAreaBaselinePoints(
@@ -5627,6 +5861,9 @@ public static partial class ChartRenderPlanner
             labels,
             seriesPrimitives)
         {
+            Center = center,
+            Radius = radius,
+            ValueMaximum = dataMax,
             ValueLabels = valueLabels
         };
     }
