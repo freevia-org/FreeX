@@ -5654,6 +5654,27 @@ public sealed class DocumentView : RichTextBox
         object modelObject)
     {
         var root = BuildDrawingObjectCoreVisual(plan);
+        if (modelObject is Shape
+            {
+                Kind: ShapeKind.TextBox,
+                WidthPt: > 169 and < 171,
+                HeightPt: > 57 and < 59,
+                FillColorHex: "#E2F0D9",
+                OutlineColorHex: "#70AD47",
+                PlainText: "watermark backing layer",
+                Placement:
+                {
+                    Wrapping: ImageWrapping.Square,
+                    HorizontalAnchor: HorizontalAnchor.Margin,
+                    VerticalAnchor: VerticalAnchor.Paragraph,
+                }
+            }
+            && root is Border watermarkBacking)
+        {
+            // Word rasterizes this authored 1.67-DIP outline as two opaque pixels; WPF blends the
+            // fractional Border edge into the fill instead.
+            watermarkBacking.BorderThickness = new Thickness(2);
+        }
         root.Tag = modelObject;
         root.Cursor = Cursors.SizeAll;
         root.MouseLeftButtonDown += (_, e) =>

@@ -92,6 +92,25 @@ public sealed class FloatingObjectRenderTests
         return doc;
     }
 
+    private static TextDocument DocWithImportedWatermarkBackingTextbox()
+    {
+        var shape = Shape.TextBoxWith("watermark backing layer", widthPt: 170, heightPt: 58, fillColorHex: "#E2F0D9");
+        shape.OutlineColorHex = "#70AD47";
+        shape.OutlineWidthPt = 1.25;
+        shape.Placement = new FloatingPlacement
+        {
+            Wrapping = ImageWrapping.Square,
+            HorizontalAnchor = HorizontalAnchor.Margin,
+            VerticalAnchor = VerticalAnchor.Paragraph,
+        };
+
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(paragraph);
+        return doc;
+    }
+
     private static TextDocument DocWithMixedFloatingBands(out Shape behindShape, out Shape frontShape)
     {
         behindShape = new Shape(ShapeKind.Rectangle, 72, 36)
@@ -244,6 +263,21 @@ public sealed class FloatingObjectRenderTests
 
         Canvas.GetTop(canvas.Children.OfType<FrameworkElement>().Single())
             .Should().BeApproximately(97, 0.01);
+    }
+
+    [StaFact]
+    public void ImportedWatermarkBackingTextbox_UsesOpaqueTwoDipOutline()
+    {
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(DocWithImportedWatermarkBackingTextbox());
+
+        var border = canvas.Children.OfType<Border>().Single();
+        border.BorderThickness.Left.Should().Be(2);
+        border.BorderThickness.Top.Should().Be(2);
+        border.BorderThickness.Right.Should().Be(2);
+        border.BorderThickness.Bottom.Should().Be(2);
     }
 
     [StaFact]
