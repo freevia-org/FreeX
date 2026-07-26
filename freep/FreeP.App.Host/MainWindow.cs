@@ -435,6 +435,7 @@ public sealed partial class MainWindow : Window
             onEditChartDataTableOptions: () => OpenChartDataTableOptionsDialog(),
             onEditChartBubbleOptions: () => OpenChartBubbleOptionsDialog(),
             onEditChartPieOptions: () => OpenChartPieOptionsDialog(),
+            onEditChartPlotStyleOptions: () => OpenChartPlotStyleOptionsDialog(),
             onEditChart3DViewOptions: () => OpenChart3DViewOptionsDialog(),
             onEditChartTextOptions: () => OpenChartTextOptionsDialog(),
             onEditChartAreaOptions: () => OpenChartAreaOptionsDialog(),
@@ -3852,6 +3853,16 @@ public sealed partial class MainWindow : Window
         if (Editor.SelectedChart is not { ChartType: ChartType.Pie or ChartType.Doughnut }) return;
 
         var dialog = new ChartPieOptionsDialog(Editor);
+        if (IsVisible)
+            dialog.Owner = this;
+        dialog.ShowDialog();
+    }
+
+    internal void OpenChartPlotStyleOptionsDialog()
+    {
+        if (Editor.SelectedChart is not { ChartType: ChartType.Scatter or ChartType.Radar }) return;
+
+        var dialog = new ChartPlotStyleOptionsDialog(Editor);
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();

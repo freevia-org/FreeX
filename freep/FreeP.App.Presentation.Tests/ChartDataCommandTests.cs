@@ -1334,6 +1334,51 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartPlotStyleOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.Scatter;
+        chart.ScatterStyle = ScatterStyle.Marker;
+        chart.RadarStyle = RadarStyle.Standard;
+
+        bus.Execute(new SetChartPlotStyleOptionsCommand(
+            0, id, new ChartPlotStyleOptions(ScatterStyle.SmoothMarker, RadarStyle.Filled)));
+
+        chart.ScatterStyle.Should().Be(ScatterStyle.SmoothMarker);
+        chart.RadarStyle.Should().Be(RadarStyle.Filled);
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.ChartType.Should().Be(ChartType.Scatter);
+        roundTripped.ScatterStyle.Should().Be(ScatterStyle.SmoothMarker);
+
+        bus.Undo();
+        chart.ScatterStyle.Should().Be(ScatterStyle.Marker);
+        chart.RadarStyle.Should().Be(RadarStyle.Standard);
+    }
+
+    [Fact]
+    public void SetChartPlotStyleOptions_RadarRoundTripsStyle()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.Radar;
+        chart.RadarStyle = RadarStyle.Standard;
+
+        bus.Execute(new SetChartPlotStyleOptionsCommand(
+            0, id, new ChartPlotStyleOptions(ScatterStyle.Marker, RadarStyle.Filled)));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.ChartType.Should().Be(ChartType.Radar);
+        roundTripped.RadarStyle.Should().Be(RadarStyle.Filled);
+    }
+
+    [Fact]
     public void SetChartPointOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
     {
         var (p, bus, id) = MakeChartPresentation();

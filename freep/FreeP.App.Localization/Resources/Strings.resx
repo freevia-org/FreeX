@@ -496,6 +496,12 @@
   <data name="Ribbon_Command_ChartPieOptions_KeyTip" xml:space="preserve">
     <value>I</value>
   </data>
+  <data name="Ribbon_Command_ChartPlotStyleOptions_Label" xml:space="preserve">
+    <value>Plot Style</value>
+  </data>
+  <data name="Ribbon_Command_ChartPlotStyleOptions_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
   <data name="Ribbon_Command_Chart3DViewOptions_Label" xml:space="preserve">
     <value>3-D View</value>
   </data>

@@ -6212,6 +6212,26 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartPlotStyleOptionsDialog_constructs_and_commits_shared_options()
+    {
+        ChartPlotStyleOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.Scatter);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartPlotStyleOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(ScatterStyle.SmoothMarker, RadarStyle.Filled);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().Be(new ChartPlotStyleOptions(ScatterStyle.SmoothMarker, RadarStyle.Filled));
+    }
+
+    [Fact]
     public async Task ChartTextOptionsDialog_constructs_and_commits_shared_options()
     {
         ChartTextOptions? options = null;

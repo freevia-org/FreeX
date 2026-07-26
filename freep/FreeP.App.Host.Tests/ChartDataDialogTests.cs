@@ -258,6 +258,22 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartPlotStyleOptionsDialog_ConstructsAndUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.ChartType = ChartType.Scatter;
+        sess.SelectedChart.ScatterStyle = ScatterStyle.Marker;
+        sess.SelectedChart.RadarStyle = RadarStyle.Standard;
+
+        var dialog = new ChartPlotStyleOptionsDialog(sess);
+        dialog.SetOptionsForTests(ScatterStyle.SmoothMarker, RadarStyle.Filled);
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.Should().Be(new ChartPlotStyleOptions(ScatterStyle.SmoothMarker, RadarStyle.Filled));
+    }
+
+    [StaFact]
     public void Chart3DViewOptionsDialog_ConstructsAndUsesSharedPlanner()
     {
         var (sess, _) = MakeSession();
@@ -437,6 +453,21 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().NotContain("new SetChartPieOptionsCommand");
         ribbonSource.Should().Contain("ChartPieOptionsPlanner.CommandId");
         windowSource.Should().Contain("OpenChartPieOptionsDialog");
+    }
+
+    [Fact]
+    public void ChartPlotStyleOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartPlotStyleOptionsDialog.cs");
+        var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
+        var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+
+        source.Should().Contain("ChartPlotStyleOptionsPlanner.FromChart(chart)");
+        source.Should().Contain("_planner.BuildCommitPlan()");
+        source.Should().Contain("_editor.ApplyChartPlotStyleOptions");
+        source.Should().NotContain("new SetChartPlotStyleOptionsCommand");
+        ribbonSource.Should().Contain("ChartPlotStyleOptionsPlanner.CommandId");
+        windowSource.Should().Contain("OpenChartPlotStyleOptionsDialog");
     }
 
     [Fact]
