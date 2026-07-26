@@ -13,6 +13,8 @@ public sealed class ConsolidateDialogPlannerTests
         ConsolidateDialogPlanner.WpfWindowWidth.Should().Be(420);
         ConsolidateDialogPlanner.CaptureWidth.Should().Be(380);
         ConsolidateDialogPlanner.CaptureHeight.Should().Be(420);
+        ConsolidateDialogPlanner.CaptureContentWidth.Should().Be(341);
+        ConsolidateDialogPlanner.CaptureContentHeight.Should().Be(361);
         ConsolidateDialogPlanner.MinWidth.Should().Be(360);
         ConsolidateDialogPlanner.ReferencesListHeight.Should().Be(72);
     }

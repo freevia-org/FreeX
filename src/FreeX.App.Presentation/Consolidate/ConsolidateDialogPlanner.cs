@@ -17,6 +17,8 @@ public static class ConsolidateDialogPlanner
     public const double WpfWindowWidth = 420;
     public const double CaptureWidth = 380;
     public const double CaptureHeight = 420;
+    public const double CaptureContentWidth = 341;
+    public const double CaptureContentHeight = 361;
     public const double MinWidth = 360;
     public const double ReferencesListHeight = 72;
 
