@@ -9,6 +9,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
 
     private bool? _oldSmoothLine;
     private bool _oldOnSecondaryAxis;
+    private ChartAxis? _oldSecondaryValueAxis;
     private ChartLineStyle? _oldLineStyle;
     private ChartMarkerStyle? _oldMarkerStyle;
     private ThemeAwareColor? _oldFillColor;
@@ -32,6 +33,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
 
         _oldSmoothLine = series.SmoothLine;
         _oldOnSecondaryAxis = series.OnSecondaryAxis;
+        _oldSecondaryValueAxis = CloneAxis(chart.SecondaryValueAxis);
         _oldLineStyle = CloneLineStyle(series.LineStyle);
         _oldMarkerStyle = CloneMarkerStyle(series.MarkerStyle);
         _oldFillColor = series.FillColor;
@@ -39,6 +41,12 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
 
         series.SmoothLine = _newOptions.SmoothLine;
         series.OnSecondaryAxis = _newOptions.OnSecondaryAxis;
+        if (chart.Series.Any(item => item.OnSecondaryAxis))
+            chart.SecondaryValueAxis ??= new ChartAxis();
+        else if (_oldSecondaryValueAxis is null)
+            chart.SecondaryValueAxis = null;
+        else
+            chart.SecondaryValueAxis = CloneAxis(_oldSecondaryValueAxis);
         series.FillColor = _newOptions.FillColor;
         series.Fill = _newOptions.Fill;
 
@@ -76,6 +84,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
 
         series.SmoothLine = _oldSmoothLine;
         series.OnSecondaryAxis = _oldOnSecondaryAxis;
+        chart.SecondaryValueAxis = CloneAxis(_oldSecondaryValueAxis);
         series.LineStyle = CloneLineStyle(_oldLineStyle);
         series.MarkerStyle = CloneMarkerStyle(_oldMarkerStyle);
         series.FillColor = _oldFillColor;
@@ -105,5 +114,30 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
             StrokeWidthPt = source.StrokeWidthPt,
             NoFill = source.NoFill,
             NoStroke = source.NoStroke,
+        };
+
+    private static ChartAxis? CloneAxis(ChartAxis? source) => source is null
+        ? null
+        : new ChartAxis
+        {
+            Title = source.Title,
+            NumberFormatCode = source.NumberFormatCode,
+            NumberFormatSourceLinked = source.NumberFormatSourceLinked,
+            Min = source.Min,
+            Max = source.Max,
+            MajorUnit = source.MajorUnit,
+            MinorUnit = source.MinorUnit,
+            HasMajorGridlines = source.HasMajorGridlines,
+            MajorTickMark = source.MajorTickMark,
+            MinorTickMark = source.MinorTickMark,
+            TickLabelPosition = source.TickLabelPosition,
+            LabelOffsetPercent = source.LabelOffsetPercent,
+            NoMultiLevelLabels = source.NoMultiLevelLabels,
+            CrossBetween = source.CrossBetween,
+            AutoCrossing = source.AutoCrossing,
+            LabelAlignment = source.LabelAlignment,
+            Crosses = source.Crosses,
+            CrossesAt = source.CrossesAt,
+            Delete = source.Delete,
         };
 }
