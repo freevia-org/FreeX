@@ -62,6 +62,18 @@ public sealed class MergeState
 
     /// <summary>The count of non-skipped records emitted so far (the merge sequence number).</summary>
     public int SequenceNumber { get; set; }
+
+    /// <summary>
+    /// True when the most recently merged record requested an additional source-row advance.
+    /// This is reset at the start of each rules-aware record merge.
+    /// </summary>
+    public bool AdvanceRecordRequested { get; internal set; }
+
+    /// <summary>
+    /// True when the most recently merged record requested that its source row be skipped.
+    /// This is reset at the start of each rules-aware record merge.
+    /// </summary>
+    public bool SkipRecordRequested { get; internal set; }
 }
 
 /// <summary>
@@ -1439,6 +1451,9 @@ public static class MailMerge
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(state);
 
+        state.AdvanceRecordRequested = false;
+        state.SkipRecordRequested = false;
+
         var doc = new TextDocument
         {
             DefaultRun = template.DefaultRun,
@@ -1767,7 +1782,9 @@ public static class MailMerge
 
     private static Run CloneRunWithRules(Run source, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex)
     {
-        var resolvedText = SubstituteSpecialWithRules(source.Text, row, state, recordIndex, out _, out _);
+        var resolvedText = SubstituteSpecialWithRules(source.Text, row, state, recordIndex, out var advanceRecord, out var skipRecord);
+        state.AdvanceRecordRequested |= advanceRecord;
+        state.SkipRecordRequested |= skipRecord;
         return new Run(resolvedText, source.Formatting)
         {
             Image = source.Image,

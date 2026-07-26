@@ -1076,6 +1076,59 @@ public class MailMergeTests
         merged[1].PlainText.Should().Be("Hello Grace, Engineering");
     }
 
+    [Fact]
+    public void MergeRecordWithRules_NextRecordIf_PreservesAdvanceRequestForCaller()
+    {
+        var template = new TextDocument();
+        var paragraph = new Paragraph();
+        var instruction = MergeRuleEvaluator.BuildNextRecordIfInstruction(
+            "Type", MergeConditionOperator.Equal, "Header");
+        paragraph.Runs.Add(new Run(
+            $"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}{MailMerge.FieldOpen}Name{MailMerge.FieldClose}"));
+        template.Blocks.Add(paragraph);
+
+        var state = new MergeState();
+        var merged = MailMerge.MergeRecordWithRules(
+            template,
+            new Dictionary<string, string> { ["Type"] = "Header", ["Name"] = "Section A" },
+            state,
+            recordIndex: 1);
+
+        merged.PlainText.Should().Be("Section A");
+        state.AdvanceRecordRequested.Should().BeTrue();
+        state.SkipRecordRequested.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MergeRecordWithRules_ResetsPriorRecordOutcomeBeforeCloning()
+    {
+        var advanceTemplate = new TextDocument();
+        var advanceParagraph = new Paragraph();
+        var instruction = MergeRuleEvaluator.BuildNextRecordIfInstruction(
+            "Type", MergeConditionOperator.Equal, "Header");
+        advanceParagraph.Runs.Add(new Run(
+            $"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}"));
+        advanceTemplate.Blocks.Add(advanceParagraph);
+
+        var plainTemplate = new TextDocument();
+        var plainParagraph = new Paragraph();
+        plainParagraph.Runs.Add(new Run(
+            $"{MailMerge.FieldOpen}Name{MailMerge.FieldClose}"));
+        plainTemplate.Blocks.Add(plainParagraph);
+
+        var state = new MergeState();
+        var header = new Dictionary<string, string> { ["Type"] = "Header", ["Name"] = "Section A" };
+        MailMerge.MergeRecordWithRules(advanceTemplate, header, state, recordIndex: 1);
+        state.AdvanceRecordRequested.Should().BeTrue();
+
+        var data = new Dictionary<string, string> { ["Type"] = "Data", ["Name"] = "Ada" };
+        var merged = MailMerge.MergeRecordWithRules(plainTemplate, data, state, recordIndex: 2);
+
+        merged.PlainText.Should().Be("Ada");
+        state.AdvanceRecordRequested.Should().BeFalse();
+        state.SkipRecordRequested.Should().BeFalse();
+    }
+
     // ── SubstituteSpecialWithRules — unit tests ──────────────────────────────────────────────────
 
     [Fact]

@@ -7352,9 +7352,10 @@ internal static class FreeWRibbonCommands
                         return; // no more records; remaining cells stay empty
 
                     var row = session.AugmentRow(data.Rows[recordIndex]);
+                    mergeState.SequenceNumber++;
                     // Merge the template for this record, then extract the body paragraphs.
                     var merged = MailMerge.MergeRecordWithRules(template, row, mergeState, recordIndex + 1);
-                    if (mergeState.SkippedIndices.Contains(recordIndex))
+                    if (mergeState.SkipRecordRequested)
                     {
                         // «Skip Record If» fired — don't consume a cell; try same cell with next record.
                         mergeState.SequenceNumber--;
@@ -7370,7 +7371,8 @@ internal static class FreeWRibbonCommands
                         .ToList();
 
                     editor.SetTableCellContent(blockIndex, r, c, paragraphs);
-                    recordIndex++;
+                    // Next Record directives consume one additional source row after this label.
+                    recordIndex += mergeState.AdvanceRecordRequested ? 2 : 1;
                 }
             }
         }
