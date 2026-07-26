@@ -18,6 +18,15 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     private static AvaloniaCompactDialogChromeStyle DataOpsDialogChromeStyle => new(FormulaBarFontFamily);
+    private static AvaloniaCompactDialogChromeStyle ConsolidateDialogChromeStyle =>
+        DataOpsDialogChromeStyle with
+        {
+            ControlHeight = 20,
+            ButtonHeight = 20,
+            ButtonPadding = new Thickness(4, 1),
+        };
+    private static AvaloniaCompactDialogChromeStyle ConsolidateFunctionChromeStyle =>
+        ConsolidateDialogChromeStyle with { ControlHeight = 22 };
 
     /// <summary>Opens the Consolidate dialog (invoked from the Data menu and the Data-tab ribbon button).</summary>
     private void Consolidate() => _ = ShowConsolidateDialogAsync();
@@ -53,7 +62,7 @@ public sealed partial class MainWindow
             MinWidth = 160,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
-        ApplyDataOpsComboBoxChrome(functionBox);
+        ApplyConsolidateFunctionComboBoxChrome(functionBox);
         AutomationProperties.SetAutomationId(functionBox, "ConsolidateFunctionBox");
         AutomationProperties.SetName(functionBox, StripDisplayMnemonic(UiText.Get("Consolidate_FunctionAutomationName")));
         AutomationProperties.SetHelpText(functionBox, StripDisplayMnemonic(UiText.Get("Consolidate_ChooseTheFunctionUsedToCombineSourceRanges")));
@@ -67,7 +76,7 @@ public sealed partial class MainWindow
             PlaceholderText = UiText.Get("TableLoc_ConsolidateReferencePlaceholder"),
             MinWidth = 220,
         };
-        ApplyDataOpsTextBoxChrome(referenceBox);
+        ApplyConsolidateTextBoxChrome(referenceBox);
         AutomationProperties.SetAutomationId(referenceBox, "ConsolidateReferenceBox");
         AutomationProperties.SetName(referenceBox, StripDisplayMnemonic(UiText.Get("Consolidate_Reference2")));
         AutomationProperties.SetHelpText(referenceBox, StripDisplayMnemonic(UiText.Get("Consolidate_EnterASourceRangeToAddToTheAllReferencesList")));
@@ -90,12 +99,12 @@ public sealed partial class MainWindow
         AutomationProperties.SetHelpText(referencesList, StripDisplayMnemonic(UiText.Get("Consolidate_ListsTheSourceRangesThatWillBeConsolidated")));
 
         var addButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Consolidate_Add")), MinWidth = 76 };
-        ApplyDataOpsButtonChrome(addButton);
+        ApplyConsolidateButtonChrome(addButton);
         AutomationProperties.SetAutomationId(addButton, "ConsolidateAddReferenceButton");
         AutomationProperties.SetName(addButton, StripDisplayMnemonic(UiText.Get("Consolidate_AddReferenceAutomationName")));
         AutomationProperties.SetHelpText(addButton, StripDisplayMnemonic(UiText.Get("Consolidate_AddTheReferenceRangeToTheAllReferencesList")));
         var removeButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Consolidate_Delete")), MinWidth = 76, IsEnabled = false };
-        ApplyDataOpsButtonChrome(removeButton);
+        ApplyConsolidateButtonChrome(removeButton);
         AutomationProperties.SetAutomationId(removeButton, "ConsolidateDeleteReferenceButton");
         AutomationProperties.SetName(removeButton, StripDisplayMnemonic(UiText.Get("Consolidate_DeleteReferenceAutomationName")));
         AutomationProperties.SetHelpText(removeButton, StripDisplayMnemonic(UiText.Get("Consolidate_DeleteTheSelectedReferenceRange")));
@@ -105,7 +114,7 @@ public sealed partial class MainWindow
             Text = defaultDestination,
             MinWidth = 220,
         };
-        ApplyDataOpsTextBoxChrome(destinationBox);
+        ApplyConsolidateTextBoxChrome(destinationBox);
         AutomationProperties.SetAutomationId(destinationBox, "ConsolidateDestinationCellBox");
         AutomationProperties.SetName(destinationBox, StripDisplayMnemonic(UiText.Get("Consolidate_DestinationCell2")));
         AutomationProperties.SetHelpText(destinationBox, StripDisplayMnemonic(UiText.Get("Consolidate_EnterTheUpperLeftDestinationCellForTheConsolidatedResult")));
@@ -128,6 +137,7 @@ public sealed partial class MainWindow
         // WPF has a "Create links to source data" checkbox below the Use labels row
         var createLinksBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Consolidate_CreateLinksToSourceData")) };
         ApplyDataOpsCheckBoxChrome(createLinksBox);
+        createLinksBox.Margin = new Thickness(0, 0, 0, 12);
         AutomationProperties.SetAutomationId(createLinksBox, "ConsolidateCreateLinksBox");
         AutomationProperties.SetName(createLinksBox, StripDisplayMnemonic(UiText.Get("Consolidate_CreateLinksToSourceDataAutomationName")));
         AutomationProperties.SetHelpText(createLinksBox, StripDisplayMnemonic(UiText.Get("Consolidate_CreateFormulasThatLinkTheResultToTheSourceCells")));
@@ -191,10 +201,10 @@ public sealed partial class MainWindow
         };
 
         var applyButton = new Button { Content = UiText.Ok, IsDefault = true, MinWidth = 72 };
-        ApplyDataOpsButtonChrome(applyButton, isDefault: true);
+        ApplyConsolidateButtonChrome(applyButton, isDefault: true);
         AutomationProperties.SetAutomationId(applyButton, "ConsolidateApplyButton");
         var cancelButton = new Button { Content = UiText.Cancel, IsCancel = true, MinWidth = 72 };
-        ApplyDataOpsButtonChrome(cancelButton);
+        ApplyConsolidateButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "ConsolidateCancelButton");
 
         applyButton.Click += (_, _) =>
@@ -249,7 +259,7 @@ public sealed partial class MainWindow
         // Windows: "[...] <Reference textbox>" — Browse (ellipsis) sits left of the reference field.
         var referenceRow = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(browseButton, Dock.Left);
-        browseButton.Margin = new Thickness(0, 0, 8, 0);
+        browseButton.Margin = new Thickness(0, 0, 6, 0);
         referenceRow.Children.Add(browseButton);
         referenceRow.Children.Add(referenceBox);
 
@@ -257,56 +267,70 @@ public sealed partial class MainWindow
         // right-aligned side by side (matches the WPF ConsolidateDialog layout / win.png ground truth).
         var addRemoveRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [addButton, removeButton],
-            new Thickness(0, 6, 0, 2));
+            new Thickness(0, 0, 0, 0));
 
         // Windows: "[...] <Destination textbox>" — Browse (ellipsis) sits left of the destination field.
         var destinationRow = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(destinationBrowseButton, Dock.Left);
-        destinationBrowseButton.Margin = new Thickness(0, 0, 8, 0);
+        destinationBrowseButton.Margin = new Thickness(0, 0, 6, 0);
         destinationRow.Children.Add(destinationBrowseButton);
         destinationRow.Children.Add(destinationBox);
 
-        var labelRow = new StackPanel
+        var useLabelsText = new TextBlock
+        {
+            Text = StripDisplayMnemonic(UiText.Get("Consolidate_UseLabelsIn")),
+            Margin = new Thickness(0, 8, 0, 2),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+        };
+        var labelOptions = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 12,
+            Margin = new Thickness(0, 0, 0, 8),
             Children =
             {
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_UseLabelsIn")), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 topRowBox,
                 leftColumnBox,
             },
         };
+        topRowBox.Margin = new Thickness(0, 0, 16, 0);
 
         // WPF button order: [OK][Cancel] — primary on left; the Apply button maps to WPF OK
-        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([applyButton, cancelButton], new Thickness(0, 10, 0, 0));
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([applyButton, cancelButton], new Thickness(0, 12, 0, 0));
 
         var root = new DockPanel
         {
             Margin = new Thickness(12, 10, 12, 10),
+            Width = ConsolidateDialogPlanner.CaptureContentWidth,
+            Height = ConsolidateDialogPlanner.CaptureContentHeight,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Children =
             {
-                buttonRow,
                 new ScrollViewer
                 {
+                    Width = ConsolidateDialogPlanner.CaptureContentWidth,
                     Content = new StackPanel
                     {
-                        Spacing = 4,
+                        Width = ConsolidateDialogPlanner.CaptureContentWidth,
+                        Spacing = 0,
+                        Margin = new Thickness(0, 4, 0, 0),
                         Children =
                         {
-                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_Function")), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_Function")), Margin = new Thickness(0, 0, 0, 2), FontSize = 12, FontFamily = FormulaBarFontFamily },
                             functionBox,
                             new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_Reference")), FontSize = 12, FontFamily = FormulaBarFontFamily },
                             referenceRow,
                             addRemoveRow,
                             new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_AllReferences")), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             referencesList,
-                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_DestinationCell")), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Consolidate_DestinationCell")), Margin = new Thickness(0, 8, 0, 0), FontSize = 12, FontFamily = FormulaBarFontFamily },
                             destinationRow,
-                            labelRow,
+                            useLabelsText,
+                            labelOptions,
                             createLinksBox,
                             warningText,
+                            buttonRow,
                         },
                     },
                 },
@@ -420,9 +444,18 @@ public sealed partial class MainWindow
 
     private static void ApplyDataOpsRangePickerButtonChrome(Button button)
     {
-        ApplyDataOpsButtonChrome(button);
-        button.Padding = new Thickness(0, 3);
+        ApplyConsolidateButtonChrome(button);
+        button.Padding = new Thickness(0, 1);
     }
+
+    private static void ApplyConsolidateButtonChrome(Button button, bool isDefault = false)
+        => AvaloniaCompactDialogChrome.ApplyButton(button, ConsolidateDialogChromeStyle, button.MinWidth, isDefault);
+
+    private static void ApplyConsolidateTextBoxChrome(TextBox textBox)
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, ConsolidateDialogChromeStyle);
+
+    private static void ApplyConsolidateFunctionComboBoxChrome(ComboBox comboBox)
+        => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, ConsolidateFunctionChromeStyle);
 
     /// <summary>
     /// Applies standard text box chrome: Height=24, Padding=(4,1), FontSize=12,

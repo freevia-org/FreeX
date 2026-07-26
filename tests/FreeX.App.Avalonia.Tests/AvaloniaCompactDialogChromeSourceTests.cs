@@ -211,9 +211,21 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Consolidate.cs"));
 
         source.Should().Contain("HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,");
+        source.Should().Contain("Width = ConsolidateDialogPlanner.CaptureContentWidth,");
+        source.Should().Contain("Height = ConsolidateDialogPlanner.CaptureContentHeight,");
+        source.Should().Contain("ControlHeight = 20,");
+        source.Should().Contain("ButtonHeight = 20,");
+        source.Should().Contain("ConsolidateDialogChromeStyle with { ControlHeight = 22 }");
         source.Should().Contain("ApplyDataOpsRangePickerButtonChrome(browseButton);");
         source.Should().Contain("ApplyDataOpsRangePickerButtonChrome(destinationBrowseButton);");
-        source.Should().Contain("button.Padding = new Thickness(0, 3);");
+        source.Should().Contain("button.Padding = new Thickness(0, 1);");
+        source.Should().Contain("browseButton.Margin = new Thickness(0, 0, 6, 0);");
+        source.Should().Contain("destinationBrowseButton.Margin = new Thickness(0, 0, 6, 0);");
+        source.Should().Contain("Spacing = 0,");
+        source.Should().Contain("topRowBox.Margin = new Thickness(0, 0, 16, 0);");
+        source.Should().Contain("new Thickness(0, 0, 0, 0)");
+        source.Should().Contain("new Thickness(0, 12, 0, 0)");
+        source.Should().NotContain("DockPanel.SetDock(buttonRow, Dock.Bottom);");
         source.Should().NotContain("FontWeight = FontWeight.SemiBold");
     }
 
