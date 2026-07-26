@@ -20,6 +20,11 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly CheckBox _legendKeysCheck;
     private readonly TextBox _numberFormatBox;
     private readonly TextBox _separatorBox;
+    private readonly TextBox _labelFontFamilyBox;
+    private readonly TextBox _labelFontSizeBox;
+    private readonly CheckBox _labelBoldCheck;
+    private readonly CheckBox _labelItalicCheck;
+    private readonly TextBox _labelColorBox;
     private readonly ComboBox _labelPositionCombo;
     private readonly CheckBox _categoryGridlinesCheck;
     private readonly CheckBox _valueGridlinesCheck;
@@ -81,6 +86,11 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         };
         _numberFormatBox = new TextBox { Text = _planner.LabelNumberFormat, MinWidth = 160 };
         _separatorBox = new TextBox { Text = _planner.LabelSeparator, MinWidth = 160 };
+        _labelFontFamilyBox = new TextBox { Text = _planner.LabelFontFamily, MinWidth = 160 };
+        _labelFontSizeBox = new TextBox { Text = Format(_planner.LabelFontSizePt), MinWidth = 120 };
+        _labelBoldCheck = new CheckBox { Content = surface.BoldLabel, IsThreeState = true, IsChecked = _planner.LabelBold };
+        _labelItalicCheck = new CheckBox { Content = surface.ItalicLabel, IsThreeState = true, IsChecked = _planner.LabelItalic };
+        _labelColorBox = new TextBox { Text = _planner.LabelColorText, MinWidth = 160 };
         _labelPositionCombo = new ComboBox
         {
             ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions,
@@ -156,6 +166,11 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         content.Children.Add(_legendKeysCheck);
         content.Children.Add(MakeRow(surface.NumberFormatLabel, _numberFormatBox));
         content.Children.Add(MakeRow(surface.SeparatorLabel, _separatorBox));
+        content.Children.Add(MakeRow(surface.FontFamilyLabel, _labelFontFamilyBox));
+        content.Children.Add(MakeRow(surface.FontSizeLabel, _labelFontSizeBox));
+        content.Children.Add(_labelBoldCheck);
+        content.Children.Add(_labelItalicCheck);
+        content.Children.Add(MakeRow(surface.LabelColorLabel, _labelColorBox));
         content.Children.Add(_categoryGridlinesCheck);
         content.Children.Add(_valueGridlinesCheck);
         content.Children.Add(MakeRow(surface.BarGapWidthLabel, _barGapWidthBox));
@@ -182,6 +197,15 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     internal void SetHighLowLinesForTests(bool? value) => _highLowLinesCheck.IsChecked = value;
 
+    internal void SetLabelTextStyleForTests(string? family, double? sizePt, bool? bold, bool? italic, string? color)
+    {
+        _labelFontFamilyBox.Text = family ?? string.Empty;
+        _labelFontSizeBox.Text = Format(sizePt);
+        _labelBoldCheck.IsChecked = bold;
+        _labelItalicCheck.IsChecked = italic;
+        _labelColorBox.Text = color ?? string.Empty;
+    }
+
     private void OnOk()
     {
         _editor.ApplyChartDisplayOptions(BuildCommitPlanForTests());
@@ -201,6 +225,11 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             _planner.SetLabelPosition(position.Value);
         _planner.SetLabelNumberFormat(_numberFormatBox.Text);
         _planner.SetLabelSeparator(_separatorBox.Text);
+        _planner.SetLabelFontFamily(_labelFontFamilyBox.Text);
+        _planner.SetLabelFontSize(ParseOptional(_labelFontSizeBox.Text, "Label font size"));
+        _planner.SetLabelBold(_labelBoldCheck.IsChecked);
+        _planner.SetLabelItalic(_labelItalicCheck.IsChecked);
+        _planner.SetLabelColor(_labelColorBox.Text);
         _planner.SetCategoryGridlines(_categoryGridlinesCheck.IsChecked == true);
         _planner.SetValueGridlines(_valueGridlinesCheck.IsChecked == true);
         _planner.SetBarGapWidthPercent(ParseOptionalPercent(_barGapWidthBox.Text, "Bar gap width", 0, 500));
@@ -241,6 +270,18 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             .FirstOrDefault(item => item.option.Value == value).index;
 
     private static string Format(int? value) => value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static string Format(double? value) => value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static double? ParseOptional(string? text, string label)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
+            double.IsFinite(value) && value >= 0)
+            return value;
+        throw new FormatException($"{label} must be a non-negative finite number or blank.");
+    }
 
     private static int? ParseOptionalPercent(string? text, string surface, int minimum, int maximum)
     {
