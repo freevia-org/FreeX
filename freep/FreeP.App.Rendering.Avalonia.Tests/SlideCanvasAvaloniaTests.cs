@@ -2286,6 +2286,60 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task ChartErrorBars_AreaAndRadarReachAvaloniaCanvasPaintPath()
+    {
+        int changedPixels = 0;
+        await Run(() =>
+        {
+            var charts = new[]
+            {
+                new ChartShape
+                {
+                    ChartType = ChartType.Area,
+                    Categories = { "Q1", "Q2", "Q3" },
+                },
+                new ChartShape
+                {
+                    ChartType = ChartType.Radar,
+                    Categories = { "A", "B", "C", "D" },
+                    RadarStyle = RadarStyle.Marker,
+                }
+            };
+
+            foreach (var chart in charts)
+            {
+                var series = new ChartSeries { Name = "Actual" };
+                series.Values.AddRange(chart.ChartType == ChartType.Area
+                    ? new double?[] { 10, 20, 15 }
+                    : new double?[] { 8, 6, 7, 9 });
+                chart.Series.Add(series);
+
+                var presentation = MakePresentation(presence =>
+                {
+                    presence.Slides[0].Shapes.Clear();
+                    presence.Slides[0].Shapes.Add(new SlideShape
+                    {
+                        Id = 1,
+                        Kind = SlideShapeKind.Chart,
+                        OffsetXEmu = 914400,
+                        OffsetYEmu = 457200,
+                        ExtentCxEmu = 5486400,
+                        ExtentCyEmu = 3657600,
+                        Chart = chart,
+                    });
+                });
+                var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+                var baseline = RenderPixels(canvas, 960, 540);
+                series.ErrorBars = new ChartErrorBars { Value = 2 };
+                var candidate = RenderPixels(canvas, 960, 540);
+                changedPixels += CountPixelDifferences(baseline, candidate, 960, 0, 0, 960, 540);
+            }
+        });
+
+        changedPixels.Should().BeGreaterThan(0, "area and radar error bars must reach the shared Avalonia canvas paint path");
+    }
+
+    [Fact]
     public void CC2_LineDataLabel_SecondaryAxisSeries_UsesSecondaryRange()
     {
         // Primary series: values 0–100. Secondary series: values 0–1_000_000.
