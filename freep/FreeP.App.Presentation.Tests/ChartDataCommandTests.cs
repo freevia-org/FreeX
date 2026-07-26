@@ -1308,6 +1308,32 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartPieOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.Doughnut;
+        chart.FirstSliceAngleDegrees = 20;
+        chart.DoughnutHolePercent = 40;
+
+        bus.Execute(new SetChartPieOptionsCommand(0, id, new ChartPieOptions(225, 68)));
+
+        chart.FirstSliceAngleDegrees.Should().Be(225);
+        chart.DoughnutHolePercent.Should().Be(68);
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.ChartType.Should().Be(ChartType.Doughnut);
+        roundTripped.FirstSliceAngleDegrees.Should().Be(225);
+        roundTripped.DoughnutHolePercent.Should().Be(68);
+
+        bus.Undo();
+        chart.FirstSliceAngleDegrees.Should().Be(20);
+        chart.DoughnutHolePercent.Should().Be(40);
+    }
+
+    [Fact]
     public void SetChartPointOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
     {
         var (p, bus, id) = MakeChartPresentation();

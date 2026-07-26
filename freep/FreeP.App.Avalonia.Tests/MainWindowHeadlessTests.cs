@@ -6192,6 +6192,26 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartPieOptionsDialog_constructs_and_commits_shared_options()
+    {
+        ChartPieOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.Doughnut);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartPieOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(225, 68);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().Be(new ChartPieOptions(225, 68));
+    }
+
+    [Fact]
     public async Task ChartTextOptionsDialog_constructs_and_commits_shared_options()
     {
         ChartTextOptions? options = null;
