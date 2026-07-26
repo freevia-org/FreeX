@@ -405,9 +405,16 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetMinorUnit(5);
         planner.SetNumberFormatCode("$#,##0");
         planner.SetMajorGridlines(false);
+        planner.SetMajorTickMark(ChartTickMark.Out);
+        planner.SetMinorTickMark(ChartTickMark.In);
+        planner.SetTickLabelPosition(ChartTickLabelPosition.NextTo);
+        planner.SetCrosses(ChartAxisCrossing.Min);
+        planner.SetCrossesAt(10);
 
         planner.BuildCommitPlan().Should().Be(new ChartAxisOptions(
-            ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false));
+            ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false,
+            ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
+            null, 10));
         chart.ValueAxis.Title.Should().Be("Amount", "axis dialogs must edit a working copy");
         ChartAxisOptionsPlanner.BuildSurfacePlan().CommandId
             .Should().Be(ChartAxisOptionsPlanner.CommandId);

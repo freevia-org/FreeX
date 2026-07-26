@@ -6256,14 +6256,21 @@ public sealed class MainWindowHeadlessTests
                 10,
                 5,
                 "$#,##0",
-                false);
+                false,
+                ChartTickMark.Out,
+                ChartTickMark.In,
+                ChartTickLabelPosition.NextTo,
+                ChartAxisCrossing.Min,
+                10);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
 
         if (!ran) return;
         options.Should().Be(new ChartAxisOptions(
-            ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false));
+            ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false,
+            ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
+            null, 10));
     }
 
     [Fact]
