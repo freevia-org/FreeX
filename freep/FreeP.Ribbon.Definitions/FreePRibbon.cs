@@ -515,6 +515,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
                 FreePRibbonText.SmartArtBasicBlockListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtBasicBlockListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BasicListLayoutCommandId,
+                FreePRibbonText.SmartArtBasicListCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtBasicListCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.StackedListLayoutCommandId,
                 FreePRibbonText.SmartArtStackedListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtStackedListCommand.KeyTip);

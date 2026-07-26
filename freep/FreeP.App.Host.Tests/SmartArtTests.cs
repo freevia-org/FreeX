@@ -674,6 +674,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.TextCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BlockCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.NonDirectionalCycle, SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.BasicList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicBlockList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.StackedList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.DescendingBlockList, SmartArtFamily.List)]
@@ -1600,6 +1601,23 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
             "funnelProcess is now in the bounded shared live-layout planner");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Stage 1", "Stage 2", "Stage 3");
+    }
+
+    [Fact]
+    public void Reader_ParsesBasicListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/list1",
+            nodes: [("id1", "Item 1"), ("id2", "Item 2"), ("id3", "Item 3")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue("list1 is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Item 1", "Item 2", "Item 3");
     }
 
     [Fact]
@@ -2879,6 +2897,32 @@ public sealed class SmartArtTests : IDisposable
             .And.Contain("Review");
         liveShapes.Where(op => op.Text is null)
             .Should().HaveCount(4, "WPF and Avalonia hosts consume shared radial-list connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_BasicListSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/list1",
+            nodes: [("n1", "Item 1"), ("n2", "Item 2"), ("n3", "Item 3")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(3, "Basic List should render one live box per node without connectors");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain("Item 1")
+            .And.Contain("Item 3");
+        liveShapes.Where(op => op.Text is null)
+            .Should().BeEmpty("Basic List has no connector DrawOps");
     }
 
     [Fact]
