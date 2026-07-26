@@ -210,6 +210,38 @@ public sealed class ConnectorAttachmentTests
         ConnectionSiteHelper.Resolve(shape, 3).Should().Be((50L, 100L));
     }
 
+    [Theory]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.Ribbon, 0, 0, 76)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.Ribbon, 1, 50, 22)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.Ribbon, 2, 100, 24)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.Ribbon, 3, 50, 78)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.Wave, 0, 0, 45)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.Wave, 1, 22, 12)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.Wave, 2, 100, 36)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.Wave, 3, 58, 88)]
+    public void ConnectionSiteHelper_RibbonAndWaveSitesFollowVisibleOutline(
+        Free.Shared.Drawing.DrawingShapeKind kind,
+        int siteIndex,
+        int expectedX,
+        int expectedY)
+    {
+        var shape = MakeRect(1, 0, 0, 100, 100);
+        shape.AutoShapeKind = kind;
+
+        ConnectionSiteHelper.Resolve(shape, siteIndex).Should().Be((expectedX, expectedY));
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_RibbonAndWaveSitesHonorShapeTransform()
+    {
+        var shape = MakeRect(1, 0, 0, 100, 100);
+        shape.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Wave;
+        shape.RotationDeg = 90;
+
+        // The wave crest site rotates clockwise around the shape centre.
+        ConnectionSiteHelper.Resolve(shape, 1).Should().Be((88L, 22L));
+    }
+
     [Fact]
     public void ConnectionSiteHelper_OutOfRange_ReturnsCentre()
     {
