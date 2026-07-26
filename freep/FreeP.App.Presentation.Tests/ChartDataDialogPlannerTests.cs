@@ -317,9 +317,15 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetShowCategoryLabels(true);
         planner.SetShowSeriesLabels(true);
         planner.SetShowLegendKeys(true);
+        planner.SetShowBubbleSize(true);
         planner.SetLabelPosition(DataLabelPosition.OutsideEnd);
         planner.SetLabelNumberFormat("0.0%");
         planner.SetLabelSeparator(" | ");
+        planner.SetLabelFontFamily("Aptos");
+        planner.SetLabelFontSize(9);
+        planner.SetLabelBold(true);
+        planner.SetLabelItalic(false);
+        planner.SetLabelColor("#2F5496");
         planner.SetCategoryGridlines(false);
         planner.SetValueGridlines(true);
         planner.SetBarGapWidthPercent(40);
@@ -333,7 +339,14 @@ public sealed class ChartDataDialogPlannerTests
         var commit = planner.BuildCommitPlan();
         commit.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, false, DataLabelPosition.OutsideEnd, false, true,
-            true, true, true, true, "0.0%", " | ", 40, 55, ChartDisplayBlanksAs.Span, true, true, true, false));
+            true, true, true, true, "0.0%", " | ", 40, 55, ChartDisplayBlanksAs.Span, true, true, true, false,
+            commit.LabelTextStyle, true));
+        commit.LabelTextStyle.Should().NotBeNull();
+        commit.LabelTextStyle!.FontFamily.Should().Be("Aptos");
+        commit.LabelTextStyle.FontSizePt.Should().Be(9);
+        commit.LabelTextStyle.Bold.Should().BeTrue();
+        commit.LabelTextStyle.Italic.Should().BeFalse();
+        commit.LabelTextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
         chart.Title.Should().Be("Existing", "the dialog planner is a working copy");
         ChartDisplayOptionsPlanner.BuildSurfacePlan().CommandId
             .Should().Be(ChartDisplayOptionsPlanner.CommandId);
@@ -459,6 +472,11 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetLabelPosition(DataLabelPosition.InsideEnd);
         planner.SetLabelNumberFormat("0.0%");
         planner.SetLabelSeparator(" | ");
+        planner.SetLabelFontFamily("Aptos");
+        planner.SetLabelFontSize(9);
+        planner.SetLabelBold(true);
+        planner.SetLabelItalic(false);
+        planner.SetLabelColor("#2F5496");
         planner.SetMarkerSymbol(ChartMarkerSymbol.Diamond);
         planner.SetMarkerSize(8);
 
@@ -480,6 +498,12 @@ public sealed class ChartDataDialogPlannerTests
         options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         options.DataLabels.NumberFormat.Should().Be("0.0%");
         options.DataLabels.Separator.Should().Be(" | ");
+        options.DataLabels.TextStyle.Should().NotBeNull();
+        options.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        options.DataLabels.TextStyle.FontSizePt.Should().Be(9);
+        options.DataLabels.TextStyle.Bold.Should().BeTrue();
+        options.DataLabels.TextStyle.Italic.Should().BeFalse();
+        options.DataLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
         planner.SeriesOptions.Select(option => option.Label)
             .Should().Equal("Revenue", "Margin");
         chart.Series[1].SmoothLine.Should().BeTrue("series dialogs must edit a working copy");
@@ -530,6 +554,11 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetLabelPosition(DataLabelPosition.InsideEnd);
         planner.SetLabelNumberFormat("0.0%");
         planner.SetLabelSeparator(" | ");
+        planner.SetLabelFontFamily("Aptos");
+        planner.SetLabelFontSize(9);
+        planner.SetLabelBold(true);
+        planner.SetLabelItalic(false);
+        planner.SetLabelColor("#2F5496");
 
         var options = planner.BuildCommitPlan();
         options.SeriesIndex.Should().Be(1);
@@ -546,6 +575,12 @@ public sealed class ChartDataDialogPlannerTests
         options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         options.DataLabels.NumberFormat.Should().Be("0.0%");
         options.DataLabels.Separator.Should().Be(" | ");
+        options.DataLabels.TextStyle.Should().NotBeNull();
+        options.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        options.DataLabels.TextStyle.FontSizePt.Should().Be(9);
+        options.DataLabels.TextStyle.Bold.Should().BeTrue();
+        options.DataLabels.TextStyle.Italic.Should().BeFalse();
+        options.DataLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
         planner.PointOptions.Select(option => option.Label).Should().Equal("1: Q1", "2: Q2", "3: Q3");
         chart.Series[1].PointColors[1].Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
         ChartPointOptionsPlanner.BuildSurfacePlan().CommandId.Should().Be(ChartPointOptionsPlanner.CommandId);

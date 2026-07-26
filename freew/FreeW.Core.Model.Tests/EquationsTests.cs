@@ -96,6 +96,27 @@ public class EquationsTests
     }
 
     [Fact]
+    public void Equation_Clone_PreservesCyclicNestedSlotsWithoutSharingTheSource()
+    {
+        var source = new Equation();
+        source.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.Superscript,
+            Base = "x",
+            Sup = "2",
+            ScriptBaseEquation = source
+        });
+
+        var clone = source.Clone();
+
+        clone.Should().NotBeSameAs(source);
+        clone.Runs.Should().ContainSingle();
+        clone.Runs.Single().ScriptBaseEquation.Should().BeSameAs(clone);
+        clone.Runs.Add(MathRun.PlainText("+1"));
+        source.Runs.Should().ContainSingle();
+    }
+
+    [Fact]
     public void MathRun_Fraction_LinearText_IsDepthBoundedForCyclicNestedSlots()
     {
         var equation = new Equation();

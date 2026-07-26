@@ -67,7 +67,11 @@ public readonly record struct PreservedDrawingReference(
 /// <param name="References">
 /// The drawing's references into preserved parts (relationship id → preserved part name), rewritten on write.
 /// </param>
-public sealed record PreservedDrawing(string Xml, IReadOnlyList<PreservedDrawingReference> References);
+public sealed record PreservedDrawing(string Xml, IReadOnlyList<PreservedDrawingReference> References)
+{
+    /// <summary>Creates an independent copy of the reference collection for document merge.</summary>
+    public PreservedDrawing Duplicate() => new(Xml, [.. References]);
+}
 
 /// <summary>
 /// One relationship reference from a verbatim-preserved document-level element to a preserved package part.

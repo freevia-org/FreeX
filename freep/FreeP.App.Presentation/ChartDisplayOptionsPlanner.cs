@@ -18,8 +18,14 @@ public sealed record ChartDisplayOptionsSurfacePlan(
     string CategoryLabelsLabel,
     string SeriesLabelsLabel,
     string LegendKeysLabel,
+    string BubbleSizeLabelsLabel,
     string NumberFormatLabel,
     string SeparatorLabel,
+    string FontFamilyLabel,
+    string FontSizeLabel,
+    string BoldLabel,
+    string ItalicLabel,
+    string LabelColorLabel,
     string LabelPositionLabel,
     string CategoryGridlinesLabel,
     string ValueGridlinesLabel,
@@ -49,8 +55,14 @@ public sealed class ChartDisplayOptionsPlanner
     public const string CategoryLabelsLabel = "Category Labels";
     public const string SeriesLabelsLabel = "Series Labels";
     public const string LegendKeysLabel = "Legend Keys";
+    public const string BubbleSizeLabelsLabel = "Bubble size labels";
     public const string NumberFormatLabel = "Number Format";
     public const string SeparatorLabel = "Separator";
+    public const string FontFamilyLabel = "Font Family";
+    public const string FontSizeLabel = "Font Size (pt)";
+    public const string BoldLabel = "Bold";
+    public const string ItalicLabel = "Italic";
+    public const string LabelColorLabel = "Label color (#RRGGBB)";
     public const string LabelPositionLabel = "Label Position";
     public const string CategoryGridlinesLabel = "Category Gridlines";
     public const string ValueGridlinesLabel = "Value Gridlines";
@@ -65,7 +77,7 @@ public sealed class ChartDisplayOptionsPlanner
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
     public const double DefaultDialogWidth = 420;
-    public const double DefaultDialogHeight = 470;
+    public const double DefaultDialogHeight = 650;
 
     public static IReadOnlyList<ChartDisplayLegendOption> LegendOptions { get; } =
     [
@@ -96,9 +108,15 @@ public sealed class ChartDisplayOptionsPlanner
     private bool _showCategoryLabels;
     private bool _showSeriesLabels;
     private bool _showLegendKeys;
+    private bool _showBubbleSize;
     private DataLabelPosition _labelPosition = DataLabelPosition.OutsideEnd;
     private string _labelNumberFormat = string.Empty;
     private string _labelSeparator = string.Empty;
+    private string _labelFontFamily = string.Empty;
+    private double? _labelFontSizePt;
+    private bool? _labelBold;
+    private bool? _labelItalic;
+    private ThemeAwareColor? _labelColor;
     private bool _categoryGridlines;
     private bool _valueGridlines;
     private int? _barGapWidthPercent;
@@ -119,9 +137,15 @@ public sealed class ChartDisplayOptionsPlanner
         _showCategoryLabels = chart.DataLabels?.ShowCategoryName == true;
         _showSeriesLabels = chart.DataLabels?.ShowSeriesName == true;
         _showLegendKeys = chart.DataLabels?.ShowLegendKey == true;
+        _showBubbleSize = chart.DataLabels?.ShowBubbleSize == true;
         _labelPosition = chart.DataLabels?.Position ?? DataLabelPosition.OutsideEnd;
         _labelNumberFormat = chart.DataLabels?.NumberFormat ?? string.Empty;
         _labelSeparator = chart.DataLabels?.Separator ?? string.Empty;
+        _labelFontFamily = chart.DataLabels?.TextStyle?.FontFamily ?? string.Empty;
+        _labelFontSizePt = chart.DataLabels?.TextStyle?.FontSizePt;
+        _labelBold = chart.DataLabels?.TextStyle?.Bold;
+        _labelItalic = chart.DataLabels?.TextStyle?.Italic;
+        _labelColor = chart.DataLabels?.TextStyle?.Color;
         _categoryGridlines = chart.CategoryAxis.HasMajorGridlines;
         _valueGridlines = chart.ValueAxis.HasMajorGridlines;
         _barGapWidthPercent = chart.BarGapWidthPercent;
@@ -145,8 +169,14 @@ public sealed class ChartDisplayOptionsPlanner
             CategoryLabelsLabel,
             SeriesLabelsLabel,
             LegendKeysLabel,
+            BubbleSizeLabelsLabel,
             NumberFormatLabel,
             SeparatorLabel,
+            FontFamilyLabel,
+            FontSizeLabel,
+            BoldLabel,
+            ItalicLabel,
+            LabelColorLabel,
             LabelPositionLabel,
             CategoryGridlinesLabel,
             ValueGridlinesLabel,
@@ -174,9 +204,15 @@ public sealed class ChartDisplayOptionsPlanner
     public bool ShowCategoryLabels => _showCategoryLabels;
     public bool ShowSeriesLabels => _showSeriesLabels;
     public bool ShowLegendKeys => _showLegendKeys;
+    public bool ShowBubbleSize => _showBubbleSize;
     public DataLabelPosition LabelPosition => _labelPosition;
     public string LabelNumberFormat => _labelNumberFormat;
     public string LabelSeparator => _labelSeparator;
+    public string LabelFontFamily => _labelFontFamily;
+    public double? LabelFontSizePt => _labelFontSizePt;
+    public bool? LabelBold => _labelBold;
+    public bool? LabelItalic => _labelItalic;
+    public string LabelColorText => FormatColor(_labelColor);
     public bool CategoryGridlines => _categoryGridlines;
     public bool ValueGridlines => _valueGridlines;
     public int? BarGapWidthPercent => _barGapWidthPercent;
@@ -203,9 +239,17 @@ public sealed class ChartDisplayOptionsPlanner
     public void SetShowCategoryLabels(bool show) => _showCategoryLabels = show;
     public void SetShowSeriesLabels(bool show) => _showSeriesLabels = show;
     public void SetShowLegendKeys(bool show) => _showLegendKeys = show;
+    public void SetShowBubbleSize(bool show) => _showBubbleSize = show;
     public void SetLabelPosition(DataLabelPosition position) => _labelPosition = position;
     public void SetLabelNumberFormat(string? format) => _labelNumberFormat = format ?? string.Empty;
     public void SetLabelSeparator(string? separator) => _labelSeparator = separator ?? string.Empty;
+    public void SetLabelFontFamily(string? value) => _labelFontFamily = value?.Trim() ?? string.Empty;
+    public void SetLabelFontSize(double? value) => _labelFontSizePt = value;
+    public void SetLabelBold(bool? value) => _labelBold = value;
+    public void SetLabelItalic(bool? value) => _labelItalic = value;
+    public void SetLabelColor(string? text) => _labelColor = string.IsNullOrWhiteSpace(text)
+        ? null
+        : ChartPointOptionsPlanner.ParseColor(text, LabelColorLabel);
     public void SetCategoryGridlines(bool show) => _categoryGridlines = show;
     public void SetValueGridlines(bool show) => _valueGridlines = show;
     public void SetBarGapWidthPercent(int? value) => _barGapWidthPercent = Normalize(value, 0, 500);
@@ -235,7 +279,31 @@ public sealed class ChartDisplayOptionsPlanner
         _showDataLabelsOverMaximum,
         _varyColors,
         _legendOverlay,
-        _highLowLines);
+        _highLowLines,
+        BuildLabelTextStyle(),
+        _showBubbleSize);
+
+    private ChartTextStyle? BuildLabelTextStyle()
+    {
+        if (string.IsNullOrWhiteSpace(_labelFontFamily) &&
+            !_labelFontSizePt.HasValue &&
+            !_labelBold.HasValue &&
+            !_labelItalic.HasValue &&
+            _labelColor is null)
+            return null;
+
+        return new ChartTextStyle
+        {
+            FontFamily = string.IsNullOrWhiteSpace(_labelFontFamily) ? null : _labelFontFamily,
+            FontSizePt = _labelFontSizePt,
+            Bold = _labelBold,
+            Italic = _labelItalic,
+            Color = _labelColor,
+        };
+    }
+
+    private static string FormatColor(ThemeAwareColor? color) =>
+        color is null ? string.Empty : color.Resolved.ToString();
 
     private static int? Normalize(int? value, int minimum, int maximum) =>
         value is null ? null : Math.Clamp(value.Value, minimum, maximum);

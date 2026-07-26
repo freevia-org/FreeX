@@ -3343,12 +3343,7 @@ public sealed class ReplaceChartDataCommand(int paragraphIndex, int runIndex, Ch
         _applied = false;
     }
 
-    private static Chart Clone(Chart source)
-    {
-        var clone = new Chart();
-        Copy(source, clone);
-        return clone;
-    }
+    private static Chart Clone(Chart source) => source.Clone();
 
     private static void Copy(Chart source, Chart target)
     {

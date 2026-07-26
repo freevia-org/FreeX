@@ -472,7 +472,58 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs",
                 "freep/FreeP.App.Host.Tests/ChartTests.cs"
             ],
-            RemainingWork: "Bar and column c:gapWidth/c:overlap now round-trip through the model/package and drive shared primitive and data-label spacing for WPF/Avalonia. PowerPoint-authoritative chart visual baselines, 3-D bar/column spacing, and broader type-specific visual fidelity remain deferred."),
+             RemainingWork: "Bar and column c:gapWidth/c:overlap now round-trip through the model/package and drive shared primitive and data-label spacing for WPF/Avalonia. PowerPoint-authoritative chart visual baselines, 3-D bar/column spacing, and broader type-specific visual fidelity remain deferred."),
+        new(
+            EvidenceId: "freep.chart.data-label-text-style",
+            Area: "Chart-level data-label text styling",
+            Status: "shared-model-and-host-evidence",
+            HostCoverage: "WPF/Avalonia consume one shared ChartDisplayOptions planner and undo command for chart-scoped c:dLbls text styling; no renderer-local chart-label policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-data-label-text-style-20260726.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.Model/ChartDisplayOptions.cs",
+                "freep/FreeP.Core.Model/PresentationCommands.ChartOptions.cs",
+                "freep/FreeP.App.Presentation/ChartDisplayOptionsPlanner.cs",
+                "freep/FreeP.Core.IO/PptxChartReader.cs",
+                "freep/FreeP.Core.IO/PptxChartWriter.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartDataDialogPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartDataCommandTests.cs",
+                "freep/FreeP.App.Host.Tests/ChartDataDialogTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "Chart-level font family, size, color, bold, and italic controls now round-trip through c:txPr/c:rich and one undoable edit in both hosts; PowerPoint-authoritative chart visual baselines remain deferred."),
+        new(
+            EvidenceId: "freep.chart.bubble-size-data-labels",
+            Area: "Chart bubble-size data-label authoring",
+            Status: "shared-model-and-host-evidence",
+            HostCoverage: "WPF/Avalonia consume shared chart, series, and point data-label planners and render bubble-size values from BubbleSizes; no renderer-local chart-label policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-bubble-size-data-labels-20260726.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.Model/ChartShape.cs",
+                "freep/FreeP.Core.Model/ChartDisplayOptions.cs",
+                "freep/FreeP.Core.Model/ChartSeriesOptions.cs",
+                "freep/FreeP.Core.Model/ChartPointOptions.cs",
+                "freep/FreeP.Core.IO/PptxChartReader.cs",
+                "freep/FreeP.Core.IO/PptxChartWriter.cs",
+                "freep/FreeP.App.Presentation/ChartRenderPlanner.cs",
+                "freep/FreeP.App.Presentation/ChartDisplayOptionsPlanner.cs",
+                "freep/FreeP.App.Presentation/ChartSeriesOptionsPlanner.cs",
+                "freep/FreeP.App.Presentation/ChartPointOptionsPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartDataCommandTests.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartDataDialogPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/ChartDataLabelsTests.cs",
+                "freep/FreeP.App.Host.Tests/ChartDataDialogTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "Chart, series, and point bubble-size authoring now round-trips through c:showBubbleSize, remains undoable, and renders from source BubbleSizes in both hosts. PowerPoint-authoritative bubble-label typography and placement baselines remain deferred."),
         new(
             EvidenceId: "freep.chart.series-data-labels",
             Area: "Chart per-series data-label authoring",
@@ -494,7 +545,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/ChartDataDialogTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Series-scoped value, percentage, category, series-name, legend-key, position, format, and separator controls now round-trip through c:dLbls and one undoable edit in both hosts. Per-point label text styling, full PowerPoint label text styling, and PowerPoint-authoritative chart visual baselines remain deferred."),
+            RemainingWork: "Series-scoped value, percentage, category, series-name, legend-key, position, format, separator, and font styling controls now round-trip through c:dLbls and one undoable edit in both hosts. PowerPoint-authoritative chart visual baselines remain deferred."),
         new(
             EvidenceId: "freep.chart.point-data-labels",
             Area: "Chart per-point data-label authoring",
@@ -517,7 +568,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/ChartDataDialogTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Selected-point value, percentage, category, series-name, legend-key, position, format, separator, and delete overrides now round-trip through c:dLbl entries and one undoable edit in both hosts. Per-point label text styling and PowerPoint-authoritative chart visual baselines remain deferred."),
+            RemainingWork: "Selected-point value, percentage, category, series-name, legend-key, position, format, separator, delete, and font styling overrides now round-trip through c:dLbl entries and one undoable edit in both hosts. PowerPoint-authoritative chart visual baselines remain deferred."),
         new(
             EvidenceId: "freep.chart.bubble-sizing-semantics",
             Area: "Chart bubble authored sizing semantics",

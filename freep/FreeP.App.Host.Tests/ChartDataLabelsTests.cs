@@ -33,6 +33,7 @@ public sealed class ChartDataLabelsTests : IDisposable
         dl.ShowCategoryName.Should().BeFalse();
         dl.ShowSeriesName.Should().BeFalse();
         dl.ShowLegendKey.Should().BeFalse();
+        dl.ShowBubbleSize.Should().BeFalse();
         dl.Position.Should().BeNull();
         dl.NumberFormat.Should().BeNull();
         dl.HasAny.Should().BeFalse();
@@ -56,6 +57,13 @@ public sealed class ChartDataLabelsTests : IDisposable
     public void ChartDataLabels_HasAny_TrueWhenShowLegendKeySet()
     {
         var dl = new ChartDataLabels { ShowLegendKey = true };
+        dl.HasAny.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ChartDataLabels_HasAny_TrueWhenShowBubbleSizeSet()
+    {
+        var dl = new ChartDataLabels { ShowBubbleSize = true };
         dl.HasAny.Should().BeTrue();
     }
 
@@ -136,6 +144,17 @@ public sealed class ChartDataLabelsTests : IDisposable
         rt.DataLabels.Should().NotBeNull("legend-key-only data labels survive round-trip");
         rt.DataLabels!.ShowLegendKey.Should().BeTrue();
         rt.DataLabels.HasAny.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RoundTrip_ChartLevelDataLabels_ShowBubbleSize_Preserved()
+    {
+        var chart = BuildColumnChartWithLabels();
+        chart.DataLabels!.ShowBubbleSize = true;
+        var rt = DoRoundTrip(chart);
+
+        rt.DataLabels.Should().NotBeNull("bubble-size data labels survive round-trip");
+        rt.DataLabels!.ShowBubbleSize.Should().BeTrue();
     }
 
     [Fact]

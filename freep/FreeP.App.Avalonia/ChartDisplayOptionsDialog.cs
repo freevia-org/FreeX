@@ -21,8 +21,14 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly CheckBox _categoryLabelsCheck;
     private readonly CheckBox _seriesLabelsCheck;
     private readonly CheckBox _legendKeysCheck;
+    private readonly CheckBox _bubbleSizeLabelsCheck;
     private readonly TextBox _numberFormatBox;
     private readonly TextBox _separatorBox;
+    private readonly TextBox _labelFontFamilyBox;
+    private readonly TextBox _labelFontSizeBox;
+    private readonly CheckBox _labelBoldCheck;
+    private readonly CheckBox _labelItalicCheck;
+    private readonly TextBox _labelColorBox;
     private readonly ComboBox _labelPositionCombo;
     private readonly CheckBox _categoryGridlinesCheck;
     private readonly CheckBox _valueGridlinesCheck;
@@ -82,8 +88,18 @@ internal sealed class ChartDisplayOptionsDialog : Window
             Content = surface.LegendKeysLabel,
             IsChecked = _planner.ShowLegendKeys,
         };
+        _bubbleSizeLabelsCheck = new CheckBox
+        {
+            Content = surface.BubbleSizeLabelsLabel,
+            IsChecked = _planner.ShowBubbleSize,
+        };
         _numberFormatBox = new TextBox { Text = _planner.LabelNumberFormat, MinWidth = 150 };
         _separatorBox = new TextBox { Text = _planner.LabelSeparator, MinWidth = 150 };
+        _labelFontFamilyBox = new TextBox { Text = _planner.LabelFontFamily, MinWidth = 150 };
+        _labelFontSizeBox = new TextBox { Text = Format(_planner.LabelFontSizePt), MinWidth = 130 };
+        _labelBoldCheck = new CheckBox { Content = surface.BoldLabel, IsThreeState = true, IsChecked = _planner.LabelBold };
+        _labelItalicCheck = new CheckBox { Content = surface.ItalicLabel, IsThreeState = true, IsChecked = _planner.LabelItalic };
+        _labelColorBox = new TextBox { Text = _planner.LabelColorText, MinWidth = 150 };
         _labelPositionCombo = new ComboBox
         {
             ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions.Select(option => option.Label).ToArray(),
@@ -160,8 +176,14 @@ internal sealed class ChartDisplayOptionsDialog : Window
                 _categoryLabelsCheck,
                 _seriesLabelsCheck,
                 _legendKeysCheck,
+                _bubbleSizeLabelsCheck,
                 MakeRow(surface.NumberFormatLabel, _numberFormatBox),
                 MakeRow(surface.SeparatorLabel, _separatorBox),
+                MakeRow(surface.FontFamilyLabel, _labelFontFamilyBox),
+                MakeRow(surface.FontSizeLabel, _labelFontSizeBox),
+                _labelBoldCheck,
+                _labelItalicCheck,
+                MakeRow(surface.LabelColorLabel, _labelColorBox),
                 _categoryGridlinesCheck,
                 _valueGridlinesCheck,
                 MakeRow(surface.BarGapWidthLabel, _barGapWidthBox),
@@ -205,7 +227,13 @@ internal sealed class ChartDisplayOptionsDialog : Window
         int? barGapWidthPercent = null,
         int? barOverlapPercent = null,
         ChartDisplayBlanksAs? displayBlanksAs = null,
-        bool? showDataLabelsOverMaximum = null)
+        bool? showDataLabelsOverMaximum = null,
+        string? labelFontFamily = null,
+        double? labelFontSizePt = null,
+        bool? labelBold = null,
+        bool? labelItalic = null,
+        string? labelColor = null,
+        bool showBubbleSize = false)
     {
         _titleBox.Text = title;
         _legendCombo.SelectedIndex = FindLegendIndex(legend);
@@ -214,6 +242,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _categoryLabelsCheck.IsChecked = showCategoryLabels;
         _seriesLabelsCheck.IsChecked = showSeriesLabels;
         _legendKeysCheck.IsChecked = showLegendKeys;
+        _bubbleSizeLabelsCheck.IsChecked = showBubbleSize;
         _numberFormatBox.Text = numberFormat ?? string.Empty;
         _separatorBox.Text = separator ?? string.Empty;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
@@ -223,6 +252,11 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _barOverlapBox.Text = Format(barOverlapPercent);
         _displayBlanksCombo.SelectedIndex = FindDisplayBlanksIndex(displayBlanksAs);
         _showDataLabelsOverMaximumCheck.IsChecked = showDataLabelsOverMaximum;
+        _labelFontFamilyBox.Text = labelFontFamily ?? string.Empty;
+        _labelFontSizeBox.Text = Format(labelFontSizePt);
+        _labelBoldCheck.IsChecked = labelBold;
+        _labelItalicCheck.IsChecked = labelItalic;
+        _labelColorBox.Text = labelColor ?? string.Empty;
     }
 
     private void OnOk()
@@ -243,11 +277,17 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _planner.SetShowCategoryLabels(_categoryLabelsCheck.IsChecked == true);
         _planner.SetShowSeriesLabels(_seriesLabelsCheck.IsChecked == true);
         _planner.SetShowLegendKeys(_legendKeysCheck.IsChecked == true);
+        _planner.SetShowBubbleSize(_bubbleSizeLabelsCheck.IsChecked == true);
         var labelIndex = _labelPositionCombo.SelectedIndex;
         if (labelIndex >= 0 && labelIndex < ChartDisplayOptionsPlanner.LabelPositionOptions.Count)
             _planner.SetLabelPosition(ChartDisplayOptionsPlanner.LabelPositionOptions[labelIndex].Value);
         _planner.SetLabelNumberFormat(_numberFormatBox.Text);
         _planner.SetLabelSeparator(_separatorBox.Text);
+        _planner.SetLabelFontFamily(_labelFontFamilyBox.Text);
+        _planner.SetLabelFontSize(ParseOptional(_labelFontSizeBox.Text, "Label font size"));
+        _planner.SetLabelBold(_labelBoldCheck.IsChecked);
+        _planner.SetLabelItalic(_labelItalicCheck.IsChecked);
+        _planner.SetLabelColor(_labelColorBox.Text);
         _planner.SetCategoryGridlines(_categoryGridlinesCheck.IsChecked == true);
         _planner.SetValueGridlines(_valueGridlinesCheck.IsChecked == true);
         _planner.SetBarGapWidthPercent(ParseOptionalPercent(_barGapWidthBox.Text, "Bar gap width", 0, 500));
@@ -302,6 +342,18 @@ internal sealed class ChartDisplayOptionsDialog : Window
             .FirstOrDefault(item => item.option.Value == value).index);
 
     private static string Format(int? value) => value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static string Format(double? value) => value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static double? ParseOptional(string? text, string label)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
+            double.IsFinite(value) && value >= 0)
+            return value;
+        throw new FormatException($"{label} must be a non-negative finite number or blank.");
+    }
 
     private static int? ParseOptionalPercent(string? text, string surface, int minimum, int maximum)
     {

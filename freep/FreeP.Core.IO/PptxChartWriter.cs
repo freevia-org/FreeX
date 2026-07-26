@@ -614,6 +614,8 @@ internal static class PptxChartWriter
             el.Add(new XElement(C + "showSerName", new XAttribute("val", "1")));
         if (labels.ShowPercent)
             el.Add(new XElement(C + "showPercent", new XAttribute("val", "1")));
+        if (labels.ShowBubbleSize)
+            el.Add(new XElement(C + "showBubbleSize", new XAttribute("val", "1")));
         if (labels.Separator is not null)
             el.Add(new XElement(C + "separator", labels.Separator));
 

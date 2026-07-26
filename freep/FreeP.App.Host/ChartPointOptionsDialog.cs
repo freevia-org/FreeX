@@ -22,9 +22,15 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     private readonly CheckBox _showCategoryLabelsCheck;
     private readonly CheckBox _showSeriesLabelsCheck;
     private readonly CheckBox _showLegendKeysCheck;
+    private readonly CheckBox _showBubbleSizeCheck;
     private readonly ComboBox _labelPositionCombo;
     private readonly TextBox _labelNumberFormatBox;
     private readonly TextBox _labelSeparatorBox;
+    private readonly TextBox _labelFontFamilyBox;
+    private readonly TextBox _labelFontSizeBox;
+    private readonly CheckBox _labelBoldCheck;
+    private readonly CheckBox _labelItalicCheck;
+    private readonly TextBox _labelColorBox;
     private readonly ComboBox _markerCombo;
     private readonly TextBox _markerSizeBox;
 
@@ -77,6 +83,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _showCategoryLabelsCheck = new CheckBox { Content = surface.CategoryLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showSeriesLabelsCheck = new CheckBox { Content = surface.SeriesLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showLegendKeysCheck = new CheckBox { Content = surface.LegendKeysLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _showBubbleSizeCheck = new CheckBox { Content = surface.BubbleSizeLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
         _labelPositionCombo = new ComboBox
         {
             ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions,
@@ -85,6 +92,11 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         };
         _labelNumberFormatBox = new TextBox { MinWidth = 140 };
         _labelSeparatorBox = new TextBox { MinWidth = 140 };
+        _labelFontFamilyBox = new TextBox { MinWidth = 140 };
+        _labelFontSizeBox = new TextBox { MinWidth = 120 };
+        _labelBoldCheck = new CheckBox { Content = surface.BoldLabel, IsThreeState = true };
+        _labelItalicCheck = new CheckBox { Content = surface.ItalicLabel, IsThreeState = true };
+        _labelColorBox = new TextBox { MinWidth = 140 };
         _markerCombo = new ComboBox
         {
             ItemsSource = ChartPointOptionsPlanner.MarkerOptions,
@@ -120,9 +132,15 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         content.Children.Add(_showCategoryLabelsCheck);
         content.Children.Add(_showSeriesLabelsCheck);
         content.Children.Add(_showLegendKeysCheck);
+        content.Children.Add(_showBubbleSizeCheck);
         content.Children.Add(MakeRow(surface.LabelPositionLabel, _labelPositionCombo));
         content.Children.Add(MakeRow(surface.NumberFormatLabel, _labelNumberFormatBox));
         content.Children.Add(MakeRow(surface.SeparatorLabel, _labelSeparatorBox));
+        content.Children.Add(MakeRow(surface.FontFamilyLabel, _labelFontFamilyBox));
+        content.Children.Add(MakeRow(surface.FontSizeLabel, _labelFontSizeBox));
+        content.Children.Add(_labelBoldCheck);
+        content.Children.Add(_labelItalicCheck);
+        content.Children.Add(MakeRow(surface.LabelColorLabel, _labelColorBox));
         content.Children.Add(MakeRow(surface.MarkerLabel, _markerCombo));
         content.Children.Add(MakeRow(surface.MarkerSizeLabel, _markerSizeBox));
         content.Children.Add(new TextBlock { Text = surface.AutoHint, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
@@ -152,7 +170,13 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         bool showLegendKeys = false,
         DataLabelPosition labelPosition = DataLabelPosition.OutsideEnd,
         string? labelNumberFormat = null,
-        string? labelSeparator = null)
+        string? labelSeparator = null,
+        string? labelFontFamily = null,
+        double? labelFontSizePt = null,
+        bool? labelBold = null,
+        bool? labelItalic = null,
+        string? labelColor = null,
+        bool showBubbleSize = false)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         RefreshPoints();
@@ -166,9 +190,15 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _showCategoryLabelsCheck.IsChecked = showCategoryLabels;
         _showSeriesLabelsCheck.IsChecked = showSeriesLabels;
         _showLegendKeysCheck.IsChecked = showLegendKeys;
+        _showBubbleSizeCheck.IsChecked = showBubbleSize;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
         _labelNumberFormatBox.Text = labelNumberFormat ?? string.Empty;
         _labelSeparatorBox.Text = labelSeparator ?? string.Empty;
+        _labelFontFamilyBox.Text = labelFontFamily ?? string.Empty;
+        _labelFontSizeBox.Text = Format(labelFontSizePt);
+        _labelBoldCheck.IsChecked = labelBold;
+        _labelItalicCheck.IsChecked = labelItalic;
+        _labelColorBox.Text = labelColor ?? string.Empty;
         _markerCombo.SelectedIndex = FindMarkerIndex(markerSymbol);
         _markerSizeBox.Text = Format(markerSizePt);
     }
@@ -203,9 +233,15 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _showCategoryLabelsCheck.IsChecked = _planner.ShowCategoryLabels;
         _showSeriesLabelsCheck.IsChecked = _planner.ShowSeriesLabels;
         _showLegendKeysCheck.IsChecked = _planner.ShowLegendKeys;
+        _showBubbleSizeCheck.IsChecked = _planner.ShowBubbleSize;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(_planner.LabelPosition);
         _labelNumberFormatBox.Text = _planner.LabelNumberFormat;
         _labelSeparatorBox.Text = _planner.LabelSeparator;
+        _labelFontFamilyBox.Text = _planner.LabelFontFamily;
+        _labelFontSizeBox.Text = Format(_planner.LabelFontSizePt);
+        _labelBoldCheck.IsChecked = _planner.LabelBold;
+        _labelItalicCheck.IsChecked = _planner.LabelItalic;
+        _labelColorBox.Text = _planner.LabelColorText;
         _markerCombo.SelectedIndex = FindMarkerIndex(_planner.MarkerSymbol);
         _markerSizeBox.Text = Format(_planner.MarkerSizePt);
     }
@@ -221,10 +257,16 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _planner.SetShowCategoryLabels(_showCategoryLabelsCheck.IsChecked == true);
         _planner.SetShowSeriesLabels(_showSeriesLabelsCheck.IsChecked == true);
         _planner.SetShowLegendKeys(_showLegendKeysCheck.IsChecked == true);
+        _planner.SetShowBubbleSize(_showBubbleSizeCheck.IsChecked == true);
         if (_labelPositionCombo.SelectedItem is ChartDisplayLabelPositionOption position)
             _planner.SetLabelPosition(position.Value);
         _planner.SetLabelNumberFormat(_labelNumberFormatBox.Text);
         _planner.SetLabelSeparator(_labelSeparatorBox.Text);
+        _planner.SetLabelFontFamily(_labelFontFamilyBox.Text);
+        _planner.SetLabelFontSize(ParseOptional(_labelFontSizeBox.Text, "Label font size"));
+        _planner.SetLabelBold(_labelBoldCheck.IsChecked);
+        _planner.SetLabelItalic(_labelItalicCheck.IsChecked);
+        _planner.SetLabelColor(_labelColorBox.Text);
         var marker = _markerCombo.SelectedItem as ChartMarkerSymbolOption;
         _planner.SetMarkerSymbol(marker is null || marker.Value == ChartMarkerSymbol.Auto ? null : marker.Value);
         _planner.SetMarkerSize(ParseOptional(_markerSizeBox.Text, "Marker size"));

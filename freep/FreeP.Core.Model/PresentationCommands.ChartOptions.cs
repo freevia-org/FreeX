@@ -74,17 +74,21 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
             chart.DataLabels.ShowCategoryName = _newOptions.ShowCategoryLabels;
             chart.DataLabels.ShowSeriesName = _newOptions.ShowSeriesLabels;
             chart.DataLabels.ShowLegendKey = _newOptions.ShowLegendKeys;
+            chart.DataLabels.ShowBubbleSize = _newOptions.ShowBubbleSize;
             chart.DataLabels.Position = _newOptions.LabelPosition;
             chart.DataLabels.NumberFormat = _newOptions.LabelNumberFormat;
             chart.DataLabels.Separator = _newOptions.LabelSeparator;
+            chart.DataLabels.TextStyle = CloneTextStyle(_newOptions.LabelTextStyle);
         }
         else if (_newOptions.ShowValueLabels ||
                  _newOptions.ShowPercentLabels ||
                  _newOptions.ShowCategoryLabels ||
-                 _newOptions.ShowSeriesLabels ||
-                 _newOptions.ShowLegendKeys ||
-                 !string.IsNullOrWhiteSpace(_newOptions.LabelNumberFormat) ||
-                 !string.IsNullOrEmpty(_newOptions.LabelSeparator))
+                  _newOptions.ShowSeriesLabels ||
+                  _newOptions.ShowLegendKeys ||
+                  _newOptions.ShowBubbleSize ||
+                  !string.IsNullOrWhiteSpace(_newOptions.LabelNumberFormat) ||
+                 !string.IsNullOrEmpty(_newOptions.LabelSeparator) ||
+                 _newOptions.LabelTextStyle is not null)
         {
             chart.DataLabels = new ChartDataLabels
             {
@@ -93,9 +97,11 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
                 ShowCategoryName = _newOptions.ShowCategoryLabels,
                 ShowSeriesName = _newOptions.ShowSeriesLabels,
                 ShowLegendKey = _newOptions.ShowLegendKeys,
+                ShowBubbleSize = _newOptions.ShowBubbleSize,
                 Position = _newOptions.LabelPosition,
                 NumberFormat = _newOptions.LabelNumberFormat,
                 Separator = _newOptions.LabelSeparator,
+                TextStyle = CloneTextStyle(_newOptions.LabelTextStyle),
             };
         }
 
@@ -134,6 +140,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
             ShowCategoryName = source.ShowCategoryName,
             ShowSeriesName = source.ShowSeriesName,
             ShowLegendKey = source.ShowLegendKey,
+            ShowBubbleSize = source.ShowBubbleSize,
             Position = source.Position,
             NumberFormat = source.NumberFormat,
             Separator = source.Separator,
@@ -152,4 +159,16 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
 
     private static int? Normalize(int? value, int minimum, int maximum) =>
         value is null ? null : Math.Clamp(value.Value, minimum, maximum);
+
+    private static ChartTextStyle? CloneTextStyle(ChartTextStyle? source) => source is null
+        ? null
+        : new ChartTextStyle
+        {
+            IsImplicitDefault = source.IsImplicitDefault,
+            FontSizePt = source.FontSizePt,
+            Bold = source.Bold,
+            Italic = source.Italic,
+            Color = source.Color,
+            FontFamily = source.FontFamily,
+        };
 }

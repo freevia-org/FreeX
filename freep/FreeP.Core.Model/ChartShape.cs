@@ -188,6 +188,9 @@ public sealed class ChartDataLabels
     /// <summary>Show the legend key (color swatch) next to the label.</summary>
     public bool ShowLegendKey { get; set; }
 
+    /// <summary>Show the bubble-size value for bubble-chart points.</summary>
+    public bool ShowBubbleSize { get; set; }
+
     /// <summary>Label placement relative to the data point. Null means use the default for the chart type.</summary>
     public DataLabelPosition? Position { get; set; }
 
@@ -201,7 +204,18 @@ public sealed class ChartDataLabels
     public ChartTextStyle? TextStyle { get; set; }
 
     /// <summary>Returns true if any label component is enabled.</summary>
-    public bool HasAny => Delete.HasValue || ShowValue || ShowPercent || ShowCategoryName || ShowSeriesName || ShowLegendKey;
+    public bool HasAny =>
+        Delete.HasValue ||
+        ShowValue ||
+        ShowPercent ||
+        ShowCategoryName ||
+        ShowSeriesName ||
+        ShowLegendKey ||
+        ShowBubbleSize ||
+        Position.HasValue ||
+        NumberFormat is not null ||
+        Separator is not null ||
+        TextStyle is not null;
 }
 
 /// <summary>Data table settings for charts that render source values below the plot.</summary>

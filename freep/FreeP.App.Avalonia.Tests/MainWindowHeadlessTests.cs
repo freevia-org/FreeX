@@ -6163,7 +6163,13 @@ public sealed class MainWindowHeadlessTests
                 "0.0%",
                 " | ",
                 displayBlanksAs: ChartDisplayBlanksAs.Zero,
-                showDataLabelsOverMaximum: true);
+                showDataLabelsOverMaximum: true,
+                labelFontFamily: "Aptos",
+                labelFontSizePt: 9,
+                labelBold: true,
+                labelItalic: false,
+                labelColor: "#2F5496",
+                showBubbleSize: true);
             dialog.SetVaryColorsForTests(true);
             dialog.SetLegendOverlayForTests(true);
             dialog.SetHighLowLinesForTests(false);
@@ -6172,9 +6178,16 @@ public sealed class MainWindowHeadlessTests
         });
 
         if (!ran) return;
-        options.Should().Be(new ChartDisplayOptions(
-            "Revenue", LegendPosition.Bottom, true, DataLabelPosition.OutsideEnd, false, true,
-            true, true, true, true, "0.0%", " | ", null, null, ChartDisplayBlanksAs.Zero, true, true, true, false));
+        options.Should().NotBeNull();
+        options!.Title.Should().Be("Revenue");
+        options.Legend.Should().Be(LegendPosition.Bottom);
+        options.LabelTextStyle.Should().NotBeNull();
+        options.LabelTextStyle!.FontFamily.Should().Be("Aptos");
+        options.LabelTextStyle.FontSizePt.Should().Be(9);
+        options.LabelTextStyle.Bold.Should().BeTrue();
+        options.LabelTextStyle.Italic.Should().BeFalse();
+        options.LabelTextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
+        options.ShowBubbleSize.Should().BeTrue();
     }
 
     [Fact]
@@ -6377,7 +6390,8 @@ public sealed class MainWindowHeadlessTests
 
             var dialog = new ChartSeriesOptionsDialog(window.Editor);
             dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4", "#1F4E79", OutlineDash.DashDot, true,
-                true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ");
+                true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
+                "Aptos", 9, true, false, "#2F5496", showBubbleSize: true);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6398,7 +6412,14 @@ public sealed class MainWindowHeadlessTests
         options.DataLabels!.ShowValue.Should().BeTrue();
         options.DataLabels.ShowCategoryName.Should().BeTrue();
         options.DataLabels.ShowLegendKey.Should().BeTrue();
+        options.DataLabels.ShowBubbleSize.Should().BeTrue();
         options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
+        options.DataLabels.TextStyle.Should().NotBeNull();
+        options.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        options.DataLabels.TextStyle.FontSizePt.Should().Be(9);
+        options.DataLabels.TextStyle.Bold.Should().BeTrue();
+        options.DataLabels.TextStyle.Italic.Should().BeFalse();
+        options.DataLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
     }
 
     [Fact]
@@ -6413,7 +6434,8 @@ public sealed class MainWindowHeadlessTests
 
             var dialog = new ChartPointOptionsDialog(window.Editor);
             dialog.SetOptionsForTests(0, 0, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7,
-                true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ");
+                true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
+                "Aptos", 9, true, false, "#2F5496", showBubbleSize: true);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6431,7 +6453,14 @@ public sealed class MainWindowHeadlessTests
         options.DataLabels!.ShowValue.Should().BeTrue();
         options.DataLabels.ShowCategoryName.Should().BeTrue();
         options.DataLabels.ShowLegendKey.Should().BeTrue();
+        options.DataLabels.ShowBubbleSize.Should().BeTrue();
         options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
+        options.DataLabels.TextStyle.Should().NotBeNull();
+        options.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        options.DataLabels.TextStyle.FontSizePt.Should().Be(9);
+        options.DataLabels.TextStyle.Bold.Should().BeTrue();
+        options.DataLabels.TextStyle.Italic.Should().BeFalse();
+        options.DataLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
     }
 
     [Fact]

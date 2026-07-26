@@ -632,4 +632,73 @@ public sealed class Equation
 
         return string.Concat(Runs.Select(r => r.LinearTextWithDepth(depth)));
     }
+
+    /// <summary>Creates an independent copy while preserving nested-equation graph identity.</summary>
+    public Equation Clone()
+    {
+        var equations = new Dictionary<Equation, Equation>(ReferenceEqualityComparer.Instance);
+        var matrices = new Dictionary<MathMatrix, MathMatrix>(ReferenceEqualityComparer.Instance);
+        return CloneEquation(this, equations, matrices);
+    }
+
+    private static Equation CloneEquation(
+        Equation source,
+        Dictionary<Equation, Equation> equations,
+        Dictionary<MathMatrix, MathMatrix> matrices)
+    {
+        if (equations.TryGetValue(source, out var existing))
+            return existing;
+
+        var clone = new Equation();
+        equations[source] = clone;
+        foreach (var run in source.Runs)
+            clone.Runs.Add(CloneRun(run, equations, matrices));
+        return clone;
+    }
+
+    private static MathRun CloneRun(
+        MathRun source,
+        Dictionary<Equation, Equation> equations,
+        Dictionary<MathMatrix, MathMatrix> matrices) => source with
+    {
+        ScriptBaseEquation = CloneOptional(source.ScriptBaseEquation, equations, matrices),
+        ScriptSubEquation = CloneOptional(source.ScriptSubEquation, equations, matrices),
+        ScriptSupEquation = CloneOptional(source.ScriptSupEquation, equations, matrices),
+        NumeratorEquation = CloneOptional(source.NumeratorEquation, equations, matrices),
+        DenominatorEquation = CloneOptional(source.DenominatorEquation, equations, matrices),
+        RadicandEquation = CloneOptional(source.RadicandEquation, equations, matrices),
+        DegreeEquation = CloneOptional(source.DegreeEquation, equations, matrices),
+        DelimiterContentEquation = CloneOptional(source.DelimiterContentEquation, equations, matrices),
+        FunctionArgumentEquation = CloneOptional(source.FunctionArgumentEquation, equations, matrices),
+        NAryLowerLimitEquation = CloneOptional(source.NAryLowerLimitEquation, equations, matrices),
+        NAryUpperLimitEquation = CloneOptional(source.NAryUpperLimitEquation, equations, matrices),
+        NAryOperandEquation = CloneOptional(source.NAryOperandEquation, equations, matrices),
+        DecoratorBaseEquation = CloneOptional(source.DecoratorBaseEquation, equations, matrices),
+        Matrix = CloneMatrix(source.Matrix, equations, matrices)
+    };
+
+    private static Equation? CloneOptional(
+        Equation? source,
+        Dictionary<Equation, Equation> equations,
+        Dictionary<MathMatrix, MathMatrix> matrices) =>
+        source is null ? null : CloneEquation(source, equations, matrices);
+
+    private static MathMatrix? CloneMatrix(
+        MathMatrix? source,
+        Dictionary<Equation, Equation> equations,
+        Dictionary<MathMatrix, MathMatrix> matrices)
+    {
+        if (source is null)
+            return null;
+        if (matrices.TryGetValue(source, out var existing))
+            return existing;
+
+        var clone = new MathMatrix();
+        matrices[source] = clone;
+        foreach (var row in source.Rows)
+            clone.Rows.Add([.. row]);
+        foreach (var row in source.CellEquations)
+            clone.CellEquations.Add(row.Select(cell => CloneOptional(cell, equations, matrices)).ToList());
+        return clone;
+    }
 }

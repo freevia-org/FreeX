@@ -926,7 +926,16 @@ public sealed class ChartDataCommandTests
                 ChartDisplayBlanksAs.Zero,
                 true,
                 true,
-                true)));
+                true,
+                LabelTextStyle: new ChartTextStyle
+                {
+                    FontFamily = "Aptos",
+                    FontSizePt = 9,
+                    Bold = true,
+                    Italic = false,
+                    Color = new ThemeAwareColor(SrgbColor.FromRgb(0x2F5496)),
+                },
+                ShowBubbleSize: true)));
 
         chart.Title.Should().Be("Revenue");
         chart.HasAutomaticTitle.Should().BeFalse();
@@ -936,9 +945,16 @@ public sealed class ChartDataCommandTests
         chart.DataLabels.ShowPercent.Should().BeTrue();
         chart.DataLabels.ShowSeriesName.Should().BeFalse();
         chart.DataLabels.ShowLegendKey.Should().BeTrue();
+        chart.DataLabels.ShowBubbleSize.Should().BeTrue();
         chart.DataLabels.NumberFormat.Should().Be("0.0%");
         chart.DataLabels.Separator.Should().Be(" | ");
         chart.DataLabels.Position.Should().Be(DataLabelPosition.OutsideEnd);
+        chart.DataLabels.TextStyle.Should().NotBeNull();
+        chart.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        chart.DataLabels.TextStyle.FontSizePt.Should().Be(9);
+        chart.DataLabels.TextStyle.Bold.Should().BeTrue();
+        chart.DataLabels.TextStyle.Italic.Should().BeFalse();
+        chart.DataLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
         chart.CategoryAxis.HasMajorGridlines.Should().BeFalse();
         chart.ValueAxis.HasMajorGridlines.Should().BeTrue();
         chart.BarGapWidthPercent.Should().Be(40);
@@ -959,8 +975,15 @@ public sealed class ChartDataCommandTests
         roundTripped.DataLabels.ShowPercent.Should().BeTrue();
         roundTripped.DataLabels.ShowCategoryName.Should().BeTrue();
         roundTripped.DataLabels.ShowLegendKey.Should().BeTrue();
+        roundTripped.DataLabels.ShowBubbleSize.Should().BeTrue();
         roundTripped.DataLabels.NumberFormat.Should().Be("0.0%");
         roundTripped.DataLabels.Separator.Should().Be(" | ");
+        roundTripped.DataLabels.TextStyle.Should().NotBeNull();
+        roundTripped.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        roundTripped.DataLabels.TextStyle.FontSizePt.Should().Be(9);
+        roundTripped.DataLabels.TextStyle.Bold.Should().BeTrue();
+        roundTripped.DataLabels.TextStyle.Italic.Should().BeFalse();
+        roundTripped.DataLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
         roundTripped.BarGapWidthPercent.Should().Be(40);
         roundTripped.BarOverlapPercent.Should().Be(55);
         roundTripped.DisplayBlanksAs.Should().Be(ChartDisplayBlanksAs.Zero);
@@ -979,9 +1002,11 @@ public sealed class ChartDataCommandTests
         chart.DataLabels.ShowPercent.Should().BeFalse();
         chart.DataLabels.ShowSeriesName.Should().BeFalse();
         chart.DataLabels.ShowLegendKey.Should().BeFalse();
+        chart.DataLabels.ShowBubbleSize.Should().BeFalse();
         chart.DataLabels.NumberFormat.Should().Be("0.0");
         chart.DataLabels.Separator.Should().BeNull();
         chart.DataLabels.Position.Should().Be(DataLabelPosition.Center);
+        chart.DataLabels.TextStyle.Should().BeNull();
         chart.CategoryAxis.HasMajorGridlines.Should().BeTrue();
         chart.ValueAxis.HasMajorGridlines.Should().BeFalse();
         chart.BarGapWidthPercent.Should().Be(180);
@@ -1047,12 +1072,15 @@ public sealed class ChartDataCommandTests
                 false,
                 false,
                 null,
-                " / ")));
+                " / ",
+                LabelTextStyle: new ChartTextStyle { FontFamily = "Aptos", FontSizePt = 9 })));
 
         chart.DataLabels.Should().NotBeNull();
         chart.DataLabels!.ShowCategoryName.Should().BeTrue();
         chart.DataLabels.ShowValue.Should().BeFalse();
         chart.DataLabels.Separator.Should().Be(" / ");
+        chart.DataLabels.TextStyle.Should().NotBeNull();
+        chart.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
     }
 
     [Fact]
@@ -1281,6 +1309,15 @@ public sealed class ChartDataCommandTests
                     Position = DataLabelPosition.InsideEnd,
                     NumberFormat = "0.0%",
                     Separator = " | ",
+                    TextStyle = new ChartTextStyle
+                    {
+                        FontFamily = "Aptos",
+                        FontSizePt = 9,
+                        Bold = true,
+                        Italic = false,
+                        Color = new ThemeAwareColor(SrgbColor.FromRgb(0x2F5496)),
+                    },
+                    ShowBubbleSize = true,
                 })));
 
         var series = chart.Series[1];
@@ -1296,6 +1333,7 @@ public sealed class ChartDataCommandTests
         series.DataLabels!.ShowValue.Should().BeTrue();
         series.DataLabels.ShowCategoryName.Should().BeTrue();
         series.DataLabels.ShowLegendKey.Should().BeTrue();
+        series.DataLabels.ShowBubbleSize.Should().BeTrue();
         series.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         series.DataLabels.NumberFormat.Should().Be("0.0%");
         series.DataLabels.Separator.Should().Be(" | ");
@@ -1323,6 +1361,12 @@ public sealed class ChartDataCommandTests
         roundTrippedLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         roundTrippedLabels.NumberFormat.Should().Be("0.0%");
         roundTrippedLabels.Separator.Should().Be(" | ");
+        roundTrippedLabels.TextStyle.Should().NotBeNull();
+        roundTrippedLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        roundTrippedLabels.TextStyle.FontSizePt.Should().Be(9);
+        roundTrippedLabels.TextStyle.Bold.Should().BeTrue();
+        roundTrippedLabels.TextStyle.Italic.Should().BeFalse();
+        roundTrippedLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
         var roundTrippedMarker = roundTripped.Series[1].MarkerStyle!;
         roundTrippedMarker.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
         roundTrippedMarker.SizePt.Should().Be(8);
@@ -1511,6 +1555,15 @@ public sealed class ChartDataCommandTests
                     Position = DataLabelPosition.InsideEnd,
                     NumberFormat = "0.0%",
                     Separator = " | ",
+                    TextStyle = new ChartTextStyle
+                    {
+                        FontFamily = "Aptos",
+                        FontSizePt = 9,
+                        Bold = true,
+                        Italic = false,
+                        Color = new ThemeAwareColor(SrgbColor.FromRgb(0x2F5496)),
+                    },
+                    ShowBubbleSize = true,
                 })));
 
         var style = chart.Series[0].PointStyles[1];
@@ -1524,7 +1577,13 @@ public sealed class ChartDataCommandTests
         style.DataLabels!.ShowValue.Should().BeTrue();
         style.DataLabels.ShowCategoryName.Should().BeTrue();
         style.DataLabels.ShowLegendKey.Should().BeTrue();
+        style.DataLabels.ShowBubbleSize.Should().BeTrue();
         style.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
+        style.DataLabels.TextStyle.Should().NotBeNull();
+        style.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        style.DataLabels.TextStyle.FontSizePt.Should().Be(9);
+        style.DataLabels.TextStyle.Bold.Should().BeTrue();
+        style.DataLabels.TextStyle.Italic.Should().BeFalse();
 
         using var stream = new MemoryStream();
         PptxPackageWriter.Write(p, stream);
@@ -1543,6 +1602,12 @@ public sealed class ChartDataCommandTests
         roundTrippedLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         roundTrippedLabels.NumberFormat.Should().Be("0.0%");
         roundTrippedLabels.Separator.Should().Be(" | ");
+        roundTrippedLabels.TextStyle.Should().NotBeNull();
+        roundTrippedLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        roundTrippedLabels.TextStyle.FontSizePt.Should().Be(9);
+        roundTrippedLabels.TextStyle.Bold.Should().BeTrue();
+        roundTrippedLabels.TextStyle.Italic.Should().BeFalse();
+        roundTrippedLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
 
         bus.Undo();
         chart.Series[0].PointColors[1].Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
@@ -1550,6 +1615,17 @@ public sealed class ChartDataCommandTests
         chart.Series[0].PointStyles[1].StrokeWidthPt.Should().Be(0.75);
         chart.Series[0].PointStyles[1].Marker!.Symbol.Should().Be(ChartMarkerSymbol.Circle);
         chart.Series[0].PointStyles[1].DataLabels.Should().BeNull();
+    }
+
+    [Fact]
+    public void ChartDataLabels_TextStyleOnly_IsAValidAuthoredOverride()
+    {
+        var labels = new ChartDataLabels
+        {
+            TextStyle = new ChartTextStyle { FontFamily = "Aptos", FontSizePt = 9 },
+        };
+
+        labels.HasAny.Should().BeTrue();
     }
 
     [Fact]
