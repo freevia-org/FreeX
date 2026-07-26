@@ -1939,21 +1939,23 @@ public sealed partial class MainWindow
     {
         var sheetId = _session.ActiveSheet.Id;
         var previousSelection = _session.SelectedRange;
-        var range = new GridRange(
-            new CellAddress(sheetId, 2, 2),
-            new CellAddress(sheetId, 4, 4));
-        if (!_session.ActiveSheet.AllowEditRanges.Contains(range))
+        var existingRange = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 5, 5));
+        if (!_session.ActiveSheet.AllowEditRanges.Contains(existingRange))
         {
-            _session.ExecuteReviewCommand(new AllowEditRangeCommand(sheetId, range));
+            _session.ExecuteReviewCommand(new AllowEditRangeCommand(sheetId, existingRange));
             RefreshShell(_statusText.Text ?? "Ready");
         }
 
-        _session.SelectRange(range);
+        _session.SelectRange(new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 5, 4)));
         RefreshShell(_statusText.Text ?? "Ready");
 
         try
         {
-            await ShowAllowEditRangeDialogAsync();
+            await ShowAllowEditRangeDialogAsync("Sheet1!$B$2:$D$5");
         }
         finally
         {
