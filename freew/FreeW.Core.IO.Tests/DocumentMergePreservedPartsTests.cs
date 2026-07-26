@@ -11,6 +11,45 @@ public class DocumentMergePreservedPartsTests
 {
     private static readonly XNamespace Relationships =
         "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace Wordprocessing =
+        "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+    [Fact]
+    public void Merge_WritesTransferredNoteAndCommentReferencesWithRemappedIds()
+    {
+        var source = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FootnoteReference(1));
+        paragraph.Runs.Add(Run.EndnoteReference(1));
+        paragraph.Runs.Add(Run.CommentReference(0));
+        source.Blocks.Add(paragraph);
+        source.Footnotes[1] = new Footnote(1, "Source footnote");
+        source.Endnotes[1] = new Endnote(1, "Source endnote");
+        source.Comments[0] = new Comment(0, "Source comment");
+
+        var target = new TextDocument();
+        target.Footnotes[1] = new Footnote(1, "Target footnote");
+        target.Endnotes[1] = new Endnote(1, "Target endnote");
+        target.Comments[0] = new Comment(0, "Target comment");
+
+        DocumentMerge.Merge(target, 0, source);
+        var bytes = WriteBytes(target);
+
+        using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        var document = ReadXml(zip, "word/document.xml");
+        document.Descendants(Wordprocessing + "footnoteReference")
+            .Single().Attribute(Wordprocessing + "id")!.Value.Should().Be("2");
+        document.Descendants(Wordprocessing + "endnoteReference")
+            .Single().Attribute(Wordprocessing + "id")!.Value.Should().Be("2");
+        document.Descendants(Wordprocessing + "commentReference")
+            .Single().Attribute(Wordprocessing + "id")!.Value.Should().Be("1");
+        ReadXml(zip, "word/footnotes.xml").Descendants(Wordprocessing + "footnote")
+            .Should().Contain(note => (string?)note.Attribute(Wordprocessing + "id") == "2" && note.Value.Contains("Source footnote"));
+        ReadXml(zip, "word/endnotes.xml").Descendants(Wordprocessing + "endnote")
+            .Should().Contain(note => (string?)note.Attribute(Wordprocessing + "id") == "2" && note.Value.Contains("Source endnote"));
+        ReadXml(zip, "word/comments.xml").Descendants(Wordprocessing + "comment")
+            .Should().Contain(comment => (string?)comment.Attribute(Wordprocessing + "id") == "1" && comment.Value.Contains("Source comment"));
+    }
 
     [Fact]
     public void Merge_PreservesRenamedAltChunkPackageGraph_WhenWritten()

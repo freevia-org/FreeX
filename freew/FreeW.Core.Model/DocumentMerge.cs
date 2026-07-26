@@ -43,7 +43,8 @@ public static class DocumentMerge
     {
         ArgumentNullException.ThrowIfNull(target);
         var clones = CloneBlocks(source);
-        var roots = EnumerateParagraphs(clones)
+        var allParagraphs = TransferAnnotations(target, source, clones);
+        var roots = allParagraphs
             .SelectMany(paragraph => paragraph.Runs)
             .Select(run => run.PreservedDrawing)
             .Where(drawing => drawing is not null)
@@ -51,7 +52,7 @@ public static class DocumentMerge
             .Select(reference => reference.PreservedPartName)
             .Concat(clones.OfType<AltChunkBlock>().Select(altChunk => altChunk.PreservedPartName));
         var partNames = TransferPreservedPartGraph(target, source, roots);
-        RewritePreservedDrawingReferences(clones, partNames);
+        RewritePreservedDrawingReferences(allParagraphs, partNames);
         RewriteAltChunkPartNames(clones, partNames);
         return clones;
     }
@@ -272,10 +273,10 @@ public static class DocumentMerge
     }
 
     private static void RewritePreservedDrawingReferences(
-        IReadOnlyList<Block> clones,
+        IEnumerable<Paragraph> paragraphs,
         IReadOnlyDictionary<string, string> partNames)
     {
-        foreach (var paragraph in EnumerateParagraphs(clones))
+        foreach (var paragraph in paragraphs)
             foreach (var run in paragraph.Runs)
                 if (run.PreservedDrawing is { } drawing)
                     run.PreservedDrawing = new PreservedDrawing(
@@ -285,6 +286,131 @@ public static class DocumentMerge
                                 ? reference with { PreservedPartName = partName }
                                 : reference)
                             .ToArray());
+    }
+
+    private static IReadOnlyList<Paragraph> TransferAnnotations(
+        TextDocument target,
+        TextDocument source,
+        IReadOnlyList<Block> clones)
+    {
+        var paragraphs = EnumerateParagraphs(clones).ToList();
+        var footnoteIds = new Dictionary<int, int>();
+        var endnoteIds = new Dictionary<int, int>();
+        var commentIds = new Dictionary<int, int>();
+        var copiedCommentRoots = new HashSet<int>();
+        var usedFootnotes = target.Footnotes.Keys.ToHashSet();
+        var usedEndnotes = target.Endnotes.Keys.ToHashSet();
+        var usedComments = target.Comments.Values.SelectMany(comment => comment.ThreadInOrder()).Select(comment => comment.Id).ToHashSet();
+
+        for (var cursor = 0; cursor < paragraphs.Count; cursor++)
+        {
+            foreach (var run in paragraphs[cursor].Runs)
+            {
+                if (run.FootnoteId is { } footnoteId
+                    && !footnoteIds.ContainsKey(footnoteId)
+                    && source.Footnotes.TryGetValue(footnoteId, out var footnote))
+                {
+                    var mappedId = AllocateId(footnoteId, usedFootnotes, firstId: 1);
+                    footnoteIds[footnoteId] = mappedId;
+                    var clone = new Footnote(mappedId);
+                    foreach (var content in footnote.Content)
+                    {
+                        var paragraph = CloneParagraph(content);
+                        clone.Content.Add(paragraph);
+                        paragraphs.Add(paragraph);
+                    }
+                    target.Footnotes[mappedId] = clone;
+                }
+
+                if (run.EndnoteId is { } endnoteId
+                    && !endnoteIds.ContainsKey(endnoteId)
+                    && source.Endnotes.TryGetValue(endnoteId, out var endnote))
+                {
+                    var mappedId = AllocateId(endnoteId, usedEndnotes, firstId: 1);
+                    endnoteIds[endnoteId] = mappedId;
+                    var clone = new Endnote(mappedId);
+                    foreach (var content in endnote.Content)
+                    {
+                        var paragraph = CloneParagraph(content);
+                        clone.Content.Add(paragraph);
+                        paragraphs.Add(paragraph);
+                    }
+                    target.Endnotes[mappedId] = clone;
+                }
+
+                if (run.CommentId is not { } commentId
+                    || !TryFindTopLevelComment(source, commentId, out var topComment)
+                    || !copiedCommentRoots.Add(topComment.Id))
+                    continue;
+
+                foreach (var node in topComment.ThreadInOrder())
+                    commentIds[node.Id] = AllocateId(node.Id, usedComments, firstId: 0);
+                var copied = CloneComment(topComment, id => commentIds[id], paragraphs);
+                target.Comments[copied.Id] = copied;
+            }
+        }
+
+        foreach (var paragraph in paragraphs)
+            foreach (var run in paragraph.Runs)
+            {
+                if (run.FootnoteId is { } footnoteId && footnoteIds.TryGetValue(footnoteId, out var mappedFootnote))
+                    run.FootnoteId = mappedFootnote;
+                if (run.EndnoteId is { } endnoteId && endnoteIds.TryGetValue(endnoteId, out var mappedEndnote))
+                    run.EndnoteId = mappedEndnote;
+                if (run.CommentId is { } commentId && commentIds.TryGetValue(commentId, out var mappedComment))
+                    run.CommentId = mappedComment;
+            }
+
+        return paragraphs;
+    }
+
+    private static int AllocateId(int sourceId, HashSet<int> usedIds, int firstId)
+    {
+        if (sourceId >= firstId && usedIds.Add(sourceId))
+            return sourceId;
+        var candidate = Math.Max(firstId, usedIds.Count == 0 ? firstId : usedIds.Max() + 1);
+        while (!usedIds.Add(candidate))
+            candidate++;
+        return candidate;
+    }
+
+    private static bool TryFindTopLevelComment(TextDocument source, int id, out Comment comment)
+    {
+        if (source.Comments.TryGetValue(id, out var direct))
+        {
+            comment = direct;
+            return true;
+        }
+
+        var topLevel = source.Comments.Values.FirstOrDefault(candidate => candidate.ThreadInOrder().Any(node => node.Id == id));
+        if (topLevel is not null)
+        {
+            comment = topLevel;
+            return true;
+        }
+
+        comment = null!;
+        return false;
+    }
+
+    private static Comment CloneComment(Comment source, Func<int, int> mapId, List<Paragraph> allParagraphs)
+    {
+        var clone = new Comment(mapId(source.Id))
+        {
+            Author = source.Author,
+            Initials = source.Initials,
+            DateXml = source.DateXml,
+            Resolved = source.Resolved,
+        };
+        foreach (var content in source.Content)
+        {
+            var paragraph = CloneParagraph(content);
+            clone.Content.Add(paragraph);
+            allParagraphs.Add(paragraph);
+        }
+        foreach (var reply in source.Replies)
+            clone.Replies.Add(CloneComment(reply, mapId, allParagraphs));
+        return clone;
     }
 
     private static void RewriteAltChunkPartNames(

@@ -3,6 +3,48 @@ namespace FreeW.Core.Model.Tests;
 public class DocumentMergeTests
 {
     [Fact]
+    public void Merge_TransfersAndRemapsReferencedNotesAndCommentThreads()
+    {
+        var source = new TextDocument();
+        var sourceParagraph = new Paragraph();
+        sourceParagraph.Runs.Add(Run.FootnoteReference(1));
+        sourceParagraph.Runs.Add(Run.EndnoteReference(1));
+        sourceParagraph.Runs.Add(new Run("Commented") { CommentId = 0 });
+        sourceParagraph.Runs.Add(Run.CommentReference(0));
+        source.Blocks.Add(sourceParagraph);
+        var footnote = new Footnote(1, "Source footnote");
+        footnote.Content[0].Runs.Add(Run.EndnoteReference(1));
+        source.Footnotes[1] = footnote;
+        source.Endnotes[1] = new Endnote(1, "Source endnote");
+        var comment = new Comment(0, "Source comment", "Ada", "A") { Resolved = true };
+        comment.AddReply(1, "Reply", "Ben", "B");
+        source.Comments[0] = comment;
+
+        var target = new TextDocument();
+        target.Footnotes[1] = new Footnote(1, "Target footnote");
+        target.Endnotes[1] = new Endnote(1, "Target endnote");
+        var targetComment = new Comment(0, "Target comment");
+        targetComment.AddReply(1, "Target reply");
+        target.Comments[0] = targetComment;
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        var runs = inserted.Single().Should().BeOfType<Paragraph>().Subject.Runs;
+        runs[0].FootnoteId.Should().Be(2);
+        runs[1].EndnoteId.Should().Be(2);
+        runs[2].CommentId.Should().Be(2);
+        runs[3].CommentId.Should().Be(2);
+        target.Footnotes[2].PlainText.Should().Be("Source footnote1");
+        target.Footnotes[2].Content.Single().Runs.Last().EndnoteId.Should().Be(2);
+        target.Endnotes[2].PlainText.Should().Be("Source endnote");
+        target.Comments[2].PlainText.Should().Be("Source comment");
+        target.Comments[2].Replies.Single().Id.Should().Be(3);
+        target.Comments[2].Resolved.Should().BeTrue();
+        source.Footnotes[1].PlainText.Should().Be("Source footnote1");
+        source.Comments[0].Replies.Single().Id.Should().Be(1);
+    }
+
+    [Fact]
     public void Merge_TransfersAltChunkPackageGraph_WithCollisionSafeRelationshipRewrite()
     {
         const string altChunkRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk";
