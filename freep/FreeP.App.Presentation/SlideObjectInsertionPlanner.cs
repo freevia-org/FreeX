@@ -58,6 +58,8 @@ public static class SlideObjectInsertionPlanner
     public const string HexagonCommandId = "freep.shape-hexagon";
     public const string RightArrowCommandId = "freep.shape-right-arrow";
     public const string Star5CommandId = "freep.shape-star5";
+    public const string CrossCommandId = "freep.shape-cross";
+    public const string PlusSignCommandId = "freep.shape-plus-sign";
     public const string ConnectorCommandId = "freep.insert-connector";
     public const string ElbowConnectorCommandId = "freep.insert-elbow-connector";
     public const string CurvedConnectorCommandId = "freep.insert-curved-connector";
@@ -106,6 +108,8 @@ public static class SlideObjectInsertionPlanner
         new(HexagonCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Hexagon),
         new(RightArrowCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.RightArrow),
         new(Star5CommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Star5),
+        new(CrossCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Cross),
+        new(PlusSignCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.PlusSign),
         new(ConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.Line),
         new(ElbowConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.ElbowConnector),
         new(CurvedConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.CurvedConnector),

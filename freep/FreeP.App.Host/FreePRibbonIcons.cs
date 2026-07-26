@@ -56,6 +56,8 @@ internal static class FreePRibbonIcons
             ["freep.shape-hexagon"] = RibbonCommandIconKind.Pentagon,
             ["freep.shape-right-arrow"] = RibbonCommandIconKind.ArrowRight,
             ["freep.shape-star5"] = RibbonCommandIconKind.Star,
+            ["freep.shape-cross"] = RibbonCommandIconKind.Cross,
+            ["freep.shape-plus-sign"] = RibbonCommandIconKind.PlusSign,
             ["freep.insert-connector"] = RibbonCommandIconKind.Line,
             ["freep.insert-elbow-connector"] = RibbonCommandIconKind.Line,
             ["freep.insert-curved-connector"] = RibbonCommandIconKind.Line,

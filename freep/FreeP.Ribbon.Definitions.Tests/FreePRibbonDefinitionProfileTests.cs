@@ -121,6 +121,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                     ShapeChangePlanner.RightArrowCommandId,
                     ShapeChangePlanner.HexagonCommandId,
                     ShapeChangePlanner.Star5CommandId,
+                    ShapeChangePlanner.CrossCommandId,
+                    ShapeChangePlanner.PlusSignCommandId,
                 ]);
         }
     }

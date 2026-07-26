@@ -27,6 +27,8 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.HexagonCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.RightArrowCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.Star5CommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.CrossCommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.PlusSignCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.ConnectorCommandId, SlideObjectInsertionKind.Connector)]
     [InlineData(SlideObjectInsertionPlanner.ElbowConnectorCommandId, SlideObjectInsertionKind.Connector)]
     [InlineData(SlideObjectInsertionPlanner.CurvedConnectorCommandId, SlideObjectInsertionKind.Connector)]
@@ -59,6 +61,8 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.HexagonCommandId, DrawingShapeKind.Hexagon, false)]
     [InlineData(SlideObjectInsertionPlanner.RightArrowCommandId, DrawingShapeKind.RightArrow, false)]
     [InlineData(SlideObjectInsertionPlanner.Star5CommandId, DrawingShapeKind.Star5, false)]
+    [InlineData(SlideObjectInsertionPlanner.CrossCommandId, DrawingShapeKind.Cross, false)]
+    [InlineData(SlideObjectInsertionPlanner.PlusSignCommandId, DrawingShapeKind.PlusSign, false)]
     public void ApplyCommand_InsertsExpectedAutoShape(
         string commandId,
         DrawingShapeKind expectedShape,

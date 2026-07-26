@@ -296,6 +296,12 @@ public static class FreePRibbon
         menu.Item(ShapeChangePlanner.Star5CommandId,
             FreePRibbonText.ShapeStar5Label,
             FreePRibbonText.ShapeStar5KeyTip);
+        menu.Item(ShapeChangePlanner.CrossCommandId,
+            FreePRibbonText.ArrangeChangeShapeCrossCommand.Label,
+            FreePRibbonText.ArrangeChangeShapeCrossCommand.KeyTip);
+        menu.Item(ShapeChangePlanner.PlusSignCommandId,
+            FreePRibbonText.ArrangeChangeShapePlusSignCommand.Label,
+            FreePRibbonText.ArrangeChangeShapePlusSignCommand.KeyTip);
     }
 
     private static void AddInsertGroups(RibbonTabBuilder tab)
@@ -416,6 +422,10 @@ public static class FreePRibbon
                 RibbonCommandIconKind.ArrowRight, FreePRibbonText.ShapeRightArrowKeyTip);
             group.Medium(SlideObjectInsertionPlanner.Star5CommandId, FreePRibbonText.ShapeStar5Label,
                 RibbonCommandIconKind.Star, FreePRibbonText.ShapeStar5KeyTip);
+            group.Medium(SlideObjectInsertionPlanner.CrossCommandId, FreePRibbonText.ShapeCrossLabel,
+                RibbonCommandIconKind.Cross, FreePRibbonText.ShapeCrossKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.PlusSignCommandId, FreePRibbonText.ShapePlusSignLabel,
+                RibbonCommandIconKind.PlusSign, FreePRibbonText.ShapePlusSignKeyTip);
             group.Medium(SlideObjectInsertionPlanner.ConnectorCommandId, FreePRibbonText.ConnectorLabel,
                 RibbonCommandIconKind.Line, FreePRibbonText.ConnectorKeyTip);
             group.Medium(SlideObjectInsertionPlanner.ElbowConnectorCommandId, FreePRibbonText.ElbowConnectorLabel,

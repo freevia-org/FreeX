@@ -232,6 +232,8 @@ public class RibbonEditorCompleteness5BTests
         Assert.Contains(SlideObjectInsertionPlanner.HexagonCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.RightArrowCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.Star5CommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.CrossCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.PlusSignCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.ConnectorCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.ElbowConnectorCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.CurvedConnectorCommandId, ids);
@@ -341,6 +343,8 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.arrange.change-shape.right-arrow", DrawingShapeKind.RightArrow)]
     [InlineData("freep.arrange.change-shape.hexagon", DrawingShapeKind.Hexagon)]
     [InlineData("freep.arrange.change-shape.star5", DrawingShapeKind.Star5)]
+    [InlineData("freep.arrange.change-shape.cross", DrawingShapeKind.Cross)]
+    [InlineData("freep.arrange.change-shape.plus-sign", DrawingShapeKind.PlusSign)]
     public void Cmd_ChangeShape_RoutesThroughSharedEditingSession(
         string commandId,
         DrawingShapeKind expectedKind)

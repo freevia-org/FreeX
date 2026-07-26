@@ -616,6 +616,18 @@
   <data name="Ribbon_Command_ShapeStar5_KeyTip" xml:space="preserve">
     <value>ST</value>
   </data>
+  <data name="Ribbon_Command_ShapeCross_Label" xml:space="preserve">
+    <value>Cross</value>
+  </data>
+  <data name="Ribbon_Command_ShapeCross_KeyTip" xml:space="preserve">
+    <value>CR</value>
+  </data>
+  <data name="Ribbon_Command_ShapePlusSign_Label" xml:space="preserve">
+    <value>Plus</value>
+  </data>
+  <data name="Ribbon_Command_ShapePlusSign_KeyTip" xml:space="preserve">
+    <value>PS</value>
+  </data>
   <data name="Ribbon_Command_Connector_Label" xml:space="preserve">
     <value>Connector</value>
   </data>
@@ -687,6 +699,18 @@
   </data>
   <data name="Ribbon_Command_ArrangeChangeShapeRightArrow_KeyTip" xml:space="preserve">
     <value>A</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeChangeShapeCross_Label" xml:space="preserve">
+    <value>Cross</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeChangeShapeCross_KeyTip" xml:space="preserve">
+    <value>CR</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeChangeShapePlusSign_Label" xml:space="preserve">
+    <value>Plus</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeChangeShapePlusSign_KeyTip" xml:space="preserve">
+    <value>PS</value>
   </data>
   <data name="Ribbon_Command_OpenEmbeddedObject_Label" xml:space="preserve">
     <value>Open Embedded Object</value>

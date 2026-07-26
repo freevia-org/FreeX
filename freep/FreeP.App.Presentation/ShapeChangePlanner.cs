@@ -13,6 +13,8 @@ public static class ShapeChangePlanner
     public const string RightArrowCommandId = "freep.arrange.change-shape.right-arrow";
     public const string HexagonCommandId = "freep.arrange.change-shape.hexagon";
     public const string Star5CommandId = "freep.arrange.change-shape.star5";
+    public const string CrossCommandId = "freep.arrange.change-shape.cross";
+    public const string PlusSignCommandId = "freep.arrange.change-shape.plus-sign";
 
     public static IReadOnlyList<(string CommandId, DrawingShapeKind Kind)> Presets =>
     [
@@ -23,5 +25,7 @@ public static class ShapeChangePlanner
         (RightArrowCommandId, DrawingShapeKind.RightArrow),
         (HexagonCommandId, DrawingShapeKind.Hexagon),
         (Star5CommandId, DrawingShapeKind.Star5),
+        (CrossCommandId, DrawingShapeKind.Cross),
+        (PlusSignCommandId, DrawingShapeKind.PlusSign),
     ];
 }

@@ -215,6 +215,10 @@ internal static class FreePRibbonText
     public static string ShapeRightArrowKeyTip => Get("Ribbon_Command_ShapeRightArrow_KeyTip");
     public static string ShapeStar5Label => Get("Ribbon_Command_ShapeStar5_Label");
     public static string ShapeStar5KeyTip => Get("Ribbon_Command_ShapeStar5_KeyTip");
+    public static string ShapeCrossLabel => Get("Ribbon_Command_ShapeCross_Label");
+    public static string ShapeCrossKeyTip => Get("Ribbon_Command_ShapeCross_KeyTip");
+    public static string ShapePlusSignLabel => Get("Ribbon_Command_ShapePlusSign_Label");
+    public static string ShapePlusSignKeyTip => Get("Ribbon_Command_ShapePlusSign_KeyTip");
     public static string ConnectorLabel => Get("Ribbon_Command_Connector_Label");
     public static string ConnectorKeyTip => Get("Ribbon_Command_Connector_KeyTip");
     public static string ElbowConnectorLabel => Get("Ribbon_Command_ElbowConnector_Label");
@@ -231,6 +235,8 @@ internal static class FreePRibbonText
     public static RibbonText ArrangeChangeShapeTriangleCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeTriangle_Label", "Ribbon_Command_ArrangeChangeShapeTriangle_KeyTip");
     public static RibbonText ArrangeChangeShapeDiamondCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeDiamond_Label", "Ribbon_Command_ArrangeChangeShapeDiamond_KeyTip");
     public static RibbonText ArrangeChangeShapeRightArrowCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeRightArrow_Label", "Ribbon_Command_ArrangeChangeShapeRightArrow_KeyTip");
+    public static RibbonText ArrangeChangeShapeCrossCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeCross_Label", "Ribbon_Command_ArrangeChangeShapeCross_KeyTip");
+    public static RibbonText ArrangeChangeShapePlusSignCommand { get; } = new("Ribbon_Command_ArrangeChangeShapePlusSign_Label", "Ribbon_Command_ArrangeChangeShapePlusSign_KeyTip");
     public static RibbonText OpenEmbeddedObjectCommand { get; } = new("Ribbon_Command_OpenEmbeddedObject_Label", "Ribbon_Command_OpenEmbeddedObject_KeyTip");
     public static RibbonText ArrangeEditPointsCommand { get; } = new("Ribbon_Command_ArrangeEditPoints_Label", "Ribbon_Command_ArrangeEditPoints_KeyTip");
     public static RibbonText ArrangeBringToFrontCommand { get; } = new("Ribbon_Command_ArrangeBringToFront_Label", "Ribbon_Command_ArrangeBringToFront_KeyTip");
