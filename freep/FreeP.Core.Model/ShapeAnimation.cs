@@ -182,6 +182,84 @@ public sealed class MotionPath
     /// Stored as the OOXML string value of <c>p:animMotion/@ptsTypes</c> when present.
     /// </summary>
     public string? PtsTypes { get; set; }
+
+    /// <summary>
+    /// Creates a copy whose drawable segments run in the opposite direction.
+    /// The returned path uses the same native OOXML segment vocabulary; cubic
+    /// control points are swapped so the reversed curve has the same geometry.
+    /// </summary>
+    public static MotionPath ReversedClone(MotionPath source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var reversed = new MotionPath
+        {
+            Origin = source.Origin,
+            PtsTypes = source.PtsTypes,
+        };
+
+        var subpath = new List<MotionPathSegment>();
+        foreach (var segment in source.Segments)
+        {
+            if (segment.Kind == MotionPathSegmentKind.Move && subpath.Count > 0)
+            {
+                AppendReversedSubpath(reversed.Segments, subpath);
+                subpath.Clear();
+            }
+
+            subpath.Add(segment);
+        }
+
+        if (subpath.Count > 0)
+            AppendReversedSubpath(reversed.Segments, subpath);
+
+        return reversed;
+    }
+
+    private static void AppendReversedSubpath(
+        List<MotionPathSegment> destination,
+        IReadOnlyList<MotionPathSegment> source)
+    {
+        var move = source.FirstOrDefault(segment => segment.Kind == MotionPathSegmentKind.Move);
+        if (move is null)
+            return;
+
+        var drawable = source
+            .Where(segment => segment.Kind is MotionPathSegmentKind.Line or MotionPathSegmentKind.Cubic)
+            .ToList();
+        var endX = drawable.Count == 0 ? move.X : drawable[^1].X;
+        var endY = drawable.Count == 0 ? move.Y : drawable[^1].Y;
+        destination.Add(MotionPathSegment.MoveTo(endX, endY));
+
+        var points = new List<(double X, double Y)> { (move.X, move.Y) };
+        foreach (var segment in drawable)
+        {
+            points.Add((segment.X, segment.Y));
+        }
+
+        for (var index = drawable.Count - 1; index >= 0; index--)
+        {
+            var segment = drawable[index];
+            var previous = points[index];
+            if (segment.Kind == MotionPathSegmentKind.Line)
+            {
+                destination.Add(MotionPathSegment.LineTo(previous.X, previous.Y));
+            }
+            else
+            {
+                destination.Add(MotionPathSegment.CubicTo(
+                    segment.X2,
+                    segment.Y2,
+                    segment.X1,
+                    segment.Y1,
+                    previous.X,
+                    previous.Y));
+            }
+        }
+
+        if (source[^1].Kind == MotionPathSegmentKind.Close)
+            destination.Add(MotionPathSegment.Close());
+    }
 }
 
 /// <summary>Kind of a single segment in a <see cref="MotionPath"/>.</summary>
