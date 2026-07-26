@@ -44,6 +44,8 @@ public class PreservedPartsRoundTripTests
     private const string CommentsIdsContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml";
     private const string CommentsExtensibleRelType = "http://schemas.microsoft.com/office/2018/08/relationships/commentsExtensible";
     private const string CommentsExtensibleContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml";
+    private const string KeyMapCustomizationRelType = "http://schemas.microsoft.com/office/2006/relationships/keyMapCustomizations";
+    private const string KeyMapCustomizationContentType = "application/vnd.ms-word.keyMapCustomizations+xml";
 
     private static byte[] WriteBytes(TextDocument document)
     {
@@ -117,6 +119,7 @@ public class PreservedPartsRoundTripTests
                   <Override PartName="/word/people.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml"/>
                   <Override PartName="/word/commentsIds.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml"/>
                   <Override PartName="/word/commentsExtensible.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml"/>
+                  <Override PartName="/word/customizations.xml" ContentType="application/vnd.ms-word.keyMapCustomizations+xml"/>
                   <Override PartName="/customXml/itemProps1.xml" ContentType="application/vnd.openxmlformats-officedocument.customXmlProperties+xml"/>
                 </Types>
                 """);
@@ -140,6 +143,7 @@ public class PreservedPartsRoundTripTests
                   <Relationship Id="rId5" Type="http://schemas.microsoft.com/office/2011/relationships/people" Target="people.xml"/>
                   <Relationship Id="rId6" Type="http://schemas.microsoft.com/office/2016/09/relationships/commentsIds" Target="commentsIds.xml"/>
                   <Relationship Id="rId7" Type="http://schemas.microsoft.com/office/2018/08/relationships/commentsExtensible" Target="commentsExtensible.xml"/>
+                  <Relationship Id="rId8" Type="http://schemas.microsoft.com/office/2006/relationships/keyMapCustomizations" Target="customizations.xml"/>
                 </Relationships>
                 """);
 
@@ -201,6 +205,7 @@ public class PreservedPartsRoundTripTests
 
             Add("word/commentsIds.xml", "<w16cid:commentsIds xmlns:w16cid=\"http://schemas.microsoft.com/office/word/2016/wordml/cid\"><w16cid:commentId w16cid:paraId=\"12345678\" w16cid:durableId=\"1\"/></w16cid:commentsIds>");
             Add("word/commentsExtensible.xml", "<w16cex:commentsExtensible xmlns:w16cex=\"http://schemas.microsoft.com/office/word/2018/wordml/cex\"><w16cex:commentExtensible w16cex:durableId=\"1\"/></w16cex:commentsExtensible>");
+            Add("word/customizations.xml", "<wne:tcg xmlns:wne=\"http://schemas.microsoft.com/office/word/2006/wordml\"><wne:keymap wne:cmacro=\"FileSave\" wne:vk=\"S\" wne:mask=\"1\"/></wne:tcg>");
 
             Add("customXml/item1.xml",
                 """<root xmlns="urn:freew:test"><value>preserved</value></root>""");
@@ -597,6 +602,18 @@ public class PreservedPartsRoundTripTests
             EntryXml(rewritten, "word/_rels/document.xml.rels").Root!.Elements(Rel + "Relationship").Should().Contain(element => element.Attribute("Type")!.Value == relationshipType && element.Attribute("Target")!.Value == target);
             EntryXml(rewritten, "[Content_Types].xml").Root!.Elements(Ct + "Override").Should().Contain(element => element.Attribute("PartName")!.Value == partName && element.Attribute("ContentType")!.Value == contentType);
         }
+    }
+
+    [Fact]
+    public void KeyMapCustomizationPart_SurvivesWithDocumentRelationshipAndContentType()
+    {
+        var source = AuthorPackage();
+        var read = ReadDoc(source);
+        read.Preserved.Parts.Should().ContainSingle(part => part.PartName == "/word/customizations.xml" && part.RelationshipType == KeyMapCustomizationRelType);
+        var rewritten = WriteBytes(read);
+        EntryBytes(rewritten, "word/customizations.xml").Should().Equal(EntryBytes(source, "word/customizations.xml"));
+        EntryXml(rewritten, "word/_rels/document.xml.rels").Root!.Elements(Rel + "Relationship").Should().Contain(element => element.Attribute("Type")!.Value == KeyMapCustomizationRelType && element.Attribute("Target")!.Value == "customizations.xml");
+        EntryXml(rewritten, "[Content_Types].xml").Root!.Elements(Ct + "Override").Should().Contain(element => element.Attribute("PartName")!.Value == "/word/customizations.xml" && element.Attribute("ContentType")!.Value == KeyMapCustomizationContentType);
     }
 
     // --- customXml + webSettings: verbatim pass-through ---------------------------------------------
