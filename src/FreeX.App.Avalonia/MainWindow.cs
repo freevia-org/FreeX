@@ -338,6 +338,18 @@ public sealed partial class MainWindow : Window
     private static readonly IBrush FormulaBarControlBorder = Brush(192, 192, 192);
     private static readonly FontFamily FormulaBarFontFamily =
         new("Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, sans-serif");
+    // Subtotal is a compact WPF data dialog: its inputs and buttons are shorter than the generic
+    // 24px compact-dialog family. Keep the shared chrome and only override the measured WPF metrics.
+    private static readonly AvaloniaCompactDialogChromeStyle SubtotalDialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ControlHeight = 22,
+            ButtonHeight = 22,
+            ButtonPadding = new Thickness(10, 1),
+            ComboBoxPadding = new Thickness(4, 0, 4, 0),
+            ListBoxItemPadding = new Thickness(0, 1),
+            ListBoxItemMinHeight = 22,
+        };
 
     // Shell chrome surface — shared by the toolbar and the sheet-tabs/status bar so the window chrome reads
     // as one cohesive light surface (the same #F5F6F7 the ribbon theme uses). Exposed for tests.
@@ -20050,6 +20062,7 @@ public sealed partial class MainWindow : Window
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, SubtotalDialogChromeStyle);
         AutomationProperties.SetAutomationId(dialog, "SubtotalCompactDialog");
 
         var groupColumnBox = new ComboBox
@@ -20058,7 +20071,6 @@ public sealed partial class MainWindow : Window
             SelectedItem = columns.FirstOrDefault(column => column.Offset == initialGroupColumnOffset) ?? columns[0],
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
-        ApplyDialogComboBoxChrome(groupColumnBox);
         ApplySubtotalComboBoxChrome(groupColumnBox);
         AutomationProperties.SetName(groupColumnBox, StripDisplayMnemonic(UiText.Get("Subtotal_AtEachChangeInAutomationName")));
         AutomationProperties.SetAutomationId(groupColumnBox, "SubtotalGroupColumnBox");
@@ -20072,7 +20084,6 @@ public sealed partial class MainWindow : Window
                 ?? functions[0],
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
-        ApplyDialogComboBoxChrome(functionBox);
         ApplySubtotalComboBoxChrome(functionBox);
         AutomationProperties.SetName(functionBox, StripDisplayMnemonic(UiText.Get("Subtotal_UseFunctionAutomationName")));
         AutomationProperties.SetAutomationId(functionBox, "SubtotalFunctionBox");
@@ -20160,7 +20171,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 76,
             Padding = new Thickness(10, 4),
         };
-        ApplyDialogButtonChrome(okButton, 72, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, SubtotalDialogChromeStyle, 72, isDefault: true);
         AutomationProperties.SetName(okButton, UiText.Ok);
         AutomationProperties.SetAutomationId(okButton, "SubtotalOkButton");
         AutomationProperties.SetHelpText(okButton, UiText.Get("Subtotal_Subtotal"));
@@ -20171,7 +20182,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 96,
             Padding = new Thickness(10, 4),
         };
-        ApplyDialogButtonChrome(removeAllButton, 92);
+        AvaloniaCompactDialogChrome.ApplyButton(removeAllButton, SubtotalDialogChromeStyle, 92);
         AutomationProperties.SetName(removeAllButton, UiText.Get("Subtotal_RemoveAllAutomationName"));
         AutomationProperties.SetAutomationId(removeAllButton, "SubtotalRemoveAllButton");
         AutomationProperties.SetHelpText(removeAllButton, UiText.Get("Subtotal_RemoveAllHelpText"));
@@ -20183,7 +20194,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 76,
             Padding = new Thickness(10, 4),
         };
-        ApplyDialogButtonChrome(cancelButton, 72);
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, SubtotalDialogChromeStyle, 72);
         AutomationProperties.SetName(cancelButton, UiText.Cancel);
         AutomationProperties.SetAutomationId(cancelButton, "SubtotalCancelButton");
         AutomationProperties.SetHelpText(cancelButton, UiText.Cancel);
@@ -20260,7 +20271,7 @@ public sealed partial class MainWindow : Window
         };
         var buttonRow = new Grid
         {
-            Height = 21,
+            Height = 22,
             Margin = new Thickness(0, 0, 0, 76),
             ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
             Children =
@@ -20270,6 +20281,16 @@ public sealed partial class MainWindow : Window
             },
         };
         Grid.SetColumn(actionButtons, 2);
+
+        var columnsGroup = new GroupBox
+        {
+            Content = columnsList,
+            Height = 100,
+            MinHeight = 100,
+            MaxHeight = 100,
+            Padding = new Thickness(3, 0, 3, 0),
+        };
+        AvaloniaCompactDialogChrome.ApplyGroupBox(columnsGroup, SubtotalDialogChromeStyle);
 
         dialog.Content = new DockPanel
         {
@@ -20285,14 +20306,7 @@ public sealed partial class MainWindow : Window
                         CreateSubtotalField(UiText.Get("Subtotal_AtEachChangeIn"), groupColumnBox),
                         CreateSubtotalField(UiText.Get("Subtotal_UseFunction"), functionBox, topMargin: 7),
                         CreateSubtotalLabel(UiText.Get("Subtotal_AddSubtotalTo"), columnsList, topMargin: 10),
-                        new GroupBox
-                        {
-                            Content = columnsList,
-                            Height = 100,
-                            MinHeight = 100,
-                            MaxHeight = 100,
-                            Padding = new Thickness(0),
-                        },
+                        columnsGroup,
                         replaceBox,
                         pageBreakBox,
                         summaryBelowBox,
@@ -20302,7 +20316,17 @@ public sealed partial class MainWindow : Window
             },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
-        dialog.Opened += (_, _) => groupColumnBox.Focus();
+        dialog.Opened += (_, _) =>
+        {
+            // ApplyWindow normalizes descendants for every dialog. Reapply this route's measured
+            // metrics after that pass so Subtotal stays aligned with the WPF capture.
+            ApplySubtotalComboBoxChrome(groupColumnBox);
+            ApplySubtotalComboBoxChrome(functionBox);
+            AvaloniaCompactDialogChrome.ApplyButton(okButton, SubtotalDialogChromeStyle, 72, isDefault: true);
+            AvaloniaCompactDialogChrome.ApplyButton(removeAllButton, SubtotalDialogChromeStyle, 92);
+            AvaloniaCompactDialogChrome.ApplyButton(cancelButton, SubtotalDialogChromeStyle, 72);
+            groupColumnBox.Focus();
+        };
 
         await dialog.ShowDialog(this);
         return result;
@@ -20334,9 +20358,7 @@ public sealed partial class MainWindow : Window
 
     private static void ApplySubtotalComboBoxChrome(ComboBox comboBox)
     {
-        comboBox.Height = 22;
-        comboBox.MinHeight = 22;
-        comboBox.MaxHeight = 22;
+        AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, SubtotalDialogChromeStyle);
     }
 
     private static AccessText CreateSubtotalAccessText(string label) =>
@@ -20344,10 +20366,8 @@ public sealed partial class MainWindow : Window
 
     private static void ApplySubtotalCheckBoxChrome(CheckBox checkBox)
     {
-        checkBox.MinHeight = 20;
-        checkBox.MaxHeight = 20;
-        checkBox.FontSize = 12;
-        checkBox.FontFamily = FormulaBarFontFamily;
+        StripContentMnemonic(checkBox);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, SubtotalDialogChromeStyle);
     }
 
     private async Task ShowRemoveDuplicatesDialogAsync()

@@ -381,9 +381,11 @@ internal static class FreePCommandInventory
             EvidenceId: "freep.table.inline-text.workflow-depth",
             Area: "Rich inline table-cell text editing, paragraph formatting, selection, and persistence",
             Status: "shared-planner-and-host-evidence",
-            HostCoverage: "WPF/Avalonia shared TableCellEditPlanner routes with thin WPF RichTextBox and Avalonia overlay adapters",
+            HostCoverage: "WPF/Avalonia shared TableCellEditPlanner and renderer-neutral rich clipboard routes with WPF RichTextBox and Avalonia native-input/custom-rich-surface adapters",
             EvidenceDocs:
             [
+                "docs/parity/freep-rich-clipboard-wave15-20260727.md",
+                "docs/parity/freep-rich-table-cell-editing-shared-visual-2026-07-27.md",
                 "docs/parity/freep-table-cell-rich-editor-fidelity-2026-07-03.md",
                 "docs/parity/freep-list-gallery-image-bullet-ui-2026-07-05.md",
                 "docs/parity/freep-table-cell-tab-navigation-2026-07-13.md",
@@ -399,9 +401,15 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/CanvasEditingTests.cs",
                 "freep/FreeP.App.Host.Tests/RibbonEditorCompleteness5BTests.cs",
                 "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/AvaloniaRichTextEditorTests.cs",
+                "freep/FreeP.App.Presentation.Tests/InCanvasRichClipboardTests.cs",
+                "freep/FreeP.App.Presentation.Tests/InCanvasRichTextVisualPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/RichTextEditorTests.cs",
+                "freep/FreeP.App.Host.Tests/WpfRichTextClipboardAdapterTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/PresentationClipboardInteropTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "WPF/Avalonia now share picture-bullet picker payload execution, paragraph authoring, PPTX media-part persistence, Tab/Shift+Tab navigation, and focused-editor keyboard ownership between editable table-cell anchors. Avalonia still lacks a true editable rich-text widget equivalent to WPF RichTextBox; PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
+            RemainingWork: "WPF/Avalonia now share mixed-run and paragraph-preserving edits, marker sequencing, selection/caret rendering, rich copy/cut/paste payloads, plain-text clipboard interoperability, picture-bullet picker payload execution, paragraph authoring, PPTX media-part persistence, Tab/Shift+Tab navigation, focused-editor keyboard ownership, and commit/cancel routing. Avalonia still uses a custom rich surface over a native TextBox rather than a framework-native RichTextBox. Arbitrary external RTF/XamlPackage import on Avalonia, broader IME/RTL/FlowDocument behavior, advanced inline effects, and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
         new(
             EvidenceId: "freep.header-footer.placeholder-creation",
             Area: "Header/Footer date, footer, and slide-number placeholder creation",

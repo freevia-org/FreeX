@@ -8,6 +8,7 @@ public static class PresentationClipboardFormats
 {
     public const string Selection = "freex.freep.selection.v1";
     public const string OwnerToken = "freex.freep.owner-token.v1";
+    public const string RichText = "freex.freep.rich-text.v1";
 }
 
 /// <summary>Framework-neutral payload written to or read from a system clipboard.</summary>
@@ -15,12 +16,14 @@ public sealed record PresentationClipboardContent(
     byte[]? SelectionBytes = null,
     byte[]? PngBytes = null,
     string? Text = null,
-    string? OwnerToken = null)
+    string? OwnerToken = null,
+    byte[]? RichTextBytes = null)
 {
     public bool HasSelection => SelectionBytes is { Length: > 0 };
     public bool HasImage => PngBytes is { Length: > 0 };
     public bool HasText => !string.IsNullOrEmpty(Text);
-    public bool IsEmpty => !HasSelection && !HasImage && !HasText;
+    public bool HasRichText => RichTextBytes is { Length: > 0 };
+    public bool IsEmpty => !HasSelection && !HasImage && !HasText && !HasRichText;
 }
 
 /// <summary>Creates and reads the native FreeP selection clipboard format.</summary>

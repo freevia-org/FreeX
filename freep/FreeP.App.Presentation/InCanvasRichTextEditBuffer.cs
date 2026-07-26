@@ -22,6 +22,50 @@ public sealed class InCanvasRichTextEditBuffer
 
     public string PlainText => InCanvasTextEditPlanner.ExtractPlainText(_body);
 
+    public InCanvasRichClipboardPayload CreateClipboardPayload(
+        InCanvasEditorTextSelection selection) =>
+        InCanvasRichClipboardPlanner.Capture(_body, selection, _typingRun);
+
+    public bool ApplyClipboardPayload(
+        InCanvasRichClipboardPayload payload,
+        InCanvasEditorTextSelection selection,
+        out int caret)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        _body = InCanvasRichClipboardPlanner.Apply(_body, selection, payload, out caret);
+        _typingRun = payload.TypingRun is null
+            ? null
+            : TextBodyModelCloner.CloneRun(payload.TypingRun);
+        _typingCaret = caret;
+        return payload.PlainText.Length > 0 || !selection.IsCollapsed;
+    }
+
+    public bool ReplaceSelectionWithPlainText(
+        InCanvasEditorTextSelection selection,
+        string? insertedText,
+        out int caret)
+    {
+        string normalized = NormalizeNewlines(insertedText ?? string.Empty);
+        int textLength = PlainText.Length;
+        int start = Math.Clamp(Math.Min(selection.Start, selection.End), 0, textLength);
+        int end = Math.Clamp(Math.Max(selection.Start, selection.End), 0, textLength);
+        int removedLength = end - start;
+        var typingRun = selection.IsCollapsed && _typingRun is not null && _typingCaret == start
+            ? TextBodyModelCloner.CloneRun(_typingRun)
+            : null;
+
+        _body = RichTextBodyMutationPlanner.Replace(
+            _body,
+            start,
+            removedLength,
+            normalized,
+            typingRun);
+        caret = start + normalized.Length;
+        _typingRun = typingRun;
+        _typingCaret = typingRun is null ? null : caret;
+        return removedLength > 0 || normalized.Length > 0;
+    }
+
     public InCanvasTableCellRichTextEditPlan Plan(InCanvasEditorTextSelection selection)
     {
         var plan = TableCellEditPlanner.PlanRichTextEdit(_body, selection);
@@ -348,6 +392,30 @@ internal static class RichTextBodyMutationPlanner
         return Rebuild(working, tokens);
     }
 
+    internal static TextBody ReplaceWithFragment(
+        TextBody source,
+        int start,
+        int removedLength,
+        TextBody fragment)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(fragment);
+
+        var working = TextBodyModelCloner.CloneTextBody(source) ?? new TextBody();
+        EnsureParagraph(working);
+        var pasted = TextBodyModelCloner.CloneTextBody(fragment) ?? new TextBody();
+        EnsureParagraph(pasted);
+
+        var tokens = Flatten(working);
+        var fragmentTokens = Flatten(pasted);
+        int clampedStart = Math.Clamp(start, 0, tokens.Count);
+        int clampedLength = Math.Clamp(removedLength, 0, tokens.Count - clampedStart);
+
+        tokens.RemoveRange(clampedStart, clampedLength);
+        tokens.InsertRange(clampedStart, fragmentTokens);
+        return Rebuild(working, tokens, pasted.Paragraphs[0]);
+    }
+
     internal static TextBody InsertSoftBreak(
         TextBody source,
         int start,
@@ -460,10 +528,13 @@ internal static class RichTextBodyMutationPlanner
         }
     }
 
-    private static TextBody Rebuild(TextBody source, IReadOnlyList<Token> tokens)
+    private static TextBody Rebuild(
+        TextBody source,
+        IReadOnlyList<Token> tokens,
+        Paragraph? initialParagraphTemplate = null)
     {
         var result = TextBodyModelCloner.CloneTextBody(source)!;
-        var firstTemplate = source.Paragraphs[0];
+        var firstTemplate = initialParagraphTemplate ?? source.Paragraphs[0];
         result.Paragraphs.Clear();
 
         var paragraph = CloneParagraphWithoutRuns(firstTemplate);

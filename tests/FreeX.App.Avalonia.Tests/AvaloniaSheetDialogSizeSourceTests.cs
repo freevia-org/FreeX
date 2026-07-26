@@ -62,8 +62,8 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
 
         var subtotalDialog = ExtractMethodSource(
             mainWindowSource,
-            "private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()",
-            "private static StackPanel CreateSubtotalField(string label, Control control)");
+            "private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(",
+            "private static StackPanel CreateSubtotalField(string label, Control control, double topMargin = 0)");
         subtotalDialog.Should().Contain("Width = SubtotalParityDialogWidth,");
         subtotalDialog.Should().Contain("Height = SubtotalParityDialogHeight,");
         subtotalDialog.Should().Contain("MinWidth = SubtotalParityDialogWidth,");
@@ -78,6 +78,27 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
         textToColumnsDialog.Should().Contain("Height = TextToColumnsParityDialogHeight,");
         textToColumnsDialog.Should().Contain("MinWidth = TextToColumnsParityDialogWidth,");
         textToColumnsDialog.Should().Contain("MinHeight = TextToColumnsParityDialogHeight,");
+    }
+
+    [Fact]
+    public void SubtotalDialog_UsesSharedWindowsChromeAfterGenericDialogNormalization()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var subtotalDialog = ExtractMethodSource(
+            source,
+            "private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(",
+            "private static StackPanel CreateSubtotalField(string label, Control control, double topMargin = 0)");
+
+        subtotalDialog.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, SubtotalDialogChromeStyle);");
+        subtotalDialog.Should().Contain("ApplySubtotalComboBoxChrome(groupColumnBox);");
+        subtotalDialog.Should().Contain("ApplySubtotalComboBoxChrome(functionBox);");
+        subtotalDialog.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(columnsGroup, SubtotalDialogChromeStyle);");
+        subtotalDialog.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(okButton, SubtotalDialogChromeStyle, 72, isDefault: true);");
+        subtotalDialog.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(removeAllButton, SubtotalDialogChromeStyle, 92);");
+        subtotalDialog.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(cancelButton, SubtotalDialogChromeStyle, 72);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, SubtotalDialogChromeStyle);");
+        subtotalDialog.Should().NotContain("ApplyDialogComboBoxChrome(groupColumnBox);");
+        subtotalDialog.Should().NotContain("ApplyDialogButtonChrome(okButton, 72");
     }
 
     private static string ExtractMethodSource(string source, string startMarker, string endMarker)

@@ -108,7 +108,8 @@ public sealed class PresentationClipboardInteropTests
                 SelectionBytes: [4, 5, 6],
                 PngBytes: Png,
                 Text: "portable text",
-                OwnerToken: "owner-token");
+                OwnerToken: "owner-token",
+                RichTextBytes: [10, 11, 12]);
             var transfer = AvaloniaPresentationSystemClipboard.BuildDataTransfer(
                 content,
                 out var bitmap);
@@ -122,6 +123,10 @@ public sealed class PresentationClipboardInteropTests
                     : AvaloniaPresentationSystemClipboard.OwnerTokenFormat;
                 transfer.Formats.Should().Contain(expectedSelectionFormat);
                 transfer.Formats.Should().Contain(expectedOwnerTokenFormat);
+                transfer.Formats.Should().Contain(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaPresentationSystemClipboard.RichTextPlatformFormat
+                        : AvaloniaPresentationSystemClipboard.RichTextFormat);
                 AvaloniaPresentationSystemClipboard.SelectionFormat
                     .ToSystemName("avn-app-fmt:")
                     .Should().Be("avn-app-fmt:" + PresentationClipboardFormats.Selection);
@@ -136,6 +141,7 @@ public sealed class PresentationClipboardInteropTests
                 roundTrip.PngBytes.Should().NotBeNullOrEmpty();
                 roundTrip.Text.Should().Be("portable text");
                 roundTrip.OwnerToken.Should().Be("owner-token");
+                roundTrip.RichTextBytes.Should().Equal(10, 11, 12);
             }
             finally
             {
@@ -153,6 +159,7 @@ public sealed class PresentationClipboardInteropTests
             var item = new DataTransferItem();
             item.Set(AvaloniaPresentationSystemClipboard.SelectionPlatformFormat, [9, 8, 7]);
             item.Set(AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat, "wpf-owner");
+            item.Set(AvaloniaPresentationSystemClipboard.RichTextPlatformFormat, [1, 2, 3]);
             item.SetText("WPF fallback");
             using var transfer = new DataTransfer();
             transfer.Add(item);
@@ -162,6 +169,7 @@ public sealed class PresentationClipboardInteropTests
             content.SelectionBytes.Should().Equal(9, 8, 7);
             content.OwnerToken.Should().Be("wpf-owner");
             content.Text.Should().Be("WPF fallback");
+            content.RichTextBytes.Should().Equal(1, 2, 3);
         }, CancellationToken.None);
     }
 
