@@ -84,6 +84,9 @@ public static class SmartArtLayoutEngine
         if (IsAlternatingProcessLayout(data.LayoutUniqueId))
             return LayoutAlternatingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsBasicTimelineLayout(data.LayoutUniqueId))
+            return LayoutBasicTimeline(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsArrowRibbonLayout(data.LayoutUniqueId))
             return LayoutArrowRibbon(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -364,6 +367,58 @@ public static class SmartArtLayoutEngine
             var from = centers[i];
             var to = centers[i + 1];
             shapes.Add(MakeConnector(idCounter++, from.x, from.y, to.x, to.y, stylePlan.Connector));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Basic Timeline geometry: a shared horizontal time rail, one marker per node,
+    /// and alternating text boxes above and below the rail. This keeps the node order
+    /// and connector ownership deterministic for both live hosts.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutBasicTimeline(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>();
+        if (n == 0) return shapes;
+
+        long padX = Math.Max((long)(fcx * 0.06), 1L);
+        long railY = fy + fcy / 2;
+        long railLeft = fx + padX;
+        long railRight = fx + fcx - padX;
+        long marker = Math.Max(Math.Min((long)(fcy * 0.075), (long)(fcx * 0.025)), 1L);
+        long gap = Math.Max((long)(fcy * 0.035), marker);
+        long boxH = Math.Max((long)(fcy * 0.23), 1L);
+        long innerW = Math.Max(railRight - railLeft, 1L);
+        long step = n > 1 ? innerW / (n - 1) : 0L;
+        long boxW = Math.Max(n > 1 ? (long)(step * 0.72) : (long)(innerW * 0.58), 1L);
+        uint idCounter = 240;
+
+        shapes.Add(MakeConnector(idCounter++, railLeft, railY, railRight, railY, stylePlan.Connector));
+
+        for (int i = 0; i < n; i++)
+        {
+            long centerX = n > 1 ? railLeft + i * step : railLeft + innerW / 2;
+            long markerX = centerX - marker / 2;
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Process);
+
+            shapes.Add(MakeBox(
+                idCounter++, string.Empty, nodeStyle,
+                markerX, railY - marker / 2, marker, marker,
+                NodeFontSizePt, DrawingShapeKind.Ellipse));
+
+            bool aboveRail = i % 2 == 0;
+            long boxX = centerX - boxW / 2;
+            long boxY = aboveRail
+                ? railY - marker / 2 - gap - boxH
+                : railY + marker / 2 + gap;
+            long boxEdgeY = aboveRail ? boxY + boxH : boxY;
+            shapes.Add(MakeConnector(idCounter++, centerX, railY, centerX, boxEdgeY, stylePlan.Connector));
+            shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, boxX, boxY, boxW, boxH));
         }
 
         return shapes;
@@ -1536,6 +1591,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "alternatingprocess", StringComparison.Ordinal);
+    }
+
+    private static bool IsBasicTimelineLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "basictimeline", StringComparison.Ordinal);
     }
 
     private static bool IsArrowRibbonLayout(string uniqueId)

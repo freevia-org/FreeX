@@ -2591,7 +2591,7 @@ public static class PptxPackageReader
         if (uid.Contains("cycle") || uid.Contains("gear") || uid.Contains("radial"))
             return SmartArtFamily.Cycle;
 
-        if (uid.Contains("process") || uid.Contains("arrow") || uid.Contains("chevron")
+        if (uid.Contains("process") || uid.Contains("timeline") || uid.Contains("arrow") || uid.Contains("chevron")
             || uid.Contains("funnel") || uid.Contains("horiz"))
             return SmartArtFamily.Process;
 
@@ -2617,7 +2617,7 @@ public static class PptxPackageReader
 
         return family switch
         {
-            SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess" or "basicchevronprocess" or "closedchevronprocess" or "bendingprocess" or "alternatingprocess" or "arrowribbon" or "circleprocess" or "funnelprocess" or "verticalprocess",
+            SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "basictimeline" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess" or "basicchevronprocess" or "closedchevronprocess" or "bendingprocess" or "alternatingprocess" or "arrowribbon" or "circleprocess" or "funnelprocess" or "verticalprocess",
             SmartArtFamily.List => layoutId is "list1" or "basicblocklist" or "verticalboxlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "picturecaptionlist",
             SmartArtFamily.Cycle => layoutId is "cycle1" or "basiccycle" or "radialcycle" or "radiallist" or "gearcycle" or "textcycle" or "blockcycle" or "nondirectionalcycle" or "continuouscycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "basichierarchy" or "horizontalhierarchy" or "labeledhierarchy" or "tablehierarchy" or "verticalbulletlist" or "orgchart",
