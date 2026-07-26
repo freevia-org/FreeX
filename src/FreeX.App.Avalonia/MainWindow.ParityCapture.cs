@@ -1572,7 +1572,20 @@ public sealed partial class MainWindow
         await ShowWithSelectedParityChartAsync(ShowFormatChartAreaDialog);
 
     private async Task ShowShapeEffectsParityDialogAsync() =>
-        await ShowWithSelectedParityShapeAsync(OpenShapeEffectsDialogAsync);
+        await ShowWithSelectedParityShapeAsync(async () =>
+        {
+            if (ResolveSelectedShape() is { } shape)
+            {
+                var outcome = _session.ExecuteReviewCommand(new SetDrawingShapeEffectCommand(
+                    _session.ActiveSheet.Id,
+                    shape.Id,
+                    DrawingShapeEffectPreset.Shadow));
+                if (outcome.Success)
+                    RefreshShell(_statusText.Text ?? "Ready");
+            }
+
+            await OpenShapeEffectsDialogAsync();
+        });
 
     private async Task ShowShapeGradientParityDialogAsync()
     {

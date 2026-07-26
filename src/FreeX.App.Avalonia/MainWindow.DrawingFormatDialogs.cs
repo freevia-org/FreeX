@@ -378,8 +378,9 @@ public sealed partial class MainWindow
         {
             ItemsSource = options,
             SelectedIndex = ShapeEffectsPlanner.FindOptionIndex(plan.Options, plan.SelectedPreset),
-            MinWidth = 260,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
+        effectBox.Margin = new Thickness(0, 0, 0, 10);
         ApplyDrawingComboBoxChrome(effectBox);
         AutomationProperties.SetName(effectBox, UiText.Get("ShapeEffects_EffectAutomationName"));
         AutomationProperties.SetAutomationId(effectBox, "ShapeEffectsPresetBox");
@@ -422,13 +423,24 @@ public sealed partial class MainWindow
         var content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 8,
+            Spacing = 0,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ShapeEffects_Label"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(UiText.Get("ShapeEffects_EffectLabel")),
+                    Foreground = HeaderForeground,
+                    FontSize = 16,
+                    FontFamily = FormulaBarFontFamily,
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
                 effectBox,
-                descriptionText,
-                AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 4, 0, 0)),
+                new Border
+                {
+                    Child = descriptionText,
+                    Margin = new Thickness(0, 0, 0, 12),
+                },
+                AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]),
             },
         };
         dialog.Content = content;
