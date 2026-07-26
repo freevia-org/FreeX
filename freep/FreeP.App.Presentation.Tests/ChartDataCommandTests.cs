@@ -1272,7 +1272,16 @@ public sealed class ChartDataCommandTests
                 null,
                 new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79)),
                 OutlineDash.DashDot,
-                true)));
+                true,
+                new ChartDataLabels
+                {
+                    ShowValue = true,
+                    ShowCategoryName = true,
+                    ShowLegendKey = true,
+                    Position = DataLabelPosition.InsideEnd,
+                    NumberFormat = "0.0%",
+                    Separator = " | ",
+                })));
 
         var series = chart.Series[1];
         series.SmoothLine.Should().BeFalse();
@@ -1283,6 +1292,13 @@ public sealed class ChartDataCommandTests
         series.LineStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
         series.LineStyle.Dash.Should().Be(OutlineDash.DashDot);
         series.LineStyle.NoFill.Should().BeTrue();
+        series.DataLabels.Should().NotBeNull();
+        series.DataLabels!.ShowValue.Should().BeTrue();
+        series.DataLabels.ShowCategoryName.Should().BeTrue();
+        series.DataLabels.ShowLegendKey.Should().BeTrue();
+        series.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
+        series.DataLabels.NumberFormat.Should().Be("0.0%");
+        series.DataLabels.Separator.Should().Be(" | ");
         series.MarkerStyle!.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
         series.MarkerStyle.SizePt.Should().Be(8);
         series.MarkerStyle.NoStroke.Should().BeTrue();
@@ -1299,6 +1315,14 @@ public sealed class ChartDataCommandTests
         roundTripped.Series[1].LineStyle!.Color.Should().BeNull();
         roundTripped.Series[1].LineStyle!.Dash.Should().Be(OutlineDash.DashDot);
         roundTripped.Series[1].LineStyle!.NoFill.Should().BeTrue();
+        roundTripped.Series[1].DataLabels.Should().NotBeNull();
+        var roundTrippedLabels = roundTripped.Series[1].DataLabels!;
+        roundTrippedLabels.ShowValue.Should().BeTrue();
+        roundTrippedLabels.ShowCategoryName.Should().BeTrue();
+        roundTrippedLabels.ShowLegendKey.Should().BeTrue();
+        roundTrippedLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
+        roundTrippedLabels.NumberFormat.Should().Be("0.0%");
+        roundTrippedLabels.Separator.Should().Be(" | ");
         var roundTrippedMarker = roundTripped.Series[1].MarkerStyle!;
         roundTrippedMarker.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
         roundTrippedMarker.SizePt.Should().Be(8);
@@ -1317,6 +1341,7 @@ public sealed class ChartDataCommandTests
         revertedMarker.NoStroke.Should().BeTrue();
         series.FillColor.Should().BeNull();
         series.Fill.Should().BeOfType<ShapeFill.Gradient>();
+        series.DataLabels.Should().BeNull();
     }
 
     [Fact]

@@ -14,6 +14,8 @@ public sealed class SmartArtEditingPlannerTests
 
     [Theory]
     [InlineData(SmartArtLayoutPreset.BasicProcess, "basicProcess", SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.BasicTimeline, "basicTimeline", SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.StepDownProcess, "StepDownProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.ContinuousBlockProcess, "continuousBlockProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.SegmentedProcess, "segmentedProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.ChevronProcess, "chevronProcess", SmartArtFamily.Process)]
@@ -40,6 +42,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.BasicPyramid, "basicPyramid", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PyramidList, "pyramidList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.RadialCycle, "radialCycle", SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.BasicRadial, "radial1", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.RadialList, "radialList", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicMatrix, "basicMatrix", SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.TitledMatrix, "titledMatrix", SmartArtFamily.Matrix)]

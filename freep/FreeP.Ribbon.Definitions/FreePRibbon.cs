@@ -464,6 +464,12 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
                 FreePRibbonText.SmartArtBasicProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
                 FreePRibbonText.SmartArtBasicProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
+                FreePRibbonText.SmartArtBasicTimelineCommand.Label, RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtBasicTimelineCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.StepDownProcessLayoutCommandId,
+                FreePRibbonText.SmartArtStepDownProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtStepDownProcessCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,
                 FreePRibbonText.SmartArtContinuousBlockProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
                 FreePRibbonText.SmartArtContinuousBlockProcessCommand.KeyTip);
@@ -542,6 +548,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
                 FreePRibbonText.SmartArtRadialCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtRadialCycleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
+                FreePRibbonText.SmartArtBasicRadialCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtBasicRadialCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.RadialListLayoutCommandId,
                 FreePRibbonText.SmartArtRadialListCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtRadialListCommand.KeyTip);

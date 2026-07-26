@@ -12,4 +12,5 @@ public sealed record ChartSeriesOptions(
     ShapeFill? Fill = null,
     ThemeAwareColor? LineColor = null,
     OutlineDash LineDash = OutlineDash.Solid,
-    bool NoLine = false);
+    bool NoLine = false,
+    ChartDataLabels? DataLabels = null);

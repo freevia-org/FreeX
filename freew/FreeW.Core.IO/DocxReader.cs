@@ -300,7 +300,7 @@ public static class DocxReader
         // a FreeW save.
         foreach (var relationship in ReadDocumentRelationships(archive).Values)
         {
-            if (relationship.Type is not (StylesWithEffectsRelType or PeopleRelType))
+            if (relationship.Type is not (StylesWithEffectsRelType or PeopleRelType or CommentsIdsRelType or CommentsExtensibleRelType or KeyMapCustomizationRelType or DocumentTasksRelType))
                 continue;
 
             var partName = OpcPathHelper.ResolveAbsolutePartName("/word", relationship.Target);
@@ -1682,7 +1682,7 @@ public static class DocxReader
             var relationshipId = element.Attribute(R + "id")?.Value;
             if (relationshipId is not null && altChunkRelationships.TryGetValue(relationshipId, out var partName))
             {
-                if (TryMaterializeAltChunk(archive, partName, out var importedBlocks))
+                if (TryMaterializeAltChunk(archive, document, partName, out var importedBlocks))
                 {
                     foreach (var importedBlock in importedBlocks)
                     {
@@ -1726,12 +1726,13 @@ public static class DocxReader
 
     /// <summary>
     /// Word resolves supported body-level altChunks into ordinary editable blocks when the document opens.
-    /// Materialize package-local HTML and MHTML payloads; RTF, nested Word packages, malformed content,
-    /// and unknown chunk types remain represented by <see cref="AltChunkBlock"/> so their payload graph is
-    /// retained verbatim on save.
+    /// Materialize package-local HTML, MHTML, RTF, and self-contained nested Word-package payloads.
+    /// Malformed content, packages with document-global references, and unknown chunk types remain represented
+    /// by <see cref="AltChunkBlock"/> so their payload graph is retained verbatim on save.
     /// </summary>
     private static bool TryMaterializeAltChunk(
         ZipArchive archive,
+        TextDocument target,
         string partName,
         out IReadOnlyList<Block> blocks)
     {
@@ -1747,10 +1748,25 @@ public static class DocxReader
 
         try
         {
+            if (IsNestedWordPackageContentType(contentType))
+            {
+                using var nestedStream = new MemoryStream(bytes, writable: false);
+                var nested = Read(nestedStream);
+                return TryMergeNestedWordPackage(target, nested, out blocks);
+            }
+
             if (string.Equals(contentType, "message/rfc822", StringComparison.OrdinalIgnoreCase))
             {
                 using var mhtmlStream = new MemoryStream(bytes, writable: false);
                 blocks = new MhtmlFileAdapter().Load(mhtmlStream).Blocks.ToList();
+                return true;
+            }
+
+            if (string.Equals(contentType, "application/rtf", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(contentType, "text/rtf", StringComparison.OrdinalIgnoreCase))
+            {
+                using var rtfStream = new MemoryStream(bytes, writable: false);
+                blocks = new RtfFileAdapter().Load(rtfStream).Blocks.ToList();
                 return true;
             }
 
@@ -1785,11 +1801,195 @@ public static class DocxReader
             blocks = HtmlFileAdapter.LoadHtml(reader.ReadToEnd(), ResolveImage).Blocks.ToList();
             return true;
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException or FormatException or MimeKit.ParseException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException
+            or FormatException or NotSupportedException or MimeKit.ParseException)
         {
             return false;
         }
     }
+
+    private static bool IsNestedWordPackageContentType(string? contentType) =>
+        string.Equals(contentType, "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(contentType, "application/vnd.ms-word.document.macroEnabled.main+xml", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A nested Word altChunk imports its body into the host document, not its package-level state.  Only
+    /// materialize the self-contained subset whose formatting can be carried by body blocks and styles;
+    /// retaining the remaining packages intact is safer than creating dangling note, numbering, or relationship
+    /// references in the host package.
+    /// </summary>
+    private static bool TryMergeNestedWordPackage(
+        TextDocument target,
+        TextDocument nested,
+        out IReadOnlyList<Block> blocks)
+    {
+        blocks = [];
+        if (nested.Footnotes.Count != 0
+            || nested.Endnotes.Count != 0
+            || nested.Comments.Count != 0
+            || nested.Preserved.Parts.Count != 0
+            || nested.Preserved.WebExtensions is not null
+            || nested.Blocks.Any(ContainsPackageBoundContent)
+            || nested.Styles.Values.Any(style => style.PreservedNumbering is not null))
+        {
+            return false;
+        }
+
+        var (styleMap, defaultStyleId) = CopyNestedStyles(target, nested);
+        foreach (var block in nested.Blocks)
+            RemapStyleIds(block, styleMap, defaultStyleId);
+
+        blocks = nested.Blocks;
+        return true;
+    }
+
+    private static bool ContainsPackageBoundContent(Block block) => block switch
+    {
+        AltChunkBlock => true,
+        Paragraph paragraph => paragraph.SectionBreak is not null
+            || paragraph.PreservedNumbering is not null
+            || paragraph.BookmarkNames.Count != 0
+            || paragraph.Runs.Any(run => run.FootnoteId is not null
+                || run.EndnoteId is not null
+                || run.CommentId is not null
+                || run.IsCommentReference
+                || run.PreservedDrawing is not null),
+        Table table => table.Rows.SelectMany(row => row.Cells)
+            .SelectMany(cell => cell.Paragraphs)
+            .Any(paragraph => ContainsPackageBoundContent(paragraph)),
+        _ => true
+    };
+
+    private static (Dictionary<string, string> StyleMap, string DefaultStyleId) CopyNestedStyles(
+        TextDocument target,
+        TextDocument nested)
+    {
+        var prefix = "AltChunk";
+        var sequence = 1;
+        while (target.Styles.Keys.Any(id => id.StartsWith(prefix + sequence + "_", StringComparison.Ordinal)))
+            sequence++;
+        prefix += sequence + "_";
+        var defaultStyleId = prefix + "DocumentDefaults";
+
+        var styleMap = nested.Styles.Keys.ToDictionary(
+            id => id,
+            id => target.Styles.ContainsKey(id) ? prefix + id : id,
+            StringComparer.Ordinal);
+        target.Styles[defaultStyleId] = new DocumentStyle
+        {
+            Id = defaultStyleId,
+            Name = "Imported document defaults",
+            Run = nested.DefaultRun,
+            Paragraph = nested.DefaultParagraph
+        };
+        foreach (var style in nested.Styles.Values)
+        {
+            var id = styleMap[style.Id];
+            var (effectiveRun, effectiveParagraph) = ResolveNestedStyle(nested, style.Id);
+            target.Styles[id] = new DocumentStyle
+            {
+                Id = id,
+                Name = style.Name,
+                Type = style.Type,
+                // Style inheritance is flattened against the nested document's defaults. The host's
+                // defaults must not leak into materialized altChunk content.
+                BasedOnStyleId = null,
+                NextStyleId = RemapStyleId(style.NextStyleId, styleMap),
+                Run = effectiveRun,
+                Paragraph = effectiveParagraph,
+                TableBorders = style.TableBorders
+            };
+        }
+
+        return (styleMap, defaultStyleId);
+    }
+
+    private static (RunFormatting Run, ParagraphFormatting Paragraph) ResolveNestedStyle(TextDocument nested, string styleId)
+    {
+        var run = nested.DefaultRun;
+        var paragraph = nested.DefaultParagraph;
+        var chain = new Stack<DocumentStyle>();
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        for (var id = styleId; id is not null && visited.Add(id) && nested.Styles.TryGetValue(id, out var style); id = style.BasedOnStyleId)
+            chain.Push(style);
+        while (chain.TryPop(out var style))
+        {
+            run = OverlayRunFormatting(run, style.Run);
+            paragraph = OverlayParagraphFormatting(paragraph, style.Paragraph);
+        }
+        return (run, paragraph);
+    }
+
+    private static RunFormatting OverlayRunFormatting(RunFormatting inherited, RunFormatting direct) => direct with
+    {
+        Bold = direct.Bold || inherited.Bold,
+        Italic = direct.Italic || inherited.Italic,
+        Underline = direct.Underline || inherited.Underline,
+        Strikethrough = direct.Strikethrough || inherited.Strikethrough,
+        SmallCaps = direct.SmallCaps || inherited.SmallCaps,
+        AllCaps = direct.AllCaps || inherited.AllCaps,
+        Rtl = direct.Rtl || inherited.Rtl,
+        VerticalAlign = direct.VerticalAlign != VerticalAlign.Baseline ? direct.VerticalAlign : inherited.VerticalAlign,
+        FontFamily = direct.FontFamily ?? inherited.FontFamily,
+        FontSizePt = direct.FontSizePt ?? inherited.FontSizePt,
+        ColorHex = direct.ColorHex ?? inherited.ColorHex,
+        HighlightColorHex = direct.HighlightColorHex ?? inherited.HighlightColorHex,
+        CharacterBorder = direct.CharacterBorder ?? inherited.CharacterBorder,
+        CharacterShadingHex = direct.CharacterShadingHex ?? inherited.CharacterShadingHex,
+        CharacterShadingPattern = direct.CharacterShadingHex is not null
+            ? direct.CharacterShadingPattern
+            : inherited.CharacterShadingPattern,
+        LanguageTag = direct.LanguageTag ?? inherited.LanguageTag
+    };
+
+    private static ParagraphFormatting OverlayParagraphFormatting(ParagraphFormatting inherited, ParagraphFormatting direct)
+    {
+        var defaults = ParagraphFormatting.Default;
+        var line = direct.LineSpacingIsSet ? direct : inherited;
+        return direct with
+        {
+            Alignment = direct.Alignment != defaults.Alignment ? direct.Alignment : inherited.Alignment,
+            Rtl = direct.Rtl || inherited.Rtl,
+            SpaceBeforePt = direct.SpaceBeforeIsSet ? direct.SpaceBeforePt : inherited.SpaceBeforePt,
+            SpaceAfterPt = direct.SpaceAfterIsSet ? direct.SpaceAfterPt : inherited.SpaceAfterPt,
+            BeforeAutoSpacing = direct.SpaceBeforeIsSet ? direct.BeforeAutoSpacing : inherited.BeforeAutoSpacing,
+            AfterAutoSpacing = direct.SpaceAfterIsSet ? direct.AfterAutoSpacing : inherited.AfterAutoSpacing,
+            ContextualSpacing = direct.ContextualSpacing ?? inherited.ContextualSpacing,
+            SpaceBeforeIsSet = direct.SpaceBeforeIsSet || inherited.SpaceBeforeIsSet,
+            SpaceAfterIsSet = direct.SpaceAfterIsSet || inherited.SpaceAfterIsSet,
+            LineSpacing = line.LineSpacing,
+            LineRule = line.LineRule,
+            LineHeightPt = line.LineHeightPt,
+            LineSpacingIsSet = direct.LineSpacingIsSet || inherited.LineSpacingIsSet,
+            IndentLeftPt = direct.IndentLeftPt != defaults.IndentLeftPt ? direct.IndentLeftPt : inherited.IndentLeftPt,
+            IndentRightPt = direct.IndentRightPt != defaults.IndentRightPt ? direct.IndentRightPt : inherited.IndentRightPt,
+            FirstLineIndentPt = direct.FirstLineIndentPt != defaults.FirstLineIndentPt ? direct.FirstLineIndentPt : inherited.FirstLineIndentPt,
+            Border = direct.Border ?? inherited.Border,
+            ShadingColorHex = direct.ShadingColorHex ?? inherited.ShadingColorHex,
+            ShadingPattern = direct.ShadingColorHex is not null ? direct.ShadingPattern : inherited.ShadingPattern
+        };
+    }
+
+    private static void RemapStyleIds(
+        Block block,
+        IReadOnlyDictionary<string, string> styleMap,
+        string defaultStyleId)
+    {
+        switch (block)
+        {
+            case Paragraph paragraph:
+                paragraph.StyleId = RemapStyleId(paragraph.StyleId, styleMap) ?? defaultStyleId;
+                break;
+            case Table table:
+                table.TableStyleId = RemapStyleId(table.TableStyleId, styleMap);
+                foreach (var paragraph in table.Rows.SelectMany(row => row.Cells).SelectMany(cell => cell.Paragraphs))
+                    paragraph.StyleId = RemapStyleId(paragraph.StyleId, styleMap) ?? defaultStyleId;
+                break;
+        }
+    }
+
+    private static string? RemapStyleId(string? styleId, IReadOnlyDictionary<string, string> styleMap) =>
+        styleId is not null && styleMap.TryGetValue(styleId, out var mapped) ? mapped : styleId;
 
     private static void AddParagraphRuns(
         Paragraph paragraph,

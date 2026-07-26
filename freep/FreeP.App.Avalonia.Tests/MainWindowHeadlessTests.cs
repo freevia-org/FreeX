@@ -5294,6 +5294,27 @@ public sealed class MainWindowHeadlessTests
                 "urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList");
             window.Editor.Redo();
             smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
+
+            registry.TryGet(SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId, out var timelineCommand)
+                .Should().BeTrue();
+            timelineCommand!.Execute(RibbonCommandContext.Empty);
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/basicTimeline");
+            window.Editor.Undo();
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
+
+            registry.TryGet(SmartArtAuthoringPlanner.StepDownProcessLayoutCommandId, out var stepDownCommand)
+                .Should().BeTrue();
+            stepDownCommand!.Execute(RibbonCommandContext.Empty);
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/StepDownProcess");
+            window.Editor.Undo();
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
+
+            registry.TryGet(SmartArtAuthoringPlanner.BasicRadialLayoutCommandId, out var radialCommand)
+                .Should().BeTrue();
+            radialCommand!.Execute(RibbonCommandContext.Empty);
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/radial1");
+            window.Editor.Undo();
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
         });
 
         if (!ran) return;
@@ -5311,6 +5332,8 @@ public sealed class MainWindowHeadlessTests
 
             foreach (var commandId in new[]
             {
+                SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
+                SmartArtAuthoringPlanner.StepDownProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.SegmentedProcessLayoutCommandId,
@@ -5329,6 +5352,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
                 SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
+                SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialListLayoutCommandId,
                 SmartArtAuthoringPlanner.GearCycleLayoutCommandId,
                 SmartArtAuthoringPlanner.TextCycleLayoutCommandId,
@@ -6352,7 +6376,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartSeriesOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4", "#1F4E79", OutlineDash.DashDot, true);
+            dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4", "#1F4E79", OutlineDash.DashDot, true,
+                true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ");
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6369,6 +6394,11 @@ public sealed class MainWindowHeadlessTests
         options.LineColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
         options.LineDash.Should().Be(OutlineDash.DashDot);
         options.NoLine.Should().BeTrue();
+        options.DataLabels.Should().NotBeNull();
+        options.DataLabels!.ShowValue.Should().BeTrue();
+        options.DataLabels.ShowCategoryName.Should().BeTrue();
+        options.DataLabels.ShowLegendKey.Should().BeTrue();
+        options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
     }
 
     [Fact]

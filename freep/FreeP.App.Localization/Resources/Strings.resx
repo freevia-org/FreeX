@@ -886,6 +886,18 @@
   <data name="Ribbon_Command_SmartArtBasicProcess_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
+  <data name="Ribbon_Command_SmartArtBasicTimeline_Label" xml:space="preserve">
+    <value>Basic Timeline</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicTimeline_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtStepDownProcess_Label" xml:space="preserve">
+    <value>Step Down Process</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtStepDownProcess_KeyTip" xml:space="preserve">
+    <value>D</value>
+  </data>
   <data name="Ribbon_Command_SmartArtContinuousBlockProcess_Label" xml:space="preserve">
     <value>Continuous Block Process</value>
   </data>
@@ -1035,6 +1047,12 @@
   </data>
   <data name="Ribbon_Command_SmartArtRadialCycle_KeyTip" xml:space="preserve">
     <value>R</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicRadial_Label" xml:space="preserve">
+    <value>Basic Radial</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicRadial_KeyTip" xml:space="preserve">
+    <value>B</value>
   </data>
   <data name="Ribbon_Command_SmartArtBasicMatrix_Label" xml:space="preserve">
     <value>Basic Matrix</value>

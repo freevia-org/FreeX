@@ -655,6 +655,8 @@ public sealed class SmartArtTests : IDisposable
 
     [Theory]
     [InlineData(SmartArtLayoutPreset.BasicProcess, SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.BasicTimeline, SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.StepDownProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.ContinuousBlockProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.SegmentedProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.ChevronProcess, SmartArtFamily.Process)]
@@ -681,6 +683,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.BasicPyramid, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PyramidList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.RadialCycle, SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.BasicRadial, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.RadialList, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicMatrix, SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.TitledMatrix, SmartArtFamily.Matrix)]
@@ -1808,6 +1811,25 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
             "radialList is in the bounded shared live-layout planner");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Discover", "Plan", "Build", "Review");
+    }
+
+    [Fact]
+    public void Reader_ParsesBasicRadialAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/radial1",
+            nodes: [("id1", "Core"), ("id2", "Branch A"), ("id3", "Branch B")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "radial1 is a cycle-family hub-and-spoke layout");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "radial1 is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Core", "Branch A", "Branch B");
     }
 
     [Fact]

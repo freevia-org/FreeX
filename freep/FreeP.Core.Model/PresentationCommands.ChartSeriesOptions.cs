@@ -14,6 +14,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
     private ChartMarkerStyle? _oldMarkerStyle;
     private ThemeAwareColor? _oldFillColor;
     private ShapeFill? _oldFill;
+    private ChartDataLabels? _oldDataLabels;
 
     public SetChartSeriesOptionsCommand(int slideIndex, uint shapeId, ChartSeriesOptions options)
     {
@@ -38,6 +39,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         _oldMarkerStyle = CloneMarkerStyle(series.MarkerStyle);
         _oldFillColor = series.FillColor;
         _oldFill = series.Fill;
+        _oldDataLabels = CloneDataLabels(series.DataLabels);
 
         series.SmoothLine = _newOptions.SmoothLine;
         series.OnSecondaryAxis = _newOptions.OnSecondaryAxis;
@@ -49,6 +51,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
             chart.SecondaryValueAxis = CloneAxis(_oldSecondaryValueAxis);
         series.FillColor = _newOptions.FillColor;
         series.Fill = _newOptions.Fill;
+        series.DataLabels = CloneDataLabels(_newOptions.DataLabels);
 
         if (_newOptions.LineColor is not null ||
             _newOptions.LineWidthPt.HasValue ||
@@ -89,6 +92,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         series.MarkerStyle = CloneMarkerStyle(_oldMarkerStyle);
         series.FillColor = _oldFillColor;
         series.Fill = _oldFill;
+        series.DataLabels = CloneDataLabels(_oldDataLabels);
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -114,6 +118,31 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
             StrokeWidthPt = source.StrokeWidthPt,
             NoFill = source.NoFill,
             NoStroke = source.NoStroke,
+        };
+
+    private static ChartDataLabels? CloneDataLabels(ChartDataLabels? source) => source is null
+        ? null
+        : new ChartDataLabels
+        {
+            ShowValue = source.ShowValue,
+            ShowPercent = source.ShowPercent,
+            ShowCategoryName = source.ShowCategoryName,
+            ShowSeriesName = source.ShowSeriesName,
+            ShowLegendKey = source.ShowLegendKey,
+            Position = source.Position,
+            NumberFormat = source.NumberFormat,
+            Separator = source.Separator,
+            TextStyle = source.TextStyle is null
+                ? null
+                : new ChartTextStyle
+                {
+                    IsImplicitDefault = source.TextStyle.IsImplicitDefault,
+                    FontSizePt = source.TextStyle.FontSizePt,
+                    Bold = source.TextStyle.Bold,
+                    Italic = source.TextStyle.Italic,
+                    Color = source.TextStyle.Color,
+                    FontFamily = source.TextStyle.FontFamily,
+                },
         };
 
     private static ChartAxis? CloneAxis(ChartAxis? source) => source is null

@@ -364,6 +364,26 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void BasicRadial_ReturnsHubAndSpokeLiveGeometry()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Core", "Branch A", "Branch B", "Branch C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radial1";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("radial1 is the native PowerPoint Basic Radial layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Should().ContainSingle("the first node is the central radial topic");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(3, "each remaining node is a spoke box");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(3, "each spoke is connected to the central topic");
+
+        shapes.Single(s => s.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .TextBody!.Paragraphs.First().Runs.First().Text.Should().Be("Core");
+    }
+
+    [Fact]
     public void GearCycle_ReturnsLiveCircularBoxesAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Cycle, "Initiate", "Coordinate", "Deliver", "Improve");
@@ -703,6 +723,48 @@ public sealed class SmartArtLayoutTests
             .Should().HaveCount(3, "one live box should be emitted per process node");
         shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
             .Should().HaveCount(2, "adjacent basic-process nodes need shared connectors");
+    }
+
+    [Fact]
+    public void BasicTimeline_ReturnsRailMarkersAlternatingBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Plan", "Build", "Test", "Ship");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicTimeline";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("basicTimeline is a bounded shared timeline layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "one live text box should be emitted per timeline node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Should().HaveCount(4, "one timeline marker should be emitted per node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(5, "the rail and node stems are shared live geometry");
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Plan", "Build", "Test", "Ship");
+        boxes[0].OffsetYEmu.Should().BeLessThan(boxes[1].OffsetYEmu);
+        boxes[1].OffsetYEmu.Should().BeGreaterThan(boxes[2].OffsetYEmu);
+    }
+
+    [Fact]
+    public void StepDownProcess_ReturnsDescendingLiveBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "One", "Two", "Three", "Four");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/StepDownProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("StepDownProcess is a native PowerPoint process layout");
+        var boxes = shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Should().HaveCount(4);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(3, "each step after the first connects to its predecessor");
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("One", "Two", "Three", "Four");
+        boxes.Select(s => s.OffsetYEmu).Should().BeInAscendingOrder(
+            "StepDownProcess should descend in display order");
     }
 
     [Fact]
