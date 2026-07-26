@@ -39,6 +39,67 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_EmitsBothSidedVerticalErrorBarsForLinePoints()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.LineMarkers,
+            Categories = { "Q1", "Q2", "Q3" },
+        };
+        var series = new ChartSeries
+        {
+            Name = "Actual",
+            ErrorBars = new ChartErrorBars { Value = 2 },
+        };
+        series.Values.AddRange(new double?[] { 10, 20, 30 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.ErrorBars.Should().HaveCount(3);
+        var first = scene.ErrorBars[0];
+        first.Direction.Should().Be(ChartErrorDirection.Y);
+        first.MinusEnd.Should().NotBeNull();
+        first.PlusEnd.Should().NotBeNull();
+        first.MinusEnd!.Value.Y.Should().BeGreaterThan(first.Center.Y);
+        first.PlusEnd!.Value.Y.Should().BeLessThan(first.Center.Y);
+        first.NoEndCap.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildScenePlan_RespectsScatterXPlusOnlyAndNoEndCap()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Scatter, ScatterStyle = ScatterStyle.Marker };
+        var series = new ChartSeries
+        {
+            Name = "Actual",
+            ErrorBars = new ChartErrorBars
+            {
+                Direction = ChartErrorDirection.X,
+                BarType = ChartErrorBarType.Plus,
+                ValueType = ChartErrorValueType.Percentage,
+                Value = 10,
+                NoEndCap = true,
+            },
+        };
+        series.XValues.AddRange(new double?[] { 10, 20 });
+        series.Values.AddRange(new double?[] { 5, 10 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.ErrorBars.Should().HaveCount(2);
+        scene.ErrorBars.Should().AllSatisfy(errorBar =>
+        {
+            errorBar.Direction.Should().Be(ChartErrorDirection.X);
+            errorBar.MinusEnd.Should().BeNull();
+            errorBar.PlusEnd.Should().NotBeNull();
+            errorBar.NoEndCap.Should().BeTrue();
+        });
+        scene.ErrorBars[0].PlusEnd!.Value.X.Should().BeGreaterThan(scene.ErrorBars[0].Center.X);
+    }
+
+    [Fact]
     public void BuildScenePlan_TallImportedSurfaceWrapsItsPowerPointTitle()
     {
         var chart = new ChartShape
