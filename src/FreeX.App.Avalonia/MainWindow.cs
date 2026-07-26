@@ -15802,8 +15802,36 @@ public sealed partial class MainWindow : Window
             "FormatCellsBorderStyleBox",
             BorderStyle.Thin);
         var borderColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MoreBorderColors"));
+        borderColorBox.ConfigureCompactPickButton();
         AutomationProperties.SetName(borderColorBox, "Border color");
         AutomationProperties.SetAutomationId(borderColorBox, "FormatCellsBorderColorBox");
+
+        TextBox CreateBorderColorTextBox(FormatCellsColorPicker picker, string automationId)
+        {
+            var box = new TextBox
+            {
+                Text = FormatRgb(CellColor.Black),
+                Width = 120,
+                Height = 24,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+            };
+            AutomationProperties.SetAutomationId(box, automationId);
+            ApplyDialogTextBoxChrome(box);
+            picker.SelectionChanged += (_, _) =>
+            {
+                if (picker.SelectedColor is { } color)
+                    box.Text = FormatRgb(color);
+            };
+            box.LostFocus += (_, _) =>
+            {
+                if (TryParseRgb(box.Text, out var color))
+                    picker.SelectColor(color);
+            };
+            return box;
+        }
+
+        var borderColorTextBox = CreateBorderColorTextBox(borderColorBox, "FormatCellsBorderColorTextBox");
 
         // Per-side border controls mirror WPF: each edge is a toggle honoring the selected line
         // style + color, composed alongside the whole-cell preset buttons (None/Outline/Inside).
@@ -15843,7 +15871,7 @@ public sealed partial class MainWindow : Window
         FormatCellsColorPicker CreateBorderEdgeColorBox(string automationId)
         {
             var box = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MoreBorderColors"));
-            box.MinWidth = 120;
+            box.ConfigureCompactPickButton();
             AutomationProperties.SetAutomationId(box, automationId);
             return box;
         }
@@ -15851,6 +15879,10 @@ public sealed partial class MainWindow : Window
         var borderRightColorBox = CreateBorderEdgeColorBox("FormatCellsBorderRightColorBox");
         var borderBottomColorBox = CreateBorderEdgeColorBox("FormatCellsBorderBottomColorBox");
         var borderLeftColorBox = CreateBorderEdgeColorBox("FormatCellsBorderLeftColorBox");
+        var borderTopColorTextBox = CreateBorderColorTextBox(borderTopColorBox, "FormatCellsBorderTopColorTextBox");
+        var borderRightColorTextBox = CreateBorderColorTextBox(borderRightColorBox, "FormatCellsBorderRightColorTextBox");
+        var borderBottomColorTextBox = CreateBorderColorTextBox(borderBottomColorBox, "FormatCellsBorderBottomColorTextBox");
+        var borderLeftColorTextBox = CreateBorderColorTextBox(borderLeftColorBox, "FormatCellsBorderLeftColorTextBox");
 
         // Re-entrancy guard so diagram-toggle <-> per-edge-style two-way sync doesn't loop.
         var borderSyncing = false;
@@ -16155,7 +16187,14 @@ public sealed partial class MainWindow : Window
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
         };
+
+        void ShowFormatCellsError(string message)
+        {
+            errorText.Text = message;
+            errorText.IsVisible = true;
+        }
 
         void Accept()
         {
@@ -16169,17 +16208,17 @@ public sealed partial class MainWindow : Window
             }
             else if (!TryReadFormatCellsFontSize(fontSizeBox.Text, currentFontSize, out fontSize, out message))
             {
-                errorText.Text = message;
+                ShowFormatCellsError(message);
                 return;
             }
             if (!TryReadFormatCellsIndentLevel(indentLevelBox.Text, currentIndentLevel, out var indentLevel, out message))
             {
-                errorText.Text = message;
+                ShowFormatCellsError(message);
                 return;
             }
             if (!TryReadFormatCellsTextRotation(textRotationBox.Text, currentTextRotation, out var textRotation, out message))
             {
-                errorText.Text = message;
+                ShowFormatCellsError(message);
                 return;
             }
 
@@ -16188,7 +16227,7 @@ public sealed partial class MainWindow : Window
                 && (!int.TryParse(numberDecimalPlacesBox.Text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var decimalPlaces)
                     || decimalPlaces is < 0 or > 30))
             {
-                errorText.Text = "Decimal places must be a whole number between 0 and 30.";
+                ShowFormatCellsError("Decimal places must be a whole number between 0 and 30.");
                 return;
             }
 
@@ -16431,32 +16470,96 @@ public sealed partial class MainWindow : Window
         // LEFT: Presets group — None/Outline/Inside stacked vertically.
         foreach (var presetButton in new[] { borderNoneButton, borderOutlineButton, borderInsideButton })
         {
-            presetButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
-            presetButton.MinWidth = 96;
+            presetButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
+            presetButton.Width = 110;
+            presetButton.Height = 28;
         }
         var borderPresetsGroup = CreateFormatCellsBorderGroup(
             UiText.Get("FormatCells_Presets"),
             new StackPanel
             {
-                Spacing = 8,
-                Width = 100,
+                Spacing = 6,
                 Children = { borderNoneButton, borderOutlineButton, borderInsideButton },
             });
 
         // MIDDLE: Line group — scrollable line-sample list + color picker.
+        Control CreateBorderPalette(FormatCellsColorPicker picker)
+        {
+            var palette = CellColorPalettePlanner.BuildDefaultSwatches();
+            var wanted = new (byte R, byte G, byte B)[]
+            {
+                (0, 0, 0), (127, 127, 127), (255, 0, 0), (255, 192, 0),
+                (0, 176, 80), (0, 176, 240), (0, 112, 192), (112, 48, 160),
+            };
+            var swatches = wanted
+                .Select(rgb => palette.FirstOrDefault(s => s.Color is { R: var r, G: var g, B: var b } && r == rgb.R && g == rgb.G && b == rgb.B))
+                .Where(swatch => swatch is not null)
+                .Cast<CellColorSwatch>()
+                .ToList();
+            var row = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 1,
+                Height = 20,
+            };
+            foreach (var swatch in swatches)
+            {
+                var swatchButton = new Button
+                {
+                    Width = 22,
+                    Height = 18,
+                    Padding = new Thickness(0),
+                    Background = new SolidColorBrush(Color.FromRgb(swatch.Color.R, swatch.Color.G, swatch.Color.B)),
+                    BorderBrush = Brushes.Gray,
+                    BorderThickness = new Thickness(1),
+                };
+                AutomationProperties.SetName(swatchButton, swatch.Hex);
+                swatchButton.Click += (_, _) => picker.SelectColor(swatch.Color);
+                row.Children.Add(swatchButton);
+            }
+            var moreButton = new Button { Content = "...", Width = 22, Height = 18, Padding = new Thickness(0) };
+            AutomationProperties.SetName(moreButton, UiText.Get("FormatCells_MoreBorderColors"));
+            moreButton.Click += (_, _) => picker.Flyout?.ShowAt(moreButton);
+            row.Children.Add(moreButton);
+            return row;
+        }
+
+        var borderLineColorRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children = { borderColorTextBox, borderColorBox },
+        };
+
         var borderLineGroup = CreateFormatCellsBorderGroup(
             UiText.Get("FormatCells_Line"),
             new StackPanel
             {
-                Spacing = 8,
+                Spacing = 4,
                 Children =
                 {
                     new TextBlock { Text = StripDisplayMnemonic(UiText.Get("FormatCells_Style")) },
                     borderStyleBox,
-                    new TextBlock { Text = StripDisplayMnemonic(UiText.Get("FormatCells_Color")) },
-                    borderColorBox,
+                    new TextBlock
+                    {
+                        Text = StripDisplayMnemonic(UiText.Get("FormatCells_Color")),
+                        Margin = new Thickness(0, 4, 0, 0),
+                    },
+                    borderLineColorRow,
+                    CreateBorderPalette(borderColorBox),
+                    new Border
+                    {
+                        Height = 20,
+                        Width = 178,
+                        Background = Brushes.Black,
+                        BorderBrush = Brushes.Gray,
+                        BorderThickness = new Thickness(1),
+                        Margin = new Thickness(0, 20, 0, 0),
+                    },
                 },
             });
+        borderStyleBox.Width = 178;
+        borderStyleBox.Height = 124;
 
         // RIGHT: Border group — interactive diagram. Edge toggles surround a central
         // white "Text" preview box (Top above, Bottom below, Left/Right at the sides),
@@ -16470,11 +16573,10 @@ public sealed partial class MainWindow : Window
         };
         var borderDiagramGrid = new AvaloniaGrid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"),
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
-            ColumnSpacing = 8,
-            RowSpacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            Width = 244,
+            Height = 164,
+            ColumnDefinitions = new ColumnDefinitions("50,144,50"),
+            RowDefinitions = new RowDefinitions("32,100,32"),
         };
         // Top toggle: row 0, center column.
         borderDiagramGrid.Children.Add(borderTopToggle);
@@ -16485,11 +16587,11 @@ public sealed partial class MainWindow : Window
         AvaloniaGrid.SetRow(borderLeftToggle, 1);
         AvaloniaGrid.SetColumn(borderLeftToggle, 0);
         // Center "Text" preview box.
-        var borderPreviewHost = new AvaloniaGrid { Width = 110, Height = 72 };
+        var borderPreviewHost = new AvaloniaGrid { Width = 144, Height = 100 };
         borderPreviewHost.Children.Add(borderPreview);
         borderPreviewHost.Children.Add(textPreviewLabel);
-        borderPreview.Width = 110;
-        borderPreview.Height = 72;
+        borderPreview.Width = 144;
+        borderPreview.Height = 100;
         borderDiagramGrid.Children.Add(borderPreviewHost);
         AvaloniaGrid.SetRow(borderPreviewHost, 1);
         AvaloniaGrid.SetColumn(borderPreviewHost, 1);
@@ -16501,12 +16603,22 @@ public sealed partial class MainWindow : Window
         borderDiagramGrid.Children.Add(borderBottomToggle);
         AvaloniaGrid.SetRow(borderBottomToggle, 2);
         AvaloniaGrid.SetColumn(borderBottomToggle, 1);
+        foreach (var toggle in new[] { borderTopToggle, borderBottomToggle })
+        {
+            toggle.Width = 144;
+            toggle.Height = 32;
+        }
+        foreach (var toggle in new[] { borderLeftToggle, borderRightToggle })
+        {
+            toggle.Width = 50;
+            toggle.Height = 100;
+        }
 
         var borderGroup = CreateFormatCellsBorderGroup(
             UiText.Get("FormatCells_Border"),
             new StackPanel
             {
-                Spacing = 10,
+                Spacing = 6,
                 Children =
                 {
                     borderDiagramGrid,
@@ -16522,10 +16634,20 @@ public sealed partial class MainWindow : Window
 
         var borderGroupsRow = new StackPanel
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Children = { borderPresetsGroup, borderLineGroup, borderGroup },
+            Width = 580,
+            Children =
+            {
+                new AvaloniaGrid
+                {
+                    Width = 580,
+                    ColumnDefinitions = new ColumnDefinitions("122,195,244"),
+                    Children = { borderPresetsGroup, borderLineGroup, borderGroup },
+                },
+            },
         };
+        AvaloniaGrid.SetColumn(borderPresetsGroup, 0);
+        AvaloniaGrid.SetColumn(borderLineGroup, 1);
+        AvaloniaGrid.SetColumn(borderGroup, 2);
 
         // "Individual border details": four labeled rows (Top / Right / Bottom / Left), each with a
         // per-edge Style dropdown and a per-edge Color (R,G,B) picker — matching Excel's grid. The
@@ -16533,10 +16655,10 @@ public sealed partial class MainWindow : Window
         // (read in Accept as borderChoice) is unchanged.
         var borderDetailsGrid = new AvaloniaGrid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("73,170,220"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
-            ColumnSpacing = 10,
-            RowSpacing = 5,
+            ColumnSpacing = 8,
+            RowSpacing = 6,
         };
         void AddDetailHeader(string text, int column)
         {
@@ -16547,32 +16669,43 @@ public sealed partial class MainWindow : Window
         }
         AddDetailHeader(StripDisplayMnemonic(UiText.Get("FormatCells_Style")), 1);
         AddDetailHeader(StripDisplayMnemonic(UiText.Get("FormatCells_Color")), 2);
-        void AddDetailRow(int row, string labelKey, ComboBox styleBox, FormatCellsColorPicker colorBox)
+        void AddDetailRow(int row, string labelKey, ComboBox styleBox, TextBox colorTextBox, FormatCellsColorPicker colorPicker)
         {
             var label = new TextBlock
             {
                 Text = StripDisplayMnemonic(UiText.Get(labelKey)) + ":",
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
+            styleBox.Width = 170;
             AvaloniaGrid.SetRow(label, row);
             AvaloniaGrid.SetColumn(label, 0);
             borderDetailsGrid.Children.Add(label);
             AvaloniaGrid.SetRow(styleBox, row);
             AvaloniaGrid.SetColumn(styleBox, 1);
             borderDetailsGrid.Children.Add(styleBox);
-            AvaloniaGrid.SetRow(colorBox, row);
-            AvaloniaGrid.SetColumn(colorBox, 2);
-            borderDetailsGrid.Children.Add(colorBox);
+            var colorRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children = { colorTextBox, colorPicker },
+            };
+            AvaloniaGrid.SetRow(colorRow, row);
+            AvaloniaGrid.SetColumn(colorRow, 2);
+            borderDetailsGrid.Children.Add(colorRow);
         }
-        AddDetailRow(1, "FormatCells_Top", borderTopStyleBox, borderTopColorBox);
-        AddDetailRow(2, "FormatCells_Right", borderRightStyleBox, borderRightColorBox);
-        AddDetailRow(3, "FormatCells_Bottom", borderBottomStyleBox, borderBottomColorBox);
-        AddDetailRow(4, "FormatCells_Left", borderLeftStyleBox, borderLeftColorBox);
+        AddDetailRow(1, "FormatCells_Top", borderTopStyleBox, borderTopColorTextBox, borderTopColorBox);
+        AddDetailRow(2, "FormatCells_Right", borderRightStyleBox, borderRightColorTextBox, borderRightColorBox);
+        AddDetailRow(3, "FormatCells_Bottom", borderBottomStyleBox, borderBottomColorTextBox, borderBottomColorBox);
+        AddDetailRow(4, "FormatCells_Left", borderLeftStyleBox, borderLeftColorTextBox, borderLeftColorBox);
+
+        // The three visible buttons are the WPF preset surface. Keep the planner-backed selector
+        // in the visual tree for existing automation and Accept() readback without a second row.
+        borderPresetBox.IsVisible = false;
 
         var borderDetailsRow = new StackPanel
         {
-            Spacing = 8,
-            Margin = new Thickness(0, 4, 0, 0),
+            Spacing = 13,
+            Margin = new Thickness(124, 4, 0, 0),
             Children =
             {
                 new TextBlock
@@ -16580,7 +16713,6 @@ public sealed partial class MainWindow : Window
                     Text = StripDisplayMnemonic(UiText.Get("FormatCells_IndividualBorderDetails")),
                     FontWeight = FontWeight.SemiBold,
                 },
-                CreateFormatCellsField(UiText.Get("FormatCells_Preset"), borderPresetBox),
                 borderDetailsGrid,
             },
         };
@@ -16591,7 +16723,7 @@ public sealed partial class MainWindow : Window
             new StackPanel
             {
                 Spacing = 12,
-                Width = 560,
+                Width = 580,
                 // Small left inset so the bare "Individual border details" label aligns with the
                 // group-box content above it and does not clip against the dialog edge.
                 Margin = new Thickness(0),
@@ -16599,6 +16731,7 @@ public sealed partial class MainWindow : Window
                 {
                     borderGroupsRow,
                     borderDetailsRow,
+                    new Border { Height = 2 },
                 },
             });
         var protectionTab = CreateFormatCellsTab(
@@ -16657,7 +16790,7 @@ public sealed partial class MainWindow : Window
         var root = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 10,
+            Spacing = 9,
             Children =
             {
                 tabStrip,
@@ -16974,15 +17107,21 @@ public sealed partial class MainWindow : Window
         return new Panel { Height = 18, Children = { line } };
     }
 
-    // A classic Win32 dialog "group box": a header label sitting above a 1px-bordered
-    // panel. Mirrors the Presets / Line / Border groups in the Windows screenshot.
+    // WPF keeps these three sections visually open: a bold label above compact content.
     private static Control CreateFormatCellsBorderGroup(string header, Control content) =>
-        new GroupBox
+        new StackPanel
         {
-            Header = StripDisplayMnemonic(header),
-            Padding = new Thickness(10, 8),
+            Spacing = 4,
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
-            Content = content,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(header),
+                    FontWeight = FontWeight.SemiBold,
+                },
+                content,
+            },
         };
 
     private static bool? ReadChangedFormatCellsBool(bool currentValue, CheckBox checkBox)

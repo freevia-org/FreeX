@@ -4541,6 +4541,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("UiText.Get(\"FormatCells_Line\")");
         source.Should().Contain("UiText.Get(\"FormatCells_Border\")");
         source.Should().Contain("UiText.Get(\"FormatCells_IndividualBorderDetails\")");
+        source.Should().Contain("ConfigureCompactPickButton();");
+        source.Should().Contain("FormatCellsBorderColorTextBox");
+        source.Should().Contain("CreateBorderPalette(borderColorBox)");
+        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"122,195,244\")");
+        source.Should().Contain("new Border { Height = 2 }");
+        source.Should().Contain("ShowFormatCellsError(message)");
         normalizedSource.Should().Contain(
             "ItemsSource = new[]\n" +
             "            {\n" +

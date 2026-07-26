@@ -52,6 +52,7 @@ internal sealed class FormatCellsColorPicker : Button
     private readonly TextBlock _previewLabel;
 
     private FormatCellsColorChoice _selected;
+    private bool _compactPickButton;
 
     public FormatCellsColorPicker(
         RecentColorsStore recentColors,
@@ -106,6 +107,22 @@ internal sealed class FormatCellsColorPicker : Button
 
     public CellColor? SelectedColor => _selected.Color;
 
+    /// <summary>Use the picker as the compact WPF-style Pick button beside an RGB field.</summary>
+    public void ConfigureCompactPickButton()
+    {
+        _compactPickButton = true;
+        Width = 54;
+        MinWidth = 54;
+        Height = 24;
+        MinHeight = 24;
+        Padding = new Thickness(6, 1);
+        HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        Background = new SolidColorBrush(Color.FromRgb(221, 221, 221));
+        BorderBrush = new SolidColorBrush(Color.FromRgb(128, 128, 128));
+        BorderThickness = new Thickness(1);
+        Content = "Pick";
+    }
+
     /// <summary>Select the palette/recent entry matching <paramref name="color"/>, or fall back to
     /// the "no change" choice. Mirrors the old <c>SelectFormatCellsColor</c> behavior.</summary>
     public void SelectColor(CellColor color)
@@ -127,6 +144,9 @@ internal sealed class FormatCellsColorPicker : Button
 
     private void UpdatePreview()
     {
+        if (_compactPickButton)
+            return;
+
         _previewLabel.Text = _selected.Label;
         if (_selected.Color is { } color)
         {
