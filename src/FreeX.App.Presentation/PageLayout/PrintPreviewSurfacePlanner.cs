@@ -39,6 +39,15 @@ public sealed record PrintPreviewDocumentToolbarPlan(
     string MarginsButtonText,
     string PageSetupButtonText);
 
+public sealed record PrintPreviewDocumentToolbarChromePlan(
+    double Height,
+    double ButtonWidth,
+    double ButtonHeight,
+    double IconSize,
+    double LeftPadding,
+    double ButtonSpacing,
+    double SeparatorHeight);
+
 public sealed record PrintPreviewFindBarPlan(
     string PlaceholderText,
     string PreviousButtonText,
@@ -86,6 +95,23 @@ public static class PrintPreviewSurfacePlanner
     public const double SettingsCopiesBoxWidth = 60;
     public const double SettingsPageRangeBoxWidth = 44;
     public const double DocumentZoomComboWidth = 82;
+    public const double SettingsTextBoxHeight = 20;
+    public const double SettingsButtonHeight = 22;
+    public const double SettingsRailTopMargin = 16;
+    public const double SettingsRailSpacing = 7;
+
+    // WPF's DocumentViewer contributes a compact icon-only toolbar between the print controls and
+    // the paper. Keep these metrics in the shared surface planner so Avalonia's replacement chrome
+    // remains tied to the same cross-shell contract rather than becoming a capture-only adjustment.
+    public static PrintPreviewDocumentToolbarChromePlan DocumentToolbarChrome { get; } =
+        new(
+            Height: 34,
+            ButtonWidth: 28,
+            ButtonHeight: 26,
+            IconSize: 16,
+            LeftPadding: 6,
+            ButtonSpacing: 4,
+            SeparatorHeight: 18);
 
     public static PrintPreviewTopToolbarPlan CreateTopToolbarPlan(
         int totalPages,

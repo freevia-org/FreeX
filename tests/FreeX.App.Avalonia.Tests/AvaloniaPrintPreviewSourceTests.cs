@@ -36,6 +36,9 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("IReadOnlyList<PrintPreviewParityPage>? parityPages = null");
         source.Should().Contain("BuildPreviewParityPageView(parityPages[pageIndex])");
         source.Should().Contain("AvaloniaRibbonIcons.BuildMonochrome");
+        source.Should().Contain("PrintPreviewSurfacePlanner.DocumentToolbarChrome");
+        source.Should().Contain("CreateDocumentToolbarIcon(RibbonCommandIconKind.Print");
+        source.Should().Contain("IsVisible = false");
 
         source.Should().NotContain("PrintPreviewText(\"PrintPreview_PrintWhatActiveSheets\"");
         source.Should().NotContain("PrintPreviewText(\"PrintPreview_SidesOneSided\"");

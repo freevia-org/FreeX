@@ -64,6 +64,24 @@ public sealed class PrintPreviewSurfacePlannerTests
     }
 
     [Fact]
+    public void DocumentToolbarChrome_UsesSharedWpfDocumentViewerMetrics()
+    {
+        var chrome = PrintPreviewSurfacePlanner.DocumentToolbarChrome;
+
+        chrome.Height.Should().Be(34);
+        chrome.ButtonWidth.Should().Be(28);
+        chrome.ButtonHeight.Should().Be(26);
+        chrome.IconSize.Should().Be(16);
+        chrome.LeftPadding.Should().Be(6);
+        chrome.ButtonSpacing.Should().Be(4);
+        chrome.SeparatorHeight.Should().Be(18);
+        PrintPreviewSurfacePlanner.SettingsTextBoxHeight.Should().Be(20);
+        PrintPreviewSurfacePlanner.SettingsButtonHeight.Should().Be(22);
+        PrintPreviewSurfacePlanner.SettingsRailTopMargin.Should().Be(16);
+        PrintPreviewSurfacePlanner.SettingsRailSpacing.Should().Be(7);
+    }
+
+    [Fact]
     public void CreateSettingsRailPlan_OwnsRailLabelsMetricsAndPanelOptions()
     {
         var sheet = new Workbook("Book1").AddSheet("Sheet1");

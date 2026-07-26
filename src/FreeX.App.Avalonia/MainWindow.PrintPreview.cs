@@ -195,6 +195,7 @@ public sealed partial class MainWindow
             Margin = new Thickness(4, 0),
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyPreviewTextBoxChrome(pageNumberBox);
 
         var pageStatusText = new TextBlock
         {
@@ -204,7 +205,8 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
         };
-        AutomationProperties.SetAutomationId(pageStatusText, PrintPreviewDialogPlanner.PageLabelAutomationId);
+        AutomationProperties.SetAutomationId(pageNumberBox, PrintPreviewDialogPlanner.PageNumberBoxAutomationId);
+        AutomationProperties.SetAutomationId(pageStatusText, PrintPreviewDialogPlanner.PageStatusTextAutomationId);
 
         var firstButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[0]);
         var prevButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[1]);
@@ -335,8 +337,11 @@ public sealed partial class MainWindow
             PrintPreviewSurfacePlanner.CreateFindBarPlan(PrintPreviewSettingsTextResolver));
         var settingsRail = CreatePrintPreviewSettingsRail(
             PrintPreviewSurfacePlanner.CreateSettingsRailPlan(
-                _session.ActiveSheet,
-                pageCount,
+                // WPF's canonical parity dialog is constructed without a live sheet, so its rail
+                // starts from the shared default state (Narrow margins and 1..1 page fields). Keep
+                // normal production previews sheet-backed while making the shared fixture honest.
+                parityPages is null ? _session.ActiveSheet : null,
+                parityPages is null ? pageCount : 1,
                 printerName,
                 new PrintPreviewSettings(),
                 hasSelection: false,
@@ -432,7 +437,9 @@ public sealed partial class MainWindow
 
         return new Border
         {
+            Height = 38,
             MinHeight = 38,
+            MaxHeight = 38,
             Background = Brush(235, 244, 253),
             BorderBrush = Brush(190, 204, 220),
             BorderThickness = new Thickness(0, 0, 0, 1),
@@ -444,8 +451,8 @@ public sealed partial class MainWindow
     {
         var panel = new StackPanel
         {
-            Spacing = 8,
-            Margin = new Thickness(10),
+            Spacing = PrintPreviewSurfacePlanner.SettingsRailSpacing,
+            Margin = new Thickness(10, PrintPreviewSurfacePlanner.SettingsRailTopMargin, 10, 10),
             Children =
             {
                 CreateSettingsSection(plan.CopiesSectionText),
@@ -453,9 +460,9 @@ public sealed partial class MainWindow
                 {
                     Text = plan.CopiesText,
                     Width = plan.CopiesBoxWidth,
-                    Height = 24,
-                    MinHeight = 24,
-                    MaxHeight = 24,
+                    Height = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
+                    MinHeight = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
+                    MaxHeight = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
                     Padding = new Thickness(4, 1),
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
@@ -469,9 +476,9 @@ public sealed partial class MainWindow
                 new Button
                 {
                     Content = plan.PrinterPropertiesButtonText,
-                    Height = 24,
-                    MinHeight = 24,
-                    MaxHeight = 24,
+                    Height = PrintPreviewSurfacePlanner.SettingsButtonHeight,
+                    MinHeight = PrintPreviewSurfacePlanner.SettingsButtonHeight,
+                    MaxHeight = PrintPreviewSurfacePlanner.SettingsButtonHeight,
                     Padding = new Thickness(6, 1),
                     Background = Brushes.White,
                     BorderBrush = Brush(112, 112, 112),
@@ -522,9 +529,9 @@ public sealed partial class MainWindow
         {
             Text = plan.FromPageText,
             Width = plan.PageBoxWidth,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
+            Height = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
+            MinHeight = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
+            MaxHeight = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
             Padding = new Thickness(4, 1),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
@@ -537,9 +544,9 @@ public sealed partial class MainWindow
         {
             Text = plan.ToPageText,
             Width = plan.PageBoxWidth,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
+            Height = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
+            MinHeight = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
+            MaxHeight = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
             Padding = new Thickness(4, 1),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
@@ -622,49 +629,100 @@ public sealed partial class MainWindow
         TextBox pageNumberBox,
         TextBlock pageStatusText)
     {
+        var chrome = PrintPreviewSurfacePlanner.DocumentToolbarChrome;
         var toolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            Margin = new Thickness(6, 4),
+            Spacing = chrome.ButtonSpacing,
+            Margin = new Thickness(chrome.LeftPadding, 4, 0, 4),
+            Children =
+            {
+                CreateDocumentToolbarIcon(RibbonCommandIconKind.Print, "Print preview", chrome),
+                CreateDocumentToolbarIcon(RibbonCommandIconKind.Copy, "Copy", chrome),
+                CreateDocumentToolbarSeparator(chrome),
+                CreateDocumentToolbarIcon(RibbonCommandIconKind.Zoom, "Zoom in", chrome),
+                CreateDocumentToolbarIcon(RibbonCommandIconKind.Zoom, "Zoom out", chrome),
+                CreateDocumentToolbarSeparator(chrome),
+                CreateDocumentToolbarIcon(RibbonCommandIconKind.Page, "Fit page", chrome),
+                CreateDocumentToolbarIcon(RibbonCommandIconKind.View, "Fit width", chrome),
+            },
+        };
+
+        // Keep the planner-backed controls in the visual tree for keyboard navigation and automation.
+        // WPF's native DocumentViewer places these commands in its command surface rather than showing
+        // the textual controls here; the compact icon row above is the faithful Avalonia equivalent.
+        var functionalControls = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            IsVisible = false,
             Children =
             {
                 firstButton,
                 prevButton,
                 nextButton,
                 lastButton,
-                CreatePreviewToolbarSeparator(),
-                new TextBlock { Text = plan.PageLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = plan.PageLabelText },
                 pageNumberBox,
                 pageStatusText,
-                CreatePreviewToolbarSeparator(),
-                new TextBlock { Text = plan.ZoomLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 CreatePreviewZoomComboBox(plan),
-                CreatePreviewToolbarSeparator(),
                 CreatePreviewToolbarButton(plan.MarginsButtonText),
                 CreatePreviewToolbarButton(plan.PageSetupButtonText),
             },
         };
 
+        var content = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,0"),
+        };
+        content.Children.Add(toolbar);
+        Grid.SetColumn(functionalControls, 1);
+        content.Children.Add(functionalControls);
+
         return new Border
         {
-            MinHeight = 34,
+            Height = chrome.Height,
+            MinHeight = chrome.Height,
+            MaxHeight = chrome.Height,
             Background = Brush(245, 245, 245),
             BorderBrush = Brush(208, 208, 208),
             BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = toolbar,
+            Child = content,
         };
     }
 
-    private static Border CreatePreviewToolbarSeparator() =>
+    private static Border CreateDocumentToolbarSeparator(PrintPreviewDocumentToolbarChromePlan chrome) =>
         new()
         {
             Width = 1,
-            Height = 18,
+            Height = chrome.SeparatorHeight,
             Background = Brush(190, 190, 190),
             Margin = new Thickness(1, 0),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
+
+    private static Button CreateDocumentToolbarIcon(
+        RibbonCommandIconKind kind,
+        string toolTip,
+        PrintPreviewDocumentToolbarChromePlan chrome)
+    {
+        var button = new Button
+        {
+            Width = chrome.ButtonWidth,
+            MinWidth = chrome.ButtonWidth,
+            Height = chrome.ButtonHeight,
+            MinHeight = chrome.ButtonHeight,
+            MaxHeight = chrome.ButtonHeight,
+            Padding = new Thickness(4, 2),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            Content = AvaloniaRibbonIcons.BuildMonochrome(kind, chrome.IconSize, null, Brush(92, 92, 92)),
+        };
+        ToolTip.SetTip(button, toolTip);
+        return button;
+    }
 
     private static Button CreatePreviewToolbarButton(string text) =>
         ApplyPreviewToolbarButtonChrome(new Button { Content = text }, 26);
@@ -712,7 +770,7 @@ public sealed partial class MainWindow
     }
 
     private static ComboBox CreatePreviewComboBox(double width, string selectedText) =>
-        new()
+        ApplyPreviewComboBoxChrome(new()
         {
             Width = width,
             Height = 24,
@@ -724,7 +782,7 @@ public sealed partial class MainWindow
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             ItemsSource = new[] { selectedText },
             SelectedIndex = 0,
-        };
+        });
 
     private static ComboBox CreatePreviewChoiceComboBox<TValue>(
         double width,
@@ -752,7 +810,7 @@ public sealed partial class MainWindow
             plan.ZoomSelectedIndex);
 
     private static ComboBox CreatePreviewComboBox(double width, IReadOnlyList<object> items, int selectedIndex) =>
-        new()
+        ApplyPreviewComboBoxChrome(new()
         {
             Width = width,
             Height = 24,
@@ -764,7 +822,19 @@ public sealed partial class MainWindow
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             ItemsSource = items,
             SelectedIndex = selectedIndex,
-        };
+        });
+
+    private static TextBox ApplyPreviewTextBoxChrome(TextBox textBox)
+    {
+        AvaloniaCompactDialogChrome.ApplyTextBox(textBox, PrintPreviewChromeStyle);
+        return textBox;
+    }
+
+    private static ComboBox ApplyPreviewComboBoxChrome(ComboBox comboBox)
+    {
+        AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, PrintPreviewChromeStyle);
+        return comboBox;
+    }
 
     private static Control BuildPreviewDocumentViewerSurface(
         PrintPreviewPaginationContext context,
