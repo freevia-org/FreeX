@@ -242,6 +242,22 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartPieOptionsDialog_ConstructsAndUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.ChartType = ChartType.Doughnut;
+        sess.SelectedChart.FirstSliceAngleDegrees = 18;
+        sess.SelectedChart.DoughnutHolePercent = 45;
+
+        var dialog = new ChartPieOptionsDialog(sess);
+        dialog.SetOptionsForTests(225, 68);
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.Should().Be(new ChartPieOptions(225, 68));
+    }
+
+    [StaFact]
     public void Chart3DViewOptionsDialog_ConstructsAndUsesSharedPlanner()
     {
         var (sess, _) = MakeSession();
@@ -406,6 +422,21 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().NotContain("new SetChartBubbleOptionsCommand");
         ribbonSource.Should().Contain("ChartBubbleOptionsPlanner.CommandId");
         windowSource.Should().Contain("OpenChartBubbleOptionsDialog");
+    }
+
+    [Fact]
+    public void ChartPieOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartPieOptionsDialog.cs");
+        var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
+        var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+
+        source.Should().Contain("ChartPieOptionsPlanner.FromChart(chart)");
+        source.Should().Contain("_planner.BuildCommitPlan()");
+        source.Should().Contain("_editor.ApplyChartPieOptions");
+        source.Should().NotContain("new SetChartPieOptionsCommand");
+        ribbonSource.Should().Contain("ChartPieOptionsPlanner.CommandId");
+        windowSource.Should().Contain("OpenChartPieOptionsDialog");
     }
 
     [Fact]

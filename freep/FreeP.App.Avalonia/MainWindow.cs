@@ -2236,6 +2236,7 @@ public sealed partial class MainWindow : Window
         r.Register(ChartLayoutOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartLayoutOptionsDialog));
         r.Register(ChartDataTableOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDataTableOptionsDialog));
         r.Register(ChartBubbleOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartBubbleOptionsDialog));
+        r.Register(ChartPieOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartPieOptionsDialog));
         r.Register(Chart3DViewOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChart3DViewOptionsDialog));
         r.Register(ChartTextOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartTextOptionsDialog));
         r.Register(ChartAreaOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAreaOptionsDialog));
@@ -3124,6 +3125,21 @@ public sealed partial class MainWindow : Window
             return;
 
         var dialog = new ChartBubbleOptionsDialog(Editor);
+        if (IsVisible)
+        {
+            _ = dialog.ShowDialog<bool?>(this);
+            return;
+        }
+
+        dialog.Show();
+    }
+
+    internal void OpenChartPieOptionsDialog()
+    {
+        if (Editor.SelectedChart is not { ChartType: ChartType.Pie or ChartType.Doughnut })
+            return;
+
+        var dialog = new ChartPieOptionsDialog(Editor);
         if (IsVisible)
         {
             _ = dialog.ShowDialog<bool?>(this);

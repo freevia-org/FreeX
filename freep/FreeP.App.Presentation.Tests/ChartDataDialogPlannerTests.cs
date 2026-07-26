@@ -552,6 +552,24 @@ public sealed class ChartDataDialogPlannerTests
         ChartLayoutOptionsPlanner.BuildSurfacePlan().CommandId.Should().Be(ChartLayoutOptionsPlanner.CommandId);
     }
 
+    [Fact]
+    public void ChartPieOptionsPlanner_UsesWorkingCopyAndBuildsRotationAndHoleOptions()
+    {
+        var chart = MakeChart();
+        chart.ChartType = ChartType.Doughnut;
+        chart.FirstSliceAngleDegrees = 18;
+        chart.DoughnutHolePercent = 45;
+
+        var planner = ChartPieOptionsPlanner.FromChart(chart);
+        planner.SetFirstSliceAngleDegrees(225);
+        planner.SetDoughnutHolePercent(68);
+
+        planner.BuildCommitPlan().Should().Be(new ChartPieOptions(225, 68));
+        chart.FirstSliceAngleDegrees.Should().Be(18);
+        chart.DoughnutHolePercent.Should().Be(45);
+        ChartPieOptionsPlanner.BuildSurfacePlan().CommandId.Should().Be(ChartPieOptionsPlanner.CommandId);
+    }
+
     private static ChartShape MakeChart()
     {
         var chart = new ChartShape();
