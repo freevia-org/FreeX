@@ -522,6 +522,10 @@ internal static class ParityCapture
             {
                 CaptureDialog(results, "dialog.GoalSeek", outDir, () => CreateGoalSeekParityDialog(sheet.Id));
             }
+            else if (string.Equals(targetSurfaceId, "dialog.GoToSpecial", StringComparison.Ordinal))
+            {
+                CaptureDialog(results, "dialog.GoToSpecial", outDir, () => new GoToSpecialDialog());
+            }
             else if (string.Equals(targetSurfaceId, "dialog.Sparkline", StringComparison.Ordinal))
             {
                 CaptureDialog(results, "dialog.Sparkline", outDir, () =>
@@ -560,7 +564,7 @@ internal static class ParityCapture
             }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, and dialog.PivotTableOptions in this lane.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, and dialog.PivotTableOptions in this lane.");
             }
 
             return;

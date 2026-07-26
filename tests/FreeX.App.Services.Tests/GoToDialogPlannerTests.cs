@@ -31,7 +31,7 @@ public sealed class GoToDialogPlannerTests
         GoToSpecialDialogPlanner.AvaloniaContentRightMargin.Should().Be(29);
         GoToSpecialDialogPlanner.ActionRowTopMargin.Should().Be(10);
         GoToSpecialDialogPlanner.ActionRowRightMargin.Should().Be(28);
-        GoToSpecialDialogPlanner.ActionRowBottomMargin.Should().Be(51);
+        GoToSpecialDialogPlanner.ActionRowBottomMargin.Should().Be(49);
         GoToSpecialDialogPlanner.ActionButtonHeight.Should().Be(20);
         GoToSpecialDialogPlanner.AvaloniaChoiceGroupTopMargin.Should().Be(3);
         GoToSpecialDialogPlanner.AvaloniaChoiceGroupBottomMargin.Should().Be(13);
