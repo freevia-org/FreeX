@@ -38,6 +38,8 @@ public class PreservedPartsRoundTripTests
     private const string WebExtensionContentType = "application/vnd.ms-office.webextension+xml";
     private const string StylesWithEffectsRelType = "http://schemas.microsoft.com/office/2007/relationships/stylesWithEffects";
     private const string StylesWithEffectsContentType = "application/vnd.ms-word.stylesWithEffects+xml";
+    private const string PeopleRelType = "http://schemas.microsoft.com/office/2011/relationships/people";
+    private const string PeopleContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml";
 
     private static byte[] WriteBytes(TextDocument document)
     {
@@ -82,7 +84,8 @@ public class PreservedPartsRoundTripTests
     /// Hand-authors a minimal-but-valid docx package carrying: a body paragraph; a settings.xml with an
     /// unmodelled element (w:defaultTabStop) AND a FreeW-modelled toggle (w:autoHyphenation); a customXml item
     /// (item1.xml + itemProps1.xml + customXml/_rels/item1.xml.rels); a Word 2013+ stylesWithEffects part;
-    /// and a word/webSettings.xml — all wired up through [Content_Types].xml and word/_rels/document.xml.rels.
+    /// a modern comment-author people part; and a word/webSettings.xml — all wired up through
+    /// [Content_Types].xml and word/_rels/document.xml.rels.
     /// </summary>
     private static byte[] AuthorPackage()
     {
@@ -107,6 +110,7 @@ public class PreservedPartsRoundTripTests
                   <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
                   <Override PartName="/word/webSettings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml"/>
                   <Override PartName="/word/stylesWithEffects.xml" ContentType="application/vnd.ms-word.stylesWithEffects+xml"/>
+                  <Override PartName="/word/people.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml"/>
                   <Override PartName="/customXml/itemProps1.xml" ContentType="application/vnd.openxmlformats-officedocument.customXmlProperties+xml"/>
                 </Types>
                 """);
@@ -127,6 +131,7 @@ public class PreservedPartsRoundTripTests
                   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings" Target="webSettings.xml"/>
                   <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../customXml/item1.xml"/>
                   <Relationship Id="rId4" Type="http://schemas.microsoft.com/office/2007/relationships/stylesWithEffects" Target="stylesWithEffects.xml"/>
+                  <Relationship Id="rId5" Type="http://schemas.microsoft.com/office/2011/relationships/people" Target="people.xml"/>
                 </Relationships>
                 """);
 
@@ -176,6 +181,14 @@ public class PreservedPartsRoundTripTests
                 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">
                   <w:style w:type="paragraph" w:styleId="EffectHeading"><w:name w:val="Effect Heading"/><w:rPr><w14:glow w14:rad="12700"/></w:rPr></w:style>
                 </w:styles>
+                """);
+
+            Add("word/people.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w15:people xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">
+                  <w15:person w15:author="Alex Editor" w15:providerId="GUID-1234" w15:userId="alex@contoso.example"/>
+                </w15:people>
                 """);
 
             Add("customXml/item1.xml",
@@ -526,6 +539,30 @@ public class PreservedPartsRoundTripTests
         var twice = WriteBytes(ReadDoc(rewritten));
         EntryBytes(twice, "word/stylesWithEffects.xml")
             .Should().Equal(EntryBytes(rewritten, "word/stylesWithEffects.xml"));
+    }
+
+    [Fact]
+    public void PeoplePart_SurvivesWithDocumentRelationshipAndContentType()
+    {
+        var source = AuthorPackage();
+        var read = ReadDoc(source);
+
+        read.Preserved.Parts.Should().ContainSingle(part =>
+            part.PartName == "/word/people.xml"
+            && part.RelationshipType == PeopleRelType);
+
+        var rewritten = WriteBytes(read);
+        HasEntry(rewritten, "word/people.xml").Should().BeTrue();
+        EntryBytes(rewritten, "word/people.xml").Should().Equal(EntryBytes(source, "word/people.xml"));
+        EntryXml(rewritten, "word/_rels/document.xml.rels").Root!.Elements(Rel + "Relationship").Should().Contain(element =>
+            element.Attribute("Type")!.Value == PeopleRelType
+            && element.Attribute("Target")!.Value == "people.xml");
+        EntryXml(rewritten, "[Content_Types].xml").Root!.Elements(Ct + "Override").Should().Contain(element =>
+            element.Attribute("PartName")!.Value == "/word/people.xml"
+            && element.Attribute("ContentType")!.Value == PeopleContentType);
+
+        var twice = WriteBytes(ReadDoc(rewritten));
+        EntryBytes(twice, "word/people.xml").Should().Equal(EntryBytes(rewritten, "word/people.xml"));
     }
 
     // --- customXml + webSettings: verbatim pass-through ---------------------------------------------

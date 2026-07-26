@@ -229,6 +229,10 @@ internal static class Ooxml
     public const string StylesWithEffectsRelType = "http://schemas.microsoft.com/office/2007/relationships/stylesWithEffects";
     public const string StylesWithEffectsContentType = "application/vnd.ms-word.stylesWithEffects+xml";
 
+    // word/people.xml carries Office 2013+ contact metadata for comment and revision authors.
+    public const string PeopleRelType = "http://schemas.microsoft.com/office/2011/relationships/people";
+    public const string PeopleContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml";
+
     /// <summary>
     /// The bibliography namespace (b), used by word/bibliography/sources.xml — the legacy mirror for the
     /// document's citation sources (b:Sources/b:Source) and selected bibliography style. Word's active
