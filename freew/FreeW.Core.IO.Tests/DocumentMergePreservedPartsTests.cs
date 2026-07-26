@@ -85,6 +85,46 @@ public class DocumentMergePreservedPartsTests
     }
 
     [Fact]
+    public void Merge_WritesTransferredCitationSourceWithCollisionSafeTag()
+    {
+        var source = new TextDocument();
+        source.Sources.Add(new Source
+        {
+            Tag = "Shared Source",
+            Type = SourceType.JournalArticle,
+            Author = "Ada Lovelace",
+            PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")],
+            Title = "Notes",
+            Year = "1843",
+            Journal = "Scientific Memoirs",
+            Pages = "1-5"
+        });
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.ComplexFieldRun(" CITATION \"Shared Source\" \\l 4 ", "[source]"));
+        source.Blocks.Add(paragraph);
+
+        var target = new TextDocument();
+        target.Sources.Add(new Source { Tag = "Shared Source", Author = "Target", Title = "Target source", Year = "2026" });
+
+        DocumentMerge.Merge(target, 0, source);
+        var bytes = WriteBytes(target);
+
+        using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        var bibliography = ReadXml(zip, "word/bibliography/sources.xml");
+        bibliography.ToString().Should().Contain("Shared Source_FreeW1");
+        bibliography.ToString().Should().Contain("Scientific Memoirs");
+        var document = ReadXml(zip, "word/document.xml");
+        document.Descendants(Wordprocessing + "instrText").Single().Value.Should().Be(" CITATION \"Shared Source_FreeW1\" \\l 4 ");
+
+        var reread = DocxReader.Read(new MemoryStream(bytes));
+        reread.Sources.Select(entry => entry.Tag).Should().Equal("Shared Source", "Shared Source_FreeW1");
+        reread.Sources[1].PersonalAuthors.Should().Equal(SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace"));
+        reread.Sources[1].Journal.Should().Be("Scientific Memoirs");
+        reread.Blocks.OfType<Paragraph>().Single().Runs.Single().ComplexField!.Instruction
+            .Should().Be(" CITATION \"Shared Source_FreeW1\" \\l 4 ");
+    }
+
+    [Fact]
     public void Merge_WritesRemappedSourceStyleWithoutReplacingTargetDefinition()
     {
         var source = new TextDocument();

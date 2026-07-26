@@ -99,6 +99,62 @@ public static class ComplexFieldEngine
     }
 
     /// <summary>
+    /// Replaces the first non-switch argument after a field keyword while preserving the keyword,
+    /// spacing, and all following switches. Returns the original instruction when it has no argument.
+    /// </summary>
+    internal static string ReplaceArgument(string instruction, string replacement)
+    {
+        ArgumentNullException.ThrowIfNull(instruction);
+        ArgumentNullException.ThrowIfNull(replacement);
+
+        var cursor = 0;
+        while (cursor < instruction.Length && char.IsWhiteSpace(instruction[cursor]))
+            cursor++;
+        while (cursor < instruction.Length && !char.IsWhiteSpace(instruction[cursor]))
+            cursor++;
+        while (cursor < instruction.Length && char.IsWhiteSpace(instruction[cursor]))
+            cursor++;
+
+        if (cursor >= instruction.Length || instruction[cursor] == '\\')
+            return instruction;
+
+        var argumentStart = cursor;
+        if (instruction[cursor] == '"')
+        {
+            cursor++;
+            var closed = false;
+            while (cursor < instruction.Length)
+            {
+                if (instruction[cursor] == '\\' && cursor + 1 < instruction.Length)
+                {
+                    cursor += 2;
+                    continue;
+                }
+
+                if (instruction[cursor++] == '"')
+                {
+                    closed = true;
+                    break;
+                }
+            }
+
+            if (!closed)
+                return instruction;
+        }
+        else
+        {
+            while (cursor < instruction.Length && !char.IsWhiteSpace(instruction[cursor]))
+                cursor++;
+        }
+
+        var quoted = replacement.Any(char.IsWhiteSpace) || replacement.Contains('"', StringComparison.Ordinal);
+        var serialized = quoted
+            ? "\"" + replacement.Replace("\"", "\\\"", StringComparison.Ordinal) + "\""
+            : replacement;
+        return instruction[..argumentStart] + serialized + instruction[cursor..];
+    }
+
+    /// <summary>
     /// True when <paramref name="instruction"/> carries the switch letter <paramref name="letter"/>
     /// (e.g. <c>'c'</c> for SEQ's <c>\c</c>), case-insensitively. The leading keyword/argument are skipped.
     /// </summary>

@@ -552,7 +552,7 @@ public static class Citations
 
         for (var i = 0; i < document.Sources.Count; i++)
         {
-            if (SourceFieldsEqual(document.Sources[i], source))
+            if (SameSource(document.Sources[i], source))
                 return i + 1;
         }
 
@@ -1258,9 +1258,13 @@ public static class Citations
     private static string ReferenceListNumber(int number, CitationStyle style) =>
         style == CitationStyle.Vancouver ? $"{number}." : FormatInText(number, style);
 
-    private static bool SourceFieldsEqual(Source left, Source right) =>
+    internal static bool SameSource(Source left, Source right) =>
         left.Type == right.Type
         && Same(left.Author, right.Author)
+        && PeopleEqual(left.PersonalAuthors, right.PersonalAuthors)
+        && Same(left.CorporateAuthor, right.CorporateAuthor)
+        && PeopleEqual(left.Editors, right.Editors)
+        && PeopleEqual(left.Translators, right.Translators)
         && Same(left.Title, right.Title)
         && Same(left.BookTitle, right.BookTitle)
         && Same(left.ConferenceName, right.ConferenceName)
@@ -1306,6 +1310,11 @@ public static class Citations
         && Same(left.AccessedDay, right.AccessedDay)
         && Same(left.AccessedMonth, right.AccessedMonth)
         && Same(left.AccessedYear, right.AccessedYear);
+
+    private static bool PeopleEqual(
+        IReadOnlyList<SourceAuthorPerson> left,
+        IReadOnlyList<SourceAuthorPerson> right) =>
+        left.SequenceEqual(right);
 
     private static bool Same(string? left, string? right) =>
         string.Equals(left?.Trim() ?? string.Empty, right?.Trim() ?? string.Empty, StringComparison.Ordinal);
