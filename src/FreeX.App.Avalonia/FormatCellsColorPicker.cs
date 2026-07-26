@@ -130,6 +130,18 @@ internal sealed class FormatCellsColorPicker : Button
         SetSelected(new FormatCellsColorChoice(CellColorPalettePlanner.FormatHexColor(color), color, Clear: false));
     }
 
+    /// <summary>Choose the explicit no-fill sentinel when this picker supports clearing.</summary>
+    public void SelectClear()
+    {
+        if (_clearChoice is not { } clearChoice)
+            throw new InvalidOperationException("This color picker does not support clearing.");
+
+        SetSelected(clearChoice);
+    }
+
+    /// <summary>Return to the neutral no-change state without applying a color.</summary>
+    public void SelectNoChange() => SetSelected(_noColorChoice);
+
     private void SetSelected(FormatCellsColorChoice choice)
     {
         _selected = choice;

@@ -58,6 +58,7 @@ public partial class FormatCellsDialog : Window
 
     private void Populate(CellStyle s)
     {
+        PopulateFillPalettes();
         NumberCategoryList.ItemsSource = FormatCellsNumberFormatPlanner.Categories;
         NumberSymbolCombo.ItemsSource = FormatCellsNumberFormatPlanner.Symbols;
         NumberSymbolCombo.SelectedIndex = 0;

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeX.App.Services;
@@ -36,6 +37,59 @@ public partial class FormatCellsDialog
     {
         if (sender is Button { Tag: string colorText })
             DlgFillPatternColorBox.Text = colorText;
+    }
+
+    private void PopulateFillPalettes()
+    {
+        DlgFillPalettePanel.Children.Clear();
+        foreach (var entry in FormatCellsFillPalettePlanner.BackgroundEntries)
+        {
+            var button = new Button
+            {
+                Width = 28,
+                Height = 20,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0),
+                Content = entry.IsMore ? "..." : null,
+                Tag = entry.IsClear ? "" : entry.Color is { } color
+                    ? ColorInputParser.FormatRgbColor(color)
+                    : null,
+                Background = entry.Color is { } rgb
+                    ? new SolidColorBrush(Color.FromRgb(rgb.R, rgb.G, rgb.B))
+                    : Brushes.White,
+                BorderBrush = Brushes.Gray,
+            };
+            var label = UiText.Get(entry.ResourceKey);
+            button.ToolTip = label;
+            AutomationProperties.SetName(button, label);
+            button.Click += entry.IsMore ? DlgFillColorPickerButton_Click : DlgFillSwatchButton_Click;
+            DlgFillPalettePanel.Children.Add(button);
+        }
+
+        DlgFillPatternColorPalettePanel.Children.Clear();
+        foreach (var entry in FormatCellsFillPalettePlanner.PatternEntries)
+        {
+            var button = new Button
+            {
+                Width = 24,
+                Height = 19,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0),
+                Content = entry.IsMore ? "..." : null,
+                Tag = entry.Color is { } color
+                    ? ColorInputParser.FormatRgbColor(color)
+                    : null,
+                Background = entry.Color is { } rgb
+                    ? new SolidColorBrush(Color.FromRgb(rgb.R, rgb.G, rgb.B))
+                    : Brushes.White,
+                BorderBrush = Brushes.Gray,
+            };
+            var label = UiText.Get(entry.ResourceKey);
+            button.ToolTip = label;
+            AutomationProperties.SetName(button, label);
+            button.Click += entry.IsMore ? DlgFillPatternColorPickerButton_Click : DlgFillPatternSwatchButton_Click;
+            DlgFillPatternColorPalettePanel.Children.Add(button);
+        }
     }
 
     private void PickColorInto(TextBox target, bool allowNoColor, string title)

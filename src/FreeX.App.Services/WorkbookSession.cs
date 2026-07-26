@@ -677,6 +677,9 @@ public sealed class WorkbookSession
     public CellColor? SelectedRangeStartFillColor =>
         GetCellStyle(SelectedRange.Start).FillColor;
 
+    /// <summary>Returns the concrete style used to seed Format Cells, including theme references.</summary>
+    public CellStyle SelectedRangeStartStyle => GetCellStyle(SelectedRange.Start).Clone();
+
     public string SelectedRangeStartNumberFormat =>
         GetCellStyle(SelectedRange.Start).NumberFormat;
 

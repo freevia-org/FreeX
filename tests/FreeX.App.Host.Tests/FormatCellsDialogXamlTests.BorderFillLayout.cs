@@ -147,9 +147,6 @@ public sealed partial class FormatCellsDialogXamlTests
         foreach (var expected in new[]
         {
             "Text=\"Background Color:\"",
-            "ToolTip=\"No Fill\"",
-            "ToolTip=\"Yellow\"",
-            "ToolTip=\"Green\"",
             "x:Name=\"DlgBorderLineColorPreview\"",
             "ToolTip=\"Black border\"",
             "ToolTip=\"Red border\"",
@@ -166,14 +163,11 @@ public sealed partial class FormatCellsDialogXamlTests
         foreach (var expected in new[]
         {
             "Title=\"Format Cells\" Width=\"620\" Height=\"540\"",
-            "x:Name=\"DlgFillPalettePanel\" Columns=\"10\" Rows=\"6\"",
-            "x:Name=\"DlgFillPatternColorPalettePanel\" Columns=\"8\" Rows=\"2\"",
+            "x:Name=\"DlgFillPalettePanel\" Columns=\"10\" Rows=\"3\"",
+            "x:Name=\"DlgFillPatternColorPalettePanel\" Columns=\"8\" Rows=\"1\"",
             "x:Name=\"DlgFillPatternSamplePreview\"",
             "Text=\"Pattern Color:\"",
-            "Text=\"Pattern Style:\"",
-            "ToolTip=\"Gold\"",
-            "ToolTip=\"Dark Blue\"",
-            "ToolTip=\"Pattern accent blue\""
+            "Text=\"Pattern Style:\""
         })
             xaml.Should().Contain(expected);
     }

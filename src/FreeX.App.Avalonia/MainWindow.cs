@@ -15242,7 +15242,7 @@ public sealed partial class MainWindow : Window
         var currentHidden = currentStyle.Hidden ?? CellStyle.Default.Hidden;
         var currentSuperscript = currentStyle.Superscript ?? CellStyle.Default.Superscript;
         var currentSubscript = currentStyle.Subscript ?? CellStyle.Default.Subscript;
-        var currentFillPatternStyle = currentStyle.FillPatternStyle ?? CellStyle.Default.FillPatternStyle;
+        var currentFillStyle = _session.SelectedRangeStartStyle;
 
         var dialog = new Window
         {
@@ -15725,67 +15725,15 @@ public sealed partial class MainWindow : Window
         fontColorBox.SelectionChanged += (_, _) => RefreshFontPreview();
         RefreshFontPreview();
 
-        var fillColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: true, UiText.Get("FormatCells_MoreFillColors"));
-        AutomationProperties.SetName(fillColorBox, "Fill color");
-        AutomationProperties.SetAutomationId(fillColorBox, "FormatCellsFillColorBox");
-        var fillPatternStyleBox = CreateFormatCellsComboBox(
-            "FormatCellsFillPatternStyleBox",
-            CreateFormatCellsFillPatternStyleChoices(),
-            currentFillPatternStyle);
-        var fillPatternColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MorePatternColors"));
-        AutomationProperties.SetName(fillPatternColorBox, "Pattern color");
-        AutomationProperties.SetAutomationId(fillPatternColorBox, "FormatCellsFillPatternColorBox");
-
-        // Live fill preview: a swatch reflecting the chosen fill color + pattern color, or a
-        // "No fill" hatch when the clear sentinel is selected.
-        var fillPreview = new Border
-        {
-            Height = 36,
-            Width = 120,
-            Background = Brushes.White,
-            BorderBrush = Brushes.Gray,
-            BorderThickness = new Thickness(1),
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-        };
-        AutomationProperties.SetAutomationId(fillPreview, "FormatCellsFillPreview");
-        var fillPreviewLabel = new TextBlock
-        {
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-        };
-        fillPreview.Child = fillPreviewLabel;
-
-        void RefreshFillPreview()
-        {
-            var fillChoice = fillColorBox.SelectedItem as FormatCellsColorChoice;
-            if (fillChoice?.Clear == true)
-            {
-                fillPreview.Background = Brushes.White;
-                fillPreviewLabel.Text = "No fill";
-                return;
-            }
-
-            var patternStyle = (fillPatternStyleBox.SelectedItem as FormatCellsNullableChoice<CellFillPatternStyle>)?.Value
-                ?? CellFillPatternStyle.None;
-            var patternColor = (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color;
-            if (fillChoice?.Color is { } fill)
-            {
-                fillPreview.Background = Brush(fill);
-                fillPreviewLabel.Text = patternStyle != CellFillPatternStyle.None && patternColor is { } pc
-                    ? $"{CellColorPalettePlanner.FormatHexColor(fill)} / {CellColorPalettePlanner.FormatHexColor(pc)}"
-                    : CellColorPalettePlanner.FormatHexColor(fill);
-            }
-            else
-            {
-                fillPreview.Background = Brushes.White;
-                fillPreviewLabel.Text = "No change";
-            }
-        }
-
-        fillColorBox.SelectionChanged += (_, _) => RefreshFillPreview();
-        fillPatternStyleBox.SelectionChanged += (_, _) => RefreshFillPreview();
-        fillPatternColorBox.SelectionChanged += (_, _) => RefreshFillPreview();
-        RefreshFillPreview();
+        var fillEditor = new FormatCellsFillEditor(
+            _recentColors,
+            ShowMoreColorsDialogAsync,
+            UiText.Get,
+            _session.Workbook.Theme,
+            currentFillStyle);
+        var fillColorBox = fillEditor.FillColorPicker;
+        var fillPatternStyleBox = fillEditor.FillPatternStyleBox;
+        var fillPatternColorBox = fillEditor.PatternColorPicker;
 
         var borderPresetBox = new ComboBox
         {
@@ -16172,17 +16120,17 @@ public sealed partial class MainWindow : Window
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetAutomationId(okButton, "FormatCellsOkButton");
-        ApplyDialogButtonChrome(okButton, isDefault: true);
+        ApplyDialogButtonChrome(okButton, width: 74, isDefault: true);
 
         var cancelButton = new Button
         {
             Content = UiText.Get("Common_Cancel"),
             IsCancel = true,
-            MinWidth = 84,
+            MinWidth = 74,
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetAutomationId(cancelButton, "FormatCellsCancelButton");
-        ApplyDialogButtonChrome(cancelButton);
+        ApplyDialogButtonChrome(cancelButton, width: 74);
 
         var errorText = new TextBlock
         {
@@ -16199,6 +16147,13 @@ public sealed partial class MainWindow : Window
 
         void Accept()
         {
+            if (!fillEditor.TryCommitInput(out var fillValidationMessage, out var invalidFillControl))
+            {
+                ShowFormatCellsError(fillValidationMessage);
+                invalidFillControl?.Focus();
+                return;
+            }
+
             var normalFont = normalFontBox.IsChecked == true;
             var normalStyle = CellStyle.Default;
             string message;
@@ -16237,8 +16192,7 @@ public sealed partial class MainWindow : Window
                 !string.Equals(resolvedFormat, currentNumberFormat, StringComparison.Ordinal)
                     ? resolvedFormat
                     : null;
-            var fillChoice = fillColorBox.SelectedItem as FormatCellsColorChoice;
-            var clearFill = fillChoice?.Clear == true;
+            var clearFill = fillEditor.ClearFill;
             var borderChoice = borderPresetBox.SelectedItem as FormatCellsNullableChoice<CellBorderPreset>;
             var borderStyle = borderStyleBox.SelectedItem is FormatCellsNullableChoice<BorderStyle> { Value: { } selectedBorderStyle }
                 ? selectedBorderStyle
@@ -16269,10 +16223,10 @@ public sealed partial class MainWindow : Window
                 Subscript: normalFont ? normalStyle.Subscript : ReadChangedFormatCellsBool(currentSubscript, subscriptBox),
                 FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox),
                 FontSize: fontSize,
-                FillColor: fillChoice?.Color,
+                FillColor: fillEditor.FillColor,
                 ClearFill: clearFill,
-                FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox),
-                FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
+                FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox),
+                FillPatternColor: clearFill ? null : fillEditor.PatternColor,
                 FontColor: normalFont ? normalStyle.FontColor : (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
                 ShrinkToFit: ReadChangedFormatCellsBool(currentShrinkToFit, shrinkToFitBox),
                 MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox),
@@ -16452,17 +16406,7 @@ public sealed partial class MainWindow : Window
         var fillTab = CreateFormatCellsTab(
             UiText.Get("FormatCells_TabFill"),
             "FormatCellsFillTab",
-            new StackPanel
-            {
-                Spacing = 10,
-                Children =
-                {
-                    CreateFormatCellsField(UiText.Get("FormatCells_FillColor"), fillColorBox),
-                    CreateFormatCellsField(UiText.Get("FormatCells_PatternStyle"), fillPatternStyleBox),
-                    CreateFormatCellsField(UiText.Get("FormatCells_PatternColor"), fillPatternColorBox),
-                    CreateFormatCellsField(UiText.Get("FormatCells_Preview"), fillPreview),
-                },
-            });
+            fillEditor.View);
         // --- Border tab rebuilt to mirror the Windows/Excel layout: three side-by-side
         // groups (Presets | Line | Border) above an "Individual border details" row. The
         // existing controls (preset buttons, style list, color picker, per-side toggles,
@@ -16752,6 +16696,7 @@ public sealed partial class MainWindow : Window
         {
             SelectedIndex = Math.Clamp(initialTabIndex, 0, 5),
             Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 0, 8),
             ItemsSource = new[]
             {
                 numberTab,
@@ -16788,10 +16733,11 @@ public sealed partial class MainWindow : Window
             },
         };
 
-        var root = new StackPanel
+        var root = new AvaloniaGrid
         {
-            Margin = new Thickness(16),
-            Spacing = 9,
+            Margin = new Thickness(10, 10, 26, 48),
+            RowDefinitions = new RowDefinitions("*,Auto,Auto"),
+            RowSpacing = 0,
             Children =
             {
                 tabStrip,
@@ -16799,6 +16745,9 @@ public sealed partial class MainWindow : Window
                 buttonRow,
             },
         };
+        AvaloniaGrid.SetRow(tabStrip, 0);
+        AvaloniaGrid.SetRow(errorText, 1);
+        AvaloniaGrid.SetRow(buttonRow, 2);
         ConfigureDialogTabCycle(dialog, root);
         dialog.Content = root;
         dialog.Opened += (_, _) =>
@@ -16849,6 +16798,8 @@ public sealed partial class MainWindow : Window
             Content = new ScrollViewer
             {
                 Content = content,
+                HorizontalContentAlignment = AvaloniaHorizontalAlignment.Stretch,
+                VerticalContentAlignment = AvaloniaVerticalAlignment.Stretch,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             },
         };
