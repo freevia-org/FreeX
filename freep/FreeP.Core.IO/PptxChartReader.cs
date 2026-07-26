@@ -742,6 +742,7 @@ internal static class PptxChartReader
             series.MarkerStyle = ReadMarkerStyle(serEl.Element(C + "marker"), scheme);
             series.SmoothLine = ParseNullableBoolElement(serEl.Element(C + "smooth"));
             series.ErrorBars = ReadErrorBars(serEl.Element(C + "errBars"));
+            series.Trendline = ReadTrendline(serEl.Element(C + "trendline"));
 
             // Combo-chart plot groups can arrive out of visual order. Use c:idx
             // rather than the group-local position so their theme accent is stable.
@@ -825,6 +826,32 @@ internal static class PptxChartReader
                 : ChartErrorValueType.Fixed,
             Value = ParseDouble(element.Element(C + "val")?.Attribute("val")?.Value) ?? 0,
             NoEndCap = ParseBoolAttr(element.Element(C + "noEndCap")),
+        };
+    }
+
+    private static ChartTrendline? ReadTrendline(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        var type = element.Element(C + "trendlineType")?.Attribute("val")?.Value;
+        return new ChartTrendline
+        {
+            Type = type switch
+            {
+                "exp" => ChartTrendlineType.Exponential,
+                "log" => ChartTrendlineType.Logarithmic,
+                "poly" => ChartTrendlineType.Polynomial,
+                "power" => ChartTrendlineType.Power,
+                "movingAvg" => ChartTrendlineType.MovingAverage,
+                _ => ChartTrendlineType.Linear,
+            },
+            PolynomialOrder = ParseNullableInt(element.Element(C + "order")?.Attribute("val")?.Value),
+            MovingAveragePeriod = ParseNullableInt(element.Element(C + "period")?.Attribute("val")?.Value),
+            Forward = ParseDouble(element.Element(C + "forward")?.Attribute("val")?.Value),
+            Backward = ParseDouble(element.Element(C + "backward")?.Attribute("val")?.Value),
+            DisplayEquation = ParseBoolAttr(element.Element(C + "dispEq")),
+            DisplayRSquared = ParseBoolAttr(element.Element(C + "dispRSqr")),
         };
     }
 

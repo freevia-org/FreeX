@@ -91,6 +91,21 @@ public enum ChartErrorBarType { Both, Minus, Plus }
 /// <summary>How the authored error magnitude is interpreted.</summary>
 public enum ChartErrorValueType { Fixed, Percentage }
 
+/// <summary>Trendline regression family authored under a chart series.</summary>
+public enum ChartTrendlineType { Linear, Exponential, Logarithmic, Polynomial, Power, MovingAverage }
+
+/// <summary>Authored PowerPoint trendline settings from c:trendline.</summary>
+public sealed class ChartTrendline
+{
+    public ChartTrendlineType Type { get; set; } = ChartTrendlineType.Linear;
+    public int? PolynomialOrder { get; set; }
+    public int? MovingAveragePeriod { get; set; }
+    public double? Forward { get; set; }
+    public double? Backward { get; set; }
+    public bool DisplayEquation { get; set; }
+    public bool DisplayRSquared { get; set; }
+}
+
 /// <summary>Authored series error-bar settings from c:errBars.</summary>
 public sealed class ChartErrorBars
 {
@@ -434,6 +449,9 @@ public sealed class ChartSeries
 
     /// <summary>Optional authored error bars for this series.</summary>
     public ChartErrorBars? ErrorBars { get; set; }
+
+    /// <summary>Optional authored regression trendline for this series.</summary>
+    public ChartTrendline? Trendline { get; set; }
 
     /// <summary>True if this series plots against the secondary value axis (right axis).</summary>
     public bool OnSecondaryAxis { get; set; }

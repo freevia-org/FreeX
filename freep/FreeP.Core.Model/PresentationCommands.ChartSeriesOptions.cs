@@ -16,6 +16,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
     private ShapeFill? _oldFill;
     private ChartDataLabels? _oldDataLabels;
     private ChartErrorBars? _oldErrorBars;
+    private ChartTrendline? _oldTrendline;
 
     public SetChartSeriesOptionsCommand(int slideIndex, uint shapeId, ChartSeriesOptions options)
     {
@@ -42,6 +43,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         _oldFill = series.Fill;
         _oldDataLabels = CloneDataLabels(series.DataLabels);
         _oldErrorBars = CloneErrorBars(series.ErrorBars);
+        _oldTrendline = CloneTrendline(series.Trendline);
 
         series.SmoothLine = _newOptions.SmoothLine;
         series.OnSecondaryAxis = _newOptions.OnSecondaryAxis;
@@ -55,6 +57,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         series.Fill = _newOptions.Fill;
         series.DataLabels = CloneDataLabels(_newOptions.DataLabels);
         series.ErrorBars = CloneErrorBars(_newOptions.ErrorBars);
+        series.Trendline = CloneTrendline(_newOptions.Trendline);
 
         if (_newOptions.LineColor is not null ||
             _newOptions.LineWidthPt.HasValue ||
@@ -97,6 +100,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         series.Fill = _oldFill;
         series.DataLabels = CloneDataLabels(_oldDataLabels);
         series.ErrorBars = CloneErrorBars(_oldErrorBars);
+        series.Trendline = CloneTrendline(_oldTrendline);
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -159,6 +163,19 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
             ValueType = source.ValueType,
             Value = source.Value,
             NoEndCap = source.NoEndCap,
+        };
+
+    private static ChartTrendline? CloneTrendline(ChartTrendline? source) => source is null
+        ? null
+        : new ChartTrendline
+        {
+            Type = source.Type,
+            PolynomialOrder = source.PolynomialOrder,
+            MovingAveragePeriod = source.MovingAveragePeriod,
+            Forward = source.Forward,
+            Backward = source.Backward,
+            DisplayEquation = source.DisplayEquation,
+            DisplayRSquared = source.DisplayRSquared,
         };
 
     private static ChartAxis? CloneAxis(ChartAxis? source) => source is null

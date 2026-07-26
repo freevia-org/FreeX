@@ -11,6 +11,7 @@ public sealed record ChartDashOption(OutlineDash Value, string Label);
 public sealed record ChartErrorDirectionOption(ChartErrorDirection Value, string Label);
 public sealed record ChartErrorBarTypeOption(ChartErrorBarType Value, string Label);
 public sealed record ChartErrorValueTypeOption(ChartErrorValueType Value, string Label);
+public sealed record ChartTrendlineTypeOption(ChartTrendlineType Value, string Label);
 
 public sealed record ChartSeriesOptionsSurfacePlan(
     string CommandId,
@@ -73,6 +74,12 @@ public sealed class ChartSeriesOptionsPlanner
     public const string ErrorValueTypeLabel = "Value type";
     public const string ErrorValueLabel = "Value";
     public const string ErrorNoEndCapLabel = "No end cap";
+    public const string TrendlineLabel = "Trendline";
+    public const string TrendlineTypeLabel = "Trendline type";
+    public const string TrendlineOrderLabel = "Polynomial order";
+    public const string TrendlinePeriodLabel = "Moving average period";
+    public const string TrendlineEquationLabel = "Display equation";
+    public const string TrendlineRSquaredLabel = "Display R-squared";
     public const string LabelPositionLabel = "Label position";
     public const string NumberFormatLabel = "Number format";
     public const string SeparatorLabel = "Separator";
@@ -135,6 +142,16 @@ public sealed class ChartSeriesOptionsPlanner
         new(ChartErrorValueType.Percentage, "Percentage"),
     ];
 
+    public static IReadOnlyList<ChartTrendlineTypeOption> TrendlineTypeOptions { get; } =
+    [
+        new(ChartTrendlineType.Linear, "Linear"),
+        new(ChartTrendlineType.Exponential, "Exponential"),
+        new(ChartTrendlineType.Logarithmic, "Logarithmic"),
+        new(ChartTrendlineType.Polynomial, "Polynomial"),
+        new(ChartTrendlineType.Power, "Power"),
+        new(ChartTrendlineType.MovingAverage, "Moving average"),
+    ];
+
     private readonly ChartShape _chart;
     private int _seriesIndex;
     private bool _smoothLine;
@@ -158,6 +175,12 @@ public sealed class ChartSeriesOptionsPlanner
     private ChartErrorValueType _errorValueType;
     private double _errorValue;
     private bool _errorNoEndCap;
+    private bool _trendlineEnabled;
+    private ChartTrendlineType _trendlineType;
+    private int? _trendlineOrder;
+    private int? _trendlinePeriod;
+    private bool _trendlineEquation;
+    private bool _trendlineRSquared;
     private DataLabelPosition _labelPosition = DataLabelPosition.OutsideEnd;
     private string _labelNumberFormat = string.Empty;
     private string _labelSeparator = string.Empty;
@@ -241,6 +264,12 @@ public sealed class ChartSeriesOptionsPlanner
     public ChartErrorValueType ErrorValueType => _errorValueType;
     public double ErrorValue => _errorValue;
     public bool ErrorNoEndCap => _errorNoEndCap;
+    public bool TrendlineEnabled => _trendlineEnabled;
+    public ChartTrendlineType TrendlineType => _trendlineType;
+    public int? TrendlineOrder => _trendlineOrder;
+    public int? TrendlinePeriod => _trendlinePeriod;
+    public bool TrendlineEquation => _trendlineEquation;
+    public bool TrendlineRSquared => _trendlineRSquared;
     public DataLabelPosition LabelPosition => _labelPosition;
     public string LabelNumberFormat => _labelNumberFormat;
     public string LabelSeparator => _labelSeparator;
@@ -278,6 +307,12 @@ public sealed class ChartSeriesOptionsPlanner
             _errorValueType = ChartErrorValueType.Fixed;
             _errorValue = 0;
             _errorNoEndCap = false;
+            _trendlineEnabled = false;
+            _trendlineType = ChartTrendlineType.Linear;
+            _trendlineOrder = null;
+            _trendlinePeriod = null;
+            _trendlineEquation = false;
+            _trendlineRSquared = false;
             _labelPosition = DataLabelPosition.OutsideEnd;
             _labelNumberFormat = string.Empty;
             _labelSeparator = string.Empty;
@@ -316,6 +351,13 @@ public sealed class ChartSeriesOptionsPlanner
         _errorValueType = errorBars?.ValueType ?? ChartErrorValueType.Fixed;
         _errorValue = errorBars?.Value ?? 0;
         _errorNoEndCap = errorBars?.NoEndCap == true;
+        var trendline = series.Trendline;
+        _trendlineEnabled = trendline is not null;
+        _trendlineType = trendline?.Type ?? ChartTrendlineType.Linear;
+        _trendlineOrder = trendline?.PolynomialOrder;
+        _trendlinePeriod = trendline?.MovingAveragePeriod;
+        _trendlineEquation = trendline?.DisplayEquation == true;
+        _trendlineRSquared = trendline?.DisplayRSquared == true;
         _labelPosition = labels?.Position ?? DataLabelPosition.OutsideEnd;
         _labelNumberFormat = labels?.NumberFormat ?? string.Empty;
         _labelSeparator = labels?.Separator ?? string.Empty;
@@ -360,6 +402,12 @@ public sealed class ChartSeriesOptionsPlanner
     public void SetErrorValueType(ChartErrorValueType value) => _errorValueType = value;
     public void SetErrorValue(double value) => _errorValue = Math.Max(0, value);
     public void SetErrorNoEndCap(bool value) => _errorNoEndCap = value;
+    public void SetTrendlineEnabled(bool value) => _trendlineEnabled = value;
+    public void SetTrendlineType(ChartTrendlineType value) => _trendlineType = value;
+    public void SetTrendlineOrder(int? value) => _trendlineOrder = value is null ? null : Math.Clamp(value.Value, 2, 6);
+    public void SetTrendlinePeriod(int? value) => _trendlinePeriod = value is null ? null : Math.Max(2, value.Value);
+    public void SetTrendlineEquation(bool value) => _trendlineEquation = value;
+    public void SetTrendlineRSquared(bool value) => _trendlineRSquared = value;
     public void SetLabelPosition(DataLabelPosition value) => _labelPosition = value;
     public void SetLabelNumberFormat(string? value) => _labelNumberFormat = value ?? string.Empty;
     public void SetLabelSeparator(string? value) => _labelSeparator = value ?? string.Empty;
@@ -408,6 +456,16 @@ public sealed class ChartSeriesOptionsPlanner
                 ValueType = _errorValueType,
                 Value = _errorValue,
                 NoEndCap = _errorNoEndCap,
+            }
+            : null,
+        Trendline: _trendlineEnabled
+            ? new ChartTrendline
+            {
+                Type = _trendlineType,
+                PolynomialOrder = _trendlineType == ChartTrendlineType.Polynomial ? _trendlineOrder : null,
+                MovingAveragePeriod = _trendlineType == ChartTrendlineType.MovingAverage ? _trendlinePeriod : null,
+                DisplayEquation = _trendlineEquation,
+                DisplayRSquared = _trendlineRSquared,
             }
             : null);
 

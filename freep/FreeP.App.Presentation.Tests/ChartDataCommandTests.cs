@@ -1326,6 +1326,12 @@ public sealed class ChartDataCommandTests
                     ValueType = ChartErrorValueType.Percentage,
                     Value = 7.5,
                     NoEndCap = true,
+                },
+                Trendline: new ChartTrendline
+                {
+                    Type = ChartTrendlineType.Polynomial,
+                    PolynomialOrder = 3,
+                    DisplayEquation = true,
                 })));
 
         var series = chart.Series[1];
@@ -1348,6 +1354,10 @@ public sealed class ChartDataCommandTests
         series.ErrorBars.ValueType.Should().Be(ChartErrorValueType.Percentage);
         series.ErrorBars.Value.Should().Be(7.5);
         series.ErrorBars.NoEndCap.Should().BeTrue();
+        series.Trendline.Should().NotBeNull();
+        series.Trendline!.Type.Should().Be(ChartTrendlineType.Polynomial);
+        series.Trendline.PolynomialOrder.Should().Be(3);
+        series.Trendline.DisplayEquation.Should().BeTrue();
         series.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         series.DataLabels.NumberFormat.Should().Be("0.0%");
         series.DataLabels.Separator.Should().Be(" | ");
@@ -1388,6 +1398,11 @@ public sealed class ChartDataCommandTests
         roundTrippedErrorBars.ValueType.Should().Be(ChartErrorValueType.Percentage);
         roundTrippedErrorBars.Value.Should().Be(7.5);
         roundTrippedErrorBars.NoEndCap.Should().BeTrue();
+        var roundTrippedTrendline = roundTripped.Series[1].Trendline;
+        roundTrippedTrendline.Should().NotBeNull();
+        roundTrippedTrendline!.Type.Should().Be(ChartTrendlineType.Polynomial);
+        roundTrippedTrendline.PolynomialOrder.Should().Be(3);
+        roundTrippedTrendline.DisplayEquation.Should().BeTrue();
         var roundTrippedMarker = roundTripped.Series[1].MarkerStyle!;
         roundTrippedMarker.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
         roundTrippedMarker.SizePt.Should().Be(8);
@@ -1408,6 +1423,7 @@ public sealed class ChartDataCommandTests
         series.Fill.Should().BeOfType<ShapeFill.Gradient>();
         series.DataLabels.Should().BeNull();
         series.ErrorBars.Should().BeNull();
+        series.Trendline.Should().BeNull();
     }
 
     [Fact]

@@ -932,6 +932,9 @@ internal static class PptxChartWriter
         var serDlblsEl2 = BuildDataLabelsEl(series.DataLabels, chart.ChartType, PointDataLabels(series));
         if (serDlblsEl2 is not null) el.Add(serDlblsEl2);
 
+        var trendline = BuildTrendlineEl(series.Trendline);
+        if (trendline is not null) el.Add(trendline);
+
         var errBars = BuildErrorBarsEl(series.ErrorBars);
         if (errBars is not null) el.Add(errBars);
 
@@ -1038,6 +1041,9 @@ internal static class PptxChartWriter
         var serDlblsEl = BuildDataLabelsEl(series.DataLabels, chart.ChartType, PointDataLabels(series));
         if (serDlblsEl is not null) el.Add(serDlblsEl);
 
+        var trendline = BuildTrendlineEl(series.Trendline);
+        if (trendline is not null) el.Add(trendline);
+
         var errBars = BuildErrorBarsEl(series.ErrorBars);
         if (errBars is not null) el.Add(errBars);
 
@@ -1107,6 +1113,39 @@ internal static class PptxChartWriter
             new XElement(C + "errValType", new XAttribute("val", bars.ValueType == ChartErrorValueType.Percentage ? "percentage" : "fixedVal")),
             new XElement(C + "noEndCap", new XAttribute("val", BoolValue(bars.NoEndCap))),
             new XElement(C + "val", new XAttribute("val", bars.Value.ToString("G", CultureInfo.InvariantCulture))));
+    }
+
+    private static XElement? BuildTrendlineEl(ChartTrendline? trendline)
+    {
+        if (trendline is null)
+            return null;
+
+        var type = trendline.Type switch
+        {
+            ChartTrendlineType.Exponential => "exp",
+            ChartTrendlineType.Logarithmic => "log",
+            ChartTrendlineType.Polynomial => "poly",
+            ChartTrendlineType.Power => "power",
+            ChartTrendlineType.MovingAverage => "movingAvg",
+            _ => "linear",
+        };
+        var children = new List<object>
+        {
+            new XElement(C + "trendlineType", new XAttribute("val", type)),
+        };
+        if (trendline.PolynomialOrder is { } order)
+            children.Add(new XElement(C + "order", new XAttribute("val", order)));
+        if (trendline.MovingAveragePeriod is { } period)
+            children.Add(new XElement(C + "period", new XAttribute("val", period)));
+        if (trendline.Forward is { } forward)
+            children.Add(new XElement(C + "forward", new XAttribute("val", forward.ToString("G", CultureInfo.InvariantCulture))));
+        if (trendline.Backward is { } backward)
+            children.Add(new XElement(C + "backward", new XAttribute("val", backward.ToString("G", CultureInfo.InvariantCulture))));
+        if (trendline.DisplayEquation)
+            children.Add(new XElement(C + "dispEq", new XAttribute("val", "1")));
+        if (trendline.DisplayRSquared)
+            children.Add(new XElement(C + "dispRSqr", new XAttribute("val", "1")));
+        return new XElement(C + "trendline", children);
     }
 
     private static XElement? BuildSeriesShapePropertiesEl(ChartSeries series)

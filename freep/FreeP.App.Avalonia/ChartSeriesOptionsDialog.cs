@@ -35,6 +35,12 @@ internal sealed class ChartSeriesOptionsDialog : Window
     private readonly ComboBox _errorValueTypeCombo;
     private readonly TextBox _errorValueBox;
     private readonly CheckBox _errorNoEndCapCheck;
+    private readonly CheckBox _trendlineCheck;
+    private readonly ComboBox _trendlineTypeCombo;
+    private readonly TextBox _trendlineOrderBox;
+    private readonly TextBox _trendlinePeriodBox;
+    private readonly CheckBox _trendlineEquationCheck;
+    private readonly CheckBox _trendlineRSquaredCheck;
     private readonly ComboBox _labelPositionCombo;
     private readonly TextBox _labelNumberFormatBox;
     private readonly TextBox _labelSeparatorBox;
@@ -100,6 +106,12 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _errorValueTypeCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.ErrorValueTypeOptions.Select(option => option.Label).ToArray(), MinWidth = 160 };
         _errorValueBox = new TextBox { MinWidth = 130 };
         _errorNoEndCapCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.ErrorNoEndCapLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _trendlineCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.TrendlineLabel };
+        _trendlineTypeCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.TrendlineTypeOptions.Select(option => option.Label).ToArray(), MinWidth = 160 };
+        _trendlineOrderBox = new TextBox { MinWidth = 130 };
+        _trendlinePeriodBox = new TextBox { MinWidth = 130 };
+        _trendlineEquationCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.TrendlineEquationLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _trendlineRSquaredCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.TrendlineRSquaredLabel, Margin = new Thickness(20, 0, 0, 0) };
         _labelPositionCombo = new ComboBox
         {
             ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions.Select(option => option.Label).ToArray(),
@@ -160,6 +172,12 @@ internal sealed class ChartSeriesOptionsDialog : Window
                 MakeRow(ChartSeriesOptionsPlanner.ErrorValueTypeLabel, _errorValueTypeCombo),
                 MakeRow(ChartSeriesOptionsPlanner.ErrorValueLabel, _errorValueBox),
                 _errorNoEndCapCheck,
+                _trendlineCheck,
+                MakeRow(ChartSeriesOptionsPlanner.TrendlineTypeLabel, _trendlineTypeCombo),
+                MakeRow(ChartSeriesOptionsPlanner.TrendlineOrderLabel, _trendlineOrderBox),
+                MakeRow(ChartSeriesOptionsPlanner.TrendlinePeriodLabel, _trendlinePeriodBox),
+                _trendlineEquationCheck,
+                _trendlineRSquaredCheck,
                 MakeRow(surface.LabelPositionLabel, _labelPositionCombo),
                 MakeRow(surface.NumberFormatLabel, _labelNumberFormatBox),
                 MakeRow(surface.SeparatorLabel, _labelSeparatorBox),
@@ -208,7 +226,13 @@ internal sealed class ChartSeriesOptionsDialog : Window
         bool? labelItalic = null,
         string? labelColor = null,
         bool showBubbleSize = false,
-        bool errorBars = false)
+        bool errorBars = false,
+        bool trendline = false,
+        ChartTrendlineType trendlineType = ChartTrendlineType.Linear,
+        int? trendlineOrder = null,
+        int? trendlinePeriod = null,
+        bool trendlineEquation = false,
+        bool trendlineRSquared = false)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         _smoothLineCheck.IsChecked = smoothLine;
@@ -228,6 +252,12 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _showLegendKeysCheck.IsChecked = showLegendKeys;
         _showBubbleSizeCheck.IsChecked = showBubbleSize;
         _errorBarsCheck.IsChecked = errorBars;
+        _trendlineCheck.IsChecked = trendline;
+        _trendlineTypeCombo.SelectedIndex = FindTrendlineTypeIndex(trendlineType);
+        _trendlineOrderBox.Text = Format(trendlineOrder);
+        _trendlinePeriodBox.Text = Format(trendlinePeriod);
+        _trendlineEquationCheck.IsChecked = trendlineEquation;
+        _trendlineRSquaredCheck.IsChecked = trendlineRSquared;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
         _labelNumberFormatBox.Text = labelNumberFormat ?? string.Empty;
         _labelSeparatorBox.Text = labelSeparator ?? string.Empty;
@@ -273,6 +303,12 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _errorValueTypeCombo.SelectedIndex = FindErrorValueTypeIndex(_planner.ErrorValueType);
         _errorValueBox.Text = Format(_planner.ErrorValue);
         _errorNoEndCapCheck.IsChecked = _planner.ErrorNoEndCap;
+        _trendlineCheck.IsChecked = _planner.TrendlineEnabled;
+        _trendlineTypeCombo.SelectedIndex = FindTrendlineTypeIndex(_planner.TrendlineType);
+        _trendlineOrderBox.Text = Format(_planner.TrendlineOrder);
+        _trendlinePeriodBox.Text = Format(_planner.TrendlinePeriod);
+        _trendlineEquationCheck.IsChecked = _planner.TrendlineEquation;
+        _trendlineRSquaredCheck.IsChecked = _planner.TrendlineRSquared;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(_planner.LabelPosition);
         _labelNumberFormatBox.Text = _planner.LabelNumberFormat;
         _labelSeparatorBox.Text = _planner.LabelSeparator;
@@ -311,6 +347,13 @@ internal sealed class ChartSeriesOptionsDialog : Window
             _planner.SetErrorValueType(ChartSeriesOptionsPlanner.ErrorValueTypeOptions[_errorValueTypeCombo.SelectedIndex].Value);
         _planner.SetErrorValue(ParseOptional(_errorValueBox.Text, "Error bar value") ?? 0);
         _planner.SetErrorNoEndCap(_errorNoEndCapCheck.IsChecked == true);
+        _planner.SetTrendlineEnabled(_trendlineCheck.IsChecked == true);
+        if (_trendlineTypeCombo.SelectedIndex >= 0 && _trendlineTypeCombo.SelectedIndex < ChartSeriesOptionsPlanner.TrendlineTypeOptions.Count)
+            _planner.SetTrendlineType(ChartSeriesOptionsPlanner.TrendlineTypeOptions[_trendlineTypeCombo.SelectedIndex].Value);
+        _planner.SetTrendlineOrder(ParseOptionalInt(_trendlineOrderBox.Text, ChartSeriesOptionsPlanner.TrendlineOrderLabel));
+        _planner.SetTrendlinePeriod(ParseOptionalInt(_trendlinePeriodBox.Text, ChartSeriesOptionsPlanner.TrendlinePeriodLabel));
+        _planner.SetTrendlineEquation(_trendlineEquationCheck.IsChecked == true);
+        _planner.SetTrendlineRSquared(_trendlineRSquaredCheck.IsChecked == true);
         if (_labelPositionCombo.SelectedIndex >= 0 &&
             _labelPositionCombo.SelectedIndex < ChartDisplayOptionsPlanner.LabelPositionOptions.Count)
             _planner.SetLabelPosition(ChartDisplayOptionsPlanner.LabelPositionOptions[_labelPositionCombo.SelectedIndex].Value);
@@ -339,6 +382,18 @@ internal sealed class ChartSeriesOptionsDialog : Window
     private static string Format(double? value) =>
         value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
 
+    private static string Format(int? value) =>
+        value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static int? ParseOptionalInt(string? text, string label)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value >= 0)
+            return value;
+        throw new FormatException($"{label} must be a non-negative integer or blank.");
+    }
+
     private static int FindMarkerIndex(ChartMarkerSymbol symbol) =>
         Math.Max(0, ChartSeriesOptionsPlanner.MarkerOptions
             .Select((option, index) => (option, index))
@@ -361,6 +416,11 @@ internal sealed class ChartSeriesOptionsDialog : Window
 
     private static int FindErrorValueTypeIndex(ChartErrorValueType value) =>
         Math.Max(0, ChartSeriesOptionsPlanner.ErrorValueTypeOptions
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == value).index);
+
+    private static int FindTrendlineTypeIndex(ChartTrendlineType value) =>
+        Math.Max(0, ChartSeriesOptionsPlanner.TrendlineTypeOptions
             .Select((option, index) => (option, index))
             .FirstOrDefault(item => item.option.Value == value).index);
 

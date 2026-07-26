@@ -32,6 +32,12 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly ComboBox _errorValueTypeCombo;
     private readonly TextBox _errorValueBox;
     private readonly CheckBox _errorNoEndCapCheck;
+    private readonly CheckBox _trendlineCheck;
+    private readonly ComboBox _trendlineTypeCombo;
+    private readonly TextBox _trendlineOrderBox;
+    private readonly TextBox _trendlinePeriodBox;
+    private readonly CheckBox _trendlineEquationCheck;
+    private readonly CheckBox _trendlineRSquaredCheck;
     private readonly ComboBox _labelPositionCombo;
     private readonly TextBox _labelNumberFormatBox;
     private readonly TextBox _labelSeparatorBox;
@@ -97,6 +103,12 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _errorValueTypeCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.ErrorValueTypeOptions, DisplayMemberPath = nameof(ChartErrorValueTypeOption.Label), MinWidth = 150 };
         _errorValueBox = new TextBox { MinWidth = 120 };
         _errorNoEndCapCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.ErrorNoEndCapLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _trendlineCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.TrendlineLabel };
+        _trendlineTypeCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.TrendlineTypeOptions, DisplayMemberPath = nameof(ChartTrendlineTypeOption.Label), MinWidth = 150 };
+        _trendlineOrderBox = new TextBox { MinWidth = 120 };
+        _trendlinePeriodBox = new TextBox { MinWidth = 120 };
+        _trendlineEquationCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.TrendlineEquationLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _trendlineRSquaredCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.TrendlineRSquaredLabel, Margin = new Thickness(20, 0, 0, 0) };
         _labelPositionCombo = new ComboBox
         {
             ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions,
@@ -154,6 +166,12 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.ErrorValueTypeLabel, _errorValueTypeCombo));
         content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.ErrorValueLabel, _errorValueBox));
         content.Children.Add(_errorNoEndCapCheck);
+        content.Children.Add(_trendlineCheck);
+        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.TrendlineTypeLabel, _trendlineTypeCombo));
+        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.TrendlineOrderLabel, _trendlineOrderBox));
+        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.TrendlinePeriodLabel, _trendlinePeriodBox));
+        content.Children.Add(_trendlineEquationCheck);
+        content.Children.Add(_trendlineRSquaredCheck);
         content.Children.Add(MakeRow(surface.LabelPositionLabel, _labelPositionCombo));
         content.Children.Add(MakeRow(surface.NumberFormatLabel, _labelNumberFormatBox));
         content.Children.Add(MakeRow(surface.SeparatorLabel, _labelSeparatorBox));
@@ -201,7 +219,13 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         bool? labelItalic = null,
         string? labelColor = null,
         bool showBubbleSize = false,
-        bool errorBars = false)
+        bool errorBars = false,
+        bool trendline = false,
+        ChartTrendlineType trendlineType = ChartTrendlineType.Linear,
+        int? trendlineOrder = null,
+        int? trendlinePeriod = null,
+        bool trendlineEquation = false,
+        bool trendlineRSquared = false)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         _smoothLineCheck.IsChecked = smoothLine;
@@ -221,6 +245,12 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _showLegendKeysCheck.IsChecked = showLegendKeys;
         _showBubbleSizeCheck.IsChecked = showBubbleSize;
         _errorBarsCheck.IsChecked = errorBars;
+        _trendlineCheck.IsChecked = trendline;
+        _trendlineTypeCombo.SelectedIndex = FindTrendlineTypeIndex(trendlineType);
+        _trendlineOrderBox.Text = Format(trendlineOrder);
+        _trendlinePeriodBox.Text = Format(trendlinePeriod);
+        _trendlineEquationCheck.IsChecked = trendlineEquation;
+        _trendlineRSquaredCheck.IsChecked = trendlineRSquared;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
         _labelNumberFormatBox.Text = labelNumberFormat ?? string.Empty;
         _labelSeparatorBox.Text = labelSeparator ?? string.Empty;
@@ -266,6 +296,12 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _errorValueTypeCombo.SelectedIndex = FindErrorValueTypeIndex(_planner.ErrorValueType);
         _errorValueBox.Text = Format(_planner.ErrorValue);
         _errorNoEndCapCheck.IsChecked = _planner.ErrorNoEndCap;
+        _trendlineCheck.IsChecked = _planner.TrendlineEnabled;
+        _trendlineTypeCombo.SelectedIndex = FindTrendlineTypeIndex(_planner.TrendlineType);
+        _trendlineOrderBox.Text = Format(_planner.TrendlineOrder);
+        _trendlinePeriodBox.Text = Format(_planner.TrendlinePeriod);
+        _trendlineEquationCheck.IsChecked = _planner.TrendlineEquation;
+        _trendlineRSquaredCheck.IsChecked = _planner.TrendlineRSquared;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(_planner.LabelPosition);
         _labelNumberFormatBox.Text = _planner.LabelNumberFormat;
         _labelSeparatorBox.Text = _planner.LabelSeparator;
@@ -304,6 +340,13 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             _planner.SetErrorValueType(valueType.Value);
         _planner.SetErrorValue(ParseOptional(_errorValueBox.Text, "Error bar value") ?? 0);
         _planner.SetErrorNoEndCap(_errorNoEndCapCheck.IsChecked == true);
+        _planner.SetTrendlineEnabled(_trendlineCheck.IsChecked == true);
+        if (_trendlineTypeCombo.SelectedItem is ChartTrendlineTypeOption trendlineType)
+            _planner.SetTrendlineType(trendlineType.Value);
+        _planner.SetTrendlineOrder(ParseOptionalInt(_trendlineOrderBox.Text, ChartSeriesOptionsPlanner.TrendlineOrderLabel));
+        _planner.SetTrendlinePeriod(ParseOptionalInt(_trendlinePeriodBox.Text, ChartSeriesOptionsPlanner.TrendlinePeriodLabel));
+        _planner.SetTrendlineEquation(_trendlineEquationCheck.IsChecked == true);
+        _planner.SetTrendlineRSquared(_trendlineRSquaredCheck.IsChecked == true);
         if (_labelPositionCombo.SelectedItem is ChartDisplayLabelPositionOption position)
             _planner.SetLabelPosition(position.Value);
         _planner.SetLabelNumberFormat(_labelNumberFormatBox.Text);
@@ -331,6 +374,18 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private static string Format(double? value) =>
         value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
 
+    private static string Format(int? value) =>
+        value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static int? ParseOptionalInt(string? text, string label)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value >= 0)
+            return value;
+        throw new FormatException($"{label} must be a non-negative integer or blank.");
+    }
+
     private static int FindMarkerIndex(ChartMarkerSymbol symbol) =>
         Math.Max(0, ChartSeriesOptionsPlanner.MarkerOptions
             .Select((option, index) => (option, index))
@@ -353,6 +408,11 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     private static int FindErrorValueTypeIndex(ChartErrorValueType value) =>
         Math.Max(0, ChartSeriesOptionsPlanner.ErrorValueTypeOptions
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == value).index);
+
+    private static int FindTrendlineTypeIndex(ChartTrendlineType value) =>
+        Math.Max(0, ChartSeriesOptionsPlanner.TrendlineTypeOptions
             .Select((option, index) => (option, index))
             .FirstOrDefault(item => item.option.Value == value).index);
 
