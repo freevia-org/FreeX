@@ -300,7 +300,7 @@ public static class DocxReader
         // a FreeW save.
         foreach (var relationship in ReadDocumentRelationships(archive).Values)
         {
-            if (relationship.Type is not (StylesWithEffectsRelType or PeopleRelType or CommentsIdsRelType or CommentsExtensibleRelType or KeyMapCustomizationRelType))
+            if (relationship.Type is not (StylesWithEffectsRelType or PeopleRelType or CommentsIdsRelType or CommentsExtensibleRelType or KeyMapCustomizationRelType or DocumentTasksRelType))
                 continue;
 
             var partName = OpcPathHelper.ResolveAbsolutePartName("/word", relationship.Target);
