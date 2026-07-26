@@ -29,6 +29,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly TextBox _barGapWidthBox;
     private readonly TextBox _barOverlapBox;
     private readonly ComboBox _displayBlanksCombo;
+    private readonly CheckBox _showDataLabelsOverMaximumCheck;
 
     internal ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -104,6 +105,12 @@ internal sealed class ChartDisplayOptionsDialog : Window
             SelectedIndex = FindDisplayBlanksIndex(_planner.DisplayBlanksAs),
             MinWidth = 150,
         };
+        _showDataLabelsOverMaximumCheck = new CheckBox
+        {
+            Content = surface.ShowDataLabelsOverMaximumLabel,
+            IsThreeState = true,
+            IsChecked = _planner.ShowDataLabelsOverMaximum,
+        };
 
         var buttons = new StackPanel
         {
@@ -139,6 +146,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
                 MakeRow(surface.BarGapWidthLabel, _barGapWidthBox),
                 MakeRow(surface.BarOverlapLabel, _barOverlapBox),
                 MakeRow(surface.DisplayBlanksAsLabel, _displayBlanksCombo),
+                _showDataLabelsOverMaximumCheck,
                 new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 },
                 buttons,
             },
@@ -166,7 +174,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
         string? separator = null,
         int? barGapWidthPercent = null,
         int? barOverlapPercent = null,
-        ChartDisplayBlanksAs? displayBlanksAs = null)
+        ChartDisplayBlanksAs? displayBlanksAs = null,
+        bool? showDataLabelsOverMaximum = null)
     {
         _titleBox.Text = title;
         _legendCombo.SelectedIndex = FindLegendIndex(legend);
@@ -183,6 +192,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _barGapWidthBox.Text = Format(barGapWidthPercent);
         _barOverlapBox.Text = Format(barOverlapPercent);
         _displayBlanksCombo.SelectedIndex = FindDisplayBlanksIndex(displayBlanksAs);
+        _showDataLabelsOverMaximumCheck.IsChecked = showDataLabelsOverMaximum;
     }
 
     private void OnOk()
@@ -215,6 +225,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
         var blanksIndex = _displayBlanksCombo.SelectedIndex;
         if (blanksIndex >= 0 && blanksIndex < ChartDisplayOptionsPlanner.DisplayBlanksOptions.Count)
             _planner.SetDisplayBlanksAs(ChartDisplayOptionsPlanner.DisplayBlanksOptions[blanksIndex].Value);
+        _planner.SetShowDataLabelsOverMaximum(_showDataLabelsOverMaximumCheck.IsChecked);
     }
 
     private static Control MakeRow(string label, Control control)
