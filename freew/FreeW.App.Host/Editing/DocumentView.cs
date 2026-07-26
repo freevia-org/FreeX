@@ -6038,7 +6038,7 @@ public sealed class DocumentView : RichTextBox
             if (materialLayer is not null)
             {
                 materialLayer.Width = canvas.ActualWidth + 1;
-                materialLayer.Height = canvas.ActualHeight + 10;
+                materialLayer.Height = canvas.ActualHeight + 13;
                 Canvas.SetLeft(materialLayer, -1);
                 Canvas.SetTop(materialLayer, -6);
             }

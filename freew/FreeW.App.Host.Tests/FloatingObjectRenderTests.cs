@@ -569,6 +569,43 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void FloatingOverlay_ExtendsMaterialLayerForImportedReviewCopySignature()
+    {
+        var wordArt = new WordArt("Review Copy", WordArtStyle.FillGold, 26)
+        {
+            Warp = WordArtWarp.ArchUp,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 260,
+                VerticalOffsetPt = 142,
+                ZOrderIndex = 9
+            }
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromWordArt(wordArt));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Canvas>().Single();
+        root.Measure(new Size(236, 56));
+        root.Arrange(new Rect(0, 0, 236, 56));
+        root.UpdateLayout();
+
+        var materialLayer = root.Children.OfType<Border>().Single();
+        materialLayer.Width.Should().BeApproximately(root.ActualWidth + 1, 0.01);
+        materialLayer.Height.Should().BeApproximately(root.ActualHeight + 13, 0.01);
+        Canvas.GetLeft(materialLayer).Should().Be(-1);
+        Canvas.GetTop(materialLayer).Should().Be(-6);
+        root.Children.OfType<TextBlock>().Should().HaveCount(wordArt.Text.Length);
+    }
+
+    [StaFact]
     public void FloatingOverlay_UsesOuterOnlyGlowLayerForImportedFreeW30PointWave1Signature()
     {
         var wordArt = new WordArt("FreeW", WordArtStyle.GlowBlue, 30)
