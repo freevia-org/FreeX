@@ -1617,11 +1617,12 @@ public sealed class EditingSession
 
     public SlideShape InsertSmartArt(SmartArtLayoutPreset layout = SmartArtLayoutPreset.BasicProcess)
     {
-        if (layout != SmartArtLayoutPreset.BasicProcess)
-            throw new ArgumentOutOfRangeException(nameof(layout), layout, "Only Basic Process insertion is currently supported.");
+        if (!SlideObjectInsertionPlanner.InsertableSmartArtLayouts.Contains(layout))
+            throw new ArgumentOutOfRangeException(nameof(layout), layout, "The requested SmartArt layout is not available for insertion.");
 
         var (x, y, cx, cy) = DefaultShapeBounds();
-        var smartArt = SmartArtInsertionFactory.CreateBasicProcess(
+        var smartArt = SmartArtInsertionFactory.Create(
+            layout,
             NextSmartArtPartIndex(),
             ["Step 1", "Step 2", "Step 3"]);
         var shape = new SlideShape

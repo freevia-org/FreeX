@@ -202,6 +202,52 @@ public sealed class SlideObjectInsertionPlannerTests
     }
 
     [Fact]
+    public void ApplyCommand_InsertsEveryLiveSmartArtLayoutPreset()
+    {
+        foreach (var preset in SlideObjectInsertionPlanner.InsertableSmartArtLayouts)
+        {
+            var editor = MakeSession();
+            var commandId = preset == SmartArtLayoutPreset.BasicProcess
+                ? SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId
+                : SlideObjectInsertionPlanner.SmartArtLayoutCommandId(preset);
+
+            var added = SlideObjectInsertionPlanner.ApplyCommand(editor, commandId);
+
+            added.Should().NotBeNull(preset.ToString());
+            added!.Kind.Should().Be(SlideShapeKind.SmartArt);
+            added.SmartArt!.Data!.Family.Should().NotBe(SmartArtFamily.Unknown, preset.ToString());
+            added.SmartArt.Data.LayoutUniqueId.Should().Contain("/layout/", preset.ToString());
+        }
+    }
+
+    [Fact]
+    public void ApplyCommand_InsertsEveryLiveSmartArtLayoutPreset_AndRoundTrips()
+    {
+        var editor = MakeSession();
+        foreach (var preset in SlideObjectInsertionPlanner.InsertableSmartArtLayouts)
+        {
+            var commandId = preset == SmartArtLayoutPreset.BasicProcess
+                ? SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId
+                : SlideObjectInsertionPlanner.SmartArtLayoutCommandId(preset);
+
+            SlideObjectInsertionPlanner.ApplyCommand(editor, commandId).Should().NotBeNull(preset.ToString());
+        }
+
+        using var package = new MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(editor.Presentation, package);
+        package.Position = 0;
+
+        var reopened = FreeP.Core.IO.PptxPackageReader.Read(package);
+        var smartArts = reopened.Slides[0].Shapes
+            .Where(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .Select(shape => shape.SmartArt!.Data!.LayoutUniqueId)
+            .ToArray();
+
+        smartArts.Should().HaveCount(SlideObjectInsertionPlanner.InsertableSmartArtLayouts.Count);
+        smartArts.Should().OnlyContain(layout => layout.Contains("/layout/"));
+    }
+
+    [Fact]
     public void ApplyCommand_InsertsSmartArt_RoundTripsNativeDiagramParts()
     {
         var editor = MakeSession();

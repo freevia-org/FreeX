@@ -380,7 +380,9 @@ public static class FreePRibbon
             group.Large(SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId,
                 FreePRibbonText.SmartArtBasicProcessCommand.Label,
                 RibbonCommandIconKind.ArrowRight,
-                FreePRibbonText.SmartArtBasicProcessCommand.KeyTip);
+                FreePRibbonText.SmartArtBasicProcessCommand.KeyTip,
+                dropdown: true,
+                menu: BuildSmartArtInsertMenu);
         });
         tab.Group("links", FreePRibbonText.LinksGroupLabel, FreePRibbonText.LinksGroupKeyTip, 92, group =>
         {
@@ -421,6 +423,20 @@ public static class FreePRibbon
             group.Medium(SlideObjectInsertionPlanner.CurvedConnectorCommandId, FreePRibbonText.CurvedConnectorLabel,
                 RibbonCommandIconKind.Line, FreePRibbonText.CurvedConnectorKeyTip);
         });
+    }
+
+    private static void BuildSmartArtInsertMenu(RibbonMenuBuilder menu)
+    {
+        var index = 0;
+        foreach (var preset in SlideObjectInsertionPlanner.InsertableSmartArtLayouts)
+        {
+            menu.Item(
+                preset == SmartArtLayoutPreset.BasicProcess
+                    ? SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId
+                    : SlideObjectInsertionPlanner.SmartArtLayoutCommandId(preset),
+                SlideObjectInsertionPlanner.SmartArtLayoutDisplayName(preset),
+                $"S{++index}");
+        }
     }
 
     private static void AddDesignGroups(RibbonTabBuilder tab)
