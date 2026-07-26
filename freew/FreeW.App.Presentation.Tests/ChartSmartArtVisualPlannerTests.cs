@@ -172,6 +172,17 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartPlan_ImportedNativeColumnStyle_UsesWordOfficeThemePalette()
+    {
+        var column = Chart.Create(ChartKind.Column, ["Q1", "Q2"], [1.0, 2.0]);
+        column.StyleId = 7;
+        column.ColorSchemeId = "mono-blue";
+        column.NativeVisualSettings = new ChartNativeVisualSettings(false, false, false, false);
+        ChartSmartArtVisualPlanner.BuildChartPlan(column).PaletteHex
+            .Should().Equal("#4679A7", "#5591C7", "#84AEDC", "#B8CDE8");
+    }
+
+    [Fact]
     public void ColumnScene_UsesWordSizedCategoryBarSlots()
     {
         var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2", "Q3", "Q4"], [1.0, 2.0, 1.5, 2.5]);

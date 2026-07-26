@@ -419,10 +419,25 @@ public static class ChartSmartArtVisualPlanner
             showAxisTitles,
             showAxisTitles ? chart.CategoryAxisTitle : null,
             showAxisTitles ? chart.ValueAxisTitle : null,
-            scheme.Colors.Select(NormalizeHex).ToList(),
+            ResolveImportedNativePalette(chart, scheme),
             chart.Categories.Select(NormalizeSignatureText).ToList(),
             series,
             ChartValueAxisPlan.FromSeries(series));
+    }
+
+    private static IReadOnlyList<string> ResolveImportedNativePalette(Chart chart, ChartColorScheme scheme)
+    {
+        if (chart.NativeVisualSettings is null)
+            return scheme.Colors.Select(NormalizeHex).ToList();
+
+        // Office's native style ids are not FreeW gallery ids. These two combinations are the
+        // default Office-theme palettes serialized by the imported chart parts, measured from Word.
+        if (chart.Kind == ChartKind.Column
+            && chart.StyleId == 7
+            && string.Equals(chart.ColorSchemeId, "mono-blue", StringComparison.OrdinalIgnoreCase))
+            return ["#4679A7", "#5591C7", "#84AEDC", "#B8CDE8"];
+
+        return scheme.Colors.Select(NormalizeHex).ToList();
     }
 
     public static ChartScene BuildChartScene(Chart chart, double width, double height)
