@@ -120,6 +120,48 @@ public class DocumentMergePreservedPartsTests
     }
 
     [Fact]
+    public void Merge_WritesTransferredPreservedNumberingForParagraphsAndStyles()
+    {
+        var source = new TextDocument();
+        source.Preserved.OriginalNumbering = RawNumbering(12, 12, "source");
+        source.Styles["RawList"] = new DocumentStyle
+        {
+            Id = "RawList", Name = "Source raw list", PreservedNumbering = new PreservedNumbering(12, 2)
+        };
+        var sourceParagraph = new Paragraph("Source") { StyleId = "RawList", PreservedNumbering = new PreservedNumbering(12, 1) };
+        sourceParagraph.Runs.Add(Run.FootnoteReference(1));
+        source.Blocks.Add(sourceParagraph);
+        var sourceFootnote = new Footnote(1, "Source note");
+        sourceFootnote.Content[0].PreservedNumbering = new PreservedNumbering(12, 0);
+        source.Footnotes[1] = sourceFootnote;
+
+        var target = new TextDocument();
+        target.Preserved.OriginalNumbering = RawNumbering(12, 12, "target");
+        target.Styles["RawList"] = new DocumentStyle { Id = "RawList", Name = "Target raw list" };
+        target.Blocks.Add(new Paragraph("Target") { PreservedNumbering = new PreservedNumbering(12, 0) });
+
+        DocumentMerge.Merge(target, target.Blocks.Count, source);
+        var bytes = WriteBytes(target);
+
+        using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        var numbering = ReadXml(zip, "word/numbering.xml");
+        numbering.Descendants(Wordprocessing + "num")
+            .Select(number => (string?)number.Attribute(Wordprocessing + "numId"))
+            .Should().Equal("4", "5");
+        var document = ReadXml(zip, "word/document.xml");
+        document.Descendants(Wordprocessing + "numId").Last().Attribute(Wordprocessing + "val")!.Value.Should().Be("5");
+        ReadXml(zip, "word/footnotes.xml").Descendants(Wordprocessing + "numId").Single()
+            .Attribute(Wordprocessing + "val")!.Value.Should().Be("5");
+        var styles = ReadXml(zip, "word/styles.xml").Root!.Elements(Wordprocessing + "style");
+        styles.Single(style => (string?)style.Attribute(Wordprocessing + "styleId") == "RawList_FreeW1")
+            .Descendants(Wordprocessing + "numId").Single().Attribute(Wordprocessing + "val")!.Value.Should().Be("5");
+
+        var reread = DocxReader.Read(new MemoryStream(bytes));
+        reread.Blocks.OfType<Paragraph>().Should().OnlyContain(paragraph => paragraph.Formatting.ListKind == ListKind.Number);
+        reread.Styles["RawList_FreeW1"].PreservedNumbering.Should().Be(new PreservedNumbering(5, 2));
+    }
+
+    [Fact]
     public void Merge_PreservesRenamedAltChunkPackageGraph_WhenWritten()
     {
         const string altChunkRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk";
@@ -212,4 +254,14 @@ public class DocumentMergePreservedPartsTests
         using var stream = archive.GetEntry(entryName)!.Open();
         return XDocument.Load(stream);
     }
+
+    private static XElement RawNumbering(int abstractId, int numberId, string label) =>
+        new(Wordprocessing + "numbering",
+            new XAttribute(XNamespace.Xmlns + "w", Wordprocessing.NamespaceName),
+            new XElement(Wordprocessing + "abstractNum",
+                new XAttribute(Wordprocessing + "abstractNumId", abstractId),
+                new XElement(Wordprocessing + "multiLevelType", new XAttribute(Wordprocessing + "val", label))),
+            new XElement(Wordprocessing + "num",
+                new XAttribute(Wordprocessing + "numId", numberId),
+                new XElement(Wordprocessing + "abstractNumId", new XAttribute(Wordprocessing + "val", abstractId))));
 }

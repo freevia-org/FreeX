@@ -1,7 +1,49 @@
+using System.Xml.Linq;
+
 namespace FreeW.Core.Model.Tests;
 
 public class DocumentMergeTests
 {
+    [Fact]
+    public void Merge_TransfersPreservedNumberingWithCollisionSafeIds()
+    {
+        var wordprocessing = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var source = new TextDocument();
+        source.Preserved.OriginalNumbering = Numbering(wordprocessing, 12, 12, "source");
+        source.Styles["RawList"] = new DocumentStyle
+        {
+            Id = "RawList", Name = "Source raw list", PreservedNumbering = new PreservedNumbering(12, 2)
+        };
+        var sourceParagraph = new Paragraph("Source item")
+        {
+            StyleId = "RawList",
+            PreservedNumbering = new PreservedNumbering(12, 1)
+        };
+        sourceParagraph.Runs.Add(Run.FootnoteReference(1));
+        source.Blocks.Add(sourceParagraph);
+        var sourceFootnote = new Footnote(1, "Source note");
+        sourceFootnote.Content[0].PreservedNumbering = new PreservedNumbering(12, 0);
+        source.Footnotes[1] = sourceFootnote;
+
+        var target = new TextDocument();
+        target.Preserved.OriginalNumbering = Numbering(wordprocessing, 12, 12, "target");
+        target.Styles["RawList"] = new DocumentStyle { Id = "RawList", Name = "Target raw list" };
+        target.Blocks.Add(new Paragraph("Target item") { PreservedNumbering = new PreservedNumbering(12, 0) });
+
+        var inserted = DocumentMerge.Merge(target, target.Blocks.Count, source);
+
+        inserted.Single().Should().BeOfType<Paragraph>().Which.PreservedNumbering.Should().Be(new PreservedNumbering(13, 1));
+        inserted.Single().Should().BeOfType<Paragraph>().Which.StyleId.Should().Be("RawList_FreeW1");
+        target.Styles["RawList_FreeW1"].PreservedNumbering.Should().Be(new PreservedNumbering(13, 2));
+        target.Footnotes[1].Content.Single().PreservedNumbering.Should().Be(new PreservedNumbering(13, 0));
+        target.Blocks[0].Should().BeOfType<Paragraph>().Which.PreservedNumbering.Should().Be(new PreservedNumbering(12, 0));
+        target.Preserved.OriginalNumbering!.Elements(wordprocessing + "num")
+            .Select(element => (string?)element.Attribute(wordprocessing + "numId"))
+            .Should().Equal("12", "13");
+        source.Blocks.Single().Should().BeOfType<Paragraph>().Which.PreservedNumbering.Should().Be(new PreservedNumbering(12, 1));
+        source.Styles["RawList"].PreservedNumbering.Should().Be(new PreservedNumbering(12, 2));
+    }
+
     [Fact]
     public void Merge_TransfersConflictingStyleClosureWithoutOverwritingTargetStyles()
     {
@@ -653,4 +695,14 @@ public class DocumentMergeTests
         target.Blocks.OfType<Paragraph>().Select(p => p.PlainText)
             .Should().Equal("Only", "Appended");
     }
+
+    private static XElement Numbering(XNamespace wordprocessing, int abstractId, int numberId, string label) =>
+        new(wordprocessing + "numbering",
+            new XAttribute(XNamespace.Xmlns + "w", wordprocessing.NamespaceName),
+            new XElement(wordprocessing + "abstractNum",
+                new XAttribute(wordprocessing + "abstractNumId", abstractId),
+                new XElement(wordprocessing + "multiLevelType", new XAttribute(wordprocessing + "val", label))),
+            new XElement(wordprocessing + "num",
+                new XAttribute(wordprocessing + "numId", numberId),
+                new XElement(wordprocessing + "abstractNumId", new XAttribute(wordprocessing + "val", abstractId))));
 }

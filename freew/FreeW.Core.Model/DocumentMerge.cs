@@ -19,6 +19,10 @@ public static class DocumentMerge
 {
     private static readonly IReadOnlyDictionary<string, string> EmptyPartNameMap =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private static readonly IReadOnlyDictionary<int, int> EmptyNumberingIdMap =
+        new Dictionary<int, int>();
+    private static readonly XNamespace Wordprocessing =
+        "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
     /// <summary>
     /// Deep-clone the body blocks of <paramref name="source"/> so they can be inserted into another
@@ -45,7 +49,9 @@ public static class DocumentMerge
         var clones = CloneBlocks(source);
         var existingBookmarkNames = BookmarkNamesIn(target);
         var allParagraphs = TransferAnnotations(target, source, clones);
-        TransferStyles(target, source, clones, allParagraphs);
+        var sourceStyleIds = SourceStyleClosure(source, clones, allParagraphs);
+        var numberingIds = TransferPreservedNumbering(target, source, allParagraphs, sourceStyleIds);
+        TransferStyles(target, source, clones, allParagraphs, sourceStyleIds, numberingIds);
         RemapBookmarksAndInternalReferences(allParagraphs, existingBookmarkNames);
         var roots = allParagraphs
             .SelectMany(paragraph => paragraph.Runs)
@@ -108,6 +114,7 @@ public static class DocumentMerge
             Formatting = source.Formatting,
             StyleId = source.StyleId,
             DropCap = source.DropCap,
+            PreservedNumbering = source.PreservedNumbering,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
         foreach (var run in source.Runs)
@@ -312,25 +319,11 @@ public static class DocumentMerge
         TextDocument target,
         TextDocument source,
         IReadOnlyList<Block> clones,
-        IReadOnlyList<Paragraph> paragraphs)
+        IReadOnlyList<Paragraph> paragraphs,
+        IReadOnlyList<string> styleIds,
+        IReadOnlyDictionary<int, int> numberingIds)
     {
         var sourceStyles = new Dictionary<string, DocumentStyle>(source.Styles, StringComparer.OrdinalIgnoreCase);
-        var styleIds = new List<string>();
-        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        void AddStyle(string? id)
-        {
-            if (string.IsNullOrEmpty(id) || !sourceStyles.TryGetValue(id, out var style) || !selected.Add(id))
-                return;
-            styleIds.Add(id);
-            AddStyle(style.BasedOnStyleId);
-            AddStyle(style.NextStyleId);
-        }
-
-        foreach (var paragraph in paragraphs)
-            AddStyle(paragraph.StyleId);
-        foreach (var table in clones.OfType<Table>())
-            AddStyle(table.TableStyleId);
         if (styleIds.Count == 0)
             return;
 
@@ -354,7 +347,7 @@ public static class DocumentMerge
                 Run = sourceStyle.Run,
                 Paragraph = sourceStyle.Paragraph,
                 TableBorders = sourceStyle.TableBorders,
-                PreservedNumbering = sourceStyle.PreservedNumbering,
+                PreservedNumbering = RemapPreservedNumbering(sourceStyle.PreservedNumbering, numberingIds),
             };
         }
 
@@ -365,6 +358,144 @@ public static class DocumentMerge
             if (table.TableStyleId is { } styleId && styleNames.TryGetValue(styleId, out var mappedStyleId))
                 table.TableStyleId = mappedStyleId;
     }
+
+    private static IReadOnlyList<string> SourceStyleClosure(
+        TextDocument source,
+        IReadOnlyList<Block> clones,
+        IReadOnlyList<Paragraph> paragraphs)
+    {
+        var sourceStyles = new Dictionary<string, DocumentStyle>(source.Styles, StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>();
+        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void AddStyle(string? id)
+        {
+            if (string.IsNullOrEmpty(id) || !sourceStyles.TryGetValue(id, out var style) || !selected.Add(id))
+                return;
+            result.Add(id);
+            AddStyle(style.BasedOnStyleId);
+            AddStyle(style.NextStyleId);
+        }
+
+        foreach (var paragraph in paragraphs)
+            AddStyle(paragraph.StyleId);
+        foreach (var table in clones.OfType<Table>())
+            AddStyle(table.TableStyleId);
+        return result;
+    }
+
+    private static IReadOnlyDictionary<int, int> TransferPreservedNumbering(
+        TextDocument target,
+        TextDocument source,
+        IReadOnlyList<Paragraph> paragraphs,
+        IReadOnlyList<string> sourceStyleIds)
+    {
+        var referencedNumIds = new HashSet<int>();
+        foreach (var paragraph in paragraphs)
+            if (paragraph.PreservedNumbering is { } numbering)
+                referencedNumIds.Add(numbering.NumId);
+
+        var sourceStyles = new Dictionary<string, DocumentStyle>(source.Styles, StringComparer.OrdinalIgnoreCase);
+        foreach (var styleId in sourceStyleIds)
+            if (sourceStyles.TryGetValue(styleId, out var style) && style.PreservedNumbering is { } numbering)
+                referencedNumIds.Add(numbering.NumId);
+
+        var sourceNumbering = source.Preserved.OriginalNumbering;
+        if (referencedNumIds.Count == 0 || sourceNumbering is null)
+            return EmptyNumberingIdMap;
+
+        var sourceNums = sourceNumbering.Elements(Wordprocessing + "num")
+            .Select(element => (Id: NumberingId(element, Wordprocessing + "numId"), Element: element))
+            .Where(item => item.Id is not null && referencedNumIds.Contains(item.Id.Value))
+            .Select(item => (Id: item.Id!.Value, item.Element))
+            .ToList();
+        if (sourceNums.Count == 0)
+            return EmptyNumberingIdMap;
+
+        var sourceAbstracts = sourceNumbering.Elements(Wordprocessing + "abstractNum")
+            .Select(element => (Id: NumberingId(element, Wordprocessing + "abstractNumId"), Element: element))
+            .Where(item => item.Id is not null)
+            .ToDictionary(item => item.Id!.Value, item => item.Element);
+        var referencedAbstracts = sourceNums
+            .Select(item => NumberingId(item.Element.Element(Wordprocessing + "abstractNumId"), Wordprocessing + "val"))
+            .Where(id => id is not null && sourceAbstracts.ContainsKey(id.Value))
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+        if (referencedAbstracts.Count == 0)
+            return EmptyNumberingIdMap;
+
+        var targetNumbering = target.Preserved.OriginalNumbering ?? new XElement(
+            Wordprocessing + "numbering",
+            new XAttribute(XNamespace.Xmlns + "w", Wordprocessing.NamespaceName));
+        target.Preserved.OriginalNumbering = targetNumbering;
+        CopyNumberingNamespaces(sourceNumbering, targetNumbering);
+
+        var usedAbstractIds = targetNumbering.Elements(Wordprocessing + "abstractNum")
+            .Select(element => NumberingId(element, Wordprocessing + "abstractNumId"))
+            .Where(id => id is not null)
+            .Select(id => id!.Value)
+            .ToHashSet();
+        var usedNumIds = targetNumbering.Elements(Wordprocessing + "num")
+            .Select(element => NumberingId(element, Wordprocessing + "numId"))
+            .Where(id => id is not null)
+            .Select(id => id!.Value)
+            .ToHashSet();
+        var abstractIds = new Dictionary<int, int>();
+        foreach (var sourceAbstractId in referencedAbstracts)
+            abstractIds[sourceAbstractId] = AllocateId(sourceAbstractId, usedAbstractIds, firstId: 0);
+
+        foreach (var sourceAbstractId in referencedAbstracts)
+        {
+            var clone = new XElement(sourceAbstracts[sourceAbstractId]);
+            clone.SetAttributeValue(Wordprocessing + "abstractNumId", abstractIds[sourceAbstractId]);
+            var firstNum = targetNumbering.Elements(Wordprocessing + "num").FirstOrDefault();
+            if (firstNum is null)
+                targetNumbering.Add(clone);
+            else
+                firstNum.AddBeforeSelf(clone);
+        }
+
+        var numberIds = new Dictionary<int, int>();
+        foreach (var (sourceNumId, sourceNum) in sourceNums)
+        {
+            var sourceAbstractId = NumberingId(sourceNum.Element(Wordprocessing + "abstractNumId"), Wordprocessing + "val");
+            if (sourceAbstractId is null || !abstractIds.TryGetValue(sourceAbstractId.Value, out var targetAbstractId))
+                continue;
+
+            var targetNumId = AllocateId(sourceNumId, usedNumIds, firstId: 0);
+            var clone = new XElement(sourceNum);
+            clone.SetAttributeValue(Wordprocessing + "numId", targetNumId);
+            clone.Element(Wordprocessing + "abstractNumId")!.SetAttributeValue(Wordprocessing + "val", targetAbstractId);
+            targetNumbering.Add(clone);
+            numberIds[sourceNumId] = targetNumId;
+        }
+
+        foreach (var paragraph in paragraphs)
+            paragraph.PreservedNumbering = RemapPreservedNumbering(paragraph.PreservedNumbering, numberIds);
+        return numberIds;
+    }
+
+    private static void CopyNumberingNamespaces(XElement source, XElement target)
+    {
+        foreach (var attribute in source.Attributes().Where(attribute => attribute.IsNamespaceDeclaration))
+        {
+            if (attribute.Value == Wordprocessing.NamespaceName
+                || target.Attributes().Any(existing => existing.Name == attribute.Name))
+                continue;
+            target.Add(new XAttribute(attribute));
+        }
+    }
+
+    private static PreservedNumbering? RemapPreservedNumbering(
+        PreservedNumbering? numbering,
+        IReadOnlyDictionary<int, int> numberIds) =>
+        numbering is { } value && numberIds.TryGetValue(value.NumId, out var mappedNumId)
+            ? new PreservedNumbering(mappedNumId, value.Ilvl)
+            : numbering;
+
+    private static int? NumberingId(XElement? element, XName attribute) =>
+        int.TryParse(element?.Attribute(attribute)?.Value, out var id) ? id : null;
 
     private static string? RemapStyleReference(string? styleId, IReadOnlyDictionary<string, string> styleNames) =>
         styleId is not null && styleNames.TryGetValue(styleId, out var mappedStyleId)
