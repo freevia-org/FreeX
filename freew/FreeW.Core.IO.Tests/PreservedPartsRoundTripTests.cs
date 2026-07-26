@@ -31,6 +31,7 @@ public class PreservedPartsRoundTripTests
     private const string ExtendedPropertiesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
     private const string CustomUiContentType = "application/vnd.ms-office.customUI+xml";
     private const string CustomUiRelType = "http://schemas.microsoft.com/office/2006/relationships/ui/extensibility";
+    private const string ThumbnailRelType = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail";
 
     private static byte[] WriteBytes(TextDocument document)
     {
@@ -267,6 +268,7 @@ public class PreservedPartsRoundTripTests
                   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
                   <Default Extension="xml" ContentType="application/xml"/>
                   <Default Extension="png" ContentType="image/png"/>
+                  <Default Extension="jpeg" ContentType="image/jpeg"/>
                   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
                   <Override PartName="/customUI/customUI.xml" ContentType="application/vnd.ms-office.customUI+xml"/>
                 </Types>
@@ -278,6 +280,7 @@ public class PreservedPartsRoundTripTests
                 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
                   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
                   <Relationship Id="rIdRibbon" Type="{CustomUiRelType}" Target="customUI/customUI.xml"/>
+                  <Relationship Id="rIdThumbnail" Type="{ThumbnailRelType}" Target="docProps/thumbnail.jpeg"/>
                 </Relationships>
                 """);
 
@@ -312,6 +315,10 @@ public class PreservedPartsRoundTripTests
             AddBytes("customUI/images/partner.png", new byte[]
             {
                 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x50, 0x41, 0x52, 0x54, 0x4E, 0x45, 0x52
+            });
+            AddBytes("docProps/thumbnail.jpeg", new byte[]
+            {
+                0xFF, 0xD8, 0xFF, 0xE0, 0x46, 0x52, 0x45, 0x45, 0x57, 0x2D, 0x54, 0x48, 0x55, 0x4D, 0x42, 0xFF, 0xD9
             });
         }
         return stream.ToArray();
@@ -426,7 +433,7 @@ public class PreservedPartsRoundTripTests
     }
 
     [Fact]
-    public void CustomUi_RootRelationshipAndLocalResourcesSurviveRoundTrip()
+    public void PackageRootPartsAndLocalResourcesSurviveRoundTrip()
     {
         var source = AuthorPackageWithCustomUi();
         var read = ReadDoc(source);
@@ -437,13 +444,18 @@ public class PreservedPartsRoundTripTests
         read.Preserved.Parts.Select(part => part.PartName).Should().Contain(new[]
         {
             "/customUI/_rels/customUI.xml.rels",
-            "/customUI/images/partner.png"
+            "/customUI/images/partner.png",
+            "/docProps/thumbnail.jpeg"
         });
+        read.Preserved.Parts.Should().Contain(part =>
+            part.PartName == "/docProps/thumbnail.jpeg"
+            && part.PackageRelationshipType == ThumbnailRelType);
 
         var rewritten = WriteBytes(read);
         EntryBytes(rewritten, "customUI/customUI.xml").Should().Equal(EntryBytes(source, "customUI/customUI.xml"));
         EntryBytes(rewritten, "customUI/_rels/customUI.xml.rels").Should().Equal(EntryBytes(source, "customUI/_rels/customUI.xml.rels"));
         EntryBytes(rewritten, "customUI/images/partner.png").Should().Equal(EntryBytes(source, "customUI/images/partner.png"));
+        EntryBytes(rewritten, "docProps/thumbnail.jpeg").Should().Equal(EntryBytes(source, "docProps/thumbnail.jpeg"));
 
         var contentTypes = EntryXml(rewritten, "[Content_Types].xml").Root!;
         contentTypes.Elements(Ct + "Override").Should().Contain(element =>
@@ -452,14 +464,21 @@ public class PreservedPartsRoundTripTests
         contentTypes.Elements(Ct + "Default").Should().Contain(element =>
             element.Attribute("Extension")!.Value == "png"
             && element.Attribute("ContentType")!.Value == "image/png");
+        contentTypes.Elements(Ct + "Default").Should().Contain(element =>
+            element.Attribute("Extension")!.Value == "jpeg"
+            && element.Attribute("ContentType")!.Value == "image/jpeg");
 
         EntryXml(rewritten, "_rels/.rels").Root!.Elements(Rel + "Relationship").Should().Contain(element =>
             element.Attribute("Type")!.Value == CustomUiRelType
             && element.Attribute("Target")!.Value == "customUI/customUI.xml");
+        EntryXml(rewritten, "_rels/.rels").Root!.Elements(Rel + "Relationship").Should().Contain(element =>
+            element.Attribute("Type")!.Value == ThumbnailRelType
+            && element.Attribute("Target")!.Value == "docProps/thumbnail.jpeg");
 
         var twice = WriteBytes(ReadDoc(rewritten));
         EntryBytes(twice, "customUI/customUI.xml").Should().Equal(EntryBytes(rewritten, "customUI/customUI.xml"));
         EntryBytes(twice, "customUI/images/partner.png").Should().Equal(EntryBytes(rewritten, "customUI/images/partner.png"));
+        EntryBytes(twice, "docProps/thumbnail.jpeg").Should().Equal(EntryBytes(rewritten, "docProps/thumbnail.jpeg"));
     }
 
     [Fact]
