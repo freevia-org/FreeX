@@ -183,6 +183,18 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartPlan_ImportedNativeScatterStyle_UsesWordBlueGrayPointPalette()
+    {
+        var scatter = Chart.Create(ChartKind.Scatter, ["155", "160", "165", "170"], [52.0, 58.0, 62.0, 66.0]);
+        scatter.StyleId = 4;
+        scatter.ColorSchemeId = "colorful1";
+        scatter.NativeVisualSettings = new ChartNativeVisualSettings(false, false, false, true);
+
+        ChartSmartArtVisualPlanner.BuildChartPlan(scatter).PaletteHex
+            .Should().Equal("#234075", "#2B4E8C", "#7180AA", "#B0B7CB");
+    }
+
+    [Fact]
     public void ChartScene_ImportedNativeColumnStyle_UsesCompactCenteredCategoryLegend()
     {
         var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2", "Q3", "Q4"], [1.4, 1.8, 1.6, 2.2]);
