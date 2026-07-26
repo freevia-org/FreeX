@@ -8,6 +8,10 @@ public sealed record ChartMarkerSymbolOption(ChartMarkerSymbol Value, string Lab
 
 public sealed record ChartDashOption(OutlineDash Value, string Label);
 
+public sealed record ChartErrorDirectionOption(ChartErrorDirection Value, string Label);
+public sealed record ChartErrorBarTypeOption(ChartErrorBarType Value, string Label);
+public sealed record ChartErrorValueTypeOption(ChartErrorValueType Value, string Label);
+
 public sealed record ChartSeriesOptionsSurfacePlan(
     string CommandId,
     string Title,
@@ -63,6 +67,12 @@ public sealed class ChartSeriesOptionsPlanner
     public const string SeriesLabelsLabel = "Series labels";
     public const string LegendKeysLabel = "Legend keys";
     public const string BubbleSizeLabelsLabel = "Bubble size labels";
+    public const string ErrorBarsLabel = "Error bars";
+    public const string ErrorDirectionLabel = "Direction";
+    public const string ErrorBarTypeLabel = "Error amount";
+    public const string ErrorValueTypeLabel = "Value type";
+    public const string ErrorValueLabel = "Value";
+    public const string ErrorNoEndCapLabel = "No end cap";
     public const string LabelPositionLabel = "Label position";
     public const string NumberFormatLabel = "Number format";
     public const string SeparatorLabel = "Separator";
@@ -106,6 +116,25 @@ public sealed class ChartSeriesOptionsPlanner
         new(OutlineDash.SystemDashDot, "System dash dot"),
     ];
 
+    public static IReadOnlyList<ChartErrorDirectionOption> ErrorDirectionOptions { get; } =
+    [
+        new(ChartErrorDirection.Y, "Vertical (Y)"),
+        new(ChartErrorDirection.X, "Horizontal (X)"),
+    ];
+
+    public static IReadOnlyList<ChartErrorBarTypeOption> ErrorBarTypeOptions { get; } =
+    [
+        new(ChartErrorBarType.Both, "Plus and minus"),
+        new(ChartErrorBarType.Minus, "Minus only"),
+        new(ChartErrorBarType.Plus, "Plus only"),
+    ];
+
+    public static IReadOnlyList<ChartErrorValueTypeOption> ErrorValueTypeOptions { get; } =
+    [
+        new(ChartErrorValueType.Fixed, "Fixed value"),
+        new(ChartErrorValueType.Percentage, "Percentage"),
+    ];
+
     private readonly ChartShape _chart;
     private int _seriesIndex;
     private bool _smoothLine;
@@ -123,6 +152,12 @@ public sealed class ChartSeriesOptionsPlanner
     private bool _showSeriesLabels;
     private bool _showLegendKeys;
     private bool _showBubbleSize;
+    private bool _errorBarsEnabled;
+    private ChartErrorDirection _errorDirection;
+    private ChartErrorBarType _errorBarType;
+    private ChartErrorValueType _errorValueType;
+    private double _errorValue;
+    private bool _errorNoEndCap;
     private DataLabelPosition _labelPosition = DataLabelPosition.OutsideEnd;
     private string _labelNumberFormat = string.Empty;
     private string _labelSeparator = string.Empty;
@@ -200,6 +235,12 @@ public sealed class ChartSeriesOptionsPlanner
     public bool ShowSeriesLabels => _showSeriesLabels;
     public bool ShowLegendKeys => _showLegendKeys;
     public bool ShowBubbleSize => _showBubbleSize;
+    public bool ErrorBarsEnabled => _errorBarsEnabled;
+    public ChartErrorDirection ErrorDirection => _errorDirection;
+    public ChartErrorBarType ErrorBarType => _errorBarType;
+    public ChartErrorValueType ErrorValueType => _errorValueType;
+    public double ErrorValue => _errorValue;
+    public bool ErrorNoEndCap => _errorNoEndCap;
     public DataLabelPosition LabelPosition => _labelPosition;
     public string LabelNumberFormat => _labelNumberFormat;
     public string LabelSeparator => _labelSeparator;
@@ -231,6 +272,12 @@ public sealed class ChartSeriesOptionsPlanner
             _showSeriesLabels = false;
             _showLegendKeys = false;
             _showBubbleSize = false;
+            _errorBarsEnabled = false;
+            _errorDirection = ChartErrorDirection.Y;
+            _errorBarType = ChartErrorBarType.Both;
+            _errorValueType = ChartErrorValueType.Fixed;
+            _errorValue = 0;
+            _errorNoEndCap = false;
             _labelPosition = DataLabelPosition.OutsideEnd;
             _labelNumberFormat = string.Empty;
             _labelSeparator = string.Empty;
@@ -262,6 +309,13 @@ public sealed class ChartSeriesOptionsPlanner
         _showSeriesLabels = labels?.ShowSeriesName == true;
         _showLegendKeys = labels?.ShowLegendKey == true;
         _showBubbleSize = labels?.ShowBubbleSize == true;
+        var errorBars = series.ErrorBars;
+        _errorBarsEnabled = errorBars is not null;
+        _errorDirection = errorBars?.Direction ?? ChartErrorDirection.Y;
+        _errorBarType = errorBars?.BarType ?? ChartErrorBarType.Both;
+        _errorValueType = errorBars?.ValueType ?? ChartErrorValueType.Fixed;
+        _errorValue = errorBars?.Value ?? 0;
+        _errorNoEndCap = errorBars?.NoEndCap == true;
         _labelPosition = labels?.Position ?? DataLabelPosition.OutsideEnd;
         _labelNumberFormat = labels?.NumberFormat ?? string.Empty;
         _labelSeparator = labels?.Separator ?? string.Empty;
@@ -300,6 +354,12 @@ public sealed class ChartSeriesOptionsPlanner
     public void SetShowSeriesLabels(bool value) => _showSeriesLabels = value;
     public void SetShowLegendKeys(bool value) => _showLegendKeys = value;
     public void SetShowBubbleSize(bool value) => _showBubbleSize = value;
+    public void SetErrorBarsEnabled(bool value) => _errorBarsEnabled = value;
+    public void SetErrorDirection(ChartErrorDirection value) => _errorDirection = value;
+    public void SetErrorBarType(ChartErrorBarType value) => _errorBarType = value;
+    public void SetErrorValueType(ChartErrorValueType value) => _errorValueType = value;
+    public void SetErrorValue(double value) => _errorValue = Math.Max(0, value);
+    public void SetErrorNoEndCap(bool value) => _errorNoEndCap = value;
     public void SetLabelPosition(DataLabelPosition value) => _labelPosition = value;
     public void SetLabelNumberFormat(string? value) => _labelNumberFormat = value ?? string.Empty;
     public void SetLabelSeparator(string? value) => _labelSeparator = value ?? string.Empty;
@@ -338,6 +398,16 @@ public sealed class ChartSeriesOptionsPlanner
                 NumberFormat = string.IsNullOrWhiteSpace(_labelNumberFormat) ? null : _labelNumberFormat,
                 Separator = string.IsNullOrEmpty(_labelSeparator) ? null : _labelSeparator,
                 TextStyle = BuildLabelTextStyle(),
+            }
+            : null,
+        ErrorBars: _errorBarsEnabled
+            ? new ChartErrorBars
+            {
+                Direction = _errorDirection,
+                BarType = _errorBarType,
+                ValueType = _errorValueType,
+                Value = _errorValue,
+                NoEndCap = _errorNoEndCap,
             }
             : null);
 

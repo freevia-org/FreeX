@@ -932,6 +932,9 @@ internal static class PptxChartWriter
         var serDlblsEl2 = BuildDataLabelsEl(series.DataLabels, chart.ChartType, PointDataLabels(series));
         if (serDlblsEl2 is not null) el.Add(serDlblsEl2);
 
+        var errBars = BuildErrorBarsEl(series.ErrorBars);
+        if (errBars is not null) el.Add(errBars);
+
         // X values (c:xVal)
         if (series.XValues.Count > 0)
         {
@@ -1035,6 +1038,9 @@ internal static class PptxChartWriter
         var serDlblsEl = BuildDataLabelsEl(series.DataLabels, chart.ChartType, PointDataLabels(series));
         if (serDlblsEl is not null) el.Add(serDlblsEl);
 
+        var errBars = BuildErrorBarsEl(series.ErrorBars);
+        if (errBars is not null) el.Add(errBars);
+
         // Categories
         if (chart.Categories.Count > 0)
         {
@@ -1084,6 +1090,24 @@ internal static class PptxChartWriter
         series.SmoothLine.HasValue
             ? new XElement(C + "smooth", new XAttribute("val", BoolValue(series.SmoothLine.Value)))
             : null;
+
+    private static XElement? BuildErrorBarsEl(ChartErrorBars? bars)
+    {
+        if (bars is null)
+            return null;
+
+        return new XElement(C + "errBars",
+            new XElement(C + "errDir", new XAttribute("val", bars.Direction == ChartErrorDirection.X ? "x" : "y")),
+            new XElement(C + "errBarType", new XAttribute("val", bars.BarType switch
+            {
+                ChartErrorBarType.Minus => "minus",
+                ChartErrorBarType.Plus => "plus",
+                _ => "both",
+            })),
+            new XElement(C + "errValType", new XAttribute("val", bars.ValueType == ChartErrorValueType.Percentage ? "percentage" : "fixedVal")),
+            new XElement(C + "noEndCap", new XAttribute("val", BoolValue(bars.NoEndCap))),
+            new XElement(C + "val", new XAttribute("val", bars.Value.ToString("G", CultureInfo.InvariantCulture))));
+    }
 
     private static XElement? BuildSeriesShapePropertiesEl(ChartSeries series)
     {

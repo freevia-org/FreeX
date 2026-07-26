@@ -1318,6 +1318,14 @@ public sealed class ChartDataCommandTests
                         Color = new ThemeAwareColor(SrgbColor.FromRgb(0x2F5496)),
                     },
                     ShowBubbleSize = true,
+                },
+                ErrorBars: new ChartErrorBars
+                {
+                    Direction = ChartErrorDirection.X,
+                    BarType = ChartErrorBarType.Minus,
+                    ValueType = ChartErrorValueType.Percentage,
+                    Value = 7.5,
+                    NoEndCap = true,
                 })));
 
         var series = chart.Series[1];
@@ -1334,6 +1342,12 @@ public sealed class ChartDataCommandTests
         series.DataLabels.ShowCategoryName.Should().BeTrue();
         series.DataLabels.ShowLegendKey.Should().BeTrue();
         series.DataLabels.ShowBubbleSize.Should().BeTrue();
+        series.ErrorBars.Should().NotBeNull();
+        series.ErrorBars!.Direction.Should().Be(ChartErrorDirection.X);
+        series.ErrorBars.BarType.Should().Be(ChartErrorBarType.Minus);
+        series.ErrorBars.ValueType.Should().Be(ChartErrorValueType.Percentage);
+        series.ErrorBars.Value.Should().Be(7.5);
+        series.ErrorBars.NoEndCap.Should().BeTrue();
         series.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         series.DataLabels.NumberFormat.Should().Be("0.0%");
         series.DataLabels.Separator.Should().Be(" | ");
@@ -1367,6 +1381,13 @@ public sealed class ChartDataCommandTests
         roundTrippedLabels.TextStyle.Bold.Should().BeTrue();
         roundTrippedLabels.TextStyle.Italic.Should().BeFalse();
         roundTrippedLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
+        roundTripped.Series[1].ErrorBars.Should().NotBeNull();
+        var roundTrippedErrorBars = roundTripped.Series[1].ErrorBars!;
+        roundTrippedErrorBars.Direction.Should().Be(ChartErrorDirection.X);
+        roundTrippedErrorBars.BarType.Should().Be(ChartErrorBarType.Minus);
+        roundTrippedErrorBars.ValueType.Should().Be(ChartErrorValueType.Percentage);
+        roundTrippedErrorBars.Value.Should().Be(7.5);
+        roundTrippedErrorBars.NoEndCap.Should().BeTrue();
         var roundTrippedMarker = roundTripped.Series[1].MarkerStyle!;
         roundTrippedMarker.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
         roundTrippedMarker.SizePt.Should().Be(8);
@@ -1386,6 +1407,7 @@ public sealed class ChartDataCommandTests
         series.FillColor.Should().BeNull();
         series.Fill.Should().BeOfType<ShapeFill.Gradient>();
         series.DataLabels.Should().BeNull();
+        series.ErrorBars.Should().BeNull();
     }
 
     [Fact]

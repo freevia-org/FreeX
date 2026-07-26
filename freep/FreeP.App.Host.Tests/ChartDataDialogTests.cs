@@ -180,7 +180,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var dialog = new ChartSeriesOptionsDialog(sess);
         dialog.SetOptionsForTests(0, false, false, 2.25, ChartMarkerSymbol.Diamond, 7, "#4472C4", "#1F4E79", OutlineDash.DashDot, true,
             true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
-            "Aptos", 9, true, false, "#2F5496", showBubbleSize: true);
+            "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, errorBars: true);
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -196,6 +196,7 @@ public sealed class ChartDataDialogTests : IDisposable
         options.DataLabels.ShowCategoryName.Should().BeTrue();
         options.DataLabels.ShowLegendKey.Should().BeTrue();
         options.DataLabels.ShowBubbleSize.Should().BeTrue();
+        options.ErrorBars.Should().NotBeNull();
         options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         options.DataLabels.TextStyle.Should().NotBeNull();
         options.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");

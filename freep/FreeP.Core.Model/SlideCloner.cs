@@ -215,6 +215,7 @@ public static class SlideCloner
                 MarkerStyle       = CloneChartMarkerStyle(s.MarkerStyle),
                 OnSecondaryAxis   = s.OnSecondaryAxis,
                 DataLabels        = CloneChartDataLabels(s.DataLabels),
+                ErrorBars         = CloneChartErrorBars(s.ErrorBars),
                 OverrideChartType = s.OverrideChartType,
             };
             foreach (var v in s.Values)
@@ -260,6 +261,17 @@ public static class SlideCloner
                 Separator = labels.Separator,
                 TextStyle = CloneChartTextStyle(labels.TextStyle),
             };
+
+    private static ChartErrorBars? CloneChartErrorBars(ChartErrorBars? bars) => bars is null
+        ? null
+        : new ChartErrorBars
+        {
+            Direction = bars.Direction,
+            BarType = bars.BarType,
+            ValueType = bars.ValueType,
+            Value = bars.Value,
+            NoEndCap = bars.NoEndCap,
+        };
 
     private static ChartTextStyle? CloneChartTextStyle(ChartTextStyle? style) =>
         style is null

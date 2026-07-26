@@ -687,6 +687,7 @@ internal static class PptxChartReader
 
         series.MarkerStyle = ReadMarkerStyle(serEl.Element(C + "marker"), scheme);
         series.SmoothLine = ParseNullableBoolElement(serEl.Element(C + "smooth"));
+        series.ErrorBars = ReadErrorBars(serEl.Element(C + "errBars"));
 
         // Fall back to the OOXML series index in the theme accent cycle. Combo-chart
         // plot groups can arrive out of visual order, so the group-local index would
@@ -740,6 +741,7 @@ internal static class PptxChartReader
 
             series.MarkerStyle = ReadMarkerStyle(serEl.Element(C + "marker"), scheme);
             series.SmoothLine = ParseNullableBoolElement(serEl.Element(C + "smooth"));
+            series.ErrorBars = ReadErrorBars(serEl.Element(C + "errBars"));
 
             // Combo-chart plot groups can arrive out of visual order. Use c:idx
             // rather than the group-local position so their theme accent is stable.
@@ -799,6 +801,31 @@ internal static class PptxChartReader
 
             seriesIndex++;
         }
+    }
+
+    private static ChartErrorBars? ReadErrorBars(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        var valueType = element.Element(C + "errValType")?.Attribute("val")?.Value;
+        var barType = element.Element(C + "errBarType")?.Attribute("val")?.Value;
+        var direction = element.Element(C + "errDir")?.Attribute("val")?.Value;
+        return new ChartErrorBars
+        {
+            Direction = direction == "x" ? ChartErrorDirection.X : ChartErrorDirection.Y,
+            BarType = barType switch
+            {
+                "minus" => ChartErrorBarType.Minus,
+                "plus" => ChartErrorBarType.Plus,
+                _ => ChartErrorBarType.Both,
+            },
+            ValueType = valueType == "percentage"
+                ? ChartErrorValueType.Percentage
+                : ChartErrorValueType.Fixed,
+            Value = ParseDouble(element.Element(C + "val")?.Attribute("val")?.Value) ?? 0,
+            NoEndCap = ParseBoolAttr(element.Element(C + "noEndCap")),
+        };
     }
 
     private static void ReadSeriesShapeProperties(

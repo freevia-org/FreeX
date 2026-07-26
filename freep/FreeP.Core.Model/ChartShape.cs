@@ -82,6 +82,25 @@ public enum ChartCrossBetween { Between, MidCat }
 /// <summary>Authored category-axis label alignment.</summary>
 public enum ChartLabelAlignment { Left, Center, Right }
 
+/// <summary>Axis direction for a series error-bar set.</summary>
+public enum ChartErrorDirection { X, Y }
+
+/// <summary>Which side(s) of a data point receive an error bar.</summary>
+public enum ChartErrorBarType { Both, Minus, Plus }
+
+/// <summary>How the authored error magnitude is interpreted.</summary>
+public enum ChartErrorValueType { Fixed, Percentage }
+
+/// <summary>Authored series error-bar settings from c:errBars.</summary>
+public sealed class ChartErrorBars
+{
+    public ChartErrorDirection Direction { get; set; } = ChartErrorDirection.Y;
+    public ChartErrorBarType BarType { get; set; } = ChartErrorBarType.Both;
+    public ChartErrorValueType ValueType { get; set; } = ChartErrorValueType.Fixed;
+    public double Value { get; set; }
+    public bool NoEndCap { get; set; }
+}
+
 /// <summary>Authored axis crossing mode from <c>c:crosses/@val</c>.</summary>
 public enum ChartAxisCrossing { AutoZero, Min, Max }
 
@@ -412,6 +431,9 @@ public sealed class ChartSeries
 
     /// <summary>Per-series data labels override. When null, the chart-level labels apply (if any).</summary>
     public ChartDataLabels? DataLabels { get; set; }
+
+    /// <summary>Optional authored error bars for this series.</summary>
+    public ChartErrorBars? ErrorBars { get; set; }
 
     /// <summary>True if this series plots against the secondary value axis (right axis).</summary>
     public bool OnSecondaryAxis { get; set; }

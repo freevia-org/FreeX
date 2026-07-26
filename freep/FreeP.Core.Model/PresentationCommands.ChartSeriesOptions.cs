@@ -15,6 +15,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
     private ThemeAwareColor? _oldFillColor;
     private ShapeFill? _oldFill;
     private ChartDataLabels? _oldDataLabels;
+    private ChartErrorBars? _oldErrorBars;
 
     public SetChartSeriesOptionsCommand(int slideIndex, uint shapeId, ChartSeriesOptions options)
     {
@@ -40,6 +41,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         _oldFillColor = series.FillColor;
         _oldFill = series.Fill;
         _oldDataLabels = CloneDataLabels(series.DataLabels);
+        _oldErrorBars = CloneErrorBars(series.ErrorBars);
 
         series.SmoothLine = _newOptions.SmoothLine;
         series.OnSecondaryAxis = _newOptions.OnSecondaryAxis;
@@ -52,6 +54,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         series.FillColor = _newOptions.FillColor;
         series.Fill = _newOptions.Fill;
         series.DataLabels = CloneDataLabels(_newOptions.DataLabels);
+        series.ErrorBars = CloneErrorBars(_newOptions.ErrorBars);
 
         if (_newOptions.LineColor is not null ||
             _newOptions.LineWidthPt.HasValue ||
@@ -93,6 +96,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         series.FillColor = _oldFillColor;
         series.Fill = _oldFill;
         series.DataLabels = CloneDataLabels(_oldDataLabels);
+        series.ErrorBars = CloneErrorBars(_oldErrorBars);
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -144,6 +148,17 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
                     Color = source.TextStyle.Color,
                     FontFamily = source.TextStyle.FontFamily,
                 },
+        };
+
+    private static ChartErrorBars? CloneErrorBars(ChartErrorBars? source) => source is null
+        ? null
+        : new ChartErrorBars
+        {
+            Direction = source.Direction,
+            BarType = source.BarType,
+            ValueType = source.ValueType,
+            Value = source.Value,
+            NoEndCap = source.NoEndCap,
         };
 
     private static ChartAxis? CloneAxis(ChartAxis? source) => source is null
