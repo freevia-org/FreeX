@@ -28,6 +28,11 @@ public sealed record ChartSeriesOptionsSurfacePlan(
     string LabelPositionLabel,
     string NumberFormatLabel,
     string SeparatorLabel,
+    string FontFamilyLabel,
+    string FontSizeLabel,
+    string BoldLabel,
+    string ItalicLabel,
+    string LabelColorLabel,
     string MarkerLabel,
     string MarkerSizeLabel,
     string AutoHint,
@@ -59,13 +64,18 @@ public sealed class ChartSeriesOptionsPlanner
     public const string LabelPositionLabel = "Label position";
     public const string NumberFormatLabel = "Number format";
     public const string SeparatorLabel = "Separator";
+    public const string FontFamilyLabel = "Font family";
+    public const string FontSizeLabel = "Font size (pt)";
+    public const string BoldLabel = "Bold";
+    public const string ItalicLabel = "Italic";
+    public const string LabelColorLabel = "Label color (#RRGGBB)";
     public const string MarkerLabel = "Marker";
     public const string MarkerSizeLabel = "Marker size (pt)";
     public const string AutoHint = "Blank values preserve automatic series formatting.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
     public const double DefaultDialogWidth = 440;
-    public const double DefaultDialogHeight = 520;
+    public const double DefaultDialogHeight = 700;
 
     public static IReadOnlyList<ChartMarkerSymbolOption> MarkerOptions { get; } =
     [
@@ -113,6 +123,11 @@ public sealed class ChartSeriesOptionsPlanner
     private DataLabelPosition _labelPosition = DataLabelPosition.OutsideEnd;
     private string _labelNumberFormat = string.Empty;
     private string _labelSeparator = string.Empty;
+    private string _labelFontFamily = string.Empty;
+    private double? _labelFontSizePt;
+    private bool? _labelBold;
+    private bool? _labelItalic;
+    private ThemeAwareColor? _labelColor;
     private ChartMarkerSymbol _markerSymbol;
     private double? _markerSizePt;
 
@@ -143,6 +158,11 @@ public sealed class ChartSeriesOptionsPlanner
             LabelPositionLabel,
             NumberFormatLabel,
             SeparatorLabel,
+            FontFamilyLabel,
+            FontSizeLabel,
+            BoldLabel,
+            ItalicLabel,
+            LabelColorLabel,
             MarkerLabel,
             MarkerSizeLabel,
             AutoHint,
@@ -178,6 +198,11 @@ public sealed class ChartSeriesOptionsPlanner
     public DataLabelPosition LabelPosition => _labelPosition;
     public string LabelNumberFormat => _labelNumberFormat;
     public string LabelSeparator => _labelSeparator;
+    public string LabelFontFamily => _labelFontFamily;
+    public double? LabelFontSizePt => _labelFontSizePt;
+    public bool? LabelBold => _labelBold;
+    public bool? LabelItalic => _labelItalic;
+    public string LabelColorText => FormatColor(_labelColor);
     public ChartMarkerSymbol MarkerSymbol => _markerSymbol;
     public double? MarkerSizePt => _markerSizePt;
 
@@ -203,6 +228,11 @@ public sealed class ChartSeriesOptionsPlanner
             _labelPosition = DataLabelPosition.OutsideEnd;
             _labelNumberFormat = string.Empty;
             _labelSeparator = string.Empty;
+            _labelFontFamily = string.Empty;
+            _labelFontSizePt = null;
+            _labelBold = null;
+            _labelItalic = null;
+            _labelColor = null;
             _markerSymbol = ChartMarkerSymbol.Auto;
             _markerSizePt = null;
             return;
@@ -228,6 +258,11 @@ public sealed class ChartSeriesOptionsPlanner
         _labelPosition = labels?.Position ?? DataLabelPosition.OutsideEnd;
         _labelNumberFormat = labels?.NumberFormat ?? string.Empty;
         _labelSeparator = labels?.Separator ?? string.Empty;
+        _labelFontFamily = labels?.TextStyle?.FontFamily ?? string.Empty;
+        _labelFontSizePt = labels?.TextStyle?.FontSizePt;
+        _labelBold = labels?.TextStyle?.Bold;
+        _labelItalic = labels?.TextStyle?.Italic;
+        _labelColor = labels?.TextStyle?.Color;
         _markerSymbol = series.MarkerStyle?.Symbol ?? ChartMarkerSymbol.Auto;
         _markerSizePt = series.MarkerStyle?.SizePt;
     }
@@ -260,6 +295,13 @@ public sealed class ChartSeriesOptionsPlanner
     public void SetLabelPosition(DataLabelPosition value) => _labelPosition = value;
     public void SetLabelNumberFormat(string? value) => _labelNumberFormat = value ?? string.Empty;
     public void SetLabelSeparator(string? value) => _labelSeparator = value ?? string.Empty;
+    public void SetLabelFontFamily(string? value) => _labelFontFamily = value?.Trim() ?? string.Empty;
+    public void SetLabelFontSize(double? value) => _labelFontSizePt = value;
+    public void SetLabelBold(bool? value) => _labelBold = value;
+    public void SetLabelItalic(bool? value) => _labelItalic = value;
+    public void SetLabelColor(string? text) => _labelColor = string.IsNullOrWhiteSpace(text)
+        ? null
+        : ChartPointOptionsPlanner.ParseColor(text, LabelColorLabel);
     public void SetMarkerSymbol(ChartMarkerSymbol value) => _markerSymbol = value;
     public void SetMarkerSize(double? value) => _markerSizePt = value;
 
@@ -286,11 +328,31 @@ public sealed class ChartSeriesOptionsPlanner
                 Position = _labelPosition,
                 NumberFormat = string.IsNullOrWhiteSpace(_labelNumberFormat) ? null : _labelNumberFormat,
                 Separator = string.IsNullOrEmpty(_labelSeparator) ? null : _labelSeparator,
+                TextStyle = BuildLabelTextStyle(),
             }
             : null);
 
     private static string FormatColor(ThemeAwareColor? color) =>
         color is null ? string.Empty : color.Resolved.ToString();
+
+    private ChartTextStyle? BuildLabelTextStyle()
+    {
+        if (string.IsNullOrWhiteSpace(_labelFontFamily) &&
+            !_labelFontSizePt.HasValue &&
+            !_labelBold.HasValue &&
+            !_labelItalic.HasValue &&
+            _labelColor is null)
+            return null;
+
+        return new ChartTextStyle
+        {
+            FontFamily = string.IsNullOrWhiteSpace(_labelFontFamily) ? null : _labelFontFamily,
+            FontSizePt = _labelFontSizePt,
+            Bold = _labelBold,
+            Italic = _labelItalic,
+            Color = _labelColor,
+        };
+    }
 
     private static string SeriesLabelText(int index, ChartSeries series) =>
         string.IsNullOrWhiteSpace(series.Name) ? $"Series {index + 1}" : series.Name;

@@ -459,6 +459,11 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetLabelPosition(DataLabelPosition.InsideEnd);
         planner.SetLabelNumberFormat("0.0%");
         planner.SetLabelSeparator(" | ");
+        planner.SetLabelFontFamily("Aptos");
+        planner.SetLabelFontSize(9);
+        planner.SetLabelBold(true);
+        planner.SetLabelItalic(false);
+        planner.SetLabelColor("#2F5496");
         planner.SetMarkerSymbol(ChartMarkerSymbol.Diamond);
         planner.SetMarkerSize(8);
 
@@ -480,6 +485,12 @@ public sealed class ChartDataDialogPlannerTests
         options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         options.DataLabels.NumberFormat.Should().Be("0.0%");
         options.DataLabels.Separator.Should().Be(" | ");
+        options.DataLabels.TextStyle.Should().NotBeNull();
+        options.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+        options.DataLabels.TextStyle.FontSizePt.Should().Be(9);
+        options.DataLabels.TextStyle.Bold.Should().BeTrue();
+        options.DataLabels.TextStyle.Italic.Should().BeFalse();
+        options.DataLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
         planner.SeriesOptions.Select(option => option.Label)
             .Should().Equal("Revenue", "Margin");
         chart.Series[1].SmoothLine.Should().BeTrue("series dialogs must edit a working copy");
