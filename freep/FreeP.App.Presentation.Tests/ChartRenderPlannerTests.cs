@@ -100,6 +100,66 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_EmitsVerticalErrorBarsForAreaPoints()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Area,
+            Categories = { "Q1", "Q2", "Q3" },
+        };
+        var series = new ChartSeries
+        {
+            Name = "Actual",
+            ErrorBars = new ChartErrorBars { Value = 1.5 },
+        };
+        series.Values.AddRange(new double?[] { 10, 20, 15 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.ErrorBars.Should().HaveCount(3);
+        scene.ErrorBars.Should().AllSatisfy(errorBar =>
+        {
+            errorBar.Direction.Should().Be(ChartErrorDirection.Y);
+            errorBar.MinusEnd.Should().NotBeNull();
+            errorBar.PlusEnd.Should().NotBeNull();
+        });
+    }
+
+    [Fact]
+    public void BuildScenePlan_ProjectsRadarValueErrorBarsAlongTheSpoke()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Radar,
+            Categories = { "A", "B", "C", "D" },
+            RadarStyle = RadarStyle.Marker,
+        };
+        var series = new ChartSeries
+        {
+            Name = "Actual",
+            ErrorBars = new ChartErrorBars { Value = 2 },
+        };
+        series.Values.AddRange(new double?[] { 8, 6, 7, 9 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.ErrorBars.Should().HaveCount(4);
+        var first = scene.ErrorBars[0];
+        first.MinusEnd.Should().NotBeNull();
+        first.PlusEnd.Should().NotBeNull();
+        var radar = scene.Radar!.Value;
+        var radial = new ChartPlanPoint(
+            first.Center.X - radar.Center.X,
+            first.Center.Y - radar.Center.Y);
+        var plus = new ChartPlanPoint(
+            first.PlusEnd!.Value.X - first.Center.X,
+            first.PlusEnd.Value.Y - first.Center.Y);
+        (radial.X * plus.X + radial.Y * plus.Y).Should().BeLessThan(0);
+    }
+
+    [Fact]
     public void BuildScenePlan_TallImportedSurfaceWrapsItsPowerPointTitle()
     {
         var chart = new ChartShape
