@@ -89,22 +89,49 @@ public class AltChunkRoundTripTests
             .Where(run => run.Image is not null).Should().ContainSingle();
     }
 
-    [Fact]
-    public void NonHtmlAltChunk_RetainsItsPayloadAndBodyMarker()
+    [Theory]
+    [InlineData("application/rtf")]
+    [InlineData("text/rtf")]
+    public void RtfAltChunk_MaterializesEditableBlocks(string contentType)
     {
         var sourceBytes = AuthorPackageWithAltChunk(
             chunkPartName: "afchunk.rtf",
-            chunkContentType: "application/rtf",
-            chunkPayload: @"{\rtf1\ansi Preserved RTF}");
+            chunkContentType: contentType,
+            chunkPayload: @"{\rtf1\ansi Materialized \b RTF\b0}",
+            includeChunkLocalImage: false);
+        var document = ReadDocument(sourceBytes);
+
+        document.Blocks.Should().HaveCount(3);
+        document.Blocks[1].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Materialized RTF");
+        document.Preserved.Parts.Should().NotContain(part => part.PartName == "/word/afchunk.rtf");
+
+        var rewrittenBytes = WriteDocument(document);
+        using var zip = new ZipArchive(new MemoryStream(rewrittenBytes), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/document.xml")!.Open();
+        var body = XDocument.Load(entry).Root!.Element(Ooxml.W + "body")!;
+        body.Element(Ooxml.W + "altChunk").Should().BeNull();
+        zip.GetEntry("word/afchunk.rtf").Should().BeNull();
+
+        var reopened = ReadDocument(rewrittenBytes);
+        reopened.Blocks[1].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Materialized RTF");
+    }
+
+    [Fact]
+    public void NestedWordPackageAltChunk_RetainsItsPayloadAndBodyMarker()
+    {
+        var sourceBytes = AuthorPackageWithAltChunk(
+            chunkPartName: "afchunk.docx",
+            chunkContentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+            chunkPayload: "not a nested Word package");
         var source = DocxPackageInventory.Read(sourceBytes);
         var document = ReadDocument(sourceBytes);
 
-        document.Blocks[1].Should().BeOfType<AltChunkBlock>().Which.PreservedPartName.Should().Be("/word/afchunk.rtf");
+        document.Blocks[1].Should().BeOfType<AltChunkBlock>().Which.PreservedPartName.Should().Be("/word/afchunk.docx");
 
         var rewrittenBytes = WriteDocument(document);
         var rewritten = DocxPackageInventory.Read(rewrittenBytes);
 
-        rewritten.ShouldPreserveVerbatim(source, ["word/afchunk.rtf", "word/_rels/afchunk.rtf.rels", "word/media/altchunk.png"]);
+        rewritten.ShouldPreserveVerbatim(source, ["word/afchunk.docx", "word/_rels/afchunk.docx.rels", "word/media/altchunk.png"]);
         using var zip = new ZipArchive(new MemoryStream(rewrittenBytes), ZipArchiveMode.Read);
         using var entry = zip.GetEntry("word/document.xml")!.Open();
         var body = XDocument.Load(entry).Root!.Element(Ooxml.W + "body")!;

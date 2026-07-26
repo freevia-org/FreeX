@@ -1726,7 +1726,7 @@ public static class DocxReader
 
     /// <summary>
     /// Word resolves supported body-level altChunks into ordinary editable blocks when the document opens.
-    /// Materialize package-local HTML and MHTML payloads; RTF, nested Word packages, malformed content,
+    /// Materialize package-local HTML, MHTML, and RTF payloads; nested Word packages, malformed content,
     /// and unknown chunk types remain represented by <see cref="AltChunkBlock"/> so their payload graph is
     /// retained verbatim on save.
     /// </summary>
@@ -1751,6 +1751,14 @@ public static class DocxReader
             {
                 using var mhtmlStream = new MemoryStream(bytes, writable: false);
                 blocks = new MhtmlFileAdapter().Load(mhtmlStream).Blocks.ToList();
+                return true;
+            }
+
+            if (string.Equals(contentType, "application/rtf", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(contentType, "text/rtf", StringComparison.OrdinalIgnoreCase))
+            {
+                using var rtfStream = new MemoryStream(bytes, writable: false);
+                blocks = new RtfFileAdapter().Load(rtfStream).Blocks.ToList();
                 return true;
             }
 
@@ -1785,7 +1793,8 @@ public static class DocxReader
             blocks = HtmlFileAdapter.LoadHtml(reader.ReadToEnd(), ResolveImage).Blocks.ToList();
             return true;
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException or FormatException or MimeKit.ParseException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException
+            or FormatException or NotSupportedException or MimeKit.ParseException)
         {
             return false;
         }
