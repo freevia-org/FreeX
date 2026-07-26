@@ -990,6 +990,39 @@ public sealed class ChartDataCommandTests
         chart.ShowDataLabelsOverMaximum.Should().BeNull();
         chart.VaryColors.Should().BeFalse();
         chart.LegendOverlay.Should().BeNull();
+        chart.HasHighLowLines.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetChartDisplayOptions_StockHighLowLines_RoundTripsAndUndo()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.Stock;
+        chart.HasHighLowLines = true;
+
+        bus.Execute(new SetChartDisplayOptionsCommand(
+            0,
+            id,
+            new ChartDisplayOptions(
+                null,
+                null,
+                false,
+                DataLabelPosition.BestFit,
+                false,
+                false,
+                HighLowLines: false)));
+
+        chart.HasHighLowLines.Should().BeFalse();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var reloaded = PptxPackageReader.Read(stream);
+        reloaded.Slides[0].Shapes[0].Chart!.HasHighLowLines.Should().BeFalse();
+
+        bus.Undo();
+        chart.HasHighLowLines.Should().BeTrue();
     }
 
     [Fact]

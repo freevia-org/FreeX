@@ -124,10 +124,12 @@ public sealed class ChartDataDialogTests : IDisposable
         var (sess, _) = MakeSession();
         sess.SelectedChart!.Title = "Existing";
         sess.SelectedChart.Legend = LegendPosition.Right;
+        sess.SelectedChart.ChartType = ChartType.Stock;
 
         var dialog = new ChartDisplayOptionsDialog(sess);
         dialog.SetVaryColorsForTests(true);
         dialog.SetLegendOverlayForTests(true);
+        dialog.SetHighLowLinesForTests(false);
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -136,6 +138,7 @@ public sealed class ChartDataDialogTests : IDisposable
         options.DisplayBlanksAs.Should().BeNull();
         options.VaryColors.Should().BeTrue();
         options.LegendOverlay.Should().BeTrue();
+        options.HighLowLines.Should().BeFalse();
     }
 
     [StaFact]
