@@ -13,6 +13,7 @@ using FreeP.App.Compositor;
 using FreeP.App.Host.Backstage;
 using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
+using ModelHyperlink = FreeP.Core.Model.Hyperlink;
 
 namespace FreeP.App.Host;
 
@@ -4172,16 +4173,31 @@ public sealed partial class MainWindow : Window
     /// </summary>
     internal void OpenHyperlinkDialog()
     {
+        var textEditor = SlideCanvas.TextEditor;
+        ModelHyperlink? selectedRunHyperlink = null;
+        var editsSelectedRun = textEditor is not null
+            && textEditor.TryGetSelectedShapeRunHyperlink(out selectedRunHyperlink);
         var request = HyperlinkDialogPlanner.BuildDialogRequest(
             Editor.Presentation.Slides,
-            Editor.SelectedShapeHyperlink);
+            editsSelectedRun ? selectedRunHyperlink : Editor.SelectedShapeHyperlink);
         var dialog = new HyperlinkDialog(request);
         if (IsVisible) dialog.Owner = this;
         var applyPlan = dialog.ShowDialog() == true
             ? HyperlinkDialogPlanner.BuildApplyPlan(dialog.Result)
             : HyperlinkDialogPlanner.BuildApplyPlan(null);
-        if (applyPlan.ShouldApply)
-            Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip);
+        if (!applyPlan.ShouldApply)
+            return;
+
+        var hyperlink = new ModelHyperlink
+        {
+            Url = applyPlan.Url,
+            TargetSlideId = applyPlan.TargetSlideId,
+            Tooltip = applyPlan.Tooltip,
+        };
+        if (editsSelectedRun && textEditor?.TryApplySelectedShapeRunHyperlink(hyperlink) == true)
+            return;
+
+        Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip);
     }
 
     // ── Find & Replace dialog (Wave 12B) ──────────────────────────────────────────

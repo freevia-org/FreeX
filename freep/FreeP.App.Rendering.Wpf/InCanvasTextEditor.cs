@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
+using ModelHyperlink = FreeP.Core.Model.Hyperlink;
 
 namespace FreeP.App.Rendering.Wpf;
 
@@ -44,6 +45,30 @@ public sealed class InCanvasTextEditor : IDisposable
 
     /// <summary>The text selected by the active editor.</summary>
     public string SelectedText => _richBox?.Selection.Text ?? string.Empty;
+
+    public bool TryGetSelectedShapeRunHyperlink(out ModelHyperlink? hyperlink)
+    {
+        hyperlink = null;
+        if (!_active || _richBox is null || _richBox.Selection.IsEmpty)
+            return false;
+
+        var body = TextBodyFlowDocumentConverter.FromFlowDocument(
+            _richBox.Document,
+            _shapeParagraphBody);
+        hyperlink = InCanvasTextEditPlanner.GetSelectedRunHyperlink(
+            body,
+            CurrentSelection());
+        return true;
+    }
+
+    public bool TryApplySelectedShapeRunHyperlink(ModelHyperlink? hyperlink)
+    {
+        if (!_active || _richBox is null || _richBox.Selection.IsEmpty)
+            return false;
+
+        return ApplyShapeParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplySelectedRunHyperlink(body, hyperlink, selection));
+    }
 
     /// <summary>Selects a logical model-text range in the active editor.</summary>
     public bool TrySelectTextRange(int start, int end)
@@ -330,10 +355,7 @@ public sealed class InCanvasTextEditor : IDisposable
         var current = TextBodyFlowDocumentConverter.FromFlowDocument(
             _richBox.Document,
             _shapeParagraphBody);
-        (int Start, int End)? selection = _richBox.Selection.IsEmpty
-            ? null
-            : (LogicalOffsetAt(_richBox.Document, _richBox.Selection.Start),
-               LogicalOffsetAt(_richBox.Document, _richBox.Selection.End));
+        (int Start, int End)? selection = CurrentSelection();
         var updated = mutate(current, selection);
         int start = selection?.Start ?? 0;
         int end = selection?.End ?? InCanvasTextEditPlanner.ExtractPlainText(updated).Length;
@@ -350,6 +372,16 @@ public sealed class InCanvasTextEditor : IDisposable
             _richBox.Selection.Select(startPointer, endPointer);
         _richBox.Focus();
         return true;
+    }
+
+    private (int Start, int End)? CurrentSelection()
+    {
+        if (_richBox is null || _richBox.Selection.IsEmpty)
+            return null;
+
+        return (
+            LogicalOffsetAt(_richBox.Document, _richBox.Selection.Start),
+            LogicalOffsetAt(_richBox.Document, _richBox.Selection.End));
     }
 
     private static int LogicalOffsetAt(FlowDocument document, TextPointer position)

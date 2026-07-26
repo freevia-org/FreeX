@@ -261,6 +261,19 @@ public sealed class InCanvasTextEditPlanner
             color,
             selection);
 
+    /// <summary>Returns the hyperlink when every selected text run shares one value.</summary>
+    public static Hyperlink? GetSelectedRunHyperlink(
+        TextBody body,
+        (int Start, int End)? selection) =>
+        TextBodyRunMutationPlanner.GetSelectedHyperlink(body, selection);
+
+    /// <summary>Applies or clears a hyperlink on the selected text runs.</summary>
+    public static TextBody ApplySelectedRunHyperlink(
+        TextBody body,
+        Hyperlink? hyperlink,
+        (int Start, int End)? selection) =>
+        TextBodyRunMutationPlanner.ApplyHyperlink(body, hyperlink, selection);
+
     private static InCanvasShapeTextValueFormatPlan PlanTextValueFormat(
         int slideIndex,
         Slide? slide,
@@ -589,6 +602,42 @@ internal static class TextBodyRunMutationPlanner
         return editedBody;
     }
 
+    internal static Hyperlink? GetSelectedHyperlink(
+        TextBody source,
+        (int Start, int End)? selection)
+    {
+        var range = NormalizeSelection(selection, GetPlainTextLength(source));
+        if (range is not { } r)
+            return null;
+
+        var copy = TextBodyModelCloner.CloneTextBody(source)!;
+        var selectedRuns = SplitRunsAtSelection(copy, r.Start, r.End);
+        if (selectedRuns.Count == 0)
+            return null;
+
+        var first = selectedRuns[0].Hyperlink;
+        return selectedRuns.All(run => HyperlinksEqual(run.Hyperlink, first))
+            ? CloneHyperlink(first)
+            : null;
+    }
+
+    internal static TextBody ApplyHyperlink(
+        TextBody source,
+        Hyperlink? hyperlink,
+        (int Start, int End)? selection)
+    {
+        var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
+        var range = NormalizeSelection(selection, GetPlainTextLength(source));
+        if (range is not { } r)
+            return editedBody;
+
+        foreach (var run in SplitRunsAtSelection(editedBody, r.Start, r.End))
+            run.Hyperlink = CloneHyperlink(hyperlink);
+
+        MergeAdjacentRunsWithSameFormat(editedBody);
+        return editedBody;
+    }
+
     private static int GetPlainTextLength(TextBody body) =>
         body.Paragraphs.SelectMany(p => p.Runs).Sum(r => r.Text.Length)
         + Math.Max(0, body.Paragraphs.Count - 1);
@@ -693,7 +742,7 @@ internal static class TextBodyRunMutationPlanner
         && a.Strikethrough == b.Strikethrough
         && a.Caps == b.Caps
         && TextBodyModelCloner.ColorsEqual(a.Color, b.Color)
-        && a.Hyperlink == b.Hyperlink
+        && HyperlinksEqual(a.Hyperlink, b.Hyperlink)
         && a.Field == b.Field
         && a.TextFill == b.TextFill
         && a.TextOutline == b.TextOutline
@@ -720,6 +769,23 @@ internal static class TextBodyRunMutationPlanner
             paragraph.Runs.AddRange(merged);
         }
     }
+
+    private static bool HyperlinksEqual(Hyperlink? a, Hyperlink? b) =>
+        a is null || b is null
+            ? a is null && b is null
+            : a.Url == b.Url
+                && a.TargetSlideId == b.TargetSlideId
+                && a.Tooltip == b.Tooltip;
+
+    private static Hyperlink? CloneHyperlink(Hyperlink? source) =>
+        source is null
+            ? null
+            : new Hyperlink
+            {
+                Url = source.Url,
+                TargetSlideId = source.TargetSlideId,
+                Tooltip = source.Tooltip,
+            };
 
     private static bool GetRunFormat(Run run, TableCellTextFormatKind kind) => kind switch
     {

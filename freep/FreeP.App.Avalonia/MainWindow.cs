@@ -2250,7 +2250,12 @@ public sealed partial class MainWindow : Window
         r.Register(ChartTextOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartTextOptionsDialog));
         r.Register(ChartAreaOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAreaOptionsDialog));
         r.Register("freep.insert-link", new ActionRibbonCommand(OpenHyperlinkDialog));
-        r.Register("freep.remove-link", new ActionRibbonCommand(() => Editor.RemoveShapeHyperlink()));
+        r.Register("freep.remove-link", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplySelectedShapeRunHyperlink(null) == true)
+                return;
+            Editor.RemoveShapeHyperlink();
+        }));
         r.Register(HeaderFooterCommandPlanner.HeaderFooterCommandId,
             new ActionRibbonCommand(() => OpenHeaderFooterDialog(HeaderFooterCommandFocus.HeaderFooter)));
         r.Register(HeaderFooterCommandPlanner.DateTimeCommandId,
@@ -3265,9 +3270,12 @@ public sealed partial class MainWindow : Window
 
     private async Task<HyperlinkDialogApplyPlan> OpenHyperlinkDialogAsync()
     {
+        Hyperlink? selectedRunHyperlink = null;
+        var editsSelectedRun = _textEditor is not null
+            && _textEditor.TryGetSelectedShapeRunHyperlink(out selectedRunHyperlink);
         var request = HyperlinkDialogPlanner.BuildDialogRequest(
             Editor.Presentation.Slides,
-            Editor.SelectedShapeHyperlink);
+            editsSelectedRun ? selectedRunHyperlink : Editor.SelectedShapeHyperlink);
         LastHyperlinkDialogRequest = request;
 
         var result = HyperlinkDialogResultProviderForTests is { } provider
@@ -3277,7 +3285,16 @@ public sealed partial class MainWindow : Window
         var applyPlan = HyperlinkDialogPlanner.BuildApplyPlan(result);
         LastHyperlinkDialogApplyPlan = applyPlan;
         if (applyPlan.ShouldApply)
-            Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip);
+        {
+            var hyperlink = new Hyperlink
+            {
+                Url = applyPlan.Url,
+                TargetSlideId = applyPlan.TargetSlideId,
+                Tooltip = applyPlan.Tooltip,
+            };
+            if (!editsSelectedRun || _textEditor?.TryApplySelectedShapeRunHyperlink(hyperlink) != true)
+                Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip);
+        }
 
         return applyPlan;
     }

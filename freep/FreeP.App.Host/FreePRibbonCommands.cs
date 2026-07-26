@@ -552,7 +552,12 @@ internal static class FreePRibbonCommands
 
         // Remove hyperlink — clears the shape-level hyperlink on all selected shapes.
         registry.Register("freep.remove-link",
-            new ActionRibbonCommand(() => editor.RemoveShapeHyperlink()));
+            new ActionRibbonCommand(() =>
+            {
+                if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplySelectedShapeRunHyperlink(null) == true)
+                    return;
+                editor.RemoveShapeHyperlink();
+            }));
 
         // ── Wave 12A: Arrange — Group / Ungroup / Z-order / Align / Distribute ────
 

@@ -21,6 +21,30 @@ public sealed class InCanvasRichTextEditBufferTests
     }
 
     [Fact]
+    public void SelectedRunHyperlink_SplitsAndClearsWithoutChangingPlainText()
+    {
+        var buffer = new InCanvasRichTextEditBuffer(MixedBody("Alpha", "Beta"));
+        var selection = new InCanvasEditorTextSelection(1, 8);
+
+        buffer.ApplyHyperlink(
+            new Hyperlink { TargetSlideId = "slide-2", Tooltip = "Jump" },
+            selection).Should().BeTrue();
+
+        buffer.PlainText.Should().Be("AlphaBeta");
+        buffer.GetSelectedRunHyperlink(selection)!.TargetSlideId.Should().Be("slide-2");
+        buffer.Body.Paragraphs.SelectMany(p => p.Runs)
+            .Where(run => run.Text.Length > 0)
+            .Skip(1)
+            .First()
+            .Hyperlink.Should().NotBeNull();
+
+        buffer.ApplyHyperlink(null, selection).Should().BeTrue();
+        buffer.Body.Paragraphs.SelectMany(p => p.Runs)
+            .All(run => run.Hyperlink is null)
+            .Should().BeTrue();
+    }
+
+    [Fact]
     public void PasteLikeInsertionAtCaret_InheritsPrecedingRunAndKeepsFollowingRun()
     {
         var buffer = new InCanvasRichTextEditBuffer(MixedBody("Alpha", "Beta"));

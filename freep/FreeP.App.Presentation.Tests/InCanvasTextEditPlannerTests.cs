@@ -361,6 +361,31 @@ public sealed class InCanvasTextEditPlannerTests
         shape.TextBody.Paragraphs[0].Runs[0].Hyperlink!.Url.Should().Be("https://example.test");
     }
 
+    [Fact]
+    public void SelectedRunHyperlink_SplitsRangeAndSupportsUndoThroughTextBodyCommand()
+    {
+        var source = MakeBody("Click here");
+        var link = new Hyperlink { Url = "https://example.test", Tooltip = "Example" };
+
+        var edited = InCanvasTextEditPlanner.ApplySelectedRunHyperlink(
+            source,
+            link,
+            (0, 5));
+
+        edited.Paragraphs[0].Runs.Should().HaveCount(2);
+        edited.Paragraphs[0].Runs[0].Text.Should().Be("Click");
+        edited.Paragraphs[0].Runs[0].Hyperlink.Should().NotBeSameAs(link);
+        edited.Paragraphs[0].Runs[0].Hyperlink!.Url.Should().Be(link.Url);
+        edited.Paragraphs[0].Runs[1].Text.Should().Be(" here");
+        edited.Paragraphs[0].Runs[1].Hyperlink.Should().BeNull();
+        InCanvasTextEditPlanner.GetSelectedRunHyperlink(edited, (0, 5))!.Url
+            .Should().Be(link.Url);
+
+        var cleared = InCanvasTextEditPlanner.ApplySelectedRunHyperlink(edited, null, (0, 5));
+        cleared.Paragraphs[0].Runs.Should().ContainSingle();
+        cleared.Paragraphs[0].Runs[0].Hyperlink.Should().BeNull();
+    }
+
     private static TextBody MakeBody(string text, ThemeAwareColor? color = null)
     {
         var body = new TextBody { Wrap = true, Anchor = VerticalAnchor.Middle };

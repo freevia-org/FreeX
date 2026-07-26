@@ -147,6 +147,24 @@ public sealed class InCanvasRichTextEditBuffer
         return true;
     }
 
+    public Hyperlink? GetSelectedRunHyperlink(InCanvasEditorTextSelection selection) =>
+        InCanvasTextEditPlanner.GetSelectedRunHyperlink(_body, NormalizeSelection(selection));
+
+    public bool ApplyHyperlink(
+        Hyperlink? hyperlink,
+        InCanvasEditorTextSelection selection)
+    {
+        if (!TextBodyRunMutationPlanner.HasTextRuns(_body))
+            return false;
+
+        ClearTypingStyle();
+        _body = InCanvasTextEditPlanner.ApplySelectedRunHyperlink(
+            _body,
+            hyperlink,
+            NormalizeSelection(selection));
+        return true;
+    }
+
     public bool ApplyParagraphAlignment(TextAlign alignment, InCanvasEditorTextSelection selection) =>
         ApplyParagraphMutation(body => TableCellEditPlanner.ApplyParagraphAlignmentToBody(
             body,
