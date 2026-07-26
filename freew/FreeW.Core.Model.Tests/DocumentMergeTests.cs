@@ -45,6 +45,69 @@ public class DocumentMergeTests
     }
 
     [Fact]
+    public void Merge_TransfersReferencedCitationSources_AndRemapsConflictingTags()
+    {
+        var imported = new Source
+        {
+            Tag = "Shared Source",
+            Type = SourceType.JournalArticle,
+            Author = "Ada Lovelace",
+            PersonalAuthors = [SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace")],
+            Editors = [SourceAuthorPerson.Create("Edna", string.Empty, "Editor")],
+            Title = "Notes on the Analytical Engine",
+            Year = "1843",
+            Journal = "Scientific Memoirs",
+            Volume = "3",
+            Pages = "1-5"
+        };
+        var reusable = new Source
+        {
+            Tag = "Reusable",
+            Author = "Grace Hopper",
+            PersonalAuthors = [SourceAuthorPerson.Create("Grace", string.Empty, "Hopper")],
+            Title = "Compiler work",
+            Year = "1952"
+        };
+        var source = new TextDocument();
+        source.Sources.Add(imported);
+        source.Sources.Add(reusable);
+        var sourceParagraph = new Paragraph();
+        sourceParagraph.Runs.Add(Run.ComplexFieldRun(" CITATION \"Shared Source\" \\l 4 ", "[source]"));
+        sourceParagraph.Runs.Add(Run.ComplexFieldRun(" CITATION Reusable ", "[reused]"));
+        sourceParagraph.Runs.Add(Run.FootnoteReference(1));
+        source.Blocks.Add(sourceParagraph);
+        var sourceFootnote = new Footnote(1);
+        sourceFootnote.Content.Add(new Paragraph());
+        sourceFootnote.Content[0].Runs.Add(Run.ComplexFieldRun(" CITATION \"Shared Source\" ", "[source note]"));
+        source.Footnotes[1] = sourceFootnote;
+
+        var target = new TextDocument { BibliographyStyle = CitationStyle.Ieee };
+        target.Sources.Add(new Source { Tag = "Shared Source", Author = "Different author", Title = "Different work", Year = "2026" });
+        target.Sources.Add(reusable);
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        target.Sources.Select(entry => entry.Tag).Should().Equal("Shared Source", "Reusable", "Shared Source_FreeW1");
+        var copied = target.Sources[2];
+        copied.Type.Should().Be(SourceType.JournalArticle);
+        copied.PersonalAuthors.Should().Equal(SourceAuthorPerson.Create("Ada", string.Empty, "Lovelace"));
+        copied.Editors.Should().Equal(SourceAuthorPerson.Create("Edna", string.Empty, "Editor"));
+        copied.Journal.Should().Be("Scientific Memoirs");
+        copied.Pages.Should().Be("1-5");
+
+        var bodyCitation = inserted.Single().Should().BeOfType<Paragraph>().Which.Runs[0];
+        bodyCitation.ComplexField!.Instruction.Should().Be(" CITATION \"Shared Source_FreeW1\" \\l 4 ");
+        ComplexFieldEngine.Argument(bodyCitation.ComplexField.Instruction).Should().Be("Shared Source_FreeW1");
+        Citations.ResolveCitationField(target, bodyCitation.ComplexField, bodyCitation.Text).Should().Be("[3]");
+        target.Footnotes[1].Content.Single().Runs.Single().ComplexField!.Instruction
+            .Should().Be(" CITATION \"Shared Source_FreeW1\" ");
+
+        source.Sources.Should().Equal(imported, reusable);
+        sourceParagraph.Runs[0].ComplexField!.Instruction.Should().Be(" CITATION \"Shared Source\" \\l 4 ");
+        sourceFootnote.Content[0].Runs.Single().ComplexField!.Instruction.Should().Be(" CITATION \"Shared Source\" ");
+    }
+
+    [Fact]
     public void Merge_TransfersConflictingStyleClosureWithoutOverwritingTargetStyles()
     {
         var source = new TextDocument();
