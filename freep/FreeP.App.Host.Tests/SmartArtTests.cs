@@ -680,6 +680,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.BasicPyramid, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PyramidList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.RadialCycle, SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.RadialList, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicMatrix, SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.TitledMatrix, SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.BasicVenn, SmartArtFamily.Relationship)]
@@ -1773,6 +1774,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesRadialListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/radialList",
+            nodes: [("id1", "Discover"), ("id2", "Plan"), ("id3", "Build"), ("id4", "Review")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "radialList is a cycle-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "radialList is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Discover", "Plan", "Build", "Review");
+    }
+
+    [Fact]
     public void Reader_ParsesGearCycleAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -2833,6 +2853,32 @@ public sealed class SmartArtTests : IDisposable
         renderedText.Should().Contain("Review");
         liveShapes.Where(op => op.Text is null)
             .Should().HaveCount(4, "WPF and Avalonia hosts consume shared radial-cycle connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_RadialListSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/radialList",
+            nodes: [("n1", "Discover"), ("n2", "Plan"), ("n3", "Build"), ("n4", "Review")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(8, "four radial-list boxes plus four connectors should render from shared live data");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain("Discover")
+            .And.Contain("Review");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(4, "WPF and Avalonia hosts consume shared radial-list connector DrawOps");
     }
 
     [Fact]

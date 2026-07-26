@@ -146,6 +146,7 @@ public class RibbonEditorCompleteness5BTests
             [SmartArtAuthoringPlanner.TextCycleLayoutCommandId] = SmartArtLayoutPreset.TextCycle,
             [SmartArtAuthoringPlanner.BlockCycleLayoutCommandId] = SmartArtLayoutPreset.BlockCycle,
             [SmartArtAuthoringPlanner.NonDirectionalCycleLayoutCommandId] = SmartArtLayoutPreset.NonDirectionalCycle,
+            [SmartArtAuthoringPlanner.RadialListLayoutCommandId] = SmartArtLayoutPreset.RadialList,
         };
 
         foreach (var (commandId, preset) in expected)
