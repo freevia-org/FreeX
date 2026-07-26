@@ -958,6 +958,21 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void BasicList_ReturnsLiveVerticalListBoxesWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.List, "A", "B", "C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/list1";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("list1 is a bounded shared list-family layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(3, "one live box should be emitted per Basic List node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().BeEmpty("the shared list planner renders Basic List without connectors");
+    }
+
+    [Fact]
     public void BasicBlockList_ReturnsLiveVerticalListBoxesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.List, "A", "B", "C");

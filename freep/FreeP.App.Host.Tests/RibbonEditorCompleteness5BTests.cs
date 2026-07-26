@@ -146,6 +146,7 @@ public class RibbonEditorCompleteness5BTests
             [SmartArtAuthoringPlanner.TextCycleLayoutCommandId] = SmartArtLayoutPreset.TextCycle,
             [SmartArtAuthoringPlanner.BlockCycleLayoutCommandId] = SmartArtLayoutPreset.BlockCycle,
             [SmartArtAuthoringPlanner.NonDirectionalCycleLayoutCommandId] = SmartArtLayoutPreset.NonDirectionalCycle,
+            [SmartArtAuthoringPlanner.BasicListLayoutCommandId] = SmartArtLayoutPreset.BasicList,
             [SmartArtAuthoringPlanner.RadialListLayoutCommandId] = SmartArtLayoutPreset.RadialList,
         };
 
@@ -331,8 +332,17 @@ public class RibbonEditorCompleteness5BTests
         Assert.True(ed.CanPaste, "CanPaste should be true after cut.");
     }
 
-    [Fact]
-    public void Cmd_ChangeShape_RoutesThroughSharedEditingSession()
+    [Theory]
+    [InlineData("freep.arrange.change-shape.rectangle", DrawingShapeKind.Rectangle)]
+    [InlineData("freep.arrange.change-shape.ellipse", DrawingShapeKind.Ellipse)]
+    [InlineData("freep.arrange.change-shape.triangle", DrawingShapeKind.Triangle)]
+    [InlineData("freep.arrange.change-shape.diamond", DrawingShapeKind.Diamond)]
+    [InlineData("freep.arrange.change-shape.right-arrow", DrawingShapeKind.RightArrow)]
+    [InlineData("freep.arrange.change-shape.hexagon", DrawingShapeKind.Hexagon)]
+    [InlineData("freep.arrange.change-shape.star5", DrawingShapeKind.Star5)]
+    public void Cmd_ChangeShape_RoutesThroughSharedEditingSession(
+        string commandId,
+        DrawingShapeKind expectedKind)
     {
         var (ed, pres) = MakeSession();
         var shape = new SlideShape
@@ -346,9 +356,9 @@ public class RibbonEditorCompleteness5BTests
         pres.Slides[0].Shapes.Add(shape);
         ed.Select(shape.Id);
 
-        Exec(MakeRegistry(ed), ShapeChangePlanner.EllipseCommandId);
+        Exec(MakeRegistry(ed), commandId);
 
-        Assert.Equal(DrawingShapeKind.Ellipse, shape.AutoShapeKind);
+        Assert.Equal(expectedKind, shape.AutoShapeKind);
         ed.Undo();
         Assert.Equal(DrawingShapeKind.Rectangle, shape.AutoShapeKind);
     }

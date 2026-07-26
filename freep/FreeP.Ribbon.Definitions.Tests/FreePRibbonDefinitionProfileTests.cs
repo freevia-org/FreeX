@@ -98,6 +98,34 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Arrange_change_shape_menu_exposes_all_modeled_common_presets()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            var control = RequiredControl(definition, ShapeChangePlanner.MenuCommandId)
+                .Should()
+                .BeOfType<RibbonDropdown>()
+                .Subject;
+
+            control.Menu.Items.Select(item => item.CommandId?.Value)
+                .Should()
+                .Contain([
+                    ShapeChangePlanner.RectangleCommandId,
+                    ShapeChangePlanner.EllipseCommandId,
+                    ShapeChangePlanner.TriangleCommandId,
+                    ShapeChangePlanner.DiamondCommandId,
+                    ShapeChangePlanner.RightArrowCommandId,
+                    ShapeChangePlanner.HexagonCommandId,
+                    ShapeChangePlanner.Star5CommandId,
+                ]);
+        }
+    }
+
+    [Fact]
     public void Home_shell_ribbon_text_resolves_from_freep_localization_resources()
     {
         var text = WithUiCulture(Loc.PseudoLocalizationCultureName, () =>

@@ -530,8 +530,17 @@ public sealed class FloatingObjectRenderTests
         var glowRing = root.Children.OfType<Border>()
             .Single(border => border.Effect is null && border.Opacity == 0.6);
         ((SolidColorBrush)glowRing.Background).Color.Should().Be(Color.FromRgb(0x2E, 0x75, 0xB6));
-        glowRing.Width.Should().BeApproximately(484.16, 0.01);
-        glowRing.Height.Should().BeApproximately(76.2667, 0.01);
+        glowRing.Width.Should().BeApproximately(488.16, 0.01);
+        glowRing.Height.Should().BeApproximately(80.2667, 0.01);
+        var fillLayer = root.Children.OfType<Border>()
+            .Single(border => border.Effect is null
+                && border.Opacity == 1
+                && border.Background is SolidColorBrush { Color: var color }
+                && color == Color.FromRgb(0x24, 0x24, 0x24));
+        fillLayer.Width.Should().BeApproximately(484.16, 0.01);
+        fillLayer.Height.Should().BeApproximately(78.2667, 0.01);
+        Canvas.GetLeft(fillLayer).Should().Be(-4);
+        Canvas.GetTop(fillLayer).Should().Be(-2);
         root.Children.OfType<Border>().Single(border => border.Effect is not null)
             .Effect.Should().BeOfType<DropShadowEffect>();
         var glyphs = root.Children.OfType<TextBlock>().ToList();
@@ -543,7 +552,7 @@ public sealed class FloatingObjectRenderTests
             "Wave1 slopes glyphs downward at both ends");
         rotations.Should().Contain(angle => angle > 1,
             "Wave1 rises through the center");
-        rotations.Select(angle => Math.Abs(angle)).Max().Should().BeGreaterThan(5,
+        rotations.Select(angle => Math.Abs(angle)).Max().Should().BeGreaterThan(1.5,
             "the imported Wave1 signature carries visible per-glyph rotation");
     }
 

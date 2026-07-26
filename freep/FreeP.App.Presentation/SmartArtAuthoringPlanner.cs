@@ -42,6 +42,7 @@ public enum SmartArtLayoutPreset
     TextCycle,
     BlockCycle,
     NonDirectionalCycle,
+    BasicList,
     BasicBlockList,
     StackedList,
     DescendingBlockList,
@@ -134,6 +135,7 @@ public static class SmartArtAuthoringPlanner
     public const string TextCycleLayoutCommandId = "freep.smartart.layout.text-cycle";
     public const string BlockCycleLayoutCommandId = "freep.smartart.layout.block-cycle";
     public const string NonDirectionalCycleLayoutCommandId = "freep.smartart.layout.non-directional-cycle";
+    public const string BasicListLayoutCommandId = "freep.smartart.layout.basic-list";
     public const string BasicBlockListLayoutCommandId = "freep.smartart.layout.basic-block-list";
     public const string StackedListLayoutCommandId = "freep.smartart.layout.stacked-list";
     public const string DescendingBlockListLayoutCommandId = "freep.smartart.layout.descending-block-list";
@@ -319,6 +321,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/blockCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.NonDirectionalCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/nonDirectionalCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.BasicList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/list1", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicBlockList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.StackedList =>

@@ -11,6 +11,8 @@ public static class ShapeChangePlanner
     public const string TriangleCommandId = "freep.arrange.change-shape.triangle";
     public const string DiamondCommandId = "freep.arrange.change-shape.diamond";
     public const string RightArrowCommandId = "freep.arrange.change-shape.right-arrow";
+    public const string HexagonCommandId = "freep.arrange.change-shape.hexagon";
+    public const string Star5CommandId = "freep.arrange.change-shape.star5";
 
     public static IReadOnlyList<(string CommandId, DrawingShapeKind Kind)> Presets =>
     [
@@ -19,5 +21,7 @@ public static class ShapeChangePlanner
         (TriangleCommandId, DrawingShapeKind.Triangle),
         (DiamondCommandId, DrawingShapeKind.Diamond),
         (RightArrowCommandId, DrawingShapeKind.RightArrow),
+        (HexagonCommandId, DrawingShapeKind.Hexagon),
+        (Star5CommandId, DrawingShapeKind.Star5),
     ];
 }

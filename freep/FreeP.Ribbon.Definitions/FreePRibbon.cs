@@ -290,6 +290,12 @@ public static class FreePRibbon
         menu.Item(ShapeChangePlanner.RightArrowCommandId,
             FreePRibbonText.ArrangeChangeShapeRightArrowCommand.Label,
             FreePRibbonText.ArrangeChangeShapeRightArrowCommand.KeyTip);
+        menu.Item(ShapeChangePlanner.HexagonCommandId,
+            FreePRibbonText.ShapeHexagonLabel,
+            FreePRibbonText.ShapeHexagonKeyTip);
+        menu.Item(ShapeChangePlanner.Star5CommandId,
+            FreePRibbonText.ShapeStar5Label,
+            FreePRibbonText.ShapeStar5KeyTip);
     }
 
     private static void AddInsertGroups(RibbonTabBuilder tab)
@@ -515,6 +521,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
                 FreePRibbonText.SmartArtBasicBlockListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtBasicBlockListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BasicListLayoutCommandId,
+                FreePRibbonText.SmartArtBasicListCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtBasicListCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.StackedListLayoutCommandId,
                 FreePRibbonText.SmartArtStackedListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtStackedListCommand.KeyTip);
