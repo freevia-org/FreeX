@@ -122,7 +122,7 @@ public sealed class SmartArtEditingPlannerTests
             SmartArtLayoutPreset.PictureCaptionList);
 
         result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("requires image content for every SmartArt node");
+        result.Message.Should().Contain("require image content for every SmartArt node");
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public sealed class SmartArtEditingPlannerTests
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureGrid);
 
         result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("requires image content for every SmartArt node");
+        result.Message.Should().Contain("require image content for every SmartArt node");
     }
 
     [Theory]
