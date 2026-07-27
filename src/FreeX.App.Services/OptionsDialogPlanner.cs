@@ -36,6 +36,32 @@ public static class OptionsDialogPlanner
     /// <summary>The fixed client-frame height captured for the taller Formulas Options page.</summary>
     public const double FormulasCaptureHeight = 776.5;
 
+    // Shared WPF/Avalonia frame and Advanced-page metrics.
+    public const double CategoryColumnWidth = 220;
+    public const double CategoryTopMargin = 8;
+    public const double CategoryItemHorizontalPadding = 16;
+    public const double CategoryItemVerticalPadding = 9;
+    public const double ContentPaddingHorizontal = 28;
+    public const double ContentPaddingVertical = 20;
+    public const double FooterPaddingHorizontal = 16;
+    public const double FooterPaddingVertical = 10;
+    public const double FooterHeight = 46;
+    public const double ButtonHeight = 26;
+    public const double ControlHeight = 24;
+    public const double AdvancedDirectionLeftMargin = 18;
+    public const double AdvancedDirectionLabelWidth = 160;
+    public const double AdvancedDirectionControlWidth = 140;
+    public const double AdvancedObjectsLabelWidth = 230;
+    public const double AdvancedObjectsControlWidth = 220;
+    public const double AdvancedMoveAfterEnterBottomMargin = 8;
+    public const double AdvancedDirectionBottomMargin = 9;
+    public const double AdvancedDisabledFillHandleBottomMargin = 6;
+    public const double AdvancedAutoCompleteBottomMargin = 6;
+    public const double AdvancedDisplaySectionTopMargin = 18;
+    public const double AdvancedGridlinesBottomMargin = 6;
+    public const double AdvancedHeadingsBottomMargin = 8;
+    public const double AdvancedObjectsBottomMargin = 9;
+
     /// <summary>Why a numeric Options field could not be parsed.</summary>
     public enum OptionsInputError
     {
@@ -61,7 +87,8 @@ public static class OptionsDialogPlanner
         string DefaultFormat,
         bool ShowScreenTips,
         bool MoveSelectionAfterEnter,
-        AppOptionsEnterDirection AfterEnterDirection);
+        AppOptionsEnterDirection AfterEnterDirection,
+        AppOptionsObjectDisplay? ObjectsDisplay = null);
 
     /// <summary>Font names offered in the Options dialog's default-font picker (parity with the WPF host).</summary>
     public static IReadOnlyList<string> FontNames { get; } =
@@ -121,7 +148,8 @@ public static class OptionsDialogPlanner
         bool moveSelectionAfterEnter,
         AppOptionsEnterDirection afterEnterDirection,
         out OptionsDialogInput input,
-        out OptionsInputError error)
+        out OptionsInputError error,
+        AppOptionsObjectDisplay? objectsDisplay = null)
     {
         input = null!;
 
@@ -154,7 +182,8 @@ public static class OptionsDialogPlanner
             AppOptions.NormalizeDefaultFormat(defaultFormat),
             showScreenTips,
             moveSelectionAfterEnter,
-            afterEnterDirection);
+            afterEnterDirection,
+            objectsDisplay);
         return true;
     }
 
@@ -189,13 +218,13 @@ public static class OptionsDialogPlanner
             DefaultFormat = input.DefaultFormat,
             MoveSelectionAfterEnter = input.MoveSelectionAfterEnter,
             AfterEnterDirection = input.AfterEnterDirection,
+            ObjectsDisplay = input.ObjectsDisplay ?? existing.ObjectsDisplay,
 
             // Carried over verbatim — not surfaced by this dialog.
             CollapseRibbonAutomatically = existing.CollapseRibbonAutomatically,
             AppLanguage = existing.AppLanguage,
             SpellCheckCustomDictionaryWords = existing.SpellCheckCustomDictionaryWords,
             FormulaBarExpanded = existing.FormulaBarExpanded,
-            ObjectsDisplay = existing.ObjectsDisplay,
             StatusBarShowCellMode = existing.StatusBarShowCellMode,
             StatusBarShowEndMode = existing.StatusBarShowEndMode,
             StatusBarShowSelectionMode = existing.StatusBarShowSelectionMode,
