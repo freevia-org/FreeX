@@ -428,6 +428,7 @@ public class WatermarkOptionsRoundTripTests
         var w = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
         var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
         var shape = xml.Descendants(vml + "shape").Single();
+        var shapeType = xml.Descendants(vml + "shapetype").Single();
         var textPath = shape.Element(vml + "textpath");
 
         xml.Descendants(w + "docPartGallery")
@@ -441,6 +442,25 @@ public class WatermarkOptionsRoundTripTests
         textPath.Attribute("on")!.Value.Should().Be("t");
         textPath.Attribute("fitshape")!.Value.Should().Be("t");
         textPath.Attribute("style")!.Value.Should().Contain("font-family:Arial");
+        shapeType.Attribute("path")!.Value.Should().Be("m@7,l@8,m@5,21600l@6,21600e");
+        shapeType.Element(vml + "formulas")!.Elements(vml + "f")
+            .Select(formula => formula.Attribute("eqn")!.Value)
+            .Should().Equal(
+                "sum #0 0 10800",
+                "prod #0 2 1",
+                "sum 21600 0 @1",
+                "sum 0 0 @2",
+                "sum 21600 0 @3",
+                "if @0 @3 0",
+                "if @0 21600 @1",
+                "if @0 0 @2",
+                "if @0 @3 21600",
+                "mid @5 @6",
+                "mid @8 @5",
+                "mid @7 @8",
+                "mid @6 @7",
+                "sum @6 0 @5");
+        shapeType.Descendants(vml + "h").Single().Attribute("position")!.Value.Should().Be("#0,bottomRight");
     }
 
     [Fact]
