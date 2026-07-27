@@ -270,6 +270,7 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.RadialVenn => ("urn:microsoft.com/office/officeart/2005/8/layout/radialVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.TargetList => ("urn:microsoft.com/office/officeart/2005/8/layout/targetList", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.StackedVenn => ("urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn", SmartArtFamily.Relationship),
+            SmartArtLayoutPreset.InterlockingRings => ("urn:microsoft.com/office/officeart/2005/8/layout/interlockingRings", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.BasicHierarchy => ("urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.Hierarchy3 => ("urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.HorizontalHierarchy => ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy", SmartArtFamily.Hierarchy),

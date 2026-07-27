@@ -1620,6 +1620,45 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void InterlockingRings_ReturnsOverlappingTranslucentEllipsesInNodeOrder()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "Plan", "Build", "Review", "Share");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/interlockingRings";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("Interlocking Rings has bounded shared relationship geometry");
+        shapes!.Should().HaveCount(4);
+        shapes.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse);
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Plan", "Build", "Review", "Share");
+        shapes.Select(shape => shape.OffsetXEmu).Should().BeInAscendingOrder();
+        shapes.Select(shape => shape.ExtentCxEmu).Distinct().Should().ContainSingle();
+        shapes.Select(shape => shape.ExtentCyEmu).Distinct().Should().ContainSingle();
+
+        foreach (var shape in shapes)
+        {
+            ((ShapeFill.Solid)shape.Fill!).Color.Alpha.Should().BeLessThan(255);
+            shape.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            shape.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(6)]
+    public void InterlockingRings_OutsideBoundedNodeCount_ReturnsNullForCachedFallback(int nodeCount)
+    {
+        var data = MakeData(SmartArtFamily.Relationship, Enumerable.Range(1, nodeCount).Select(i => $"N{i}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/interlockingRings";
+
+        SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
+            .Should().BeNull("the bounded Interlocking Rings planner owns only readable two-to-five node diagrams");
+    }
+
+    [Fact]
     public void UnsupportedKnownProcessSibling_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B");

@@ -246,6 +246,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.TargetList)));
         registry.Register(SmartArtAuthoringPlanner.StackedVennLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.StackedVenn)));
+        registry.Register(SmartArtAuthoringPlanner.InterlockingRingsLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.InterlockingRings)));
         registry.Register(SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicHierarchy)));
         registry.Register(SmartArtAuthoringPlanner.Hierarchy3LayoutCommandId,
