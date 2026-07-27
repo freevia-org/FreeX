@@ -277,9 +277,10 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.screenshot", HostCommand(callbacks.CaptureScreenClip));
         r.Register("freew.screen-clipping", HostCommand(callbacks.CaptureScreenClip));
 
-        // Header / Footer — enable the page-margin region (render-ready). Region caret editing deferred.
-        r.Register("freew.header", new ActionRibbonCommand(editor.EnsureHeader));
-        r.Register("freew.footer", new ActionRibbonCommand(editor.EnsureFooter));
+        // Header / Footer — match WPF's text prompt when the shell supplies it. The fallback keeps
+        // headless registry callers deterministic and retains the old region-creation behavior.
+        r.Register("freew.header", HeaderFooterTextCommand(editor, callbacks, footer: false));
+        r.Register("freew.footer", HeaderFooterTextCommand(editor, callbacks, footer: true));
         r.Register("freew.page-number", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
         r.Register("freew.page-number-top", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)));
         r.Register("freew.page-number-bottom", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
@@ -707,6 +708,27 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.hf-insert-page-number-footer", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
         r.Register("freew.hf-insert-datetime", new ActionRibbonCommand(editor.InsertHeaderFooterDateTime));
         r.Register("freew.hf-insert-field", new ActionRibbonCommand(editor.InsertHeaderFooterDocumentInfo));
+    }
+
+    private static IRibbonCommand HeaderFooterTextCommand(
+        DocumentView editor,
+        RibbonHostCallbacks callbacks,
+        bool footer) =>
+        callbacks.AskHeaderFooterText is { } ask
+            ? new ActionRibbonCommand(() => _ = ApplyHeaderFooterTextAsync(editor, ask, footer))
+            : new ActionRibbonCommand(footer ? editor.EnsureFooter : editor.EnsureHeader);
+
+    private static async Task ApplyHeaderFooterTextAsync(
+        DocumentView editor,
+        Func<bool, string, Task<string?>> ask,
+        bool footer)
+    {
+        var current = footer ? editor.Document.Footer : editor.Document.Header;
+        var result = await ask(footer, current?.PlainText ?? string.Empty);
+        if (result is null)
+            return;
+
+        editor.ApplyHeaderFooterText(footer, result);
     }
 
     private static void RegisterDeveloperControls(RibbonCommandRegistry r, DocumentView editor)

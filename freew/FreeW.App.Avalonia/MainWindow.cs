@@ -59,6 +59,7 @@ public sealed partial class MainWindow : Window
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
     private readonly Action<IInputElement?> _restorePrintOwnerFocus;
     private readonly Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>> _pickExportPath;
+    private readonly Func<bool, string, Task<string?>>? _askHeaderFooterText;
     private readonly IScreenClipService _screenClipService;
     private readonly DocumentView _editor = new();
     private readonly QuickPartLibrary _quickParts = QuickPartLibrary.Load();
@@ -175,7 +176,8 @@ public sealed partial class MainWindow : Window
         Action<IInputElement?>? restorePrintOwnerFocus = null,
         Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>>? pickExportPath = null,
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
-        Func<string, Exception, Task>? showFileCommandErrorAsync = null)
+        Func<string, Exception, Task>? showFileCommandErrorAsync = null,
+        Func<bool, string, Task<string?>>? askHeaderFooterText = null)
     {
         _optionsStore = optionsStore;
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
@@ -185,6 +187,7 @@ public sealed partial class MainWindow : Window
                 CupsPrintDialog.ShowAsync(owner, discovery, cancellationToken: cancellationToken));
         _restorePrintOwnerFocus = restorePrintOwnerFocus ?? RestorePrintOwnerFocus;
         _pickExportPath = pickExportPath ?? PickExportPathAsync;
+        _askHeaderFooterText = askHeaderFooterText;
         _options = options ?? _optionsStore.Load();
         _options.Normalize();
 
@@ -1637,6 +1640,8 @@ public sealed partial class MainWindow : Window
             OpenLineNumberOptionsDialog: () => _ = OpenLineNumberOptionsDialogAsync(),
             ShowHyphenationInfo: message => _status.Text = message,
             OpenPageNumberFormatDialog: () => _ = OpenPageNumberFormatDialogAsync(),
+            AskHeaderFooterText: _askHeaderFooterText ??
+                ((footer, initial) => HeaderFooterTextDialog.ShowAsync(this, footer, initial)),
             OpenImageCropDialog: () => _ = OpenImageCropDialogAsync(),
             OpenImageSizeDialog: () => _ = OpenImageSizeDialogAsync(),
             OpenImageAltTextDialog: () => _ = OpenImageAltTextDialogAsync(),
