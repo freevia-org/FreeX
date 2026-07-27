@@ -10,6 +10,15 @@ public enum TableCellAnchor
     Bottom = 2
 }
 
+/// <summary>One of the four editable sides of a table cell border.</summary>
+public enum TableCellBorderSide
+{
+    Left = 0,
+    Right = 1,
+    Top = 2,
+    Bottom = 3
+}
+
 /// <summary>
 /// Per-cell borders for a table cell. Each side may be null (use table-style default) or a
 /// concrete outline (None = no border, Visible = drawn border).

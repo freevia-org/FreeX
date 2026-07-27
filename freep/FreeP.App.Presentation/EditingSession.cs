@@ -2012,6 +2012,27 @@ public sealed class EditingSession
         return true;
     }
 
+    /// <summary>Sets or clears one explicit border side of the active table cell. Undoable.</summary>
+    public bool TryApplyActiveTableCellBorder(
+        TableCellBorderSide side,
+        ShapeOutline? outline)
+    {
+        if (ActiveTableCell is not { } active)
+            return false;
+
+        var (shapeId, table) = RequireSelectedTable();
+        if (shapeId == 0 || table is null || active.Row < 0 || active.Row >= table.Rows.Count)
+            return false;
+
+        var row = table.Rows[active.Row];
+        if (active.Col < 0 || active.Col >= row.Cells.Count)
+            return false;
+
+        ExecuteTableCommand((si, id) => new SetTableCellBorderCommand(
+            si, id, active.Row, active.Col, side, outline));
+        return true;
+    }
+
     public TableCellTextFormatPlan PlanActiveTableCellTextFormat(
         TableCellTextFormatKind kind,
         (int Start, int End)? selection = null) =>

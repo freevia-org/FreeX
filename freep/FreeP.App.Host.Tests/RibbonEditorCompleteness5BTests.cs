@@ -795,6 +795,25 @@ public class RibbonEditorCompleteness5BTests
         Assert.Null(shape.Table.Rows[0].Cells[0].Anchor);
     }
 
+    [Fact]
+    public void Cmd_TableCellBorder_WithActiveTableCell_UsesSharedCommand()
+    {
+        var (ed, pres) = MakeSession();
+        var shape = AddSingleCellTable(pres, 803, MakeTextBody("Cell"));
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.table-cell-border", RibbonCommandContext.ForSelectedValue("Bottom:Black 1pt"));
+
+        var outline = shape.Table!.Rows[0].Cells[0].Borders!.Bottom
+            .Should().BeOfType<ShapeOutline.Visible>().Subject;
+        Assert.Equal(1, outline.WidthPt);
+        Assert.Equal(ThemeAwareColor.Black, outline.Color);
+        ed.Undo();
+        Assert.Null(shape.Table.Rows[0].Cells[0].Borders);
+    }
+
     [Theory]
     [InlineData("freep.bold", TableCellTextFormatKind.Bold)]
     [InlineData("freep.italic", TableCellTextFormatKind.Italic)]
@@ -1047,6 +1066,7 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.font-color")]
     [InlineData("freep.table-cell-fill")]
     [InlineData("freep.table-cell-anchor")]
+    [InlineData("freep.table-cell-border")]
     [InlineData("freep.format-painter")]
     [InlineData("freep.theme.office")]
     [InlineData("freep.theme.berlin")]

@@ -312,6 +312,22 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void SetTableCellBorder_UndoRedo_Works()
+    {
+        var (p, bus, shape) = MakeTable();
+        var outline = new ShapeOutline.Visible(ThemeAwareColor.Black, 1.0);
+
+        bus.Execute(new SetTableCellBorderCommand(
+            0, shape.Id, 1, 1, TableCellBorderSide.Bottom, outline));
+
+        shape.Table!.Rows[1].Cells[1].Borders!.Bottom.Should().BeSameAs(outline);
+        bus.Undo();
+        shape.Table.Rows[1].Cells[1].Borders.Should().BeNull();
+        bus.Redo();
+        shape.Table.Rows[1].Cells[1].Borders!.Bottom.Should().BeSameAs(outline);
+    }
+
+    [Fact]
     public void SetTableCellFill_RoundTripsThroughPptx()
     {
         var (presentation, bus, shape) = MakeTable(1, 1);
@@ -345,6 +361,29 @@ public sealed class TableEditCommandTests
         var reopened = PptxPackageReader.Read(stream);
         reopened.Slides[0].Shapes[0].Table!.Rows[0].Cells[0].Anchor
             .Should().Be(TableCellAnchor.Middle);
+    }
+
+    [Fact]
+    public void SetTableCellBorder_RoundTripsThroughPptx()
+    {
+        var (presentation, bus, shape) = MakeTable(1, 1);
+        bus.Execute(new SetTableCellBorderCommand(
+            0,
+            shape.Id,
+            0,
+            0,
+            TableCellBorderSide.Top,
+            new ShapeOutline.Visible(SrgbColor.FromRgb(0x1F4E79), 0.5)));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+
+        var reopened = PptxPackageReader.Read(stream);
+        var outline = reopened.Slides[0].Shapes[0].Table!.Rows[0].Cells[0].Borders!.Top
+            .Should().BeOfType<ShapeOutline.Visible>().Subject;
+        outline.WidthPt.Should().BeApproximately(0.5, 0.001);
+        outline.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
     }
 
     [Fact]
@@ -827,6 +866,41 @@ public sealed class TableEditCommandTests
 
         sess.Undo();
         shape.Table.Rows[0].Cells[0].Anchor.Should().BeNull();
+    }
+
+    [Fact]
+    public void EditingSession_SetActiveTableCellBorder_IsUndoable()
+    {
+        var sess = MakeSession(out var shape);
+        sess.SetActiveTableCell(0, 0);
+
+        sess.TryApplyActiveTableCellBorder(
+            TableCellBorderSide.Left,
+            ShapeOutline.None.Instance).Should().BeTrue();
+        shape.Table!.Rows[0].Cells[0].Borders!.Left.Should().BeSameAs(ShapeOutline.None.Instance);
+
+        sess.Undo();
+        shape.Table.Rows[0].Cells[0].Borders.Should().BeNull();
+    }
+
+    [Fact]
+    public void TableCellBorderOptionParser_ParsesAutomaticNoneAndPen()
+    {
+        TableCellBorderOptionParser.TryParse("Top:Automatic", out var side, out var automatic)
+            .Should().BeTrue();
+        side.Should().Be(TableCellBorderSide.Top);
+        automatic.Should().BeNull();
+
+        TableCellBorderOptionParser.TryParse("Left:None", out side, out var none)
+            .Should().BeTrue();
+        side.Should().Be(TableCellBorderSide.Left);
+        none.Should().BeSameAs(ShapeOutline.None.Instance);
+
+        TableCellBorderOptionParser.TryParse("Bottom:Black 1pt", out side, out var pen)
+            .Should().BeTrue();
+        side.Should().Be(TableCellBorderSide.Bottom);
+        pen.Should().BeOfType<ShapeOutline.Visible>()
+            .Which.WidthPt.Should().Be(1.0);
     }
 
     [Fact]
