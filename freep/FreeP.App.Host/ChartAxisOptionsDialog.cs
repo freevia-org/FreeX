@@ -25,6 +25,8 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly ComboBox _tickLabelPositionCombo;
     private readonly ComboBox _crossesCombo;
     private readonly TextBox _crossesAtBox;
+    private readonly ComboBox _crossBetweenCombo;
+    private readonly ComboBox _labelAlignmentCombo;
 
     public ChartAxisOptionsDialog(EditingSession editor)
     {
@@ -68,6 +70,8 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _tickLabelPositionCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickLabelPositionOptions);
         _crossesCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.CrossingOptions);
         _crossesAtBox = new TextBox { MinWidth = 120 };
+        _crossBetweenCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.CrossBetweenOptions);
+        _labelAlignmentCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.LabelAlignmentOptions);
         LoadControls();
 
         var buttons = new StackPanel
@@ -99,6 +103,8 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         content.Children.Add(MakeRow(surface.TickLabelPositionLabel, _tickLabelPositionCombo));
         content.Children.Add(MakeRow(surface.CrossingLabel, _crossesCombo));
         content.Children.Add(MakeRow(surface.CrossesAtLabel, _crossesAtBox));
+        content.Children.Add(MakeRow(surface.CrossBetweenLabel, _crossBetweenCombo));
+        content.Children.Add(MakeRow(surface.LabelAlignmentLabel, _labelAlignmentCombo));
         content.Children.Add(buttons);
         Content = content;
     }
@@ -137,6 +143,8 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _tickLabelPositionCombo.SelectedItem = ChartAxisOptionsPlanner.TickLabelPositionOptions.FirstOrDefault(x => x.Value == _planner.TickLabelPosition);
         _crossesCombo.SelectedItem = ChartAxisOptionsPlanner.CrossingOptions.FirstOrDefault(x => x.Value == _planner.Crosses);
         _crossesAtBox.Text = Format(_planner.CrossesAt);
+        _crossBetweenCombo.SelectedItem = ChartAxisOptionsPlanner.CrossBetweenOptions.FirstOrDefault(x => x.Value == _planner.CrossBetween);
+        _labelAlignmentCombo.SelectedItem = ChartAxisOptionsPlanner.LabelAlignmentOptions.FirstOrDefault(x => x.Value == _planner.LabelAlignment);
     }
 
     private void UpdatePlannerFromControls()
@@ -154,6 +162,8 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _planner.SetTickLabelPosition(((ChartTickLabelPositionOption)_tickLabelPositionCombo.SelectedItem).Value);
         _planner.SetCrosses(((ChartAxisCrossingOption)_crossesCombo.SelectedItem).Value);
         _planner.SetCrossesAt(ParseOptional(_crossesAtBox.Text, "Crosses at"));
+        _planner.SetCrossBetween(((ChartCrossBetweenOption)_crossBetweenCombo.SelectedItem).Value);
+        _planner.SetLabelAlignment(((ChartLabelAlignmentOption)_labelAlignmentCombo.SelectedItem).Value);
     }
 
     private static double? ParseOptional(string text, string label)

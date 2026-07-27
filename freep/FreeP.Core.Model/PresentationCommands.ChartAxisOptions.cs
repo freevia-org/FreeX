@@ -21,6 +21,8 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
     private ChartTickLabelPosition? _oldTickLabelPosition;
     private ChartAxisCrossing? _oldCrosses;
     private double? _oldCrossesAt;
+    private ChartCrossBetween? _oldCrossBetween;
+    private ChartLabelAlignment? _oldLabelAlignment;
 
     public SetChartAxisOptionsCommand(int slideIndex, uint shapeId, ChartAxisOptions options)
     {
@@ -55,6 +57,8 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         axis.TickLabelPosition = _newOptions.TickLabelPosition;
         axis.Crosses = _newOptions.CrossesAt is null ? _newOptions.Crosses : null;
         axis.CrossesAt = _newOptions.CrossesAt;
+        axis.CrossBetween = _newOptions.CrossBetween;
+        axis.LabelAlignment = _newOptions.LabelAlignment;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -79,6 +83,8 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         axis.TickLabelPosition = _oldTickLabelPosition;
         axis.Crosses = _oldCrosses;
         axis.CrossesAt = _oldCrossesAt;
+        axis.CrossBetween = _oldCrossBetween;
+        axis.LabelAlignment = _oldLabelAlignment;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -98,6 +104,8 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         _oldTickLabelPosition = axis.TickLabelPosition;
         _oldCrosses = axis.Crosses;
         _oldCrossesAt = axis.CrossesAt;
+        _oldCrossBetween = axis.CrossBetween;
+        _oldLabelAlignment = axis.LabelAlignment;
     }
 
     private static ChartAxis ResolveAxis(ChartShape chart, ChartAxisKind kind) =>

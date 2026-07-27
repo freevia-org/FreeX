@@ -6,6 +6,8 @@ public sealed record ChartAxisKindOption(ChartAxisKind Value, string Label);
 public sealed record ChartTickMarkOption(ChartTickMark? Value, string Label);
 public sealed record ChartTickLabelPositionOption(ChartTickLabelPosition? Value, string Label);
 public sealed record ChartAxisCrossingOption(ChartAxisCrossing? Value, string Label);
+public sealed record ChartCrossBetweenOption(ChartCrossBetween? Value, string Label);
+public sealed record ChartLabelAlignmentOption(ChartLabelAlignment? Value, string Label);
 
 public sealed record ChartAxisOptionsSurfacePlan(
     string CommandId,
@@ -26,6 +28,8 @@ public sealed record ChartAxisOptionsSurfacePlan(
     string TickLabelPositionLabel,
     string CrossingLabel,
     string CrossesAtLabel,
+    string CrossBetweenLabel,
+    string LabelAlignmentLabel,
     string AutoHint,
     string OkLabel,
     string CancelLabel);
@@ -54,11 +58,13 @@ public sealed class ChartAxisOptionsPlanner
     public const string TickLabelPositionLabel = "Tick labels";
     public const string CrossingLabel = "Axis crosses";
     public const string CrossesAtLabel = "Crosses at";
+    public const string CrossBetweenLabel = "Cross between";
+    public const string LabelAlignmentLabel = "Label alignment";
     public const string AutoHint = "Blank values use automatic chart scaling.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
     public const double DefaultDialogWidth = 480;
-    public const double DefaultDialogHeight = 430;
+    public const double DefaultDialogHeight = 490;
 
     public static IReadOnlyList<ChartAxisKindOption> AxisOptions { get; } =
     [
@@ -92,6 +98,21 @@ public sealed class ChartAxisOptionsPlanner
         new(ChartAxisCrossing.Max, "Maximum"),
     ];
 
+    public static IReadOnlyList<ChartCrossBetweenOption> CrossBetweenOptions { get; } =
+    [
+        new(null, "Automatic"),
+        new(ChartCrossBetween.Between, "Between categories"),
+        new(ChartCrossBetween.MidCat, "On category"),
+    ];
+
+    public static IReadOnlyList<ChartLabelAlignmentOption> LabelAlignmentOptions { get; } =
+    [
+        new(null, "Automatic"),
+        new(ChartLabelAlignment.Left, "Left"),
+        new(ChartLabelAlignment.Center, "Center"),
+        new(ChartLabelAlignment.Right, "Right"),
+    ];
+
     private readonly ChartShape _chart;
     private ChartAxisKind _axisKind;
     private string _title = string.Empty;
@@ -107,6 +128,8 @@ public sealed class ChartAxisOptionsPlanner
     private ChartTickLabelPosition? _tickLabelPosition;
     private ChartAxisCrossing? _crosses;
     private double? _crossesAt;
+    private ChartCrossBetween? _crossBetween;
+    private ChartLabelAlignment? _labelAlignment;
 
     private ChartAxisOptionsPlanner(ChartShape chart)
     {
@@ -134,6 +157,8 @@ public sealed class ChartAxisOptionsPlanner
             TickLabelPositionLabel,
             CrossingLabel,
             CrossesAtLabel,
+            CrossBetweenLabel,
+            LabelAlignmentLabel,
             AutoHint,
             OkLabel,
             CancelLabel);
@@ -158,6 +183,8 @@ public sealed class ChartAxisOptionsPlanner
     public ChartTickLabelPosition? TickLabelPosition => _tickLabelPosition;
     public ChartAxisCrossing? Crosses => _crosses;
     public double? CrossesAt => _crossesAt;
+    public ChartCrossBetween? CrossBetween => _crossBetween;
+    public ChartLabelAlignment? LabelAlignment => _labelAlignment;
 
     public void SetAxis(ChartAxisKind axisKind)
     {
@@ -176,6 +203,8 @@ public sealed class ChartAxisOptionsPlanner
         _tickLabelPosition = axis.TickLabelPosition;
         _crosses = axis.Crosses;
         _crossesAt = axis.CrossesAt;
+        _crossBetween = axis.CrossBetween;
+        _labelAlignment = axis.LabelAlignment;
     }
 
     public void SetTitle(string? title) => _title = title ?? string.Empty;
@@ -191,6 +220,8 @@ public sealed class ChartAxisOptionsPlanner
     public void SetTickLabelPosition(ChartTickLabelPosition? value) => _tickLabelPosition = value;
     public void SetCrosses(ChartAxisCrossing? value) => _crosses = value;
     public void SetCrossesAt(double? value) => _crossesAt = value;
+    public void SetCrossBetween(ChartCrossBetween? value) => _crossBetween = value;
+    public void SetLabelAlignment(ChartLabelAlignment? value) => _labelAlignment = value;
 
     public ChartAxisOptions BuildCommitPlan() => new(
         _axisKind,
@@ -206,7 +237,9 @@ public sealed class ChartAxisOptionsPlanner
         _tickLabelPosition,
         _crossesAt is null ? _crosses : null,
         _crossesAt,
-        _showAxis);
+        _showAxis,
+        _crossBetween,
+        _labelAlignment);
 
     private ChartAxis ResolveAxis() =>
         _axisKind == ChartAxisKind.Category ? _chart.CategoryAxis : _chart.ValueAxis;

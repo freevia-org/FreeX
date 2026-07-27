@@ -22,4 +22,6 @@ public sealed record ChartAxisOptions(
     ChartTickLabelPosition? TickLabelPosition = null,
     ChartAxisCrossing? Crosses = null,
     double? CrossesAt = null,
-    bool ShowAxis = true);
+    bool ShowAxis = true,
+    ChartCrossBetween? CrossBetween = null,
+    ChartLabelAlignment? LabelAlignment = null);
