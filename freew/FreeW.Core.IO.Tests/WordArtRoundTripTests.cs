@@ -16,6 +16,7 @@ public class WordArtRoundTripTests
     private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     private static readonly XNamespace Wp = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
     private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private static readonly XNamespace Wps = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
 
     private static TextDocument RoundTrip(TextDocument document)
@@ -206,6 +207,21 @@ public class WordArtRoundTripTests
         inline.Descendants(A + "graphicData").Single().Attribute("uri")!.Value.Should().Be(Wps.NamespaceName);
         var txbxContent = inline.Descendants(W + "txbxContent").Single();
         string.Concat(txbxContent.Descendants(W + "t").Select(t => t.Value)).Should().Be("Box");
+    }
+
+    [Fact]
+    public void WordArt_ImportsFromMarkupCompatibilityChoice()
+    {
+        var document = DocumentWith(WordArt.Create("Choice art", WordArtStyle.GlowBlue, 36));
+
+        var read = ReadWithDocumentXmlMutation(document, xml =>
+        {
+            var drawing = xml.Descendants(W + "drawing").Single();
+            drawing.ReplaceWith(new XElement(Mc + "AlternateContent",
+                new XElement(Mc + "Choice", new XAttribute("Requires", "wps"), new XElement(drawing))));
+        });
+
+        read.Paragraphs.Single().Runs.Single(run => run.WordArt is not null).WordArt!.Text.Should().Be("Choice art");
     }
 
     [Fact]
