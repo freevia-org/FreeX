@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using FreeP.App.Avalonia;
 using FreeP.App.Recording;
 using FreeP.App.Compositor;
@@ -14,6 +15,7 @@ using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.Model;
 using Free.Shared.Drawing;
 using Free.Shared.AppServices;
+using Free.Shared.Ribbon;
 
 namespace FreeP.App.Avalonia.Tests;
 
@@ -978,6 +980,47 @@ public sealed class SlideShowWindowHeadlessTests
             var window = new MainWindow(Array.Empty<string>());
             var act = () => window.StartSlideShow(fromStart: true);
             act.Should().NotThrow();
+        });
+
+        if (!ran) return;
+    }
+
+    [Fact]
+    public async Task MainWindow_RibbonTimingCommands_launch_shared_timing_intents()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var owner = new MainWindow(Array.Empty<string>());
+            try
+            {
+                owner.Show();
+                var timingCommands = new[]
+                {
+                    (CommandId: "freep.slideshow.rehearse-timings", Intent: SlideShowTimingIntent.RehearseTimings),
+                    (CommandId: "freep.slideshow.record-timings", Intent: SlideShowTimingIntent.RecordTimings),
+                };
+
+                foreach (var timingCommand in timingCommands)
+                {
+                    owner.RibbonCommandRegistryForTests
+                        .TryGet(timingCommand.CommandId, out var command)
+                        .Should().BeTrue();
+                    command!.Execute(RibbonCommandContext.Empty);
+
+                    Dispatcher.UIThread.RunJobs();
+                    var desktop = Application.Current?.ApplicationLifetime
+                        as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+                    var slideShow = desktop?.Windows.OfType<SlideShowWindow>()
+                        .Single(window => window.IsVisible);
+                    slideShow.Should().NotBeNull();
+                    slideShow!.PresenterToolPlan.Recording.TimingIntent.Should().Be(timingCommand.Intent);
+                    slideShow.Close();
+                }
+            }
+            finally
+            {
+                owner.Close();
+            }
         });
 
         if (!ran) return;

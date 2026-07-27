@@ -8714,12 +8714,23 @@ public sealed partial class MainWindow : Window
         return flyout;
     }
 
-    private ComboBox? FindRibbonComboBox(RibbonCommandId commandId) =>
-        _ribbonControl?
-            .GetLogicalDescendants()
-            .OfType<ComboBox>()
-            .FirstOrDefault(combo =>
-                string.Equals(combo.Tag as string, commandId.Value, StringComparison.Ordinal));
+    private ComboBox? FindRibbonComboBox(RibbonCommandId commandId)
+    {
+        if (_ribbonControl is null)
+            return null;
+
+        static bool IsCommandCombo(ComboBox combo, RibbonCommandId commandId) =>
+            string.Equals(combo.Tag as string, commandId.Value, StringComparison.Ordinal);
+
+        // Key-tip execution targets the rendered control. The logical tree can omit
+        // controls inside a realized TabItem template in the headless presenter.
+        return _ribbonControl.GetVisualDescendants()
+                   .OfType<ComboBox>()
+                   .FirstOrDefault(combo => IsCommandCombo(combo, commandId))
+               ?? _ribbonControl.GetLogicalDescendants()
+                   .OfType<ComboBox>()
+                   .FirstOrDefault(combo => IsCommandCombo(combo, commandId));
+    }
 
     private string? GetSelectedRibbonTabId()
         => (_ribbonControl as TabControl)?.SelectedItem is TabItem { Tag: string tabId }

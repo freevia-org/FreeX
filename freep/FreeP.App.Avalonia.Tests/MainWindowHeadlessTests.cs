@@ -742,6 +742,8 @@ public sealed class MainWindowHeadlessTests
         slideShow.Controls.Select(i => i.CommandId.Value).Should().Equal(
             "freep.slideshow.from-beginning",
             "freep.slideshow.from-current-slide",
+            "freep.slideshow.rehearse-timings",
+            "freep.slideshow.record-timings",
             "freep.slideshow.custom-shows");
     }
 
