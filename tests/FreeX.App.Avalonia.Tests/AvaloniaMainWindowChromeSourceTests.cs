@@ -862,6 +862,32 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void PageSetupSheet_UsesWpfThreeColumnGridAndControlOrder()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
+        var start = source.IndexOf("var sheetGrid = new Grid", StringComparison.Ordinal);
+        var end = source.IndexOf("var tabs = new TabControl", start, StringComparison.Ordinal);
+
+        start.Should().BeGreaterThanOrEqualTo(0);
+        end.Should().BeGreaterThan(start);
+        var sheetSource = source[start..end];
+
+        sheetSource.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"150,*,Auto\")");
+        sheetSource.Should().Contain("RowDefinitions = new RowDefinitions(\"Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto\")");
+        sheetSource.Should().Contain("picker.Width = 24;");
+        sheetSource.Should().Contain("AddSheetValue(0, printAreaBox, printAreaPicker);");
+        sheetSource.Should().Contain("AddSheetValue(1, repeatRowsBox, repeatRowsPicker);");
+        sheetSource.Should().Contain("AddSheetValue(2, repeatColumnsBox, repeatColumnsPicker);");
+        source.Should().Contain("Margin = new Thickness(12),");
+
+        sheetSource.IndexOf("AddSheetLabel(5, UiText.Get(\"PageSetup_PageOrder\")", StringComparison.Ordinal)
+            .Should().BeLessThan(sheetSource.IndexOf("AddSheetValue(6, blackAndWhiteCheck", StringComparison.Ordinal));
+        sheetSource.IndexOf("AddSheetValue(6, blackAndWhiteCheck", StringComparison.Ordinal)
+            .Should().BeLessThan(sheetSource.IndexOf("AddSheetValue(7, draftQualityCheck", StringComparison.Ordinal));
+        sheetSource.Should().Contain("VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden");
+    }
+
+    [Fact]
     public void HeaderFooterEditorRoute_PreservesSixPictureScopesAndUsesNamedDocking()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));

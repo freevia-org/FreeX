@@ -1050,35 +1050,74 @@ public sealed partial class MainWindow
             Content = new ScrollViewer { Content = headerFooterGrid },
         };
 
+        // Keep the Sheet tab's three-column grid in lockstep with the WPF XAML.  The stacked
+        // Avalonia form made the 600x560 dialog scroll, hid the range-picker buttons, and changed
+        // the visual order of the page-order/print-option controls.
+        var sheetGrid = new Grid
+        {
+            Margin = new Thickness(10),
+            ColumnDefinitions = new ColumnDefinitions("150,*,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
+        };
+
+        void AddSheetLabel(int row, string text, Thickness margin)
+        {
+            var label = PageSetupLabel(text);
+            label.Margin = margin;
+            Grid.SetRow(label, row);
+            Grid.SetColumn(label, 0);
+            sheetGrid.Children.Add(label);
+        }
+
+        void AddSheetValue(int row, Control value, Button? picker = null, Thickness? margin = null)
+        {
+            value.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+            value.Margin = margin ?? new Thickness(0, 0, picker is null ? 0 : 6, 8);
+            Grid.SetRow(value, row);
+            Grid.SetColumn(value, 1);
+            sheetGrid.Children.Add(value);
+
+            if (picker is null)
+                return;
+
+            picker.Width = 24;
+            picker.MinWidth = 24;
+            picker.MaxWidth = 24;
+            picker.Height = 24;
+            picker.MinHeight = 24;
+            picker.MaxHeight = 24;
+            picker.Margin = new Thickness(0, 0, 0, 8);
+            Grid.SetRow(picker, row);
+            Grid.SetColumn(picker, 2);
+            sheetGrid.Children.Add(picker);
+        }
+
+        AddSheetLabel(0, UiText.Get("PageSetup_PrintArea"), new Thickness(0, 0, 8, 8));
+        AddSheetValue(0, printAreaBox, printAreaPicker);
+        AddSheetLabel(1, UiText.Get("PageSetup_RepeatRows"), new Thickness(0, 0, 8, 8));
+        AddSheetValue(1, repeatRowsBox, repeatRowsPicker);
+        AddSheetLabel(2, UiText.Get("PageSetup_RepeatColumns"), new Thickness(0, 0, 8, 8));
+        AddSheetValue(2, repeatColumnsBox, repeatColumnsPicker);
+
+        AddSheetValue(3, gridlinesCheck, margin: new Thickness(0, 0, 0, 8));
+        AddSheetValue(4, headingsCheck, margin: new Thickness(0, 0, 0, 8));
+        AddSheetLabel(5, UiText.Get("PageSetup_PageOrder"), new Thickness(0, 0, 8, 0));
+        AddSheetValue(5, pageOrderBox, margin: new Thickness(0));
+        AddSheetValue(6, blackAndWhiteCheck, margin: new Thickness(0, 8, 0, 8));
+        AddSheetValue(7, draftQualityCheck, margin: new Thickness(0));
+        AddSheetLabel(8, UiText.Get("PageSetup_CellErrorsAs"), new Thickness(0, 8, 8, 0));
+        AddSheetValue(8, cellErrorsBox, margin: new Thickness(0, 8, 0, 0));
+        AddSheetLabel(9, UiText.Get("PageSetup_Comments"), new Thickness(0, 8, 8, 0));
+        AddSheetValue(9, commentsBox, margin: new Thickness(0, 8, 0, 0));
+
         var sheetTab = new TabItem
         {
             Header = StripDisplayMnemonic(UiText.Get("PageSetup_SheetTab")),
             Content = new ScrollViewer
             {
-                Content = new StackPanel
-                {
-                    Margin = new Thickness(14),
-                    Spacing = 8,
-                    Children =
-                    {
-                        PageSetupLabel(UiText.Get("PageSetup_PrintArea")),
-                        BuildDialogRangePickerRow(printAreaBox, printAreaPicker),
-                        PageSetupLabel(UiText.Get("PageSetup_RepeatRows")),
-                        BuildDialogRangePickerRow(repeatRowsBox, repeatRowsPicker),
-                        PageSetupLabel(UiText.Get("PageSetup_RepeatColumns")),
-                        BuildDialogRangePickerRow(repeatColumnsBox, repeatColumnsPicker),
-                        gridlinesCheck,
-                        headingsCheck,
-                        blackAndWhiteCheck,
-                        draftQualityCheck,
-                        PageSetupLabel(UiText.Get("PageSetup_CellErrorsAs")),
-                        cellErrorsBox,
-                        PageSetupLabel(UiText.Get("PageSetup_Comments")),
-                        commentsBox,
-                        PageSetupLabel(UiText.Get("PageSetup_PageOrder")),
-                        pageOrderBox,
-                    },
-                },
+                HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden,
+                VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden,
+                Content = sheetGrid,
             },
         };
 
@@ -1187,7 +1226,7 @@ public sealed partial class MainWindow
         DockPanel.SetDock(validationText, AvaloniaDock.Bottom);
         var root = new DockPanel
         {
-            Margin = new Thickness(12, 15, 28, 44),
+            Margin = new Thickness(12),
             Children = { buttonRow, validationText, tabs },
         };
         ConfigurePageSetupTabCycle(dialog, root, cancelButton);
