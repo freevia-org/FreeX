@@ -6,6 +6,12 @@ public static class FreeWSymbolPickerDialogPlanner
     public const string Title = "Symbol";
     public const string CancelText = "Cancel";
     public const int Columns = 6;
+    public const int ButtonSize = 36;
+    public const int ButtonMargin = 2;
+    public const int ButtonFontSize = 18;
+    public const int OuterMargin = 8;
+    public const int FooterTopMargin = 8;
+    public const int FooterButtonMinWidth = 72;
 
     public static readonly IReadOnlyList<string> Glyphs =
     [
