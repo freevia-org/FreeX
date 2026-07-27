@@ -190,6 +190,22 @@ public sealed class OptionsDialogPlannerTests
     }
 
     [Fact]
+    public void Project_UsesExplicitAppLanguageWhenLanguagePageSuppliesOne()
+    {
+        OptionsDialogPlanner.TryBuildInput(
+            "Calibri", "12", "2", "Tester",
+            autoCalculate: true, useR1C1ReferenceStyle: false, errorCheckingEnabled: true,
+            proofingIgnoreUppercase: true, proofingIgnoreNumbers: false,
+            showFormulaBar: true, showGridlines: true, showHeadings: true,
+            defaultFormat: ".xlsx", showScreenTips: true,
+            moveSelectionAfterEnter: true, afterEnterDirection: AppOptionsEnterDirection.Down,
+            out var input, out _, appLanguage: "en-US").Should().BeTrue();
+
+        OptionsDialogPlanner.Project(new AppOptions { AppLanguage = "*" }, input)
+            .AppLanguage.Should().Be("en-US");
+    }
+
+    [Fact]
     public void Project_CarriesOverUnmanagedFields()
     {
         var existing = new AppOptions

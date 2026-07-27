@@ -581,7 +581,8 @@ internal static class ParityCapture
             {
                 CaptureConsolidateDialogDirect(results, outDir, sheet.Id, ResolveSheetId(workbook));
             }
-            else if (string.Equals(targetSurfaceId, "dialog.Options.Save", StringComparison.Ordinal))
+            else if (string.Equals(targetSurfaceId, "dialog.Options.Save", StringComparison.Ordinal) ||
+                string.Equals(targetSurfaceId, "dialog.Options.Language", StringComparison.Ordinal))
             {
                 CaptureDialogTabs(results, "dialog.Options", outDir,
                     () => new OptionsDialog(FreeXOptions.Load()),
