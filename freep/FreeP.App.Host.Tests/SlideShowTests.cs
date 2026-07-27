@@ -1880,6 +1880,26 @@ public sealed class SlideShowMediaControllerTests
     }
 
     [StaFact]
+    public void TryHandleClick_UsesTopmostOverlappingMediaShape()
+    {
+        var fakeWriter = new FakeFileWriter();
+        var overlay = new System.Windows.Controls.Canvas();
+        var ctrl = new SlideShowMediaController(overlay, fakeWriter);
+        var slide = new Slide();
+        var bottomShape = MakeMediaShape(0, 0, cx: 9144000, cy: 6858000);
+        bottomShape.Id = 10;
+        var topShape = MakeMediaShape(0, 0, cx: 9144000, cy: 6858000);
+        topShape.Id = 20;
+        slide.Shapes.Add(bottomShape);
+        slide.Shapes.Add(topShape);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720);
+
+        ctrl.TryHandleClick(480, 360, slide, 960, 720).Should().BeTrue();
+        ctrl.LastMediaClickShapeIdForTest.Should().Be(20);
+    }
+
+    [StaFact]
     public void TryHandleClick_OutsideMediaShapeRect_ReturnsFalse()
     {
         // Shape is in the top-left quarter only (0,0 to 480,360).

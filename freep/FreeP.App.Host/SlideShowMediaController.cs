@@ -139,6 +139,7 @@ public sealed class SlideShowMediaController
 
     // For each media shape: the MediaElement (null if creation failed) + optional temp path.
     private sealed record MediaSlot(
+        uint ShapeId,
         MediaElement? Element,
         string? TempPath,
         PresentationMediaTranscriptTrackDescriptor? CaptionTrack = null,
@@ -167,6 +168,8 @@ public sealed class SlideShowMediaController
 
     internal void RefreshCaptionsForTest(TimeSpan? playbackPosition = null) =>
         UpdateCaptions(playbackPosition);
+
+    internal uint? LastMediaClickShapeIdForTest { get; private set; }
 
     // ── public API ────────────────────────────────────────────────────────────
 
@@ -213,7 +216,7 @@ public sealed class SlideShowMediaController
                 continue;
 
             var rect = ComputeMediaRect(shape, slideDipW, slideDipH, canvasW, canvasH);
-            var slot = CreateSlot(shape.Media, rect, shape.Media.IsVideo);
+            var slot = CreateSlot(shape.Id, shape.Media, rect, shape.Media.IsVideo);
             var captionTrack = captionTracks?.FirstOrDefault(track =>
                 track.ShapeId == shape.Id && track.HasTranscript);
             if (captionTrack is not null)
@@ -290,24 +293,25 @@ public sealed class SlideShowMediaController
     public bool TryHandleClick(double canvasX, double canvasY, Slide slide,
                                double canvasW, double canvasH)
     {
-        int idx = 0;
-        foreach (var shape in slide.Shapes)
-        {
-            if (shape.Kind != SlideShapeKind.Media || shape.Media is null)
-                continue;
-            if (idx >= _slots.Count) break;
+        var click = SlideShowMediaInteractionPlanner.PlanClick(
+            slide,
+            _slideDipW,
+            _slideDipH,
+            canvasW,
+            canvasH,
+            canvasX,
+            canvasY);
+        LastMediaClickShapeIdForTest = click.Media?.ShapeId;
+        if (!click.IsHandled)
+            return false;
 
-            var slot = _slots[idx++];
-            var r    = ComputeMediaRect(shape, _slideDipW, _slideDipH, canvasW, canvasH);
+        var slot = _slots.FirstOrDefault(candidate =>
+            candidate.ShapeId == click.Media!.ShapeId);
+        if (slot is null)
+            return true;
 
-            if (canvasX >= r.X && canvasX <= r.X + r.Width &&
-                canvasY >= r.Y && canvasY <= r.Y + r.Height)
-            {
-                TogglePlayPause(slot.Element);
-                return true;
-            }
-        }
-        return false;
+        TogglePlayPause(slot.Element);
+        return true;
     }
 
     // ── internal helpers ──────────────────────────────────────────────────────
@@ -365,7 +369,7 @@ public sealed class SlideShowMediaController
         }
     }
 
-    private MediaSlot CreateSlot(MediaInfo media, MediaShapeRect rect, bool isVideo)
+    private MediaSlot CreateSlot(uint shapeId, MediaInfo media, MediaShapeRect rect, bool isVideo)
     {
         // Resolve source first (writes temp file if needed).
         // This is done OUTSIDE the element-creation try/catch so the temp path
@@ -377,7 +381,7 @@ public sealed class SlideShowMediaController
         if (source is null)
         {
             // Still record the tempPath for cleanup (written but URI was unparseable).
-            return new MediaSlot(null, tempPath);
+            return new MediaSlot(shapeId, null, tempPath);
         }
 
         MediaElement? element = null;
@@ -409,7 +413,7 @@ public sealed class SlideShowMediaController
             element = null;
         }
 
-        return new MediaSlot(element, tempPath);
+        return new MediaSlot(shapeId, element, tempPath);
     }
 
     private Uri? ResolveSource(MediaInfo media, out string? tempPath)

@@ -93,6 +93,40 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
     }
 
     [Fact]
+    public void Controller_UsesTopmostOverlappingMediaShapeForClicks()
+    {
+        var factory = new FakeBackendFactory();
+        var overlay = new Canvas();
+        var controller = new AvaloniaSlideShowMediaController(overlay, factory);
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 10,
+            Kind = SlideShapeKind.Media,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 6858000,
+            Media = new MediaInfo { IsVideo = true, Bytes = [1, 2, 3], ContentType = "video/mp4" },
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 20,
+            Kind = SlideShapeKind.Media,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 6858000,
+            Media = new MediaInfo { IsVideo = true, Bytes = [4, 5, 6], ContentType = "video/mp4" },
+        });
+
+        controller.EnterSlide(slide, 960, 720, 960, 720, Array.Empty<PresentationMediaTranscriptTrackDescriptor>());
+
+        controller.TryHandleClick(slide, 960, 720, 960, 720, 480, 360).Should().BeTrue();
+        controller.LastClick.Media!.ShapeId.Should().Be(20);
+    }
+
+    [Fact]
     public void Controller_RefreshesCaptionOverlayFromPlaybackPosition()
     {
         var factory = new FakeBackendFactory();
