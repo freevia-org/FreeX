@@ -449,6 +449,15 @@ internal static class FreePRibbonText
     public static RibbonText AnimationEmphasisPulseCommand { get; } = new("Ribbon_Command_AnimationEmphasisPulse_Label", "Ribbon_Command_AnimationEmphasisPulse_KeyTip");
     public static RibbonText AnimationEmphasisSpinCommand { get; } = new("Ribbon_Command_AnimationEmphasisSpin_Label", "Ribbon_Command_AnimationEmphasisSpin_KeyTip");
     public static RibbonText AnimationEmphasisGrowShrinkCommand { get; } = new("Ribbon_Command_AnimationEmphasisGrowShrink_Label", "Ribbon_Command_AnimationEmphasisGrowShrink_KeyTip");
+    public static RibbonText AnimationEmphasisTeeterCommand { get; } = new("Ribbon_Command_AnimationEmphasisTeeter_Label", "Ribbon_Command_AnimationEmphasisTeeter_KeyTip");
+    public static RibbonText AnimationEmphasisBlinkCommand { get; } = new("Ribbon_Command_AnimationEmphasisBlink_Label", "Ribbon_Command_AnimationEmphasisBlink_KeyTip");
+    public static RibbonText AnimationEmphasisColorPulseCommand { get; } = new("Ribbon_Command_AnimationEmphasisColorPulse_Label", "Ribbon_Command_AnimationEmphasisColorPulse_KeyTip");
+    public static RibbonText AnimationEmphasisChangeColorCommand { get; } = new("Ribbon_Command_AnimationEmphasisChangeColor_Label", "Ribbon_Command_AnimationEmphasisChangeColor_KeyTip");
+    public static RibbonText AnimationEmphasisGrowWithColorCommand { get; } = new("Ribbon_Command_AnimationEmphasisGrowWithColor_Label", "Ribbon_Command_AnimationEmphasisGrowWithColor_KeyTip");
+    public static RibbonText AnimationEmphasisWaveCommand { get; } = new("Ribbon_Command_AnimationEmphasisWave_Label", "Ribbon_Command_AnimationEmphasisWave_KeyTip");
+    public static RibbonText AnimationEmphasisShimmerCommand { get; } = new("Ribbon_Command_AnimationEmphasisShimmer_Label", "Ribbon_Command_AnimationEmphasisShimmer_KeyTip");
+    public static RibbonText AnimationEmphasisBoldCommand { get; } = new("Ribbon_Command_AnimationEmphasisBold_Label", "Ribbon_Command_AnimationEmphasisBold_KeyTip");
+    public static RibbonText AnimationEmphasisUnderlineCommand { get; } = new("Ribbon_Command_AnimationEmphasisUnderline_Label", "Ribbon_Command_AnimationEmphasisUnderline_KeyTip");
     public static RibbonText AnimationExitDisappearCommand { get; } = new("Ribbon_Command_AnimationExitDisappear_Label", "Ribbon_Command_AnimationExitDisappear_KeyTip");
     public static RibbonText AnimationExitFadeOutCommand { get; } = new("Ribbon_Command_AnimationExitFadeOut_Label", "Ribbon_Command_AnimationExitFadeOut_KeyTip");
     public static RibbonText AnimationExitFlyOutCommand { get; } = new("Ribbon_Command_AnimationExitFlyOut_Label", "Ribbon_Command_AnimationExitFlyOut_KeyTip");
