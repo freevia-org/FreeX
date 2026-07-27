@@ -1,6 +1,7 @@
 using Avalonia.Headless;
 using Avalonia.Input;
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -344,6 +345,59 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task RichText_is_used_before_xaml_package_and_plain_text()
+    {
+        var body = BuildTextBody("Rich Avalonia paste");
+        body.Paragraphs.Single().Runs.Single().Bold = true;
+        body.Paragraphs.Single().Runs.Single().BoldSet = true;
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                Text: "plain fallback",
+                RichTextBytes: InCanvasRichClipboardPlanner.Serialize(
+                    new InCanvasRichClipboardPayload(body, "Rich Avalonia paste")),
+                XamlPackageBytes: CreateXamlPackage(
+                    "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Paragraph>ignored</Paragraph></FlowDocument>")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        var result = await service.PasteAsync(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        var run = editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Single().Runs.Single();
+        run.Text.Should().Be("Rich Avalonia paste");
+        run.Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task XamlPackage_table_is_projected_into_formatted_text_box()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                Text: "plain fallback",
+                XamlPackageBytes: CreateXamlPackage("""
+                    <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                      <Table><TableRowGroup><TableRow>
+                        <TableCell><Paragraph><Italic>Q1</Italic></Paragraph></TableCell>
+                        <TableCell><Paragraph>42</Paragraph></TableCell>
+                      </TableRow></TableRowGroup></Table>
+                    </FlowDocument>
+                    """)),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        var result = await service.PasteAsync(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.XamlPackage);
+        var paragraph = editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Single();
+        paragraph.Runs.Select(run => run.Text).Should().ContainInOrder("Q1", "\t", "42");
+        paragraph.Runs.Single(run => run.Text == "Q1").Italic.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Own_copy_prefers_internal_editable_shape_over_exported_fallbacks()
     {
         var clipboard = new FakeSystemClipboard();
@@ -571,6 +625,15 @@ public sealed class PresentationClipboardInteropTests
         paragraph.Runs.Add(new Run { Text = text });
         body.Paragraphs.Add(paragraph);
         return body;
+    }
+
+    private static byte[] CreateXamlPackage(string xaml)
+    {
+        using var output = new MemoryStream();
+        using (var package = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        using (var writer = new StreamWriter(package.CreateEntry("Xaml/Document.xaml").Open(), Encoding.UTF8))
+            writer.Write(xaml);
+        return output.ToArray();
     }
 
     private sealed class FakeSystemClipboard : IPresentationSystemClipboard
