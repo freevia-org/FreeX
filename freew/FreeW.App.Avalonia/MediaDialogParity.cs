@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -399,40 +400,58 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
     private InsertChartDialog(Chart? seed)
     {
         Title = "Insert Chart";
-        Width = 650;
-        MinHeight = 420;
+        Width = 500;
+        MinHeight = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
         var state = InsertChartDialogPlanner.BuildInitialState(seed, CultureInfo.CurrentCulture);
         _seriesNames = state.SeriesNames;
-        _kind = new ComboBox { ItemsSource = Enum.GetValues<ChartKind>(), SelectedItem = state.Kind, MinWidth = 180 };
-        _title = Chrome.TextBox(state.Title, 300);
+        _kind = new ComboBox
+        {
+            ItemsSource = Enum.GetValues<ChartKind>(),
+            SelectedItem = state.Kind,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        AvaloniaCompactDialogChrome.ApplyComboBox(_kind, Chrome.Style);
+        _title = Chrome.TextBox(state.Title, 0);
+        _title.HorizontalAlignment = HorizontalAlignment.Stretch;
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
-        BuildHeader();
+        BuildTableHeader();
         foreach (var row in state.Rows)
             AddRow(row.Category, row.SeriesValues);
 
         var scroll = new ScrollViewer
         {
             Content = _rowsPanel,
-            MaxHeight = 250,
+            Height = 138,
+            HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
         };
-        var addRow = Chrome.Button("Add Row", () => AddRow(string.Empty, _seriesNames.Select(_ => string.Empty).ToArray()));
-        var grid = new Grid { ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) } } };
-        Chrome.AddField(grid, "Chart type:", _kind, 0);
-        Chrome.AddField(grid, "Title (optional):", _title, 1);
-        Grid.SetRow(scroll, 2); Grid.SetColumnSpan(scroll, 2); grid.Children.Add(scroll);
-        Grid.SetRow(addRow, 3); Grid.SetColumn(addRow, 1); addRow.Margin = new Thickness(0, 6, 0, 0); grid.Children.Add(addRow);
-        Grid.SetRow(_status, 4); Grid.SetColumnSpan(_status, 2); grid.Children.Add(_status);
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        Content = new Border { Padding = new Thickness(14), Child = new StackPanel { Children = { grid, Chrome.ActionRow(Accept, () => Close(null)) } } };
+        var table = new Border
+        {
+            Background = new ImmutableSolidColorBrush(Color.FromRgb(240, 240, 240)),
+            BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(104, 140, 175)),
+            BorderThickness = new Thickness(1),
+            Height = 140,
+            Child = scroll,
+        };
+
+        var panel = new StackPanel();
+        AddLabeledControl(panel, "Chart type:", _kind);
+        AddLabeledControl(panel, "Title (optional):", _title);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Chart data  (first column = category labels, remaining columns = series values):",
+            Margin = new Thickness(0, 3, 0, 4),
+            TextWrapping = TextWrapping.Wrap,
+        });
+        panel.Children.Add(table);
+        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
+            [Chrome.Button("OK", Accept, isDefault: true), Chrome.Button("Cancel", () => Close(null), isCancel: true)],
+            new Thickness(0, 12, 0, 0)));
+        Content = new Border { Padding = new Thickness(14), Child = panel };
         Opened += (_, _) => Chrome.FocusAndSelect(_title);
         Chrome.Escape(this, () => Close(null));
     }
@@ -440,36 +459,62 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
     public static Task<Chart?> ShowAsync(Window owner, Chart? seed = null) =>
         new InsertChartDialog(seed).ShowDialog<Chart?>(owner);
 
-    private void BuildHeader()
+    private void BuildTableHeader()
     {
-        _rowsPanel.Children.Add(new TextBlock
+        var header = new Grid
         {
-            Text = "Category    " + string.Join("    ", _seriesNames),
-            FontWeight = FontWeight.Bold,
-            Margin = new Thickness(0, 0, 0, 4),
-        });
+            Background = Brushes.White,
+            Height = 24,
+            ColumnDefinitions = { new ColumnDefinition { Width = new GridLength(100) } },
+        };
+        for (var i = 0; i < _seriesNames.Count; i++)
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = SeriesColumnWidth() });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        AddHeaderCell(header, "Category", 0);
+        for (var i = 0; i < _seriesNames.Count; i++)
+            AddHeaderCell(header, _seriesNames[i], i + 1);
+        _rowsPanel.Children.Add(header);
     }
 
     private void AddRow(string category, IReadOnlyList<string> values)
     {
-        var row = new Grid { ColumnDefinitions = { new ColumnDefinition { Width = new GridLength(130) } } };
+        var row = new Grid
+        {
+            Background = Brushes.White,
+            Height = 22,
+            ColumnDefinitions = { new ColumnDefinition { Width = new GridLength(100) } },
+        };
         for (var i = 0; i < _seriesNames.Count; i++)
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var categoryBox = Chrome.TextBox(category, 110);
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = SeriesColumnWidth() });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var categoryBox = CellBox(category);
         Chrome.Place(row, categoryBox, 0, 0);
         var boxes = new List<TextBox>();
         for (var i = 0; i < _seriesNames.Count; i++)
         {
-            var box = Chrome.TextBox(i < values.Count ? values[i] : string.Empty, 90);
+            var box = CellBox(i < values.Count ? values[i] : string.Empty);
             boxes.Add(box);
             Chrome.Place(row, box, 0, i + 1);
         }
         var controls = new RowControls { Category = categoryBox, Values = boxes, View = row };
-        var remove = Chrome.Button("Remove", () => RemoveRow(controls), minWidth: 64);
-        Chrome.Place(row, remove, 0, _seriesNames.Count + 1);
         _rows.Add(controls);
         _rowsPanel.Children.Add(row);
+        foreach (var box in new[] { categoryBox }.Concat(boxes))
+        {
+            box.KeyDown += (_, e) =>
+            {
+                if (e.Key == Key.Enter && ReferenceEquals(_rows.LastOrDefault(), controls))
+                {
+                    AddRow(string.Empty, _seriesNames.Select(_ => string.Empty).ToArray());
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.Delete && _rows.Count > 1 && IsEmpty(controls))
+                {
+                    RemoveRow(controls);
+                    e.Handled = true;
+                }
+            };
+        }
     }
 
     private void RemoveRow(RowControls controls)
@@ -492,6 +537,60 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
         }
         _status.Text = errorMessage ?? InsertChartDialogPlanner.EmptyRowsValidationMessage;
     }
+
+    private static void AddLabeledControl(StackPanel panel, string label, Control control)
+    {
+        panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        control.Margin = new Thickness(0, 0, 0, 10);
+        panel.Children.Add(control);
+    }
+
+    private static void AddHeaderCell(Grid header, string text, int column)
+    {
+        var cell = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(210, 210, 210)),
+            BorderThickness = new Thickness(0, 0, 1, 1),
+            Child = new TextBlock
+            {
+                Text = text,
+                FontFamily = Chrome.Style.FontFamily,
+                FontSize = Chrome.Style.FontSize,
+                Padding = new Thickness(4, 3),
+                VerticalAlignment = VerticalAlignment.Stretch,
+            },
+        };
+        Grid.SetColumn(cell, column);
+        header.Children.Add(cell);
+    }
+
+    private GridLength SeriesColumnWidth() =>
+        _seriesNames.Count == 1 ? new GridLength(20) : new GridLength(1, GridUnitType.Star);
+
+    private static TextBox CellBox(string text)
+    {
+        var box = new TextBox
+        {
+            Text = text,
+            Background = Brushes.White,
+            Height = 21,
+            MinHeight = 21,
+            MaxHeight = 21,
+            Padding = new Thickness(4, 1),
+            FontFamily = Chrome.Style.FontFamily,
+            FontSize = Chrome.Style.FontSize,
+            BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(210, 210, 210)),
+            BorderThickness = new Thickness(0, 0, 1, 1),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        return box;
+    }
+
+    private static bool IsEmpty(RowControls row) =>
+        string.IsNullOrWhiteSpace(row.Category.Text)
+        && row.Values.All(box => string.IsNullOrWhiteSpace(box.Text));
 }
 
 internal static class Chrome
