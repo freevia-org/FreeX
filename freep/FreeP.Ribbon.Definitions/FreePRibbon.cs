@@ -596,6 +596,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.GridMatrixLayoutCommandId,
                 FreePRibbonText.SmartArtGridMatrixCommand.Label, RibbonCommandIconKind.Grid,
                 FreePRibbonText.SmartArtGridMatrixCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BasicRelationshipLayoutCommandId,
+                FreePRibbonText.SmartArtBasicRelationshipCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtBasicRelationshipCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
                 FreePRibbonText.SmartArtBasicVennCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.SmartArtBasicVennCommand.KeyTip);

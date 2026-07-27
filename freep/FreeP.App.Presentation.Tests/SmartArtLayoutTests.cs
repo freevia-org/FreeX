@@ -1568,15 +1568,19 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void UnsupportedRelationshipSibling_ReturnsNull()
+    public void BasicRelationship_UsesOverlappingEllipsesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.Relationship, "A", "B", "C");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/relationship1";
-        data.IsLiveLayoutSupported = false;
+        data.IsLiveLayoutSupported = true;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        result.Should().BeNull("relationship-family layouts outside the bounded live planner should use cached drawing");
+        result.Should().NotBeNull("relationship1 is admitted to the shared live Relationship engine");
+        result!.Should().HaveCount(3);
+        result.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse);
+        result.Select(shape => shape.OffsetXEmu).Should().BeInAscendingOrder();
+        result[1].OffsetXEmu.Should().BeLessThan(result[0].OffsetXEmu + result[0].ExtentCxEmu);
     }
 
     // BI2: when nodes parse to zero, Layout returns null so compositor uses cached-drawing fallback.
