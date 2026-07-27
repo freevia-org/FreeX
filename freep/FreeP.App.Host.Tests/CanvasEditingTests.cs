@@ -172,6 +172,42 @@ public sealed class CanvasEditingTests
     }
 
     [Fact]
+    public void HitTest_PointOnGroupedChild_ReturnsChildId()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Clear();
+
+        var child = new SlideShape
+        {
+            Id = 21,
+            OffsetXEmu = 952500L,
+            OffsetYEmu = 952500L,
+            ExtentCxEmu = 476250L,
+            ExtentCyEmu = 476250L,
+            Fill = new ShapeFill.Solid(new SrgbColor(0x20, 0x40, 0x80))
+        };
+        var group = new SlideShape
+        {
+            Id = 20,
+            Kind = SlideShapeKind.Group,
+            OffsetXEmu = 952500L,
+            OffsetYEmu = 952500L,
+            ExtentCxEmu = 476250L,
+            ExtentCyEmu = 476250L
+        };
+        group.Children.Add(child);
+        slide.Shapes.Add(group);
+
+        ShapeHitTester.HitTest(slide, pres, 120.0, 120.0).Should().Be(child.Id);
+        ShapeHitTester.FindShape(slide, child.Id).Should().BeSameAs(child);
+        ShapeHitTester.GetShapeBoundsDip(slide, pres, child.Id).Should().NotBeNull();
+
+        var moveState = CanvasGesturePlanner.CaptureMoveState(slide, [child.Id]);
+        moveState.Should().ContainSingle().Which.ShapeId.Should().Be(child.Id);
+    }
+
+    [Fact]
     public void MarqueeHitTest_OverlapsAll_ReturnsBothShapes()
     {
         var (pres, slide, shape1, shape2) = MakeTestSlide();

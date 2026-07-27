@@ -34,6 +34,15 @@ public static class ShapeHitTester
             right,
             bottom);
 
+    public static SlideShape? FindShape(Slide slide, uint shapeId) =>
+        FreeP.App.Compositor.ShapeHitTester.FindShape(slide, shapeId);
+
+    public static ShapeBoundsDip? GetShapeBoundsDip(
+        Slide slide,
+        Presentation presentation,
+        uint shapeId) =>
+        FreeP.App.Compositor.ShapeHitTester.GetShapeBoundsDip(slide, presentation, shapeId);
+
     public static ShapeBoundsDip GetShapeBoundsDip(
         SlideShape shape,
         Presentation presentation) =>

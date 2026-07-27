@@ -30,12 +30,26 @@ public static class ShapeHitTester
         for (var i = slide.Shapes.Count - 1; i >= 0; i--)
         {
             var shape = slide.Shapes[i];
+            var childHit = HitTestChildren(shape.Children, presentation, point);
+            if (childHit.HasValue)
+                return childHit;
+
             var bounds = GetShapeBoundsDip(shape, presentation).ToLayoutRect();
             if (DrawingBoundsHitTester.Contains(bounds, point, shape.RotationDeg))
                 return shape.Id;
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Finds a shape by id, including descendants of grouped shapes.
+    /// Group children use the same absolute slide coordinate space as their parent.
+    /// </summary>
+    public static SlideShape? FindShape(Slide slide, uint shapeId)
+    {
+        ArgumentNullException.ThrowIfNull(slide);
+        return FindShape(slide.Shapes, shapeId);
     }
 
     /// <summary>
@@ -78,6 +92,54 @@ public static class ShapeHitTester
             DrawingMlCoordinateUnits.EmuToPixels(anchor.OffsetYEmu),
             DrawingMlCoordinateUnits.EmuToPixels(anchor.ExtentCxEmu),
             DrawingMlCoordinateUnits.EmuToPixels(anchor.ExtentCyEmu));
+    }
+
+    /// <summary>Returns bounds for a top-level or grouped-child shape id.</summary>
+    public static ShapeBoundsDip? GetShapeBoundsDip(
+        Slide slide,
+        Presentation presentation,
+        uint shapeId)
+    {
+        var shape = FindShape(slide, shapeId);
+        return shape is null ? null : GetShapeBoundsDip(shape, presentation);
+    }
+
+    private static uint? HitTestChildren(
+        IReadOnlyList<SlideShape> children,
+        Presentation presentation,
+        LayoutPoint point)
+    {
+        for (var i = children.Count - 1; i >= 0; i--)
+        {
+            var child = children[i];
+            var descendantHit = HitTestChildren(child.Children, presentation, point);
+            if (descendantHit.HasValue)
+                return descendantHit;
+
+            if (DrawingBoundsHitTester.Contains(
+                    GetShapeBoundsDip(child, presentation).ToLayoutRect(),
+                    point,
+                    child.RotationDeg))
+            {
+                return child.Id;
+            }
+        }
+
+        return null;
+    }
+
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+
+            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
     }
 
 }

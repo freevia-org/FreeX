@@ -70,7 +70,7 @@ public static class SlideCanvasGeometryPlanner
         ArgumentNullException.ThrowIfNull(slide);
         ArgumentNullException.ThrowIfNull(presentation);
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
+        var shape = ShapeHitTester.FindShape(slide, shapeId);
         return shape is null
             ? null
             : ShapeBoundsToScreen(shape, presentation, transform);
