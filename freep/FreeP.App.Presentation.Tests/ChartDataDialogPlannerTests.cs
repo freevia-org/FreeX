@@ -466,6 +466,7 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetSeriesIndex(1);
         planner.SetSmoothLine(false);
         planner.SetOnSecondaryAxis(false);
+        planner.SetOverrideChartType(ChartType.LineMarkers);
         planner.SetLineWidth(2.25);
         planner.SetLineColor("#1F4E79");
         planner.SetLineDash(OutlineDash.DashDot);
@@ -490,6 +491,7 @@ public sealed class ChartDataDialogPlannerTests
         options.SeriesIndex.Should().Be(1);
         options.SmoothLine.Should().BeFalse();
         options.OnSecondaryAxis.Should().BeFalse();
+        options.OverrideChartType.Should().Be(ChartType.LineMarkers);
         options.LineWidthPt.Should().Be(2.25);
         options.LineColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
         options.LineDash.Should().Be(OutlineDash.DashDot);
@@ -515,6 +517,21 @@ public sealed class ChartDataDialogPlannerTests
         chart.Series[1].SmoothLine.Should().BeTrue("series dialogs must edit a working copy");
         ChartSeriesOptionsPlanner.BuildSurfacePlan().CommandId
             .Should().Be(ChartSeriesOptionsPlanner.CommandId);
+    }
+
+    [Fact]
+    public void ChartSeriesOptionsPlanner_PreservesAndValidatesComboTypeOverride()
+    {
+        var chart = MakeChart();
+        chart.Series[0].OverrideChartType = ChartType.Line;
+
+        var planner = ChartSeriesOptionsPlanner.FromChart(chart);
+        planner.OverrideChartType.Should().Be(ChartType.Line);
+        planner.SetOverrideChartType(null);
+        planner.BuildCommitPlan().OverrideChartType.Should().BeNull();
+        Action invalid = () => planner.SetOverrideChartType(ChartType.Pie);
+        invalid.Should().Throw<ArgumentOutOfRangeException>();
+        chart.Series[0].OverrideChartType.Should().Be(ChartType.Line);
     }
 
     [Fact]

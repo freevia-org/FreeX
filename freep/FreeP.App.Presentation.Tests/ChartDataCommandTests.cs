@@ -1478,6 +1478,36 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartSeriesOptions_AuthorsComboOverrideAndUndoRestoresIt()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+
+        bus.Execute(new SetChartSeriesOptionsCommand(
+            0,
+            id,
+            new ChartSeriesOptions(
+                1, false, false, null, ChartMarkerSymbol.Auto, null,
+                OverrideChartType: ChartType.LineMarkers)));
+
+        chart.Series[1].OverrideChartType.Should().Be(ChartType.LineMarkers);
+        chart.Series[1].OnSecondaryAxis.Should().BeTrue();
+        chart.SecondaryValueAxis.Should().NotBeNull();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.Series[1].OverrideChartType.Should().Be(ChartType.LineMarkers);
+        roundTripped.Series[1].OnSecondaryAxis.Should().BeTrue();
+
+        bus.Undo();
+        chart.Series[1].OverrideChartType.Should().BeNull();
+        chart.Series[1].OnSecondaryAxis.Should().BeFalse();
+        chart.SecondaryValueAxis.Should().BeNull();
+    }
+
+    [Fact]
     public void SetChartBubbleOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
     {
         var (p, bus, id) = MakeChartPresentation();

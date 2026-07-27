@@ -639,6 +639,58 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void EditingSession_AddsPictureSmartArtNodeWithPlaceholderAndKeepsExistingMedia()
+    {
+        var sourcePath = MakeSmartArtPptx(
+            ["Alpha caption", "Beta caption"],
+            pictureCaptionList: true,
+            includeNodeImage: true);
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var shape = presentation.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt);
+        var smartArt = shape.SmartArt!;
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        session.EditSmartArt(shape.Id, candidate =>
+        {
+            var edit = SmartArtEditingPlanner.Apply(
+                candidate.Data,
+                SmartArtNodeEditIntent.AddSiblingAfter(
+                    candidate.Data!.Nodes[0].ModelId,
+                    "Gamma caption"));
+            if (!edit.Applied)
+                return false;
+
+            if (!SmartArtEditingPlanner.RewriteDataPart(candidate).Applied)
+                return false;
+
+            return SmartArtEditingPlanner.RegenerateDrawingCache(
+                candidate,
+                shape.OffsetXEmu,
+                shape.OffsetYEmu,
+                shape.ExtentCxEmu,
+                shape.ExtentCyEmu,
+                presentation.Theme).Applied;
+        }).Should().BeTrue();
+
+        var updated = presentation.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        updated.Data!.Nodes.Should().HaveCount(3);
+        updated.Data.Nodes[1].Picture.Should().BeNull("new picture nodes start as an explicit add-picture slot");
+        updated.FallbackShapes.Where(s => s.Kind == SlideShapeKind.Picture).Should().HaveCount(2);
+        updated.FallbackShapes.Select(s => s.PlainText).Should().Contain("Add picture");
+        updated.PartRels[updated.DrawingPartPath!].Count(value => value == (byte)'i')
+            .Should().BeGreaterThan(0, "existing picture relationships remain in the cache");
+
+        var roundTripPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(roundTripPath);
+        var reopenedSmartArt = reopened.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        reopenedSmartArt.Data!.Nodes.Should().HaveCount(3);
+        reopenedSmartArt.Data.Nodes[1].Picture.Should().BeNull();
+        reopenedSmartArt.FallbackShapes.Select(s => s.PlainText).Should().Contain("Add picture");
+    }
+
+    [Fact]
     public void Reader_SmartArt_StoresDiagramPartBytes()
     {
         var pptxPath = MakeSmartArtPptx(["A"]);

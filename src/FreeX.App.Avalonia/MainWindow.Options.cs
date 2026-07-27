@@ -1127,16 +1127,20 @@ public sealed partial class MainWindow
             }
 
             var iterativeEnabled = iterativeBox.IsChecked == true;
-            if (!CalculationOptionsInputParser.TryParseMaxIterations(maxIterationsBox.Text, out var maxIterations))
+            if (!CalculationOptionsInputParser.TryParseBounds(
+                    iterativeEnabled,
+                    maxIterationsBox.Text,
+                    maxChangeBox.Text,
+                    workbook.MaxCalculationIterations ?? DefaultMaxCalculationIterations,
+                    workbook.MaxCalculationChange ?? DefaultMaxCalculationChange,
+                    out var maxIterations,
+                    out var maxChange,
+                    out var calculationInputError))
             {
-                warningText.Text = UiText.Get("Options_InvalidMaxIterationsMessage");
-                warningText.IsVisible = true;
-                return false;
-            }
-
-            if (!CalculationOptionsInputParser.TryParseMaxChange(maxChangeBox.Text, out var maxChange))
-            {
-                warningText.Text = UiText.Get("Options_InvalidMaxChangeMessage");
+                warningText.Text = UiText.Get(
+                    calculationInputError == CalculationOptionsInputError.InvalidMaxIterations
+                        ? "Options_InvalidMaxIterationsMessage"
+                        : "Options_InvalidMaxChangeMessage");
                 warningText.IsVisible = true;
                 return false;
             }

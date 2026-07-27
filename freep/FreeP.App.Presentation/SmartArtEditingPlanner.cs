@@ -1039,8 +1039,11 @@ public static class SmartArtEditingPlanner
             return false;
 
         var nodes = FlattenNodes(smartArt.Data);
+        var pictureNodes = nodes
+            .Where(node => node.Picture?.Bytes is { Length: > 0 })
+            .ToList();
         var relationships = GetPictureRelationships(smartArt, drawingPartPath);
-        if (nodes.Count == 0 || relationships.Count == 0 || relationships.Count > nodes.Count)
+        if (pictureNodes.Count == 0 || relationships.Count == 0)
             return false;
 
         if (!smartArt.PartRels.TryGetValue(drawingPartPath, out var relationshipBytes))
@@ -1063,11 +1066,9 @@ public static class SmartArtEditingPlanner
         var usedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var replacements = new List<XElement>();
 
-        for (var index = 0; index < nodes.Count; index++)
+        for (var index = 0; index < pictureNodes.Count; index++)
         {
-            var picture = nodes[index].Picture;
-            if (picture?.Bytes is not { Length: > 0 })
-                return false;
+            var picture = pictureNodes[index].Picture!;
 
             var source = relationships[Math.Min(index, relationships.Count - 1)];
             var relationshipId = index < imageElements.Count

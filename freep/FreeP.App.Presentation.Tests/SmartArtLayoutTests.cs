@@ -244,7 +244,7 @@ public sealed class SmartArtLayoutTests
 
         var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        shapes.Should().NotBeNull("pictureCaptionList is supported only when every node has image bytes");
+        shapes.Should().NotBeNull("pictureCaptionList keeps a live layout while picture nodes are present");
         shapes!.Should().HaveCount(4, "each node emits one shared picture shape and one shared caption shape");
         shapes.Where(s => s.Kind == SlideShapeKind.Picture).Should().HaveCount(2);
         shapes.Where(s => s.Kind == SlideShapeKind.AutoShape)
@@ -253,7 +253,7 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void PictureCaptionList_WithoutNodePictures_ReturnsNullForCachedFallback()
+    public void PictureCaptionList_MissingNodePicture_EmitsAddPicturePlaceholder()
     {
         var data = MakeData(SmartArtFamily.List, "Alpha");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList";
@@ -261,7 +261,11 @@ public sealed class SmartArtLayoutTests
 
         var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        shapes.Should().BeNull("missing node images must keep cached drawing fallback in control");
+        shapes.Should().NotBeNull("an authored new node can temporarily have no picture payload");
+        shapes!.Where(s => s.Kind == SlideShapeKind.Picture).Should().BeEmpty();
+        shapes.Where(s => s.Kind == SlideShapeKind.AutoShape)
+            .Select(s => s.PlainText)
+            .Should().Contain("Add picture");
     }
 
     [Fact]
@@ -286,14 +290,19 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void PictureGrid_WithoutNodePictures_ReturnsNullForCachedFallback()
+    public void PictureGrid_MissingNodePicture_EmitsAddPicturePlaceholder()
     {
         var data = MakeData(SmartArtFamily.List, "Alpha");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid";
         data.IsLiveLayoutSupported = true;
 
-        SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
-            .Should().BeNull();
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        shapes!.Where(s => s.Kind == SlideShapeKind.Picture).Should().BeEmpty();
+        shapes.Where(s => s.Kind == SlideShapeKind.AutoShape)
+            .Select(s => s.PlainText)
+            .Should().Contain("Add picture");
     }
 
     [Fact]
