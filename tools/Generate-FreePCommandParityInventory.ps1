@@ -1361,7 +1361,7 @@ internal static class FreePCommandInventory
             EvidenceId: "freep.smartart.chevron-process",
             Area: "SmartArt chevron process live layout",
             Status: "shared-render-planner-evidence",
-            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt process-family planner; no renderer-local SmartArt policy",
+            HostCoverage: "WPF/Avalonia consume the same shared Chevron slide-shape ops emitted by the SmartArt process-family planner; no renderer-local SmartArt policy",
             EvidenceDocs:
             [
                 "docs/parity/freep-smartart-chevron-process-2026-07-07.md"
@@ -1371,7 +1371,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "chevronProcess now uses the bounded shared process live-layout path for parsed ordered-stage nodes. The shared planner intentionally represents this as renderer-neutral rounded boxes plus connector ops, not exact PowerPoint chevron polygon geometry; other unsupported process variants remain on cached drawing fallback. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+            RemainingWork: "chevronProcess, basicChevronProcess, and closedChevronProcess now share the bounded Chevron preset planner for parsed ordered-stage nodes, using the evidence-backed 24% notch and 76% interlocking step. The checked-in corpus does not justify distinct basic/closed geometry, so no separate closed behavior is claimed. Malformed or out-of-bound input remains on cached drawing fallback. Exact PowerPoint chevron metrics, effects, authoring regeneration, and PowerPoint-authoritative pixel baselines remain deferred."),
         new(
             EvidenceId: "freep.smartart.bending-process",
             Area: "SmartArt bendingProcess live layout",

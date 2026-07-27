@@ -31,6 +31,13 @@ public sealed class SmartArtLayoutTests
         return data;
     }
 
+    private static SmartArtData MakeChevronData(string layout, params string[] nodeTexts)
+    {
+        var data = MakeData(SmartArtFamily.Process, nodeTexts);
+        data.LayoutUniqueId = $"urn:microsoft.com/office/officeart/2005/8/layout/{layout}";
+        return data;
+    }
+
     private static SmartArtData MakeHierarchyData(string rootText, params string[] childTexts)
     {
         var root = new SmartArtNode { Text = rootText, Level = 0 };
@@ -917,7 +924,7 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void ChevronProcess_ReturnsLiveProcessBoxesAndConnectors()
+    public void ChevronProcess_ReturnsLiveChevronStagesWithPowerPointLikeOverlap()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/chevronProcess";
@@ -925,20 +932,27 @@ public sealed class SmartArtLayoutTests
         var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
         shapes.Should().NotBeNull("chevronProcess is a bounded ordered-stage process layout");
-        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
-            .Should().HaveCount(3, "one live box should be emitted per chevron-process node");
-        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
-            .Should().HaveCount(2, "adjacent chevron-process nodes need shared connectors");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.Chevron)
+            .Should().HaveCount(3, "one live chevron should be emitted per chevron-process node");
+        shapes.Should().NotContain(s => s.AutoShapeKind == DrawingShapeKind.Line,
+            "the chevron polygons provide the process direction without renderer-local connectors");
 
-        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Chevron).ToList();
         boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .Should().Equal("A", "B", "C");
         boxes.Select(s => s.OffsetXEmu)
-            .Should().BeInAscendingOrder("chevronProcess should reuse the shared process-family geometry");
+            .Should().BeInAscendingOrder("chevronProcess stages should remain left to right");
+        boxes[1].OffsetXEmu.Should().BeLessThan(boxes[0].OffsetXEmu + boxes[0].ExtentCxEmu,
+            "adjacent chevrons should overlap instead of being separated by a generic connector gap");
+        boxes.All(s => s.PresetGeometryAdjustments.TryGetValue("adj", out var value) && value > 0)
+            .Should().BeTrue("the shared Chevron preset should carry its point-depth adjustment");
+        boxes.Select(s => s.PresetGeometryAdjustments["adj"])
+            .Should().OnlyContain(value => value == 24000,
+                "the Chevron preset uses its normalized 24% DrawingML guide value");
     }
 
     [Fact]
-    public void BasicChevronProcess_ReturnsLiveProcessBoxesAndConnectors()
+    public void BasicChevronProcess_ReturnsLiveChevronStagesWithSharedGeometry()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicChevronProcess";
@@ -946,20 +960,21 @@ public sealed class SmartArtLayoutTests
         var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
         shapes.Should().NotBeNull("basicChevronProcess is a bounded ordered-stage process layout");
-        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
-            .Should().HaveCount(3, "one live box should be emitted per basic-chevron-process node");
-        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
-            .Should().HaveCount(2, "adjacent basic-chevron-process nodes need shared connectors");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.Chevron)
+            .Should().HaveCount(3, "one live chevron should be emitted per basic-chevron-process node");
+        shapes.Should().NotContain(s => s.AutoShapeKind == DrawingShapeKind.Line);
 
-        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Chevron).ToList();
         boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .Should().Equal("A", "B", "C");
         boxes.Select(s => s.OffsetXEmu)
-            .Should().BeInAscendingOrder("basicChevronProcess should reuse the shared process-family geometry");
+            .Should().BeInAscendingOrder("basicChevronProcess stages should remain left to right");
+        boxes.Select(s => s.PresetGeometryAdjustments["adj"])
+            .Should().OnlyContain(value => value > 0);
     }
 
     [Fact]
-    public void ClosedChevronProcess_ReturnsLiveProcessBoxesAndConnectors()
+    public void ClosedChevronProcess_UsesTheSameEvidenceBackedChevronGeometry()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/closedChevronProcess";
@@ -967,16 +982,36 @@ public sealed class SmartArtLayoutTests
         var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
         shapes.Should().NotBeNull("closedChevronProcess is a bounded ordered-stage process layout");
-        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
-            .Should().HaveCount(3, "one live box should be emitted per closed-chevron-process node");
-        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
-            .Should().HaveCount(2, "adjacent closed-chevron-process nodes need shared connectors");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.Chevron)
+            .Should().HaveCount(3, "one live chevron should be emitted per closed-chevron-process node");
+        shapes.Should().NotContain(s => s.AutoShapeKind == DrawingShapeKind.Line);
 
-        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Chevron).ToList();
         boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .Should().Equal("A", "B", "C");
         boxes.Select(s => s.OffsetXEmu)
-            .Should().BeInAscendingOrder("closedChevronProcess should reuse the shared process-family geometry");
+            .Should().BeInAscendingOrder("closedChevronProcess stages should remain left to right");
+        var standard = SmartArtLayoutEngine.Layout(
+            MakeChevronData("chevronProcess", "A", "B", "C"),
+            FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!
+            .Where(s => s.AutoShapeKind == DrawingShapeKind.Chevron)
+            .ToList();
+        boxes.Select(s => (s.OffsetXEmu, s.ExtentCxEmu, s.ExtentCyEmu))
+            .Should().Equal(standard.Select(s => (s.OffsetXEmu, s.ExtentCxEmu, s.ExtentCyEmu)),
+                "the corpus provides no evidence for a distinct closed-chevron geometry");
+    }
+
+    [Fact]
+    public void ChevronProcess_MalformedOrOverlargeInput_UsesCachedFallback()
+    {
+        var data = MakeChevronData("chevronProcess", Enumerable.Repeat("x", 13).ToArray());
+
+        SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
+            .Should().BeNull("unsupported node counts must keep the cached drawing authoritative");
+
+        data = MakeChevronData("basicChevronProcess", new string('x', 513));
+        SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
+            .Should().BeNull("pathological node text must keep the cached drawing authoritative");
     }
 
     [Fact]
@@ -2133,15 +2168,15 @@ public sealed class SmartArtLayoutTests
         var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
 
         var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
-        shapeOps.Should().HaveCount(3, "chevronProcess should render two live boxes plus one connector");
+        shapeOps.Should().HaveCount(2, "chevronProcess should render two shared live chevron stages");
         var renderedText = shapeOps
             .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .ToList();
         renderedText.Should().Contain("Live A");
         renderedText.Should().Contain("Live B");
         renderedText.Should().NotContain("Cached fallback");
-        shapeOps.Where(op => op.Text is null)
-            .Should().ContainSingle("WPF and Avalonia hosts consume the shared process connector DrawOp");
+        shapeOps.All(op => op.Text is not null).Should().BeTrue(
+            "the shared chevron geometry carries the process direction");
     }
 
     [Fact]
@@ -2190,15 +2225,14 @@ public sealed class SmartArtLayoutTests
         var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
 
         var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
-        shapeOps.Should().HaveCount(3, "basicChevronProcess should render two live boxes plus one connector");
+        shapeOps.Should().HaveCount(2, "basicChevronProcess should render two shared live chevron stages");
         var renderedText = shapeOps
             .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .ToList();
         renderedText.Should().Contain("Live A");
         renderedText.Should().Contain("Live B");
         renderedText.Should().NotContain("Cached fallback");
-        shapeOps.Where(op => op.Text is null)
-            .Should().ContainSingle("WPF and Avalonia hosts consume the shared process connector DrawOp");
+        shapeOps.All(op => op.Text is not null).Should().BeTrue();
     }
 
     [Fact]
@@ -2247,15 +2281,14 @@ public sealed class SmartArtLayoutTests
         var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
 
         var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
-        shapeOps.Should().HaveCount(3, "closedChevronProcess should render two live boxes plus one connector");
+        shapeOps.Should().HaveCount(2, "closedChevronProcess should render two shared live chevron stages");
         var renderedText = shapeOps
             .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .ToList();
         renderedText.Should().Contain("Live A");
         renderedText.Should().Contain("Live B");
         renderedText.Should().NotContain("Cached fallback");
-        shapeOps.Where(op => op.Text is null)
-            .Should().ContainSingle("WPF and Avalonia hosts consume the shared process connector DrawOp");
+        shapeOps.All(op => op.Text is not null).Should().BeTrue();
     }
 
     [Fact]

@@ -114,6 +114,9 @@ public static class SmartArtLayoutEngine
         if (IsDescendingBlockListLayout(data.LayoutUniqueId))
             return LayoutDescendingBlockList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsChevronProcessLayout(data.LayoutUniqueId))
+            return LayoutChevronProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsBasicPyramidLayout(data.LayoutUniqueId))
             return LayoutBasicPyramid(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -200,7 +203,8 @@ public static class SmartArtLayoutEngine
         uint id, string text, SmartArtNodeStyle style,
         long x, long y, long cx, long cy,
         double fontSizePt = NodeFontSizePt,
-        DrawingShapeKind shapeKind = DrawingShapeKind.RoundedRectangle)
+        DrawingShapeKind shapeKind = DrawingShapeKind.RoundedRectangle,
+        double? geometryAdjustment = null)
     {
         var run = new Run { Text = text, Color = style.Text, Bold = true, FontSizePt = fontSizePt };
         var para = new Paragraph();
@@ -211,7 +215,7 @@ public static class SmartArtLayoutEngine
         body.Anchor = VerticalAnchor.Middle;
         body.Wrap   = true;
 
-        return new SlideShape
+        var shape = new SlideShape
         {
             Id            = id,
             Name          = $"SmartArt_Box_{id}",
@@ -225,6 +229,11 @@ public static class SmartArtLayoutEngine
             Outline       = new ShapeOutline.Visible(style.Outline, style.OutlineWidthPt),
             TextBody      = body
         };
+
+        if (geometryAdjustment is double adjustment)
+            shape.PresetGeometryAdjustments["adj"] = adjustment;
+
+        return shape;
     }
 
     private static SlideShape MakeOrgChartBox(
@@ -386,6 +395,64 @@ public static class SmartArtLayoutEngine
             }
 
             curX += boxW + gap + connectorW;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Bounded live plan for the three chevron process variants. Each stage is a real
+    /// Chevron preset so the shared compositor, WPF host, and Avalonia host all consume
+    /// the same polygon geometry. The stage step is intentionally shorter than the stage
+    /// width to reproduce the authored overlap between adjacent chevrons.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutChevronProcess(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        // Negative offsets are valid for objects that intentionally extend beyond the slide;
+        // only the frame extents and the generated geometry are bounded here.
+        if (nodes.Count is < 1 or > 12 || fcx <= 0 || fcy <= 0)
+            return null;
+
+        // Keep malformed imported text on the cached drawing path rather than allowing a
+        // single pathological node to collapse the live geometry or text layout.
+        if (nodes.Any(node => node.Text is null || node.Text.Length > 512))
+            return null;
+
+        long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long padY = Math.Max((long)(fcy * 0.12), 1L);
+        long height = fcy - (2 * padY);
+        long availableWidth = fcx - (2 * padX);
+        if (height <= 0 || availableWidth <= 0)
+            return null;
+
+        // ShapeGeometryBuilder's Chevron preset uses a 24% notch. Advancing by the
+        // remaining 76% makes the next notch receive the preceding tip, which gives
+        // every admitted variant the same evidence-backed interlocking geometry.
+        const double ChevronOverlap = 0.24;
+        double overlap = ChevronOverlap;
+        double denominator = nodes.Count - ((nodes.Count - 1) * overlap);
+        long stageWidth = (long)(availableWidth / denominator);
+        long step = (long)(stageWidth * (1.0 - overlap));
+        if (stageWidth <= 0 || step <= 0 || stageWidth < 6_000L || step < 4_000L)
+            return null;
+
+        var shapes = new List<SlideShape>(nodes.Count);
+        uint idCounter = 100;
+        long x = fx + padX;
+        // DrawingML guide values use the shared 0..100000 scale. 24000 matches the
+        // normalized 24% notch used by ShapeGeometryBuilder when no adjustment exists.
+        const double ChevronDepth = 24000.0;
+
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Process);
+            shapes.Add(MakeBox(
+                idCounter++, nodes[i].Text, nodeStyle, x, fy + padY, stageWidth, height,
+                NodeFontSizePt, DrawingShapeKind.Chevron, ChevronDepth));
+            x += step;
         }
 
         return shapes;
@@ -2451,6 +2518,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "descendingblocklist", StringComparison.Ordinal);
+    }
+
+    private static bool IsChevronProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return id.Split('/').Last() is "chevronprocess" or "basicchevronprocess" or "closedchevronprocess";
     }
 
     private static bool IsBasicVennLayout(string uniqueId)
