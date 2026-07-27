@@ -266,8 +266,16 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void OnRemoveSeries()
     {
-        _planner.RemoveLastSeries();
-        RebuildGrid();
+        if (!TryCommitPendingEdit())
+            return;
+
+        var table = _planner.BuildTableProjection();
+        var displayIndex = _grid.CurrentColumn?.DisplayIndex ?? -1;
+        var seriesIndex = displayIndex > 0 && displayIndex <= table.SeriesColumns.Count
+            ? table.SeriesColumns[displayIndex - 1].SeriesIndex
+            : _planner.SeriesCount - 1;
+        if (_planner.RemoveSeriesAt(seriesIndex))
+            RebuildGrid();
     }
 
     private void OnMoveSeriesUp() => MoveActiveSeries(-1);
@@ -297,8 +305,14 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void OnRemoveCategory()
     {
-        _planner.RemoveLastCategory();
-        RebuildGrid();
+        if (!TryCommitPendingEdit())
+            return;
+
+        var categoryIndex = _grid.SelectedIndex >= 0
+            ? _grid.SelectedIndex
+            : _planner.CategoryCount - 1;
+        if (_planner.RemoveCategoryAt(categoryIndex))
+            RebuildGrid();
     }
 
     private void OnSwitchRowsAndColumns()

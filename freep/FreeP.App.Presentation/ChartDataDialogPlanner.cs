@@ -350,9 +350,17 @@ public sealed class ChartDataDialogPlanner
 
     public void RemoveLastSeries()
     {
-        _grid.RemoveLastSeries();
-        RemoveLastCoordinateRow(_xValues);
-        RemoveLastCoordinateRow(_bubbleSizes);
+        RemoveSeriesAt(_grid.SeriesCount - 1);
+    }
+
+    public bool RemoveSeriesAt(int seriesIndex)
+    {
+        if (!_grid.RemoveSeriesAt(seriesIndex))
+            return false;
+
+        RemoveCoordinateRow(_xValues, seriesIndex);
+        RemoveCoordinateRow(_bubbleSizes, seriesIndex);
+        return true;
     }
 
     public bool MoveSeries(int seriesIndex, int targetIndex)
@@ -378,9 +386,17 @@ public sealed class ChartDataDialogPlanner
 
     public void RemoveLastCategory()
     {
-        _grid.RemoveLastCategory();
-        RemoveLastCoordinateValue(_xValues);
-        RemoveLastCoordinateValue(_bubbleSizes);
+        RemoveCategoryAt(_grid.CategoryCount - 1);
+    }
+
+    public bool RemoveCategoryAt(int categoryIndex)
+    {
+        if (!_grid.RemoveCategoryAt(categoryIndex))
+            return false;
+
+        RemoveCoordinateValue(_xValues, categoryIndex);
+        RemoveCoordinateValue(_bubbleSizes, categoryIndex);
+        return true;
     }
 
     public void SwitchRowsAndColumns()
@@ -643,10 +659,10 @@ public sealed class ChartDataDialogPlanner
         }
     }
 
-    private static void RemoveLastCoordinateRow(List<List<double?>> matrix)
+    private static void RemoveCoordinateRow(List<List<double?>> matrix, int rowIndex)
     {
-        if (matrix.Count > 0)
-            matrix.RemoveAt(matrix.Count - 1);
+        if (rowIndex >= 0 && rowIndex < matrix.Count)
+            matrix.RemoveAt(rowIndex);
     }
 
     private static void MoveCoordinateRow(List<List<double?>> matrix, int sourceIndex, int targetIndex)
@@ -660,12 +676,12 @@ public sealed class ChartDataDialogPlanner
         matrix.Insert(targetIndex, row);
     }
 
-    private static void RemoveLastCoordinateValue(List<List<double?>> matrix)
+    private static void RemoveCoordinateValue(List<List<double?>> matrix, int categoryIndex)
     {
         foreach (var values in matrix)
         {
-            if (values.Count > 0)
-                values.RemoveAt(values.Count - 1);
+            if (categoryIndex >= 0 && categoryIndex < values.Count)
+                values.RemoveAt(categoryIndex);
         }
     }
 

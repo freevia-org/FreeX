@@ -6374,6 +6374,32 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartDataDialog_removes_selected_series_and_category()
+    {
+        ChartDataDialogCommitPlan? commit = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.Scatter);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartDataDialog(window.Editor, CultureInfo.InvariantCulture);
+            dialog.RemoveSeriesForTests(0);
+            dialog.RemoveCategoryForTests(1);
+            commit = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        commit.Should().NotBeNull();
+        commit!.Categories.Should().Equal("Q1", "Q3");
+        commit.SeriesNames.Should().Equal("Series 2");
+        commit.Values.Should().ContainSingle().Which.Should().HaveCount(2);
+        commit.XValues.Should().ContainSingle().Which.Should().HaveCount(2);
+    }
+
+    [Fact]
     public async Task ChartDataDialog_scatter_projection_exposes_coordinate_columns()
     {
         int valueCells = -1;

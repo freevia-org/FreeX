@@ -551,6 +551,8 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().Contain("commit.ChartType");
         source.Should().Contain("_planner.AddSeries()");
         source.Should().Contain("_planner.AddCategory()");
+        source.Should().Contain("_planner.RemoveSeriesAt(seriesIndex)");
+        source.Should().Contain("_planner.RemoveCategoryAt(categoryIndex)");
         source.Should().Contain("_planner.SwitchRowsAndColumns()");
         source.Should().Contain("ChartDataDialogPlanner.FormatCellValue(");
         source.Should().Contain("ChartDataDialogPlanner.ParseCellValue(");
