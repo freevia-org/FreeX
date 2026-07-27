@@ -27,6 +27,26 @@ public sealed class OptionsDialogGeneralParitySourceTests
         wpf.Should().Contain("Height=\"24\"");
     }
 
+    [Fact]
+    public void SaveOptions_UsesWpfSectionGeometryAndStretching()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+        var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+
+        source.Should().Contain("savePanel.Spacing = 0;");
+        source.Should().Contain("topMargin: 0,");
+        source.Should().Contain("fieldWidth: OptionsDialogPlanner.GeneralFontFieldWidth,");
+        source.Should().Contain("spacing: OptionsDialogPlanner.GeneralFieldSpacing,");
+        source.Should().Contain("topMargin: OptionsDialogPlanner.GeneralSectionTopMargin,");
+        source.Should().Contain("stretchField: true,");
+        source.Should().Contain("minWidth: 0");
+
+        wpf.Should().Contain("<ColumnDefinition Width=\"230\"/>");
+        wpf.Should().Contain("<ColumnDefinition Width=\"200\"/>");
+        wpf.Should().Contain("<ColumnDefinition Width=\"*\"/>");
+        wpf.Should().Contain("x:Name=\"OptRecentFilesPath\"");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
