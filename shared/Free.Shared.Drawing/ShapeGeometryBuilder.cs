@@ -95,8 +95,8 @@ public static class ShapeGeometryBuilder
                 12,
                 StarInnerRadius(adjustments, 0.62),
                 startAngle: (-Math.PI / 2) + 0.08),
-            DrawingShapeKind.Ribbon => Ribbon(rect),
-            DrawingShapeKind.Wave => Wave(rect),
+            DrawingShapeKind.Ribbon => Ribbon(rect, adjustments),
+            DrawingShapeKind.Wave => Wave(rect, adjustments),
             DrawingShapeKind.RectangularCallout => RectangularCallout(rect),
             DrawingShapeKind.RoundedRectangularCallout => RoundedCallout(rect),
             DrawingShapeKind.OvalCallout => OvalCallout(rect),
@@ -699,10 +699,77 @@ public static class ShapeGeometryBuilder
         return Math.Clamp(GetAdjustment(adjustments, "adj", fallback * 100000) / 100000.0, 0, 1);
     }
 
-    private static ShapeGeometry Ribbon(LayoutRect rect) =>
-        Polygon(rect, [(0.08, 0.22), (0.92, 0.22), (0.92, 0.06), (1, 0.24), (0.92, 0.42), (0.92, 0.78), (0.08, 0.78), (0.08, 0.94), (0, 0.76), (0.08, 0.58)]);
+    private static ShapeGeometry Ribbon(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments)
+    {
+        // Keep the established outline for newly-created shapes. Authored DrawingML ribbons
+        // expose fold depth (adj1) and fold width (adj2); these values must drive the outline
+        // so edit-point changes survive the next render.
+        if (adjustments is null ||
+            (!adjustments.ContainsKey("adj1") && !adjustments.ContainsKey("adj2")))
+        {
+            return Polygon(rect, [(0.08, 0.22), (0.92, 0.22), (0.92, 0.06), (1, 0.24), (0.92, 0.42), (0.92, 0.78), (0.08, 0.78), (0.08, 0.94), (0, 0.76), (0.08, 0.58)]);
+        }
 
-    private static ShapeGeometry Wave(LayoutRect rect)
+        var fold = Math.Clamp(GetAdjustment(adjustments, "adj1", 16667), 0, 33333) / 100000.0;
+        var width = Math.Clamp(GetAdjustment(adjustments, "adj2", 50000), 25000, 75000) / 200000.0;
+        var bandTop = Math.Clamp(fold, 0.04, 0.45);
+        var bandBottom = 1 - bandTop;
+        var tailTop = Math.Max(0.01, bandTop / 2);
+        var tailBottom = 1 - tailTop;
+        var leftFold = 0.5 - width;
+        var rightFold = 0.5 + width;
+        var center = (bandTop + bandBottom) / 2;
+        var foldLip = Math.Min(0.08, Math.Max(0.02, (bandBottom - bandTop) / 5));
+
+        return Polygon(
+            rect,
+            [
+                (0.08, bandTop), (leftFold, bandTop), (0.08, tailTop), (0, center),
+                (0.08, tailBottom), (leftFold, bandBottom), (0.08, bandBottom),
+                (0.08, bandBottom - foldLip), (0.92, bandBottom), (rightFold, bandBottom),
+                (0.92, tailBottom), (1, center), (0.92, tailTop), (rightFold, bandTop),
+                (0.92, bandTop), (0.92, bandTop - foldLip),
+            ]);
+    }
+
+    private static ShapeGeometry Wave(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments)
+    {
+        if (adjustments is null ||
+            (!adjustments.ContainsKey("adj1") && !adjustments.ContainsKey("adj2")))
+        {
+            return LegacyWave(rect);
+        }
+
+        // The standard wave guides use adj1 for amplitude and adj2 for horizontal phase. The
+        // guide-derived extrema may extend beyond the box, as they do in DrawingML; the host
+        // clips the resulting shape to the authored bounds when appropriate.
+        var amplitude = Math.Clamp(GetAdjustment(adjustments, "adj1", 12500), 0, 20000) / 100000.0;
+        var phase = Math.Clamp(GetAdjustment(adjustments, "adj2", 0), -10000, 10000) / 100000.0;
+        var dy = amplitude * 10 / 3;
+        var y1 = amplitude;
+        var y2 = y1 - dy;
+        var y3 = y1 + dy;
+        var y4 = 1 - y1;
+        var y5 = y4 - dy;
+        var y6 = y4 + dy;
+        var shift = phase * 0.5;
+        var x = (double value) => Math.Clamp(value + shift, -0.15, 1.15);
+        var start = P(rect, 0, y1);
+        ShapeSegment[] authoredSegments =
+        [
+            ShapeSegment.BezierTo(P(rect, x(0.22), y2), P(rect, x(0.38), y3), P(rect, x(0.58), y1)),
+            ShapeSegment.BezierTo(P(rect, x(0.74), y2), P(rect, x(0.88), y3), P(rect, 1, y4)),
+            ShapeSegment.BezierTo(P(rect, x(0.78), y5), P(rect, x(0.58), y6), P(rect, x(0.36), y4)),
+            ShapeSegment.BezierTo(P(rect, x(0.18), y5), P(rect, x(0.08), y6), P(rect, 0, y1))
+        ];
+        return Single(new ShapeContour(start, authoredSegments, Closed: true, Filled: true));
+    }
+
+    private static ShapeGeometry LegacyWave(LayoutRect rect)
     {
         var start = P(rect, 0, 0.45);
         ShapeSegment[] segments =

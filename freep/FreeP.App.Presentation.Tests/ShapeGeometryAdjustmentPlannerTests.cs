@@ -10,6 +10,116 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     private static readonly LayoutRect Bounds = new(10, 20, 200, 100);
 
     [Fact]
+    public void Build_Ribbon_ExposesFoldDepthAndWidthHandles()
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Ribbon,
+        };
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.CanEdit.Should().BeTrue();
+        plan.Handles.Select(handle => handle.Name).Should().Equal("adj1", "adj2");
+        plan.Handles[0].Label.Should().Be("Ribbon fold depth");
+        plan.Handles[0].Value.Should().Be(16667);
+        plan.Handles[0].PositionDip.Y.Should().BeApproximately(36.667, 0.001);
+        plan.Handles[1].Label.Should().Be("Ribbon fold width");
+        plan.Handles[1].Value.Should().Be(50000);
+        plan.Handles[1].PositionDip.Should().Be(new LayoutPoint(60, 20));
+    }
+
+    [Fact]
+    public void BuildMutationPlan_Ribbon_MapsFoldHandlesToDrawingMlUnits()
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Ribbon,
+        };
+
+        var fold = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape, Bounds, "adj1", new LayoutPoint(110, 45));
+        var width = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape, Bounds, "adj2", new LayoutPoint(60, 20));
+
+        fold.ShouldApply.Should().BeTrue();
+        fold.Value.Should().BeApproximately(25000, 0.001);
+        width.ShouldApply.Should().BeTrue();
+        width.Value.Should().BeApproximately(50000, 0.001);
+    }
+
+    [Fact]
+    public void Build_Wave_ExposesAmplitudeAndPhaseHandles()
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Wave,
+        };
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.CanEdit.Should().BeTrue();
+        plan.Handles.Select(handle => handle.Name).Should().Equal("adj1", "adj2");
+        plan.Handles[0].Label.Should().Be("Wave amplitude");
+        plan.Handles[0].Value.Should().Be(12500);
+        plan.Handles[0].PositionDip.Should().Be(new LayoutPoint(10, 32.5));
+        plan.Handles[1].Label.Should().Be("Wave phase");
+        plan.Handles[1].Value.Should().Be(0);
+        plan.Handles[1].PositionDip.Should().Be(new LayoutPoint(110, 120));
+    }
+
+    [Fact]
+    public void BuildMutationPlan_Wave_MapsAmplitudeAndPhaseToDrawingMlUnits()
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Wave,
+        };
+
+        var amplitude = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape, Bounds, "adj1", new LayoutPoint(10, 40));
+        var phase = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape, Bounds, "adj2", new LayoutPoint(120, 120));
+
+        amplitude.ShouldApply.Should().BeTrue();
+        amplitude.Value.Should().BeApproximately(20000, 0.001);
+        phase.ShouldApply.Should().BeTrue();
+        phase.Value.Should().BeApproximately(-10000, 0.001);
+    }
+
+    [Fact]
+    public void ShapeGeometryBuilder_RibbonAndWave_ConsumeAuthoredAdjustments()
+    {
+        var ribbonDefault = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Ribbon,
+            Bounds,
+            new Dictionary<string, double> { ["adj1"] = 16667, ["adj2"] = 50000 });
+        var ribbonAdjusted = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Ribbon,
+            Bounds,
+            new Dictionary<string, double> { ["adj1"] = 30000, ["adj2"] = 70000 });
+        var waveDefault = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Wave,
+            Bounds,
+            new Dictionary<string, double> { ["adj1"] = 12500, ["adj2"] = 0 });
+        var waveAdjusted = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Wave,
+            Bounds,
+            new Dictionary<string, double> { ["adj1"] = 5000, ["adj2"] = -7500 });
+
+        ribbonAdjusted.Contours[0].Segments.Should().NotEqual(ribbonDefault.Contours[0].Segments);
+        waveAdjusted.Contours[0].Segments.Should().NotEqual(waveDefault.Contours[0].Segments);
+    }
+
+    [Fact]
     public void Build_Chord_ExposesAngleHandlesAtRenderedArcEndpoints()
     {
         var shape = new SlideShape
