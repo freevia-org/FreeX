@@ -28,6 +28,8 @@ internal sealed class ChartAxisOptionsDialog : Window
     private readonly ComboBox _tickLabelPositionCombo;
     private readonly ComboBox _crossesCombo;
     private readonly TextBox _crossesAtBox;
+    private readonly ComboBox _crossBetweenCombo;
+    private readonly ComboBox _labelAlignmentCombo;
 
     internal ChartAxisOptionsDialog(EditingSession editor)
     {
@@ -72,6 +74,8 @@ internal sealed class ChartAxisOptionsDialog : Window
         _tickLabelPositionCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickLabelPositionOptions.Select(x => x.Label));
         _crossesCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.CrossingOptions.Select(x => x.Label));
         _crossesAtBox = new TextBox { MinWidth = 130 };
+        _crossBetweenCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.CrossBetweenOptions.Select(x => x.Label));
+        _labelAlignmentCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.LabelAlignmentOptions.Select(x => x.Label));
         LoadControls();
 
         var buttons = new StackPanel
@@ -108,6 +112,8 @@ internal sealed class ChartAxisOptionsDialog : Window
                 MakeRow(surface.TickLabelPositionLabel, _tickLabelPositionCombo),
                 MakeRow(surface.CrossingLabel, _crossesCombo),
                 MakeRow(surface.CrossesAtLabel, _crossesAtBox),
+                MakeRow(surface.CrossBetweenLabel, _crossBetweenCombo),
+                MakeRow(surface.LabelAlignmentLabel, _labelAlignmentCombo),
                 buttons,
             },
         };
@@ -133,7 +139,9 @@ internal sealed class ChartAxisOptionsDialog : Window
         ChartTickLabelPosition? tickLabelPosition = null,
         ChartAxisCrossing? crosses = null,
         double? crossesAt = null,
-        bool showAxis = true)
+        bool showAxis = true,
+        ChartCrossBetween? crossBetween = null,
+        ChartLabelAlignment? labelAlignment = null)
     {
         _axisCombo.SelectedIndex = (int)axis;
         _titleBox.Text = title;
@@ -149,6 +157,8 @@ internal sealed class ChartAxisOptionsDialog : Window
         _tickLabelPositionCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickLabelPositionOptions, tickLabelPosition);
         _crossesCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.CrossingOptions, crosses);
         _crossesAtBox.Text = Format(crossesAt);
+        _crossBetweenCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.CrossBetweenOptions, crossBetween);
+        _labelAlignmentCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.LabelAlignmentOptions, labelAlignment);
     }
 
     private void OnOk()
@@ -179,6 +189,8 @@ internal sealed class ChartAxisOptionsDialog : Window
         _tickLabelPositionCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickLabelPositionOptions, _planner.TickLabelPosition);
         _crossesCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.CrossingOptions, _planner.Crosses);
         _crossesAtBox.Text = Format(_planner.CrossesAt);
+        _crossBetweenCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.CrossBetweenOptions, _planner.CrossBetween);
+        _labelAlignmentCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.LabelAlignmentOptions, _planner.LabelAlignment);
     }
 
     private void UpdatePlannerFromControls()
@@ -196,6 +208,8 @@ internal sealed class ChartAxisOptionsDialog : Window
         _planner.SetTickLabelPosition(ChartAxisOptionsPlanner.TickLabelPositionOptions[_tickLabelPositionCombo.SelectedIndex].Value);
         _planner.SetCrosses(ChartAxisOptionsPlanner.CrossingOptions[_crossesCombo.SelectedIndex].Value);
         _planner.SetCrossesAt(ParseOptional(_crossesAtBox.Text, "Crosses at"));
+        _planner.SetCrossBetween(ChartAxisOptionsPlanner.CrossBetweenOptions[_crossBetweenCombo.SelectedIndex].Value);
+        _planner.SetLabelAlignment(ChartAxisOptionsPlanner.LabelAlignmentOptions[_labelAlignmentCombo.SelectedIndex].Value);
     }
 
     private static double? ParseOptional(string? text, string label)
@@ -239,6 +253,8 @@ internal sealed class ChartAxisOptionsDialog : Window
                 ChartTickMarkOption tick => Equals(tick.Value, value),
                 ChartTickLabelPositionOption position => Equals(position.Value, value),
                 ChartAxisCrossingOption crossing => Equals(crossing.Value, value),
+                ChartCrossBetweenOption crossBetween => Equals(crossBetween.Value, value),
+                ChartLabelAlignmentOption alignment => Equals(alignment.Value, value),
                 _ => false,
             }).index;
 

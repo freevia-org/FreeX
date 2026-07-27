@@ -1208,6 +1208,8 @@ public sealed class ChartDataCommandTests
         chart.ValueAxis.TickLabelPosition = ChartTickLabelPosition.High;
         chart.ValueAxis.Crosses = ChartAxisCrossing.Max;
         chart.ValueAxis.CrossesAt = 40;
+        chart.ValueAxis.CrossBetween = ChartCrossBetween.Between;
+        chart.ValueAxis.LabelAlignment = ChartLabelAlignment.Left;
 
         bus.Execute(new SetChartAxisOptionsCommand(
             0,
@@ -1215,7 +1217,8 @@ public sealed class ChartDataCommandTests
             new ChartAxisOptions(
                 ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false,
                 ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
-                ChartAxisCrossing.Min, 10, false)));
+                ChartAxisCrossing.Min, 10, false,
+                ChartCrossBetween.MidCat, ChartLabelAlignment.Right)));
 
         chart.ValueAxis.Title.Should().Be("Revenue");
         chart.ValueAxis.Delete.Should().BeTrue();
@@ -1231,6 +1234,8 @@ public sealed class ChartDataCommandTests
         chart.ValueAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.NextTo);
         chart.ValueAxis.Crosses.Should().BeNull();
         chart.ValueAxis.CrossesAt.Should().Be(10);
+        chart.ValueAxis.CrossBetween.Should().Be(ChartCrossBetween.MidCat);
+        chart.ValueAxis.LabelAlignment.Should().Be(ChartLabelAlignment.Right);
 
         using var stream = new MemoryStream();
         PptxPackageWriter.Write(p, stream);
@@ -1249,6 +1254,8 @@ public sealed class ChartDataCommandTests
         roundTripped.ValueAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.NextTo);
         roundTripped.ValueAxis.Crosses.Should().BeNull();
         roundTripped.ValueAxis.CrossesAt.Should().Be(10);
+        roundTripped.ValueAxis.CrossBetween.Should().Be(ChartCrossBetween.MidCat);
+        roundTripped.ValueAxis.LabelAlignment.Should().Be(ChartLabelAlignment.Right);
 
         bus.Undo();
         chart.ValueAxis.Title.Should().Be("Old axis");
@@ -1264,6 +1271,8 @@ public sealed class ChartDataCommandTests
         chart.ValueAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.High);
         chart.ValueAxis.Crosses.Should().Be(ChartAxisCrossing.Max);
         chart.ValueAxis.CrossesAt.Should().Be(40);
+        chart.ValueAxis.CrossBetween.Should().Be(ChartCrossBetween.Between);
+        chart.ValueAxis.LabelAlignment.Should().Be(ChartLabelAlignment.Left);
     }
 
     [Fact]
