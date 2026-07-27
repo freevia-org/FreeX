@@ -300,6 +300,117 @@ public static class AvaloniaCompactDialogChrome
         });
     }
 
+    /// <summary>Applies the unframed, full-width expander chrome used by compact WPF dialogs.</summary>
+    public static void ApplyWpfExpander(
+        Expander expander,
+        AvaloniaCompactDialogChromeStyle? style = null)
+    {
+        ArgumentNullException.ThrowIfNull(expander);
+        style ??= WindowsStyle;
+
+        expander.FontFamily = style.FontFamily;
+        expander.FontSize = style.FontSize;
+        expander.Foreground = Brushes.Black;
+        expander.HorizontalAlignment = HorizontalAlignment.Stretch;
+        expander.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        expander.Padding = new Thickness(0);
+        expander.Background = Brushes.Transparent;
+        expander.BorderBrush = Brushes.Transparent;
+        expander.BorderThickness = new Thickness(0);
+        expander.Template = new FuncControlTemplate<Expander>((control, _) =>
+        {
+            var arrow = new global::Avalonia.Controls.Shapes.Path
+            {
+                Data = Geometry.Parse("M 3 5 L 6 2 L 9 5"),
+                Stroke = DialogForegroundBrush,
+                StrokeThickness = 1,
+                Width = 12,
+                Height = 8,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var indicator = new Border
+            {
+                Width = 18,
+                Height = 18,
+                Background = Brushes.White,
+                BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(9),
+                Child = arrow,
+            };
+            var header = new ContentPresenter
+            {
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+            header.Bind(ContentPresenter.ContentProperty, new Binding(nameof(HeaderedContentControl.Header)) { Source = control });
+            header.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(HeaderedContentControl.HeaderTemplate)) { Source = control });
+
+            var toggle = new ToggleButton
+            {
+                Height = 20,
+                MinHeight = 20,
+                MaxHeight = 20,
+                Padding = new Thickness(0),
+                Background = Brushes.Transparent,
+                BorderBrush = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 4,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Children = { indicator, header },
+                },
+            };
+            toggle.Template = new FuncControlTemplate<ToggleButton>((button, _) =>
+            {
+                var presenter = new ContentPresenter
+                {
+                    HorizontalContentAlignment = HorizontalAlignment.Left,
+                    VerticalContentAlignment = VerticalAlignment.Center,
+                };
+                presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = button });
+                presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = button });
+                return presenter;
+            });
+
+            var content = new ContentPresenter
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                IsVisible = control.IsExpanded,
+            };
+            content.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = control });
+            content.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = control });
+
+            void UpdateExpandedState()
+            {
+                content.IsVisible = control.IsExpanded;
+                toggle.IsChecked = control.IsExpanded;
+                arrow.Data = Geometry.Parse(control.IsExpanded ? "M 3 6 L 6 3 L 9 6" : "M 3 3 L 6 6 L 9 3");
+            }
+
+            control.PropertyChanged += (_, args) =>
+            {
+                if (args.Property == Expander.IsExpandedProperty)
+                    UpdateExpandedState();
+            };
+            toggle.Click += (_, _) => control.IsExpanded = !control.IsExpanded;
+            UpdateExpandedState();
+
+            return new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Children = { toggle, content },
+            };
+        });
+    }
+
     public static void ApplyGroupBox(
         GroupBox groupBox,
         AvaloniaCompactDialogChromeStyle? style = null,

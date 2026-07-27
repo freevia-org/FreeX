@@ -52,6 +52,10 @@ public sealed class WpfAuthoritySurfaceParityTests
             dialog.Title.Should().Be("Compare Documents");
             dialog.AuthorBoxForTest.Text.Should().Be("Reviewer");
             dialog.AuthorBoxForTest.Focusable.Should().BeTrue();
+            dialog.MoreExpanderForTest.Template.Should().NotBeNull();
+            dialog.MoreExpanderForTest.IsExpanded.Should().BeFalse();
+            dialog.MoreExpanderForTest.IsExpanded = true;
+            dialog.MoreExpanderForTest.IsExpanded.Should().BeTrue();
             AssertDefaultCancelButtons(dialog);
 
             dialog.AcceptForTest("   ").Should().BeNull();

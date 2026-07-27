@@ -32,6 +32,7 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
     private readonly RadioButton _showNew = MakeRadio("New document", true);
     private readonly RadioButton _showOriginal = MakeRadio("Original document");
     private readonly RadioButton _showRevised = MakeRadio("Revised document");
+    private readonly Expander _moreExpander;
     private readonly TextBlock _validation = new()
     {
         Foreground = Brushes.Maroon,
@@ -76,16 +77,17 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
 
         AddFieldRow(grid, 3, "Label revisions with:", _authorBox);
 
-        var expander = new Expander
+        _moreExpander = new Expander
         {
             Header = "More",
             Content = BuildCompareSettingsPanel(),
             IsExpanded = false,
             Margin = new Thickness(0, 6, 0, 0),
         };
-        Grid.SetRow(expander, 4);
-        Grid.SetColumnSpan(expander, 2);
-        grid.Children.Add(expander);
+        AvaloniaCompactDialogChrome.ApplyWpfExpander(_moreExpander, InsertDialogLayout.ChromeStyle);
+        Grid.SetRow(_moreExpander, 4);
+        Grid.SetColumnSpan(_moreExpander, 2);
+        grid.Children.Add(_moreExpander);
 
         Grid.SetRow(_validation, 5);
         Grid.SetColumn(_validation, 1);
@@ -147,6 +149,7 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
 
     internal TextBox AuthorBoxForTest => _authorBox;
     internal TextBlock ValidationForTest => _validation;
+    internal Expander MoreExpanderForTest => _moreExpander;
 
     internal CompareDocumentsDialogResult? AcceptForTest(string? author)
     {

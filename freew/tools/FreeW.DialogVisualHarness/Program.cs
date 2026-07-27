@@ -28,7 +28,7 @@ static int Usage()
 {
     Console.WriteLine("FreeW.DialogVisualHarness");
     Console.WriteLine("  inventory --repo-root <root> --output <dir> [--check]");
-    Console.WriteLine("  compare --inventory <scenarios.json> --wpf <manifest.json> --avalonia <manifest.json> --output <dir> [--check]");
+    Console.WriteLine("  compare --inventory <scenarios.json> --wpf <manifest.json> --avalonia <manifest.json> --output <dir> [--baseline <report.json> --refresh-route <route>] [--check]");
     return 0;
 }
 
@@ -69,12 +69,25 @@ static int RunCompare(string[] args)
     var wpfPath = Path.GetFullPath(Required(args, "--wpf"));
     var avaloniaPath = Path.GetFullPath(Required(args, "--avalonia"));
     var output = Path.GetFullPath(Required(args, "--output"));
+    var baselinePath = Optional(args, "--baseline");
+    var refreshRoute = Optional(args, "--refresh-route");
+    if ((baselinePath is null) != (refreshRoute is null))
+        throw new ArgumentException("--baseline and --refresh-route must be supplied together.");
     var check = args.Contains("--check", StringComparer.Ordinal);
     var inventory = Read<EvidenceInventory>(inventoryPath);
     var wpf = Read<CaptureManifest>(wpfPath);
     var avalonia = Read<CaptureManifest>(avaloniaPath);
     Directory.CreateDirectory(output);
     var rows = CompareCaptures(inventory, wpf, avalonia, output);
+    if (baselinePath is not null)
+    {
+        var baseline = Read<ComparisonReport>(Path.GetFullPath(baselinePath));
+        var baselineRows = baseline.Rows.ToDictionary(row => row.ScenarioId, StringComparer.OrdinalIgnoreCase);
+        var refreshPrefix = refreshRoute is null ? null : refreshRoute.TrimEnd('.') + ".";
+        rows = rows.Select(row => refreshPrefix is not null && row.ScenarioId.StartsWith(refreshPrefix, StringComparison.OrdinalIgnoreCase)
+            ? row
+            : baselineRows.TryGetValue(row.ScenarioId, out var preserved) ? preserved : row).ToList();
+    }
     var report = new ComparisonReport(
         Schema: "freew.dialog-visual-comparison.v1",
         GeneratedFromSha256: Sha256(string.Join("\n", File.ReadAllText(inventoryPath), File.ReadAllText(wpfPath), File.ReadAllText(avaloniaPath))),
@@ -335,6 +348,7 @@ static SKBitmap DecodeAndScale(string path, int width, int height)
 
 static T Read<T>(string path) => JsonSerializer.Deserialize<T>(File.ReadAllText(path), JsonOptions()) ?? throw new InvalidOperationException($"Invalid JSON: {path}");
 static string Required(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : throw new ArgumentException($"Missing {option}."); }
+static string? Optional(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
 static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
 static string Safe(string value) => Regex.Replace(value, "[^A-Za-z0-9._-]", "-");
 static string Kebab(string value)
