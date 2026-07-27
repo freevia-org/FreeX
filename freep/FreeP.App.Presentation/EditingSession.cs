@@ -2560,6 +2560,30 @@ public sealed class EditingSession
     }
 
     /// <summary>
+    /// Changes only the selected chart's type through the same coordinate-aware, undoable path
+    /// used by the chart data dialog. Scatter and Bubble transitions receive valid coordinates;
+    /// ordinary chart data and formatting remain intact.
+    /// </summary>
+    public bool ChangeSelectedChartType(ChartType chartType)
+    {
+        var selectedChart = SelectedChart;
+        if (selectedChart is null || chartType == ChartType.Unknown)
+            return false;
+
+        var planner = ChartDataDialogPlanner.FromChart(selectedChart);
+        planner.SetChartType(chartType);
+        var plan = planner.BuildCommitPlan();
+        ReplaceChartData(
+            plan.Categories,
+            plan.SeriesNames,
+            plan.ValuesForCommand(),
+            plan.ChartType,
+            plan.XValuesForCommand(),
+            plan.BubbleSizesForCommand());
+        return true;
+    }
+
+    /// <summary>
     /// Sets the numeric value at [<paramref name="seriesIndex"/>][<paramref name="categoryIndex"/>]
     /// in the selected chart.  Undoable.
     /// </summary>

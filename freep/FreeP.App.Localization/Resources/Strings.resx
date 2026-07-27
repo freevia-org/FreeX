@@ -493,6 +493,12 @@
   <data name="Ribbon_Command_ChartEditData_Label" xml:space="preserve">
     <value>Edit Data</value>
   </data>
+  <data name="Ribbon_Command_ChartChangeType_Label" xml:space="preserve">
+    <value>Change Chart Type</value>
+  </data>
+  <data name="Ribbon_Command_ChartChangeType_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
   <data name="Ribbon_Command_ChartEditData_KeyTip" xml:space="preserve">
     <value>E</value>
   </data>

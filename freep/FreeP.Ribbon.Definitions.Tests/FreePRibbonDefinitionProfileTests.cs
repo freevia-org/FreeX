@@ -128,6 +128,30 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Chart_change_type_menu_exposes_all_modelled_chart_types_in_both_profiles()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            var control = RequiredControl(definition, ChartDataDialogPlanner.ChangeChartTypeCommandId)
+                .Should()
+                .BeOfType<RibbonDropdown>()
+                .Subject;
+
+            control.Menu.Items.Select(item => item.CommandId?.Value)
+                .Should()
+                .Equal(ChartDataDialogPlanner.ChartTypeOptions.Select(option =>
+                    ChartDataDialogPlanner.ChangeChartTypeOptionCommandId(option.Value)));
+            control.Menu.Items.Select(item => item.Header)
+                .Should()
+                .Equal(ChartDataDialogPlanner.ChartTypeOptions.Select(option => option.Label));
+        }
+    }
+
+    [Fact]
     public void SmartArt_colors_menu_exposes_the_complete_powerpoint_gallery()
     {
         foreach (var definition in new[]

@@ -837,6 +837,27 @@ public class RibbonEditorCompleteness5BTests
         Assert.Equal(ChartType.Pie, added.Chart!.ChartType);
     }
 
+    [Fact]
+    public void Cmd_ChangeChartType_RegistersAllOptionsAndRoutesSelectedChart()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.insert-chart-column");
+        var chart = pres.Slides[0].Shapes.Last();
+        ed.Select(chart.Id);
+
+        Assert.True(reg.TryGet(ChartDataDialogPlanner.ChangeChartTypeCommandId, out _));
+        foreach (var option in ChartDataDialogPlanner.ChartTypeOptions)
+        {
+            var commandId = ChartDataDialogPlanner.ChangeChartTypeOptionCommandId(option.Value);
+            Assert.True(reg.TryGet(commandId, out _), $"Command '{commandId}' was not registered.");
+        }
+
+        Exec(reg, ChartDataDialogPlanner.ChangeChartTypeOptionCommandId(ChartType.Scatter));
+        Assert.Equal(ChartType.Scatter, chart.Chart!.ChartType);
+        Assert.True(ed.CanUndo);
+    }
+
     // ── Command: font-family ComboBox ────────────────────────────────────────────
 
     [Fact]

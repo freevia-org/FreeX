@@ -591,6 +591,22 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void EditingSession_ChangeSelectedChartType_SeedsCoordinatesAndUndoRestoresType()
+    {
+        var sess = MakeSession();
+
+        sess.ChangeSelectedChartType(ChartType.Scatter).Should().BeTrue();
+        var scatter = sess.SelectedChart!;
+        scatter.ChartType.Should().Be(ChartType.Scatter);
+        scatter.Series.Should().OnlyContain(series => series.XValues.Count == scatter.Categories.Count);
+        scatter.Series.SelectMany(series => series.XValues).Should().NotContainNulls();
+
+        sess.Undo();
+        sess.SelectedChart!.ChartType.Should().Be(ChartType.ColumnClustered);
+        sess.SelectedChart.Series.Should().OnlyContain(series => series.XValues.Count == 0);
+    }
+
+    [Fact]
     public void EditingSession_ChangedEvent_FiredOnChartEdit()
     {
         var sess = MakeSession();
