@@ -357,9 +357,14 @@ public sealed class KeyboardContextParityTests
             var window = new MainWindow([]);
             try
             {
+                window.Width = 2400;
                 window.Show();
+                // Ribbon content is created inside the rendered TabItem template; it is
+                // reliably discoverable in the visual tree after Show(), but is not part
+                // of the logical descendants exposed by the headless presenter.
+                Dispatcher.UIThread.RunJobs();
                 var combo = window.RibbonControlForTests!
-                    .GetLogicalDescendants()
+                    .GetVisualDescendants()
                     .OfType<ComboBox>()
                     .First(control => Equals(control.Tag, "freep.font-family"));
                 var definition = FreePRibbonAvalonia.Build();
