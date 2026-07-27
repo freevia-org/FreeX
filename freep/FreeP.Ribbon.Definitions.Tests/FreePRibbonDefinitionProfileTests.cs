@@ -567,6 +567,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         var wpfBorder = RequiredCombo(wpf, "freep.table-cell-border");
         var wpfInset = RequiredCombo(wpf, "freep.table-cell-inset");
         var wpfRowHeight = RequiredCombo(wpf, "freep.table-row-height");
+        var wpfTextAutoFit = RequiredCombo(wpf, "freep.text-autofit");
         var size = RequiredCombo(avalonia, "freep.font-size");
         var color = RequiredCombo(avalonia, "freep.font-color");
         var fill = RequiredCombo(avalonia, "freep.table-cell-fill");
@@ -574,11 +575,13 @@ public sealed class FreePRibbonDefinitionProfileTests
         var border = RequiredCombo(avalonia, "freep.table-cell-border");
         var inset = RequiredCombo(avalonia, "freep.table-cell-inset");
         var rowHeight = RequiredCombo(avalonia, "freep.table-row-height");
+        var textAutoFit = RequiredCombo(avalonia, "freep.text-autofit");
 
         wpfCommandIds.Should().ContainInOrder(
             "freep.font-family",
             "freep.font-size",
             "freep.font-color",
+            "freep.text-autofit",
             "freep.table-cell-fill",
             "freep.table-cell-anchor",
             "freep.table-cell-border",
@@ -593,6 +596,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.font-family",
             "freep.font-size",
             "freep.font-color",
+            "freep.text-autofit",
             "freep.table-cell-fill",
             "freep.table-cell-anchor",
             "freep.table-cell-border",
@@ -610,6 +614,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         wpfBorder.Items.Should().Equal(FreePRibbonDefinitionData.TableCellBorderOptions);
         wpfInset.Items.Should().Equal(FreePRibbonDefinitionData.TableCellInsetOptions);
         wpfRowHeight.Items.Should().Equal(FreePRibbonDefinitionData.TableRowHeightOptions);
+        wpfTextAutoFit.Items.Should().Equal(FreePRibbonDefinitionData.TextAutoFitOptions);
         size.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
         color.Items.Should().Equal(FreePRibbonDefinitionData.FontColors);
         fill.Items.Should().Equal(FreePRibbonDefinitionData.TableCellFillColors);
@@ -617,6 +622,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         border.Items.Should().Equal(FreePRibbonDefinitionData.TableCellBorderOptions);
         inset.Items.Should().Equal(FreePRibbonDefinitionData.TableCellInsetOptions);
         rowHeight.Items.Should().Equal(FreePRibbonDefinitionData.TableRowHeightOptions);
+        textAutoFit.Items.Should().Equal(FreePRibbonDefinitionData.TextAutoFitOptions);
     }
 
     [Fact]

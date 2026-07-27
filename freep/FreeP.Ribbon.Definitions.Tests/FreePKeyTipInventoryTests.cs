@@ -71,6 +71,7 @@ public sealed class FreePKeyTipInventoryTests
             ["freep.font-family"] = "FON",
             ["freep.font-size"] = "SIZ",
             ["freep.font-color"] = "FC",
+            ["freep.text-autofit"] = "TA",
             ["freep.transition.duration"] = "DUR",
             ["freep.transition.advance-after"] = "AFT",
             ["freep.anim.trigger"] = "STA",

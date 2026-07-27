@@ -1059,6 +1059,24 @@ public sealed class EditingSession
         }
     }
 
+    /// <summary>Sets the DrawingML text-frame autofit mode on all selected text shapes as one undo step.</summary>
+    public int SetTextAutoFitOnSelection(TextAutoFitKind kind)
+    {
+        if (CurrentSlide is null)
+            return 0;
+
+        var commands = _selectedShapeIds
+            .Where(id => CurrentSlide.Shapes.FirstOrDefault(shape => shape.Id == id)?.TextBody is not null)
+            .Select(id => (IPresentationCommand)new SetShapeTextAutoFitCommand(_currentSlideIndex, id, kind))
+            .ToArray();
+
+        if (commands.Length == 0)
+            return 0;
+
+        Bus.Execute(new BatchCommand("Set Text Autofit", commands));
+        return commands.Length;
+    }
+
     // ── Notes operations ─────────────────────────────────────────────────────────
 
     /// <summary>

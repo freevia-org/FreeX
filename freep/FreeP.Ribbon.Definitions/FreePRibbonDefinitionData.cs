@@ -11,6 +11,9 @@ public static class FreePRibbonDefinitionData
     public static readonly string[] FontColors =
         ["Automatic", "Black", "White", "Red", "Green", "Blue", "Yellow", "Orange", "Purple", "Dark Red", "Dark Blue"];
 
+    public static readonly string[] TextAutoFitOptions =
+        ["Do not autofit", "Shrink text on overflow", "Resize shape to fit text"];
+
     public static readonly string[] TableCellFillColors = FontColors;
 
     public static readonly string[] TableCellAnchorOptions =

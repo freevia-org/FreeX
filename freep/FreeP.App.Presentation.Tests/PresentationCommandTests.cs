@@ -697,6 +697,36 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SetShapeTextAutoFitCommand_ApplyUndoAndRedo_PreservesThreeStateMode()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape();
+        shape.TextBody = new TextBody { AutoFitKind = TextAutoFitKind.None };
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new SetShapeTextAutoFitCommand(0, shape.Id, TextAutoFitKind.Normal));
+        shape.TextBody!.AutoFitKind.Should().Be(TextAutoFitKind.Normal);
+
+        bus.Undo();
+        shape.TextBody.AutoFitKind.Should().Be(TextAutoFitKind.None);
+
+        bus.Redo();
+        shape.TextBody.AutoFitKind.Should().Be(TextAutoFitKind.Normal);
+    }
+
+    [Fact]
+    public void SetShapeTextAutoFitCommand_NoOp_DoesNotAddUndoEntry()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape();
+        shape.TextBody = new TextBody { AutoFitKind = TextAutoFitKind.Shape };
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new SetShapeTextAutoFitCommand(0, shape.Id, TextAutoFitKind.Shape));
+        bus.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void ToggleRunBoldCommand_Apply_TogglesBold()
     {
         var (p, bus, _, run) = MakeShapeWithRun();
