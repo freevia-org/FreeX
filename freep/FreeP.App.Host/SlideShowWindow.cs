@@ -4505,36 +4505,31 @@ public sealed class SlideShowWindow : Window
         double w = el.Width  > 0 ? el.Width  : 960;
         double h = el.Height > 0 ? el.Height : 540;
 
-        var clip = new RectangleGeometry();
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        var fromProgress = isExit ? 1 : 0;
+        var toProgress = isExit ? 0 : 1;
+        var clip = (GeometryGroup)BuildSplitGeometry(
+            w, h, fromProgress, plan.SplitHorizontal, plan.SplitFromCenter);
         el.Clip = clip;
         el.Opacity = 1;
 
         var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
-        Rect from;
-        Rect to;
-
-        var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        if (plan.WipeHorizontal)
+        var fromRects = SlideShowMaskGeometryPlanner.BuildSplitRects(
+            w, h, fromProgress, plan.SplitHorizontal, plan.SplitFromCenter);
+        var toRects = SlideShowMaskGeometryPlanner.BuildSplitRects(
+            w, h, toProgress, plan.SplitHorizontal, plan.SplitFromCenter);
+        for (var i = 0; i < clip.Children.Count; i++)
         {
-            from = isExit ? new Rect(0, 0, w, h) : new Rect(w / 2, 0, 0, h);
-            to = isExit ? new Rect(w / 2, 0, 0, h) : new Rect(0, 0, w, h);
+            AddRectAnimation(
+                sb,
+                (RectangleGeometry)clip.Children[i],
+                ToRect(fromRects[i]),
+                ToRect(toRects[i]),
+                dur,
+                ease,
+                plan.DelayMs);
         }
-        else
-        {
-            from = isExit ? new Rect(0, 0, w, h) : new Rect(0, h / 2, w, 0);
-            to = isExit ? new Rect(0, h / 2, w, 0) : new Rect(0, 0, w, h);
-        }
-
-        clip.Rect = from;
-        var anim = new RectAnimation(from, to, dur)
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
-            EasingFunction = ease
-        };
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim, new PropertyPath("Clip.Rect"));
-        sb.Children.Add(anim);
     }
 
     private static void RandomBarsEffect(Storyboard sb, FrameworkElement el,

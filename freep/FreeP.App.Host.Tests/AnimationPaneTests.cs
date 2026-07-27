@@ -386,6 +386,24 @@ public sealed class AnimationPaneTests
     }
 
     [StaFact]
+    public void AnimationPane_Split_UsesSharedFourDirectionOptionsAndMutation()
+    {
+        var editor = MakeSessionWithAnimations();
+        editor.CurrentSlideAnimations[0].Preset = AnimationPreset.Split;
+        editor.CurrentSlideAnimations[0].Direction = AnimationDirection.HorizontalIn;
+        var pane = new AnimationPane(editor);
+
+        pane.CurrentTimelinePlanForTest.Items[0].EffectOptions.Options
+            .Select(option => option.DisplayText)
+            .Should().Equal("Horizontal In", "Horizontal Out", "Vertical In", "Vertical Out");
+
+        var mutation = pane.ApplyAnimationPaneEffectOptionEditForTest(0, "vertical-out");
+        mutation.ShouldApply.Should().BeTrue();
+        mutation.Direction.Should().Be(AnimationDirection.VerticalOut);
+        editor.CurrentSlideAnimations[0].Direction.Should().Be(AnimationDirection.VerticalOut);
+    }
+
+    [StaFact]
     public void AnimationPane_ProjectsSharedPlaybackSessionState()
     {
         var editor = MakeSessionWithAnimations();

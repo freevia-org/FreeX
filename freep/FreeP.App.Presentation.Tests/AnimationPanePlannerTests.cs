@@ -719,6 +719,32 @@ public sealed class AnimationPanePlannerTests
             new AnimationPaneEffectOptionDescriptor("from-bottom-right", "From Bottom Right", AnimationDirection.FromBottomRight, false));
     }
 
+    [Fact]
+    public void SplitEffectOptions_ExposeFourPowerPointDirectionsAndSelectLegacyAlias()
+    {
+        var slide = new Slide();
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 10u,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Split,
+            Direction = AnimationDirection.Horizontal,
+        });
+
+        var plan = AnimationPanePlanner.BuildEffectOptionsPlan(slide.Animations, 0);
+
+        plan.Options.Select(option => option.DisplayText)
+            .Should().Equal("Horizontal In", "Horizontal Out", "Vertical In", "Vertical Out");
+        plan.SelectedOptionText.Should().Be("Horizontal Out");
+        plan.Options.Should().ContainSingle(option =>
+            option.IsSelected && option.Direction == AnimationDirection.HorizontalOut);
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            slide.Animations, 0, "vertical-in");
+        mutation.ShouldApply.Should().BeTrue();
+        mutation.Direction.Should().Be(AnimationDirection.VerticalIn);
+    }
+
     [Theory]
     [InlineData("from-top-left", AnimationDirection.FromTopLeft)]
     [InlineData("from-top-right", AnimationDirection.FromTopRight)]
@@ -890,7 +916,7 @@ public sealed class AnimationPanePlannerTests
     [Theory]
     [InlineData(AnimationPreset.Wipe, "from-top", AnimationDirection.FromTop)]
     [InlineData(AnimationPreset.Zoom, "out", AnimationDirection.Out)]
-    [InlineData(AnimationPreset.Split, "vertical", AnimationDirection.Vertical)]
+    [InlineData(AnimationPreset.Split, "vertical-in", AnimationDirection.VerticalIn)]
     [InlineData(AnimationPreset.RandomBars, "horizontal", AnimationDirection.Horizontal)]
     [InlineData(AnimationPreset.Blinds, "vertical", AnimationDirection.Vertical)]
     [InlineData(AnimationPreset.Checkerboard, "horizontal", AnimationDirection.Horizontal)]

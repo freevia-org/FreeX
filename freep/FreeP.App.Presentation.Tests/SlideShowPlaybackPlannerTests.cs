@@ -1219,6 +1219,35 @@ public sealed class SlideShowPlaybackPlannerTests
         verticalWipe.WipeHorizontal.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(AnimationDirection.HorizontalIn, true, false)]
+    [InlineData(AnimationDirection.HorizontalOut, true, true)]
+    [InlineData(AnimationDirection.VerticalIn, false, false)]
+    [InlineData(AnimationDirection.VerticalOut, false, true)]
+    public void PlanShapeAnimation_MapsSplitDirectionToSharedAxisAndMovement(
+        AnimationDirection direction,
+        bool expectedHorizontal,
+        bool expectedFromCenter)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 4,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Split,
+                Direction = direction,
+                DurationMs = 300,
+            },
+            startDelayMs: 0);
+
+        plan.SplitHorizontal.Should().Be(expectedHorizontal);
+        plan.SplitFromCenter.Should().Be(expectedFromCenter);
+        var frame = SlideShowPlaybackFramePlanner.PlanFrame(plan, 150, 960, 540);
+        frame.ClipKind.Should().Be(SlideShowAnimationClipKind.Split);
+        frame.ClipHorizontal.Should().Be(expectedHorizontal);
+        frame.ClipFromCenter.Should().Be(expectedFromCenter);
+    }
+
     [Fact]
     public void PlanShapeAnimation_PreservesRepeatAndAutoReverseTiming()
     {

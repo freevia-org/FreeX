@@ -3250,6 +3250,38 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Animation_pane_split_effect_options_use_shared_direction_semantics()
+    {
+        AnimationPaneEffectOptionsPlan? optionsPlan = null;
+        AnimationPaneEffectOptionMutationPlan? mutationPlan = null;
+        AnimationDirection? direction = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.entrance.split", out var split).Should().BeTrue();
+
+            var hero = window.Editor.InsertDefaultRectangle();
+            window.Editor.Select(hero.Id);
+            split!.Execute(RibbonCommandContext.Empty);
+            window.ShowAnimationPane();
+
+            optionsPlan = window.LastAnimationPaneTimelinePlan!.Items[0].EffectOptions;
+            mutationPlan = window.ApplyAnimationPaneEffectOptionEditForTests(0, "vertical-out");
+            direction = window.Editor.CurrentSlideAnimations.Single().Direction;
+        });
+
+        if (!ran) return;
+        optionsPlan.Should().NotBeNull();
+        optionsPlan!.Options.Select(option => option.DisplayText)
+            .Should().Equal("Horizontal In", "Horizontal Out", "Vertical In", "Vertical Out");
+        mutationPlan.Should().NotBeNull();
+        mutationPlan!.Direction.Should().Be(AnimationDirection.VerticalOut);
+        direction.Should().Be(AnimationDirection.VerticalOut);
+    }
+
+    [Fact]
     public async Task Ribbon_review_workflow_commands_refresh_shared_adapter_state()
     {
         var foundComments = false;

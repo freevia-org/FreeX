@@ -877,8 +877,11 @@ public static class AnimationPanePlanner
             };
         }
 
+        var selectedDirection = animation.Preset == AnimationPreset.Split
+            ? AnimationDirectionSemantics.ResolveSplitDirection(animation)
+            : animation.Direction;
         var selected = descriptors.FirstOrDefault(option =>
-                option.Direction == animation.Direction
+                option.Direction == selectedDirection
                 && option.EffectSubtype == animation.EffectSubtype)
             ?? descriptors.FirstOrDefault(option => option.EffectSubtype == animation.EffectSubtype)
             ?? descriptors[0];
@@ -1571,6 +1574,10 @@ public static class AnimationPanePlanner
                 break;
 
             case AnimationPreset.Split:
+                foreach (var option in SplitDirectionOptions())
+                    yield return option;
+                break;
+
             case AnimationPreset.RandomBars:
             case AnimationPreset.Blinds:
             case AnimationPreset.Checkerboard:
@@ -1642,6 +1649,14 @@ public static class AnimationPanePlanner
     {
         yield return EffectOption("horizontal", "Horizontal", AnimationDirection.Horizontal);
         yield return EffectOption("vertical", "Vertical", AnimationDirection.Vertical);
+    }
+
+    private static IEnumerable<AnimationPaneEffectOptionDescriptor> SplitDirectionOptions()
+    {
+        yield return EffectOption("horizontal-in", "Horizontal In", AnimationDirection.HorizontalIn);
+        yield return EffectOption("horizontal-out", "Horizontal Out", AnimationDirection.HorizontalOut);
+        yield return EffectOption("vertical-in", "Vertical In", AnimationDirection.VerticalIn);
+        yield return EffectOption("vertical-out", "Vertical Out", AnimationDirection.VerticalOut);
     }
 
     private static IEnumerable<AnimationPaneEffectOptionDescriptor> InOutOptions()

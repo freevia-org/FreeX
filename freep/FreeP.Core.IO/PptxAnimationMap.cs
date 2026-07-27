@@ -421,6 +421,10 @@ internal static class PptxAnimationMap
         AnimationDirection.FromTopRight => "fromTopRight",
         AnimationDirection.FromBottomLeft => "fromBottomLeft",
         AnimationDirection.FromBottomRight => "fromBottomRight",
+        AnimationDirection.HorizontalIn => "1",
+        AnimationDirection.HorizontalOut => "0",
+        AnimationDirection.VerticalIn => "3",
+        AnimationDirection.VerticalOut => "2",
         _                              => null
     };
 
@@ -448,4 +452,19 @@ internal static class PptxAnimationMap
         "fromBottomRight" => AnimationDirection.FromBottomRight,
         _                 => (AnimationDirection?)null
     };
+
+    public static AnimationDirection? SubtypeToAnimationDirection(
+        string? s,
+        AnimationPreset preset) => preset == AnimationPreset.Split
+            ? s switch
+            {
+                "0" => AnimationDirection.HorizontalOut,
+                "1" => AnimationDirection.HorizontalIn,
+                "2" => AnimationDirection.VerticalOut,
+                "3" => AnimationDirection.VerticalIn,
+                "horizontal" => AnimationDirection.Horizontal,
+                "vertical" => AnimationDirection.Vertical,
+                _ => SubtypeToAnimationDirection(s),
+            }
+            : SubtypeToAnimationDirection(s);
 }

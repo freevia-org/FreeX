@@ -4881,7 +4881,7 @@ public static class PptxPackageReader
 
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
         bool knownPreset = PptxAnimationMap.IsKnownOoxmlPreset(presetClass, presetId);
-        var direction = PptxAnimationMap.SubtypeToAnimationDirection(presetSubtype);
+        var direction = PptxAnimationMap.SubtypeToAnimationDirection(presetSubtype, preset);
         var wheelSpokeCount = preset == AnimationPreset.Wheel
             ? ReadWheelSpokeCount(buildPar, cTn)
             : null;

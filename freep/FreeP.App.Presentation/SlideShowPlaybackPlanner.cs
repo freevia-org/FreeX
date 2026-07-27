@@ -160,6 +160,8 @@ public sealed record SlideShowShapeAnimationPlaybackPlan(
     int CheckerboardColumnCount,
     IReadOnlyList<SlideShowMotionPathKeyFrame> MotionKeyFrames)
 {
+    public bool SplitHorizontal { get; init; }
+    public bool SplitFromCenter { get; init; }
     public int? RepeatCount { get; init; }
     public bool RepeatIndefinitely { get; init; }
     public bool AutoReverse { get; init; }
@@ -328,6 +330,9 @@ public static class SlideShowPlaybackPlanner
         ArgumentNullException.ThrowIfNull(animation);
 
         var effectKind = ResolveEffectKind(animation);
+        var splitDirection = animation.Preset == AnimationPreset.Split
+            ? AnimationDirectionSemantics.ResolveSplitDirection(animation)
+            : (AnimationDirection?)null;
         var (fromOpacity, toOpacity) = ResolveOpacity(animation);
         var (fromScale, toScale) = ResolveScale(animation);
         var (offsetX, offsetY) = ResolveFlyInOffset(animation.Direction);
@@ -363,6 +368,10 @@ public static class SlideShowPlaybackPlanner
             RepeatCount = animation.RepeatCount,
             RepeatIndefinitely = animation.RepeatIndefinitely,
             AutoReverse = animation.AutoReverse,
+            SplitHorizontal = splitDirection is not null
+                && AnimationDirectionSemantics.IsSplitHorizontal(splitDirection.Value),
+            SplitFromCenter = splitDirection is not null
+                && AnimationDirectionSemantics.IsSplitFromCenter(splitDirection.Value),
         };
     }
 
@@ -513,6 +522,8 @@ public static class SlideShowPlaybackPlanner
             or AnimationDirection.FromLeft
             or AnimationDirection.FromRight
             or AnimationDirection.Horizontal
+            or AnimationDirection.HorizontalIn
+            or AnimationDirection.HorizontalOut
             or null;
 
     private static bool IsHorizontalBlinds(AnimationDirection? direction) =>

@@ -2246,7 +2246,12 @@ public static class PptxPackageWriter
         int presetId = hasRawPreset ? anim.RawPresetId!.Value : mappedPresetId;
         var subtypeAttr = hasRawPreset && anim.RawPresetSubtype is not null
             ? anim.RawPresetSubtype
-            : anim.EffectSubtype ?? PptxAnimationMap.AnimationDirectionToSubtype(anim.Direction);
+            : anim.EffectSubtype ?? (anim.Preset == AnimationPreset.Split
+                ? PptxAnimationMap.AnimationDirectionToSubtype(anim.Direction is
+                    AnimationDirection.Horizontal or AnimationDirection.Vertical
+                    ? anim.Direction
+                    : AnimationDirectionSemantics.ResolveSplitDirection(anim))
+                : PptxAnimationMap.AnimationDirectionToSubtype(anim.Direction));
 
         string delayStr = triggerOverride == AnimationTrigger.OnClick
             ? "indefinite"

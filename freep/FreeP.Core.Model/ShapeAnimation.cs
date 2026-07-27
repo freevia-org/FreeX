@@ -436,4 +436,12 @@ public enum AnimationDirection
     FromTopRight,
     FromBottomLeft,
     FromBottomRight,
+    /// <summary>Split effect: panels move from the outside edges toward the center.</summary>
+    HorizontalIn,
+    /// <summary>Split effect: panels move from the center toward the outside edges.</summary>
+    HorizontalOut,
+    /// <summary>Split effect: panels move from the outside edges toward the center.</summary>
+    VerticalIn,
+    /// <summary>Split effect: panels move from the center toward the outside edges.</summary>
+    VerticalOut,
 }

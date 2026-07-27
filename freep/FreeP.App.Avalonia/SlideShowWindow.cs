@@ -3317,11 +3317,13 @@ public sealed class SlideShowWindow : Window
         bool horizontal,
         bool fromCenter,
         int durationMs,
-        Action? onComplete = null)
+        Action? onComplete = null,
+        double startProgress = 0,
+        double endProgress = 1)
     {
         if (durationMs <= 0)
         {
-            target.Clip = BuildSplitGeometry(width, height, 1, horizontal, fromCenter);
+            target.Clip = BuildSplitGeometry(width, height, endProgress, horizontal, fromCenter);
             onComplete?.Invoke();
             return;
         }
@@ -3337,12 +3339,13 @@ public sealed class SlideShowWindow : Window
         {
             frame++;
             var t = Math.Min(1.0, (double)frame / steps);
-            target.Clip = BuildSplitGeometry(width, height, EaseInOut(t), horizontal, fromCenter);
+            var progress = startProgress + (endProgress - startProgress) * EaseInOut(t);
+            target.Clip = BuildSplitGeometry(width, height, progress, horizontal, fromCenter);
             if (frame >= steps)
             {
                 timer.Stop();
                 _activeTimers.Remove(timer);
-                target.Clip = BuildSplitGeometry(width, height, 1, horizontal, fromCenter);
+                target.Clip = BuildSplitGeometry(width, height, endProgress, horizontal, fromCenter);
                 onComplete?.Invoke();
             }
         };
@@ -4480,31 +4483,22 @@ public sealed class SlideShowWindow : Window
         double h = el.Height > 0 ? el.Height : 540;
 
         el.Opacity = 1;
-
-        Rect from;
-        Rect to;
         var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        if (plan.WipeHorizontal)
-        {
-            from = isExit ? new Rect(0, 0, w, h) : new Rect(w / 2, 0, 0, h);
-            to = isExit ? new Rect(w / 2, 0, 0, h) : new Rect(0, 0, w, h);
-        }
-        else
-        {
-            from = isExit ? new Rect(0, 0, w, h) : new Rect(0, h / 2, w, 0);
-            to = isExit ? new Rect(0, h / 2, w, 0) : new Rect(0, 0, w, h);
-        }
-
-        var clipRect = new RectangleGeometry(from);
-        el.Clip = clipRect;
+        var fromProgress = isExit ? 1 : 0;
+        var toProgress = isExit ? 0 : 1;
+        el.Clip = BuildSplitGeometry(
+            w, h, fromProgress, plan.SplitHorizontal, plan.SplitFromCenter);
         DelayedAction(plan.DelayMs, () =>
-            AnimateRectClip(
+            AnimateSplitClip(
                 el,
-                clipRect,
-                from,
-                to,
+                w,
+                h,
+                plan.SplitHorizontal,
+                plan.SplitFromCenter,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                startProgress: fromProgress,
+                endProgress: toProgress));
     }
 
     private void RandomBarsEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)

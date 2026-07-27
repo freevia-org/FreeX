@@ -57,6 +57,7 @@ public sealed record SlideShowShapeAnimationVisualFramePlan(
     // Swivel is a 3-D vertical-axis effect.  Hosts expose the depth cue as a
     // horizontal 2-D projection while retaining the shared rotation track.
     public double HorizontalScale { get; init; } = 1;
+    public bool ClipFromCenter { get; init; }
 }
 
 public sealed record SlideShowAnimationStepVisualCheckpointPlan(
@@ -255,7 +256,8 @@ public static class SlideShowPlaybackFramePlanner
             BuildEvidenceSummary(plan, trackKind, progress, opacity, scale, horizontalScale,
                 rotation, translateXFactor, translateYFactor, clipKind, clipProgress))
         {
-            HorizontalScale = horizontalScale
+            HorizontalScale = horizontalScale,
+            ClipFromCenter = clipKind == SlideShowAnimationClipKind.Split && plan.SplitFromCenter
         };
     }
 
@@ -504,7 +506,8 @@ public static class SlideShowPlaybackFramePlanner
             SlideShowAnimationClipKind.Wipe => plan.WipeHorizontal,
             SlideShowAnimationClipKind.Blinds => plan.BlindsHorizontal,
             SlideShowAnimationClipKind.Checkerboard => plan.CheckerboardHorizontal,
-            SlideShowAnimationClipKind.RandomBars or SlideShowAnimationClipKind.Split => plan.WipeHorizontal,
+            SlideShowAnimationClipKind.RandomBars => plan.WipeHorizontal,
+            SlideShowAnimationClipKind.Split => plan.SplitHorizontal,
             _ => false
         };
 
