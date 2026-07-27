@@ -5403,9 +5403,13 @@ public sealed class SlideShowWindow : Window
     }
 
     private void AnimateScale(Control target, ScaleTransform scale,
-        double from, double to, int durationMs)
+        double from, double to, int durationMs) =>
+        AnimateScaleAxes(scale, from, from, to, to, durationMs);
+
+    private void AnimateScaleAxes(ScaleTransform scale,
+        double fromX, double fromY, double toX, double toY, int durationMs)
     {
-        if (durationMs <= 0) { scale.ScaleX = scale.ScaleY = to; return; }
+        if (durationMs <= 0) { scale.ScaleX = toX; scale.ScaleY = toY; return; }
 
         const int frameMs = 16;
         int steps = Math.Max(1, durationMs / frameMs);
@@ -5419,9 +5423,9 @@ public sealed class SlideShowWindow : Window
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
             double eased = EaseInOut(t);
-            double v = from + (to - from) * eased;
-            scale.ScaleX = scale.ScaleY = v;
-            if (frame >= steps) { timer.Stop(); _activeTimers.Remove(timer); scale.ScaleX = scale.ScaleY = to; }
+            scale.ScaleX = fromX + (toX - fromX) * eased;
+            scale.ScaleY = fromY + (toY - fromY) * eased;
+            if (frame >= steps) { timer.Stop(); _activeTimers.Remove(timer); scale.ScaleX = toX; scale.ScaleY = toY; }
         };
         timer.Start();
     }
@@ -5445,14 +5449,14 @@ public sealed class SlideShowWindow : Window
     {
         el.Opacity = 1;
         el.RenderTransformOrigin = RelativePoint.Center;
-        var scale = new ScaleTransform(plan.FromScale, plan.FromScale);
+        var scale = new ScaleTransform(plan.FromScaleX, plan.FromScaleY);
         el.RenderTransform = scale;
 
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateScale(el, scale, plan.FromScale, plan.PeakScale, plan.DurationMs / 2);
+            AnimateScaleAxes(scale, plan.FromScaleX, plan.FromScaleY, plan.PeakScaleX, plan.PeakScaleY, plan.DurationMs / 2);
             DelayedAction(plan.DurationMs / 2, () =>
-                AnimateScale(el, scale, plan.PeakScale, plan.ToScale, plan.DurationMs / 2));
+                AnimateScaleAxes(scale, plan.PeakScaleX, plan.PeakScaleY, plan.ToScaleX, plan.ToScaleY, plan.DurationMs / 2));
         });
     }
 

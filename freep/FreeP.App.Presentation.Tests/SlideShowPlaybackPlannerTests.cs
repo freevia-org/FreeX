@@ -1851,6 +1851,51 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanShapeAnimation_ProjectsAsymmetricGrowShrinkScaleAxesThroughFrames()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 36,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Grow,
+                DurationMs = 400,
+                ScaleBehavior = new AnimationScaleBehavior
+                {
+                    FromX = "100000",
+                    FromY = "100000",
+                    ToX = "150000",
+                    ToY = "75000",
+                },
+            },
+            startDelayMs: 20);
+
+        plan.FromScaleX.Should().Be(1);
+        plan.FromScaleY.Should().Be(1);
+        plan.ToScaleX.Should().Be(1);
+        plan.ToScaleY.Should().Be(1);
+        plan.PeakScaleX.Should().Be(1.5);
+        plan.PeakScaleY.Should().Be(0.75);
+
+        var quarterFrame = SlideShowPlaybackFramePlanner.PlanFrame(plan, 120, 960, 540);
+        quarterFrame.ScaleX.Should().BeApproximately(1.25, 0.0001);
+        quarterFrame.ScaleY.Should().BeApproximately(0.875, 0.0001);
+        quarterFrame.Scale.Should().Be(quarterFrame.ScaleX);
+        quarterFrame.FromScaleX.Should().Be(plan.FromScaleX);
+        quarterFrame.FromScaleY.Should().Be(plan.FromScaleY);
+        quarterFrame.ToScaleX.Should().Be(plan.ToScaleX);
+        quarterFrame.ToScaleY.Should().Be(plan.ToScaleY);
+        quarterFrame.PeakScaleX.Should().Be(plan.PeakScaleX);
+        quarterFrame.PeakScaleY.Should().Be(plan.PeakScaleY);
+
+        var peakFrame = SlideShowPlaybackFramePlanner.PlanFrame(plan, 220, 960, 540);
+        peakFrame.ScaleX.Should().Be(plan.PeakScaleX);
+        peakFrame.ScaleY.Should().Be(plan.PeakScaleY);
+        peakFrame.EvidenceSummary.Should().Contain("scale-x 1.5");
+        peakFrame.EvidenceSummary.Should().Contain("scale-y 0.75");
+    }
+
+    [Fact]
     public void PlanShapeAnimation_PreSamplesMotionPathKeyframes()
     {
         var path = new MotionPath();

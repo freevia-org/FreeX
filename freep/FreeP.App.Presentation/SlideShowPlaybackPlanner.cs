@@ -160,6 +160,21 @@ public sealed record SlideShowShapeAnimationPlaybackPlan(
     int CheckerboardColumnCount,
     IReadOnlyList<SlideShowMotionPathKeyFrame> MotionKeyFrames)
 {
+    // Scalar scale members remain the compatibility surface for effects that have
+    // historically been uniform. Grow/Shrink additionally carries the authored
+    // X/Y scale trajectory so both hosts can render asymmetric animScale behavior.
+    private double? _fromScaleX;
+    private double? _fromScaleY;
+    private double? _toScaleX;
+    private double? _toScaleY;
+    private double? _peakScaleX;
+    private double? _peakScaleY;
+    public double FromScaleX { get => _fromScaleX ?? FromScale; init => _fromScaleX = value; }
+    public double FromScaleY { get => _fromScaleY ?? FromScale; init => _fromScaleY = value; }
+    public double ToScaleX { get => _toScaleX ?? ToScale; init => _toScaleX = value; }
+    public double ToScaleY { get => _toScaleY ?? ToScale; init => _toScaleY = value; }
+    public double PeakScaleX { get => _peakScaleX ?? PeakScale; init => _peakScaleX = value; }
+    public double PeakScaleY { get => _peakScaleY ?? PeakScale; init => _peakScaleY = value; }
     public bool SplitHorizontal { get; init; }
     public bool SplitFromCenter { get; init; }
     public int? RepeatCount { get; init; }
@@ -335,6 +350,8 @@ public static class SlideShowPlaybackPlanner
             : (AnimationDirection?)null;
         var (fromOpacity, toOpacity) = ResolveOpacity(animation);
         var (fromScale, toScale) = ResolveScale(animation);
+        var (fromScaleX, fromScaleY, toScaleX, toScaleY, peakScaleX, peakScaleY) =
+            ResolveScaleAxesForPlayback(animation, fromScale, toScale, ResolvePeakScale(animation));
         var (offsetX, offsetY) = ResolveFlyInOffset(animation.Direction);
 
         return new SlideShowShapeAnimationPlaybackPlan(
@@ -368,6 +385,12 @@ public static class SlideShowPlaybackPlanner
             RepeatCount = animation.RepeatCount,
             RepeatIndefinitely = animation.RepeatIndefinitely,
             AutoReverse = animation.AutoReverse,
+            FromScaleX = fromScaleX,
+            FromScaleY = fromScaleY,
+            ToScaleX = toScaleX,
+            ToScaleY = toScaleY,
+            PeakScaleX = peakScaleX,
+            PeakScaleY = peakScaleY,
             SplitHorizontal = splitDirection is not null
                 && AnimationDirectionSemantics.IsSplitHorizontal(splitDirection.Value),
             SplitFromCenter = splitDirection is not null
@@ -491,6 +514,18 @@ public static class SlideShowPlaybackPlanner
         AnimationAmountSemantics.IsGrowShrink(animation.Preset)
             ? AnimationAmountSemantics.ResolveScale(animation.Preset, animation.ScaleBehavior)
             : 1.2;
+
+    private static (double FromX, double FromY, double ToX, double ToY, double PeakX, double PeakY)
+        ResolveScaleAxesForPlayback(ShapeAnimation animation, double fromScale, double toScale, double peakScale)
+    {
+        if (!AnimationAmountSemantics.IsGrowShrink(animation.Preset))
+        {
+            return (fromScale, fromScale, toScale, toScale, peakScale, peakScale);
+        }
+
+        var (peakX, peakY) = AnimationAmountSemantics.ResolveScaleAxes(animation.Preset, animation.ScaleBehavior);
+        return (fromScale, fromScale, toScale, toScale, peakX, peakY);
+    }
 
     private static double ResolveRotationDegrees(ShapeAnimation animation) =>
         animation.Direction == AnimationDirection.Out

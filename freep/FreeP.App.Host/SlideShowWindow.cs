@@ -5273,15 +5273,15 @@ public sealed class SlideShowWindow : Window
 
         double cx = el.Width  / 2;
         double cy = el.Height / 2;
-        var scale = new ScaleTransform(plan.FromScale, plan.FromScale, cx, cy);
+        var scale = new ScaleTransform(plan.FromScaleX, plan.FromScaleY, cx, cy);
         el.RenderTransform = scale;
 
-        var animSX = BuildGrowShrinkScaleAnimation(plan);
+        var animSX = BuildGrowShrinkScaleAnimation(plan, plan.FromScaleX, plan.PeakScaleX, plan.ToScaleX);
         Storyboard.SetTarget(animSX, el);
         Storyboard.SetTargetProperty(animSX,
             new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)"));
 
-        var animSY = BuildGrowShrinkScaleAnimation(plan);
+        var animSY = BuildGrowShrinkScaleAnimation(plan, plan.FromScaleY, plan.PeakScaleY, plan.ToScaleY);
         Storyboard.SetTarget(animSY, el);
         Storyboard.SetTargetProperty(animSY,
             new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)"));
@@ -5291,19 +5291,22 @@ public sealed class SlideShowWindow : Window
     }
 
     private static DoubleAnimationUsingKeyFrames BuildGrowShrinkScaleAnimation(
-        SlideShowShapeAnimationPlaybackPlan plan)
+        SlideShowShapeAnimationPlaybackPlan plan,
+        double fromScale,
+        double peakScale,
+        double toScale)
     {
         var anim = new DoubleAnimationUsingKeyFrames
         {
             BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
         };
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(plan.FromScale, KeyTime.FromPercent(0)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(fromScale, KeyTime.FromPercent(0)));
         anim.KeyFrames.Add(new SplineDoubleKeyFrame(
-            plan.PeakScale,
+            peakScale,
             KeyTime.FromPercent(0.5),
             new KeySpline(0.2, 0, 0.2, 1)));
         anim.KeyFrames.Add(new SplineDoubleKeyFrame(
-            plan.ToScale,
+            toScale,
             KeyTime.FromPercent(1),
             new KeySpline(0.4, 0, 0.2, 1)));
         return anim;

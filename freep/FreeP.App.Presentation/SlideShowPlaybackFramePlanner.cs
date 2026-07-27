@@ -54,6 +54,14 @@ public sealed record SlideShowShapeAnimationVisualFramePlan(
     int ClipSpokeCount,
     string EvidenceSummary)
 {
+    public double ScaleX { get; init; } = 1;
+    public double ScaleY { get; init; } = 1;
+    public double FromScaleX { get; init; } = 1;
+    public double FromScaleY { get; init; } = 1;
+    public double ToScaleX { get; init; } = 1;
+    public double ToScaleY { get; init; } = 1;
+    public double PeakScaleX { get; init; } = 1;
+    public double PeakScaleY { get; init; } = 1;
     // Swivel is a 3-D vertical-axis effect.  Hosts expose the depth cue as a
     // horizontal 2-D projection while retaining the shared rotation track.
     public double HorizontalScale { get; init; } = 1;
@@ -223,7 +231,8 @@ public static class SlideShowPlaybackFramePlanner
         var isBeforeStart = localElapsedMs < 0;
         var isComplete = localElapsedMs >= durationMs;
         var opacity = ResolveOpacity(plan, progress, isBeforeStart);
-        var scale = ResolveScale(plan, progress);
+        var (scaleX, scaleY) = ResolveScaleAxes(plan, progress);
+        var scale = scaleX;
         var rotation = ResolveRotation(plan, progress);
         var horizontalScale = ResolveHorizontalScale(plan, progress);
         var (translateXFactor, translateYFactor) = ResolveTranslateFactors(plan, progress);
@@ -253,9 +262,17 @@ public static class SlideShowPlaybackFramePlanner
             ResolveClipHorizontal(plan, clipKind),
             ResolveClipBandCount(plan, clipKind),
             ResolveClipSpokeCount(plan, clipKind),
-            BuildEvidenceSummary(plan, trackKind, progress, opacity, scale, horizontalScale,
+            BuildEvidenceSummary(plan, trackKind, progress, opacity, scaleX, scaleY, horizontalScale,
                 rotation, translateXFactor, translateYFactor, clipKind, clipProgress))
         {
+            ScaleX = scaleX,
+            ScaleY = scaleY,
+            FromScaleX = plan.FromScaleX,
+            FromScaleY = plan.FromScaleY,
+            ToScaleX = plan.ToScaleX,
+            ToScaleY = plan.ToScaleY,
+            PeakScaleX = plan.PeakScaleX,
+            PeakScaleY = plan.PeakScaleY,
             HorizontalScale = horizontalScale,
             ClipFromCenter = clipKind == SlideShowAnimationClipKind.Split && plan.SplitFromCenter
         };
@@ -299,21 +316,38 @@ public static class SlideShowPlaybackFramePlanner
         return plan.FromOpacity + (plan.ToOpacity - plan.FromOpacity) * progress;
     }
 
-    private static double ResolveScale(SlideShowShapeAnimationPlaybackPlan plan, double progress) =>
-        plan.EffectKind switch
+    private static (double X, double Y) ResolveScaleAxes(
+        SlideShowShapeAnimationPlaybackPlan plan,
+        double progress)
+    {
+        if (plan.EffectKind is SlideShowShapeAnimationEffectKind.Pulse
+            or SlideShowShapeAnimationEffectKind.GrowShrink)
         {
-            SlideShowShapeAnimationEffectKind.Pulse or SlideShowShapeAnimationEffectKind.GrowShrink =>
-                progress <= 0.5
-                    ? Lerp(plan.FromScale, plan.PeakScale, progress * 2)
-                    : Lerp(plan.PeakScale, plan.ToScale, (progress - 0.5) * 2),
-            SlideShowShapeAnimationEffectKind.Zoom =>
-                Lerp(plan.FromScale, plan.ToScale, progress),
-            SlideShowShapeAnimationEffectKind.GrowWithColor =>
-                progress <= 0.5
-                    ? Lerp(1, plan.PeakScale, progress * 2)
-                    : Lerp(plan.PeakScale, 1, (progress - 0.5) * 2),
-            _ => 1
-        };
+            var phase = progress <= 0.5;
+            var phaseProgress = phase ? progress * 2 : (progress - 0.5) * 2;
+            return phase
+                ? (Lerp(plan.FromScaleX, plan.PeakScaleX, phaseProgress),
+                   Lerp(plan.FromScaleY, plan.PeakScaleY, phaseProgress))
+                : (Lerp(plan.PeakScaleX, plan.ToScaleX, phaseProgress),
+                   Lerp(plan.PeakScaleY, plan.ToScaleY, phaseProgress));
+        }
+
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.Zoom)
+        {
+            var scale = Lerp(plan.FromScale, plan.ToScale, progress);
+            return (scale, scale);
+        }
+
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.GrowWithColor)
+        {
+            var scale = progress <= 0.5
+                ? Lerp(1, plan.PeakScale, progress * 2)
+                : Lerp(plan.PeakScale, 1, (progress - 0.5) * 2);
+            return (scale, scale);
+        }
+
+        return (1, 1);
+    }
 
     private static double ResolveRotation(SlideShowShapeAnimationPlaybackPlan plan, double progress) =>
         plan.EffectKind == SlideShowShapeAnimationEffectKind.Teeter
@@ -533,7 +567,8 @@ public static class SlideShowPlaybackFramePlanner
         SlideShowAnimationVisualTrackKind trackKind,
         double progress,
         double opacity,
-        double scale,
+        double scaleX,
+        double scaleY,
         double horizontalScale,
         double rotation,
         double translateX,
@@ -542,13 +577,15 @@ public static class SlideShowPlaybackFramePlanner
         double clipProgress) =>
         string.Format(
             CultureInfo.InvariantCulture,
-            "{0} {1}: shape {2}; progress {3:0.###}; opacity {4:0.###}; scale {5:0.###}; horizontal-scale {6:0.###}; rotation {7:0.###}; translate ({8:0.###},{9:0.###}); clip {10} {11:0.###}",
+            "{0} {1}: shape {2}; progress {3:0.###}; opacity {4:0.###}; scale {5:0.###}; scale-x {6:0.###}; scale-y {7:0.###}; horizontal-scale {8:0.###}; rotation {9:0.###}; translate ({10:0.###},{11:0.###}); clip {12} {13:0.###}",
             plan.EffectKind,
             trackKind,
             plan.Animation.ShapeId,
             progress,
             opacity,
-            scale,
+            scaleX,
+            scaleX,
+            scaleY,
             horizontalScale,
             rotation,
             translateX,

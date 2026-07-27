@@ -331,6 +331,50 @@ public sealed class AnimationPresetRoundTripTests
         behavior.ToY.Should().Be("office-custom");
     }
 
+    [Fact]
+    public void AsymmetricGrowShrinkAnimScaleSurvivesReadWriteWithBothAxes()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Grow,
+            ScaleBehavior = new AnimationScaleBehavior
+            {
+                FromX = "100000",
+                FromY = "100000",
+                ToX = "150000",
+                ToY = "75000",
+                ZoomContents = true,
+            },
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var behavior = reloaded.Slides[0].Animations.Single().ScaleBehavior!;
+        behavior.FromX.Should().Be("100000");
+        behavior.FromY.Should().Be("100000");
+        behavior.ToX.Should().Be("150000");
+        behavior.ToY.Should().Be("75000");
+        behavior.ZoomContents.Should().BeTrue();
+
+        using var second = new MemoryStream();
+        PptxPackageWriter.Write(reloaded, second);
+        using var archive = new ZipArchive(new MemoryStream(second.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var animScale = slideXml.Descendants(p + "animScale").Single();
+        animScale.Attribute("zoomContents")!.Value.Should().Be("1");
+        animScale.Element(p + "from")!.Attribute("x")!.Value.Should().Be("100000");
+        animScale.Element(p + "from")!.Attribute("y")!.Value.Should().Be("100000");
+        animScale.Element(p + "to")!.Attribute("x")!.Value.Should().Be("150000");
+        animScale.Element(p + "to")!.Attribute("y")!.Value.Should().Be("75000");
+    }
+
     [Theory]
     [InlineData(AnimationDirection.HorizontalOut, "0")]
     [InlineData(AnimationDirection.HorizontalIn, "1")]
