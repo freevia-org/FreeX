@@ -32,6 +32,49 @@ public sealed class QCalcSettingsIterativeCalculationCommandTests
     }
 
     [Fact]
+    public void CalculationOptionsInputParser_DisabledIterationUsesFallbacksForInvalidBounds()
+    {
+        CalculationOptionsInputParser.TryParseBounds(
+                iterativeCalculationEnabled: false,
+                maxIterationsText: string.Empty,
+                maxChangeText: "not-a-number",
+                fallbackMaxIterations: 250,
+                fallbackMaxChange: 0.0005,
+                out var maxIterations,
+                out var maxChange,
+                out var error)
+            .Should()
+            .BeTrue();
+
+        error.Should().Be(CalculationOptionsInputError.None);
+        maxIterations.Should().Be(250);
+        maxChange.Should().Be(0.0005);
+    }
+
+    [Theory]
+    [InlineData("", "0.001", CalculationOptionsInputError.InvalidMaxIterations)]
+    [InlineData("100", "invalid", CalculationOptionsInputError.InvalidMaxChange)]
+    public void CalculationOptionsInputParser_EnabledIterationRequiresValidBounds(
+        string maxIterationsText,
+        string maxChangeText,
+        CalculationOptionsInputError expectedError)
+    {
+        CalculationOptionsInputParser.TryParseBounds(
+                iterativeCalculationEnabled: true,
+                maxIterationsText,
+                maxChangeText,
+                fallbackMaxIterations: 250,
+                fallbackMaxChange: 0.0005,
+                out _,
+                out _,
+                out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be(expectedError);
+    }
+
+    [Fact]
     public void SetIterativeCalculationOptionsCommand_SetsSettingsAndUndoRestores()
     {
         var wb = new Workbook("test");

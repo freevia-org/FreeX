@@ -199,14 +199,44 @@ public sealed partial class OptionsDialogSourceTests
     }
 
     [Fact]
-    public void OptionsDialog_WiresNonPositiveMaxIterationsToOwnedWarning()
+    public void OptionsDialog_DisabledIterativeCalculationAcceptsEmptyBoundsWithoutWarning()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "options.json");
+        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
+
+        StaTestRunner.Run(() =>
+        {
+            var calcSettings = new OptionsDialogCalculationSettings(true, false, null, null);
+            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
+            dialog.Show();
+            try
+            {
+                GetControl<CheckBox>(dialog, "OptIterativeEnabled").IsChecked = false;
+                GetControl<TextBox>(dialog, "OptMaxIterations").Text = string.Empty;
+                GetControl<TextBox>(dialog, "OptMaxChange").Text = string.Empty;
+
+                ClickOkAllowingNonModalDialogResult(dialog);
+
+                dialog.Result.Should().NotBeNull();
+                dialog.CalculationSettingsResult.Should().BeNull();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void OptionsDialog_WiresInvalidEnabledIterationBoundsToOwnedWarning()
     {
         CalculationOptionsInputParser.TryParseMaxIterations("0", out _).Should().BeFalse();
 
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
-        source.Should().Contain(
-            "if (!CalculationOptionsInputParser.TryParseMaxIterations(OptMaxIterations.Text, out var maxIterations))");
-        source.Should().Contain(
-            "ShowInvalidInputWarning(UiText.Get(\"Options_InvalidMaxIterationsMessage\"), OptMaxIterations);");
+        source.Should().Contain("CalculationOptionsInputParser.TryParseBounds(");
+        source.Should().Contain("CalculationOptionsInputError.InvalidMaxIterations");
+        source.Should().Contain("\"Options_InvalidMaxIterationsMessage\"");
+        source.Should().Contain("invalidIterations ? OptMaxIterations : OptMaxChange");
     }
 }

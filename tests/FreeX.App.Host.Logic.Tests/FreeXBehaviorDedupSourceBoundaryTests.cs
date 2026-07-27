@@ -40,10 +40,8 @@ public sealed class FreeXBehaviorDedupSourceBoundaryTests
         var host = ReadHost("OptionsDialog.xaml.cs");
         var avalonia = ReadAvalonia("MainWindow.Options.cs");
 
-        host.Should().Contain("CalculationOptionsInputParser.TryParseMaxIterations");
-        host.Should().Contain("CalculationOptionsInputParser.TryParseMaxChange");
-        avalonia.Should().Contain("CalculationOptionsInputParser.TryParseMaxIterations");
-        avalonia.Should().Contain("CalculationOptionsInputParser.TryParseMaxChange");
+        host.Should().Contain("CalculationOptionsInputParser.TryParseBounds");
+        avalonia.Should().Contain("CalculationOptionsInputParser.TryParseBounds");
         host.Should().NotContain("private static bool TryParseMaxIterations");
         host.Should().NotContain("private static bool TryParseMaxChange");
         avalonia.Should().NotContain("private static bool TryParseMaxIterations");

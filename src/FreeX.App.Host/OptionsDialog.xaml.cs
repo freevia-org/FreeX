@@ -542,15 +542,22 @@ public partial class OptionsDialog : Window
         }
 
         var iterativeEnabled = OptIterativeEnabled.IsChecked == true;
-        if (!CalculationOptionsInputParser.TryParseMaxIterations(OptMaxIterations.Text, out var maxIterations))
+        if (!CalculationOptionsInputParser.TryParseBounds(
+                iterativeEnabled,
+                OptMaxIterations.Text,
+                OptMaxChange.Text,
+                _calcSettings.MaxCalculationIterations ?? DefaultMaxCalculationIterations,
+                _calcSettings.MaxCalculationChange ?? DefaultMaxCalculationChange,
+                out var maxIterations,
+                out var maxChange,
+                out var calculationInputError))
         {
-            ShowInvalidInputWarning(UiText.Get("Options_InvalidMaxIterationsMessage"), OptMaxIterations);
-            return;
-        }
-
-        if (!CalculationOptionsInputParser.TryParseMaxChange(OptMaxChange.Text, out var maxChange))
-        {
-            ShowInvalidInputWarning(UiText.Get("Options_InvalidMaxChangeMessage"), OptMaxChange);
+            var invalidIterations = calculationInputError == CalculationOptionsInputError.InvalidMaxIterations;
+            ShowInvalidInputWarning(
+                UiText.Get(invalidIterations
+                    ? "Options_InvalidMaxIterationsMessage"
+                    : "Options_InvalidMaxChangeMessage"),
+                invalidIterations ? OptMaxIterations : OptMaxChange);
             return;
         }
 
