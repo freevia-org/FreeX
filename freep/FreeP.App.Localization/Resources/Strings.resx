@@ -598,6 +598,12 @@
   <data name="Ribbon_Command_ShapeRectangle_KeyTip" xml:space="preserve">
     <value>R</value>
   </data>
+  <data name="Ribbon_Command_ShapeRoundedRectangle_Label" xml:space="preserve">
+    <value>Rounded Rectangle</value>
+  </data>
+  <data name="Ribbon_Command_ShapeRoundedRectangle_KeyTip" xml:space="preserve">
+    <value>RR</value>
+  </data>
   <data name="Ribbon_Command_ShapeEllipse_Label" xml:space="preserve">
     <value>Ellipse</value>
   </data>
@@ -622,11 +628,41 @@
   <data name="Ribbon_Command_ShapeHexagon_KeyTip" xml:space="preserve">
     <value>HX</value>
   </data>
+  <data name="Ribbon_Command_ShapeParallelogram_Label" xml:space="preserve">
+    <value>Parallelogram</value>
+  </data>
+  <data name="Ribbon_Command_ShapeParallelogram_KeyTip" xml:space="preserve">
+    <value>PG</value>
+  </data>
+  <data name="Ribbon_Command_ShapeTrapezoid_Label" xml:space="preserve">
+    <value>Trapezoid</value>
+  </data>
+  <data name="Ribbon_Command_ShapeTrapezoid_KeyTip" xml:space="preserve">
+    <value>TZ</value>
+  </data>
+  <data name="Ribbon_Command_ShapeLeftArrow_Label" xml:space="preserve">
+    <value>Left Arrow</value>
+  </data>
+  <data name="Ribbon_Command_ShapeLeftArrow_KeyTip" xml:space="preserve">
+    <value>LA</value>
+  </data>
   <data name="Ribbon_Command_ShapeRightArrow_Label" xml:space="preserve">
     <value>Right Arrow</value>
   </data>
   <data name="Ribbon_Command_ShapeRightArrow_KeyTip" xml:space="preserve">
     <value>RA</value>
+  </data>
+  <data name="Ribbon_Command_ShapeUpArrow_Label" xml:space="preserve">
+    <value>Up Arrow</value>
+  </data>
+  <data name="Ribbon_Command_ShapeUpArrow_KeyTip" xml:space="preserve">
+    <value>UA</value>
+  </data>
+  <data name="Ribbon_Command_ShapeDownArrow_Label" xml:space="preserve">
+    <value>Down Arrow</value>
+  </data>
+  <data name="Ribbon_Command_ShapeDownArrow_KeyTip" xml:space="preserve">
+    <value>DA</value>
   </data>
   <data name="Ribbon_Command_ShapeStar5_Label" xml:space="preserve">
     <value>5-Point Star</value>

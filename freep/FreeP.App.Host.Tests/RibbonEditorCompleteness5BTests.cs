@@ -231,9 +231,15 @@ public class RibbonEditorCompleteness5BTests
         var group = tab.Groups.Single(g => g.Id == "illustrations");
         var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
         Assert.Contains(SlideObjectInsertionPlanner.TriangleCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.RoundedRectangleCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.DiamondCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.HexagonCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.ParallelogramCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.TrapezoidCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.LeftArrowCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.RightArrowCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.UpArrowCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.DownArrowCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.Star5CommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.CrossCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.PlusSignCommandId, ids);

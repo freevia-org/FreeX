@@ -1361,6 +1361,12 @@ public sealed class MainWindowHeadlessTests
     [InlineData("freep.text-box",        DrawingShapeKind.Rectangle, true)]
     [InlineData("freep.shape-rectangle", DrawingShapeKind.Rectangle, false)]
     [InlineData("freep.shape-ellipse",   DrawingShapeKind.Ellipse,   false)]
+    [InlineData("freep.shape-rounded-rectangle", DrawingShapeKind.RoundedRectangle, false)]
+    [InlineData("freep.shape-parallelogram", DrawingShapeKind.Parallelogram, false)]
+    [InlineData("freep.shape-trapezoid", DrawingShapeKind.Trapezoid, false)]
+    [InlineData("freep.shape-left-arrow", DrawingShapeKind.LeftArrow, false)]
+    [InlineData("freep.shape-up-arrow", DrawingShapeKind.UpArrow, false)]
+    [InlineData("freep.shape-down-arrow", DrawingShapeKind.DownArrow, false)]
     public async Task Ribbon_insert_shape_commands_add_expected_shape(
         string commandId,
         DrawingShapeKind expectedShape,

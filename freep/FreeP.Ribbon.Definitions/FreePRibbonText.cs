@@ -209,6 +209,8 @@ internal static class FreePRibbonText
     public static string AudioKeyTip => Get("Ribbon_Command_Audio_KeyTip");
     public static string ShapeRectangleLabel => Get("Ribbon_Command_ShapeRectangle_Label");
     public static string ShapeRectangleKeyTip => Get("Ribbon_Command_ShapeRectangle_KeyTip");
+    public static string ShapeRoundedRectangleLabel => Get("Ribbon_Command_ShapeRoundedRectangle_Label");
+    public static string ShapeRoundedRectangleKeyTip => Get("Ribbon_Command_ShapeRoundedRectangle_KeyTip");
     public static string ShapeEllipseLabel => Get("Ribbon_Command_ShapeEllipse_Label");
     public static string ShapeEllipseKeyTip => Get("Ribbon_Command_ShapeEllipse_KeyTip");
     public static string ShapeTriangleLabel => Get("Ribbon_Command_ShapeTriangle_Label");
@@ -217,8 +219,18 @@ internal static class FreePRibbonText
     public static string ShapeDiamondKeyTip => Get("Ribbon_Command_ShapeDiamond_KeyTip");
     public static string ShapeHexagonLabel => Get("Ribbon_Command_ShapeHexagon_Label");
     public static string ShapeHexagonKeyTip => Get("Ribbon_Command_ShapeHexagon_KeyTip");
+    public static string ShapeParallelogramLabel => Get("Ribbon_Command_ShapeParallelogram_Label");
+    public static string ShapeParallelogramKeyTip => Get("Ribbon_Command_ShapeParallelogram_KeyTip");
+    public static string ShapeTrapezoidLabel => Get("Ribbon_Command_ShapeTrapezoid_Label");
+    public static string ShapeTrapezoidKeyTip => Get("Ribbon_Command_ShapeTrapezoid_KeyTip");
+    public static string ShapeLeftArrowLabel => Get("Ribbon_Command_ShapeLeftArrow_Label");
+    public static string ShapeLeftArrowKeyTip => Get("Ribbon_Command_ShapeLeftArrow_KeyTip");
     public static string ShapeRightArrowLabel => Get("Ribbon_Command_ShapeRightArrow_Label");
     public static string ShapeRightArrowKeyTip => Get("Ribbon_Command_ShapeRightArrow_KeyTip");
+    public static string ShapeUpArrowLabel => Get("Ribbon_Command_ShapeUpArrow_Label");
+    public static string ShapeUpArrowKeyTip => Get("Ribbon_Command_ShapeUpArrow_KeyTip");
+    public static string ShapeDownArrowLabel => Get("Ribbon_Command_ShapeDownArrow_Label");
+    public static string ShapeDownArrowKeyTip => Get("Ribbon_Command_ShapeDownArrow_KeyTip");
     public static string ShapeStar5Label => Get("Ribbon_Command_ShapeStar5_Label");
     public static string ShapeStar5KeyTip => Get("Ribbon_Command_ShapeStar5_KeyTip");
     public static string ShapeCrossLabel => Get("Ribbon_Command_ShapeCross_Label");
