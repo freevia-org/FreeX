@@ -1314,6 +1314,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.image-border", new SelectedImageDialogCommand(
             editor,
             callbacks.OpenImageBorderDialog));
+        RegisterImageAdjustmentCommands(r, editor, callbacks);
         r.Register("freew.image-reset", new ImageResetCommand(editor));
         foreach (var preset in PictureStyleCatalog.Catalog)
         {
@@ -1360,6 +1361,144 @@ internal static class FreeWAvaloniaRibbonCommands
         // Shape Styles fill/outline: top-level opener ids plus menu item commands.
         RegisterShapeFillOutlineCommands(r, editor);
     }
+
+    private static void RegisterImageAdjustmentCommands(
+        RibbonCommandRegistry r,
+        DocumentView editor,
+        RibbonHostCallbacks callbacks)
+    {
+        // These IDs are the WPF authority's Picture Format > Adjust routes. Keep the
+        // value-preserving mutations in DocumentView so both hosts use the shared model commands.
+        RegisterImageMutation(r, editor, "freew.image-brightness-plus20",
+            image => editor.SetSelectedImageAdjust(20, image.ContrastPct, image.SaturationPct, image.TransparencyPct));
+        RegisterImageMutation(r, editor, "freew.image-brightness-plus40",
+            image => editor.SetSelectedImageAdjust(40, image.ContrastPct, image.SaturationPct, image.TransparencyPct));
+        RegisterImageMutation(r, editor, "freew.image-brightness-minus20",
+            image => editor.SetSelectedImageAdjust(-20, image.ContrastPct, image.SaturationPct, image.TransparencyPct));
+        RegisterImageMutation(r, editor, "freew.image-brightness-minus40",
+            image => editor.SetSelectedImageAdjust(-40, image.ContrastPct, image.SaturationPct, image.TransparencyPct));
+        RegisterImageMutation(r, editor, "freew.image-contrast-plus20",
+            image => editor.SetSelectedImageAdjust(image.BrightnessPct, 20, image.SaturationPct, image.TransparencyPct));
+        RegisterImageMutation(r, editor, "freew.image-contrast-minus20",
+            image => editor.SetSelectedImageAdjust(image.BrightnessPct, -20, image.SaturationPct, image.TransparencyPct));
+
+        RegisterImageMutation(r, editor, "freew.image-saturation-0",
+            image => editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, 0, image.TransparencyPct));
+        RegisterImageMutation(r, editor, "freew.image-saturation-50",
+            image => editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, 50, image.TransparencyPct));
+        RegisterImageMutation(r, editor, "freew.image-saturation-200",
+            image => editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, 200, image.TransparencyPct));
+        RegisterImageMutation(r, editor, "freew.image-transparency-25",
+            image => editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, image.SaturationPct, 25));
+        RegisterImageMutation(r, editor, "freew.image-transparency-50",
+            image => editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, image.SaturationPct, 50));
+        RegisterImageMutation(r, editor, "freew.image-transparency-75",
+            image => editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, image.SaturationPct, 75));
+
+        // Avalonia currently exposes one shared adjustment dialog callback, which is also
+        // the WPF route used for Color and Transparency's full-value dialogs.
+        r.Register("freew.image-color-dialog", new SelectedImageDialogCommand(
+            editor, callbacks.OpenImageAdjustDialog));
+        r.Register("freew.image-transparency-dialog", new SelectedImageDialogCommand(
+            editor, callbacks.OpenImageAdjustDialog));
+
+        RegisterImageMutation(r, editor, "freew.image-recolor-grayscale",
+            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.Grayscale));
+        RegisterImageMutation(r, editor, "freew.image-recolor-sepia",
+            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.Sepia));
+        RegisterImageMutation(r, editor, "freew.image-recolor-washout",
+            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.Washout));
+        RegisterImageMutation(r, editor, "freew.image-recolor-blackwhite",
+            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.BlackWhite));
+        RegisterImageMutation(r, editor, "freew.image-recolor-none",
+            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.None));
+        RegisterImageMutation(r, editor, "freew.image-colortemp-warm",
+            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.None, 60));
+        RegisterImageMutation(r, editor, "freew.image-colortemp-cool",
+            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.None, -60));
+        RegisterImageMutation(r, editor, "freew.image-colortemp-neutral",
+            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.None, 0));
+
+        RegisterImageMutation(r, editor, "freew.image-shadow-none",
+            image => editor.SetSelectedImageEffect(0, image.GlowSizePt, image.GlowColorHex,
+                image.ReflectionPreset, image.SoftEdgePt, image.BevelPreset));
+        for (var preset = 1; preset <= 5; preset++)
+        {
+            var captured = preset;
+            RegisterImageMutation(r, editor, $"freew.image-shadow-{captured}",
+                image => editor.SetSelectedImageEffect(captured, image.GlowSizePt, image.GlowColorHex,
+                    image.ReflectionPreset, image.SoftEdgePt, image.BevelPreset));
+            RegisterImageMutation(r, editor, $"freew.image-reflection-{captured}",
+                image => editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
+                    captured, image.SoftEdgePt, image.BevelPreset));
+        }
+        RegisterImageMutation(r, editor, "freew.image-reflection-none",
+            image => editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
+                0, image.SoftEdgePt, image.BevelPreset));
+
+        foreach (var glow in new[] { 0d, 5d, 8d, 11d, 18d })
+        {
+            var captured = glow;
+            var suffix = captured == 0 ? "none" : captured.ToString("0", CultureInfo.InvariantCulture);
+            RegisterImageMutation(r, editor, $"freew.image-glow-{suffix}",
+                image => editor.SetSelectedImageEffect(image.ShadowPreset, captured, image.GlowColorHex,
+                    image.ReflectionPreset, image.SoftEdgePt, image.BevelPreset));
+        }
+        foreach (var softEdge in new[] { 0d, 1d, 2.5d, 5d, 10d })
+        {
+            var captured = softEdge;
+            var suffix = captured == 0
+                ? "none"
+                : captured == 2.5
+                    ? "2pt5"
+                    : captured.ToString("0", CultureInfo.InvariantCulture);
+            RegisterImageMutation(r, editor, $"freew.image-softedge-{suffix}",
+                image => editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
+                    image.ReflectionPreset, captured, image.BevelPreset));
+        }
+        RegisterImageMutation(r, editor, "freew.image-bevel-none",
+            image => editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
+                image.ReflectionPreset, image.SoftEdgePt, 0));
+        for (var preset = 1; preset <= 4; preset++)
+        {
+            var captured = preset;
+            RegisterImageMutation(r, editor, $"freew.image-bevel-{captured}",
+                image => editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
+                    image.ReflectionPreset, image.SoftEdgePt, captured));
+        }
+
+        foreach (var effect in Enum.GetValues<ImageArtisticEffect>())
+        {
+            var captured = effect;
+            var suffix = captured switch
+            {
+                ImageArtisticEffect.Blur => "blur",
+                ImageArtisticEffect.PencilGrayscale => "pencil-gray",
+                ImageArtisticEffect.GlowDiffused => "glow-diffused",
+                ImageArtisticEffect.GlowEdges => "glow-edges",
+                ImageArtisticEffect.PencilSketch => "pencil-sketch",
+                ImageArtisticEffect.LineDrawing => "line-drawing",
+                ImageArtisticEffect.Paintbrush => "paintbrush",
+                ImageArtisticEffect.PaintStrokes => "paint-strokes",
+                ImageArtisticEffect.Photocopy => "photocopy",
+                ImageArtisticEffect.Posterize => "posterize",
+                ImageArtisticEffect.Pastels => "pastels",
+                ImageArtisticEffect.Watercolor => "watercolor",
+                ImageArtisticEffect.FilmGrain => "film-grain",
+                ImageArtisticEffect.Mosaic => "mosaic",
+                _ => "none"
+            };
+            RegisterImageMutation(r, editor, $"freew.image-artistic-{suffix}",
+                _ => editor.SetSelectedImageArtisticEffect(captured));
+        }
+    }
+
+    private static void RegisterImageMutation(
+        RibbonCommandRegistry registry,
+        DocumentView editor,
+        string commandId,
+        Action<InlineImage> mutation) =>
+        registry.Register(commandId, new SelectedImageMutationCommand(editor, mutation));
 
     private static void RegisterFloatingPositionCommands(
         RibbonCommandRegistry r,
@@ -1418,6 +1557,20 @@ internal static class FreeWAvaloniaRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: editor.SelectedFloatingImage() is not null && openDialog is not null);
+    }
+
+    private sealed class SelectedImageMutationCommand(
+        DocumentView editor,
+        Action<InlineImage> mutation) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled && editor.SelectedFloatingImage() is { } image)
+                mutation(image);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedFloatingImage() is not null);
     }
 
     private sealed class SelectedFloatingDialogCommand(

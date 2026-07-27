@@ -475,6 +475,7 @@ public sealed class DocumentView : Control
     public void LoadDocument(TextDocument document)
     {
         _doc = document ?? throw new ArgumentNullException(nameof(document));
+        _bitmapCache.Clear();
         if (_doc.Blocks.Count == 0)
             _doc.Blocks.Add(new Paragraph());
         _bus = new DocumentCommandBus(new ViewContext(this));
@@ -5829,7 +5830,8 @@ public sealed class DocumentView : Control
             if (image.PngBytes.Length > 0)
             {
                 using var stream = new MemoryStream(image.PngBytes);
-                bitmap = new Bitmap(stream);
+                using var decoded = new Bitmap(stream);
+                bitmap = AvaloniaImageAdjustHelper.Apply(decoded, image);
             }
         }
         catch (Exception)
@@ -8497,6 +8499,75 @@ public sealed class DocumentView : Control
             contrastPct,
             saturationPct,
             transparencyPct));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+    }
+
+    /// <summary>Apply picture effects through the shared undoable model command.</summary>
+    public void SetSelectedImageEffect(
+        int shadowPreset,
+        double glowSizePt,
+        string? glowColorHex,
+        int reflectionPreset,
+        double softEdgePt,
+        int bevelPreset)
+    {
+        if (_selectedFloating is not { Kind: "Image" } selected)
+            return;
+        if (!TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            || run.Image is not { IsFloating: true })
+        {
+            return;
+        }
+
+        _bus.Execute(new SetImageEffectCommand(
+            selected.BlockIndex,
+            selected.RunIndex,
+            shadowPreset,
+            glowSizePt,
+            glowColorHex,
+            reflectionPreset,
+            softEdgePt,
+            bevelPreset));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+    }
+
+    /// <summary>Apply a picture recolor or color-temperature preset through the shared command.</summary>
+    public void SetSelectedImageRecolor(ImageRecolorMode mode, double colorTemperature = 0)
+    {
+        if (_selectedFloating is not { Kind: "Image" } selected)
+            return;
+        if (!TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            || run.Image is not { IsFloating: true })
+        {
+            return;
+        }
+
+        _bus.Execute(new SetImageRecolorCommand(
+            selected.BlockIndex,
+            selected.RunIndex,
+            mode,
+            colorTemperature));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+    }
+
+    /// <summary>Apply an artistic picture effect through the shared undoable model command.</summary>
+    public void SetSelectedImageArtisticEffect(ImageArtisticEffect effect)
+    {
+        if (_selectedFloating is not { Kind: "Image" } selected)
+            return;
+        if (!TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            || run.Image is not { IsFloating: true })
+        {
+            return;
+        }
+
+        _bus.Execute(new SetImageArtisticEffectCommand(
+            selected.BlockIndex,
+            selected.RunIndex,
+            effect));
         InvalidateLayoutAndVisual();
         RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
     }
@@ -15723,6 +15794,7 @@ public sealed class DocumentView : Control
 
     private void OnModelChanged()
     {
+        _bitmapCache.Clear();
         InvalidateLayoutAndVisual();
         DocumentChanged?.Invoke();
     }

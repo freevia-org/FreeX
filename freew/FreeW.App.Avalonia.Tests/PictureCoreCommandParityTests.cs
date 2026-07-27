@@ -1,4 +1,5 @@
 using System.Threading;
+using Avalonia.Media.Imaging;
 using Avalonia;
 using Avalonia.Headless;
 using Free.Shared.Ribbon;
@@ -127,6 +128,83 @@ public sealed class PictureCoreCommandParityTests
     }
 
     [Fact]
+    public async Task ImageAdjustRegistryRoute_MatchesWpfPresetsMutationAndUndo()
+    {
+        await Session.Dispatch(() =>
+        {
+            var (editor, image) = SelectedImage();
+            var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+
+            var brightness = Stateful(registry, "freew.image-brightness-plus40");
+            brightness.GetState().IsEnabled.Should().BeTrue();
+            brightness.Execute(RibbonCommandContext.Empty);
+            image.BrightnessPct.Should().Be(40);
+            image.ContrastPct.Should().Be(0);
+            image.SaturationPct.Should().Be(100);
+            editor.Undo();
+            image.BrightnessPct.Should().Be(20);
+
+            Stateful(registry, "freew.image-recolor-sepia").Execute(RibbonCommandContext.Empty);
+            image.RecolorMode.Should().Be(ImageRecolorMode.Sepia);
+            editor.Undo();
+            image.RecolorMode.Should().Be(ImageRecolorMode.None);
+
+            Stateful(registry, "freew.image-colortemp-warm").Execute(RibbonCommandContext.Empty);
+            image.ColorTemperature.Should().Be(60);
+            editor.Undo();
+            image.ColorTemperature.Should().Be(0);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ImageAdjustRegistryRoute_RegistersAllWpfPicturePresetIds()
+    {
+        await Session.Dispatch(() =>
+        {
+            var (editor, _) = SelectedImage();
+            var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+            var ids = new[]
+            {
+                "freew.image-brightness-plus20", "freew.image-brightness-plus40",
+                "freew.image-brightness-minus20", "freew.image-brightness-minus40",
+                "freew.image-contrast-plus20", "freew.image-contrast-minus20",
+                "freew.image-saturation-0", "freew.image-saturation-50", "freew.image-saturation-200",
+                "freew.image-transparency-25", "freew.image-transparency-50", "freew.image-transparency-75",
+                "freew.image-recolor-grayscale", "freew.image-recolor-sepia",
+                "freew.image-recolor-washout", "freew.image-recolor-blackwhite", "freew.image-recolor-none",
+                "freew.image-colortemp-warm", "freew.image-colortemp-cool", "freew.image-colortemp-neutral",
+                "freew.image-shadow-none", "freew.image-shadow-1", "freew.image-shadow-5",
+                "freew.image-reflection-none", "freew.image-reflection-1", "freew.image-reflection-5",
+                "freew.image-glow-none", "freew.image-glow-5", "freew.image-glow-18",
+                "freew.image-softedge-none", "freew.image-softedge-1", "freew.image-softedge-2pt5",
+                "freew.image-bevel-none", "freew.image-bevel-1", "freew.image-bevel-4",
+                "freew.image-artistic-none", "freew.image-artistic-blur", "freew.image-artistic-mosaic",
+            };
+
+            foreach (var id in ids)
+            {
+                Stateful(registry, id).GetState().IsEnabled.Should().BeTrue(id);
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaImageAdjustPipeline_RendersAdjustedBitmapWithoutMutatingSourceBytes()
+    {
+        await Session.Dispatch(() =>
+        {
+            using var source = new Bitmap(new MemoryStream(OnePixelPng()));
+            var image = new InlineImage(OnePixelPng(), 24, 24) { BrightnessPct = 40 };
+            var originalBytes = image.PngBytes.ToArray();
+
+            var adjusted = AvaloniaImageAdjustHelper.Apply(source, image);
+
+            adjusted.Should().NotBeSameAs(source);
+            image.PngBytes.Should().Equal(originalBytes);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task CorePictureCommands_AreDisabledWithoutPictureSelection()
     {
         await Session.Dispatch(() =>
@@ -185,7 +263,8 @@ public sealed class PictureCoreCommandParityTests
 
     private static IRibbonStatefulCommand Stateful(RibbonCommandRegistry registry, string commandId)
     {
-        registry.TryGet(new RibbonCommandId(commandId), out var command).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId(commandId), out var command)
+            .Should().BeTrue($"missing Avalonia command route: {commandId}");
         return command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
     }
 
