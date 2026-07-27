@@ -12311,6 +12311,7 @@ public sealed class DocumentView : Control
             KeepWithNext = keepWithNext,
             KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
+            WidowControlIsSet = true,
             PageBreakBefore = pageBreakBefore,
             SuppressAutoHyphens = suppressAutoHyphens,
             SuppressLineNumbers = suppressLineNumbers,

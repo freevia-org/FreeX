@@ -1,5 +1,6 @@
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -517,6 +518,36 @@ public sealed class FontAndParagraphDialogTests
         var para = (Paragraph)view.Document.Blocks[0];
         para.Formatting.FirstLineIndentPt.Should().BeApproximately(18, 0.01,
             "ApplyResult should set first-line indent to 18pt");
+    }
+
+    [Fact]
+    public void ParagraphDialog_apply_marks_widow_control_as_explicit_even_when_cleared()
+    {
+        var doc = MakeDoc("Widow control");
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+
+        var result = new ParagraphBreaksDialogResult(
+            LeftPt: 0,
+            RightPt: 0,
+            FirstLinePt: 0,
+            SpaceBeforePt: 0,
+            SpaceAfterPt: 8,
+            LineSpacing: 1.15,
+            KeepWithNext: false,
+            KeepLinesTogether: false,
+            WidowControl: false,
+            PageBreakBefore: false,
+            SuppressAutoHyphens: false,
+            SuppressLineNumbers: false,
+            ContextualSpacing: false);
+
+        ParagraphDialog.ApplyResult(view, result);
+
+        var formatting = ((Paragraph)view.Document.Blocks[0]).Formatting;
+        formatting.WidowControl.Should().BeFalse();
+        formatting.WidowControlIsSet.Should().BeTrue(
+            "the WPF Paragraph dialog writes an explicit widow-control off value");
     }
 
     [Fact]

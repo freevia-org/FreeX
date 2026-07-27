@@ -101,7 +101,32 @@ public sealed class ParagraphDialogVisualParityTests
             AvaloniaCompactDialogChrome.ApplyTextBox(
                 sharedTextBox,
                 AvaloniaCompactDialogChrome.WindowsStyle);
-            ((ISolidColorBrush)sharedTextBox.BorderBrush!).Color.Should().Be(Color.FromRgb(130, 130, 130));
+            ((ISolidColorBrush)sharedTextBox.BorderBrush!).Color.Should().Be(Color.FromRgb(0xAB, 0xAD, 0xB3));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Validation_routes_to_the_Wpf_first_field_and_keeps_the_dialog_open()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new ParagraphDialog(ParagraphFormatting.Default);
+            var tabs = Field<TabControl>(dialog, "_tabs");
+            var left = Field<TextBox>(dialog, "_left");
+            var status = Field<TextBlock>(dialog, "_status");
+            var accept = typeof(ParagraphDialog).GetMethod(
+                "Accept",
+                BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(ParagraphDialog), "Accept");
+
+            tabs.SelectedIndex = 1;
+            left.Text = "not-a-number";
+            accept.Invoke(dialog, null);
+
+            dialog.IsVisible.Should().BeFalse("headless construction must not close the dialog on validation");
+            tabs.SelectedIndex.Should().Be(0);
+            status.IsVisible.Should().BeTrue();
+            status.Text.Should().Be(ParagraphBreaksDialogPlanner.ValidationMessage);
         }, CancellationToken.None);
     }
 

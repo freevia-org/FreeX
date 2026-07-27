@@ -105,8 +105,8 @@ internal static class PageLayoutDialogChrome
     internal static void ShowError(TextBlock status, string message)
     {
         status.Text = message;
-        status.IsVisible = true;
         AvaloniaCompactDialogChrome.ApplyValidationStatus(status, Style, new Thickness(0, 8, 0, 0));
+        status.IsVisible = true;
     }
 
     internal static void FocusAndSelect(TextBox box)
