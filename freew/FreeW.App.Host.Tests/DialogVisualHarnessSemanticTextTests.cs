@@ -49,4 +49,14 @@ public sealed class DialogVisualHarnessSemanticTextTests
         wpf.Should().Contain("if (scenario.RouteId == \"symbol-picker\")");
         avalonia.Should().Contain("if (scenario.RouteId == \"symbol-picker\")");
     }
+
+    [Fact]
+    public void Avalonia_semantics_only_enumerate_buttons_attached_to_the_rendered_visual_tree()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var avalonia = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness.Avalonia", "Program.cs"));
+
+        avalonia.Should().Contain("var buttons = dialog.GetVisualDescendants()",
+            "logical descendants from inactive tabs must not change the selected dialog's action order");
+    }
 }
