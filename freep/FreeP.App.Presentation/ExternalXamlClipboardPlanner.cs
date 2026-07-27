@@ -8,13 +8,16 @@ namespace FreeP.App.Compositor;
 /// <summary>
 /// Converts the bounded FlowDocument subset commonly carried by WPF XamlPackage clipboard data
 /// into the renderer-neutral rich-text payload. Package resources and unsupported controls are
-/// deliberately ignored; callers can continue to RTF or plain-text fallback.
+/// deliberately ignored; callers can continue to RTF or plain-text fallback. FlowDocument tables
+/// use the same tab-delimited row projection as the external RTF path because TextBody has no
+/// inline table node.
 /// </summary>
 public static class ExternalXamlClipboardPlanner
 {
     public const int MaxPackageBytes = 8 * 1024 * 1024;
     public const int MaxXmlBytes = 8 * 1024 * 1024;
     public const int MaxOutputCharacters = 1_000_000;
+    public const int MaxTableCellsPerRow = 4096;
     private const long EmuPerDip = 9525;
 
     public static InCanvasRichClipboardPayload? TryParseXamlPackage(byte[]? bytes)
@@ -59,22 +62,25 @@ public static class ExternalXamlClipboardPlanner
         try
         {
             var document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
-            var paragraphElements = document
+            var blockElements = document
                 .Descendants()
-                .Where(element => element.Name.LocalName == "Paragraph")
+                .Where(element => element.Name.LocalName == "Table"
+                    ? !element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "Table")
+                    : element.Name.LocalName == "Paragraph"
+                        && !element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "Table"))
                 .ToArray();
-            if (paragraphElements.Length == 0)
+            if (blockElements.Length == 0)
                 return null;
 
             var body = new TextBody();
             var outputCharacters = 0;
-            foreach (var element in paragraphElements)
+            foreach (var element in blockElements)
             {
-                var paragraph = new Paragraph();
-                var style = ReadStyle(element, default);
-                ApplyParagraphProperties(element, paragraph);
-                ReadInlineNodes(element, paragraph, style, ref outputCharacters);
-                body.Paragraphs.Add(paragraph);
+                if (element.Name.LocalName == "Table")
+                    ReadTable(element, body, ref outputCharacters);
+                else
+                    ReadParagraph(element, body, ref outputCharacters);
+
                 if (outputCharacters > MaxOutputCharacters)
                     return null;
             }
@@ -89,6 +95,73 @@ public static class ExternalXamlClipboardPlanner
         catch
         {
             return null;
+        }
+    }
+
+    private static void ReadParagraph(
+        XElement element,
+        TextBody body,
+        ref int outputCharacters)
+    {
+        var paragraph = new Paragraph();
+        var style = ReadStyle(element, default);
+        ApplyParagraphProperties(element, paragraph);
+        ReadInlineNodes(element, paragraph, style, ref outputCharacters);
+        body.Paragraphs.Add(paragraph);
+    }
+
+    private static void ReadTable(
+        XElement table,
+        TextBody body,
+        ref int outputCharacters)
+    {
+        var rows = table
+            .Descendants()
+            .Where(element => element.Name.LocalName == "TableRow"
+                && !element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "TableRow"))
+            .ToArray();
+
+        foreach (var row in rows)
+        {
+            var cells = row
+                .Descendants()
+                .Where(element => element.Name.LocalName == "TableCell"
+                    && !element.Ancestors().Any(ancestor =>
+                        ancestor.Name.LocalName == "TableCell"))
+                .ToArray();
+            if (cells.Length == 0)
+                continue;
+            if (cells.Length > MaxTableCellsPerRow)
+                throw new InvalidDataException("XamlPackage table cell limit exceeded.");
+
+            var paragraph = new Paragraph();
+            for (var cellIndex = 0; cellIndex < cells.Length; cellIndex++)
+            {
+                if (cellIndex > 0)
+                    AddRun("\t", paragraph, default, ref outputCharacters);
+
+                var cell = cells[cellIndex];
+                var cellParagraphs = cell
+                    .Descendants()
+                    .Where(element => element.Name.LocalName == "Paragraph"
+                        && element.Ancestors().FirstOrDefault(ancestor =>
+                            ancestor.Name.LocalName == "TableCell") == cell)
+                    .ToArray();
+                for (var paragraphIndex = 0; paragraphIndex < cellParagraphs.Length; paragraphIndex++)
+                {
+                    if (paragraphIndex > 0)
+                        AddRun("\n", paragraph, default, ref outputCharacters);
+
+                    var cellParagraph = cellParagraphs[paragraphIndex];
+                    ReadInlineNodes(
+                        cellParagraph,
+                        paragraph,
+                        ReadStyle(cellParagraph, default),
+                        ref outputCharacters);
+                }
+            }
+
+            body.Paragraphs.Add(paragraph);
         }
     }
 
