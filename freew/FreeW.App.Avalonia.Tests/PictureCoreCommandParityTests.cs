@@ -269,6 +269,105 @@ public sealed class PictureCoreCommandParityTests
         }, CancellationToken.None);
     }
 
+    [Theory]
+    [InlineData(ImageArtisticEffect.Blur)]
+    [InlineData(ImageArtisticEffect.GlowDiffused)]
+    [InlineData(ImageArtisticEffect.GlowEdges)]
+    [InlineData(ImageArtisticEffect.PencilGrayscale)]
+    [InlineData(ImageArtisticEffect.PencilSketch)]
+    [InlineData(ImageArtisticEffect.LineDrawing)]
+    [InlineData(ImageArtisticEffect.Paintbrush)]
+    [InlineData(ImageArtisticEffect.PaintStrokes)]
+    [InlineData(ImageArtisticEffect.Photocopy)]
+    [InlineData(ImageArtisticEffect.Posterize)]
+    [InlineData(ImageArtisticEffect.Pastels)]
+    [InlineData(ImageArtisticEffect.Watercolor)]
+    [InlineData(ImageArtisticEffect.FilmGrain)]
+    [InlineData(ImageArtisticEffect.Mosaic)]
+    public async Task AvaloniaArtisticEffect_RendersDifferentRasterPixels(ImageArtisticEffect effect)
+    {
+        await Session.Dispatch(() =>
+        {
+            var sourcePixels = RasterSource();
+            var image = new InlineImage(OnePixelPng(), 40, 40) { ArtisticEffect = effect };
+
+            var adjustedPixels = AvaloniaImageAdjustHelper.ApplyArtisticPixels(
+                sourcePixels, 40, 40, 160, effect);
+            var changed = sourcePixels.Where((value, index) => value != adjustedPixels[index]).Count();
+            changed.Should().BeGreaterThan(0,
+                $"Avalonia artistic effect {effect} must change rendered pixels (source max={sourcePixels.Max()}, adjusted max={adjustedPixels.Max()})");
+        }, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData(1, 0, 0, 0)]
+    [InlineData(0, 5, 0, 0)]
+    [InlineData(0, 0, 5, 0)]
+    [InlineData(0, 0, 0, 1)]
+    public async Task AvaloniaPictureEffect_RendersActualRasterPixels(
+        int shadowPreset,
+        double glowSizePt,
+        double softEdgePt,
+        int bevelPreset)
+    {
+        await Session.Dispatch(() =>
+        {
+            var sourcePixels = RasterSource();
+            var image = new InlineImage(OnePixelPng(), 40, 40)
+            {
+                ShadowPreset = shadowPreset,
+                GlowSizePt = glowSizePt,
+                GlowColorHex = "FF0000",
+                SoftEdgePt = softEdgePt,
+                BevelPreset = bevelPreset,
+            };
+
+            var adjustedPixels = AvaloniaImageAdjustHelper.ApplyPictureEffectPixels(
+                sourcePixels, 40, 40, 160, image);
+            var changed = sourcePixels.Where((value, index) => value != adjustedPixels[index]).Count();
+            changed.Should().BeGreaterThan(0,
+                "picture effects must render pixels, not only mutate InlineImage model state");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task PictureEffectCommands_InvalidateRasterCacheAndUndoForEveryEffectFamily()
+    {
+        await Session.Dispatch(() =>
+        {
+            var (editor, image) = SelectedImage();
+            var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+
+            foreach (var commandId in new[]
+                     {
+                         "freew.image-shadow-1",
+                         "freew.image-reflection-5",
+                         "freew.image-glow-18",
+                         "freew.image-softedge-2pt5",
+                         "freew.image-bevel-4",
+                         "freew.image-artistic-mosaic",
+                     })
+            {
+                var before = editor.DecodeBitmap(image);
+                Stateful(registry, commandId).Execute(RibbonCommandContext.Empty);
+                editor.DecodeBitmap(image).Should().NotBeSameAs(before,
+                    $"{commandId} must invalidate the decoded image cache");
+
+                editor.Undo();
+                editor.DecodeBitmap(image).Should().NotBeSameAs(before,
+                    $"undo after {commandId} must rebuild the cache");
+                image.ShadowPreset.Should().Be(0);
+                image.ReflectionPreset.Should().Be(0);
+                image.GlowSizePt.Should().Be(0);
+                image.SoftEdgePt.Should().Be(0);
+                image.BevelPreset.Should().Be(0);
+                image.ArtisticEffect.Should().Be(ImageArtisticEffect.None);
+            }
+
+            editor.LoadDocument(TextDocument.CreateEmpty());
+        }, CancellationToken.None);
+    }
+
     [Fact]
     public async Task CorePictureCommands_AreDisabledWithoutPictureSelection()
     {
@@ -338,6 +437,22 @@ public sealed class PictureCoreCommandParityTests
         RibbonButton button => button.CommandId.Value,
         _ => string.Empty,
     };
+
+    private static byte[] RasterSource()
+    {
+        const int size = 40;
+        var pixels = new byte[size * size * 4];
+        for (var y = 8; y < 32; y++)
+        for (var x = 8; x < 32; x++)
+        {
+            var offset = (y * size + x) * 4;
+            pixels[offset] = (byte)(40 + x);
+            pixels[offset + 1] = (byte)(80 + y);
+            pixels[offset + 2] = 220;
+            pixels[offset + 3] = 255;
+        }
+        return pixels;
+    }
 
     private static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");

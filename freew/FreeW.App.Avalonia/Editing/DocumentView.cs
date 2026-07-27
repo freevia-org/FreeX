@@ -128,7 +128,7 @@ public sealed class DocumentView : Control
     // Border: bool = table-level outer border; CellBorderPlan: per-edge override planned from the model.
     private readonly List<(Rect Rect, IBrush? Fill, bool Border, TableCellBorderVisualPlan? CellBorderPlan)> _rects = new();
     private readonly List<(Rect Rect, string? ShadingHex, ParagraphBorder? Border)> _paragraphDecorations = new();
-    private readonly List<(Rect Rect, Bitmap? Image)> _images = new();
+    private readonly List<(Rect Rect, Bitmap? Image, int ReflectionPreset)> _images = new();
     // Floating images collected during layout; rendered separately from inline images with z-order.
     // BehindText=true → drawn before body text (behind); BehindText=false → drawn after (in front).
     // AV-FLSEL: BlockIndex/RunIndex added so hit-test can locate the model object.
@@ -5629,8 +5629,8 @@ public sealed class DocumentView : Control
             var imgPageSpaceY = ContentYToPageSpaceY(imgContentY);
             // AV-COL-NONTXT AG2: shift X to the column band that this image's content-Y falls in.
             var x = ColumnLeftFor(imgContentY) + AlignmentOffset(alignment, textWidth, width);
-            _images.Add((new Rect(x, imgPageSpaceY, width, height), DecodeBitmap(image)));
-            _layoutContentY = imgContentY + height + gap;
+            _images.Add((new Rect(x, imgPageSpaceY, width, height), DecodeBitmap(image), image.ReflectionPreset));
+            _layoutContentY = imgContentY + height + ReflectionExtraHeight(image.ReflectionPreset, height) + gap;
         }
     }
 
@@ -6669,16 +6669,8 @@ public sealed class DocumentView : Control
             DrawFloatingObjectSnapshot(context, snapshot);
 
         // Inline images (non-floating).
-        foreach (var (rect, bitmap) in _images)
-        {
-            if (bitmap is not null)
-                context.DrawImage(bitmap, rect);
-            else
-            {
-                context.FillRectangle(BandFill, rect);
-                context.DrawRectangle(null, TableBorderPen, rect);
-            }
-        }
+        foreach (var (rect, bitmap, reflectionPreset) in _images)
+            DrawFloatingImage(context, rect, bitmap, reflectionPreset);
 
         // FO4: inline charts, WordArt, SmartArt — rendered in the text flow using the same FO3 helpers.
         foreach (var cd in _inlineCharts)
@@ -7150,13 +7142,11 @@ public sealed class DocumentView : Control
         Bitmap bitmap,
         int reflectionPreset)
     {
-        // Preset 1 is the imported touching reflection payload measured against Word. The
-        // offset presets require separate composition calibration when other picture effects apply.
-        if (reflectionPreset != 1)
+        var parameters = ReflectionParameters(reflectionPreset);
+        if (parameters is null)
             return;
 
-        const double opacity = 0.5;
-        const double distance = 0.0;
+        var (opacity, distance) = parameters.Value;
         var reflectionRect = new Rect(
             imageRect.X,
             imageRect.Bottom + distance,
@@ -7180,6 +7170,23 @@ public sealed class DocumentView : Control
         using var mask = context.PushOpacityMask(fadeMask, reflectionRect);
         using var transform = context.PushTransform(mirror);
         context.DrawImage(bitmap, imageRect);
+    }
+
+    private static (double Opacity, double Distance)? ReflectionParameters(int preset) => preset switch
+    {
+        1 => (0.5, 0),
+        2 => (0.5, 4 * PxPerPoint),
+        3 => (0.5, 8 * PxPerPoint),
+        4 => (1.0, 0),
+        5 => (1.0, 4 * PxPerPoint),
+        _ => null,
+    };
+
+    private static double ReflectionExtraHeight(int preset, double imageHeight)
+    {
+        return ReflectionParameters(preset) is { } parameters
+            ? imageHeight + parameters.Distance
+            : 0;
     }
 
     /// <summary>
