@@ -682,6 +682,48 @@
   <data name="Ribbon_Command_ShapePlusSign_KeyTip" xml:space="preserve">
     <value>PS</value>
   </data>
+  <data name="Ribbon_Command_ShapePentagon_Label" xml:space="preserve">
+    <value>Pentagon</value>
+  </data>
+  <data name="Ribbon_Command_ShapePentagon_KeyTip" xml:space="preserve">
+    <value>PN</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOctagon_Label" xml:space="preserve">
+    <value>Octagon</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOctagon_KeyTip" xml:space="preserve">
+    <value>OC</value>
+  </data>
+  <data name="Ribbon_Command_ShapeLeftRightArrow_Label" xml:space="preserve">
+    <value>Left-Right Arrow</value>
+  </data>
+  <data name="Ribbon_Command_ShapeLeftRightArrow_KeyTip" xml:space="preserve">
+    <value>LR</value>
+  </data>
+  <data name="Ribbon_Command_ShapeUpDownArrow_Label" xml:space="preserve">
+    <value>Up-Down Arrow</value>
+  </data>
+  <data name="Ribbon_Command_ShapeUpDownArrow_KeyTip" xml:space="preserve">
+    <value>UD</value>
+  </data>
+  <data name="Ribbon_Command_ShapeStar8_Label" xml:space="preserve">
+    <value>8-Point Star</value>
+  </data>
+  <data name="Ribbon_Command_ShapeStar8_KeyTip" xml:space="preserve">
+    <value>S8</value>
+  </data>
+  <data name="Ribbon_Command_ShapeChevron_Label" xml:space="preserve">
+    <value>Chevron</value>
+  </data>
+  <data name="Ribbon_Command_ShapeChevron_KeyTip" xml:space="preserve">
+    <value>CV</value>
+  </data>
+  <data name="Ribbon_Command_ShapeHomePlate_Label" xml:space="preserve">
+    <value>Home Plate</value>
+  </data>
+  <data name="Ribbon_Command_ShapeHomePlate_KeyTip" xml:space="preserve">
+    <value>HP</value>
+  </data>
   <data name="Ribbon_Command_Connector_Label" xml:space="preserve">
     <value>Connector</value>
   </data>

@@ -66,6 +66,13 @@ public static class SlideObjectInsertionPlanner
     public const string Star5CommandId = "freep.shape-star5";
     public const string CrossCommandId = "freep.shape-cross";
     public const string PlusSignCommandId = "freep.shape-plus-sign";
+    public const string PentagonCommandId = "freep.shape-pentagon";
+    public const string OctagonCommandId = "freep.shape-octagon";
+    public const string LeftRightArrowCommandId = "freep.shape-left-right-arrow";
+    public const string UpDownArrowCommandId = "freep.shape-up-down-arrow";
+    public const string Star8CommandId = "freep.shape-star8";
+    public const string ChevronCommandId = "freep.shape-chevron";
+    public const string HomePlateCommandId = "freep.shape-home-plate";
     public const string ConnectorCommandId = "freep.insert-connector";
     public const string ElbowConnectorCommandId = "freep.insert-elbow-connector";
     public const string CurvedConnectorCommandId = "freep.insert-curved-connector";
@@ -122,6 +129,13 @@ public static class SlideObjectInsertionPlanner
         new(Star5CommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Star5),
         new(CrossCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Cross),
         new(PlusSignCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.PlusSign),
+        new(PentagonCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Pentagon),
+        new(OctagonCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Octagon),
+        new(LeftRightArrowCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.LeftRightArrow),
+        new(UpDownArrowCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.UpDownArrow),
+        new(Star8CommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Star8),
+        new(ChevronCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Chevron),
+        new(HomePlateCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.HomePlate),
         new(ConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.Line),
         new(ElbowConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.ElbowConnector),
         new(CurvedConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.CurvedConnector),

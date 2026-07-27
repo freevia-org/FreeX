@@ -1367,6 +1367,13 @@ public sealed class MainWindowHeadlessTests
     [InlineData("freep.shape-left-arrow", DrawingShapeKind.LeftArrow, false)]
     [InlineData("freep.shape-up-arrow", DrawingShapeKind.UpArrow, false)]
     [InlineData("freep.shape-down-arrow", DrawingShapeKind.DownArrow, false)]
+    [InlineData("freep.shape-pentagon", DrawingShapeKind.Pentagon, false)]
+    [InlineData("freep.shape-octagon", DrawingShapeKind.Octagon, false)]
+    [InlineData("freep.shape-left-right-arrow", DrawingShapeKind.LeftRightArrow, false)]
+    [InlineData("freep.shape-up-down-arrow", DrawingShapeKind.UpDownArrow, false)]
+    [InlineData("freep.shape-star8", DrawingShapeKind.Star8, false)]
+    [InlineData("freep.shape-chevron", DrawingShapeKind.Chevron, false)]
+    [InlineData("freep.shape-home-plate", DrawingShapeKind.HomePlate, false)]
     public async Task Ribbon_insert_shape_commands_add_expected_shape(
         string commandId,
         DrawingShapeKind expectedShape,

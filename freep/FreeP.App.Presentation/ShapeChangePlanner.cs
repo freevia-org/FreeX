@@ -21,6 +21,13 @@ public static class ShapeChangePlanner
     public const string DownArrowCommandId = "freep.arrange.change-shape.down-arrow";
     public const string CrossCommandId = "freep.arrange.change-shape.cross";
     public const string PlusSignCommandId = "freep.arrange.change-shape.plus-sign";
+    public const string PentagonCommandId = "freep.arrange.change-shape.pentagon";
+    public const string OctagonCommandId = "freep.arrange.change-shape.octagon";
+    public const string LeftRightArrowCommandId = "freep.arrange.change-shape.left-right-arrow";
+    public const string UpDownArrowCommandId = "freep.arrange.change-shape.up-down-arrow";
+    public const string Star8CommandId = "freep.arrange.change-shape.star8";
+    public const string ChevronCommandId = "freep.arrange.change-shape.chevron";
+    public const string HomePlateCommandId = "freep.arrange.change-shape.home-plate";
 
     public static IReadOnlyList<(string CommandId, DrawingShapeKind Kind)> Presets =>
     [
@@ -39,5 +46,12 @@ public static class ShapeChangePlanner
         (DownArrowCommandId, DrawingShapeKind.DownArrow),
         (CrossCommandId, DrawingShapeKind.Cross),
         (PlusSignCommandId, DrawingShapeKind.PlusSign),
+        (PentagonCommandId, DrawingShapeKind.Pentagon),
+        (OctagonCommandId, DrawingShapeKind.Octagon),
+        (LeftRightArrowCommandId, DrawingShapeKind.LeftRightArrow),
+        (UpDownArrowCommandId, DrawingShapeKind.UpDownArrow),
+        (Star8CommandId, DrawingShapeKind.Star8),
+        (ChevronCommandId, DrawingShapeKind.Chevron),
+        (HomePlateCommandId, DrawingShapeKind.HomePlate),
     ];
 }
