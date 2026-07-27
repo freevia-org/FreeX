@@ -104,6 +104,31 @@ public class WatermarkOptionsRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadWithWordNativeWatermarkShapeId(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            xml.Descendants(vml + "shape")
+                .Single(shape => shape.Attribute("id")?.Value == "PowerPlusWaterMarkObject")
+                .SetAttributeValue("id", "PowerPlusWaterMarkObject357476642");
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+            zip.GetEntry("docProps/custom.xml")!.Delete();
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     private static TextDocument ReadWithMutatedVmlTextSize(TextDocument document, double widthPt, double heightPt)
     {
         using var stream = new MemoryStream();
@@ -439,6 +464,17 @@ public class WatermarkOptionsRoundTripTests
         watermark.FontColorHex.Should().Be("#123456");
         watermark.Layout.Should().Be(WatermarkLayout.Horizontal);
         watermark.Opacity.Should().BeApproximately(0.5, 0.001);
+    }
+
+    [Fact]
+    public void NativeVmlTextWatermark_ImportsWordGeneratedSuffixedShapeId()
+    {
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions("NATIVE WORD");
+
+        var loaded = ReadWithWordNativeWatermarkShapeId(doc);
+
+        loaded.Page.WatermarkOptions!.Text.Should().Be("NATIVE WORD");
     }
 
     [Fact]
