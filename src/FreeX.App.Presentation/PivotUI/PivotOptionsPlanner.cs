@@ -90,9 +90,9 @@ public static class PivotOptionsPlanner
     /// <summary>Report layouts in display order, with the English label the dialog shows.</summary>
     public static readonly IReadOnlyList<(string Label, PivotReportLayout Value)> ReportLayouts =
     [
-        ("Compact Form", PivotReportLayout.Compact),
-        ("Outline Form", PivotReportLayout.Outline),
-        ("Tabular Form", PivotReportLayout.Tabular),
+        ("Compact", PivotReportLayout.Compact),
+        ("Outline", PivotReportLayout.Outline),
+        ("Tabular", PivotReportLayout.Tabular),
     ];
 
     /// <summary>Subtotal placements in display order, with the English label the dialog shows.</summary>

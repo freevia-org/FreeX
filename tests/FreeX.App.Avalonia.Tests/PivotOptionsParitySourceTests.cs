@@ -1,0 +1,67 @@
+namespace FreeX.App.Avalonia.Tests;
+
+public sealed class PivotOptionsParitySourceTests
+{
+    [Fact]
+    public void PivotOptions_WiresEveryWpfEditableValueThroughTheSharedCommand()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotOptions.cs"));
+
+        source.Should().Contain("PivotOptionsPlanner.CaptureDialogValues(pivot, cache)");
+        source.Should().Contain("PivotStyleGalleryPlanner.GetStyleNames(values.StyleName)");
+        source.Should().Contain("MissingItemsLimitLabels");
+        source.Should().Contain("TryParsePageWrap(pageWrapBox.Text");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(groupBox, PivotDialogChromeStyle);");
+        source.Should().NotContain("presentation-only");
+        source.Should().NotContain("only the\n    // nine totals");
+
+        foreach (var automationId in new[]
+                 {
+                     "PivotOptionsPageFieldLayoutBox",
+                     "PivotOptionsPageWrapBox",
+                     "PivotOptionsEmptyCellsBox",
+                     "PivotOptionsErrorValuesBox",
+                     "PivotOptionsStyleBox",
+                     "PivotOptionsMissingItemsLimitBox",
+                     "PivotOptionsAltTextTitleBox",
+                     "PivotOptionsAltTextDescriptionBox"
+                 })
+            source.Should().Contain($"\"{automationId}\"");
+
+        foreach (var argument in new[]
+                 {
+                     "updateEmptyValueText: true",
+                     "refreshOnOpen: values.RefreshOnOpen",
+                     "saveSourceData: values.SaveSourceData",
+                     "enableRefresh: values.EnableRefresh",
+                     "preserveSourceSortFilter: values.PreserveSourceSortFilter",
+                     "updateMissingItemsLimit: true",
+                     "printTitles: values.PrintTitles",
+                     "printExpandCollapseButtons: values.PrintExpandCollapseButtons",
+                     "updateAltText: true",
+                     "autofitColumnsOnUpdate: values.AutofitColumnsOnUpdate",
+                     "preserveFormattingOnUpdate: values.PreserveFormattingOnUpdate",
+                     "showFieldHeaders: values.ShowFieldHeaders",
+                     "showContextualTooltips: values.ShowContextualTooltips",
+                     "showPropertiesInTooltips: values.ShowPropertiesInTooltips",
+                     "showClassicLayout: values.ShowClassicLayout",
+                     "showItemsWithNoDataOnRows: values.ShowItemsWithNoDataOnRows",
+                     "showItemsWithNoDataOnColumns: values.ShowItemsWithNoDataOnColumns",
+                     "errorCaption: values.ErrorValueText",
+                     "enableDrill: values.EnableDrill"
+                 })
+            source.Should().Contain(argument);
+    }
+
+    private static string RepoFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+            directory = directory.Parent;
+
+        if (directory is null)
+            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
+
+        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+    }
+}
