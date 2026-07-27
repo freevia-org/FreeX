@@ -33,6 +33,9 @@ public static class FreePRibbonDefinitionData
         "Bottom:Automatic", "Bottom:0pt", "Bottom:2pt", "Bottom:4pt", "Bottom:6pt", "Bottom:8pt",
     ];
 
+    public static readonly string[] TableRowHeightOptions =
+        ["Automatic", "0.25in", "0.5in", "0.75in", "1in", "1.5in"];
+
     public static readonly string[] TransitionDurations =
         ["0.50s", "0.75s", "1.00s", "1.50s", "2.00s"];
 

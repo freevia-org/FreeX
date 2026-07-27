@@ -2056,6 +2056,21 @@ public sealed class EditingSession
         return true;
     }
 
+    /// <summary>Sets the height of the active table row, or restores automatic height with zero.</summary>
+    public bool TryApplyActiveTableRowHeight(long heightEmu)
+    {
+        if (ActiveTableCell is not { } active)
+            return false;
+
+        var (shapeId, table) = RequireSelectedTable();
+        if (shapeId == 0 || table is null || active.Row < 0 || active.Row >= table.Rows.Count)
+            return false;
+
+        ExecuteTableCommand((si, id) => new SetTableRowHeightCommand(
+            si, id, active.Row, Math.Max(0, heightEmu)));
+        return true;
+    }
+
     /// <summary>Sets or clears one explicit border side of the active table cell. Undoable.</summary>
     public bool TryApplyActiveTableCellBorder(
         TableCellBorderSide side,

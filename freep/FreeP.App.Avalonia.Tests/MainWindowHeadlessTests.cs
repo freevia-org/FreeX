@@ -1824,6 +1824,36 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_table_row_height_command_routes_selected_value_to_editor()
+    {
+        var found = false;
+        long? height = null;
+        long? undoneHeight = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet("freep.table-row-height", out var command);
+            found.Should().BeTrue("Row Height must be registered");
+
+            var shape = window.Editor.InsertTable(1, 1);
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+
+            command!.Execute(RibbonCommandContext.ForSelectedValue("0.75in"));
+            height = shape.Table!.Rows[0].HeightEmu;
+            window.Editor.Undo();
+            undoneHeight = shape.Table.Rows[0].HeightEmu;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("Row Height must be registered");
+        height.Should().Be(685800);
+        undoneHeight.Should().NotBe(685800);
+    }
+
+    [Fact]
     public async Task Ribbon_font_size_and_color_commands_route_to_editor()
     {
         var foundSize = false;

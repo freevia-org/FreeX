@@ -925,6 +925,22 @@ public class RibbonEditorCompleteness5BTests
         Assert.Null(cell.InsetBottomPt);
     }
 
+    [Fact]
+    public void Cmd_TableRowHeight_WithActiveTableCell_UsesSharedCommand()
+    {
+        var (ed, pres) = MakeSession();
+        var shape = AddSingleCellTable(pres, 805, MakeTextBody("Cell"));
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.table-row-height", RibbonCommandContext.ForSelectedValue("0.75in"));
+
+        Assert.Equal(685800, shape.Table!.Rows[0].HeightEmu);
+        ed.Undo();
+        Assert.NotEqual(685800, shape.Table.Rows[0].HeightEmu);
+    }
+
     [Theory]
     [InlineData("freep.bold", TableCellTextFormatKind.Bold)]
     [InlineData("freep.italic", TableCellTextFormatKind.Italic)]
@@ -1179,6 +1195,7 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.table-cell-anchor")]
     [InlineData("freep.table-cell-border")]
     [InlineData("freep.table-cell-inset")]
+    [InlineData("freep.table-row-height")]
     [InlineData("freep.format-painter")]
     [InlineData("freep.theme.office")]
     [InlineData("freep.theme.berlin")]

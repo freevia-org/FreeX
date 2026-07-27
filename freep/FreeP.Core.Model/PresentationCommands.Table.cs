@@ -459,6 +459,59 @@ public sealed class SetTableCellBorderCommand : IPresentationCommand
 /// Grid integrity: one cell per column, all GridSpan=1 RowSpan=1.
 /// Captures a full table snapshot for undo.
 /// </summary>
+/// <summary>Sets the height of one table row, or restores automatic row height with zero.</summary>
+public sealed class SetTableRowHeightCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _rowIndex;
+    private readonly long _newHeightEmu;
+    private long _oldHeightEmu;
+
+    public SetTableRowHeightCommand(
+        int slideIndex,
+        uint shapeId,
+        int rowIndex,
+        long newHeightEmu)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _rowIndex = rowIndex;
+        _newHeightEmu = newHeightEmu;
+    }
+
+    public string Label => _newHeightEmu <= 0 ? "Set Automatic Row Height" : "Set Row Height";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var row = GetRow(presentation);
+        return row is not null && row.HeightEmu != _newHeightEmu;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var row = GetRow(presentation);
+        if (row is null) return;
+        _oldHeightEmu = row.HeightEmu;
+        row.HeightEmu = Math.Max(0, _newHeightEmu);
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var row = GetRow(presentation);
+        if (row is not null)
+            row.HeightEmu = _oldHeightEmu;
+    }
+
+    private TableRow? GetRow(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        return table is not null && _rowIndex >= 0 && _rowIndex < table.Rows.Count
+            ? table.Rows[_rowIndex]
+            : null;
+    }
+}
+
 public sealed class InsertTableRowCommand : IPresentationCommand
 {
     private readonly int  _slideIndex;

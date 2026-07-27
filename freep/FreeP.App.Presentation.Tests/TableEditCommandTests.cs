@@ -348,6 +348,22 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void SetTableRowHeight_UndoRedo_Works()
+    {
+        var (p, bus, shape) = MakeTable();
+        var row = shape.Table!.Rows[1];
+        var original = row.HeightEmu;
+
+        bus.Execute(new SetTableRowHeightCommand(0, shape.Id, 1, 914400));
+
+        row.HeightEmu.Should().Be(914400);
+        bus.Undo();
+        row.HeightEmu.Should().Be(original);
+        bus.Redo();
+        row.HeightEmu.Should().Be(914400);
+    }
+
+    [Fact]
     public void SetTableCellFill_RoundTripsThroughPptx()
     {
         var (presentation, bus, shape) = MakeTable(1, 1);
@@ -422,6 +438,20 @@ public sealed class TableEditCommandTests
         cell.InsetRightPt.Should().BeApproximately(5.5, 0.001);
         cell.InsetTopPt.Should().BeApproximately(5.5, 0.001);
         cell.InsetBottomPt.Should().BeApproximately(5.5, 0.001);
+    }
+
+    [Fact]
+    public void SetTableRowHeight_RoundTripsThroughPptx()
+    {
+        var (presentation, bus, shape) = MakeTable(1, 1);
+        bus.Execute(new SetTableRowHeightCommand(0, shape.Id, 0, 685800));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+
+        PptxPackageReader.Read(stream).Slides[0].Shapes[0].Table!.Rows[0].HeightEmu
+            .Should().Be(685800);
     }
 
     [Fact]
@@ -937,6 +967,20 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void EditingSession_SetActiveTableRowHeight_IsUndoable()
+    {
+        var sess = MakeSession(out var shape);
+        var original = shape.Table!.Rows[0].HeightEmu;
+        sess.SetActiveTableCell(0, 0);
+
+        sess.TryApplyActiveTableRowHeight(914400).Should().BeTrue();
+        shape.Table.Rows[0].HeightEmu.Should().Be(914400);
+
+        sess.Undo();
+        shape.Table.Rows[0].HeightEmu.Should().Be(original);
+    }
+
+    [Fact]
     public void TableCellInsetOptionParser_ParsesAutomaticAndPointValues()
     {
         TableCellInsetOptionParser.TryParse("All:Automatic", out var side, out var automatic)
@@ -948,6 +992,18 @@ public sealed class TableEditCommandTests
             .Should().BeTrue();
         side.Should().Be(TableCellInsetSide.Bottom);
         inset.Should().BeApproximately(5.5, 0.001);
+    }
+
+    [Fact]
+    public void TableRowHeightOptionParser_ParsesAutomaticAndInchValues()
+    {
+        TableRowHeightOptionParser.TryParse("Automatic", out var automatic)
+            .Should().BeTrue();
+        automatic.Should().Be(0);
+
+        TableRowHeightOptionParser.TryParse("0.75in", out var height)
+            .Should().BeTrue();
+        height.Should().Be(685800);
     }
 
     [Fact]

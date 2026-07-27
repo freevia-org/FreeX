@@ -184,6 +184,12 @@
   <data name="Ribbon_Command_TableCellInset_KeyTip" xml:space="preserve">
     <value>TI</value>
   </data>
+  <data name="Ribbon_Command_TableRowHeight_Label" xml:space="preserve">
+    <value>Row Height</value>
+  </data>
+  <data name="Ribbon_Command_TableRowHeight_KeyTip" xml:space="preserve">
+    <value>RH</value>
+  </data>
   <data name="Ribbon_Command_Bullets_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>
