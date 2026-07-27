@@ -70,6 +70,24 @@ public sealed class DialogVisualParitySourceTests
     }
 
     [Fact]
+    public void GoToDialog_UsesSharedChromeAndWpfHistoryGridMetrics()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, dialogChrome);");
+        source.Should().Contain("ButtonHeight = 24,");
+        source.Should().Contain("MinHeight = 130,");
+        source.Should().Contain("Margin = new Thickness(0, 24, 0, 0),");
+        source.Should().Contain("new GridLength(1, GridUnitType.Star)");
+        source.Should().Contain("Grid.SetRow(historyList, 1);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(specialButton, dialogChrome, minWidth: 86);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(");
+        source.Should().NotContain("var historyBorder = new Border");
+        source.Should().Contain("AutomationProperties.SetAutomationId(historyList, \"GoToHistoryList\");");
+        source.Should().Contain("AvaloniaCompactDialogChrome.FocusAndSelect(inputBox);");
+    }
+
+    [Fact]
     public void ConditionalFormatNewRule_UsesCurrentWpfDescriptionChrome_WithoutChangingRuleBehavior()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ConditionalFormat.cs"));

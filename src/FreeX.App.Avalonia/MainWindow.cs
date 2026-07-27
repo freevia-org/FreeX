@@ -13779,27 +13779,24 @@ public sealed partial class MainWindow : Window
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        var dialogChrome = AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ButtonHeight = 24,
+            FontFamily = FormulaBarFontFamily,
+        };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, dialogChrome);
 
         var defaultReference = FormatRangeReference(_session.SelectedRange);
 
         var historyList = new ListBox
         {
             ItemsSource = BuildGoToReferenceChoices(defaultReference),
-            Background = Brushes.White,
-            MinHeight = 150,
-        };
-        var historyBorder = new Border
-        {
-            Background = Brushes.White,
-            BorderBrush = FormulaBarControlBorder,
-            BorderThickness = new Thickness(1),
-            Child = historyList,
+            MinHeight = 130,
+            Margin = new Thickness(0, 24, 0, 0),
         };
         AutomationProperties.SetName(historyList, "Go To");
         AutomationProperties.SetHelpText(historyList, "Recent references and defined names");
         AutomationProperties.SetAutomationId(historyList, "GoToHistoryList");
-        historyList.FontSize = 12;
-        historyList.FontFamily = FormulaBarFontFamily;
 
         var inputBox = new TextBox
         {
@@ -13808,7 +13805,7 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetName(inputBox, "Reference");
         AutomationProperties.SetAutomationId(inputBox, "GoToReferenceBox");
-        ApplyDialogTextBoxChrome(inputBox);
+        AvaloniaCompactDialogChrome.ApplyTextBox(inputBox, dialogChrome);
 
         var specialButton = new Button
         {
@@ -13817,7 +13814,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 86,
         };
         AutomationProperties.SetAutomationId(specialButton, "GoToSpecialButton");
-        ApplyDialogButtonChrome(specialButton, width: 86);
+        AvaloniaCompactDialogChrome.ApplyButton(specialButton, dialogChrome, minWidth: 86);
 
         var acceptButton = new Button
         {
@@ -13827,7 +13824,7 @@ public sealed partial class MainWindow : Window
             IsDefault = true,
         };
         AutomationProperties.SetAutomationId(acceptButton, "GoToReferenceBoxAcceptButton");
-        ApplyDialogButtonChrome(acceptButton, width: 72, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(acceptButton, dialogChrome, minWidth: 72, isDefault: true);
 
         var cancelButton = new Button
         {
@@ -13837,13 +13834,14 @@ public sealed partial class MainWindow : Window
             IsCancel = true,
         };
         AutomationProperties.SetAutomationId(cancelButton, "GoToReferenceBoxCancelButton");
-        ApplyDialogButtonChrome(cancelButton, width: 72);
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, dialogChrome, minWidth: 72);
 
         historyList.SelectionChanged += (_, _) =>
         {
             if (historyList.SelectedItem is string reference)
                 inputBox.Text = reference;
         };
+        historyList.SelectedIndex = 0;
         historyList.DoubleTapped += (_, _) =>
         {
             if (historyList.SelectedItem is string reference)
@@ -13884,25 +13882,16 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Children =
-            {
-                specialButton,
-                acceptButton,
-                cancelButton,
-            },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [specialButton, acceptButton, cancelButton],
+            style: dialogChrome);
 
         var root = new AvaloniaGrid
         {
             Margin = new Thickness(12),
         };
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
@@ -13912,15 +13901,15 @@ public sealed partial class MainWindow : Window
         {
             Text = "Go to:",
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 6),
+            Margin = new Thickness(0, 0, 8, 4),
         };
         Grid.SetRow(historyLabel, 0);
         Grid.SetColumnSpan(historyLabel, 2);
         root.Children.Add(historyLabel);
 
-        Grid.SetRow(historyBorder, 1);
-        Grid.SetColumnSpan(historyBorder, 2);
-        root.Children.Add(historyBorder);
+        Grid.SetRow(historyList, 1);
+        Grid.SetColumnSpan(historyList, 2);
+        root.Children.Add(historyList);
 
         var referenceLabel = new TextBlock
         {
@@ -13931,7 +13920,7 @@ public sealed partial class MainWindow : Window
         Grid.SetRow(referenceLabel, 2);
         root.Children.Add(referenceLabel);
 
-        inputBox.Margin = new Thickness(0, 10, 0, 12);
+        inputBox.Margin = new Thickness(0, 8, 0, 12);
         Grid.SetRow(inputBox, 2);
         Grid.SetColumn(inputBox, 1);
         root.Children.Add(inputBox);
@@ -13943,8 +13932,7 @@ public sealed partial class MainWindow : Window
         dialog.Content = root;
         dialog.Opened += (_, _) =>
         {
-            inputBox.Focus();
-            inputBox.SelectAll();
+            AvaloniaCompactDialogChrome.FocusAndSelect(inputBox);
         };
         if (launchSmokeProbe is not null)
         {
