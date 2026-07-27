@@ -744,7 +744,7 @@ public sealed partial class MainWindow
         {
             Width = 469,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,*,Auto,*,Auto,*"),
+            ColumnDefinitions = new ColumnDefinitions("128,10,92,10,127,10,92"),
             RowDefinitions = new RowDefinitions("Auto,Auto,180"),
         };
         var availableLabel = new TextBlock { Text = OptionsText("Options_AvailableCommands"), FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };

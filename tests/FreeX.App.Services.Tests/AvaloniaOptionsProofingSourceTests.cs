@@ -14,7 +14,7 @@ public sealed class AvaloniaOptionsProofingSourceTests
         source.Should().Contain("Padding = new Thickness(16, 9)");
         source.Should().Contain("BorderThickness = new Thickness(1)");
         source.Should().Contain("Brush(160, 160, 160)");
-        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"*,Auto,*,Auto,*,Auto,*\")");
+        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"128,10,92,10,127,10,92\")");
         source.Should().Contain("RowDefinitions = new RowDefinitions(\"Auto,Auto,180\")");
         source.Should().Contain("Margin = new Thickness(10, 0)");
         source.Should().Contain("Margin = new Thickness(10, 0, 0, 0)");
@@ -23,7 +23,6 @@ public sealed class AvaloniaOptionsProofingSourceTests
         source.Should().Contain("ApplyOptionsButtonChrome(okButton, 80, isDefault: true);");
         source.Should().Contain("ApplyOptionsButtonChrome(cancelButton, 80);");
         source.Should().Contain("listBox.FontFamily = OptionsDialogChromeStyle.FontFamily;");
-        source.Should().NotContain("ColumnDefinitions = new ColumnDefinitions(\"128,10,92,10,127,10,92\")");
 
         wpf.Should().Contain("Value=\"16,9\"");
         wpf.Should().Contain("BorderBrush\" Value=\"#A0A0A0\"");
