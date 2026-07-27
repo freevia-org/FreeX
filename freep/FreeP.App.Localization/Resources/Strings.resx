@@ -724,6 +724,66 @@
   <data name="Ribbon_Command_ShapeHomePlate_KeyTip" xml:space="preserve">
     <value>HP</value>
   </data>
+  <data name="Ribbon_Command_ShapeRightTriangle_Label" xml:space="preserve">
+    <value>Right Triangle</value>
+  </data>
+  <data name="Ribbon_Command_ShapeRightTriangle_KeyTip" xml:space="preserve">
+    <value>RT</value>
+  </data>
+  <data name="Ribbon_Command_ShapeMinusSign_Label" xml:space="preserve">
+    <value>Minus</value>
+  </data>
+  <data name="Ribbon_Command_ShapeMinusSign_KeyTip" xml:space="preserve">
+    <value>MN</value>
+  </data>
+  <data name="Ribbon_Command_ShapeMultiplySign_Label" xml:space="preserve">
+    <value>Multiply</value>
+  </data>
+  <data name="Ribbon_Command_ShapeMultiplySign_KeyTip" xml:space="preserve">
+    <value>MX</value>
+  </data>
+  <data name="Ribbon_Command_ShapeDivideSign_Label" xml:space="preserve">
+    <value>Divide</value>
+  </data>
+  <data name="Ribbon_Command_ShapeDivideSign_KeyTip" xml:space="preserve">
+    <value>DV</value>
+  </data>
+  <data name="Ribbon_Command_ShapeEqualSign_Label" xml:space="preserve">
+    <value>Equal</value>
+  </data>
+  <data name="Ribbon_Command_ShapeEqualSign_KeyTip" xml:space="preserve">
+    <value>EQ</value>
+  </data>
+  <data name="Ribbon_Command_ShapeNotEqualSign_Label" xml:space="preserve">
+    <value>Not Equal</value>
+  </data>
+  <data name="Ribbon_Command_ShapeNotEqualSign_KeyTip" xml:space="preserve">
+    <value>NE</value>
+  </data>
+  <data name="Ribbon_Command_ShapeWave_Label" xml:space="preserve">
+    <value>Wave</value>
+  </data>
+  <data name="Ribbon_Command_ShapeWave_KeyTip" xml:space="preserve">
+    <value>WV</value>
+  </data>
+  <data name="Ribbon_Command_ShapeRectangularCallout_Label" xml:space="preserve">
+    <value>Rectangular Callout</value>
+  </data>
+  <data name="Ribbon_Command_ShapeRectangularCallout_KeyTip" xml:space="preserve">
+    <value>RC</value>
+  </data>
+  <data name="Ribbon_Command_ShapeRoundedRectangularCallout_Label" xml:space="preserve">
+    <value>Rounded Rectangular Callout</value>
+  </data>
+  <data name="Ribbon_Command_ShapeRoundedRectangularCallout_KeyTip" xml:space="preserve">
+    <value>RR</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOvalCallout_Label" xml:space="preserve">
+    <value>Oval Callout</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOvalCallout_KeyTip" xml:space="preserve">
+    <value>OC</value>
+  </data>
   <data name="Ribbon_Command_Connector_Label" xml:space="preserve">
     <value>Connector</value>
   </data>

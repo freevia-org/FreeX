@@ -73,6 +73,16 @@ public static class SlideObjectInsertionPlanner
     public const string Star8CommandId = "freep.shape-star8";
     public const string ChevronCommandId = "freep.shape-chevron";
     public const string HomePlateCommandId = "freep.shape-home-plate";
+    public const string RightTriangleCommandId = "freep.shape-right-triangle";
+    public const string MinusSignCommandId = "freep.shape-minus-sign";
+    public const string MultiplySignCommandId = "freep.shape-multiply-sign";
+    public const string DivideSignCommandId = "freep.shape-divide-sign";
+    public const string EqualSignCommandId = "freep.shape-equal-sign";
+    public const string NotEqualSignCommandId = "freep.shape-not-equal-sign";
+    public const string WaveCommandId = "freep.shape-wave";
+    public const string RectangularCalloutCommandId = "freep.shape-rectangular-callout";
+    public const string RoundedRectangularCalloutCommandId = "freep.shape-rounded-rectangular-callout";
+    public const string OvalCalloutCommandId = "freep.shape-oval-callout";
     public const string ConnectorCommandId = "freep.insert-connector";
     public const string ElbowConnectorCommandId = "freep.insert-elbow-connector";
     public const string CurvedConnectorCommandId = "freep.insert-curved-connector";
@@ -136,6 +146,16 @@ public static class SlideObjectInsertionPlanner
         new(Star8CommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Star8),
         new(ChevronCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Chevron),
         new(HomePlateCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.HomePlate),
+        new(RightTriangleCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.RightTriangle),
+        new(MinusSignCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.MinusSign),
+        new(MultiplySignCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.MultiplySign),
+        new(DivideSignCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.DivideSign),
+        new(EqualSignCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.EqualSign),
+        new(NotEqualSignCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.NotEqualSign),
+        new(WaveCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Wave),
+        new(RectangularCalloutCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.RectangularCallout),
+        new(RoundedRectangularCalloutCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.RoundedRectangularCallout),
+        new(OvalCalloutCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.OvalCallout),
         new(ConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.Line),
         new(ElbowConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.ElbowConnector),
         new(CurvedConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.CurvedConnector),

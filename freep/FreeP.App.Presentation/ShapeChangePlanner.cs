@@ -28,6 +28,16 @@ public static class ShapeChangePlanner
     public const string Star8CommandId = "freep.arrange.change-shape.star8";
     public const string ChevronCommandId = "freep.arrange.change-shape.chevron";
     public const string HomePlateCommandId = "freep.arrange.change-shape.home-plate";
+    public const string RightTriangleCommandId = "freep.arrange.change-shape.right-triangle";
+    public const string MinusSignCommandId = "freep.arrange.change-shape.minus-sign";
+    public const string MultiplySignCommandId = "freep.arrange.change-shape.multiply-sign";
+    public const string DivideSignCommandId = "freep.arrange.change-shape.divide-sign";
+    public const string EqualSignCommandId = "freep.arrange.change-shape.equal-sign";
+    public const string NotEqualSignCommandId = "freep.arrange.change-shape.not-equal-sign";
+    public const string WaveCommandId = "freep.arrange.change-shape.wave";
+    public const string RectangularCalloutCommandId = "freep.arrange.change-shape.rectangular-callout";
+    public const string RoundedRectangularCalloutCommandId = "freep.arrange.change-shape.rounded-rectangular-callout";
+    public const string OvalCalloutCommandId = "freep.arrange.change-shape.oval-callout";
 
     public static IReadOnlyList<(string CommandId, DrawingShapeKind Kind)> Presets =>
     [
@@ -53,5 +63,15 @@ public static class ShapeChangePlanner
         (Star8CommandId, DrawingShapeKind.Star8),
         (ChevronCommandId, DrawingShapeKind.Chevron),
         (HomePlateCommandId, DrawingShapeKind.HomePlate),
+        (RightTriangleCommandId, DrawingShapeKind.RightTriangle),
+        (MinusSignCommandId, DrawingShapeKind.MinusSign),
+        (MultiplySignCommandId, DrawingShapeKind.MultiplySign),
+        (DivideSignCommandId, DrawingShapeKind.DivideSign),
+        (EqualSignCommandId, DrawingShapeKind.EqualSign),
+        (NotEqualSignCommandId, DrawingShapeKind.NotEqualSign),
+        (WaveCommandId, DrawingShapeKind.Wave),
+        (RectangularCalloutCommandId, DrawingShapeKind.RectangularCallout),
+        (RoundedRectangularCalloutCommandId, DrawingShapeKind.RoundedRectangularCallout),
+        (OvalCalloutCommandId, DrawingShapeKind.OvalCallout),
     ];
 }

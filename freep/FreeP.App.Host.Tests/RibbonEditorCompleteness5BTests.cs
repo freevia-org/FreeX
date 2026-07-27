@@ -280,6 +280,16 @@ public class RibbonEditorCompleteness5BTests
         Assert.Contains(SlideObjectInsertionPlanner.Star8CommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.ChevronCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.HomePlateCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.RightTriangleCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.MinusSignCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.MultiplySignCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.DivideSignCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.EqualSignCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.NotEqualSignCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.WaveCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.RectangularCalloutCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.RoundedRectangularCalloutCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.OvalCalloutCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.ConnectorCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.ElbowConnectorCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.CurvedConnectorCommandId, ids);
@@ -397,6 +407,16 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.arrange.change-shape.down-arrow", DrawingShapeKind.DownArrow)]
     [InlineData("freep.arrange.change-shape.cross", DrawingShapeKind.Cross)]
     [InlineData("freep.arrange.change-shape.plus-sign", DrawingShapeKind.PlusSign)]
+    [InlineData("freep.arrange.change-shape.right-triangle", DrawingShapeKind.RightTriangle)]
+    [InlineData("freep.arrange.change-shape.minus-sign", DrawingShapeKind.MinusSign)]
+    [InlineData("freep.arrange.change-shape.multiply-sign", DrawingShapeKind.MultiplySign)]
+    [InlineData("freep.arrange.change-shape.divide-sign", DrawingShapeKind.DivideSign)]
+    [InlineData("freep.arrange.change-shape.equal-sign", DrawingShapeKind.EqualSign)]
+    [InlineData("freep.arrange.change-shape.not-equal-sign", DrawingShapeKind.NotEqualSign)]
+    [InlineData("freep.arrange.change-shape.wave", DrawingShapeKind.Wave)]
+    [InlineData("freep.arrange.change-shape.rectangular-callout", DrawingShapeKind.RectangularCallout)]
+    [InlineData("freep.arrange.change-shape.rounded-rectangular-callout", DrawingShapeKind.RoundedRectangularCallout)]
+    [InlineData("freep.arrange.change-shape.oval-callout", DrawingShapeKind.OvalCallout)]
     public void Cmd_ChangeShape_RoutesThroughSharedEditingSession(
         string commandId,
         DrawingShapeKind expectedKind)
@@ -1145,6 +1165,16 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.shape-star8")]
     [InlineData("freep.shape-chevron")]
     [InlineData("freep.shape-home-plate")]
+    [InlineData("freep.shape-right-triangle")]
+    [InlineData("freep.shape-minus-sign")]
+    [InlineData("freep.shape-multiply-sign")]
+    [InlineData("freep.shape-divide-sign")]
+    [InlineData("freep.shape-equal-sign")]
+    [InlineData("freep.shape-not-equal-sign")]
+    [InlineData("freep.shape-wave")]
+    [InlineData("freep.shape-rectangular-callout")]
+    [InlineData("freep.shape-rounded-rectangular-callout")]
+    [InlineData("freep.shape-oval-callout")]
     [InlineData("freep.header-footer")]
     [InlineData("freep.date-time")]
     [InlineData("freep.slide-number")]

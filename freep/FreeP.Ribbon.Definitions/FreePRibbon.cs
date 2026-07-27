@@ -348,6 +348,16 @@ public static class FreePRibbon
         menu.Item(ShapeChangePlanner.Star8CommandId, FreePRibbonText.ShapeStar8Label, FreePRibbonText.ShapeStar8KeyTip);
         menu.Item(ShapeChangePlanner.ChevronCommandId, FreePRibbonText.ShapeChevronLabel, FreePRibbonText.ShapeChevronKeyTip);
         menu.Item(ShapeChangePlanner.HomePlateCommandId, FreePRibbonText.ShapeHomePlateLabel, FreePRibbonText.ShapeHomePlateKeyTip);
+        menu.Item(ShapeChangePlanner.RightTriangleCommandId, FreePRibbonText.ShapeRightTriangleLabel, FreePRibbonText.ShapeRightTriangleKeyTip);
+        menu.Item(ShapeChangePlanner.MinusSignCommandId, FreePRibbonText.ShapeMinusSignLabel, FreePRibbonText.ShapeMinusSignKeyTip);
+        menu.Item(ShapeChangePlanner.MultiplySignCommandId, FreePRibbonText.ShapeMultiplySignLabel, FreePRibbonText.ShapeMultiplySignKeyTip);
+        menu.Item(ShapeChangePlanner.DivideSignCommandId, FreePRibbonText.ShapeDivideSignLabel, FreePRibbonText.ShapeDivideSignKeyTip);
+        menu.Item(ShapeChangePlanner.EqualSignCommandId, FreePRibbonText.ShapeEqualSignLabel, FreePRibbonText.ShapeEqualSignKeyTip);
+        menu.Item(ShapeChangePlanner.NotEqualSignCommandId, FreePRibbonText.ShapeNotEqualSignLabel, FreePRibbonText.ShapeNotEqualSignKeyTip);
+        menu.Item(ShapeChangePlanner.WaveCommandId, FreePRibbonText.ShapeWaveLabel, FreePRibbonText.ShapeWaveKeyTip);
+        menu.Item(ShapeChangePlanner.RectangularCalloutCommandId, FreePRibbonText.ShapeRectangularCalloutLabel, FreePRibbonText.ShapeRectangularCalloutKeyTip);
+        menu.Item(ShapeChangePlanner.RoundedRectangularCalloutCommandId, FreePRibbonText.ShapeRoundedRectangularCalloutLabel, FreePRibbonText.ShapeRoundedRectangularCalloutKeyTip);
+        menu.Item(ShapeChangePlanner.OvalCalloutCommandId, FreePRibbonText.ShapeOvalCalloutLabel, FreePRibbonText.ShapeOvalCalloutKeyTip);
     }
 
     private static void AddInsertGroups(RibbonTabBuilder tab)
@@ -498,6 +508,26 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Pentagon, FreePRibbonText.ShapeChevronKeyTip);
             group.Medium(SlideObjectInsertionPlanner.HomePlateCommandId, FreePRibbonText.ShapeHomePlateLabel,
                 RibbonCommandIconKind.Pentagon, FreePRibbonText.ShapeHomePlateKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.RightTriangleCommandId, FreePRibbonText.ShapeRightTriangleLabel,
+                RibbonCommandIconKind.Triangle, FreePRibbonText.ShapeRightTriangleKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.MinusSignCommandId, FreePRibbonText.ShapeMinusSignLabel,
+                RibbonCommandIconKind.MinusSign, FreePRibbonText.ShapeMinusSignKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.MultiplySignCommandId, FreePRibbonText.ShapeMultiplySignLabel,
+                RibbonCommandIconKind.MultiplySign, FreePRibbonText.ShapeMultiplySignKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.DivideSignCommandId, FreePRibbonText.ShapeDivideSignLabel,
+                RibbonCommandIconKind.DivideSign, FreePRibbonText.ShapeDivideSignKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.EqualSignCommandId, FreePRibbonText.ShapeEqualSignLabel,
+                RibbonCommandIconKind.EqualSign, FreePRibbonText.ShapeEqualSignKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.NotEqualSignCommandId, FreePRibbonText.ShapeNotEqualSignLabel,
+                RibbonCommandIconKind.NotEqualSign, FreePRibbonText.ShapeNotEqualSignKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.WaveCommandId, FreePRibbonText.ShapeWaveLabel,
+                RibbonCommandIconKind.Wave, FreePRibbonText.ShapeWaveKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.RectangularCalloutCommandId, FreePRibbonText.ShapeRectangularCalloutLabel,
+                RibbonCommandIconKind.Callout, FreePRibbonText.ShapeRectangularCalloutKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.RoundedRectangularCalloutCommandId, FreePRibbonText.ShapeRoundedRectangularCalloutLabel,
+                RibbonCommandIconKind.Callout, FreePRibbonText.ShapeRoundedRectangularCalloutKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.OvalCalloutCommandId, FreePRibbonText.ShapeOvalCalloutLabel,
+                RibbonCommandIconKind.Callout, FreePRibbonText.ShapeOvalCalloutKeyTip);
             group.Medium(SlideObjectInsertionPlanner.ConnectorCommandId, FreePRibbonText.ConnectorLabel,
                 RibbonCommandIconKind.Line, FreePRibbonText.ConnectorKeyTip);
             group.Medium(SlideObjectInsertionPlanner.ElbowConnectorCommandId, FreePRibbonText.ElbowConnectorLabel,
