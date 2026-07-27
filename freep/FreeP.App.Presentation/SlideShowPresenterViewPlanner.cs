@@ -14,7 +14,8 @@ public sealed record SlideShowPresenterViewPlan(
     bool CanGoBack,
     bool CanAdvance,
     SlideShowPresenterPointerMode PointerMode,
-    bool IsRecordingTimings)
+    bool IsRecordingTimings,
+    bool IsRehearsingTimings)
 {
     public bool HasNotes =>
         !string.IsNullOrWhiteSpace(NotesText)
@@ -51,7 +52,8 @@ public static class SlideShowPresenterViewPlanner
             state.HostState.HasSlides && !state.HostState.IsFirstSlide,
             state.HostState.HasSlides && (!state.HostState.IsLastSlide || state.HostState.HasPendingSteps),
             state.ToolPlan.PointerInk.PointerMode,
-            state.ToolPlan.Recording.TimingIntent == SlideShowTimingIntent.RecordTimings);
+            state.ToolPlan.Recording.TimingIntent == SlideShowTimingIntent.RecordTimings,
+            state.ToolPlan.Recording.TimingIntent == SlideShowTimingIntent.RehearseTimings);
     }
 
     public static string FormatElapsed(TimeSpan elapsed)

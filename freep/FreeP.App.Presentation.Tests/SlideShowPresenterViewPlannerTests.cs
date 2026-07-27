@@ -97,6 +97,25 @@ public sealed class SlideShowPresenterViewPlannerTests
         SlideShowPresenterViewPlanner.Build(state).IsRecordingTimings.Should().BeTrue();
     }
 
+    [Fact]
+    public void Build_ExposesRehearseTimingsSeparatelyFromRecording()
+    {
+        var state = new SlideShowPresenterState(
+            new SlideShowHostState(1, 0, true, true, true, false, "Slide 1 of 1"),
+            new SlideShowPresenterSlideState(0, "slide", "Slide", new Slide { Id = "slide" }),
+            null,
+            string.Empty,
+            DateTimeOffset.UtcNow,
+            TimeSpan.Zero,
+            SlideShowPresenterDisplayIntent.FullScreen,
+            SlideShowPresenterToolPlanner.BuildPlan(SlideShowTimingIntent.RehearseTimings));
+
+        var plan = SlideShowPresenterViewPlanner.Build(state);
+
+        plan.IsRehearsingTimings.Should().BeTrue();
+        plan.IsRecordingTimings.Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(0, "00:00")]
     [InlineData(65, "01:05")]
