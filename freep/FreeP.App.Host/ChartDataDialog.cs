@@ -43,6 +43,8 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly DataGrid _grid;
     private readonly Button   _addSeriesBtn;
     private readonly Button   _removeSeriesBtn;
+    private readonly Button   _moveSeriesUpBtn;
+    private readonly Button   _moveSeriesDownBtn;
     private readonly Button   _addCatBtn;
     private readonly Button   _removeCatBtn;
     private readonly Button   _switchRowsAndColumnsBtn;
@@ -77,6 +79,8 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         // ── Toolbar ───────────────────────────────────────────────────────────────
         _addSeriesBtn    = MakeToolbarButton("+ Series",    OnAddSeries);
         _removeSeriesBtn = MakeToolbarButton("- Series",    OnRemoveSeries);
+        _moveSeriesUpBtn = MakeToolbarButton("Move Series Up", OnMoveSeriesUp);
+        _moveSeriesDownBtn = MakeToolbarButton("Move Series Down", OnMoveSeriesDown);
         _addCatBtn       = MakeToolbarButton("+ Category",  OnAddCategory);
         _removeCatBtn    = MakeToolbarButton("- Category",  OnRemoveCategory);
         _switchRowsAndColumnsBtn = MakeToolbarButton("Switch Row/Column", OnSwitchRowsAndColumns);
@@ -98,6 +102,8 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var toolbar = new WrapPanel { Margin = new Thickness(4, 4, 4, 2) };
         toolbar.Children.Add(_addSeriesBtn);
         toolbar.Children.Add(_removeSeriesBtn);
+        toolbar.Children.Add(_moveSeriesUpBtn);
+        toolbar.Children.Add(_moveSeriesDownBtn);
         toolbar.Children.Add(new Separator { Width = 12, Visibility = Visibility.Hidden });
         toolbar.Children.Add(_addCatBtn);
         toolbar.Children.Add(_removeCatBtn);
@@ -262,6 +268,25 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         _planner.RemoveLastSeries();
         RebuildGrid();
+    }
+
+    private void OnMoveSeriesUp() => MoveActiveSeries(-1);
+
+    private void OnMoveSeriesDown() => MoveActiveSeries(1);
+
+    private void MoveActiveSeries(int delta)
+    {
+        if (!TryCommitPendingEdit())
+            return;
+
+        var table = _planner.BuildTableProjection();
+        var displayIndex = _grid.CurrentColumn?.DisplayIndex ?? -1;
+        if (displayIndex <= 0 || displayIndex > table.SeriesColumns.Count)
+            return;
+
+        var sourceIndex = table.SeriesColumns[displayIndex - 1].SeriesIndex;
+        if (_planner.MoveSeries(sourceIndex, sourceIndex + delta))
+            RebuildGrid();
     }
 
     private void OnAddCategory()

@@ -226,6 +226,25 @@ public sealed class ChartDataCommandTests
         chart.Series[0].Name.Should().Be("Sales");
     }
 
+    [Fact]
+    public void MoveChartSeries_ApplyAndUndo_PreservesSeriesPayload()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        var fill = new ThemeAwareColor(new SrgbColor(0x12, 0x34, 0x56));
+        chart.Series[1].FillColor = fill;
+        chart.Series[1].XValues.AddRange(new double?[] { 10, 20, 30 });
+
+        bus.Execute(new MoveChartSeriesCommand(0, id, sourceIndex: 1, targetIndex: 0));
+
+        chart.Series[0].Name.Should().Be("Budget");
+        chart.Series[0].FillColor.Should().Be(fill);
+        chart.Series[0].XValues.Should().Equal(new double?[] { 10, 20, 30 });
+        bus.Undo();
+        chart.Series[0].Name.Should().Be("Sales");
+        chart.Series[1].Name.Should().Be("Budget");
+    }
+
     // ════════════════════════════════════════════════════════════════════════════════
     // AddChartCategoryCommand
     // ════════════════════════════════════════════════════════════════════════════════
@@ -523,6 +542,16 @@ public sealed class ChartDataCommandTests
         sess.SelectedChart!.Series.Should().HaveCount(1);
         sess.Undo();
         sess.SelectedChart!.Series.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void EditingSession_MoveChartSeries_IsUndoable()
+    {
+        var sess = MakeSession();
+        sess.MoveChartSeries(1, 0);
+        sess.SelectedChart!.Series[0].Name.Should().Be("Budget");
+        sess.Undo();
+        sess.SelectedChart.Series[0].Name.Should().Be("Sales");
     }
 
     [Fact]

@@ -93,6 +93,22 @@ public sealed class ChartDataGridPlanner
             _values.RemoveAt(_values.Count - 1);
     }
 
+    public bool MoveSeries(int seriesIndex, int targetIndex)
+    {
+        if (!IsValidSeriesIndex(seriesIndex) || !IsValidSeriesIndex(targetIndex) ||
+            seriesIndex == targetIndex)
+            return false;
+
+        var name = _seriesNames[seriesIndex];
+        _seriesNames.RemoveAt(seriesIndex);
+        _seriesNames.Insert(targetIndex, name);
+
+        var values = _values[seriesIndex];
+        _values.RemoveAt(seriesIndex);
+        _values.Insert(targetIndex, values);
+        return true;
+    }
+
     public void AddCategory(string category)
     {
         _categories.Add(NormalizeLabel(category));

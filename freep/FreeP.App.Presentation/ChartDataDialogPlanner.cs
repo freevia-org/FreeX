@@ -128,6 +128,8 @@ public sealed record ChartDataDialogSurfacePlan(
     double Height,
     string AddSeriesLabel,
     string RemoveSeriesLabel,
+    string MoveSeriesUpLabel,
+    string MoveSeriesDownLabel,
     string AddCategoryLabel,
     string RemoveCategoryLabel,
     string SwitchRowsAndColumnsLabel,
@@ -169,6 +171,8 @@ public sealed class ChartDataDialogPlanner
     public const string CategoryColumnHeader = "Category";
     public const string AddSeriesLabel = "+ Series";
     public const string RemoveSeriesLabel = "- Series";
+    public const string MoveSeriesUpLabel = "Move Series Up";
+    public const string MoveSeriesDownLabel = "Move Series Down";
     public const string AddCategoryLabel = "+ Category";
     public const string RemoveCategoryLabel = "- Category";
     public const string SwitchRowsAndColumnsLabel = "Switch Row/Column";
@@ -218,6 +222,8 @@ public sealed class ChartDataDialogPlanner
             DefaultDialogHeight,
             AddSeriesLabel,
             RemoveSeriesLabel,
+            MoveSeriesUpLabel,
+            MoveSeriesDownLabel,
             AddCategoryLabel,
             RemoveCategoryLabel,
             SwitchRowsAndColumnsLabel,
@@ -347,6 +353,16 @@ public sealed class ChartDataDialogPlanner
         _grid.RemoveLastSeries();
         RemoveLastCoordinateRow(_xValues);
         RemoveLastCoordinateRow(_bubbleSizes);
+    }
+
+    public bool MoveSeries(int seriesIndex, int targetIndex)
+    {
+        if (!_grid.MoveSeries(seriesIndex, targetIndex))
+            return false;
+
+        MoveCoordinateRow(_xValues, seriesIndex, targetIndex);
+        MoveCoordinateRow(_bubbleSizes, seriesIndex, targetIndex);
+        return true;
     }
 
     public void AddCategory()
@@ -631,6 +647,17 @@ public sealed class ChartDataDialogPlanner
     {
         if (matrix.Count > 0)
             matrix.RemoveAt(matrix.Count - 1);
+    }
+
+    private static void MoveCoordinateRow(List<List<double?>> matrix, int sourceIndex, int targetIndex)
+    {
+        if (sourceIndex < 0 || sourceIndex >= matrix.Count ||
+            targetIndex < 0 || targetIndex >= matrix.Count || sourceIndex == targetIndex)
+            return;
+
+        var row = matrix[sourceIndex];
+        matrix.RemoveAt(sourceIndex);
+        matrix.Insert(targetIndex, row);
     }
 
     private static void RemoveLastCoordinateValue(List<List<double?>> matrix)

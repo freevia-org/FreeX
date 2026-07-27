@@ -2425,6 +2425,18 @@ public sealed class EditingSession
             _currentSlideIndex, _selectedShapeIds[0], seriesIndex));
     }
 
+    public void MoveChartSeries(int sourceIndex, int targetIndex)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0)
+            return;
+
+        Bus.Execute(new MoveChartSeriesCommand(
+            _currentSlideIndex,
+            _selectedShapeIds[0],
+            sourceIndex,
+            targetIndex));
+    }
+
     /// <summary>Appends a new category to the selected chart. Undoable.</summary>
     public void AddChartCategory(string label = "New Category")
     {
