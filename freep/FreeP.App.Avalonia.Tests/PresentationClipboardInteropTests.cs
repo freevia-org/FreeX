@@ -48,6 +48,46 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task RichEffectPayload_SurvivesAvaloniaApplicationAndPlatformFormats()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run
+                    {
+                        Text = "glow",
+                        TextGlow = new RunTextGlow
+                        {
+                            Color = new ThemeAwareColor(SrgbColor.FromRgb(0xF0C000)),
+                            Alpha = 0x80,
+                            RadiusPt = 4.5,
+                        },
+                    },
+                },
+            });
+            var payload = InCanvasRichClipboardPlanner.Capture(
+                body,
+                new InCanvasEditorTextSelection(0, 4));
+            using var transfer = AvaloniaPresentationSystemClipboard.BuildDataTransfer(
+                new PresentationClipboardContent(
+                    RichTextBytes: InCanvasRichClipboardPlanner.Serialize(payload)),
+                out var bitmap);
+
+            bitmap.Should().BeNull();
+            var content = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+            var decoded = InCanvasRichClipboardPlanner.Deserialize(content.RichTextBytes);
+
+            decoded.Should().NotBeNull();
+            decoded!.Body.Paragraphs.Single().Runs.Single().TextGlow!.RadiusPt
+                .Should().BeApproximately(4.5, 0.0001);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public void Avalonia12Win32Backend_WritesWpfCompatibleNativePayloads()
     {
         if (!OperatingSystem.IsWindows())

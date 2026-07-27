@@ -15,13 +15,8 @@ internal static class WpfRichTextClipboardAdapter
 {
     internal static bool TryCopy(RichTextBox box, TextBody? originalBody)
     {
-        if (box.Selection.IsEmpty)
-            return false;
-
-        var currentBody = TextBodyFlowDocumentConverter.FromFlowDocument(box.Document, originalBody);
-        var selection = CurrentSelection(box.Document, box.Selection);
-        var payload = InCanvasRichClipboardPlanner.Capture(currentBody, selection);
-        if (payload.PlainText.Length == 0)
+        var payload = CreatePayload(box, originalBody);
+        if (payload is null)
             return false;
 
         try
@@ -33,6 +28,20 @@ internal static class WpfRichTextClipboardAdapter
         {
             return false;
         }
+    }
+
+    internal static InCanvasRichClipboardPayload? CreatePayload(
+        RichTextBox box,
+        TextBody? originalBody)
+    {
+        ArgumentNullException.ThrowIfNull(box);
+        if (box.Selection.IsEmpty)
+            return null;
+
+        var currentBody = TextBodyFlowDocumentConverter.FromFlowDocument(box.Document, originalBody);
+        var selection = CurrentSelection(box.Document, box.Selection);
+        var payload = InCanvasRichClipboardPlanner.Capture(currentBody, selection);
+        return payload.PlainText.Length == 0 ? null : payload;
     }
 
     internal static bool TryCut(RichTextBox box, TextBody? originalBody)

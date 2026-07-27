@@ -1057,11 +1057,11 @@ internal static class TextBodyModelCloner
         Underline = source.Underline,
         Strikethrough = source.Strikethrough,
         Caps = source.Caps,
-        Color = source.Color,
+        Color = CloneThemeAwareColor(source.Color),
         Hyperlink = CloneHyperlink(source.Hyperlink),
         Field = CloneField(source.Field),
-        TextFill = source.TextFill,
-        TextOutline = source.TextOutline,
+        TextFill = CloneShapeFill(source.TextFill),
+        TextOutline = CloneShapeOutline(source.TextOutline),
         TextShadow = CloneRunShadow(source.TextShadow),
         TextReflection = CloneRunReflection(source.TextReflection),
         TextGlow = CloneRunGlow(source.TextGlow),
@@ -1107,7 +1107,7 @@ internal static class TextBodyModelCloner
             ? null
             : new RunTextShadow
             {
-                Color = source.Color,
+                Color = CloneThemeAwareColor(source.Color)!,
                 Alpha = source.Alpha,
                 BlurPt = source.BlurPt,
                 DistPt = source.DistPt,
@@ -1132,7 +1132,7 @@ internal static class TextBodyModelCloner
             ? null
             : new RunTextGlow
             {
-                Color = source.Color,
+                Color = CloneThemeAwareColor(source.Color)!,
                 Alpha = source.Alpha,
                 RadiusPt = source.RadiusPt,
             };
@@ -1144,6 +1144,68 @@ internal static class TextBodyModelCloner
             {
                 RadiusPt = source.RadiusPt,
             };
+
+    private static ThemeAwareColor? CloneThemeAwareColor(ThemeAwareColor? source) =>
+        source is null
+            ? null
+            : source.SchemeColor is { } scheme
+                ? new ThemeAwareColor(
+                    source.Resolved,
+                    new SchemeColorRef
+                    {
+                        RoleName = scheme.RoleName,
+                        Slot = scheme.Slot,
+                        LumMod = scheme.LumMod,
+                        LumOff = scheme.LumOff,
+                        Tint = scheme.Tint,
+                        Shade = scheme.Shade,
+                    },
+                    source.Alpha)
+                : new ThemeAwareColor(source.Resolved, source.Alpha);
+
+    private static ShapeFill? CloneShapeFill(ShapeFill? source) => source switch
+    {
+        null => null,
+        ShapeFill.None => ShapeFill.None.Instance,
+        ShapeFill.Solid solid => new ShapeFill.Solid(CloneThemeAwareColor(solid.Color)!),
+        ShapeFill.Gradient gradient => new ShapeFill.Gradient(
+            gradient.Stops.Select(stop => new GradientStop(
+                stop.Position,
+                CloneThemeAwareColor(stop.Color)!)).ToArray(),
+            gradient.Kind,
+            gradient.AngleDegrees),
+        ShapeFill.Picture picture => new ShapeFill.Picture(
+            picture.ImageBytes.ToArray(),
+            picture.ContentType,
+            picture.Tile),
+        ShapeFill.Pattern pattern => new ShapeFill.Pattern(
+            pattern.Preset,
+            CloneThemeAwareColor(pattern.ForegroundColor)!,
+            CloneThemeAwareColor(pattern.BackgroundColor)!),
+        _ => throw new NotSupportedException($"Unsupported text fill type '{source.GetType().FullName}'."),
+    };
+
+    private static ShapeOutline? CloneShapeOutline(ShapeOutline? source) => source switch
+    {
+        null => null,
+        ShapeOutline.None => ShapeOutline.None.Instance,
+        ShapeOutline.Visible visible => new ShapeOutline.Visible(
+            CloneThemeAwareColor(visible.Color)!,
+            visible.WidthPt,
+            visible.Dash,
+            CloneLineEnd(visible.BeginLineEnd),
+            CloneLineEnd(visible.EndLineEnd)),
+        ShapeOutline.GradientVisible gradient => new ShapeOutline.GradientVisible(
+            (ShapeFill.Gradient)CloneShapeFill(gradient.Gradient)!,
+            gradient.WidthPt,
+            gradient.Dash,
+            CloneLineEnd(gradient.BeginLineEnd),
+            CloneLineEnd(gradient.EndLineEnd)),
+        _ => throw new NotSupportedException($"Unsupported text outline type '{source.GetType().FullName}'."),
+    };
+
+    private static ShapeLineEnd? CloneLineEnd(ShapeLineEnd? source) =>
+        source is null ? null : new ShapeLineEnd(source.Kind);
 
     private static TextStyleLevels? CloneTextStyleLevels(TextStyleLevels? source)
     {

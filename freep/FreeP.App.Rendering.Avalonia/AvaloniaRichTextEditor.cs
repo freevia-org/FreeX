@@ -136,15 +136,21 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
     internal bool FocusEditor() => InputBox.Focus();
 
+    internal InCanvasRichClipboardPayload CreateClipboardPayload()
+    {
+        SynchronizeText();
+        return _buffer.CreateClipboardPayload(Selection);
+    }
+
     internal async Task<bool> CopySelectionAsync() =>
-        await WriteRichClipboardAsync(_buffer.CreateClipboardPayload(Selection));
+        await WriteRichClipboardAsync(CreateClipboardPayload());
 
     internal async Task<bool> CutSelectionAsync()
     {
         if (Selection.IsCollapsed)
             return false;
 
-        if (!await WriteRichClipboardAsync(_buffer.CreateClipboardPayload(Selection)))
+        if (!await WriteRichClipboardAsync(CreateClipboardPayload()))
             return false;
         int caret;
         _buffer.ReplaceSelectionWithPlainText(Selection, string.Empty, out caret);

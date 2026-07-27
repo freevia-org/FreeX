@@ -62,6 +62,186 @@ public sealed class InCanvasRichClipboardTests
     }
 
     [Fact]
+    public void Effects_RoundTripEveryModeledInlineEffectAndFillVariant()
+    {
+        var themed = new ThemeAwareColor(
+            SrgbColor.FromRgb(0x336699),
+            new SchemeColorRef
+            {
+                RoleName = "accent2",
+                Slot = ThemeColorSlot.Accent2,
+                LumMod = 0.72,
+                LumOff = 0.08,
+                Tint = 0.91,
+                Shade = 0.83,
+            },
+            alpha: 0xC4);
+        var gradient = new ShapeFill.Gradient(
+            [
+                new GradientStop(0.0, themed),
+                new GradientStop(0.42, new ThemeAwareColor(SrgbColor.FromRgb(0xCC5500), 0xA0)),
+                new GradientStop(1.0, ThemeAwareColor.White),
+            ],
+            GradientKind.Radial,
+            angleDegrees: 37.5);
+        var outlineGradient = new ShapeFill.Gradient(
+            new ThemeAwareColor(SrgbColor.FromRgb(0x102030)),
+            new ThemeAwareColor(SrgbColor.FromRgb(0x908070)),
+            angleDegrees: 123.25);
+        var allEffects = new Run
+        {
+            Text = "all-effects",
+            TextFill = gradient,
+            TextOutline = new ShapeOutline.GradientVisible(
+                outlineGradient,
+                widthPt: 2.25,
+                dash: OutlineDash.LongDashDot,
+                beginLineEnd: new ShapeLineEnd(ShapeLineEndKind.Triangle),
+                endLineEnd: new ShapeLineEnd(ShapeLineEndKind.Triangle)),
+            TextShadow = new RunTextShadow
+            {
+                Color = themed,
+                Alpha = 0x71,
+                BlurPt = 4.25,
+                DistPt = 3.5,
+                DirDeg = 217.0,
+            },
+            TextReflection = new RunTextReflection
+            {
+                Alpha = 0x63,
+                BlurPt = 1.75,
+                DistPt = 2.5,
+                DirDeg = 89.0,
+                ScaleY = -0.64,
+                EndPos = 0.81,
+            },
+            TextGlow = new RunTextGlow
+            {
+                Color = new ThemeAwareColor(SrgbColor.FromRgb(0xF0C000), 0xB2),
+                Alpha = 0x92,
+                RadiusPt = 7.25,
+            },
+            TextSoftEdge = new RunTextSoftEdge { RadiusPt = 2.75 },
+        };
+        var solid = new Run
+        {
+            Text = "solid",
+            TextFill = new ShapeFill.Solid(themed),
+            TextOutline = new ShapeOutline.Visible(
+                themed,
+                widthPt: 1.2,
+                dash: OutlineDash.DashDot,
+                beginLineEnd: new ShapeLineEnd(ShapeLineEndKind.Triangle)),
+        };
+        var picture = new Run
+        {
+            Text = "picture",
+            TextFill = new ShapeFill.Picture([1, 2, 3, 4], "image/png", tile: true),
+        };
+        var pattern = new Run
+        {
+            Text = "pattern",
+            TextFill = new ShapeFill.Pattern(
+                "diagStripe",
+                themed,
+                new ThemeAwareColor(SrgbColor.FromRgb(0xEFEFEF), 0x55)),
+        };
+        var none = new Run
+        {
+            Text = "none",
+            TextFill = ShapeFill.None.Instance,
+            TextOutline = ShapeOutline.None.Instance,
+        };
+        var source = new TextBody();
+        source.Paragraphs.Add(new Paragraph { Runs = { allEffects, solid, picture, pattern, none } });
+
+        var payload = InCanvasRichClipboardPlanner.Capture(
+            source,
+            new InCanvasEditorTextSelection(0, InCanvasTextEditPlanner.ExtractPlainText(source).Length));
+        var decoded = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+
+        decoded.Should().NotBeNull();
+        var runs = decoded!.Body.Paragraphs.Single().Runs;
+        var decodedAll = runs.Single(run => run.Text == "all-effects");
+        var decodedFill = decodedAll.TextFill.Should().BeOfType<ShapeFill.Gradient>().Which;
+        decodedFill.Kind.Should().Be(GradientKind.Radial);
+        decodedFill.AngleDegrees.Should().BeApproximately(37.5, 0.0001);
+        decodedFill.Stops.Should().HaveCount(3);
+        decodedFill.Stops[0].Position.Should().Be(0.0);
+        decodedFill.Stops[0].Color.Alpha.Should().Be(0xC4);
+        var decodedScheme = decodedFill.Stops[0].Color.SchemeColor;
+        decodedScheme.Should().NotBeNull();
+        decodedScheme!.RoleName.Should().Be("accent2");
+        decodedScheme.Tint.Should().BeApproximately(0.91, 0.0001);
+
+        var decodedOutline = decodedAll.TextOutline
+            .Should().BeOfType<ShapeOutline.GradientVisible>().Which;
+        decodedOutline.WidthPt.Should().BeApproximately(2.25, 0.0001);
+        decodedOutline.Dash.Should().Be(OutlineDash.LongDashDot);
+        decodedOutline.Gradient.Kind.Should().Be(GradientKind.Linear);
+        decodedOutline.BeginLineEnd!.Kind.Should().Be(ShapeLineEndKind.Triangle);
+        decodedOutline.EndLineEnd!.Kind.Should().Be(ShapeLineEndKind.Triangle);
+
+        decodedAll.TextShadow.Should().BeEquivalentTo(new RunTextShadow
+        {
+            Color = themed,
+            Alpha = 0x71,
+            BlurPt = 4.25,
+            DistPt = 3.5,
+            DirDeg = 217.0,
+        });
+        decodedAll.TextReflection.Should().BeEquivalentTo(new RunTextReflection
+        {
+            Alpha = 0x63,
+            BlurPt = 1.75,
+            DistPt = 2.5,
+            DirDeg = 89.0,
+            ScaleY = -0.64,
+            EndPos = 0.81,
+        });
+        decodedAll.TextGlow.Should().BeEquivalentTo(new RunTextGlow
+        {
+            Color = new ThemeAwareColor(SrgbColor.FromRgb(0xF0C000), 0xB2),
+            Alpha = 0x92,
+            RadiusPt = 7.25,
+        });
+        decodedAll.TextSoftEdge!.RadiusPt.Should().BeApproximately(2.75, 0.0001);
+
+        runs.Single(run => run.Text == "solid").TextOutline
+            .Should().BeOfType<ShapeOutline.Visible>().Which.BeginLineEnd!.Kind
+            .Should().Be(ShapeLineEndKind.Triangle);
+        var decodedPicture = runs.Single(run => run.Text == "picture").TextFill
+            .Should().BeOfType<ShapeFill.Picture>().Which;
+        decodedPicture.ImageBytes.Should().Equal(1, 2, 3, 4);
+        decodedPicture.ContentType.Should().Be("image/png");
+        decodedPicture.Tile.Should().BeTrue();
+        runs.Single(run => run.Text == "pattern").TextFill
+            .Should().BeOfType<ShapeFill.Pattern>().Which.Preset.Should().Be("diagStripe");
+        runs.Single(run => run.Text == "none").TextFill.Should().BeSameAs(ShapeFill.None.Instance);
+        runs.Single(run => run.Text == "none").TextOutline.Should().BeSameAs(ShapeOutline.None.Instance);
+
+        ((ShapeFill.Picture)picture.TextFill!).ImageBytes[0] = 99;
+        decodedPicture.ImageBytes[0].Should().Be(1);
+    }
+
+    [Fact]
+    public void Version1Payload_RemainsReadableWithoutEffectFields()
+    {
+        var payload = InCanvasRichClipboardPayload.FromPlainText("legacy");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(
+            InCanvasRichClipboardPlanner.Serialize(payload))!.AsObject();
+        json["Version"] = 1;
+
+        var decoded = InCanvasRichClipboardPlanner.Deserialize(
+            System.Text.Encoding.UTF8.GetBytes(json.ToJsonString()));
+
+        decoded.Should().NotBeNull();
+        decoded!.PlainText.Should().Be("legacy");
+        decoded.Body.Paragraphs.Single().Runs.Single().Text.Should().Be("legacy");
+    }
+
+    [Fact]
     public void PlainTextFallback_CreatesParagraphsAndUsesTypingStyle()
     {
         var payload = InCanvasRichClipboardPayload.FromPlainText(

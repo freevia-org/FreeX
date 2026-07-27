@@ -61,7 +61,8 @@ public sealed record InCanvasRichClipboardPayload(
 /// <summary>Creates, serializes, and applies in-canvas rich clipboard fragments.</summary>
 public static class InCanvasRichClipboardPlanner
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
+    private const int LegacyVersion = 1;
 
     public static InCanvasRichClipboardPayload Capture(
         TextBody source,
@@ -112,7 +113,9 @@ public static class InCanvasRichClipboardPlanner
         try
         {
             var dto = JsonSerializer.Deserialize<ClipboardPayloadDto>(bytes);
-            if (dto is null || dto.Version != CurrentVersion || dto.Body is null)
+            if (dto is null
+                || (dto.Version != LegacyVersion && dto.Version != CurrentVersion)
+                || dto.Body is null)
                 return null;
             var body = FromDto(dto.Body);
             var plainText = InCanvasTextEditPlanner.ExtractPlainText(body);
@@ -329,6 +332,35 @@ public static class InCanvasRichClipboardPlanner
         Strikethrough = run.Strikethrough,
         Caps = run.Caps,
         Color = ToDto(run.Color),
+        TextFill = ToDto(run.TextFill),
+        TextOutline = ToDto(run.TextOutline),
+        TextShadow = run.TextShadow is null ? null : new ClipboardRunShadowDto
+        {
+            Color = ToDto(run.TextShadow.Color),
+            Alpha = run.TextShadow.Alpha,
+            BlurPt = run.TextShadow.BlurPt,
+            DistPt = run.TextShadow.DistPt,
+            DirDeg = run.TextShadow.DirDeg,
+        },
+        TextReflection = run.TextReflection is null ? null : new ClipboardRunReflectionDto
+        {
+            Alpha = run.TextReflection.Alpha,
+            BlurPt = run.TextReflection.BlurPt,
+            DistPt = run.TextReflection.DistPt,
+            DirDeg = run.TextReflection.DirDeg,
+            ScaleY = run.TextReflection.ScaleY,
+            EndPos = run.TextReflection.EndPos,
+        },
+        TextGlow = run.TextGlow is null ? null : new ClipboardRunGlowDto
+        {
+            Color = ToDto(run.TextGlow.Color),
+            Alpha = run.TextGlow.Alpha,
+            RadiusPt = run.TextGlow.RadiusPt,
+        },
+        TextSoftEdge = run.TextSoftEdge is null ? null : new ClipboardRunSoftEdgeDto
+        {
+            RadiusPt = run.TextSoftEdge.RadiusPt,
+        },
         Hyperlink = run.Hyperlink is null ? null : new ClipboardHyperlinkDto
         {
             Url = run.Hyperlink.Url,
@@ -446,6 +478,35 @@ public static class InCanvasRichClipboardPlanner
             Strikethrough = dto.Strikethrough,
             Caps = dto.Caps,
             Color = FromDto(dto.Color),
+            TextFill = FromDto(dto.TextFill),
+            TextOutline = FromDto(dto.TextOutline),
+            TextShadow = dto.TextShadow is null ? null : new RunTextShadow
+            {
+                Color = FromDto(dto.TextShadow.Color) ?? ThemeAwareColor.Black,
+                Alpha = dto.TextShadow.Alpha,
+                BlurPt = dto.TextShadow.BlurPt,
+                DistPt = dto.TextShadow.DistPt,
+                DirDeg = dto.TextShadow.DirDeg,
+            },
+            TextReflection = dto.TextReflection is null ? null : new RunTextReflection
+            {
+                Alpha = dto.TextReflection.Alpha,
+                BlurPt = dto.TextReflection.BlurPt,
+                DistPt = dto.TextReflection.DistPt,
+                DirDeg = dto.TextReflection.DirDeg,
+                ScaleY = dto.TextReflection.ScaleY,
+                EndPos = dto.TextReflection.EndPos,
+            },
+            TextGlow = dto.TextGlow is null ? null : new RunTextGlow
+            {
+                Color = FromDto(dto.TextGlow.Color) ?? ThemeAwareColor.Black,
+                Alpha = dto.TextGlow.Alpha,
+                RadiusPt = dto.TextGlow.RadiusPt,
+            },
+            TextSoftEdge = dto.TextSoftEdge is null ? null : new RunTextSoftEdge
+            {
+                RadiusPt = dto.TextSoftEdge.RadiusPt,
+            },
             Hyperlink = dto.Hyperlink is null ? null : new Hyperlink
             {
                 Url = dto.Hyperlink.Url,
@@ -468,6 +529,150 @@ public static class InCanvasRichClipboardPlanner
                 IsAlternateContent = dto.Math.IsAlternateContent,
             },
         };
+
+    private static ClipboardFillDto? ToDto(ShapeFill? fill) => fill switch
+    {
+        null => null,
+        ShapeFill.None => new ClipboardFillDto { Kind = "none" },
+        ShapeFill.Solid solid => new ClipboardFillDto
+        {
+            Kind = "solid",
+            Color = ToDto(solid.Color),
+        },
+        ShapeFill.Gradient gradient => new ClipboardFillDto
+        {
+            Kind = "gradient",
+            GradientKind = gradient.Kind,
+            AngleDegrees = gradient.AngleDegrees,
+            Stops = gradient.Stops.Select(stop => new ClipboardGradientStopDto
+            {
+                Position = stop.Position,
+                Color = ToDto(stop.Color),
+            }).ToList(),
+        },
+        ShapeFill.Picture picture => new ClipboardFillDto
+        {
+            Kind = "picture",
+            ImageBytes = picture.ImageBytes.ToArray(),
+            ContentType = picture.ContentType,
+            Tile = picture.Tile,
+        },
+        ShapeFill.Pattern pattern => new ClipboardFillDto
+        {
+            Kind = "pattern",
+            Preset = pattern.Preset,
+            ForegroundColor = ToDto(pattern.ForegroundColor),
+            BackgroundColor = ToDto(pattern.BackgroundColor),
+        },
+        _ => throw new NotSupportedException($"Unsupported text fill type '{fill.GetType().FullName}'."),
+    };
+
+    private static ShapeFill? FromDto(ClipboardFillDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        return dto.Kind?.ToLowerInvariant() switch
+        {
+            "none" => ShapeFill.None.Instance,
+            "solid" => new ShapeFill.Solid(FromDto(dto.Color) ?? ThemeAwareColor.Black),
+            "gradient" => new ShapeFill.Gradient(
+                (dto.Stops ?? []).Select(stop => new GradientStop(
+                    stop.Position,
+                    FromDto(stop.Color) ?? ThemeAwareColor.Black)).ToArray(),
+                dto.GradientKind,
+                dto.AngleDegrees),
+            "picture" => new ShapeFill.Picture(
+                dto.ImageBytes ?? [],
+                dto.ContentType ?? "image/png",
+                dto.Tile),
+            "pattern" => new ShapeFill.Pattern(
+                dto.Preset ?? string.Empty,
+                FromDto(dto.ForegroundColor) ?? ThemeAwareColor.Black,
+                FromDto(dto.BackgroundColor) ?? ThemeAwareColor.White),
+            _ => throw new JsonException($"Unsupported text fill kind '{dto.Kind}'."),
+        };
+    }
+
+    private static ClipboardOutlineDto? ToDto(ShapeOutline? outline) => outline switch
+    {
+        null => null,
+        ShapeOutline.None => new ClipboardOutlineDto { Kind = "none" },
+        ShapeOutline.Visible visible => new ClipboardOutlineDto
+        {
+            Kind = "visible",
+            WidthPt = visible.WidthPt,
+            Dash = visible.Dash,
+            Color = ToDto(visible.Color),
+            BeginLineEnd = ToDto(visible.BeginLineEnd),
+            EndLineEnd = ToDto(visible.EndLineEnd),
+        },
+        ShapeOutline.GradientVisible gradient => new ClipboardOutlineDto
+        {
+            Kind = "gradient-visible",
+            WidthPt = gradient.WidthPt,
+            Dash = gradient.Dash,
+            Gradient = ToDto(gradient.Gradient),
+            BeginLineEnd = ToDto(gradient.BeginLineEnd),
+            EndLineEnd = ToDto(gradient.EndLineEnd),
+        },
+        _ => throw new NotSupportedException($"Unsupported text outline type '{outline.GetType().FullName}'."),
+    };
+
+    private static ShapeOutline? FromDto(ClipboardOutlineDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        return dto.Kind?.ToLowerInvariant() switch
+        {
+            "none" => ShapeOutline.None.Instance,
+            "visible" => new ShapeOutline.Visible(
+                FromDto(dto.Color) ?? ThemeAwareColor.Black,
+                dto.WidthPt,
+                dto.Dash,
+                FromDto(dto.BeginLineEnd),
+                FromDto(dto.EndLineEnd)),
+            "gradient-visible" => new ShapeOutline.GradientVisible(
+                FromDto(dto.Gradient)
+                    ?? throw new JsonException("Gradient text outline is missing its gradient."),
+                dto.WidthPt,
+                dto.Dash,
+                FromDto(dto.BeginLineEnd),
+                FromDto(dto.EndLineEnd)),
+            _ => throw new JsonException($"Unsupported text outline kind '{dto.Kind}'."),
+        };
+    }
+
+    private static ClipboardGradientDto? ToDto(ShapeFill.Gradient? gradient) => gradient is null
+        ? null
+        : new ClipboardGradientDto
+        {
+            Kind = gradient.Kind,
+            AngleDegrees = gradient.AngleDegrees,
+            Stops = gradient.Stops.Select(stop => new ClipboardGradientStopDto
+            {
+                Position = stop.Position,
+                Color = ToDto(stop.Color),
+            }).ToList(),
+        };
+
+    private static ShapeFill.Gradient? FromDto(ClipboardGradientDto? dto) => dto is null
+        ? null
+        : new ShapeFill.Gradient(
+            (dto.Stops ?? []).Select(stop => new GradientStop(
+                stop.Position,
+                FromDto(stop.Color) ?? ThemeAwareColor.Black)).ToArray(),
+            dto.Kind,
+            dto.AngleDegrees);
+
+    private static ClipboardLineEndDto? ToDto(ShapeLineEnd? lineEnd) => lineEnd is null
+        ? null
+        : new ClipboardLineEndDto { Kind = lineEnd.Kind };
+
+    private static ShapeLineEnd? FromDto(ClipboardLineEndDto? dto) => dto is null
+        ? null
+        : new ShapeLineEnd(dto.Kind);
 
     private static ThemeAwareColor? FromDto(ClipboardColorDto? dto)
     {
@@ -561,6 +766,12 @@ public static class InCanvasRichClipboardPlanner
         public bool Strikethrough { get; set; }
         public RunTextCaps Caps { get; set; }
         public ClipboardColorDto? Color { get; set; }
+        public ClipboardFillDto? TextFill { get; set; }
+        public ClipboardOutlineDto? TextOutline { get; set; }
+        public ClipboardRunShadowDto? TextShadow { get; set; }
+        public ClipboardRunReflectionDto? TextReflection { get; set; }
+        public ClipboardRunGlowDto? TextGlow { get; set; }
+        public ClipboardRunSoftEdgeDto? TextSoftEdge { get; set; }
         public ClipboardHyperlinkDto? Hyperlink { get; set; }
         public ClipboardFieldDto? Field { get; set; }
         public ClipboardMathDto? Math { get; set; }
@@ -588,6 +799,81 @@ public static class InCanvasRichClipboardPlanner
     {
         public string? RawXml { get; set; }
         public bool IsAlternateContent { get; set; }
+    }
+
+    private sealed class ClipboardRunShadowDto
+    {
+        public ClipboardColorDto? Color { get; set; }
+        public byte Alpha { get; set; }
+        public double BlurPt { get; set; }
+        public double DistPt { get; set; }
+        public double DirDeg { get; set; }
+    }
+
+    private sealed class ClipboardRunReflectionDto
+    {
+        public byte Alpha { get; set; }
+        public double BlurPt { get; set; }
+        public double DistPt { get; set; }
+        public double DirDeg { get; set; }
+        public double ScaleY { get; set; }
+        public double EndPos { get; set; }
+    }
+
+    private sealed class ClipboardRunGlowDto
+    {
+        public ClipboardColorDto? Color { get; set; }
+        public byte Alpha { get; set; }
+        public double RadiusPt { get; set; }
+    }
+
+    private sealed class ClipboardRunSoftEdgeDto
+    {
+        public double RadiusPt { get; set; }
+    }
+
+    private sealed class ClipboardFillDto
+    {
+        public string? Kind { get; set; }
+        public ClipboardColorDto? Color { get; set; }
+        public GradientKind GradientKind { get; set; }
+        public double AngleDegrees { get; set; }
+        public List<ClipboardGradientStopDto>? Stops { get; set; }
+        public byte[]? ImageBytes { get; set; }
+        public string? ContentType { get; set; }
+        public bool Tile { get; set; }
+        public string? Preset { get; set; }
+        public ClipboardColorDto? ForegroundColor { get; set; }
+        public ClipboardColorDto? BackgroundColor { get; set; }
+    }
+
+    private sealed class ClipboardGradientDto
+    {
+        public GradientKind Kind { get; set; }
+        public double AngleDegrees { get; set; }
+        public List<ClipboardGradientStopDto>? Stops { get; set; }
+    }
+
+    private sealed class ClipboardGradientStopDto
+    {
+        public double Position { get; set; }
+        public ClipboardColorDto? Color { get; set; }
+    }
+
+    private sealed class ClipboardOutlineDto
+    {
+        public string? Kind { get; set; }
+        public double WidthPt { get; set; }
+        public OutlineDash Dash { get; set; }
+        public ClipboardColorDto? Color { get; set; }
+        public ClipboardGradientDto? Gradient { get; set; }
+        public ClipboardLineEndDto? BeginLineEnd { get; set; }
+        public ClipboardLineEndDto? EndLineEnd { get; set; }
+    }
+
+    private sealed class ClipboardLineEndDto
+    {
+        public ShapeLineEndKind Kind { get; set; }
     }
 
     private sealed class ClipboardColorDto
