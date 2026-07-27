@@ -78,6 +78,21 @@ public sealed class FootnoteEndnoteOptionsDialogVisualParityTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public void Visual_harness_uses_normalized_automation_names_for_action_semantics()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "tools",
+            "FreeW.DialogVisualHarness.Avalonia",
+            "Program.cs"));
+
+        source.Should().Contain("AutomationProperties.GetName(d) ?? d.Content?.ToString()");
+        source.Should().Contain("AutomationProperties.GetName(c) ?? c.Content?.ToString()");
+    }
+
     private static object GetField(FootnoteEndnoteOptionsDialog dialog, string name) =>
         typeof(FootnoteEndnoteOptionsDialog).GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .GetValue(dialog)!;

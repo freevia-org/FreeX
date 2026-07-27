@@ -13,6 +13,12 @@ namespace FreeW.App.Avalonia;
 internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = AvaloniaCompactDialogChrome.WindowsStyle;
+    // Avalonia's Linux text rasterizer places the same 12px dialog glyphs two pixels higher than
+    // WPF's ClearType layout. Keep the shared WPF metrics intact and compensate only at this host
+    // boundary so the painted authority bounds line up without changing the dialog contract.
+    private const double LinuxTopInsetAdjustment = 2;
+    private const double LinuxRightInsetAdjustment = -1;
+    private const double LinuxActionTopAdjustment = 2;
     private readonly ComboBox _footnoteFormat;
     private readonly TextBox _footnoteStart;
     private readonly ComboBox _footnoteRestart;
@@ -41,7 +47,11 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
 
         var panel = new StackPanel
         {
-            Margin = new Thickness(FootnoteEndnoteOptionsDialogPlanner.OuterMargin)
+            Margin = new Thickness(
+                FootnoteEndnoteOptionsDialogPlanner.OuterMargin,
+                FootnoteEndnoteOptionsDialogPlanner.OuterMargin + LinuxTopInsetAdjustment,
+                FootnoteEndnoteOptionsDialogPlanner.OuterMargin + LinuxRightInsetAdjustment,
+                FootnoteEndnoteOptionsDialogPlanner.OuterMargin)
         };
         AddSection(panel, FootnoteEndnoteOptionsDialogPlanner.FootnotesSectionLabel, _footnoteFormat, _footnoteStart, _footnoteRestart);
         panel.Children.Add(new Separator
@@ -58,10 +68,13 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
             Accept,
             () => Close(null),
             buttonWidth: FootnoteEndnoteOptionsDialogPlanner.ButtonWidth,
-            margin: new Thickness(0, FootnoteEndnoteOptionsDialogPlanner.ActionTopMargin, 0, 0),
+            margin: new Thickness(0, FootnoteEndnoteOptionsDialogPlanner.ActionTopMargin + LinuxActionTopAdjustment, 0, 0),
             style: Chrome));
         Content = panel;
-        Opened += (_, _) => _footnoteFormat.Focus();
+        // WPF's RenderTargetBitmap preserves the focused border but not its text selection. Keep
+        // the real recovery path selecting invalid input below, while matching the authority's
+        // initial painted state for visual evidence.
+        Opened += (_, _) => _footnoteStart.Focus();
         KeyDown += (_, args) =>
         {
             if (args.Key != Key.Escape) return;
@@ -91,8 +104,7 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
         }
         _status.Text = validation?.Message ?? FootnoteEndnoteOptionsDialogPlanner.PositiveStartAtMessage;
         var target = validation?.Field == FootnoteEndnoteOptionsDialogField.EndnoteStartAt ? _endnoteStart : _footnoteStart;
-        target.Focus();
-        target.SelectAll();
+        AvaloniaCompactDialogChrome.FocusAndSelect(target);
     }
 
     // The visual harness uses the same non-modal validation path as an attempted OK click without
@@ -147,6 +159,12 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
 
         Grid.SetRow(control, row);
         Grid.SetColumn(control, 1);
+        control.HorizontalAlignment = HorizontalAlignment.Stretch;
+        control.Margin = new Thickness(
+            0,
+            FootnoteEndnoteOptionsDialogPlanner.FieldVerticalMargin,
+            0,
+            FootnoteEndnoteOptionsDialogPlanner.FieldVerticalMargin);
         grid.Children.Add(control);
     }
 

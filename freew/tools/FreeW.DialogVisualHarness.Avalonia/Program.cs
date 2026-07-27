@@ -207,8 +207,12 @@ static Semantics ReadSemantics(Window dialog)
     var focused = FindVisualChildren<Control>(dialog).FirstOrDefault(c => c.IsFocused);
     return new Semantics(
         focused is null ? null : Avalonia.Automation.AutomationProperties.GetAutomationId(focused),
-        buttons.FirstOrDefault(b => b.IsDefault) is { } d ? d.Content?.ToString() : null,
-        buttons.FirstOrDefault(b => b.IsCancel) is { } c ? c.Content?.ToString() : null,
+        buttons.FirstOrDefault(b => b.IsDefault) is { } d
+            ? Avalonia.Automation.AutomationProperties.GetName(d) ?? d.Content?.ToString()
+            : null,
+        buttons.FirstOrDefault(b => b.IsCancel) is { } c
+            ? Avalonia.Automation.AutomationProperties.GetName(c) ?? c.Content?.ToString()
+            : null,
         buttons.Select(b => Avalonia.Automation.AutomationProperties.GetName(b) ?? b.Content?.ToString() ?? b.GetType().Name).ToArray(), controls);
 }
 
