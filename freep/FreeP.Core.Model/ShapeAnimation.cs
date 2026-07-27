@@ -54,8 +54,13 @@ public sealed class ShapeAnimation
     /// <summary>
     /// Optional authored effect-option subtype for modeled presets whose options are not
     /// directional (for example, PowerPoint Spin's quarter/half/full/two-turn choices).
+    /// For Grow/Shrink this is opaque legacy metadata only; the amount authority is
+    /// <see cref="ScaleBehavior"/>, not presetSubtype.
     /// </summary>
     public string? EffectSubtype { get; set; }
+
+    /// <summary>The authored p:animScale behavior for Grow/Shrink, when present.</summary>
+    public AnimationScaleBehavior? ScaleBehavior { get; set; }
 
     /// <summary>
     /// Preserves an animation preset that is not represented by the current

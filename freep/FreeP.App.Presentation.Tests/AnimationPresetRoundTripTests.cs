@@ -208,6 +208,105 @@ public sealed class AnimationPresetRoundTripTests
     }
 
     [Theory]
+    [InlineData(AnimationPreset.Shrink, 0.25)]
+    [InlineData(AnimationPreset.Shrink, 0.5)]
+    [InlineData(AnimationPreset.Grow, 1.5)]
+    [InlineData(AnimationPreset.Grow, 4.0)]
+    public void GrowShrinkAnimScaleSurvivesReadCloneAndWrite(
+        AnimationPreset expectedPreset,
+        double scale)
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = expectedPreset,
+            EffectSubtype = "legacy-subtype-is-not-amount",
+            ScaleBehavior = AnimationScaleBehavior.FromTo(scale),
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+        animation.Preset.Should().Be(expectedPreset);
+        animation.EffectSubtype.Should().BeNull();
+        animation.ScaleBehavior!.FromX.Should().Be("100000");
+        animation.ScaleBehavior.ToX.Should().Be(AnimationScaleBehavior.Format(scale));
+        SlideCloner.CloneSlide(reloaded.Slides[0]).Animations.Single().ScaleBehavior!.ToX
+            .Should().Be(AnimationScaleBehavior.Format(scale));
+
+        using var second = new MemoryStream();
+        PptxPackageWriter.Write(reloaded, second);
+        using var archive = new ZipArchive(new MemoryStream(second.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetClass")?.Value == "emph"
+                && element.Attribute("presetID")?.Value == "5");
+        cTn.Attribute("presetSubtype")!.Value.Should().Be("0");
+        var animScale = cTn.Descendants(p + "animScale").Single();
+        animScale.Descendants(p + "attrName").Select(element => element.Attribute("val")!.Value)
+            .Should().Equal("ScaleX", "ScaleY");
+        animScale.Element(p + "from")!.Attribute("x")!.Value.Should().Be("100000");
+        animScale.Element(p + "to")!.Attribute("x")!.Value.Should().Be(AnimationScaleBehavior.Format(scale));
+    }
+
+    [Fact]
+    public void GrowShrinkByOnlyCustomScaleSurvivesReadWriteWithoutSubtypeInference()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Grow,
+            EffectSubtype = "150",
+            ScaleBehavior = new AnimationScaleBehavior { ByX = "35000", ByY = "35000" },
+        });
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(stream.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+        animation.Preset.Should().Be(AnimationPreset.Grow);
+        animation.EffectSubtype.Should().BeNull();
+        animation.ScaleBehavior!.ByX.Should().Be("35000");
+        AnimationAmountSemantics.ResolveScale(animation.Preset, animation.ScaleBehavior).Should().Be(1.35);
+    }
+
+    [Fact]
+    public void GrowShrinkUnknownScaleTokensAreRetainedAsOpaqueAnimScaleValues()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Grow,
+            ScaleBehavior = new AnimationScaleBehavior
+            {
+                FromX = "100000",
+                FromY = "100000",
+                ToX = "office-custom",
+                ToY = "office-custom",
+            },
+        });
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(stream.ToArray()));
+        var behavior = reloaded.Slides[0].Animations.Single().ScaleBehavior!;
+        behavior.ToX.Should().Be("office-custom");
+        behavior.ToY.Should().Be("office-custom");
+    }
+
+    [Theory]
     [InlineData(AnimationDirection.HorizontalOut, "0")]
     [InlineData(AnimationDirection.HorizontalIn, "1")]
     [InlineData(AnimationDirection.VerticalOut, "2")]

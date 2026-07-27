@@ -4871,6 +4871,8 @@ public static class PptxPackageReader
         if (!int.TryParse(presetIdStr, out var presetId)) return null;
 
         var presetSubtype = cTn.Attribute("presetSubtype")?.Value;
+        var scaleBehavior = ReadScaleBehavior(
+            buildPar.Descendants(P + "animScale").FirstOrDefault());
 
         var repeatInfo = ReadRepeat(cTn);
         var autoReverse = ReadBoolean(cTn.Attribute("autoRev")?.Value);
@@ -4881,7 +4883,11 @@ public static class PptxPackageReader
 
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
         bool knownPreset = PptxAnimationMap.IsKnownOoxmlPreset(presetClass, presetId);
-        var direction = PptxAnimationMap.SubtypeToAnimationDirection(presetSubtype, preset);
+        if (preset == AnimationPreset.Grow)
+            preset = AnimationAmountSemantics.ResolvePreset(preset, scaleBehavior);
+        var direction = preset is AnimationPreset.Grow or AnimationPreset.Shrink
+            ? null
+            : PptxAnimationMap.SubtypeToAnimationDirection(presetSubtype, preset);
         var wheelSpokeCount = preset == AnimationPreset.Wheel
             ? ReadWheelSpokeCount(buildPar, cTn)
             : null;
@@ -4899,11 +4905,36 @@ public static class PptxPackageReader
             AutoReverse    = autoReverse,
             Direction      = direction,
             WheelSpokeCount = wheelSpokeCount,
-            EffectSubtype  = preset == AnimationPreset.Spin ? presetSubtype : null,
+            EffectSubtype  = preset == AnimationPreset.Spin
+                ? presetSubtype
+                : null,
+            ScaleBehavior = scaleBehavior,
             TriggerShapeId = triggerShapeId,
             RawPresetClass = knownPreset ? null : presetClass,
             RawPresetId = knownPreset ? null : presetId,
             RawPresetSubtype = knownPreset ? null : presetSubtype,
+        };
+    }
+
+    private static AnimationScaleBehavior? ReadScaleBehavior(XElement? animScale)
+    {
+        if (animScale is null)
+            return null;
+
+        var from = animScale.Element(P + "from");
+        var to = animScale.Element(P + "to");
+        var by = animScale.Element(P + "by");
+        return new AnimationScaleBehavior
+        {
+            FromX = from?.Attribute("x")?.Value,
+            FromY = from?.Attribute("y")?.Value,
+            ToX = to?.Attribute("x")?.Value,
+            ToY = to?.Attribute("y")?.Value,
+            ByX = by?.Attribute("x")?.Value,
+            ByY = by?.Attribute("y")?.Value,
+            ZoomContents = animScale.Attribute("zoomContents") is { } zoom
+                ? ReadBoolean(zoom.Value)
+                : null,
         };
     }
 

@@ -1824,6 +1824,32 @@ public sealed class SlideShowPlaybackPlannerTests
         growShrink.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
     }
 
+    [Theory]
+    [InlineData(AnimationPreset.Grow, 0.25, 0.25)]
+    [InlineData(AnimationPreset.Grow, 1.5, 1.5)]
+    [InlineData(AnimationPreset.Shrink, 0.5, 0.5)]
+    [InlineData(AnimationPreset.Shrink, 4.0, 4.0)]
+    [InlineData(AnimationPreset.Grow, 1.35, 1.35)]
+    public void PlanShapeAnimation_UsesSharedGrowShrinkAmountScale(
+        AnimationPreset preset,
+        double scale,
+        double expectedPeakScale)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 35,
+                Kind = AnimationKind.Emphasis,
+                Preset = preset,
+                ScaleBehavior = AnimationScaleBehavior.FromTo(scale),
+            },
+            startDelayMs: 0);
+
+        plan.PeakScale.Should().Be(expectedPeakScale);
+        var frame = SlideShowPlaybackFramePlanner.PlanFrame(plan, 250, 960, 540);
+        frame.Scale.Should().Be(expectedPeakScale);
+    }
+
     [Fact]
     public void PlanShapeAnimation_PreSamplesMotionPathKeyframes()
     {

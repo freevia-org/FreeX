@@ -404,6 +404,32 @@ public sealed class AnimationPaneTests
     }
 
     [StaFact]
+    public void AnimationPane_GrowShrink_ExposesAmountOptionsAndUsesUndoableMutation()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var shapeId = presentation.Slides[0].Shapes[0].Id;
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = shapeId,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Grow,
+            ScaleBehavior = AnimationScaleBehavior.FromTo(1.5),
+        });
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var pane = new AnimationPane(editor);
+
+        var options = pane.CurrentTimelinePlanForTest.Items[0].EffectOptions;
+        options.Options.Select(option => option.DisplayText)
+            .Should().Equal("Tiny (25%)", "Smaller (50%)", "Larger (150%)", "Huge (400%)");
+        options.SelectedOptionText.Should().Be("Larger (150%)");
+
+        pane.ApplyAnimationPaneEffectOptionEditForTest(0, "amount-400").ShouldApply.Should().BeTrue();
+        editor.CurrentSlideAnimations[0].ScaleBehavior!.ToX.Should().Be("400000");
+        editor.Undo();
+        editor.CurrentSlideAnimations[0].ScaleBehavior!.ToX.Should().Be("150000");
+    }
+
+    [StaFact]
     public void AnimationPane_ProjectsSharedPlaybackSessionState()
     {
         var editor = MakeSessionWithAnimations();

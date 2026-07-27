@@ -233,6 +233,10 @@ public static class PresentationAnimationCommandPlanner
             AutoReverse = animation.AutoReverse,
             Direction = animation.Direction,
             EffectSubtype = animation.EffectSubtype,
+            ScaleBehavior = animation.ScaleBehavior?.Clone(),
+            RawPresetClass = animation.RawPresetClass,
+            RawPresetId = animation.RawPresetId,
+            RawPresetSubtype = animation.RawPresetSubtype,
             Motion = animation.Motion,
             TriggerShapeId = animation.TriggerShapeId,
         };

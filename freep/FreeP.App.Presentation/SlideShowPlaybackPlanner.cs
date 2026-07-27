@@ -488,8 +488,8 @@ public static class SlideShowPlaybackPlanner
     }
 
     private static double ResolvePeakScale(ShapeAnimation animation) =>
-        animation.Preset == AnimationPreset.Shrink
-            ? 0.8
+        AnimationAmountSemantics.IsGrowShrink(animation.Preset)
+            ? AnimationAmountSemantics.ResolveScale(animation.Preset, animation.ScaleBehavior)
             : 1.2;
 
     private static double ResolveRotationDegrees(ShapeAnimation animation) =>

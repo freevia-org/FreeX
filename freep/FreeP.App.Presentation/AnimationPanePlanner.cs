@@ -21,7 +21,8 @@ public sealed record AnimationPaneEffectOptionDescriptor(
     AnimationDirection? Direction,
     bool IsSelected,
     int? WheelSpokeCount = null,
-    string? EffectSubtype = null)
+    string? EffectSubtype = null,
+    AnimationScaleBehavior? ScaleBehavior = null)
 {
     public bool ReversesMotionPath { get; init; }
 }
@@ -45,7 +46,8 @@ public sealed record AnimationPaneEffectOptionMutationPlan(
     string DisplayText,
     string? DisabledReason,
     int? WheelSpokeCount = null,
-    string? EffectSubtype = null)
+    string? EffectSubtype = null,
+    AnimationScaleBehavior? ScaleBehavior = null)
 {
     public bool ReversesMotionPath { get; init; }
 }
@@ -877,19 +879,24 @@ public static class AnimationPanePlanner
             };
         }
 
+        var isAmountEffect = AnimationAmountSemantics.IsGrowShrink(animation.Preset);
         var selectedDirection = animation.Preset == AnimationPreset.Split
             ? AnimationDirectionSemantics.ResolveSplitDirection(animation)
             : animation.Direction;
-        var selected = descriptors.FirstOrDefault(option =>
+        var selected = (isAmountEffect
+                ? descriptors.FirstOrDefault(option => option.IsSelected)
+                : descriptors.FirstOrDefault(option =>
                 option.Direction == selectedDirection
                 && option.EffectSubtype == animation.EffectSubtype)
-            ?? descriptors.FirstOrDefault(option => option.EffectSubtype == animation.EffectSubtype)
+                ?? descriptors.FirstOrDefault(option => option.EffectSubtype == animation.EffectSubtype))
             ?? descriptors[0];
         var normalized = descriptors
             .Select(option => option with
             {
-                IsSelected = option.Direction == selected.Direction
-                    && option.EffectSubtype == selected.EffectSubtype
+                IsSelected = isAmountEffect
+                    ? ScaleBehaviorEquals(option.ScaleBehavior, selected.ScaleBehavior)
+                    : option.Direction == selected.Direction
+                        && option.EffectSubtype == selected.EffectSubtype
             })
             .ToArray();
 
@@ -897,7 +904,9 @@ public static class AnimationPanePlanner
             true,
             animationIndex,
             FormatEffect(animation),
-            selected.DisplayText,
+            isAmountEffect
+                ? AnimationAmountSemantics.Describe(animation.Preset, animation.ScaleBehavior)
+                : selected.DisplayText,
             normalized,
             null)
         {
@@ -957,20 +966,25 @@ public static class AnimationPanePlanner
         var currentWheelSpokeCount = ResolveWheelSpokeCount(animation);
         var direction = option.Direction ?? animation.Direction;
         var effectSubtype = option.EffectSubtype ?? animation.EffectSubtype;
+        var scaleBehavior = option.ScaleBehavior ?? animation.ScaleBehavior;
         if (option.EffectSubtype is not null)
             direction = null;
+        var isAmountEffect = AnimationAmountSemantics.IsGrowShrink(animation.Preset);
         return new AnimationPaneEffectOptionMutationPlan(
-            animation.Direction != direction
+            (isAmountEffect
+                ? !ScaleBehaviorEquals(animation.ScaleBehavior, scaleBehavior)
+                : animation.Direction != direction)
                 || (animation.Preset == AnimationPreset.Wheel
                     && option.WheelSpokeCount is not null
                     && currentWheelSpokeCount != option.WheelSpokeCount)
-                || animation.EffectSubtype != effectSubtype,
+                || (!isAmountEffect && animation.EffectSubtype != effectSubtype),
             animationIndex,
             direction,
             option.DisplayText,
             null,
             option.WheelSpokeCount ?? animation.WheelSpokeCount,
-            effectSubtype);
+            isAmountEffect ? null : effectSubtype,
+            scaleBehavior);
     }
 
     public static bool TryApplyEffectOptionMutation(
@@ -998,7 +1012,10 @@ public static class AnimationPanePlanner
         }
 
         updated.Direction = plan.Direction;
-        updated.EffectSubtype = plan.EffectSubtype;
+        if (AnimationAmountSemantics.IsGrowShrink(current.Preset))
+            updated.ScaleBehavior = plan.ScaleBehavior?.Clone();
+        else
+            updated.EffectSubtype = plan.EffectSubtype;
         if (current.Preset == AnimationPreset.Wheel)
             updated.WheelSpokeCount = plan.WheelSpokeCount;
         editor.SetAnimation(plan.AnimationIndex, updated);
@@ -1600,6 +1617,12 @@ public static class AnimationPanePlanner
                     yield return option;
                 break;
 
+            case AnimationPreset.Grow:
+            case AnimationPreset.Shrink:
+                foreach (var option in GrowShrinkAmountOptions(animation))
+                    yield return option;
+                break;
+
             case AnimationPreset.Spiral:
             case AnimationPreset.Swivel:
                 foreach (var option in InOutOptions())
@@ -1672,6 +1695,52 @@ public static class AnimationPanePlanner
         yield return EffectSubtypeOption("full-spin", "Full Spin", "fullSpin");
         yield return EffectSubtypeOption("two-spins", "Two Spins", "twoSpins");
     }
+
+    private static IEnumerable<AnimationPaneEffectOptionDescriptor> GrowShrinkAmountOptions(
+        ShapeAnimation animation)
+    {
+        foreach (var choice in AnimationAmountSemantics.SupportedChoices)
+        {
+            yield return new AnimationPaneEffectOptionDescriptor(
+                $"amount-{choice.Token}",
+                choice.DisplayText,
+                null,
+                AnimationAmountSemantics.IsSupportedScale(animation.ScaleBehavior, choice.Scale),
+                ScaleBehavior: AnimationAmountSemantics.CreateChoiceBehavior(animation.Preset, choice.Scale));
+        }
+
+        // Keep a missing/default or nonstandard imported token visible instead of
+        // silently selecting the first named amount in the pane.
+        if (animation.ScaleBehavior is null)
+        {
+            yield return new AnimationPaneEffectOptionDescriptor(
+                "amount-default",
+                AnimationAmountSemantics.Describe(animation.Preset, animation.ScaleBehavior),
+                null,
+                true,
+                ScaleBehavior: AnimationScaleBehavior.FromTo(
+                    animation.Preset == AnimationPreset.Shrink ? 0.8 : 1.2));
+        }
+        else if (!AnimationAmountSemantics.SupportedChoices.Any(choice =>
+                     AnimationAmountSemantics.IsSupportedScale(animation.ScaleBehavior, choice.Scale)))
+        {
+            yield return new AnimationPaneEffectOptionDescriptor(
+                "amount-custom",
+                AnimationAmountSemantics.Describe(animation.Preset, animation.ScaleBehavior),
+                null,
+                true,
+                ScaleBehavior: animation.ScaleBehavior.Clone());
+        }
+    }
+
+    private static bool ScaleBehaviorEquals(AnimationScaleBehavior? left, AnimationScaleBehavior? right) =>
+        left?.FromX == right?.FromX
+        && left?.FromY == right?.FromY
+        && left?.ToX == right?.ToX
+        && left?.ToY == right?.ToY
+        && left?.ByX == right?.ByX
+        && left?.ByY == right?.ByY
+        && left?.ZoomContents == right?.ZoomContents;
 
     private static AnimationPaneEffectOptionDescriptor EffectOption(
         string id,

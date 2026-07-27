@@ -550,6 +550,7 @@ public static class SlideCloner
             Direction     = a.Direction,
             WheelSpokeCount = a.WheelSpokeCount,
             EffectSubtype = a.EffectSubtype,
+            ScaleBehavior = a.ScaleBehavior?.Clone(),
             TriggerShapeId = a.TriggerShapeId,
             RawPresetClass = a.RawPresetClass,
             RawPresetId = a.RawPresetId,

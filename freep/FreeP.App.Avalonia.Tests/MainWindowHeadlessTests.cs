@@ -3282,6 +3282,39 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Animation_pane_grow_shrink_effect_options_use_shared_amount_semantics()
+    {
+        AnimationPaneEffectOptionsPlan? optionsPlan = null;
+        AnimationPaneEffectOptionMutationPlan? mutationPlan = null;
+        AnimationScaleBehavior? scaleBehavior = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.emphasis.grow-shrink", out var growShrink).Should().BeTrue();
+
+            var hero = window.Editor.InsertDefaultRectangle();
+            window.Editor.Select(hero.Id);
+            growShrink!.Execute(RibbonCommandContext.Empty);
+            window.ShowAnimationPane();
+
+            optionsPlan = window.LastAnimationPaneTimelinePlan!.Items[0].EffectOptions;
+            mutationPlan = window.ApplyAnimationPaneEffectOptionEditForTests(0, "amount-50");
+            scaleBehavior = window.Editor.CurrentSlideAnimations.Single().ScaleBehavior;
+        });
+
+        if (!ran) return;
+        optionsPlan.Should().NotBeNull();
+        optionsPlan!.Options.Select(option => option.DisplayText).Should().Contain(
+            new[] { "Tiny (25%)", "Smaller (50%)", "Larger (150%)", "Huge (400%)" });
+        mutationPlan.Should().NotBeNull();
+        mutationPlan!.ShouldApply.Should().BeTrue();
+        mutationPlan.ScaleBehavior!.ToX.Should().Be("50000");
+        scaleBehavior!.ToX.Should().Be("50000");
+    }
+
+    [Fact]
     public async Task Ribbon_review_workflow_commands_refresh_shared_adapter_state()
     {
         var foundComments = false;

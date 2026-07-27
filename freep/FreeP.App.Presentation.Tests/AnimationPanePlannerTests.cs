@@ -887,6 +887,59 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Theory]
+    [InlineData(AnimationPreset.Grow, 1.5, "Larger (150%)")]
+    [InlineData(AnimationPreset.Shrink, 0.5, "Smaller (50%)")]
+    public void BuildEffectOptionsPlan_ProjectsPowerPointGrowShrinkAmounts(
+        AnimationPreset preset,
+        double scale,
+        string selectedText)
+    {
+        var animations = new[]
+        {
+            new ShapeAnimation
+            {
+                ShapeId = 10u,
+                Kind = AnimationKind.Emphasis,
+                Preset = preset,
+                ScaleBehavior = AnimationScaleBehavior.FromTo(scale),
+            },
+        };
+
+        var plan = AnimationPanePlanner.BuildEffectOptionsPlan(animations, 0);
+
+        plan.Options.Select(option => option.DisplayText)
+            .Should().Equal("Tiny (25%)", "Smaller (50%)", "Larger (150%)", "Huge (400%)");
+        plan.SelectedOptionText.Should().Be(selectedText);
+        plan.Options.Should().ContainSingle(option => option.IsSelected && option.ScaleBehavior!.ToX == AnimationScaleBehavior.Format(scale));
+    }
+
+    [Fact]
+    public void GrowShrinkCustomScale_IsShownHonestlyAndMutationIsUndoable()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = presentation.Slides[0].Shapes[0].Id,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Grow,
+            ScaleBehavior = AnimationScaleBehavior.FromTo(1.35),
+        });
+
+        var options = AnimationPanePlanner.BuildEffectOptionsPlan(editor.CurrentSlideAnimations, 0);
+        options.SelectedOptionText.Should().Be("Custom (135%)");
+        options.Options.Should().ContainSingle(option =>
+            option.IsSelected && option.ScaleBehavior!.ToX == "135000" && option.DisplayText == "Custom (135%)");
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations, 0, "amount-400");
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
+        editor.CurrentSlideAnimations[0].ScaleBehavior!.ToX.Should().Be("400000");
+        editor.Undo();
+        editor.CurrentSlideAnimations[0].ScaleBehavior!.ToX.Should().Be("135000");
+    }
+
+    [Theory]
     [InlineData(AnimationPreset.Spiral, AnimationDirection.Out, "Out")]
     [InlineData(AnimationPreset.Swivel, AnimationDirection.In, "In")]
     public void BuildEffectOptionsPlan_ProjectsSpiralAndSwivelInOutOptions(

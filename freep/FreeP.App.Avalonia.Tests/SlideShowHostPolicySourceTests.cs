@@ -308,6 +308,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PulseEffect(element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.GrowShrink:");
         source.Should().Contain("GrowShrinkEffect(element, plan);");
+        source.Should().Contain("plan.PeakScale");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Spin:");
         source.Should().Contain("SpinEffect(element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Teeter:");

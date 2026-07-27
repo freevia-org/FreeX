@@ -2246,12 +2246,14 @@ public static class PptxPackageWriter
         int presetId = hasRawPreset ? anim.RawPresetId!.Value : mappedPresetId;
         var subtypeAttr = hasRawPreset && anim.RawPresetSubtype is not null
             ? anim.RawPresetSubtype
-            : anim.EffectSubtype ?? (anim.Preset == AnimationPreset.Split
-                ? PptxAnimationMap.AnimationDirectionToSubtype(anim.Direction is
-                    AnimationDirection.Horizontal or AnimationDirection.Vertical
-                    ? anim.Direction
-                    : AnimationDirectionSemantics.ResolveSplitDirection(anim))
-                : PptxAnimationMap.AnimationDirectionToSubtype(anim.Direction));
+            : anim.Preset is AnimationPreset.Grow or AnimationPreset.Shrink
+                ? "0"
+                : anim.EffectSubtype ?? (anim.Preset == AnimationPreset.Split
+                    ? PptxAnimationMap.AnimationDirectionToSubtype(anim.Direction is
+                        AnimationDirection.Horizontal or AnimationDirection.Vertical
+                        ? anim.Direction
+                        : AnimationDirectionSemantics.ResolveSplitDirection(anim))
+                    : PptxAnimationMap.AnimationDirectionToSubtype(anim.Direction));
 
         string delayStr = triggerOverride == AnimationTrigger.OnClick
             ? "indefinite"
@@ -2274,6 +2276,8 @@ public static class PptxPackageWriter
         var childTimingItems = new List<object>();
         if (animEffectEl is not null)
             childTimingItems.Add(animEffectEl);
+        if (anim.Preset is AnimationPreset.Grow or AnimationPreset.Shrink)
+            childTimingItems.Add(BuildScaleBehaviorEl(anim, ref nodeId));
 
         var setEl = new XElement(P + "set",
             new XElement(P + "cBhvr",
@@ -2298,6 +2302,41 @@ public static class PptxPackageWriter
                             new XElement(P + "stCondLst",
                                 new XElement(P + "cond", new XAttribute("delay", "0"))),
                             new XElement(P + "childTnLst", childTimingItems))))));
+    }
+
+    private static XElement BuildScaleBehaviorEl(ShapeAnimation anim, ref uint nodeId)
+    {
+        var behavior = anim.ScaleBehavior
+            ?? AnimationScaleBehavior.FromTo(anim.Preset == AnimationPreset.Shrink ? 0.8 : 1.2);
+        var scale = new XElement(P + "animScale",
+            behavior.ZoomContents.HasValue
+                ? new XAttribute("zoomContents", behavior.ZoomContents.Value ? "1" : "0")
+                : null,
+            new XElement(P + "cBhvr",
+                new XElement(P + "cTn",
+                    new XAttribute("id", nodeId++),
+                    new XAttribute("dur", anim.DurationMs),
+                    new XAttribute("fill", "hold")),
+                new XElement(P + "tgtEl",
+                    new XElement(P + "spTgt", new XAttribute("spid", anim.ShapeId))),
+                new XElement(P + "attrNameLst",
+                    new XElement(P + "attrName", new XAttribute("val", "ScaleX")),
+                    new XElement(P + "attrName", new XAttribute("val", "ScaleY")))));
+
+        AddScalePosition(scale, "from", behavior.FromX, behavior.FromY);
+        AddScalePosition(scale, "to", behavior.ToX, behavior.ToY);
+        AddScalePosition(scale, "by", behavior.ByX, behavior.ByY);
+        return scale;
+    }
+
+    private static void AddScalePosition(XElement parent, string name, string? x, string? y)
+    {
+        if (x is null && y is null)
+            return;
+
+        parent.Add(new XElement(P + name,
+            x is not null ? new XAttribute("x", x) : null,
+            y is not null ? new XAttribute("y", y) : null));
     }
 
     private static XElement? BuildWheelSpokeAnimEffectEl(ShapeAnimation anim, ref uint nodeId)
