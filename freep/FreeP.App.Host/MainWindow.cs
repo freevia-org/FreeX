@@ -572,8 +572,104 @@ public sealed partial class MainWindow : Window
         // _textOverlay may be null during the very first call from BuildBody before
         // the field is assigned; BuildBody itself calls this after assigning it.
         if (_textOverlay is null) return;
+        SlideCanvas.MouseRightButtonUp -= OnSlideCanvasMouseRightButtonUp;
+        SlideCanvas.MouseRightButtonUp += OnSlideCanvasMouseRightButtonUp;
         SlideCanvas.AttachEditing(Editor, _textOverlay);
         SlideCanvas.ApplyViewShowState(_viewShowState);
+    }
+
+    private void OnSlideCanvasMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        var slide = Editor.CurrentSlide;
+        if (slide is null || _presentation is null)
+            return;
+
+        var screenPoint = e.GetPosition(SlideCanvas);
+        var slidePoint = SlideCanvas.CurrentTransform.ScreenToSlide(screenPoint.X, screenPoint.Y);
+        var hitId = FreeP.App.Compositor.ShapeHitTester.HitTest(slide, _presentation, slidePoint.X, slidePoint.Y);
+        var shape = hitId.HasValue
+            ? slide.Shapes.FirstOrDefault(candidate => candidate.Id == hitId.Value)
+            : null;
+        if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
+            return;
+
+        var cellHit = TableCellHitTester.HitTest(shape, slidePoint.X, slidePoint.Y);
+        if (!cellHit.HasValue)
+            return;
+
+        Editor.SetActiveTableCell(cellHit.Value.Row, cellHit.Value.Col);
+        var menu = BuildTableContextMenu(shape);
+        menu.PlacementTarget = SlideCanvas;
+        menu.Placement = PlacementMode.MousePoint;
+        menu.IsOpen = true;
+        e.Handled = true;
+    }
+
+    private ContextMenu BuildTableContextMenu(SlideShape shape)
+    {
+        var menu = new ContextMenu();
+
+        void Add(string header, Action action)
+        {
+            var item = new MenuItem { Header = header };
+            item.Click += (_, _) => action();
+            menu.Items.Add(item);
+        }
+
+        Add("Insert Row Above", () => { Editor.Select(shape.Id); Editor.InsertRowAbove(); });
+        Add("Insert Row Below", () => { Editor.Select(shape.Id); Editor.InsertRowBelow(); });
+        menu.Items.Add(new Separator());
+        Add("Insert Column Left", () => { Editor.Select(shape.Id); Editor.InsertColumnLeft(); });
+        Add("Insert Column Right", () => { Editor.Select(shape.Id); Editor.InsertColumnRight(); });
+        menu.Items.Add(new Separator());
+        Add("Delete Row", () => { Editor.Select(shape.Id); Editor.DeleteRow(); });
+        Add("Delete Column", () => { Editor.Select(shape.Id); Editor.DeleteColumn(); });
+        menu.Items.Add(new Separator());
+
+        var table = shape.Table!;
+        var activeCell = Editor.ActiveTableCell;
+        var canMerge = activeCell.HasValue &&
+            (activeCell.Value.Col + 1 < table.ColumnWidthsEmu.Count ||
+             activeCell.Value.Row + 1 < table.Rows.Count);
+        var canSplit = activeCell.HasValue &&
+            table.Rows.Count > activeCell.Value.Row &&
+            table.Rows[activeCell.Value.Row].Cells.ElementAtOrDefault(activeCell.Value.Col) is { } cell &&
+            (cell.GridSpan > 1 || cell.RowSpan > 1);
+
+        var mergeItem = new MenuItem { Header = "Merge with Right Cell", IsEnabled = canMerge };
+        if (canMerge && activeCell is { } mergeCell)
+        {
+            var row = mergeCell.Row;
+            var col = mergeCell.Col;
+            var rightColumn = col + 1 < table.ColumnWidthsEmu.Count ? col + 1 : col;
+            var belowRow = row + 1 < table.Rows.Count && rightColumn == col ? row + 1 : row;
+            mergeItem.Click += (_, _) =>
+            {
+                Editor.Select(shape.Id);
+                Editor.MergeTableCells(row, col, belowRow, rightColumn);
+            };
+        }
+        menu.Items.Add(mergeItem);
+
+        var splitItem = new MenuItem { Header = "Split Cell", IsEnabled = canSplit };
+        if (canSplit && activeCell is { } splitCell)
+        {
+            splitItem.Click += (_, _) =>
+            {
+                Editor.Select(shape.Id);
+                Editor.SplitTableCell(splitCell.Row, splitCell.Col);
+            };
+        }
+        menu.Items.Add(splitItem);
+        return menu;
+    }
+
+    internal ContextMenu? BuildTableContextMenuForTests(uint shapeId)
+    {
+        var shape = Editor.CurrentSlide?.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        return shape?.Kind == SlideShapeKind.Table && shape.Table is not null
+            ? BuildTableContextMenu(shape)
+            : null;
     }
 
     // ── File load ─────────────────────────────────────────────────────────────────

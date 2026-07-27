@@ -118,6 +118,61 @@ public sealed class KeyboardContextParityTests
         presentation.Slides[0].IsHidden.Should().BeTrue();
     }
 
+    [StaFact]
+    public void WpfTableContextMenuExecutesCellMutations()
+    {
+        var window = new MainWindow(
+            new FreePOptions(),
+            messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var table = new SlideShape
+            {
+                Id = 702,
+                Kind = SlideShapeKind.Table,
+                Table = new TableShape
+                {
+                    ColumnWidthsEmu = { 100, 100 },
+                    Rows =
+                    {
+                        new TableRow { Cells = { new TableCell(), new TableCell() } },
+                        new TableRow { Cells = { new TableCell(), new TableCell() } },
+                    }
+                }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(table);
+            window.Editor.Select(table.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+
+            var menu = window.BuildTableContextMenuForTests(table.Id);
+            menu.Should().NotBeNull();
+            menu!.Items.Cast<object>().Should().HaveCount(11);
+            menu.Items.OfType<MenuItem>().Select(item => item.Header).Should().Equal(
+                "Insert Row Above", "Insert Row Below", "Insert Column Left", "Insert Column Right",
+                "Delete Row", "Delete Column", "Merge with Right Cell", "Split Cell");
+            menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Merge with Right Cell"))
+                .IsEnabled.Should().BeTrue();
+            menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Split Cell"))
+                .IsEnabled.Should().BeFalse();
+
+            menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Merge with Right Cell"))
+                .RaiseEvent(new System.Windows.RoutedEventArgs(MenuItem.ClickEvent));
+            table.Table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+            table.Table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+
+            var splitMenu = window.BuildTableContextMenuForTests(table.Id)!;
+            splitMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Split Cell"))
+                .IsEnabled.Should().BeTrue();
+            splitMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Split Cell"))
+                .RaiseEvent(new System.Windows.RoutedEventArgs(MenuItem.ClickEvent));
+            table.Table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private static void AssertMenuMatches(
         ContextMenu menu,
         IReadOnlyList<FreePContextMenuEntryPlan> expected)
