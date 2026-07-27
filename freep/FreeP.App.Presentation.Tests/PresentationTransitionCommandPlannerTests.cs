@@ -52,6 +52,8 @@ public sealed class PresentationTransitionCommandPlannerTests
     [InlineData("freep.transition.advance-on-click", PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick)]
     [InlineData("freep.transition.advance-after", PresentationTransitionCommandIntentKind.SetAdvanceAfter)]
     [InlineData("freep.transition.apply-all", PresentationTransitionCommandIntentKind.ApplyToAllSlides)]
+    [InlineData("freep.transition.sound", PresentationTransitionCommandIntentKind.RequestSoundPicker)]
+    [InlineData("freep.transition.sound-none", PresentationTransitionCommandIntentKind.ClearSound)]
     public void TryPlan_MapsTimingAndApplyAllCommandIdsToTypedIntents(
         string commandId,
         PresentationTransitionCommandIntentKind expectedIntent)
@@ -262,6 +264,39 @@ public sealed class PresentationTransitionCommandPlannerTests
 
         editor.CurrentSlideTransition!.Kind.Should().Be(TransitionKind.Wipe);
         editor.CurrentSlideTransition.AdvanceAfterMs.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryApply_TransitionSoundCommandsUseHostPickerAndUndoableClear()
+    {
+        var editor = MakeSession(out _);
+        editor.SetTransition(new SlideTransition { Kind = TransitionKind.Fade });
+
+        PresentationTransitionCommandPlanner.TryPlan("freep.transition.sound", out var choosePlan)
+            .Should().BeTrue();
+        bool pickerInvoked = false;
+        PresentationTransitionCommandPlanner.TryApply(
+                editor,
+                choosePlan,
+                onSoundPicker: () => pickerInvoked = true)
+            .Should().BeTrue();
+        pickerInvoked.Should().BeTrue();
+
+        var sound = new TransitionSound
+        {
+            AudioBytes = [0x52, 0x49, 0x46, 0x46],
+            ContentType = "audio/wav",
+        };
+        editor.SetCurrentSlideTransitionSound(sound);
+
+        PresentationTransitionCommandPlanner.TryPlan("freep.transition.sound-none", out var clearPlan)
+            .Should().BeTrue();
+        PresentationTransitionCommandPlanner.TryApply(editor, clearPlan).Should().BeTrue();
+        editor.CurrentSlideTransition!.Sound.Should().BeNull();
+
+        editor.Undo();
+        editor.CurrentSlideTransition!.Sound.Should().NotBeNull();
+        editor.CurrentSlideTransition.Sound!.AudioBytes.Should().Equal(sound.AudioBytes);
     }
 
     [Fact]

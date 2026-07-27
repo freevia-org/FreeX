@@ -11,6 +11,8 @@ public enum PresentationTransitionCommandIntentKind
     ToggleAdvanceOnClick,
     SetAdvanceAfter,
     ApplyToAllSlides,
+    RequestSoundPicker,
+    ClearSound,
 }
 
 public sealed record PresentationTransitionCommandPlan(
@@ -248,6 +250,12 @@ public static class PresentationTransitionCommandPlanner
             new PresentationTransitionCommandPlan(
                 "freep.transition.apply-all",
                 PresentationTransitionCommandIntentKind.ApplyToAllSlides),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.sound",
+                PresentationTransitionCommandIntentKind.RequestSoundPicker),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.sound-none",
+                PresentationTransitionCommandIntentKind.ClearSound),
         };
 
     public static bool TryPlan(string commandId, out PresentationTransitionCommandPlan plan)
@@ -268,7 +276,8 @@ public static class PresentationTransitionCommandPlanner
     public static bool TryApply(
         EditingSession editor,
         PresentationTransitionCommandPlan plan,
-        string? selectedValue = null)
+        string? selectedValue = null,
+        Action? onSoundPicker = null)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(plan);
@@ -320,6 +329,24 @@ public static class PresentationTransitionCommandPlanner
                     editor.Presentation.Slides[i].Transition = transitions[i];
                 }
 
+                return true;
+
+            case PresentationTransitionCommandIntentKind.RequestSoundPicker:
+                if (onSoundPicker is null)
+                {
+                    return false;
+                }
+
+                onSoundPicker();
+                return true;
+
+            case PresentationTransitionCommandIntentKind.ClearSound:
+                if (editor.CurrentSlideTransition is null)
+                {
+                    return false;
+                }
+
+                editor.SetCurrentSlideTransitionSound(null);
                 return true;
 
             default:

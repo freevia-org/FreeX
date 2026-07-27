@@ -1807,6 +1807,18 @@
   <data name="Ribbon_Command_TransitionApplyAll_KeyTip" xml:space="preserve">
     <value>A</value>
   </data>
+  <data name="Ribbon_Command_TransitionSound_Label" xml:space="preserve">
+    <value>Sound...</value>
+  </data>
+  <data name="Ribbon_Command_TransitionSound_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_TransitionSoundNone_Label" xml:space="preserve">
+    <value>No Sound</value>
+  </data>
+  <data name="Ribbon_Command_TransitionSoundNone_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
   <data name="Ribbon_Option_TransitionAdvanceAfterNone_Label" xml:space="preserve">
     <value>(none)</value>
   </data>
