@@ -497,6 +497,44 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ImportedSmartArtHierarchy3_UsesSharedLiveHorizontalLayout()
+    {
+        var corpusPath = FindRenderCompareCorpusFile("14-smartart-live.pptx");
+        var presentation = PptxPackageReader.Read(corpusPath);
+        var smartArtShape = presentation.Slides[1].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var smartArt = smartArtShape.SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.LayoutUniqueId.Should().EndWith("/hierarchy3");
+        smartArt.Data.Family.Should().Be(SmartArtFamily.Hierarchy);
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "hierarchy3 is now admitted by the shared reader allow-list");
+
+        var liveShapes = SmartArtLayoutEngine.Layout(
+            smartArt.Data,
+            smartArtShape.OffsetXEmu,
+            smartArtShape.OffsetYEmu,
+            smartArtShape.ExtentCxEmu,
+            smartArtShape.ExtentCyEmu,
+            presentation.Theme!)!;
+
+        liveShapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "the imported hierarchy3 data has four visible node boxes");
+        liveShapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(2, "the imported hierarchy3 data has two parent-child connectors");
+
+        var boxes = liveShapes
+            .Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .ToDictionary(shape => shape.PlainText, StringComparer.Ordinal);
+        boxes.Keys.Should().Contain(["CEO", "VP Sales", "VP Engineering", "VP Marketing"]);
+        boxes["VP Sales"].OffsetXEmu.Should().BeGreaterThan(boxes["CEO"].OffsetXEmu);
+        boxes["VP Engineering"].OffsetXEmu.Should().Be(boxes["VP Sales"].OffsetXEmu);
+        boxes["VP Marketing"].OffsetXEmu.Should().Be(boxes["CEO"].OffsetXEmu,
+            "the corpus preserves its second document-level root in the shared hierarchy plan");
+    }
+
+    [Fact]
     public void Reader_SmartArt_PictureCaptionList_ImportsNodePictures()
     {
         var nodeTexts = new[] { "Alpha caption", "Beta caption" };
@@ -2105,6 +2143,25 @@ public sealed class SmartArtTests : IDisposable
             "hierarchy-family layouts outside the bounded allow-list should keep cached-drawing fallback");
         sa.Data.Nodes.Should().ContainSingle();
         sa.Data.Nodes[0].Children.Should().ContainSingle().Which.Text.Should().Be("Child");
+    }
+
+    [Fact]
+    public void Reader_ParsesHierarchy3AsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3",
+            nodes: [("R", "Portfolio"), ("C1", "Product"), ("C2", "Operations")],
+            parOfConnections: [("R", "C1"), ("R", "C2")]);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "hierarchy3 has a bounded shared left-to-right layout plan");
+        sa.Data.Nodes.Should().ContainSingle();
+        sa.Data.Nodes[0].Children.Select(n => n.Text).Should().BeEquivalentTo(new[] { "Product", "Operations" });
     }
 
     [Fact]

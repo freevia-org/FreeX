@@ -114,6 +114,9 @@ public static class SmartArtLayoutEngine
         if (IsPyramidListLayout(data.LayoutUniqueId))
             return LayoutPyramidList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (data.Family == SmartArtFamily.Hierarchy && IsHierarchy3Layout(data.LayoutUniqueId))
+            return LayoutHierarchy3(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (data.Family == SmartArtFamily.Hierarchy && IsHorizontalHierarchyLayout(data.LayoutUniqueId))
             return LayoutHorizontalHierarchy(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1359,8 +1362,55 @@ public static class SmartArtLayoutEngine
 
     /// <summary>
     /// Horizontal hierarchy layout: roots/parents on the left, child/report nodes
-    /// in depth columns to the right, with shared connector line shapes.
+    /// in depth columns to the right, with shared connector line shapes. Hierarchy3
+    /// uses the native left-to-right algorithm; empty authored template leaves remain
+    /// in the model for editing but do not become visible live boxes.
     /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutHierarchy3(
+        SmartArtData data,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var visibleData = new SmartArtData
+        {
+            Family = data.Family,
+            LayoutUniqueId = data.LayoutUniqueId,
+            IsLiveLayoutSupported = data.IsLiveLayoutSupported
+        };
+
+        foreach (var node in data.Nodes)
+        {
+            var visibleNode = CloneVisibleHierarchyNode(node);
+            if (visibleNode is not null)
+                visibleData.Nodes.Add(visibleNode);
+        }
+
+        return LayoutHorizontalHierarchy(visibleData, fx, fy, fcx, fcy, stylePlan);
+    }
+
+    private static SmartArtNode? CloneVisibleHierarchyNode(SmartArtNode node)
+    {
+        var visibleChildren = node.Children
+            .Select(CloneVisibleHierarchyNode)
+            .Where(child => child is not null)
+            .Cast<SmartArtNode>()
+            .ToList();
+
+        if (string.IsNullOrWhiteSpace(node.Text) && visibleChildren.Count == 0)
+            return null;
+
+        var clone = new SmartArtNode
+        {
+            ModelId = node.ModelId,
+            Text = node.Text,
+            Level = node.Level,
+            IsAssistant = node.IsAssistant,
+            Picture = node.Picture
+        };
+        clone.Children.AddRange(visibleChildren);
+        return clone;
+    }
+
     private static IReadOnlyList<SlideShape> LayoutHorizontalHierarchy(
         SmartArtData data,
         long fx, long fy, long fcx, long fcy,
@@ -1704,6 +1754,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "horizontalhierarchy", StringComparison.Ordinal);
+    }
+
+    private static bool IsHierarchy3Layout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "hierarchy3", StringComparison.Ordinal);
     }
 
     private static bool IsPictureCaptionListLayout(string uniqueId)
