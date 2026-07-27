@@ -9,6 +9,10 @@ public static class PresentationClipboardFormats
     public const string Selection = "freex.freep.selection.v1";
     public const string OwnerToken = "freex.freep.owner-token.v1";
     public const string RichText = "freex.freep.rich-text.v1";
+
+    // Native rich text names used by Avalonia's platform-format bridge.
+    public const string WindowsRtf = "Rich Text Format";
+    public const string LinuxRtf = "text/rtf";
 }
 
 /// <summary>Framework-neutral payload written to or read from a system clipboard.</summary>
