@@ -683,6 +683,91 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void SetPicture_UpdatesNodePayloadAndCachedMediaWithoutChangingRelationshipIds()
+    {
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.List,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList",
+            IsLiveLayoutSupported = true,
+        };
+        data.Nodes.Add(new SmartArtNode
+        {
+            ModelId = "one",
+            Text = "One",
+            Picture = new ImagePart { Bytes = [1, 2, 3], ContentType = "image/png" },
+        });
+        data.Nodes.Add(new SmartArtNode
+        {
+            ModelId = "two",
+            Text = "Two",
+            Picture = new ImagePart { Bytes = [4, 5, 6], ContentType = "image/png" },
+        });
+
+        var smartArt = new SmartArtShape
+        {
+            Data = data,
+            DrawingPartPath = "ppt/diagrams/drawing1.xml",
+        };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />"),
+        };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />"),
+        };
+        smartArt.Parts["ppt/media/one.png"] = new DiagramPart
+        {
+            PartPath = "ppt/media/one.png",
+            ContentType = "image/png",
+            Bytes = [1, 2, 3],
+        };
+        smartArt.Parts["ppt/media/two.png"] = new DiagramPart
+        {
+            PartPath = "ppt/media/two.png",
+            ContentType = "image/png",
+            Bytes = [4, 5, 6],
+        };
+        const string relationshipsNamespace = "http://schemas.openxmlformats.org/package/2006/relationships";
+        smartArt.PartRels["ppt/diagrams/drawing1.xml"] = Encoding.UTF8.GetBytes($"""
+            <Relationships xmlns="{relationshipsNamespace}">
+              <Relationship Id="rIdPic1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/one.png" />
+              <Relationship Id="rIdPic2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/two.png" />
+            </Relationships>
+            """);
+
+        var result = SmartArtEditingPlanner.Apply(
+            data,
+            SmartArtNodeEditIntent.SetPicture(
+                "two",
+                new ImagePart { Bytes = [9, 8, 7, 6], ContentType = "image/png" }));
+        result.Applied.Should().BeTrue();
+        data.Nodes[1].Picture!.Bytes.Should().Equal(9, 8, 7, 6);
+
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme()).Applied.Should().BeTrue();
+
+        smartArt.Parts["ppt/media/one.png"].Bytes.Should().Equal(1, 2, 3);
+        smartArt.Parts["ppt/media/two.png"].Bytes.Should().Equal(9, 8, 7, 6);
+        var drawing = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
+        var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        drawing.Descendants().Where(element => element.Name.LocalName == "blip")
+            .Select(element => (string?)element.Attribute(r + "embed"))
+            .Should().Equal("rIdPic1", "rIdPic2");
+    }
+
+    [Fact]
     public void TextPaneOutline_DataPartAndDrawingCacheRegenerationShareAppliedModel()
     {
         var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"), ("manager", "Manager"));

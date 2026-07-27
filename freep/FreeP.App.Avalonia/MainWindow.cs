@@ -213,6 +213,7 @@ public sealed partial class MainWindow : Window
     private TextBlock _smartArtTextPaneMessage = null!;
     private StackPanel _smartArtTextPaneRowsPanel = null!;
     private Button _smartArtTextPaneAssistantButton = null!;
+    private Button _smartArtTextPanePictureButton = null!;
     private WrapPanel _smartArtTextPaneOutlineActions = null!;
     private readonly List<Button> _smartArtTextPaneActionButtons = new();
     private Button _smartArtTextPaneApplyButton = null!;
@@ -1404,6 +1405,13 @@ public sealed partial class MainWindow : Window
             Padding = new Thickness(10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
+        _smartArtTextPanePictureButton = new Button
+        {
+            Content = "Replace picture",
+            MinWidth = 120,
+            Padding = new Thickness(10, 4),
+            Margin = new Thickness(0, 0, 8, 0),
+        };
         _smartArtTextPaneApplyButton = new Button
         {
             Content = "Apply",
@@ -1418,6 +1426,7 @@ public sealed partial class MainWindow : Window
             Padding = new Thickness(10, 4),
         };
         _smartArtTextPaneAssistantButton.Click += (_, _) => ToggleSmartArtTextPaneAssistant();
+        _smartArtTextPanePictureButton.Click += async (_, _) => await ReplaceSmartArtTextPanePictureFromFileAsync();
         _smartArtTextPaneApplyButton.Click += (_, _) => ApplySmartArtTextPane();
         _smartArtTextPaneCloseButton.Click += (_, _) => HideSmartArtTextPane();
 
@@ -1466,6 +1475,7 @@ public sealed partial class MainWindow : Window
             Children =
             {
                 _smartArtTextPaneAssistantButton,
+                _smartArtTextPanePictureButton,
                 _smartArtTextPaneApplyButton,
                 _smartArtTextPaneCloseButton,
             }
@@ -6119,6 +6129,82 @@ public sealed partial class MainWindow : Window
                 CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
                 return true;
             });
+        }
+
+        if (LastSmartArtTextPaneEditResult is { Applied: true })
+        {
+            _fileWorkflow.MarkDirty();
+            RefreshCanvas();
+            UpdateStatus();
+        }
+
+        RefreshSmartArtTextPane();
+        return LastSmartArtTextPaneEditResult;
+    }
+
+    internal SmartArtNodeEditResult? ApplySmartArtTextPanePictureForTests(
+        byte[] imageBytes,
+        string contentType = "image/png",
+        string? modelId = null)
+    {
+        if (modelId is not null)
+            _selectedSmartArtTextPaneModelId = modelId;
+        return ApplySmartArtTextPanePicture(imageBytes, contentType);
+    }
+
+    private async Task ReplaceSmartArtTextPanePictureFromFileAsync()
+    {
+        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable("Replace SmartArt picture");
+            return;
+        }
+
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                "Replace SmartArt picture",
+                [PictureFileType]));
+        if (file is null)
+            return;
+
+        try
+        {
+            await using var source = await file.OpenReadAsync();
+            using var memory = new MemoryStream();
+            await source.CopyToAsync(memory);
+            ApplySmartArtTextPanePicture(
+                memory.ToArray(),
+                SlideObjectInsertionPlanner.InferPictureContentType(file.Name));
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                "Replace SmartArt picture",
+                ex.Message);
+        }
+    }
+
+    private SmartArtNodeEditResult? ApplySmartArtTextPanePicture(
+        byte[] imageBytes,
+        string contentType)
+    {
+        var smartArtShape = GetSelectedSmartArtShape();
+        var targetId = _selectedSmartArtTextPaneModelId;
+        if (smartArtShape is null || string.IsNullOrWhiteSpace(targetId))
+        {
+            LastSmartArtTextPaneEditResult = SmartArtNodeEditResult.NotApplied(
+                SmartArtNodeEditKind.SetPicture,
+                targetId,
+                "Select a SmartArt row first.");
+        }
+        else
+        {
+            LastSmartArtTextPaneEditResult = Editor.ReplaceSmartArtNodePicture(
+                smartArtShape.Id,
+                targetId,
+                imageBytes,
+                contentType);
         }
 
         if (LastSmartArtTextPaneEditResult is { Applied: true })

@@ -558,6 +558,9 @@ public sealed class SmartArtTests : IDisposable
         smart.Data.Nodes.Select(n => n.Picture?.Bytes.Length ?? 0).Should().OnlyContain(length => length > 0);
         smart.FallbackShapes.Should().Contain(s => s.Kind == SlideShapeKind.Picture,
             "the cached dsp:pic is still parsed as an ordinary fallback picture shape");
+        smart.Parts.Should().ContainKey("ppt/media/image1.png",
+            "diagram-owned image media must be retained in the SmartArt part bag for save/edit workflows");
+        smart.Parts["ppt/media/image1.png"].Bytes.Should().Equal(Minimal1x1Png());
     }
 
     [Fact]
@@ -597,6 +600,42 @@ public sealed class SmartArtTests : IDisposable
         smart.Data.Nodes.Select(n => n.Text).Should().Equal(nodeTexts);
         smart.Data.Nodes.Select(n => n.Picture?.ContentType).Should().OnlyContain(contentType => contentType == "image/png");
         smart.Data.Nodes.Select(n => n.Picture?.Bytes.Length ?? 0).Should().OnlyContain(length => length > 0);
+    }
+
+    [Fact]
+    public void EditingSession_ReplaceSmartArtNodePicture_IsUndoableAndRoundTripsMedia()
+    {
+        var sourcePath = MakeSmartArtPptx(["Alpha caption", "Beta caption"], pictureCaptionList: true, includeNodeImage: true);
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var shape = presentation.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt);
+        var originalBytes = shape.SmartArt!.Data!.Nodes[0].Picture!.Bytes.ToArray();
+        shape.SmartArt.DrawingPartPath.Should().NotBeNull();
+        shape.SmartArt.PartRels.Should().ContainKey(shape.SmartArt.DrawingPartPath!);
+        var replacement = originalBytes.ToArray();
+        replacement[^1] ^= 0x01;
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        var result = session.ReplaceSmartArtNodePicture(
+            shape.Id,
+            shape.SmartArt.Data.Nodes[0].ModelId,
+            replacement,
+            "image/png");
+
+        result.Applied.Should().BeTrue(result.Message);
+        shape.SmartArt.Data.Nodes[0].Picture!.Bytes.Should().Equal(replacement);
+        session.Bus.CanUndo.Should().BeTrue();
+
+        session.Bus.Undo();
+        shape.SmartArt.Data.Nodes[0].Picture!.Bytes.Should().Equal(originalBytes);
+        session.Bus.Redo();
+        shape.SmartArt.Data.Nodes[0].Picture!.Bytes.Should().Equal(replacement);
+
+        var roundTripPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(roundTripPath);
+        reopened.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!.Data!.Nodes[0].Picture!.Bytes
+            .Should().Equal(replacement);
     }
 
     [Fact]

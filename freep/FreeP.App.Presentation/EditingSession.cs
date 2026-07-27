@@ -166,6 +166,68 @@ public sealed class EditingSession
     }
 
     /// <summary>
+    /// Replaces the image assigned to one node in a picture-backed SmartArt layout. The
+    /// operation updates the shared node model, the diagram data/cache parts, and the cached
+    /// media payload in one undoable command.
+    /// </summary>
+    public SmartArtNodeEditResult ReplaceSmartArtNodePicture(
+        uint shapeId,
+        string targetModelId,
+        byte[] imageBytes,
+        string contentType)
+    {
+        SmartArtNodeEditResult? result = null;
+        string? failureMessage = null;
+        var shape = CurrentSlide?.Shapes.FirstOrDefault(candidate =>
+            candidate.Id == shapeId &&
+            candidate.Kind == SlideShapeKind.SmartArt &&
+            candidate.SmartArt is not null);
+        var applied = shape?.SmartArt is not null && EditSmartArt(shapeId, smartArt =>
+        {
+            result = SmartArtEditingPlanner.Apply(
+                smartArt.Data,
+                SmartArtNodeEditIntent.SetPicture(
+                    targetModelId,
+                    new ImagePart
+                    {
+                        Bytes = imageBytes.ToArray(),
+                        ContentType = contentType,
+                    }));
+            if (!result.Applied)
+            {
+                failureMessage = result.Message;
+                return false;
+            }
+
+            var dataRewrite = SmartArtEditingPlanner.RewriteDataPart(smartArt);
+            if (!dataRewrite.Applied)
+            {
+                failureMessage = dataRewrite.Message;
+                return false;
+            }
+
+            var cacheRefresh = SmartArtEditingPlanner.RegenerateDrawingCache(
+                smartArt,
+                shape.OffsetXEmu,
+                shape.OffsetYEmu,
+                shape.ExtentCxEmu,
+                shape.ExtentCyEmu,
+                Presentation.Theme,
+                CurrentSlide?.ColorMapOverride);
+            if (!cacheRefresh.Applied)
+                failureMessage = cacheRefresh.Message;
+            return cacheRefresh.Applied;
+        });
+
+        return applied && result is not null
+            ? result
+            : SmartArtNodeEditResult.NotApplied(
+                SmartArtNodeEditKind.SetPicture,
+                targetModelId,
+                failureMessage ?? "The selected SmartArt picture node could not be updated.");
+    }
+
+    /// <summary>
     /// Converts one SmartArt graphic to the ordinary shapes produced by its live layout (or its
     /// cached fallback when no live layout is available). The replacement is one undoable edit and
     /// retains the graphic's original z-order slot.
