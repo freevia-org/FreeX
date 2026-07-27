@@ -5,6 +5,35 @@ namespace FreeX.App.Services.Tests;
 public sealed class AvaloniaOptionsProofingSourceTests
 {
     [Fact]
+    public void OptionsSource_UsesWpfQuickAccessToolbarFrameAndSharedChrome()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+        var wpf = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, OptionsDialogChromeStyle);");
+        source.Should().Contain("Padding = new Thickness(16, 9)");
+        source.Should().Contain("BorderThickness = new Thickness(1)");
+        source.Should().Contain("Brush(160, 160, 160)");
+        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"*,Auto,*,Auto,*,Auto,*\")");
+        source.Should().Contain("RowDefinitions = new RowDefinitions(\"Auto,Auto,180\")");
+        source.Should().Contain("Margin = new Thickness(10, 0)");
+        source.Should().Contain("Margin = new Thickness(10, 0, 0, 0)");
+        source.Should().Contain("BorderThickness = new Thickness(0, 1, 0, 0)");
+        source.Should().Contain("Padding = new Thickness(16, 10)");
+        source.Should().Contain("ApplyOptionsButtonChrome(okButton, 80, isDefault: true);");
+        source.Should().Contain("ApplyOptionsButtonChrome(cancelButton, 80);");
+        source.Should().Contain("listBox.FontFamily = OptionsDialogChromeStyle.FontFamily;");
+        source.Should().NotContain("ColumnDefinitions = new ColumnDefinitions(\"128,10,92,10,127,10,92\")");
+
+        wpf.Should().Contain("Value=\"16,9\"");
+        wpf.Should().Contain("BorderBrush\" Value=\"#A0A0A0\"");
+        wpf.Should().Contain("<RowDefinition Height=\"180\"/>");
+        wpf.Should().Contain("BorderThickness=\"0,1,0,0\"");
+        wpf.Should().Contain("Padding=\"16,10\"");
+        wpf.Should().Contain("Width=\"80\" Height=\"26\"");
+    }
+
+    [Fact]
     public void OptionsSource_ExposesQatAndProofingContractsWithoutRenderingIgnoreNumbers()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));

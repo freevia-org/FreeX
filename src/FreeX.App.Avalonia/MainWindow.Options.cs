@@ -81,6 +81,9 @@ public sealed partial class MainWindow
             CanResize = false,
         };
         AutomationProperties.SetAutomationId(dialog, "OptionsDialog");
+        // Use the shared Windows-style dialog chrome so inherited labels and the page background
+        // do not fall back to a wider Linux desktop font.
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, OptionsDialogChromeStyle);
 
         // ── General ─────────────────────────────────────────────────────────────
         var fontBox = new ComboBox { MinWidth = 200, ItemsSource = OptionsDialogPlanner.FontNames };
@@ -740,8 +743,9 @@ public sealed partial class MainWindow
         var quickAccessGrid = new Grid
         {
             Width = 469,
-            ColumnDefinitions = new ColumnDefinitions("128,10,92,10,127,10,92"),
-            RowDefinitions = new RowDefinitions("Auto,Auto,*"),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,*,Auto,*,Auto,*"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,180"),
         };
         var availableLabel = new TextBlock { Text = OptionsText("Options_AvailableCommands"), FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };
         Grid.SetColumn(availableLabel, 0);
@@ -756,7 +760,13 @@ public sealed partial class MainWindow
         Grid.SetRow(searchRow, 1);
         Grid.SetColumn(quickAccessAvailableList, 0);
         Grid.SetRow(quickAccessAvailableList, 2);
-        var addRemovePanel = new StackPanel { Spacing = 6, VerticalAlignment = AvaloniaVerticalAlignment.Top, Children = { quickAccessAddButton, quickAccessRemoveButton } };
+        var addRemovePanel = new StackPanel
+        {
+            Spacing = 6,
+            Margin = new Thickness(10, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            Children = { quickAccessAddButton, quickAccessRemoveButton },
+        };
         Grid.SetColumn(addRemovePanel, 2);
         Grid.SetRow(addRemovePanel, 2);
         var selectedLabel = new TextBlock { Text = OptionsText("Options_QuickAccessToolbarCommands"), FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };
@@ -764,7 +774,13 @@ public sealed partial class MainWindow
         Grid.SetRow(selectedLabel, 0);
         Grid.SetColumn(quickAccessSelectedList, 4);
         Grid.SetRow(quickAccessSelectedList, 2);
-        var reorderPanel = new StackPanel { Spacing = 6, VerticalAlignment = AvaloniaVerticalAlignment.Top, Children = { quickAccessMoveUpButton, quickAccessMoveDownButton, quickAccessResetButton } };
+        var reorderPanel = new StackPanel
+        {
+            Spacing = 6,
+            Margin = new Thickness(10, 0, 0, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            Children = { quickAccessMoveUpButton, quickAccessMoveDownButton, quickAccessResetButton },
+        };
         Grid.SetColumn(reorderPanel, 6);
         Grid.SetRow(reorderPanel, 2);
         quickAccessGrid.Children.Add(availableLabel);
@@ -847,9 +863,8 @@ public sealed partial class MainWindow
             var index = i;
             var row = new Border
             {
-                Height = 36,
-                Padding = new Thickness(16, 0, 12, 0),
-                BorderThickness = new Thickness(1, 0, 0, 1),
+                Padding = new Thickness(16, 9),
+                BorderThickness = new Thickness(1),
                 BorderBrush = Brushes.Transparent,
                 Background = Brushes.Transparent,
                 Child = new TextBlock
@@ -890,7 +905,7 @@ public sealed partial class MainWindow
             {
                 var selected = i == selectedCategoryIndex;
                 categoryRows[i].Background = selected ? Brushes.White : Brushes.Transparent;
-                categoryRows[i].BorderBrush = selected ? Brush(205, 205, 205) : Brushes.Transparent;
+                categoryRows[i].BorderBrush = selected ? Brush(160, 160, 160) : Brushes.Transparent;
             }
         }
 
@@ -912,11 +927,11 @@ public sealed partial class MainWindow
         }
 
         // ── Warning + buttons ─────────────────────────────────────────────────────
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
-        ApplyOptionsButtonChrome(okButton, 84, isDefault: true);
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyOptionsButtonChrome(okButton, 80, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "OptionsOkButton");
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
-        ApplyOptionsButtonChrome(cancelButton, 84);
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyOptionsButtonChrome(cancelButton, 80);
         AutomationProperties.SetAutomationId(cancelButton, "OptionsCancelButton");
 
         bool ApplyFormulaErrorCheckingOptions()
@@ -1020,16 +1035,23 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var buttonRow = new StackPanel
+        var footerActions = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 16, 8),
             Children = { warningText, okButton, cancelButton },
         };
         warningText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         warningText.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
+        var buttonRow = new Border
+        {
+            Background = Brush(245, 245, 245),
+            BorderBrush = Brush(200, 200, 200),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(16, 10),
+            Child = footerActions,
+        };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         var body = new Grid
@@ -1136,7 +1158,12 @@ public sealed partial class MainWindow
         => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, OptionsDialogChromeStyle);
 
     private static void ApplyOptionsListBoxChrome(ListBox listBox)
-        => AvaloniaCompactDialogChrome.ApplyListBox(listBox, OptionsDialogChromeStyle);
+    {
+        AvaloniaCompactDialogChrome.ApplyListBox(listBox, OptionsDialogChromeStyle);
+        // ApplyListBox supplies the shared item template; keep the list text on the same
+        // Windows-style font as the surrounding Options labels as well.
+        listBox.FontFamily = OptionsDialogChromeStyle.FontFamily;
+    }
 
     private static void ApplyOptionsCheckBoxChrome(CheckBox checkBox)
     {
