@@ -1963,7 +1963,40 @@ public static class PptxPackageReader
                     // Also capture rels for drawing part if present
                     var drawRelsBytes = ReadEntryBytes(archive, GetRelationshipPartPath(drawingPath));
                     if (drawRelsBytes is not null)
+                    {
                         smart.PartRels[drawingPath] = drawRelsBytes;
+
+                        // SmartArt picture layouts store their media behind the diagram
+                        // drawing part rather than in the slide's normal picture table.
+                        // Rehydrate those media parts into the same raw-part bag so the
+                        // writer can preserve them and authoring can replace one node image
+                        // without dangling the dsp:drawing relationship.
+                        var drawingRels = OpcXml.TryLoadXml(drawRelsBytes);
+                        if (drawingRels is not null)
+                        {
+                            foreach (var relationship in OpcRelationships.Load(drawingRels))
+                            {
+                                if (relationship.IsExternal ||
+                                    !relationship.Type.EndsWith("/image", StringComparison.OrdinalIgnoreCase) ||
+                                    string.IsNullOrWhiteSpace(relationship.Target))
+                                    continue;
+
+                                var mediaPath = ResolveRelativeZipPath(
+                                    GetDirectoryName(drawingPath),
+                                    relationship.Target);
+                                var mediaBytes = ReadEntryBytes(archive, mediaPath);
+                                if (mediaBytes is null)
+                                    continue;
+
+                                smart.Parts[mediaPath] = new DiagramPart
+                                {
+                                    ContentType = GuessPreservedContentType(mediaPath),
+                                    PartPath = mediaPath,
+                                    Bytes = mediaBytes,
+                                };
+                            }
+                        }
+                    }
 
                     // Parse dsp:drawing shapes into FallbackShapes
                     try
