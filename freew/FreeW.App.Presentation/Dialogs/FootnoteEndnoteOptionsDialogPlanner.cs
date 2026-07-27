@@ -42,6 +42,18 @@ public sealed record FootnoteEndnoteOptionsDialogResult(
 public static class FootnoteEndnoteOptionsDialogPlanner
 {
     public const string Title = "Footnote and Endnote";
+    // Keep the host layouts on one compact, WPF-authority metric set. These values are presentation
+    // policy, so the WPF and Avalonia adapters can consume them without referencing either UI toolkit.
+    public const int DialogWidth = 380;
+    public const int OuterMargin = 14;
+    public const int SectionHeaderBottomMargin = 4;
+    public const int FieldVerticalMargin = 4;
+    public const int LabelFieldGap = 8;
+    public const int SeparatorTopMargin = 10;
+    public const int SeparatorBottomMargin = 8;
+    public const int ActionTopMargin = 14;
+    public const int ButtonWidth = 72;
+    public const int StartAtMinWidth = 60;
     public const string FootnotesSectionLabel = "Footnotes";
     public const string EndnotesSectionLabel = "Endnotes";
     public const string NumberFormatLabel = "Number format:";

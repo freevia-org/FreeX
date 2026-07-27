@@ -6,6 +6,17 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class ParagraphNoteDialogPlannerTests
 {
     [Fact]
+    public void FootnoteEndnoteOptions_ExposeOneCrossHostLayoutPolicy()
+    {
+        FootnoteEndnoteOptionsDialogPlanner.DialogWidth.Should().Be(380);
+        FootnoteEndnoteOptionsDialogPlanner.OuterMargin.Should().Be(14);
+        FootnoteEndnoteOptionsDialogPlanner.FieldVerticalMargin.Should().Be(4);
+        FootnoteEndnoteOptionsDialogPlanner.LabelFieldGap.Should().Be(8);
+        FootnoteEndnoteOptionsDialogPlanner.ButtonWidth.Should().Be(72);
+        FootnoteEndnoteOptionsDialogPlanner.StartAtMinWidth.Should().Be(60);
+    }
+
+    [Fact]
     public void FootnoteEndnoteOptions_ExposeMirroredCatalogsAndInitialState()
     {
         FootnoteEndnoteOptionsDialogPlanner.FormatItems.Select(item => item.Label)

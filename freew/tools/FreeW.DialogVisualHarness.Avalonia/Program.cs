@@ -127,6 +127,37 @@ static Capture? CaptureOne(Scenario scenario, string output, Capture? authorityC
 static void Populate(Window dialog, Scenario scenario)
 {
     var state = scenario.State;
+    if (scenario.RouteId == "footnote-endnote-options")
+    {
+        var combos = FindVisualChildren<ComboBox>(dialog).ToArray();
+        var routeTextBoxes = FindVisualChildren<TextBox>(dialog).ToArray();
+        if (state == "populated")
+        {
+            combos.Select((combo, index) => (combo, index)).ToList().ForEach(pair =>
+                pair.combo.SelectedIndex = pair.index switch
+                {
+                    0 => 1,
+                    1 => 2,
+                    2 => 4,
+                    3 => 1,
+                    4 => 1,
+                    _ => pair.combo.SelectedIndex
+                });
+            if (routeTextBoxes.Length >= 2)
+            {
+                routeTextBoxes[0].Text = "12";
+                routeTextBoxes[1].Text = "24";
+            }
+        }
+        else if (state == "validation-error" && routeTextBoxes.Length > 0)
+        {
+            routeTextBoxes[0].Text = "not-a-number";
+            dialog.GetType().GetMethod("ValidateForTest", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(dialog, null);
+        }
+        FocusScenarioTarget(dialog, scenario);
+        return;
+    }
     var textBoxes = FindVisualChildren<TextBox>(dialog).ToArray();
     if (state == "populated") foreach (var box in textBoxes) if (string.IsNullOrWhiteSpace(box.Text)) box.Text = "12";
     if (state == "validation-error" && textBoxes.Length > 0) textBoxes[0].Text = "not-a-number";

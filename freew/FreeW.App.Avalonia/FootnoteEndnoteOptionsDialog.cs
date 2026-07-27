@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
@@ -11,7 +12,7 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle Chrome = AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly ComboBox _footnoteFormat;
     private readonly TextBox _footnoteStart;
     private readonly ComboBox _footnoteRestart;
@@ -24,7 +25,7 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
     {
         var state = FootnoteEndnoteOptionsDialogPlanner.BuildInitialState(footnote, endnote, CultureInfo.CurrentCulture);
         Title = FootnoteEndnoteOptionsDialogPlanner.Title;
-        Width = 400;
+        Width = FootnoteEndnoteOptionsDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -38,14 +39,27 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
         _endnoteRestart = Combo(FootnoteEndnoteOptionsDialogPlanner.EndnoteRestartItems.Select(item => item.Label), state.EndnoteRestartIndex);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome, new Thickness(0, 6, 0, 0));
 
-        var panel = new StackPanel { Margin = new Thickness(14) };
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(FootnoteEndnoteOptionsDialogPlanner.OuterMargin)
+        };
         AddSection(panel, FootnoteEndnoteOptionsDialogPlanner.FootnotesSectionLabel, _footnoteFormat, _footnoteStart, _footnoteRestart);
-        panel.Children.Add(new Separator { Margin = new Thickness(0, 10, 0, 8) });
+        panel.Children.Add(new Separator
+        {
+            Margin = new Thickness(
+                0,
+                FootnoteEndnoteOptionsDialogPlanner.SeparatorTopMargin,
+                0,
+                FootnoteEndnoteOptionsDialogPlanner.SeparatorBottomMargin)
+        });
         AddSection(panel, FootnoteEndnoteOptionsDialogPlanner.EndnotesSectionLabel, _endnoteFormat, _endnoteStart, _endnoteRestart);
         panel.Children.Add(_status);
-        var ok = Button("OK", true, false, Accept);
-        var cancel = Button("Cancel", false, true, () => Close(null));
-        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)));
+        panel.Children.Add(AvaloniaCompactDialogChrome.CreateOkCancelRow(
+            Accept,
+            () => Close(null),
+            buttonWidth: FootnoteEndnoteOptionsDialogPlanner.ButtonWidth,
+            margin: new Thickness(0, FootnoteEndnoteOptionsDialogPlanner.ActionTopMargin, 0, 0),
+            style: Chrome));
         Content = panel;
         Opened += (_, _) => _footnoteFormat.Focus();
         KeyDown += (_, args) =>
@@ -81,22 +95,59 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
         target.SelectAll();
     }
 
+    // The visual harness uses the same non-modal validation path as an attempted OK click without
+    // replacing the captured dialog with a second warning window.
+    internal void ValidateForTest() => Accept();
+
     private FootnoteEndnoteOptionsDialogInput Input() => new(
         _footnoteFormat.SelectedIndex, _footnoteStart.Text, _footnoteRestart.SelectedIndex,
         _endnoteFormat.SelectedIndex, _endnoteStart.Text, _endnoteRestart.SelectedIndex);
 
     private static void AddSection(StackPanel panel, string heading, ComboBox format, TextBox start, ComboBox restart)
     {
-        panel.Children.Add(new TextBlock { Text = heading, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
-        AddField(panel, FootnoteEndnoteOptionsDialogPlanner.NumberFormatLabel, format);
-        AddField(panel, FootnoteEndnoteOptionsDialogPlanner.StartAtLabel, start);
-        AddField(panel, FootnoteEndnoteOptionsDialogPlanner.NumberingLabel, restart);
+        panel.Children.Add(new TextBlock
+        {
+            Text = heading,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, 0, 0, FootnoteEndnoteOptionsDialogPlanner.SectionHeaderBottomMargin)
+        });
+        panel.Children.Add(OptionsGrid(format, start, restart));
     }
 
-    private static void AddField(StackPanel panel, string label, Control control)
+    private static Grid OptionsGrid(ComboBox format, TextBox start, ComboBox restart)
     {
-        panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 4, 0, 2) });
-        panel.Children.Add(control);
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        AddRow(grid, 0, FootnoteEndnoteOptionsDialogPlanner.NumberFormatLabel, format);
+        AddRow(grid, 1, FootnoteEndnoteOptionsDialogPlanner.StartAtLabel, start);
+        AddRow(grid, 2, FootnoteEndnoteOptionsDialogPlanner.NumberingLabel, restart);
+        return grid;
+    }
+
+    private static void AddRow(Grid grid, int row, string label, Control control)
+    {
+        var block = new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(
+                0,
+                FootnoteEndnoteOptionsDialogPlanner.FieldVerticalMargin,
+                FootnoteEndnoteOptionsDialogPlanner.LabelFieldGap,
+                FootnoteEndnoteOptionsDialogPlanner.FieldVerticalMargin)
+        };
+        Grid.SetRow(block, row);
+        Grid.SetColumn(block, 0);
+        grid.Children.Add(block);
+
+        Grid.SetRow(control, row);
+        Grid.SetColumn(control, 1);
+        grid.Children.Add(control);
     }
 
     private static ComboBox Combo(IEnumerable<string> items, int selectedIndex)
@@ -108,16 +159,12 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
 
     private static TextBox TextBox(string text)
     {
-        var box = new TextBox { Text = text };
+        var box = new TextBox
+        {
+            Text = text,
+            MinWidth = FootnoteEndnoteOptionsDialogPlanner.StartAtMinWidth
+        };
         AvaloniaCompactDialogChrome.ApplyTextBox(box, Chrome);
         return box;
-    }
-
-    private static Button Button(string text, bool isDefault, bool isCancel, Action click)
-    {
-        var button = new Button { Content = text, IsDefault = isDefault, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, Chrome, 72, isDefault);
-        button.Click += (_, _) => click();
-        return button;
     }
 }

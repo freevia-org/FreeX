@@ -158,6 +158,37 @@ static bool CaptureRenderedWindow(Scenario scenario, string output, Window dialo
 static void Populate(Window dialog, Scenario scenario)
 {
     var state = scenario.State;
+    if (scenario.RouteId == "footnote-endnote-options")
+    {
+        var combos = FindVisualChildren<ComboBox>(dialog).ToArray();
+        var routeTextBoxes = FindVisualChildren<TextBox>(dialog).ToArray();
+        if (state == "populated")
+        {
+            combos.Select((combo, index) => (combo, index)).ToList().ForEach(pair =>
+                pair.combo.SelectedIndex = pair.index switch
+                {
+                    0 => 1,
+                    1 => 2,
+                    2 => 4,
+                    3 => 1,
+                    4 => 1,
+                    _ => pair.combo.SelectedIndex
+                });
+            if (routeTextBoxes.Length >= 2)
+            {
+                routeTextBoxes[0].Text = "12";
+                routeTextBoxes[1].Text = "24";
+            }
+        }
+        else if (state == "validation-error" && routeTextBoxes.Length > 0)
+        {
+            routeTextBoxes[0].Text = "not-a-number";
+            dialog.GetType().GetMethod("ValidateForTest", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(dialog, null);
+        }
+        FocusScenarioTarget(dialog, scenario);
+        return;
+    }
     var textBoxes = FindVisualChildren<TextBox>(dialog).ToArray();
     if (state == "populated")
         foreach (var box in textBoxes) if (string.IsNullOrWhiteSpace(box.Text)) box.Text = "12";
@@ -217,7 +248,10 @@ static Semantics ReadSemantics(Window dialog)
         buttons.Select(ButtonText).ToArray(), controls);
 }
 
-static string ButtonText(Button button) => button.Content?.ToString() ?? AutomationProperties.GetName(button) ?? button.GetType().Name;
+// WPF stores access-key markers in Content (for example "_OK"), while Avalonia exposes the
+// normalized automation name. Compare the shared semantic name so the report does not flag a
+// framework-specific accelerator encoding as a dialog action mismatch.
+static string ButtonText(Button button) => AutomationProperties.GetName(button) ?? button.Content?.ToString() ?? button.GetType().Name;
 static Capture Unsupported(Scenario scenario, string note) => new(scenario.Id, "wpf", scenario.RouteId, scenario.State, "unsupported", "", 0, 0, 0, 0, 96, 96, new Rect(0, 0, 0, 0), new Semantics(null, null, null, [], []), scenario.Limitation, note);
 static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
 {
