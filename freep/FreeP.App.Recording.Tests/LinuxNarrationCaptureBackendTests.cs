@@ -82,6 +82,28 @@ public sealed class LinuxNarrationCaptureBackendTests
     }
 
     [Fact]
+    public void BeginCapture_CleansUpLaunchedRecorder_WhenStartupProbeThrows()
+    {
+        using var temp = new TemporaryDirectory();
+        var processAdapter = new FakeProcessAdapter
+        {
+            WaitForExitException = new InvalidOperationException("startup probe failed")
+        };
+        using var backend = CreateBackend(temp.Path, processAdapter);
+        var started = DateTimeOffset.UtcNow;
+
+        backend.BeginCapture(StartRequest(0, started));
+
+        var process = processAdapter.Processes.Should().ContainSingle().Which;
+        var outputPath = processAdapter.Commands.Single().OutputPath;
+        processAdapter.CancelCount.Should().Be(1);
+        process.DisposeCount.Should().Be(1);
+        File.Exists(outputPath).Should().BeFalse();
+        backend.CompleteCapture(CompleteRequest(0, started)).StatusText
+            .Should().Contain("could not start").And.Contain("startup probe failed");
+    }
+
+    [Fact]
     public void CompleteCapture_RejectsForcedStopAndInvalidWavePayload()
     {
         using var temp = new TemporaryDirectory();
@@ -294,6 +316,8 @@ public sealed class LinuxNarrationCaptureBackendTests
 
         public bool ExitDuringStartup { get; init; }
 
+        public Exception? WaitForExitException { get; init; }
+
         public string StandardError { get; init; } = string.Empty;
 
         public byte[]? PayloadOnStart { get; init; }
@@ -315,7 +339,10 @@ public sealed class LinuxNarrationCaptureBackendTests
             Commands.Add(command);
             if (PayloadOnStart is not null)
                 File.WriteAllBytes(command.OutputPath, PayloadOnStart);
-            var process = new FakeChildProcess(ExitDuringStartup, StandardError);
+            var process = new FakeChildProcess(
+                ExitDuringStartup,
+                StandardError,
+                WaitForExitException);
             Processes.Add(process);
             _commandsByProcess[process] = command;
             return process;
@@ -347,12 +374,18 @@ public sealed class LinuxNarrationCaptureBackendTests
         private bool _startupWaitPending = true;
         private bool _disposed;
 
-        public FakeChildProcess(bool exitsDuringStartup, string standardError)
+        private readonly Exception? _waitForExitException;
+
+        public FakeChildProcess(
+            bool exitsDuringStartup,
+            string standardError,
+            Exception? waitForExitException)
         {
             _exitsDuringStartup = exitsDuringStartup;
             _hasExited = exitsDuringStartup;
             _exitCode = exitsDuringStartup ? 1 : null;
             StandardError = standardError;
+            _waitForExitException = waitForExitException;
         }
 
         public int ProcessId => 42;
@@ -367,6 +400,9 @@ public sealed class LinuxNarrationCaptureBackendTests
 
         public bool WaitForExit(TimeSpan timeout)
         {
+            if (_waitForExitException is not null)
+                throw _waitForExitException;
+
             if (_startupWaitPending)
             {
                 _startupWaitPending = false;

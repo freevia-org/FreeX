@@ -1,5 +1,11 @@
 using System.Windows;
+using Free.Shared.Drawing;
+using FreeX.App.Presentation.Comments;
 using FreeX.Core.Model;
+
+using SharedCommentPreviewLayoutSize = FreeX.App.Presentation.Comments.CommentPreviewLayoutSize;
+using SharedCommentPreviewPlacement = FreeX.App.Presentation.Comments.CommentPreviewPlacement;
+using SharedCommentPreviewPlacementPlanner = FreeX.App.Presentation.Comments.CommentPreviewPlacementPlanner;
 
 namespace FreeX.App.UI;
 
@@ -15,95 +21,66 @@ public readonly record struct GridCommentPreviewPlacement(
 /// </summary>
 public readonly record struct GridCommentConnectorLine(Point Start, Point End);
 
+/// <summary>
+/// WPF boundary adapter for the platform-neutral comment preview placement planner.
+/// </summary>
 public static class GridCommentPreviewPlacementPlanner
 {
-    public const double EdgePadding = 8;
-    public const double CellGap = 6;
-    public const double MinWidth = 180;
-    public const double MaxWidth = 320;
-    public const double MinHeight = 72;
-    public const double MaxHeight = 220;
+    public const double EdgePadding = SharedCommentPreviewPlacementPlanner.EdgePadding;
+    public const double CellGap = SharedCommentPreviewPlacementPlanner.CellGap;
+    public const double MinWidth = SharedCommentPreviewPlacementPlanner.MinWidth;
+    public const double MaxWidth = SharedCommentPreviewPlacementPlanner.MaxWidth;
+    public const double MinHeight = SharedCommentPreviewPlacementPlanner.MinHeight;
+    public const double MaxHeight = SharedCommentPreviewPlacementPlanner.MaxHeight;
 
     public static GridCommentPreviewPlacement Calculate(
         Rect cellRect,
         Size viewportSize,
         CellCommentDisplay display) =>
-        Calculate(cellRect, viewportSize, EstimatePreviewSize(display));
+        ToWpf(SharedCommentPreviewPlacementPlanner.Calculate(
+            ToLayout(cellRect),
+            ToLayoutSize(viewportSize),
+            display));
 
     public static GridCommentPreviewPlacement Calculate(
         Rect cellRect,
         Size viewportSize,
-        Size desiredSize)
-    {
-        var availableWidth = Math.Max(1, viewportSize.Width - EdgePadding * 2);
-        var minWidth = Math.Min(MinWidth, availableWidth);
-        var maxWidth = Math.Max(minWidth, Math.Min(MaxWidth, availableWidth));
-        var width = Clamp(desiredSize.Width, minWidth, maxWidth);
-
-        var availableHeight = Math.Max(1, viewportSize.Height - EdgePadding * 2);
-        var minHeight = Math.Min(MinHeight, availableHeight);
-        var maxHeight = Math.Max(minHeight, Math.Min(MaxHeight, availableHeight));
-        var height = Clamp(desiredSize.Height, minHeight, maxHeight);
-
-        var right = cellRect.Right + CellGap;
-        var left = cellRect.Left - CellGap - width;
-        var x = right + width <= viewportSize.Width - EdgePadding ? right : left;
-        if (x < EdgePadding)
-            x = Math.Max(EdgePadding, viewportSize.Width - EdgePadding - width);
-        if (x + width > viewportSize.Width - EdgePadding)
-            x = Math.Max(EdgePadding, viewportSize.Width - EdgePadding - width);
-
-        var y = cellRect.Top;
-        if (y + height > viewportSize.Height - EdgePadding)
-            y = viewportSize.Height - EdgePadding - height;
-        if (y < EdgePadding)
-            y = EdgePadding;
-
-        return new GridCommentPreviewPlacement(x, y, width, height);
-    }
+        Size desiredSize) =>
+        ToWpf(SharedCommentPreviewPlacementPlanner.Calculate(
+            ToLayout(cellRect),
+            ToLayoutSize(viewportSize),
+            ToLayoutSize(desiredSize)));
 
     /// <summary>
-    /// Computes the connector line that bridges a pinned note box back to the corner of the cell it
-    /// was raised from, so two or more pinned boxes floating near each other remain unambiguous about
-    /// which cell each one belongs to (Excel draws this same leader line for a persistent note box
-    /// that isn't flush against its cell). The anchor corner is chosen to match whichever side
-    /// <see cref="Calculate(Rect, Size, Size)"/> placed the box on (left or right of the cell), using
-    /// the box's own placement result rather than re-deriving it, so the line always lands on the
-    /// actual rendered box edge even after edge-of-viewport clamping.
+    /// Converts the shared connector coordinates to WPF points while preserving the native API.
     /// </summary>
     public static GridCommentConnectorLine CalculateConnector(Rect cellRect, GridCommentPreviewPlacement placement)
     {
-        var boxCenterX = placement.HorizontalOffset + placement.Width / 2;
-        var cellCenterX = cellRect.Left + cellRect.Width / 2;
-        var boxIsRight = boxCenterX >= cellCenterX;
+        var connector = SharedCommentPreviewPlacementPlanner.CalculateConnector(
+            ToLayout(cellRect),
+            new SharedCommentPreviewPlacement(
+                placement.HorizontalOffset,
+                placement.VerticalOffset,
+                placement.Width,
+                placement.MaxHeight));
 
-        var cellAnchor = boxIsRight
-            ? new Point(cellRect.Right, cellRect.Top)
-            : new Point(cellRect.Left, cellRect.Top);
-        var boxAnchor = boxIsRight
-            ? new Point(placement.HorizontalOffset, placement.VerticalOffset)
-            : new Point(placement.HorizontalOffset + placement.Width, placement.VerticalOffset);
-
-        return new GridCommentConnectorLine(cellAnchor, boxAnchor);
+        return new GridCommentConnectorLine(
+            new Point(connector.Start.X, connector.Start.Y),
+            new Point(connector.End.X, connector.End.Y));
     }
 
     public static Size EstimatePreviewSize(CellCommentDisplay display)
     {
-        var text = string.IsNullOrEmpty(display.Body)
-            ? display.Title
-            : display.Title + Environment.NewLine + display.Body;
-        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Split('\n');
-        var longestLine = 0;
-        foreach (var line in lines)
-            longestLine = Math.Max(longestLine, line.Length);
-
-        var width = longestLine * 7.0 + 34;
-        var height = lines.Length * 18.0 + 34;
-        return new Size(width, height);
+        var size = SharedCommentPreviewPlacementPlanner.EstimatePreviewSize(display);
+        return new Size(size.Width, size.Height);
     }
 
-    private static double Clamp(double value, double min, double max) =>
-        Math.Min(Math.Max(value, min), max);
+    private static LayoutRect ToLayout(Rect rect) =>
+        new(rect.Left, rect.Top, rect.Width, rect.Height);
+
+    private static SharedCommentPreviewLayoutSize ToLayoutSize(Size size) =>
+        new(size.Width, size.Height);
+
+    private static GridCommentPreviewPlacement ToWpf(SharedCommentPreviewPlacement placement) =>
+        new(placement.HorizontalOffset, placement.VerticalOffset, placement.Width, placement.MaxHeight);
 }

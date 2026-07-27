@@ -128,11 +128,11 @@ public sealed class DocumentView : Control
     // Border: bool = table-level outer border; CellBorderPlan: per-edge override planned from the model.
     private readonly List<(Rect Rect, IBrush? Fill, bool Border, TableCellBorderVisualPlan? CellBorderPlan)> _rects = new();
     private readonly List<(Rect Rect, string? ShadingHex, ParagraphBorder? Border)> _paragraphDecorations = new();
-    private readonly List<(Rect Rect, Bitmap? Image)> _images = new();
+    private readonly List<(Rect Rect, AvaloniaRenderedImage? Image, int ReflectionPreset)> _images = new();
     // Floating images collected during layout; rendered separately from inline images with z-order.
     // BehindText=true → drawn before body text (behind); BehindText=false → drawn after (in front).
     // AV-FLSEL: BlockIndex/RunIndex added so hit-test can locate the model object.
-    private readonly List<(Rect Rect, Bitmap? Image, int ReflectionPreset, bool BehindText, int ZOrder, int BlockIndex, int RunIndex)> _floatingImages = new();
+    private readonly List<(Rect Rect, AvaloniaRenderedImage? Image, int ReflectionPreset, bool BehindText, int ZOrder, int BlockIndex, int RunIndex)> _floatingImages = new();
     // Floating shapes collected during layout; rendered in the same z-ordered passes as floating images.
     // ShapeData captures everything needed to draw the shape in Render() without re-touching the model.
     private readonly List<FloatingShapeData> _floatingShapes = new();
@@ -172,7 +172,7 @@ public sealed class DocumentView : Control
         string OpenDelimiter, string CloseDelimiter, string GroupCharacter, string GroupCharacterPosition,
         string FunctionName, string FunctionArgument)>
         _equationVisualElements = new();
-    private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
+    private readonly Dictionary<InlineImage, AvaloniaRenderedImage?> _bitmapCache = new();
     private byte[]? _watermarkBitmapCacheBytes;
     private Bitmap? _watermarkBitmapCache;
     private readonly List<(Rect Rect, int Block, int Row, int Col)> _cellHits = new();
@@ -2964,6 +2964,28 @@ public sealed class DocumentView : Control
         }
     }
 
+    internal IReadOnlyList<(Rect SourceRect, Rect VisualRect)> InlineImageVisualRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _images
+                .Select(i => (i.Rect, i.Image?.VisualRect(i.Rect) ?? i.Rect))
+                .ToList();
+        }
+    }
+
+    internal IReadOnlyList<(Rect SourceRect, Rect VisualRect)> FloatingImageVisualRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingImages
+                .Select(i => (i.Rect, i.Image?.VisualRect(i.Rect) ?? i.Rect))
+                .ToList();
+        }
+    }
+
     /// <summary>Snapshot of table cell rects (Rect, Block, Row, Col) — multi-column X-band tests.</summary>
     internal IReadOnlyList<(Rect Rect, int Block, int Row, int Col)> TableCellRects
     {
@@ -5629,8 +5651,8 @@ public sealed class DocumentView : Control
             var imgPageSpaceY = ContentYToPageSpaceY(imgContentY);
             // AV-COL-NONTXT AG2: shift X to the column band that this image's content-Y falls in.
             var x = ColumnLeftFor(imgContentY) + AlignmentOffset(alignment, textWidth, width);
-            _images.Add((new Rect(x, imgPageSpaceY, width, height), DecodeBitmap(image)));
-            _layoutContentY = imgContentY + height + gap;
+            _images.Add((new Rect(x, imgPageSpaceY, width, height), DecodeRenderedImage(image), image.ReflectionPreset));
+            _layoutContentY = imgContentY + height + ReflectionExtraHeight(image.ReflectionPreset, height) + gap;
         }
     }
 
@@ -5819,13 +5841,16 @@ public sealed class DocumentView : Control
         _layoutContentY += gap;
     }
 
-    // Internal for render-pipeline tests; the cache owns the returned bitmap.
+    // Internal for render-pipeline tests; the cache owns the returned rendered image.
     internal Bitmap? DecodeBitmap(InlineImage image)
+        => DecodeRenderedImage(image)?.Bitmap;
+
+    internal AvaloniaRenderedImage? DecodeRenderedImage(InlineImage image)
     {
         if (_bitmapCache.TryGetValue(image, out var cached))
             return cached;
 
-        Bitmap? bitmap = null;
+        AvaloniaRenderedImage? rendered = null;
         Bitmap? decoded = null;
         try
         {
@@ -5833,8 +5858,9 @@ public sealed class DocumentView : Control
             {
                 using var stream = new MemoryStream(image.PngBytes);
                 decoded = new Bitmap(stream);
-                bitmap = AvaloniaImageAdjustHelper.Apply(decoded, image);
-                if (ReferenceEquals(bitmap, decoded))
+                var applied = AvaloniaImageAdjustHelper.ApplyWithBounds(decoded, image);
+                rendered = new AvaloniaRenderedImage(applied.Bitmap, applied.SourcePixelRect);
+                if (ReferenceEquals(applied.Bitmap, decoded))
                 {
                     // The neutral fast path returns the decoded instance; transfer ownership to the cache.
                     decoded = null;
@@ -5848,15 +5874,16 @@ public sealed class DocumentView : Control
         }
         catch (Exception)
         {
-            bitmap = null; // undecodable -> placeholder rendered instead
+            rendered?.Dispose();
+            rendered = null; // undecodable -> placeholder rendered instead
         }
         finally
         {
             decoded?.Dispose();
         }
 
-        _bitmapCache[image] = bitmap;
-        return bitmap;
+        _bitmapCache[image] = rendered;
+        return rendered;
     }
 
     private void CollectFloatingObjects(int blockIndex, Paragraph paragraph, double anchorContentY)
@@ -5887,7 +5914,7 @@ public sealed class DocumentView : Control
                 case DocumentFloatingObjectKind.Image when run.Image is { IsFloating: true } img:
                     _floatingImages.Add((
                         rect,
-                        DecodeBitmap(img),
+                        DecodeRenderedImage(img),
                         img.ReflectionPreset,
                         snapshot.BehindText,
                         snapshot.ZOrderIndex,
@@ -6669,16 +6696,8 @@ public sealed class DocumentView : Control
             DrawFloatingObjectSnapshot(context, snapshot);
 
         // Inline images (non-floating).
-        foreach (var (rect, bitmap) in _images)
-        {
-            if (bitmap is not null)
-                context.DrawImage(bitmap, rect);
-            else
-            {
-                context.FillRectangle(BandFill, rect);
-                context.DrawRectangle(null, TableBorderPen, rect);
-            }
-        }
+        foreach (var (rect, bitmap, reflectionPreset) in _images)
+            DrawFloatingImage(context, rect, bitmap, reflectionPreset);
 
         // FO4: inline charts, WordArt, SmartArt — rendered in the text flow using the same FO3 helpers.
         foreach (var cd in _inlineCharts)
@@ -6861,7 +6880,7 @@ public sealed class DocumentView : Control
                 if (item.Image is { } image)
                 {
                     var rect = new Rect(item.X, item.Y, Math.Max(1, item.Width), Math.Max(1, item.Height));
-                    DrawFloatingImage(context, rect, DecodeBitmap(image));
+                    DrawFloatingImage(context, rect, DecodeRenderedImage(image));
                     continue;
                 }
 
@@ -7129,12 +7148,17 @@ public sealed class DocumentView : Control
         }
     }
 
-    private void DrawFloatingImage(DrawingContext context, Rect rect, Bitmap? bitmap, int reflectionPreset = 0)
+    private void DrawFloatingImage(
+        DrawingContext context,
+        Rect rect,
+        AvaloniaRenderedImage? rendered,
+        int reflectionPreset = 0)
     {
-        if (bitmap is not null)
+        if (rendered is not null)
         {
-            context.DrawImage(bitmap, rect);
-            DrawFloatingImageReflection(context, rect, bitmap, reflectionPreset);
+            var visualRect = rendered.VisualRect(rect);
+            context.DrawImage(rendered.Bitmap, visualRect);
+            DrawFloatingImageReflection(context, rect, rendered, reflectionPreset);
         }
         else
         {
@@ -7147,16 +7171,14 @@ public sealed class DocumentView : Control
     private static void DrawFloatingImageReflection(
         DrawingContext context,
         Rect imageRect,
-        Bitmap bitmap,
+        AvaloniaRenderedImage rendered,
         int reflectionPreset)
     {
-        // Preset 1 is the imported touching reflection payload measured against Word. The
-        // offset presets require separate composition calibration when other picture effects apply.
-        if (reflectionPreset != 1)
+        var parameters = ReflectionParameters(reflectionPreset);
+        if (parameters is null)
             return;
 
-        const double opacity = 0.5;
-        const double distance = 0.0;
+        var (opacity, distance) = parameters.Value;
         var reflectionRect = new Rect(
             imageRect.X,
             imageRect.Bottom + distance,
@@ -7179,7 +7201,24 @@ public sealed class DocumentView : Control
         using var clip = context.PushClip(reflectionRect);
         using var mask = context.PushOpacityMask(fadeMask, reflectionRect);
         using var transform = context.PushTransform(mirror);
-        context.DrawImage(bitmap, imageRect);
+        context.DrawImage(rendered.Bitmap, rendered.VisualRect(imageRect));
+    }
+
+    private static (double Opacity, double Distance)? ReflectionParameters(int preset) => preset switch
+    {
+        1 => (0.5, 0),
+        2 => (0.5, 4 * PxPerPoint),
+        3 => (0.5, 8 * PxPerPoint),
+        4 => (1.0, 0),
+        5 => (1.0, 4 * PxPerPoint),
+        _ => null,
+    };
+
+    private static double ReflectionExtraHeight(int preset, double imageHeight)
+    {
+        return ReflectionParameters(preset) is { } parameters
+            ? imageHeight + parameters.Distance
+            : 0;
     }
 
     /// <summary>
@@ -15817,8 +15856,8 @@ public sealed class DocumentView : Control
 
     private void ClearBitmapCache()
     {
-        foreach (var bitmap in _bitmapCache.Values)
-            bitmap?.Dispose();
+        foreach (var rendered in _bitmapCache.Values)
+            rendered?.Dispose();
         _bitmapCache.Clear();
     }
 
@@ -17100,7 +17139,7 @@ public sealed class DocumentView : Control
         public enum ChildKind { Image, Shape, Chart, WordArt, SmartArt, Group }
         public ChildKind Kind;
         // Reused data structs (only the relevant one is non-null):
-        public Bitmap?           Bitmap;    // Image
+        public AvaloniaRenderedImage? Bitmap;    // Image
         public FloatingShapeData? Shape;    // Shape
         public FloatingChartData? Chart;    // Chart
         public FloatingWordArtData? WordArt; // WordArt
@@ -17238,7 +17277,7 @@ public sealed class DocumentView : Control
             {
                 case DocumentFloatingObjectKind.Image when child is InlineImage img:
                     childData.Kind = FloatingGroupChildData.ChildKind.Image;
-                    childData.Bitmap = DecodeBitmap(img);
+                    childData.Bitmap = DecodeRenderedImage(img);
                     break;
 
                 case DocumentFloatingObjectKind.Shape when child is Shape:

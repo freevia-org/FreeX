@@ -11,21 +11,63 @@ namespace FreeW.App.Avalonia.Editing;
 /// The operation order mirrors the WPF host's ImageAdjustHelper so both hosts render the same
 /// model values without modifying InlineImage.PngBytes.
 /// </summary>
-internal static class AvaloniaImageAdjustHelper
+internal static partial class AvaloniaImageAdjustHelper
 {
     public static Bitmap Apply(Bitmap source, InlineImage image)
-    {
-        if (!image.HasAdjustments && !image.HasRecolor)
-            return source;
+        => ApplyWithBounds(source, image).Bitmap;
 
-        return ApplyCore(
-            source,
-            image.BrightnessPct,
-            image.ContrastPct,
-            image.SaturationPct,
-            image.TransparencyPct,
-            image.RecolorMode,
-            image.ColorTemperature);
+    internal static AvaloniaImageApplyResult ApplyWithBounds(Bitmap source, InlineImage image)
+    {
+        if (!image.HasAdjustments && !image.HasRecolor && !image.HasArtisticEffect && !HasRasterEffects(image))
+            return new(source, new PixelRect(0, 0, source.PixelSize.Width, source.PixelSize.Height));
+
+        var current = source;
+        Bitmap? owned = null;
+        var sourcePixelRect = new PixelRect(0, 0, source.PixelSize.Width, source.PixelSize.Height);
+        try
+        {
+            if (image.HasAdjustments || image.HasRecolor)
+            {
+                current = ApplyCore(
+                    current,
+                    image.BrightnessPct,
+                    image.ContrastPct,
+                    image.SaturationPct,
+                    image.TransparencyPct,
+                    image.RecolorMode,
+                    image.ColorTemperature);
+                owned = current;
+            }
+
+            if (image.HasArtisticEffect)
+            {
+                var next = ApplyArtistic(current, image.ArtisticEffect);
+                if (owned is not null)
+                    owned.Dispose();
+                current = next;
+                owned = current;
+            }
+
+            if (HasRasterEffects(image))
+            {
+                var next = ApplyPictureEffects(current, image);
+                if (owned is not null)
+                    owned.Dispose();
+                current = next.Bitmap;
+                sourcePixelRect = next.SourcePixelRect;
+                owned = current;
+            }
+
+            // Ownership transfers to DocumentView's bitmap cache. The local variable is retained only
+            // to make the transfer explicit; disposing it here would invalidate the cached result.
+            owned = null;
+            return new(current, sourcePixelRect);
+        }
+        catch
+        {
+            owned?.Dispose();
+            throw;
+        }
     }
 
     internal static Bitmap ApplyCore(

@@ -478,11 +478,16 @@ public sealed class DocumentViewFloatingImageTests
         Console.WriteLine($"[FloatingImageCapture] Visual inspection: {outPath}");
     }
 
-    [Fact]
-    public async Task Floating_image_reflection_changes_only_the_reflection_region()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public async Task Floating_image_reflection_preset_changes_only_the_reflection_region(int reflectionPreset)
     {
         var control = await CaptureFloatingImageFrameAsync(reflectionPreset: 0);
-        var reflected = await CaptureFloatingImageFrameAsync(reflectionPreset: 1);
+        var reflected = await CaptureFloatingImageFrameAsync(reflectionPreset);
 
         if (!control.Ran || !reflected.Ran || control.Png is null || reflected.Png is null)
             return;
@@ -508,7 +513,7 @@ public sealed class DocumentViewFloatingImageTests
         }
 
         changedPixels.Should().BeGreaterThan(100,
-            "the reflected floating image should paint a mirrored, fading copy below its source image");
+            $"reflection preset {reflectionPreset} should paint a mirrored, fading copy below its source image");
     }
 
     private static async Task<(bool Ran, byte[]? Png, Rect FloatRect)> CaptureFloatingImageFrameAsync(int reflectionPreset)

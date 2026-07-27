@@ -7,7 +7,8 @@ namespace FreeP.App.Recording;
 public enum LinuxNarrationCaptureToolKind
 {
     PipeWire,
-    PulseAudio
+    PulseAudio,
+    FfmpegCamera
 }
 
 public sealed record LinuxNarrationCaptureTool(

@@ -7,6 +7,7 @@ using Free.Shared.Ribbon;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.Core.Model;
+using SkiaSharp;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -269,6 +270,226 @@ public sealed class PictureCoreCommandParityTests
         }, CancellationToken.None);
     }
 
+    [Theory]
+    [InlineData(ImageArtisticEffect.Blur)]
+    [InlineData(ImageArtisticEffect.GlowDiffused)]
+    [InlineData(ImageArtisticEffect.GlowEdges)]
+    [InlineData(ImageArtisticEffect.PencilGrayscale)]
+    [InlineData(ImageArtisticEffect.PencilSketch)]
+    [InlineData(ImageArtisticEffect.LineDrawing)]
+    [InlineData(ImageArtisticEffect.Paintbrush)]
+    [InlineData(ImageArtisticEffect.PaintStrokes)]
+    [InlineData(ImageArtisticEffect.Photocopy)]
+    [InlineData(ImageArtisticEffect.Posterize)]
+    [InlineData(ImageArtisticEffect.Pastels)]
+    [InlineData(ImageArtisticEffect.Watercolor)]
+    [InlineData(ImageArtisticEffect.FilmGrain)]
+    [InlineData(ImageArtisticEffect.Mosaic)]
+    public async Task AvaloniaArtisticEffect_RendersDifferentRasterPixels(ImageArtisticEffect effect)
+    {
+        await Session.Dispatch(() =>
+        {
+            var sourcePixels = RasterSource();
+            var image = new InlineImage(OnePixelPng(), 40, 40) { ArtisticEffect = effect };
+
+            var adjustedPixels = AvaloniaImageAdjustHelper.ApplyArtisticPixels(
+                sourcePixels, 40, 40, 160, effect);
+            var changed = sourcePixels.Where((value, index) => value != adjustedPixels[index]).Count();
+            changed.Should().BeGreaterThan(0,
+                $"Avalonia artistic effect {effect} must change rendered pixels (source max={sourcePixels.Max()}, adjusted max={adjustedPixels.Max()})");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task PencilSketch_MatchesWpfWhitePaperBlendAndSaturationBoost()
+    {
+        await Session.Dispatch(() =>
+        {
+            const int width = 7;
+            const int height = 7;
+            var source = ColoredRaster(width, height);
+            var expected = WpfPencilSketchExpected(source, width, height, width * 4);
+            var actual = AvaloniaImageAdjustHelper.ApplyArtisticPixels(
+                source, width, height, width * 4, ImageArtisticEffect.PencilSketch);
+
+            actual.Should().Equal(expected,
+                "PencilSketch must retain WPF's white-paper blend followed by saturation 1.6");
+        }, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData(1, 0, 0, 0)]
+    [InlineData(0, 5, 0, 0)]
+    [InlineData(0, 0, 5, 0)]
+    [InlineData(0, 0, 0, 1)]
+    public async Task AvaloniaPictureEffect_RendersActualRasterPixels(
+        int shadowPreset,
+        double glowSizePt,
+        double softEdgePt,
+        int bevelPreset)
+    {
+        await Session.Dispatch(() =>
+        {
+            var sourcePixels = RasterSource();
+            var image = new InlineImage(OnePixelPng(), 40, 40)
+            {
+                ShadowPreset = shadowPreset,
+                GlowSizePt = glowSizePt,
+                GlowColorHex = "FF0000",
+                SoftEdgePt = softEdgePt,
+                BevelPreset = bevelPreset,
+            };
+
+            var adjustedPixels = AvaloniaImageAdjustHelper.ApplyPictureEffectPixels(
+                sourcePixels, 40, 40, 160, image);
+            var changed = sourcePixels.Where((value, index) => value != adjustedPixels[index]).Count();
+            changed.Should().BeGreaterThan(0,
+                "picture effects must render pixels, not only mutate InlineImage model state");
+        }, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData(1, 0.0)]
+    [InlineData(0, 12.0)]
+    public async Task OpaquePictureEffectsExpandRasterWithoutMovingSourceContent(
+        int shadowPreset,
+        double glowSizePt)
+    {
+        await Session.Dispatch(() =>
+        {
+            const int width = 16;
+            const int height = 12;
+            var source = OpaqueRaster(width, height);
+            var image = new InlineImage(OnePixelPng(), 160, 120)
+            {
+                ShadowPreset = shadowPreset,
+                GlowSizePt = glowSizePt,
+                GlowColorHex = "FF0000",
+            };
+
+            var raster = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, image);
+
+            raster.Width.Should().BeGreaterThan(width);
+            raster.Height.Should().BeGreaterThan(height);
+            raster.SourcePixelRect.Should().Be(new PixelRect(
+                raster.SourcePixelRect.X,
+                raster.SourcePixelRect.Y,
+                width,
+                height));
+
+            var outsideAlpha = 0;
+            for (var y = 0; y < raster.Height; y++)
+            for (var x = 0; x < raster.Width; x++)
+            {
+                var inSource = x >= raster.SourcePixelRect.X &&
+                               x < raster.SourcePixelRect.X + width &&
+                               y >= raster.SourcePixelRect.Y &&
+                               y < raster.SourcePixelRect.Y + height;
+                if (!inSource && raster.Pixels[(y * raster.Stride) + x * 4 + 3] > 0)
+                    outsideAlpha++;
+            }
+            outsideAlpha.Should().BeGreaterThan(0,
+                "an opaque source must still expose shadow/glow pixels outside its source bounds");
+
+            for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
+            {
+                var sourceOffset = y * width * 4 + x * 4;
+                var outputOffset = (y + raster.SourcePixelRect.Y) * raster.Stride +
+                                   (x + raster.SourcePixelRect.X) * 4;
+                raster.Pixels[outputOffset].Should().Be(source[sourceOffset]);
+                raster.Pixels[outputOffset + 1].Should().Be(source[sourceOffset + 1]);
+                raster.Pixels[outputOffset + 2].Should().Be(source[sourceOffset + 2]);
+                raster.Pixels[outputOffset + 3].Should().Be(source[sourceOffset + 3]);
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ExpandedEffectCacheFeedsInlineAndFloatingDrawRectsWithoutChangingSourceGeometry()
+    {
+        await Session.Dispatch(() =>
+        {
+            var inlineImage = new InlineImage(OpaquePng(), 120, 80)
+            {
+                Wrapping = ImageWrapping.Inline,
+                ShadowPreset = 1,
+            };
+            var inlineDoc = TextDocument.CreateEmpty();
+            inlineDoc.Blocks.Clear();
+            var inlineParagraph = new Paragraph();
+            inlineParagraph.Runs.Add(Run.FromImage(inlineImage));
+            inlineDoc.Blocks.Add(inlineParagraph);
+
+            var inlineView = new DocumentView();
+            inlineView.LoadDocument(inlineDoc);
+            inlineView.Measure(new Size(800, 1200));
+            var inlineRendered = inlineView.DecodeRenderedImage(inlineImage);
+            inlineRendered.Should().NotBeNull();
+            inlineView.DecodeRenderedImage(inlineImage).Should().BeSameAs(inlineRendered);
+            AssertVisualRectPreservesSource(inlineView.InlineImageVisualRects.Single(), inlineRendered!);
+
+            var floatingImage = new InlineImage(OpaquePng(), 120, 80)
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalOffsetPt = 12,
+                VerticalOffsetPt = 12,
+                ShadowPreset = 1,
+            };
+            var floatingDoc = TextDocument.CreateEmpty();
+            floatingDoc.Blocks.Clear();
+            var floatingParagraph = new Paragraph();
+            floatingParagraph.Runs.Add(Run.FromImage(floatingImage));
+            floatingDoc.Blocks.Add(floatingParagraph);
+
+            var floatingView = new DocumentView();
+            floatingView.LoadDocument(floatingDoc);
+            floatingView.Measure(new Size(800, 1200));
+            var floatingRendered = floatingView.DecodeRenderedImage(floatingImage);
+            floatingRendered.Should().NotBeNull();
+            AssertVisualRectPreservesSource(floatingView.FloatingImageVisualRects.Single(), floatingRendered!);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task PictureEffectCommands_InvalidateRasterCacheAndUndoForEveryEffectFamily()
+    {
+        await Session.Dispatch(() =>
+        {
+            var (editor, image) = SelectedImage();
+            var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+
+            foreach (var commandId in new[]
+                     {
+                         "freew.image-shadow-1",
+                         "freew.image-reflection-5",
+                         "freew.image-glow-18",
+                         "freew.image-softedge-2pt5",
+                         "freew.image-bevel-4",
+                         "freew.image-artistic-mosaic",
+                     })
+            {
+                var before = editor.DecodeBitmap(image);
+                Stateful(registry, commandId).Execute(RibbonCommandContext.Empty);
+                editor.DecodeBitmap(image).Should().NotBeSameAs(before,
+                    $"{commandId} must invalidate the decoded image cache");
+
+                editor.Undo();
+                editor.DecodeBitmap(image).Should().NotBeSameAs(before,
+                    $"undo after {commandId} must rebuild the cache");
+                image.ShadowPreset.Should().Be(0);
+                image.ReflectionPreset.Should().Be(0);
+                image.GlowSizePt.Should().Be(0);
+                image.SoftEdgePt.Should().Be(0);
+                image.BevelPreset.Should().Be(0);
+                image.ArtisticEffect.Should().Be(ImageArtisticEffect.None);
+            }
+
+            editor.LoadDocument(TextDocument.CreateEmpty());
+        }, CancellationToken.None);
+    }
+
     [Fact]
     public async Task CorePictureCommands_AreDisabledWithoutPictureSelection()
     {
@@ -338,6 +559,126 @@ public sealed class PictureCoreCommandParityTests
         RibbonButton button => button.CommandId.Value,
         _ => string.Empty,
     };
+
+    private static byte[] RasterSource()
+    {
+        const int size = 40;
+        var pixels = new byte[size * size * 4];
+        for (var y = 8; y < 32; y++)
+        for (var x = 8; x < 32; x++)
+        {
+            var offset = (y * size + x) * 4;
+            pixels[offset] = (byte)(40 + x);
+            pixels[offset + 1] = (byte)(80 + y);
+            pixels[offset + 2] = 220;
+            pixels[offset + 3] = 255;
+        }
+        return pixels;
+    }
+
+    private static byte[] OpaqueRaster(int width, int height)
+    {
+        var pixels = new byte[width * height * 4];
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            var offset = (y * width + x) * 4;
+            pixels[offset] = (byte)(20 + x);
+            pixels[offset + 1] = (byte)(80 + y);
+            pixels[offset + 2] = (byte)(180 + (x + y) % 40);
+            pixels[offset + 3] = 255;
+        }
+        return pixels;
+    }
+
+    private static byte[] ColoredRaster(int width, int height)
+    {
+        var pixels = new byte[width * height * 4];
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            var offset = (y * width + x) * 4;
+            pixels[offset] = (byte)(30 + x * 8);
+            pixels[offset + 1] = (byte)(40 + y * 9);
+            pixels[offset + 2] = (byte)(90 + x * 5 + y * 3);
+            pixels[offset + 3] = 255;
+        }
+        return pixels;
+    }
+
+    private static void AssertVisualRectPreservesSource(
+        (Rect SourceRect, Rect VisualRect) pair,
+        AvaloniaRenderedImage rendered)
+    {
+        pair.VisualRect.Width.Should().BeGreaterThan(pair.SourceRect.Width);
+        pair.VisualRect.Height.Should().BeGreaterThan(pair.SourceRect.Height);
+        var scaleX = pair.VisualRect.Width / rendered.Bitmap.PixelSize.Width;
+        var scaleY = pair.VisualRect.Height / rendered.Bitmap.PixelSize.Height;
+        (pair.VisualRect.X + rendered.SourcePixelRect.X * scaleX)
+            .Should().BeApproximately(pair.SourceRect.X, 0.001);
+        (pair.VisualRect.Y + rendered.SourcePixelRect.Y * scaleY)
+            .Should().BeApproximately(pair.SourceRect.Y, 0.001);
+        (rendered.SourcePixelRect.Width * scaleX)
+            .Should().BeApproximately(pair.SourceRect.Width, 0.001);
+        (rendered.SourcePixelRect.Height * scaleY)
+            .Should().BeApproximately(pair.SourceRect.Height, 0.001);
+    }
+
+    private static byte[] OpaquePng()
+    {
+        using var bitmap = new SKBitmap(8, 6, SKColorType.Bgra8888, SKAlphaType.Premul);
+        bitmap.Erase(new SKColor(230, 120, 40, 255));
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    private static byte[] WpfPencilSketchExpected(byte[] pixels, int width, int height, int stride)
+    {
+        var edges = ReferenceSobel(pixels, width, height, stride);
+        var result = new byte[pixels.Length];
+        for (var i = 0; i < result.Length; i += 4)
+        {
+            var t = 1.0 - edges[i / 4] / 255.0;
+            var b = pixels[i] / 255.0;
+            var g = pixels[i + 1] / 255.0;
+            var r = pixels[i + 2] / 255.0;
+            var br = Math.Clamp(t + b * (1 - t), 0, 1);
+            var gr = Math.Clamp(t + g * (1 - t), 0, 1);
+            var rr = Math.Clamp(t + r * (1 - t), 0, 1);
+            var lum = 0.2126 * rr + 0.7152 * gr + 0.0722 * br;
+            result[i] = ToByte(lum + (br - lum) * 1.6);
+            result[i + 1] = ToByte(lum + (gr - lum) * 1.6);
+            result[i + 2] = ToByte(lum + (rr - lum) * 1.6);
+            result[i + 3] = pixels[i + 3];
+        }
+        return result;
+    }
+
+    private static byte[] ReferenceSobel(byte[] pixels, int width, int height, int stride)
+    {
+        var grey = new byte[width * height];
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            var i = y * stride + x * 4;
+            grey[y * width + x] = (byte)(0.2126 * pixels[i + 2] + 0.7152 * pixels[i + 1] +
+                                         0.0722 * pixels[i] + 0.5);
+        }
+
+        var edges = new byte[width * height];
+        for (var y = 1; y < height - 1; y++)
+        for (var x = 1; x < width - 1; x++)
+        {
+            int P(int dx, int dy) => grey[(y + dy) * width + x + dx];
+            var gx = -P(-1, -1) - 2 * P(0, -1) - P(1, -1) + P(-1, 1) + 2 * P(0, 1) + P(1, 1);
+            var gy = -P(-1, -1) - 2 * P(-1, 0) - P(-1, 1) + P(1, -1) + 2 * P(1, 0) + P(1, 1);
+            edges[y * width + x] = (byte)Math.Min(255, Math.Sqrt(gx * (long)gx + gy * (long)gy));
+        }
+        return edges;
+    }
+
+    private static byte ToByte(double value) => (byte)(Math.Clamp(value, 0, 1) * 255 + 0.5);
 
     private static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");

@@ -5,7 +5,9 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
+using Free.Shared.Drawing;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.Shell;
@@ -97,32 +99,46 @@ public sealed partial class MainWindow
         ClearInlineNoteControlReferences();
         if (_inlineNoteEditAddress is not { } address ||
             !TryGetDisplayedCellBounds(viewport, address, showHeadings, zoomFactor,
-                out var cellLeft, out var cellTop, out _, out var cellHeight))
+                out var cellLeft, out var cellTop, out var cellWidth, out var cellHeight))
         {
+            // WPF dismisses the comment popup as soon as its anchor leaves the viewport.
+            // Clearing the state prevents the editor from reappearing after a later rebuild
+            // without another explicit New/Edit Note command.
+            if (_inlineNoteEditAddress is not null)
+                ClearInlineNoteEditorState();
             return;
         }
 
-        var left = Math.Clamp(cellLeft, 0, Math.Max(0, overlay.Width - InlineCommentEditorWidth));
-        var top = cellTop + cellHeight + 2;
-        if (top + InlineCommentEditorNewHeight > overlay.Height && cellTop > InlineCommentEditorNewHeight + 2)
-            top = cellTop - InlineCommentEditorNewHeight - 2;
-        top = Math.Clamp(top, 0, Math.Max(0, overlay.Height - InlineCommentEditorNewHeight));
+        var placement = CommentPreviewPlacementPlanner.Calculate(
+            new LayoutRect(cellLeft, cellTop, cellWidth, cellHeight),
+            new CommentPreviewLayoutSize(
+                Math.Max(0, overlay.Width),
+                Math.Max(0, overlay.Height)),
+            new CommentPreviewLayoutSize(
+                InlineCommentEditorWidth,
+                InlineCommentEditorNewHeight));
 
         var editor = new Border
         {
-            Width = InlineCommentEditorWidth,
-            MinHeight = InlineCommentEditorNewHeight,
-            MaxHeight = InlineCommentEditorNewHeight,
+            Width = placement.Width,
+            MaxHeight = placement.MaxHeight,
             Background = new SolidColorBrush(Color.FromRgb(255, 255, 225)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(158, 151, 113)),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(8),
+            BoxShadow = new BoxShadows(new BoxShadow
+            {
+                OffsetX = 2,
+                OffsetY = 2,
+                Blur = 8,
+                Color = Color.FromArgb(56, 0, 0, 0),
+            }),
             Child = BuildInlineNotePanel(address),
         };
         AutomationProperties.SetAutomationId(editor, "WorksheetNoteInlineEditor");
         AutomationProperties.SetName(editor, "Note");
-        Canvas.SetLeft(editor, left);
-        Canvas.SetTop(editor, top);
+        Canvas.SetLeft(editor, placement.HorizontalOffset);
+        Canvas.SetTop(editor, placement.VerticalOffset);
         overlay.Children.Add(editor);
     }
 
@@ -150,7 +166,17 @@ public sealed partial class MainWindow
             FontSize = 12,
             Padding = new Thickness(5),
         };
-        AvaloniaCompactDialogChrome.ApplyTextBox(_inlineNoteEditBox, CommentDialogChromeStyle, fixedHeight: false);
+        AvaloniaCompactDialogChrome.ApplyTextBox(
+            _inlineNoteEditBox,
+            InlineCommentEditorChromeStyle,
+            fixedHeight: false);
+        _inlineNoteEditBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Top;
+        _inlineNoteEditBox.SetValue(
+            ScrollViewer.VerticalScrollBarVisibilityProperty,
+            global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto);
+        _inlineNoteEditBox.SetValue(
+            ScrollViewer.HorizontalScrollBarVisibilityProperty,
+            global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled);
         AutomationProperties.SetAutomationId(_inlineNoteEditBox, "GridNoteInlineTextBox");
         AutomationProperties.SetName(_inlineNoteEditBox, "Note");
         _inlineNoteEditBox.KeyDown += InlineNoteTextBoxKeyDown;
@@ -178,7 +204,7 @@ public sealed partial class MainWindow
             "GridCommentInlineCancelButton",
             CancelNoteInlineEdit,
             isCancel: true);
-        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([save, cancel], new Thickness(0, 7, 0, 0)));
+        panel.Children.Add(CreateInlineCommentActionRow(save, cancel));
         return panel;
     }
 
@@ -214,6 +240,13 @@ public sealed partial class MainWindow
             BorderBrush = new SolidColorBrush(Color.FromRgb(158, 151, 113)),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(8),
+            BoxShadow = new BoxShadows(new BoxShadow
+            {
+                OffsetX = 2,
+                OffsetY = 2,
+                Blur = 8,
+                Color = Color.FromArgb(56, 0, 0, 0),
+            }),
             Child = BuildInlineThreadedCommentPanel(),
         };
         AutomationProperties.SetAutomationId(editor, "WorksheetThreadedCommentInlineEditor");
@@ -313,7 +346,7 @@ public sealed partial class MainWindow
             "GridCommentInlineCancelButton",
             CancelThreadedCommentInlineEdit,
             isCancel: true);
-        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([save, cancel], new Thickness(0, 7, 0, 0)));
+        panel.Children.Add(CreateInlineCommentActionRow(save, cancel));
         return panel;
     }
 
@@ -387,7 +420,14 @@ public sealed partial class MainWindow
             FontSize = 12,
             Padding = new Thickness(5),
         };
-        AvaloniaCompactDialogChrome.ApplyTextBox(box, CommentDialogChromeStyle, fixedHeight: false);
+        AvaloniaCompactDialogChrome.ApplyTextBox(box, InlineCommentEditorChromeStyle, fixedHeight: false);
+        box.VerticalContentAlignment = AvaloniaVerticalAlignment.Top;
+        box.SetValue(
+            ScrollViewer.VerticalScrollBarVisibilityProperty,
+            global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto);
+        box.SetValue(
+            ScrollViewer.HorizontalScrollBarVisibilityProperty,
+            global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled);
         AutomationProperties.SetName(box, UiText.Get(nameResourceKey));
         AutomationProperties.SetAutomationId(box, automationId);
         if (selectedReply)
@@ -431,6 +471,19 @@ public sealed partial class MainWindow
         button.Click += (_, _) => action();
         return button;
     }
+
+    private static AvaloniaCompactDialogChromeStyle InlineCommentEditorChromeStyle =>
+        CommentDialogChromeStyle with
+        {
+            TextBoxPadding = new Thickness(5),
+            ActionSpacing = 6,
+        };
+
+    private static StackPanel CreateInlineCommentActionRow(Button save, Button cancel) =>
+        AvaloniaCompactDialogChrome.CreateActionRow(
+            [save, cancel],
+            new Thickness(0, 8, 0, 0),
+            InlineCommentEditorChromeStyle);
 
     private static string InlineCommentSaveText =>
         UiText.CreateAutomationName(UiText.Get("MainWindow_AutomationName_Save"));
@@ -692,7 +745,17 @@ public sealed partial class MainWindow
             : _inlineThreadedCommentReplyBox ?? _inlineThreadedCommentRootBox)?.Focus();
     }
 
-    private void FocusInlineNoteEditor() => _inlineNoteEditBox?.Focus();
+    private void FocusInlineNoteEditor()
+    {
+        if (_inlineNoteEditBox is not { } editor)
+            return;
+
+        editor.Focus();
+        var caret = editor.Text?.Length ?? 0;
+        editor.CaretIndex = caret;
+        editor.SelectionStart = caret;
+        editor.SelectionEnd = caret;
+    }
 
     private void ClearInlineNoteEditorState()
     {

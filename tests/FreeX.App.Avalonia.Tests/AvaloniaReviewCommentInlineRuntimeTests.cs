@@ -3,6 +3,7 @@ using System.Threading;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -11,6 +12,8 @@ using Avalonia.Media;
 using Avalonia.VisualTree;
 using FluentAssertions;
 
+using Free.Shared.Drawing;
+using FreeX.App.Presentation.Comments;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -24,6 +27,33 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
 {
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+
+    [Theory]
+    [InlineData(50, 40, 64, 20, 800, 500, 120, 40, 300, 220)]
+    [InlineData(720, 40, 64, 20, 800, 500, 414, 40, 300, 220)]
+    [InlineData(90, 130, 50, 20, 150, 160, 8, 8, 134, 144)]
+    public void InlineNotePlacement_MatchesWpfPopupPlacementAndClampsToSurface(
+        double cellLeft,
+        double cellTop,
+        double cellWidth,
+        double cellHeight,
+        double viewportWidth,
+        double viewportHeight,
+        double expectedLeft,
+        double expectedTop,
+        double expectedWidth,
+        double expectedMaxHeight)
+    {
+        var placement = CommentPreviewPlacementPlanner.Calculate(
+            new LayoutRect(cellLeft, cellTop, cellWidth, cellHeight),
+            new CommentPreviewLayoutSize(viewportWidth, viewportHeight),
+            new CommentPreviewLayoutSize(300, 230));
+
+        placement.HorizontalOffset.Should().Be(expectedLeft);
+        placement.VerticalOffset.Should().Be(expectedTop);
+        placement.Width.Should().Be(expectedWidth);
+        placement.MaxHeight.Should().Be(expectedMaxHeight);
+    }
 
     [Fact]
     public async Task NewNoteRoute_OpensAnchoredInlineEditorAndCtrlEnterCommitsUndoableNote()
@@ -44,10 +74,19 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             editor!.Background.Should().BeOfType<SolidColorBrush>().Which.Color
                 .Should().Be(Color.FromRgb(255, 255, 225));
             editor.Padding.Should().Be(new Thickness(8));
+            editor.Width.Should().Be(300);
+            editor.MaxHeight.Should().Be(220);
+            editor.BoxShadow.Should().NotBeNull();
 
             var noteBox = FindByAutomationId<TextBox>(editor, "GridNoteInlineTextBox");
             noteBox.Should().NotBeNull();
             noteBox!.Text.Should().BeEmpty();
+            noteBox.Padding.Should().Be(new Thickness(5));
+            noteBox.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Top);
+            noteBox.GetValue(ScrollViewer.VerticalScrollBarVisibilityProperty)
+                .Should().Be(ScrollBarVisibility.Auto);
+            noteBox.GetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty)
+                .Should().Be(ScrollBarVisibility.Disabled);
             var save = FindByAutomationId<Button>(editor, "GridCommentInlineSaveButton");
             var cancel = FindByAutomationId<Button>(editor, "GridCommentInlineCancelButton");
             save.Should().NotBeNull();
@@ -95,6 +134,10 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             var noteBox = FindByAutomationId<TextBox>(editor!, "GridNoteInlineTextBox");
             noteBox.Should().NotBeNull();
             noteBox!.Text.Should().Be("Existing note");
+            InvokePrivate(window, "FocusInlineNoteEditor");
+            noteBox.CaretIndex.Should().Be(noteBox.Text.Length);
+            noteBox.SelectionStart.Should().Be(noteBox.Text.Length);
+            noteBox.SelectionEnd.Should().Be(noteBox.Text.Length);
             noteBox.Text = "Changed but cancelled";
             noteBox.RaiseEvent(new KeyEventArgs
             {

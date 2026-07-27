@@ -55,6 +55,39 @@ public sealed class GridCommentPreviewPlacementPlannerTests
     }
 
     [Fact]
+    public void Calculate_UsesWpfInlineEditorDimensionsAndPlacementRules()
+    {
+        var placement = GridCommentPreviewPlacementPlanner.Calculate(
+            new Rect(50, 40, 64, 20),
+            new Size(800, 500),
+            new Size(300, 230));
+
+        placement.HorizontalOffset.Should().Be(120);
+        placement.VerticalOffset.Should().Be(40);
+        placement.Width.Should().Be(300);
+        placement.MaxHeight.Should().Be(220);
+
+        GridCommentPreviewPlacementPlanner.EdgePadding.Should()
+            .Be(global::FreeX.App.Presentation.Comments.CommentPreviewPlacementPlanner.EdgePadding);
+        GridCommentPreviewPlacementPlanner.CellGap.Should()
+            .Be(global::FreeX.App.Presentation.Comments.CommentPreviewPlacementPlanner.CellGap);
+        GridCommentPreviewPlacementPlanner.MinWidth.Should()
+            .Be(global::FreeX.App.Presentation.Comments.CommentPreviewPlacementPlanner.MinWidth);
+        GridCommentPreviewPlacementPlanner.MaxWidth.Should()
+            .Be(global::FreeX.App.Presentation.Comments.CommentPreviewPlacementPlanner.MaxWidth);
+        GridCommentPreviewPlacementPlanner.MinHeight.Should()
+            .Be(global::FreeX.App.Presentation.Comments.CommentPreviewPlacementPlanner.MinHeight);
+        GridCommentPreviewPlacementPlanner.MaxHeight.Should()
+            .Be(global::FreeX.App.Presentation.Comments.CommentPreviewPlacementPlanner.MaxHeight);
+
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridCommentPreviewPlacementPlanner.cs");
+        source.Should().Contain("SharedCommentPreviewPlacementPlanner");
+        source.Should().Contain("ToLayout");
+        source.Should().NotContain("var availableWidth =");
+        source.Should().NotContain("private static double Clamp");
+    }
+
+    [Fact]
     public void CalculateConnector_AnchorsTopRightCellCornerWhenBoxPlacedToTheRight()
     {
         // R50-render-comment-hover-card-3-3: a pinned note box placed to the right of its cell must
@@ -115,5 +148,18 @@ public sealed class GridCommentPreviewPlacementPlannerTests
         source.Should().Contain("DismissCommentPreview();");
         source.Should().NotContain("Placement = PlacementMode.Relative");
         source.Should().NotContain("System.Windows.Controls.Primitives");
+    }
+
+    [Fact]
+    public void WpfInlineNoteEditor_UsesAuthorityChromeAndLifecycleTokens()
+    {
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.CommentPreview.cs");
+
+        source.Should().Contain("Effect = new DropShadowEffect");
+        source.Should().Contain("MaxHeight = placement.MaxHeight");
+        source.Should().Contain("Padding = new Thickness(5)");
+        source.Should().Contain("VerticalScrollBarVisibility = ScrollBarVisibility.Auto");
+        source.Should().Contain("Margin = new Thickness(0, 8, 6, 0)");
+        source.Should().Contain("textBox.CaretIndex = textBox.Text.Length");
     }
 }
