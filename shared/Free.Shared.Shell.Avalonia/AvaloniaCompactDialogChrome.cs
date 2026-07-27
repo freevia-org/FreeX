@@ -25,6 +25,13 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public Thickness ListBoxItemPadding { get; init; } = new(4, 1);
     public double ListBoxItemMinHeight { get; init; } = 24;
     public double ActionSpacing { get; init; } = 8;
+    public IBrush? InputBorderBrush { get; init; }
+    public IBrush? ComboBoxBackgroundBrush { get; init; }
+    public IBrush? TextBoxBackgroundBrush { get; init; }
+    public IBrush? DisabledTextBoxBackgroundBrush { get; init; }
+    public IBrush? TextSelectionBrush { get; init; }
+    public IBrush? DialogInactiveTabBorderBrush { get; init; }
+    public IBrush? DialogInactiveTabBackgroundBrush { get; init; }
 }
 
 /// <summary>
@@ -46,6 +53,7 @@ public static class AvaloniaCompactDialogChrome
     private static readonly IBrush DefaultButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
     private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(130, 130, 130));
     private static readonly IBrush ComboBoxBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(240, 240, 240));
+    private static readonly IBrush TextSelectionBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
     private static readonly IBrush SelectedItemBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(204, 232, 255));
     private static readonly IBrush SelectedItemBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(153, 209, 255));
     private static readonly IBrush DialogForegroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x1f, 0x1f, 0x1f));
@@ -165,9 +173,23 @@ public static class AvaloniaCompactDialogChrome
         textBox.CornerRadius = new CornerRadius(0);
         textBox.FontSize = style.FontSize;
         textBox.FontFamily = style.FontFamily;
-        textBox.BorderBrush = InputBorderBrush;
+        var inputBorder = style.InputBorderBrush ?? InputBorderBrush;
+        textBox.Background = style.TextBoxBackgroundBrush ?? textBox.Background;
+        textBox.BorderBrush = inputBorder;
         textBox.BorderThickness = new Thickness(1);
+        textBox.SelectionBrush = style.TextSelectionBrush ?? TextSelectionBrush;
+        if (style.TextSelectionBrush is not null)
+            textBox.SelectionForegroundBrush = Brushes.Black;
         textBox.VerticalContentAlignment = VerticalAlignment.Center;
+        if (style.DisabledTextBoxBackgroundBrush is not null)
+            textBox.Styles.Add(new Style(selector => selector.OfType<TextBox>().Class(":disabled"))
+            {
+                Setters =
+                {
+                    new Setter(TextBox.BackgroundProperty, style.DisabledTextBoxBackgroundBrush),
+                    new Setter(TextBox.BorderBrushProperty, inputBorder),
+                },
+            });
     }
 
     public static void FocusAndSelect(TextBox textBox)
@@ -191,8 +213,8 @@ public static class AvaloniaCompactDialogChrome
         comboBox.CornerRadius = new CornerRadius(0);
         comboBox.FontSize = style.FontSize;
         comboBox.FontFamily = style.FontFamily;
-        comboBox.Background = ComboBoxBackgroundBrush;
-        comboBox.BorderBrush = InputBorderBrush;
+        comboBox.Background = style.ComboBoxBackgroundBrush ?? ComboBoxBackgroundBrush;
+        comboBox.BorderBrush = style.InputBorderBrush ?? InputBorderBrush;
         comboBox.BorderThickness = new Thickness(1);
         comboBox.VerticalContentAlignment = VerticalAlignment.Center;
     }
@@ -478,7 +500,7 @@ public static class AvaloniaCompactDialogChrome
 
         listBox.FontSize = style.FontSize;
         listBox.Background = Brushes.White;
-        listBox.BorderBrush = InputBorderBrush;
+        listBox.BorderBrush = style.InputBorderBrush ?? InputBorderBrush;
         listBox.BorderThickness = new Thickness(1);
         var itemTemplate = new FuncControlTemplate<ListBoxItem>((item, _) =>
         {
@@ -561,9 +583,9 @@ public static class AvaloniaCompactDialogChrome
         tabControl.Styles.Add(contentPaneStyle);
 
         var tabStyle = new Style(s => s.OfType<TabItem>());
-        tabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, DialogInactiveTabBorderBrush));
+        tabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, style.DialogInactiveTabBorderBrush ?? DialogInactiveTabBorderBrush));
         tabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
-        tabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, DialogInactiveTabBackgroundBrush));
+        tabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, style.DialogInactiveTabBackgroundBrush ?? DialogInactiveTabBackgroundBrush));
         tabStyle.Setters.Add(new Setter(TemplatedControl.ForegroundProperty, Brushes.Black));
         tabStyle.Setters.Add(new Setter(TemplatedControl.FontFamilyProperty, style.FontFamily));
         tabStyle.Setters.Add(new Setter(TemplatedControl.FontSizeProperty, style.FontSize));

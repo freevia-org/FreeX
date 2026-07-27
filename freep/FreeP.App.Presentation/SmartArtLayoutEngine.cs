@@ -120,6 +120,9 @@ public static class SmartArtLayoutEngine
         if (data.Family == SmartArtFamily.Hierarchy && IsHierarchy3Layout(data.LayoutUniqueId))
             return LayoutHierarchy3(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (data.Family == SmartArtFamily.Hierarchy && IsOrgChartLayout(data.LayoutUniqueId))
+            return LayoutOrgChart(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (data.Family == SmartArtFamily.Hierarchy && IsHorizontalHierarchyLayout(data.LayoutUniqueId))
             return LayoutHorizontalHierarchy(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -215,6 +218,47 @@ public static class SmartArtLayoutEngine
             Fill          = new ShapeFill.Solid(style.Fill),
             Outline       = new ShapeOutline.Visible(style.Outline, style.OutlineWidthPt),
             TextBody      = body
+        };
+    }
+
+    private static SlideShape MakeOrgChartBox(
+        uint id, string text, SmartArtNodeStyle style,
+        long x, long y, long cx, long cy,
+        bool isAssistant,
+        double fontSizePt = NodeFontSizePt)
+    {
+        var paragraph = new Paragraph { Align = TextAlign.Center };
+        paragraph.Runs.Add(new Run
+        {
+            Text = text,
+            Color = style.Text,
+            Bold = true,
+            FontSizePt = fontSizePt,
+        });
+        var body = new TextBody
+        {
+            Anchor = VerticalAnchor.Middle,
+            Wrap = true,
+            InsetTopPt = 3,
+            InsetBottomPt = 3,
+            InsetLeftPt = 5,
+            InsetRightPt = 5,
+        };
+        body.Paragraphs.Add(paragraph);
+
+        return new SlideShape
+        {
+            Id = id,
+            Name = $"SmartArt_OrgChartBox_{id}",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = isAssistant ? DrawingShapeKind.Rectangle : DrawingShapeKind.RoundedRectangle,
+            OffsetXEmu = x,
+            OffsetYEmu = y,
+            ExtentCxEmu = cx,
+            ExtentCyEmu = cy,
+            Fill = new ShapeFill.Solid(style.Fill),
+            Outline = new ShapeOutline.Visible(style.Outline, style.OutlineWidthPt),
+            TextBody = body,
         };
     }
 
@@ -1590,6 +1634,25 @@ public static class SmartArtLayoutEngine
         return LayoutHorizontalHierarchy(visibleData, fx, fy, fcx, fcy, stylePlan);
     }
 
+    /// <summary>
+    /// Organization Chart layout. It uses a dedicated assistant-aware tree plan and
+    /// renderer-neutral ordinary shapes. Assistant nodes use rectangular boxes while
+    /// regular organization nodes use rounded boxes.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutOrgChart(
+        SmartArtData data,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan) =>
+        LayoutHierarchy(
+            data,
+            fx,
+            fy,
+            fcx,
+            fcy,
+            stylePlan,
+            useOrgChartAssistantLayout: true,
+            useOrgChartBoxStyle: true);
+
     private static SmartArtNode? CloneVisibleHierarchyNode(SmartArtNode node)
     {
         var visibleChildren = node.Children
@@ -1831,7 +1894,8 @@ public static class SmartArtLayoutEngine
         SmartArtData data,
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan,
-        bool useOrgChartAssistantLayout)
+        bool useOrgChartAssistantLayout,
+        bool useOrgChartBoxStyle = false)
     {
         var shapes = new List<SlideShape>();
         if (data.Nodes.Count == 0) return shapes;
@@ -1877,7 +1941,8 @@ public static class SmartArtLayoutEngine
             long rootSlotW = (long)((double)rootWidth / treeMaxWidth * availW);
 
             RenderNode(root, 0, 0, rootWidth, curX, startY, rootSlotW, boxW, boxH, gapX, gapY,
-                shapes, stylePlan, ref idCounter, useOrgChartAssistantLayout, parentCenterX: -1, parentBottomY: -1);
+                shapes, stylePlan, ref idCounter, useOrgChartAssistantLayout,
+                useOrgChartBoxStyle, parentCenterX: -1, parentBottomY: -1);
 
             curX += rootSlotW;
         }
@@ -1902,6 +1967,7 @@ public static class SmartArtLayoutEngine
         SmartArtStylePlan stylePlan,
         ref uint idCounter,
         bool useOrgChartAssistantLayout,
+        bool useOrgChartBoxStyle,
         long parentCenterX, long parentBottomY)
     {
         // BI1: The slot for this node is exactly availW (already pre-allocated by the caller).
@@ -1913,8 +1979,11 @@ public static class SmartArtLayoutEngine
         long boxY = levelY;
 
         var nodeStyle = stylePlan.GetNodeStyle(0, node.Level, SmartArtFamily.Hierarchy);
-        shapes.Add(MakeBox(idCounter++, node.Text, nodeStyle, boxX, boxY, nodeBoxW, boxH,
-            node.Level == 0 ? NodeFontSizeLargePt : NodeFontSizePt));
+        shapes.Add(useOrgChartBoxStyle
+            ? MakeOrgChartBox(idCounter++, node.Text, nodeStyle, boxX, boxY, nodeBoxW, boxH,
+                node.IsAssistant, node.Level == 0 ? NodeFontSizeLargePt : NodeFontSizePt)
+            : MakeBox(idCounter++, node.Text, nodeStyle, boxX, boxY, nodeBoxW, boxH,
+                node.Level == 0 ? NodeFontSizeLargePt : NodeFontSizePt));
 
         long boxCenterX = boxX + nodeBoxW / 2;
         long boxTopY    = boxY;
@@ -1963,6 +2032,7 @@ public static class SmartArtLayoutEngine
                         stylePlan,
                         ref idCounter,
                         useOrgChartAssistantLayout,
+                        useOrgChartBoxStyle,
                         parentCenterX: boxCenterX,
                         parentBottomY: boxBottomY);
 
@@ -1993,6 +2063,7 @@ public static class SmartArtLayoutEngine
                         boxW, boxH, gapX, gapY,
                         shapes, stylePlan, ref idCounter,
                         useOrgChartAssistantLayout,
+                        useOrgChartBoxStyle,
                         parentCenterX: boxCenterX,
                         parentBottomY: boxBottomY);
 

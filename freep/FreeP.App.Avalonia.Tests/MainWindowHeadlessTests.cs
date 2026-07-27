@@ -5626,6 +5626,47 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_org_chart_shape_composes_dedicated_shared_assistant_plan()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Hierarchy,
+                "urn:microsoft.com/office/officeart/2005/8/layout/orgChart",
+                ["CEO", "Assistant", "Director"]);
+            var root = shape.SmartArt!.Data!.Nodes[0];
+            var assistant = shape.SmartArt.Data.Nodes[1];
+            var director = shape.SmartArt.Data.Nodes[2];
+            shape.SmartArt.Data.Nodes.RemoveRange(1, 2);
+            assistant.Level = 1;
+            assistant.IsAssistant = true;
+            director.Level = 1;
+            root.Children.Add(assistant);
+            root.Children.Add(director);
+
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.ShapeId is >= 400 and < 420)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(5,
+            "Avalonia consumes the dedicated shared three-box org-chart plan and two connector DrawOps");
+        liveShapes.Where(op => op.Text is not null)
+            .Should().OnlyContain(op => op.Text!.Paragraphs.Count == 1);
+        liveShapes.SelectMany(op => op.Text?.Paragraphs ?? [])
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.Text)
+            .Should().Contain(["CEO", "Assistant", "Director"]);
+        liveShapes.Where(op => op.Text is null).Should().HaveCount(2);
+    }
+
+    [Fact]
     public async Task SmartArt_circle_process_shape_composes_shared_live_draw_ops()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];

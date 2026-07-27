@@ -2173,6 +2173,45 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesOrgChartAsLiveLayoutAndWpfConsumesDedicatedSharedPlan()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/orgChart",
+            nodes:
+            [
+                ("R", "CEO"),
+                ("A", "Assistant"),
+                ("C", "Director")
+            ],
+            parOfConnections: [("R", "A"), ("R", "C")],
+            assistantNodeIds: ["A"]);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "orgChart is admitted by the bounded reader allow-list");
+        sa.Data.Nodes.Should().ContainSingle();
+        sa.Data.Nodes[0].Children.Should().HaveCount(2);
+        sa.Data.Nodes[0].Children.Single(node => node.ModelId == "A").IsAssistant.Should().BeTrue();
+
+        var liveShapes = SlideCompositor.Compose(pres, pres.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+        liveShapes.Should().HaveCount(5,
+            "WPF composes three dedicated shared org-chart boxes and two shared connector operations");
+        liveShapes.Where(op => op.Text is not null)
+            .Should().OnlyContain(op => op.Text!.Paragraphs.Count == 1);
+        liveShapes.SelectMany(op => op.Text?.Paragraphs ?? [])
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.Text)
+            .Should().Contain(["CEO", "Assistant", "Director"]);
+    }
+
+    [Fact]
     public void Reader_ParsesKnownHierarchyFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(

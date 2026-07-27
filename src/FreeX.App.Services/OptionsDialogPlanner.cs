@@ -60,6 +60,11 @@ public static class OptionsDialogPlanner
     public const double GeneralCheckBoxHeight = 18;
     public const double GeneralFieldBottomMargin = 9;
     public const double GeneralUserNameBottomMargin = 6;
+    public const double LanguageFieldWidth = 240;
+    public const double LanguageSectionTopMargin = 0;
+    public const double LanguageSectionBottomMargin = 14;
+    public const double LanguageFieldBottomMargin = 9;
+    public const double LanguageDescriptionTopMargin = 4;
     public const double ProofingContentWidth = CaptureWidth - CategoryColumnWidth - (ContentPaddingHorizontal * 2);
     public const double ProofingWordsListHeight = 108;
     public const double ProofingAddWordLabelWidth = 94;
@@ -108,7 +113,8 @@ public static class OptionsDialogPlanner
         bool MoveSelectionAfterEnter,
         AppOptionsEnterDirection AfterEnterDirection,
         AppOptionsObjectDisplay? ObjectsDisplay = null,
-        bool? CollapseRibbonAutomatically = null);
+        bool? CollapseRibbonAutomatically = null,
+        string? AppLanguage = null);
 
     /// <summary>Font names offered in the Options dialog's default-font picker (parity with the WPF host).</summary>
     public static IReadOnlyList<string> FontNames { get; } =
@@ -170,7 +176,8 @@ public static class OptionsDialogPlanner
         out OptionsDialogInput input,
         out OptionsInputError error,
         AppOptionsObjectDisplay? objectsDisplay = null,
-        bool? collapseRibbonAutomatically = null)
+        bool? collapseRibbonAutomatically = null,
+        string? appLanguage = null)
     {
         input = null!;
 
@@ -205,7 +212,8 @@ public static class OptionsDialogPlanner
             moveSelectionAfterEnter,
             afterEnterDirection,
             objectsDisplay,
-            collapseRibbonAutomatically);
+            collapseRibbonAutomatically,
+            appLanguage);
         return true;
     }
 
@@ -244,7 +252,7 @@ public static class OptionsDialogPlanner
 
             // Remaining values are carried over because this dialog does not surface them.
             CollapseRibbonAutomatically = input.CollapseRibbonAutomatically ?? existing.CollapseRibbonAutomatically,
-            AppLanguage = existing.AppLanguage,
+            AppLanguage = input.AppLanguage ?? existing.AppLanguage,
             SpellCheckCustomDictionaryWords = existing.SpellCheckCustomDictionaryWords,
             FormulaBarExpanded = existing.FormulaBarExpanded,
             StatusBarShowCellMode = existing.StatusBarShowCellMode,

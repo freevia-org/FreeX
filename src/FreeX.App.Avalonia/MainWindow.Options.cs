@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Localization;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
@@ -76,6 +77,7 @@ public sealed partial class MainWindow
             Height = optionsDialogHeight,
             MinWidth = optionsDialogWidth,
             MinHeight = optionsDialogHeight,
+            SizeToContent = SizeToContent.Manual,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = false,
@@ -450,14 +452,38 @@ public sealed partial class MainWindow
 
         savePanel.Spacing = 0;
 
+        var languageOptions = AppLanguageCatalog.GetAvailableLanguages().ToList();
+        var normalizedLanguage = AppLanguageCatalog.NormalizeCultureName(current.AppLanguage);
+        var languageBox = new ComboBox
+        {
+            ItemsSource = languageOptions.Select(option => option.DisplayName).ToList(),
+            SelectedIndex = Math.Max(
+                0,
+                languageOptions.FindIndex(option =>
+                    string.Equals(option.CultureName, normalizedLanguage, StringComparison.OrdinalIgnoreCase))),
+            Width = OptionsDialogPlanner.LanguageFieldWidth,
+        };
+        ApplyOptionsComboBoxChrome(languageBox);
+        AutomationProperties.SetAutomationId(languageBox, "OptionsAppLanguageComboBox");
+        AutomationProperties.SetName(languageBox, OptionsText("Options_AppLanguage"));
+        AutomationProperties.SetHelpText(languageBox, OptionsText("Options_AppLanguageHelpText"));
+
         var languagePanel = OptionsCategoryPanel(
-            OptionsSectionHeader(OptionsText("Options_ChooseDisplayLanguage")),
-            OptionsLabeled(OptionsText("Options_AppLanguage"), OptionsComboBox(
-                new[] { UiText.Get("Options_AppLanguageSystemDefault"), UiText.Get("Options_AppLanguageEnglishUnitedStates") },
-                selectedIndex: 0,
-                isEnabled: false,
-                minWidth: 240)),
-            OptionsDescription(OptionsText("Options_AppLanguageRestartNotice")));
+            OptionsSectionHeader(
+                OptionsText("Options_ChooseDisplayLanguage"),
+                topMargin: OptionsDialogPlanner.LanguageSectionTopMargin,
+                bottomMargin: OptionsDialogPlanner.LanguageSectionBottomMargin),
+            OptionsLabeled(
+                OptionsText("Options_AppLanguage"),
+                languageBox,
+                labelWidth: OptionsDialogPlanner.GeneralLabelWidth,
+                fieldWidth: OptionsDialogPlanner.LanguageFieldWidth,
+                spacing: OptionsDialogPlanner.GeneralFieldSpacing,
+                margin: new Thickness(0, 0, 0, OptionsDialogPlanner.LanguageFieldBottomMargin)),
+            OptionsDescription(
+                OptionsText("Options_AppLanguageRestartNotice"),
+                topMargin: OptionsDialogPlanner.LanguageDescriptionTopMargin));
+        languagePanel.Spacing = 0;
 
         var easePanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_EaseOfAccessOptions")),
@@ -1088,7 +1114,10 @@ public sealed partial class MainWindow
                          2 => AppOptionsObjectDisplay.Nothing,
                          _ => AppOptionsObjectDisplay.All,
                      },
-                    collapseRibbonAutomatically: collapseRibbonBox.IsChecked == true))
+                     collapseRibbonAutomatically: collapseRibbonBox.IsChecked == true,
+                     appLanguage: languageOptions.Count > 0 && languageBox.SelectedIndex >= 0 && languageBox.SelectedIndex < languageOptions.Count
+                         ? AppLanguageCatalog.NormalizeCultureName(languageOptions[languageBox.SelectedIndex].CultureName)
+                         : current.AppLanguage))
             {
                 warningText.Text = inputError == OptionsDialogPlanner.OptionsInputError.InvalidFontSize
                     ? UiText.Get("Options_InvalidFontSizeMessage")
@@ -1440,13 +1469,13 @@ public sealed partial class MainWindow
             },
         };
 
-    private static TextBlock OptionsDescription(string text, double leftMargin = 0, double bottomMargin = 4) =>
+    private static TextBlock OptionsDescription(string text, double leftMargin = 0, double topMargin = 0, double bottomMargin = 4) =>
         new()
         {
             Text = text,
             FontSize = 12,
             Foreground = Brush(85, 85, 85),
-            Margin = new Thickness(leftMargin, 0, 0, bottomMargin),
+            Margin = new Thickness(leftMargin, topMargin, 0, bottomMargin),
             TextWrapping = TextWrapping.Wrap,
         };
 

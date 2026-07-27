@@ -47,6 +47,27 @@ public sealed class OptionsDialogGeneralParitySourceTests
         wpf.Should().Contain("x:Name=\"OptRecentFilesPath\"");
     }
 
+    [Fact]
+    public void LanguageOptions_UsesSharedCatalogAndWpfFieldGeometry()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+        var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+
+        source.Should().Contain("AppLanguageCatalog.GetAvailableLanguages()");
+        source.Should().Contain("AppLanguageCatalog.NormalizeCultureName(current.AppLanguage)");
+        source.Should().Contain("OptionsAppLanguageComboBox");
+        source.Should().Contain("spacing: OptionsDialogPlanner.GeneralFieldSpacing");
+        source.Should().Contain("SizeToContent = SizeToContent.Manual");
+        source.Should().Contain("languagePanel.Spacing = 0;");
+        source.Should().Contain("appLanguage:");
+        source.Should().NotContain("isEnabled: false,\n                minWidth: 240");
+
+        wpf.Should().Contain("x:Name=\"PanelLanguage\"");
+        wpf.Should().Contain("<ColumnDefinition Width=\"230\"/>");
+        wpf.Should().Contain("<ColumnDefinition Width=\"240\"/>");
+        wpf.Should().Contain("Height=\"24\" VerticalAlignment=\"Center\"");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
