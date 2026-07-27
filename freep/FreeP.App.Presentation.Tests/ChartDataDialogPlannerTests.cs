@@ -64,6 +64,29 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void RemoveIndexedSeriesAndCategory_PreservesScatterCoordinates()
+    {
+        var chart = MakeChart();
+        chart.ChartType = ChartType.Scatter;
+        chart.Series[0].XValues.AddRange(new double?[] { 10, 20, 30 });
+        chart.Series[1].XValues.AddRange(new double?[] { 40, 50, 60 });
+
+        var planner = ChartDataDialogPlanner.FromChart(chart);
+
+        planner.RemoveSeriesAt(0).Should().BeTrue();
+        planner.SeriesNamesForCommit().Should().Equal("Budget");
+        planner.ValuesForCommit()[0].Should().Equal(new double?[] { 4.0, null, 6.0 });
+        planner.XValuesForCommit()[0].Should().Equal(new double?[] { 40, 50, 60 });
+
+        planner.RemoveCategoryAt(1).Should().BeTrue();
+        planner.CategoriesForCommit().Should().Equal("Q1", "Q3");
+        planner.ValuesForCommit()[0].Should().Equal(new double?[] { 4.0, 6.0 });
+        planner.XValuesForCommit()[0].Should().Equal(new double?[] { 40, 60 });
+        planner.RemoveSeriesAt(4).Should().BeFalse();
+        planner.RemoveCategoryAt(4).Should().BeFalse();
+    }
+
+    [Fact]
     public void AddCategory_AppendsNamedCategoryAndNullValueSlots()
     {
         var planner = ChartDataDialogPlanner.FromChart(MakeChart());

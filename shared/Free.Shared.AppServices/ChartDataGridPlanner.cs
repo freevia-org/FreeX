@@ -85,12 +85,18 @@ public sealed class ChartDataGridPlanner
 
     public void RemoveLastSeries()
     {
-        if (_seriesNames.Count == 0)
-            return;
+        RemoveSeriesAt(_seriesNames.Count - 1);
+    }
 
-        _seriesNames.RemoveAt(_seriesNames.Count - 1);
-        if (_values.Count > 0)
-            _values.RemoveAt(_values.Count - 1);
+    public bool RemoveSeriesAt(int seriesIndex)
+    {
+        if (!IsValidSeriesIndex(seriesIndex))
+            return false;
+
+        _seriesNames.RemoveAt(seriesIndex);
+        if (seriesIndex < _values.Count)
+            _values.RemoveAt(seriesIndex);
+        return true;
     }
 
     public bool MoveSeries(int seriesIndex, int targetIndex)
@@ -118,15 +124,21 @@ public sealed class ChartDataGridPlanner
 
     public void RemoveLastCategory()
     {
-        if (_categories.Count == 0)
-            return;
+        RemoveCategoryAt(_categories.Count - 1);
+    }
 
-        _categories.RemoveAt(_categories.Count - 1);
+    public bool RemoveCategoryAt(int categoryIndex)
+    {
+        if (!IsValidCategoryIndex(categoryIndex))
+            return false;
+
+        _categories.RemoveAt(categoryIndex);
         foreach (var seriesValues in _values)
         {
-            if (seriesValues.Count > 0)
-                seriesValues.RemoveAt(seriesValues.Count - 1);
+            if (categoryIndex < seriesValues.Count)
+                seriesValues.RemoveAt(categoryIndex);
         }
+        return true;
     }
 
     /// <summary>
