@@ -35,6 +35,7 @@
     <Project Path="freew/tools/FreeW.DialogVisualHarness/FreeW.DialogVisualHarness.csproj" />
     <Project Path="freew/tools/FreeW.DialogVisualHarness.Wpf/FreeW.DialogVisualHarness.Wpf.csproj" />
     <Project Path="freew/tools/FreeW.DialogVisualHarness.Avalonia/FreeW.DialogVisualHarness.Avalonia.csproj" />
+    <Project Path="freew/tools/FreeW.FieldShortcutFixture/FreeW.FieldShortcutFixture.csproj" />
     <Project Path="freew/tools/FreeW.RibbonShot/FreeW.RibbonShot.csproj" />
     <Project Path="freew/tools/FreeW.PageLayoutShot/FreeW.PageLayoutShot.csproj" />
     <Project Path="freew/tools/FreeW.PdfRasterize/FreeW.PdfRasterize.csproj" />
