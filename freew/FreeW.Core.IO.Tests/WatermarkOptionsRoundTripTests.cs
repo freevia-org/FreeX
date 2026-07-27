@@ -129,6 +129,32 @@ public class WatermarkOptionsRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadWithWordNativeWatermarkColor(TextDocument document, string color)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            var shape = xml.Descendants(vml + "shape")
+                .Single(candidate => candidate.Attribute("id")?.Value == "PowerPlusWaterMarkObject");
+            shape.SetAttributeValue("fillcolor", color);
+            shape.Element(vml + "fill")!.SetAttributeValue("color", color);
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+            zip.GetEntry("docProps/custom.xml")!.Delete();
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     private static TextDocument ReadWithMutatedVmlTextSize(TextDocument document, double widthPt, double heightPt)
     {
         using var stream = new MemoryStream();
@@ -495,6 +521,17 @@ public class WatermarkOptionsRoundTripTests
         var loaded = ReadWithWordNativeWatermarkShapeId(doc);
 
         loaded.Page.WatermarkOptions!.Text.Should().Be("NATIVE WORD");
+    }
+
+    [Fact]
+    public void NativeVmlTextWatermark_ImportsWordNamedSilverColor()
+    {
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions("NATIVE WORD");
+
+        var loaded = ReadWithWordNativeWatermarkColor(doc, "silver");
+
+        loaded.Page.WatermarkOptions!.FontColorHex.Should().Be("#C0C0C0");
     }
 
     [Fact]
