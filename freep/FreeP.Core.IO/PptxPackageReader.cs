@@ -2611,7 +2611,7 @@ public static class PptxPackageReader
         if (uid.Contains("matrix"))
             return SmartArtFamily.Matrix;
 
-        if (uid.Contains("venn") || uid.Contains("relationship") || uid.Contains("target") || uid.Contains("opposingideas"))
+        if (uid.Contains("venn") || uid.Contains("relationship") || uid.Contains("target") || uid.Contains("opposingideas") || uid.Contains("convergingradial"))
             return SmartArtFamily.Relationship;
 
         if (uid.Contains("cycle") || uid.Contains("gear") || uid.Contains("radial"))
@@ -2648,7 +2648,7 @@ public static class PptxPackageReader
             SmartArtFamily.Cycle => layoutId is "cycle1" or "radial1" or "basiccycle" or "radialcycle" or "radiallist" or "gearcycle" or "textcycle" or "blockcycle" or "nondirectionalcycle" or "continuouscycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "hierarchy3" or "basichierarchy" or "horizontalhierarchy" or "labeledhierarchy" or "tablehierarchy" or "verticalbulletlist" or "orgchart",
             SmartArtFamily.Matrix => layoutId is "matrix1" or "basicmatrix" or "titledmatrix" or "gridmatrix",
-            SmartArtFamily.Relationship => layoutId is "relationship1" or "opposingideas" or "basicvenn" or "radialvenn" or "targetlist" or "stackedvenn",
+            SmartArtFamily.Relationship => layoutId is "relationship1" or "opposingideas" or "convergingradial" or "basicvenn" or "radialvenn" or "targetlist" or "stackedvenn",
             _ => false
         };
     }

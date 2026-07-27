@@ -5433,6 +5433,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.GridMatrixLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicRelationshipLayoutCommandId,
                 SmartArtAuthoringPlanner.OpposingIdeasLayoutCommandId,
+                SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialVennLayoutCommandId,
                 SmartArtAuthoringPlanner.TargetListLayoutCommandId,

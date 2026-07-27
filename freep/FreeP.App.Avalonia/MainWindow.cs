@@ -2350,6 +2350,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicRelationship)));
         r.Register(SmartArtAuthoringPlanner.OpposingIdeasLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.OpposingIdeas)));
+        r.Register(SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ConvergingRadial)));
         r.Register(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicVenn)));
         r.Register(SmartArtAuthoringPlanner.RadialVennLayoutCommandId,

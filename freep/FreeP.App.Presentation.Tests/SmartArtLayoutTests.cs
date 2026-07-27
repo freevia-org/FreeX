@@ -1634,6 +1634,26 @@ public sealed class SmartArtLayoutTests
         result[0].OffsetYEmu.Should().Be(result[1].OffsetYEmu);
     }
 
+    [Fact]
+    public void ConvergingRadial_UsesCompassArrowsPointingToCenter()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "Top", "Right", "Bottom", "Left");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/convergingRadial";
+        data.IsLiveLayoutSupported = true;
+
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().NotBeNull("convergingRadial is admitted to the shared live Relationship engine");
+        result!.Should().HaveCount(4);
+        result.Select(shape => shape.AutoShapeKind).Should().Equal(
+            DrawingShapeKind.DownArrow,
+            DrawingShapeKind.LeftArrow,
+            DrawingShapeKind.UpArrow,
+            DrawingShapeKind.RightArrow);
+        result[0].OffsetYEmu.Should().BeLessThan(result[2].OffsetYEmu);
+        result[3].OffsetXEmu.Should().BeLessThan(result[1].OffsetXEmu);
+    }
+
     // BI2: when nodes parse to zero, Layout returns null so compositor uses cached-drawing fallback.
     [Fact]
     public void EmptyNodes_SupportedFamily_ReturnsNull_SoCompositorUsesFallback()
