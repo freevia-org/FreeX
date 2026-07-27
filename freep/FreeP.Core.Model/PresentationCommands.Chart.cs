@@ -263,6 +263,58 @@ public sealed class RemoveChartSeriesCommand : IPresentationCommand
     }
 }
 
+/// <summary>Moves one chart series while keeping its authored formatting and data together.</summary>
+public sealed class MoveChartSeriesCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _sourceIndex;
+    private readonly int _targetIndex;
+    private bool _applied;
+
+    public MoveChartSeriesCommand(int slideIndex, uint shapeId, int sourceIndex, int targetIndex)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _sourceIndex = sourceIndex;
+        _targetIndex = targetIndex;
+    }
+
+    public string Label => "Move Series";
+
+    public void Apply(Presentation p)
+    {
+        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        if (chart is null || !IsValid(chart, _sourceIndex) || !IsValid(chart, _targetIndex) ||
+            _sourceIndex == _targetIndex)
+            return;
+
+        var series = chart.Series[_sourceIndex];
+        chart.Series.RemoveAt(_sourceIndex);
+        chart.Series.Insert(_targetIndex, series);
+        _applied = true;
+        ChartHelper.MarkWorkbookDirty(chart);
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (!_applied)
+            return;
+
+        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        if (chart is null || !IsValid(chart, _targetIndex))
+            return;
+
+        var series = chart.Series[_targetIndex];
+        chart.Series.RemoveAt(_targetIndex);
+        chart.Series.Insert(Math.Clamp(_sourceIndex, 0, chart.Series.Count), series);
+        ChartHelper.MarkWorkbookDirty(chart);
+    }
+
+    private static bool IsValid(ChartShape chart, int index) =>
+        index >= 0 && index < chart.Series.Count;
+}
+
 // ── Add / remove category ─────────────────────────────────────────────────────
 
 /// <summary>

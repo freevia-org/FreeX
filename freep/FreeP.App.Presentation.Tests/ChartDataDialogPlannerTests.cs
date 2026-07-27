@@ -47,6 +47,23 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void MoveSeries_ReordersNamesValuesAndScatterCoordinatesTogether()
+    {
+        var chart = MakeChart();
+        chart.ChartType = ChartType.Scatter;
+        chart.Series[0].XValues.AddRange(new double?[] { 10, 20, 30 });
+        chart.Series[1].XValues.AddRange(new double?[] { 40, 50, 60 });
+
+        var planner = ChartDataDialogPlanner.FromChart(chart);
+
+        planner.MoveSeries(1, 0).Should().BeTrue();
+
+        planner.SeriesNamesForCommit().Should().Equal("Budget", "Sales");
+        planner.ValuesForCommit()[0].Should().Equal(new double?[] { 4.0, null, 6.0 });
+        planner.XValuesForCommit()[0].Should().Equal(new double?[] { 40, 50, 60 });
+    }
+
+    [Fact]
     public void AddCategory_AppendsNamedCategoryAndNullValueSlots()
     {
         var planner = ChartDataDialogPlanner.FromChart(MakeChart());
@@ -236,6 +253,8 @@ public sealed class ChartDataDialogPlannerTests
         plan.Height.Should().Be(440);
         plan.AddSeriesLabel.Should().Be("+ Series");
         plan.RemoveSeriesLabel.Should().Be("- Series");
+        plan.MoveSeriesUpLabel.Should().Be("Move Series Up");
+        plan.MoveSeriesDownLabel.Should().Be("Move Series Down");
         plan.AddCategoryLabel.Should().Be("+ Category");
         plan.RemoveCategoryLabel.Should().Be("- Category");
         plan.SwitchRowsAndColumnsLabel.Should().Be("Switch Row/Column");
