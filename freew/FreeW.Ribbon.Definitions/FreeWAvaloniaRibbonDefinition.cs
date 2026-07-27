@@ -57,6 +57,18 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("Show Revisions in Balloons", new RibbonCommandId("freew.show-markup-balloons")),
         });
 
+    private static RibbonMenu BuildReadModeMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Narrow Column Width", new RibbonCommandId("freew.read-mode-column-narrow")),
+            new("Default Column Width", new RibbonCommandId("freew.read-mode-column-default")),
+            new("Wide Column Width", new RibbonCommandId("freew.read-mode-column-wide")),
+            RibbonMenuItem.Separator(),
+            new("No Color", new RibbonCommandId("freew.read-mode-color-none")),
+            new("Sepia", new RibbonCommandId("freew.read-mode-color-sepia")),
+            new("Inverse (Dark Mode)", new RibbonCommandId("freew.read-mode-color-inverse")),
+        });
+
     private static RibbonMenu BuildStartMailMergeMenu() =>
         new(new RibbonMenuItem[]
         {
@@ -803,6 +815,10 @@ internal static class FreeWAvaloniaRibbonDefinition
             {
                 tab.Group("views", "Views", null, 110, g =>
                 {
+                    g.Dropdown("freew.read-mode", "Read Mode", BuildReadModeMenu(), d => d with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.ReadMode)
+                    });
                     g.Button("freew.print-layout", "Print Layout");
                     g.Button("freew.web-layout",   "Web Layout");
                     g.Toggle("freew.outline-view", "Outline");

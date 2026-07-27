@@ -32,6 +32,62 @@ public sealed class PageViewModesTests
         return view;
     }
 
+    [StaFact]
+    public void ReadMode_AuthorityTogglesChromeOptionsAndRestoresPresentation()
+    {
+        var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
+        try
+        {
+            var editor = GetEditor(window);
+            var originalView = editor.ViewMode;
+            var originalMaxWidth = editor.MaxWidth;
+            var originalMargin = editor.Margin;
+            var originalAlignment = editor.HorizontalAlignment;
+            var originalBackground = editor.Background;
+            var originalPageColor = editor.Model.Page.BackgroundColorHex;
+            window.SetReadModePaneVisibilityForTests(navigation: false, reveal: true, reviewing: false);
+            var originalNavPaneVisible = window.IsNavigationPaneVisibleForTests;
+            var originalRevealPaneVisible = window.IsRevealPaneVisibleForTests;
+            var originalReviewingPaneVisible = window.IsReviewingPaneVisibleForTests;
+
+            window.ApplyReadModeColumnWidthForTests("wide");
+            window.ApplyReadModePageColorForTests("sepia");
+            window.ToggleReadModeForTests();
+
+            window.IsReadModeActiveForTests.Should().BeTrue();
+            window.ReadModeMaxWidthForTests.Should().Be(FreeWReadModePlanner.WideColumnWidth);
+            window.IsTitleBarVisibleForTests.Should().BeFalse();
+            window.IsRibbonVisibleForTests.Should().BeFalse();
+            window.IsNavigationPaneVisibleForTests.Should().BeFalse();
+            window.IsRevealPaneVisibleForTests.Should().BeFalse();
+            window.IsReviewingPaneVisibleForTests.Should().BeFalse();
+            ((System.Windows.Media.SolidColorBrush)editor.Background).Color.Should()
+                .Be(System.Windows.Media.Color.FromRgb(0xF0, 0xE0, 0xC0));
+            editor.ViewMode.Should().Be(originalView, "Read Mode is a chrome/presentation mode, not a view-mode switch");
+            editor.Model.Page.BackgroundColorHex.Should().Be(originalPageColor,
+                "the selected page color is transient and must not mutate the document");
+
+            window.ToggleReadModeForTests();
+
+            window.IsReadModeActiveForTests.Should().BeFalse();
+            window.IsTitleBarVisibleForTests.Should().BeTrue();
+            window.IsRibbonVisibleForTests.Should().BeTrue();
+            window.IsNavigationPaneVisibleForTests.Should().Be(originalNavPaneVisible);
+            window.IsRevealPaneVisibleForTests.Should().Be(originalRevealPaneVisible);
+            window.IsReviewingPaneVisibleForTests.Should().Be(originalReviewingPaneVisible);
+            editor.ViewMode.Should().Be(originalView);
+            editor.MaxWidth.Should().Be(originalMaxWidth);
+            editor.Margin.Should().Be(originalMargin);
+            editor.HorizontalAlignment.Should().Be(originalAlignment);
+            editor.Background.Should().BeSameAs(originalBackground);
+            editor.Model.Page.BackgroundColorHex.Should().Be(originalPageColor);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     // ── PrintLayout.BuildPaginatedSource / BuildPaginatedDocument ────────────────────────────────
 
     [StaFact]

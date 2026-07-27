@@ -4,6 +4,7 @@ using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using FreeW.Ribbon.Definitions;
 using Free.Shared.Ribbon;
@@ -94,6 +95,16 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.open",      new ActionRibbonCommand(callbacks.Open));
         r.Register("freew.import-pdf-text", new ActionRibbonCommand(callbacks.ImportPdfText ?? (() => { })));
         r.Register("freew.save",      new ActionRibbonCommand(callbacks.Save));
+
+        r.Register("freew.read-mode", callbacks.ToggleReadMode is { } toggle && callbacks.IsReadModeActive is { } isActive
+            ? new ToggleActionCommand(toggle, isActive)
+            : HostCommand(null));
+        RegisterReadModeChoice(r, "freew.read-mode-column-narrow", FreeWReadModePlanner.NarrowColumn, callbacks.ApplyReadModeColumnWidth);
+        RegisterReadModeChoice(r, "freew.read-mode-column-default", FreeWReadModePlanner.DefaultColumn, callbacks.ApplyReadModeColumnWidth);
+        RegisterReadModeChoice(r, "freew.read-mode-column-wide", FreeWReadModePlanner.WideColumn, callbacks.ApplyReadModeColumnWidth);
+        RegisterReadModeChoice(r, "freew.read-mode-color-none", FreeWReadModePlanner.NoColor, callbacks.ApplyReadModePageColor);
+        RegisterReadModeChoice(r, "freew.read-mode-color-sepia", FreeWReadModePlanner.SepiaColor, callbacks.ApplyReadModePageColor);
+        RegisterReadModeChoice(r, "freew.read-mode-color-inverse", FreeWReadModePlanner.InverseColor, callbacks.ApplyReadModePageColor);
 
         // ── Clipboard ────────────────────────────────────────────────────────
         r.Register("freew.cut",   new ActionRibbonCommand(callbacks.Cut));
@@ -604,6 +615,17 @@ internal static class FreeWAvaloniaRibbonCommands
     }
 
     private const double ParagraphSpacingTogglePoints = 12.0;
+
+    private static void RegisterReadModeChoice(
+        RibbonCommandRegistry registry,
+        string commandId,
+        string token,
+        Action<string>? apply)
+    {
+        registry.Register(commandId, apply is null
+            ? HostCommand(null)
+            : new ActionRibbonCommand(() => apply(token)));
+    }
 
     private static void ApplyMultiLevelList(DocumentView editor)
     {

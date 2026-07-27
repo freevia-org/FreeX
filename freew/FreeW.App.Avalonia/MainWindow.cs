@@ -81,6 +81,11 @@ public sealed partial class MainWindow : Window
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
     private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
     private readonly Border _titleBar;
+    private Border? _ribbonHost;
+    private Border? _statusBar;
+    private Control? _dataFolderItemControl;
+    private Control? _statusViewSwitchControl;
+    private Control? _statusZoomControl;
     private IReadOnlyList<Button> _quickAccessButtons = [];
     private readonly FreeWOptions _options;
     private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
@@ -127,10 +132,20 @@ public sealed partial class MainWindow : Window
     private DocumentViewMode _viewModeBeforePagedEdit = DocumentViewMode.PrintLayout;
     private bool _pagedEditModeBeforeOutline;
     private bool _outlineMode;
-    private DocumentViewMode _viewModeBeforeReadMode = DocumentViewMode.PrintLayout;
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
     private Thickness _editorMarginBeforeReadMode;
+    private bool _navPaneVisibleBeforeReadMode;
+    private bool _reviewingPaneVisibleBeforeReadMode;
+    private bool _revealPaneVisibleBeforeReadMode;
+    private bool _titleBarVisibleBeforeReadMode;
+    private bool _ribbonVisibleBeforeReadMode;
+    private bool _dataFolderVisibleBeforeReadMode;
+    private bool _statusViewSwitchVisibleBeforeReadMode;
+    private bool _statusZoomVisibleBeforeReadMode;
+    private IBrush _workspaceBackgroundBeforeReadMode = Brushes.Transparent;
+    private string _readModeColumnWidth = FreeWReadModePlanner.DefaultColumn;
+    private string _readModePageColor = FreeWReadModePlanner.NoColor;
     private bool _suppressEditorDirty;
     private AvaloniaSpeechEngine? _readAloudEngine;
     private ReadAloudController? _readAloudController;
@@ -1708,6 +1723,10 @@ public sealed partial class MainWindow : Window
             CheckForUpdates: () => _ = OpenExternalHelpLinkAsync(FreeWProductInfo.LatestReleaseUrl, "Check for Updates"),
             OpenAbout: () => _ = OpenAboutAsync(),
             OpenLegalNotices: () => _ = OpenLegalNoticesAsync(),
+            ToggleReadMode: ToggleReadMode,
+            IsReadModeActive: () => _readMode,
+            ApplyReadModeColumnWidth: ApplyReadModeColumnWidth,
+            ApplyReadModePageColor: ApplyReadModePageColor,
             ToggleReviewBalloons: ToggleReviewBalloons,
             IsReviewBalloonsActive: () => _reviewBalloonsPane.IsVisible);
 
@@ -1787,13 +1806,14 @@ public sealed partial class MainWindow : Window
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
             onFileTabSelected: () => _ = ShowBackstageAsync());
         HasToolbar = true;
-        return new Border
+        _ribbonHost = new Border
         {
             Background = Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child = _ribbonControl,
         };
+        return _ribbonHost;
     }
 
     // AV-MAIL: Mailings > Select Recipients. Prompt for a CSV recipient list (seeded with the document's
@@ -2133,7 +2153,7 @@ public sealed partial class MainWindow : Window
         _dataFolderStatus.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(ResolveDataFolderLabel());
         ToolTip.SetTip(_dataFolderStatus, _dataFolderStatus.Text);
 
-        var dataFolderItem = new StackPanel
+        _dataFolderItemControl = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
@@ -2156,16 +2176,21 @@ public sealed partial class MainWindow : Window
                 _sectionStatus,
                 SisterAppStatusBarChrome.CreateSeparator(),
                 _status,
-                dataFolderItem,
+                _dataFolderItemControl,
             },
         };
 
-        return SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
+        var viewSwitch = BuildViewSwitchControl(white);
+        var zoom = BuildZoomControl(white);
+        _statusViewSwitchControl = viewSwitch;
+        _statusZoomControl = zoom;
+        _statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
             Background: ResolveThemeBrush(
                 "FreeWStatusSurfaceBrush",
                 new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))),
             LeftContent: left,
-            RightItems: [BuildViewSwitchControl(white), BuildZoomControl(white)])).Root;
+            RightItems: [viewSwitch, zoom])).Root;
+        return _statusBar;
     }
 
     private Control BuildViewSwitchControl(IBrush foreground)
@@ -2440,23 +2465,106 @@ public sealed partial class MainWindow : Window
         _readMode = !_readMode;
         if (_readMode)
         {
-            _viewModeBeforeReadMode = _editor.ViewMode;
+            _titleBarVisibleBeforeReadMode = _titleBar.IsVisible;
+            _ribbonVisibleBeforeReadMode = _ribbonHost?.IsVisible == true;
+            _dataFolderVisibleBeforeReadMode = _dataFolderItemControl?.IsVisible == true;
+            _statusViewSwitchVisibleBeforeReadMode = _statusViewSwitchControl?.IsVisible == true;
+            _statusZoomVisibleBeforeReadMode = _statusZoomControl?.IsVisible == true;
+            _navPaneVisibleBeforeReadMode = _navPane.IsVisible;
+            _reviewingPaneVisibleBeforeReadMode = _reviewingPane.IsVisible;
+            _revealPaneVisibleBeforeReadMode = _revealPane.IsVisible;
+            _workspaceBackgroundBeforeReadMode = _workspace.Background ?? Brushes.Transparent;
+
             _editorMaxWidthBeforeReadMode = _editor.MaxWidth;
             _editorAlignmentBeforeReadMode = _editor.HorizontalAlignment;
             _editorMarginBeforeReadMode = _editor.Margin;
-            _editor.MaxWidth = 760;
+            _titleBar.IsVisible = false;
+            if (_ribbonHost is not null)
+                _ribbonHost.IsVisible = false;
+            if (_dataFolderItemControl is not null)
+                _dataFolderItemControl.IsVisible = false;
+            if (_statusViewSwitchControl is not null)
+                _statusViewSwitchControl.IsVisible = false;
+            if (_statusZoomControl is not null)
+                _statusZoomControl.IsVisible = false;
+
+            _navPane.IsVisible = false;
+            _reviewingPane.IsVisible = false;
+            _revealPane.IsVisible = false;
+
+            _editor.MaxWidth = FreeWReadModePlanner.ColumnWidth(_readModeColumnWidth);
             _editor.HorizontalAlignment = HorizontalAlignment.Center;
             _editor.Margin = new Thickness(40);
-            SetViewMode(DocumentViewMode.WebLayout);
+            var backgroundHex = FreeWReadModePlanner.PageColorHex(_readModePageColor);
+            _editor.ViewBackgroundColorHex = backgroundHex;
+            _workspace.Background = new SolidColorBrush(ParseColor(backgroundHex));
         }
         else
         {
+            _titleBar.IsVisible = _titleBarVisibleBeforeReadMode;
+            if (_ribbonHost is not null)
+                _ribbonHost.IsVisible = _ribbonVisibleBeforeReadMode;
+            if (_dataFolderItemControl is not null)
+                _dataFolderItemControl.IsVisible = _dataFolderVisibleBeforeReadMode;
+            if (_statusViewSwitchControl is not null)
+                _statusViewSwitchControl.IsVisible = _statusViewSwitchVisibleBeforeReadMode;
+            if (_statusZoomControl is not null)
+                _statusZoomControl.IsVisible = _statusZoomVisibleBeforeReadMode;
+
+            _navPane.IsVisible = _navPaneVisibleBeforeReadMode;
+            _reviewingPane.IsVisible = _reviewingPaneVisibleBeforeReadMode;
+            _revealPane.IsVisible = _revealPaneVisibleBeforeReadMode;
+
             _editor.MaxWidth = _editorMaxWidthBeforeReadMode;
             _editor.HorizontalAlignment = _editorAlignmentBeforeReadMode;
             _editor.Margin = _editorMarginBeforeReadMode;
-            SetViewMode(_viewModeBeforeReadMode);
+            _editor.ViewBackgroundColorHex = null;
+            _workspace.Background = _workspaceBackgroundBeforeReadMode;
+        }
+
+        UpdateViewModeButtons();
+        UpdateStatus();
+        _editor.Focus();
+    }
+
+    private void ApplyReadModeColumnWidth(string token)
+    {
+        _readModeColumnWidth = FreeWReadModePlanner.NormalizeColumnWidth(token);
+        if (_readMode)
+            _editor.MaxWidth = FreeWReadModePlanner.ColumnWidth(_readModeColumnWidth);
+    }
+
+    private void ApplyReadModePageColor(string token)
+    {
+        _readModePageColor = FreeWReadModePlanner.NormalizePageColor(token);
+        if (_readMode)
+        {
+            var backgroundHex = FreeWReadModePlanner.PageColorHex(_readModePageColor);
+            _editor.ViewBackgroundColorHex = backgroundHex;
+            _workspace.Background = new SolidColorBrush(ParseColor(backgroundHex));
         }
     }
+
+    private static Color ParseColor(string hex) =>
+        Color.Parse(hex);
+
+    internal bool IsReadModeActiveForTests => _readMode;
+    internal double ReadModeMaxWidthForTests => _editor.MaxWidth;
+    internal string? ReadModeBackgroundForTests => _editor.ViewBackgroundColorHex;
+    internal bool IsRibbonVisibleForTests => _ribbonHost?.IsVisible == true;
+    internal bool IsTitleBarVisibleForTests => _titleBar.IsVisible;
+    internal bool IsNavigationPaneVisibleForTests => _navPane.IsVisible;
+    internal bool IsRevealPaneVisibleForTests => _revealPane.IsVisible;
+    internal bool IsReviewingPaneVisibleForTests => _reviewingPane.IsVisible;
+    internal void SetReadModePaneVisibilityForTests(bool navigation, bool reveal, bool reviewing)
+    {
+        _navPane.IsVisible = navigation;
+        _revealPane.IsVisible = reveal;
+        _reviewingPane.IsVisible = reviewing;
+    }
+    internal void ToggleReadModeForTests() => ToggleReadMode();
+    internal void ApplyReadModeColumnWidthForTests(string token) => ApplyReadModeColumnWidth(token);
+    internal void ApplyReadModePageColorForTests(string token) => ApplyReadModePageColor(token);
 
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {

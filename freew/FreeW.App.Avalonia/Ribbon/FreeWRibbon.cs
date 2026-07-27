@@ -343,5 +343,13 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>Help &gt; Copy Diagnostics. Optional; the command is disabled when omitted.</summary>
     Action? CopyDiagnostics = null,
     /// <summary>Help &gt; Check for Updates. Optional; the command is disabled when omitted.</summary>
-    Action? CheckForUpdates = null);
+    Action? CheckForUpdates = null,
+    /// <summary>View &gt; Read Mode toggle. Optional; the command is disabled when omitted.</summary>
+    Action? ToggleReadMode = null,
+    /// <summary>View &gt; Read Mode checked state.</summary>
+    Func<bool>? IsReadModeActive = null,
+    /// <summary>View &gt; Read Mode column width choice.</summary>
+    Action<string>? ApplyReadModeColumnWidth = null,
+    /// <summary>View &gt; Read Mode page color choice.</summary>
+    Action<string>? ApplyReadModePageColor = null);
 

@@ -102,6 +102,7 @@ public sealed class DocumentView : Control
     private const double SubYLowerFraction = 0.33;
 
     private DocumentViewMode _viewMode = DocumentViewMode.PrintLayout;
+    private string? _viewBackgroundColorHex;
     private DocumentViewDepthLayoutPlan _viewDepthLayout =
         DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
     private bool _showParagraphMarks;
@@ -356,6 +357,22 @@ public sealed class DocumentView : Control
             _viewDepthLayout = DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
             InvalidateLayoutAndVisual();
             ViewModeChanged?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Transient host presentation color used by Read Mode. It does not alter the document's page
+    /// background and therefore is never persisted or included in save/undo state.
+    /// </summary>
+    public string? ViewBackgroundColorHex
+    {
+        get => _viewBackgroundColorHex;
+        set
+        {
+            if (string.Equals(_viewBackgroundColorHex, value, StringComparison.OrdinalIgnoreCase))
+                return;
+            _viewBackgroundColorHex = value;
+            InvalidateVisual();
         }
     }
 
@@ -6552,7 +6569,9 @@ public sealed class DocumentView : Control
 
         // AV-DESIGN: the page sheet is filled with the document's Page Color (w:background) when set,
         // else white. The page border (w:pgBorders) and watermark draw on top of the sheet fill.
-        var pageFill = ParseSolidBrush(_doc.Page.BackgroundColorHex) ?? Brushes.White;
+        var pageFill = ParseSolidBrush(_viewBackgroundColorHex)
+            ?? ParseSolidBrush(_doc.Page.BackgroundColorHex)
+            ?? Brushes.White;
 
         if (_viewMode == DocumentViewMode.PrintLayout)
         {

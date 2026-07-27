@@ -241,6 +241,11 @@ public sealed class MainWindow : Window
     private double _editorWidthBeforeReadMode = double.NaN;
     private Effect? _editorEffectBeforeReadMode;
     private System.Windows.Media.Brush? _editorBackgroundBeforeReadMode;
+    private Visibility _titleBarVisibilityBeforeReadMode = Visibility.Visible;
+    private Visibility _ribbonVisibilityBeforeReadMode = Visibility.Visible;
+    private Visibility _dataFolderVisibilityBeforeReadMode = Visibility.Visible;
+    private Visibility _viewSwitchVisibilityBeforeReadMode = Visibility.Visible;
+    private Visibility _zoomVisibilityBeforeReadMode = Visibility.Visible;
 
     // Feature 4 — Read Mode options: column width token ("narrow"/"default"/"wide") and page color token.
     private string _readModeColumnWidth = "default";
@@ -1986,6 +1991,11 @@ public sealed class MainWindow : Window
         _readMode = !_readMode;
         if (_readMode)
         {
+            _titleBarVisibilityBeforeReadMode = _titleBar.Visibility;
+            _ribbonVisibilityBeforeReadMode = _ribbon.Visibility;
+            _dataFolderVisibilityBeforeReadMode = _dataFolderItem.Visibility;
+            _viewSwitchVisibilityBeforeReadMode = _viewSwitchItem.Visibility;
+            _zoomVisibilityBeforeReadMode = _zoomItem.Visibility;
             // Remember the normal layout so we can put it back verbatim when read mode is switched off.
             _navPaneVisibleBeforeReadMode = _navPaneVisible;
             _editorMarginBeforeReadMode = _editor.Margin;
@@ -2018,30 +2028,18 @@ public sealed class MainWindow : Window
             _editor.HorizontalAlignment = HorizontalAlignment.Center;
             _editor.Width = double.NaN;
             _editor.Effect = null;
-            _editor.MaxWidth = _readModeColumnWidth switch
-            {
-                "narrow" => 560,
-                "wide"   => 1024,
-                _        => 760
-            };
+            _editor.MaxWidth = FreeWReadModePlanner.ColumnWidth(_readModeColumnWidth);
             _editor.Margin = new Thickness(40, 40, 40, 40);
             // Apply saved page color (Feature 4).
-            _editor.Background = _readModePageColor switch
-            {
-                "sepia"   => new System.Windows.Media.SolidColorBrush(
-                                 System.Windows.Media.Color.FromRgb(0xF0, 0xE0, 0xC0)),
-                "inverse" => new System.Windows.Media.SolidColorBrush(
-                                 System.Windows.Media.Color.FromRgb(0x1E, 0x1E, 0x1E)),
-                _         => System.Windows.Media.Brushes.White
-            };
+            _editor.Background = ReadModeBrush(_readModePageColor);
         }
         else
         {
-            _titleBar.Visibility = Visibility.Visible;
-            _ribbon.Visibility = Visibility.Visible;
-            _dataFolderItem.Visibility = Visibility.Visible;
-            _viewSwitchItem.Visibility = Visibility.Visible;
-            _zoomItem.Visibility = Visibility.Visible;
+            _titleBar.Visibility = _titleBarVisibilityBeforeReadMode;
+            _ribbon.Visibility = _ribbonVisibilityBeforeReadMode;
+            _dataFolderItem.Visibility = _dataFolderVisibilityBeforeReadMode;
+            _viewSwitchItem.Visibility = _viewSwitchVisibilityBeforeReadMode;
+            _zoomItem.Visibility = _zoomVisibilityBeforeReadMode;
 
             // Restore the editor's original presentation (including any Print-Layout page sizing/shadow).
             _editor.HorizontalAlignment = _editorAlignmentBeforeReadMode;
@@ -2068,31 +2066,46 @@ public sealed class MainWindow : Window
     // Stores the token and, if read mode is currently active, applies the new max-width immediately.
     private void ApplyReadModeColumnWidth(string token)
     {
-        _readModeColumnWidth = token;
+        _readModeColumnWidth = FreeWReadModePlanner.NormalizeColumnWidth(token);
         if (!_readMode) return;
-        _editor.MaxWidth = token switch
-        {
-            "narrow" => 560,
-            "wide"   => 1024,
-            _        => 760
-        };
+        _editor.MaxWidth = FreeWReadModePlanner.ColumnWidth(_readModeColumnWidth);
     }
 
     // Feature 4 — Read Mode page color: None (white), Sepia (#F0E0C0), or Inverse (dark #1E1E1E).
     // Stores the token and, if read mode is currently active, tints the editor background immediately.
     private void ApplyReadModePageColor(string token)
     {
-        _readModePageColor = token;
+        _readModePageColor = FreeWReadModePlanner.NormalizePageColor(token);
         if (!_readMode) return;
-        _editor.Background = token switch
-        {
-            "sepia"   => new System.Windows.Media.SolidColorBrush(
-                             System.Windows.Media.Color.FromRgb(0xF0, 0xE0, 0xC0)),
-            "inverse" => new System.Windows.Media.SolidColorBrush(
-                             System.Windows.Media.Color.FromRgb(0x1E, 0x1E, 0x1E)),
-            _         => System.Windows.Media.Brushes.White
-        };
+        _editor.Background = ReadModeBrush(_readModePageColor);
     }
+
+    private static System.Windows.Media.Brush ReadModeBrush(string token) =>
+        new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
+                FreeWReadModePlanner.PageColorHex(token))!);
+
+    internal bool IsReadModeActiveForTests => _readMode;
+    internal double ReadModeMaxWidthForTests => _editor.MaxWidth;
+    internal string ReadModeColumnWidthForTests => _readModeColumnWidth;
+    internal string ReadModePageColorForTests => _readModePageColor;
+    internal bool IsTitleBarVisibleForTests => _titleBar.Visibility == Visibility.Visible;
+    internal bool IsRibbonVisibleForTests => _ribbon.Visibility == Visibility.Visible;
+    internal bool IsNavigationPaneVisibleForTests => _navPane.Visibility == Visibility.Visible;
+    internal bool IsRevealPaneVisibleForTests => _revealPane.Visibility == Visibility.Visible;
+    internal bool IsReviewingPaneVisibleForTests => _reviewPane.Visibility == Visibility.Visible;
+    internal void SetReadModePaneVisibilityForTests(bool navigation, bool reveal, bool reviewing)
+    {
+        _navPaneVisible = navigation;
+        _revealPaneVisible = reveal;
+        _reviewPaneVisible = reviewing;
+        _navPane.Visibility = navigation ? Visibility.Visible : Visibility.Collapsed;
+        _revealPane.Visibility = reveal ? Visibility.Visible : Visibility.Collapsed;
+        _reviewPane.Visibility = reviewing ? Visibility.Visible : Visibility.Collapsed;
+    }
+    internal void ToggleReadModeForTests() => ToggleReadMode();
+    internal void ApplyReadModeColumnWidthForTests(string token) => ApplyReadModeColumnWidth(token);
+    internal void ApplyReadModePageColorForTests(string token) => ApplyReadModePageColor(token);
 
     // Feature 5 — New Window: open a fresh MainWindow. If the current document has a saved path, load it
     // into the new window (read-only by design — both windows can edit independently, last-save wins).
