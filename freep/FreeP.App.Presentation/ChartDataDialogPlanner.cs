@@ -166,6 +166,7 @@ public sealed record ChartDataDialogCommitPlan(
 public sealed class ChartDataDialogPlanner
 {
     public const string EditDataCommandId = "freep.chart.edit-data";
+    public const string ChangeChartTypeCommandId = "freep.chart.change-type";
     public const string EditDataCommandLabel = "Edit Data";
     public const string DialogTitle = "Edit Chart Data";
     public const string CategoryColumnHeader = "Category";
@@ -208,6 +209,9 @@ public sealed class ChartDataDialogPlanner
                 chartType,
                 FormatChartTypeLabel(chartType)))
             .ToArray();
+
+    public static string ChangeChartTypeOptionCommandId(ChartType chartType) =>
+        $"{ChangeChartTypeCommandId}.{chartType.ToString().ToLowerInvariant()}";
 
     public int CategoryCount => _grid.CategoryCount;
 

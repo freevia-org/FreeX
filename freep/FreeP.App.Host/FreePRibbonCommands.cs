@@ -174,6 +174,12 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.MonochromaticAccent6)));
         registry.Register(SmartArtAuthoringPlanner.GrayscaleCommandId,
             new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.Grayscale)));
+        foreach (var entry in SmartArtAuthoringPlanner.ColorGallery)
+        {
+            var preset = entry.Preset;
+            registry.Register(entry.CommandId,
+                new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(preset)));
+        }
         registry.Register(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicProcess)));
         registry.Register(SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
@@ -615,6 +621,15 @@ internal static class FreePRibbonCommands
                 if (onEditChartData is not null)
                     onEditChartData();
             }));
+        registry.Register(ChartDataDialogPlanner.ChangeChartTypeCommandId,
+            new ActionRibbonCommand(() => onEditChartData?.Invoke()));
+        foreach (var option in ChartDataDialogPlanner.ChartTypeOptions)
+        {
+            var chartType = option.Value;
+            registry.Register(
+                ChartDataDialogPlanner.ChangeChartTypeOptionCommandId(chartType),
+                new ActionRibbonCommand(() => editor.ChangeSelectedChartType(chartType)));
+        }
         registry.Register(ChartDisplayOptionsPlanner.CommandId,
             new ActionRibbonCommand(() => onEditChartOptions?.Invoke()));
         registry.Register(ChartAxisOptionsPlanner.CommandId,

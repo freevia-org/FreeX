@@ -212,6 +212,42 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void FidelityRender_UsesTheSharedMeasuredHeaderSurfaceHeight()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Split("const double headerH = 43;", StringSplitOptions.None)
+            .Should().HaveCount(3, "both normal and generated-table header paths must use the measured surface height");
+    }
+
+    [Fact]
+    public void FidelityRender_OffsetsOnlyImageBearingHeaderSlotsAtTheHeaderOrigin()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Should().Contain("HeaderSlotContainsInlineImage(hfSlot) ? 1 : 0");
+        source.Should().Contain("HeaderSlotContainsInlineImage(headerSlot) ? 1 : 0");
+        source.Should().Contain("slot.Paragraphs.Any(paragraph => paragraph.Runs.Any(run => run.Image is not null))");
+    }
+
+    [Fact]
+    public void FidelityRender_UsesPixelAlignedColumnRuleVisualInsteadOfTheNativeFlowRule()
+    {
+        var renderSource = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+        var viewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
+        var previewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "PrintPreviewWindow.cs"));
+
+        renderSource.Should().Contain("ApplyColumnLayout(flow, page, useNativeColumnRule: false)");
+        renderSource.Should().Contain("bmp.Render(DocumentView.BuildColumnRuleVisual(");
+        viewSource.Should().Contain("bool useNativeColumnRule = true");
+        viewSource.Should().Contain("column * (plan.WidthDip + plan.GapDip) - plan.GapDip / 2 + 0.5");
+        viewSource.Should().Contain("ApplyColumnLayout(flow, _model.Page, useNativeColumnRule: false)");
+        viewSource.Should().Contain("private sealed class ColumnRuleAdorner : Adorner");
+        viewSource.Should().Contain("SyncColumnRuleAdorner();");
+        previewSource.Should().Contain("DocumentView.BuildColumnRuleVisual(");
+    }
+
+    [Fact]
     public void FidelityRender_UsesArrangedAnchorOnlyForDrawingGroups()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));

@@ -459,6 +459,16 @@ public static class FreePRibbon
             group.Medium(SlideObjectInsertionPlanner.ChartSurface3DCommandId,
                 FreePRibbonText.InsertChartSurface3DLabel, RibbonCommandIconKind.ChartColumn,
                 FreePRibbonText.InsertChartSurface3DKeyTip);
+            group.Dropdown(
+                ChartDataDialogPlanner.ChangeChartTypeCommandId,
+                FreePRibbonText.ChartChangeTypeLabel,
+                BuildChartTypeMenu(),
+                dropdown => dropdown with
+                {
+                    PreferredLayout = RibbonCommandLayoutKind.Medium,
+                    Icon = new RibbonCommandIcon(RibbonCommandIconKind.ChartColumn),
+                    KeyTip = FreePRibbonText.ChartChangeTypeKeyTip
+                });
             group.Medium("freep.chart.edit-data", FreePRibbonText.ChartEditDataLabel, RibbonCommandIconKind.ChartTitle, FreePRibbonText.ChartEditDataKeyTip);
             group.Medium(ChartDisplayOptionsPlanner.CommandId, FreePRibbonText.ChartDisplayOptionsLabel, RibbonCommandIconKind.Effects, FreePRibbonText.ChartDisplayOptionsKeyTip);
             group.Medium(ChartAxisOptionsPlanner.CommandId, FreePRibbonText.ChartAxisOptionsLabel, RibbonCommandIconKind.ChartTitle, FreePRibbonText.ChartAxisOptionsKeyTip);
@@ -634,6 +644,16 @@ public static class FreePRibbon
         });
         tab.Group("smartart-colors", FreePRibbonText.SmartArtColorsGroup.Label, FreePRibbonText.SmartArtColorsGroup.KeyTip, 80, group =>
         {
+            group.Dropdown(
+                SmartArtAuthoringPlanner.SmartArtColorsGalleryCommandId,
+                "Change Colors",
+                BuildSmartArtColorGalleryMenu(),
+                dropdown => dropdown with
+                {
+                    PreferredLayout = RibbonCommandLayoutKind.Medium,
+                    Icon = new RibbonCommandIcon(RibbonCommandIconKind.Color),
+                    KeyTip = "CC"
+                });
             group.Medium(SmartArtAuthoringPlanner.ThemeAccentsCommandId,
                 FreePRibbonText.SmartArtThemeAccentsCommand.Label, RibbonCommandIconKind.Color,
                 FreePRibbonText.SmartArtThemeAccentsCommand.KeyTip);
@@ -1056,6 +1076,18 @@ public static class FreePRibbon
         {
             IsEnabled = item.IsEnabled
         }).ToArray());
+
+    internal static RibbonMenu BuildSmartArtColorGalleryMenu() =>
+        new(SmartArtAuthoringPlanner.ColorGallery.Select((entry, index) => new RibbonMenuItem(
+            entry.Title,
+            new RibbonCommandId(entry.CommandId),
+            KeyTip: (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))).ToArray());
+
+    internal static RibbonMenu BuildChartTypeMenu() =>
+        new(ChartDataDialogPlanner.ChartTypeOptions.Select((option, index) => new RibbonMenuItem(
+            option.Label,
+            new RibbonCommandId(ChartDataDialogPlanner.ChangeChartTypeOptionCommandId(option.Value)),
+            KeyTip: (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))).ToArray());
 
     private static void BuildAdvancedEntranceAnimationMenu(RibbonMenuBuilder menu)
     {

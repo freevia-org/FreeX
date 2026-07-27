@@ -307,7 +307,7 @@ static void RenderDocumentComposite(
 
     // Layer 2: call ApplyColumnLayout so multi-column sections render with the correct column count.
     // The old path hard-coded ColumnWidth=pageW (single column). This fixes that miss.
-    DocumentView.ApplyColumnLayout(flow, page);
+    DocumentView.ApplyColumnLayout(flow, page, useNativeColumnRule: false);
 
     if (page.ColumnCount > 1)
     {
@@ -616,6 +616,13 @@ static void RenderDocumentComposite(
             bmp.Render(composite);
         }
 
+        bmp.Render(DocumentView.BuildColumnRuleVisual(
+            thisPageSettings,
+            thisMarginLeft,
+            thisMarginTop,
+            thisPageWDip - thisMarginLeft - thisMarginRight,
+            thisPixH - thisMarginBottom));
+
         // Word's All Markup capture adds black gutter bars beside contiguous revision spans. The
         // paginator exposes no public text-line rectangles once detached, so use the already-painted
         // revision colours to recover the exact local geometry before composing the non-content layer.
@@ -671,7 +678,7 @@ static void RenderDocumentComposite(
         if (panel is not null && i < panel.PageBoxes.Count)
         {
             var box = panel.PageBoxes[i];
-            const double headerH = 42;
+            const double headerH = 43;
             const double footerH = 36;
             var printableWidthDip = Math.Max(1, thisPageWDip - thisMarginLeft - thisMarginRight);
 
@@ -704,7 +711,11 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, headerTop, printableWidthDip, headerH));
+                                null, new Rect(
+                                    thisMarginLeft,
+                                    headerTop + (HeaderSlotContainsInlineImage(hfSlot) ? 1 : 0),
+                                    printableWidthDip,
+                                    headerH));
                         bmp.Render(hfVis);
                     }
                 }
@@ -772,7 +783,7 @@ static void RenderDocumentComposite(
                 i + 1,
                 thisPageSettings,
                 differentOddEvenHeaderFooterPages);
-            const double headerH = 42;
+            const double headerH = 43;
             const double footerH = 36;
             var printableWidthDip = Math.Max(1, thisPageWDip - thisMarginLeft - thisMarginRight);
             const double DefaultHeaderFooterDistanceDip = 48;
@@ -798,7 +809,11 @@ static void RenderDocumentComposite(
                             AlignmentX = AlignmentX.Left,
                             AlignmentY = AlignmentY.Top
                         },
-                            null, new Rect(thisMarginLeft, headerTop, printableWidthDip, headerH));
+                            null, new Rect(
+                                thisMarginLeft,
+                                headerTop + (HeaderSlotContainsInlineImage(headerSlot) ? 1 : 0),
+                                printableWidthDip,
+                                headerH));
                     bmp.Render(hfVis);
                 }
             }
@@ -1912,6 +1927,9 @@ static HeaderFooter? ResolveHfSlotByName(SectionHeadersFooters hf, string slotNa
         _               => null,
     };
 }
+
+static bool HeaderSlotContainsInlineImage(HeaderFooter slot) =>
+    slot.Paragraphs.Any(paragraph => paragraph.Runs.Any(run => run.Image is not null));
 
 /// <summary>
 /// Renders a <see cref="HeaderFooter"/> slot's content to a <see cref="DocumentPage"/> via the

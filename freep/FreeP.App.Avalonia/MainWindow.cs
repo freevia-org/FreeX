@@ -2376,6 +2376,14 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => Editor.SetSelectedPictureColorEffects(PictureColorEffectAuthoringPlanner.Reset())));
 
         r.Register(ChartDataDialogPlanner.EditDataCommandId, new ActionRibbonCommand(OpenChartDataDialog));
+        r.Register(ChartDataDialogPlanner.ChangeChartTypeCommandId, new ActionRibbonCommand(OpenChartDataDialog));
+        foreach (var option in ChartDataDialogPlanner.ChartTypeOptions)
+        {
+            var chartType = option.Value;
+            r.Register(
+                ChartDataDialogPlanner.ChangeChartTypeOptionCommandId(chartType),
+                new ActionRibbonCommand(() => Editor.ChangeSelectedChartType(chartType)));
+        }
         r.Register(ChartDisplayOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDisplayOptionsDialog));
         r.Register(ChartAxisOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAxisOptionsDialog));
         r.Register(ChartSeriesOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartSeriesOptionsDialog));
@@ -2417,6 +2425,12 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent6)));
         r.Register(SmartArtAuthoringPlanner.GrayscaleCommandId,
             new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.Grayscale)));
+        foreach (var entry in SmartArtAuthoringPlanner.ColorGallery)
+        {
+            var preset = entry.Preset;
+            r.Register(entry.CommandId,
+                new ActionRibbonCommand(() => ApplySmartArtColorPreset(preset)));
+        }
         r.Register(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicProcess)));
         r.Register(SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
