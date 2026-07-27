@@ -351,6 +351,41 @@ public sealed class AnimationPaneTests
     }
 
     [StaFact]
+    public void AnimationPane_FlyIn_ExposesAndAppliesDiagonalEffectOptions()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var shapeId = presentation.Slides[0].Shapes[0].Id;
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = shapeId,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.FlyIn,
+            Direction = AnimationDirection.FromLeft,
+        });
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var pane = new AnimationPane(editor);
+
+        var options = pane.CurrentTimelinePlanForTest.Items[0].EffectOptions;
+        options.Options.Select(option => option.Id).Should().Equal(
+            "from-bottom",
+            "from-left",
+            "from-right",
+            "from-top",
+            "from-top-left",
+            "from-top-right",
+            "from-bottom-left",
+            "from-bottom-right");
+
+        var mutation = pane.ApplyAnimationPaneEffectOptionEditForTest(0, "from-top-right");
+
+        mutation.ShouldApply.Should().BeTrue();
+        mutation.Direction.Should().Be(AnimationDirection.FromTopRight);
+        editor.CurrentSlideAnimations[0].Direction.Should().Be(AnimationDirection.FromTopRight);
+        pane.CurrentTimelinePlanForTest.Items[0].EffectOptions.SelectedOptionText
+            .Should().Be("From Top Right");
+    }
+
+    [StaFact]
     public void AnimationPane_ProjectsSharedPlaybackSessionState()
     {
         var editor = MakeSessionWithAnimations();

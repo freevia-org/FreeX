@@ -3218,7 +3218,7 @@ public sealed class MainWindowHeadlessTests
 
             effectOptionControlCount = window.AnimationPaneEffectOptionControlCount;
             optionsPlan = window.LastAnimationPaneTimelinePlan!.Items[0].EffectOptions;
-            mutationPlan = window.ApplyAnimationPaneEffectOptionEditForTests(0, "from-left");
+            mutationPlan = window.ApplyAnimationPaneEffectOptionEditForTests(0, "from-bottom-right");
             invalidPlan = window.ApplyAnimationPaneEffectOptionEditForTests(0, "sideways");
 
             direction = window.Editor.CurrentSlideAnimations.Single().Direction;
@@ -3233,15 +3233,19 @@ public sealed class MainWindowHeadlessTests
             "from-bottom",
             "from-left",
             "from-right",
-            "from-top");
+            "from-top",
+            "from-top-left",
+            "from-top-right",
+            "from-bottom-left",
+            "from-bottom-right");
         mutationPlan.Should().NotBeNull();
         mutationPlan!.ShouldApply.Should().BeTrue();
-        mutationPlan.Direction.Should().Be(AnimationDirection.FromLeft);
+        mutationPlan.Direction.Should().Be(AnimationDirection.FromBottomRight);
         invalidPlan.Should().NotBeNull();
         invalidPlan!.DisabledReason.Should().Be(AnimationPanePlanner.InvalidEffectOptionMessage);
-        direction.Should().Be(AnimationDirection.FromLeft);
+        direction.Should().Be(AnimationDirection.FromBottomRight);
         paneRows.Should().ContainSingle()
-            .Which.Should().Contain("Hero box - In: FlyIn (From Left)")
+            .Which.Should().Contain("Hero box - In: FlyIn (From Bottom Right)")
             .And.Contain("duration 0.5s");
     }
 

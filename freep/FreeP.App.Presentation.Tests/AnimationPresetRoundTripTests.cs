@@ -74,6 +74,48 @@ public sealed class AnimationPresetRoundTripTests
         animation.RepeatCount.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData(AnimationDirection.FromTopLeft, "fromTopLeft")]
+    [InlineData(AnimationDirection.FromTopRight, "fromTopRight")]
+    [InlineData(AnimationDirection.FromBottomLeft, "fromBottomLeft")]
+    [InlineData(AnimationDirection.FromBottomRight, "fromBottomRight")]
+    public void FlyInDiagonalDirectionSubtypeSurvivesReadAndWrite(
+        AnimationDirection direction,
+        string expectedSubtype)
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 457200,
+        });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.FlyIn,
+            Direction = direction,
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        reloaded.Slides[0].Animations.Single().Direction.Should().Be(direction);
+
+        using var second = new MemoryStream();
+        PptxPackageWriter.Write(reloaded, second);
+        using var archive = new ZipArchive(new MemoryStream(second.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetID")?.Value == "2");
+        cTn.Attribute("presetSubtype")!.Value.Should().Be(expectedSubtype);
+    }
+
     [Fact]
     public void UnknownPresetTokensSurviveReadCloneAndWrite()
     {

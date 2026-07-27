@@ -61,6 +61,10 @@ public sealed class AnimationPane : Border
     private AnimationPanePlaybackWorkflowEvidencePlan? _playbackWorkflowEvidencePlan;
 
     internal AnimationPaneTimelinePlan CurrentTimelinePlanForTest => BuildTimelinePlan();
+    internal AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEditForTest(
+        int animationIndex,
+        string optionId)
+        => ApplyEffectOptionMutation(animationIndex, optionId);
     internal AnimationPanePlaybackSessionPlan? CurrentPlaybackSessionPlanForTest => _playbackSessionPlan;
     internal AnimationPanePlaybackWorkflowEvidencePlan? CurrentPlaybackWorkflowEvidencePlanForTest =>
         _playbackWorkflowEvidencePlan;
@@ -386,11 +390,7 @@ public sealed class AnimationPane : Border
             }
 
             var option = item.EffectOptions.Options[effectOptionCombo.SelectedIndex];
-            var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
-                _editor.CurrentSlideAnimations,
-                capturedIndex,
-                option.Id);
-            AnimationPanePlanner.TryApplyEffectOptionMutation(_editor, plan);
+            ApplyEffectOptionMutation(capturedIndex, option.Id);
         };
 
         wheelSpokeCombo.SelectionChanged += (_, _) =>
@@ -402,11 +402,7 @@ public sealed class AnimationPane : Border
             }
 
             var option = item.EffectOptions.WheelSpokeOptions[wheelSpokeCombo.SelectedIndex];
-            var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
-                _editor.CurrentSlideAnimations,
-                capturedIndex,
-                option.Id);
-            AnimationPanePlanner.TryApplyEffectOptionMutation(_editor, plan);
+            ApplyEffectOptionMutation(capturedIndex, option.Id);
         };
 
         triggerCombo.SelectionChanged += (_, _) =>
@@ -614,6 +610,19 @@ public sealed class AnimationPane : Border
         };
 
         return row;
+    }
+
+    private AnimationPaneEffectOptionMutationPlan ApplyEffectOptionMutation(
+        int animationIndex,
+        string optionId)
+    {
+        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            _editor.CurrentSlideAnimations,
+            animationIndex,
+            optionId);
+        if (AnimationPanePlanner.TryApplyEffectOptionMutation(_editor, plan))
+            Rebuild();
+        return plan;
     }
 
     // ── Highlight update ──────────────────────────────────────────────────────────

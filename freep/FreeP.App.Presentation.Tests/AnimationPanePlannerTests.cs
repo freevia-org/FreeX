@@ -712,7 +712,41 @@ public sealed class AnimationPanePlannerTests
             new AnimationPaneEffectOptionDescriptor("from-bottom", "From Bottom", AnimationDirection.FromBottom, false),
             new AnimationPaneEffectOptionDescriptor("from-left", "From Left", AnimationDirection.FromLeft, true),
             new AnimationPaneEffectOptionDescriptor("from-right", "From Right", AnimationDirection.FromRight, false),
-            new AnimationPaneEffectOptionDescriptor("from-top", "From Top", AnimationDirection.FromTop, false));
+            new AnimationPaneEffectOptionDescriptor("from-top", "From Top", AnimationDirection.FromTop, false),
+            new AnimationPaneEffectOptionDescriptor("from-top-left", "From Top Left", AnimationDirection.FromTopLeft, false),
+            new AnimationPaneEffectOptionDescriptor("from-top-right", "From Top Right", AnimationDirection.FromTopRight, false),
+            new AnimationPaneEffectOptionDescriptor("from-bottom-left", "From Bottom Left", AnimationDirection.FromBottomLeft, false),
+            new AnimationPaneEffectOptionDescriptor("from-bottom-right", "From Bottom Right", AnimationDirection.FromBottomRight, false));
+    }
+
+    [Theory]
+    [InlineData("from-top-left", AnimationDirection.FromTopLeft)]
+    [InlineData("from-top-right", AnimationDirection.FromTopRight)]
+    [InlineData("from-bottom-left", AnimationDirection.FromBottomLeft)]
+    [InlineData("from-bottom-right", AnimationDirection.FromBottomRight)]
+    public void FlyInEffectOptionMutation_UpdatesDiagonalDirection(
+        string optionId,
+        AnimationDirection expectedDirection)
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = presentation.Slides[0].Shapes[0].Id,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.FlyIn,
+            Direction = AnimationDirection.FromLeft,
+        });
+
+        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            optionId);
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.Direction.Should().Be(expectedDirection);
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, plan).Should().BeTrue();
+        editor.CurrentSlideAnimations[0].Direction.Should().Be(expectedDirection);
     }
 
     [Fact]

@@ -1556,6 +1556,10 @@ public static class AnimationPanePlanner
         switch (animation.Preset)
         {
             case AnimationPreset.FlyIn:
+                foreach (var option in FlyInDirectionOptions())
+                    yield return option;
+                break;
+
             case AnimationPreset.Wipe:
                 foreach (var option in FromCardinalOptions())
                     yield return option;
@@ -1612,6 +1616,18 @@ public static class AnimationPanePlanner
                 yield return EffectOption("right-down", "Right Down", AnimationDirection.RightDown);
                 break;
         }
+    }
+
+    // PowerPoint's Fly effect supports all four slide edges and all four corners.
+    private static IEnumerable<AnimationPaneEffectOptionDescriptor> FlyInDirectionOptions()
+    {
+        foreach (var option in FromCardinalOptions())
+            yield return option;
+
+        yield return EffectOption("from-top-left", "From Top Left", AnimationDirection.FromTopLeft);
+        yield return EffectOption("from-top-right", "From Top Right", AnimationDirection.FromTopRight);
+        yield return EffectOption("from-bottom-left", "From Bottom Left", AnimationDirection.FromBottomLeft);
+        yield return EffectOption("from-bottom-right", "From Bottom Right", AnimationDirection.FromBottomRight);
     }
 
     private static IEnumerable<AnimationPaneEffectOptionDescriptor> FromCardinalOptions()
