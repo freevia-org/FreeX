@@ -313,6 +313,96 @@ public sealed class DocumentViewReviewTests
     }
 
     [Fact]
+    public async Task RibbonTrackChanges_EnablingOverSelection_marks_exactly_that_selection()
+    {
+        bool ran = false;
+        bool enabled = false;
+        bool checkedAfter = false;
+        string text = "";
+        int insertionCount = -1;
+        string? author = null;
+        string? date = null;
+        bool undoPreservedText = false;
+        bool undoRemovedInsertion = false;
+
+        ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Hello world"));
+            var view = Build(doc);
+            view.SetSelectionRangePublic(0, 6, 0, 11);
+            var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+            registry.TryGet(new RibbonCommandId("freew.track-changes"), out var command).Should().BeTrue();
+            var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+
+            command!.Execute(RibbonCommandContext.Empty);
+
+            var paragraph = (Paragraph)view.Document.Blocks[0];
+            text = paragraph.PlainText;
+            var insertions = paragraph.Runs.Where(run => run.Revision == RevisionKind.Inserted).ToList();
+            insertionCount = insertions.Count;
+            author = insertions.SingleOrDefault()?.RevisionAuthor;
+            date = insertions.SingleOrDefault()?.RevisionDateXml;
+            enabled = view.TrackChangesEnabled;
+            checkedAfter = stateful.GetState().IsChecked;
+
+            view.Undo();
+            var undone = (Paragraph)view.Document.Blocks[0];
+            undoPreservedText = undone.PlainText == "Hello world";
+            undoRemovedInsertion = undone.Runs.All(run => run.Revision == RevisionKind.None);
+        });
+
+        ran.Should().BeTrue();
+        enabled.Should().BeTrue();
+        checkedAfter.Should().BeTrue();
+        text.Should().Be("Hello world");
+        insertionCount.Should().Be(1);
+        author.Should().Be("FreeW User");
+        date.Should().NotBeNullOrWhiteSpace();
+        date.Should().MatchRegex("^\\d{4}-\\d{2}-\\d{2}T");
+        undoPreservedText.Should().BeTrue();
+        undoRemovedInsertion.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RibbonTrackChanges_empty_selection_does_not_invent_revision_and_disabling_does_not_mark()
+    {
+        bool ran = false;
+        bool emptyRevision = true;
+        bool disabledRevision = true;
+        bool enabledChecked = false;
+        bool disabledChecked = true;
+
+        ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Hello world"));
+            var view = Build(doc);
+            var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+            registry.TryGet(new RibbonCommandId("freew.track-changes"), out var command).Should().BeTrue();
+            var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+
+            view.MoveCaretToBlock(0, 6);
+            command!.Execute(RibbonCommandContext.Empty);
+            enabledChecked = stateful.GetState().IsChecked;
+            emptyRevision = ((Paragraph)view.Document.Blocks[0]).Runs.All(run => run.Revision == RevisionKind.None);
+
+            view.SetSelectionRangePublic(0, 6, 0, 11);
+            command.Execute(RibbonCommandContext.Empty);
+            disabledChecked = stateful.GetState().IsChecked;
+            disabledRevision = ((Paragraph)view.Document.Blocks[0]).Runs.All(run => run.Revision == RevisionKind.None);
+        });
+
+        ran.Should().BeTrue();
+        enabledChecked.Should().BeTrue();
+        disabledChecked.Should().BeFalse();
+        emptyRevision.Should().BeTrue();
+        disabledRevision.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task MarkSelectionAsRevision_records_an_insertion()
     {
         bool marked = false; bool hasInsertion = false;

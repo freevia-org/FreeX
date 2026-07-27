@@ -528,9 +528,9 @@ internal static class FreeWAvaloniaRibbonCommands
         var reviewingPaneCommand = new ActionRibbonCommand(callbacks.ToggleReviewingPane);
         r.Register("freew.reviewing-pane", reviewingPaneCommand);
         r.Register("freew.reviewingpane", reviewingPaneCommand);
-        // AV-REVIEW: Track Changes toggle (flag only — keystroke-level recording is deferred; turning the
-        // current selection into a tracked change is available via DocumentView.MarkSelectionAsRevision).
-        r.Register("freew.track-changes", new ActionRibbonCommand(() => editor.ToggleTrackChanges()));
+        // AV-REVIEW: Track Changes uses the same selection transition as the WPF command: enabling it
+        // over a non-empty selection immediately records that selection as an insertion.
+        r.Register("freew.track-changes", new TrackChangesToggleCommand(editor));
         var displayAllMarkup = new DisplayForReviewCommand(editor, ReviewDisplayMode.AllMarkup);
         r.Register("freew.display-for-review", displayAllMarkup);
         r.Register("freew.display-for-review-all-markup", displayAllMarkup);
@@ -795,6 +795,21 @@ internal static class FreeWAvaloniaRibbonCommands
         public void Execute(RibbonCommandContext context) => toggle();
 
         public RibbonCommandState GetState() => new(IsChecked: isChecked());
+    }
+
+    private sealed class TrackChangesToggleCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var plan = TrackChangesTogglePlanner.Build(
+                editor.TrackChangesEnabled,
+                hasSelection: editor.SelectedText.Length > 0);
+            editor.ToggleTrackChanges();
+            if (plan.MarkSelectionAsInsertion)
+                editor.MarkSelectionAsRevision(RevisionKind.Inserted);
+        }
+
+        public RibbonCommandState GetState() => new(IsChecked: editor.TrackChangesEnabled);
     }
 
     private sealed class ProofingLanguageCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonCommand

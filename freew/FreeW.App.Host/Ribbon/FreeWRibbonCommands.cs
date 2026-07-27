@@ -4788,11 +4788,14 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            editor.TrackChangesEnabled = !editor.TrackChangesEnabled;
+            var plan = TrackChangesTogglePlanner.Build(
+                editor.TrackChangesEnabled,
+                hasSelection: !editor.Selection.IsEmpty);
+            editor.TrackChangesEnabled = plan.Enabled;
 
-            // When switching ON over a non-empty selection, mark it as an insertion as a stand-in for
-            // live tracking. This keeps the toggle useful without brittle per-keystroke interception.
-            if (editor.TrackChangesEnabled && !editor.Selection.IsEmpty)
+            // When switching ON over a non-empty selection, mark it as an insertion as the WPF/FreeW
+            // transition contract. This keeps the toggle useful without brittle per-keystroke interception.
+            if (plan.MarkSelectionAsInsertion)
             {
                 var dateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
                 editor.MarkSelectionAsRevision(RevisionKind.Inserted, editor.RevisionAuthor, dateXml);
