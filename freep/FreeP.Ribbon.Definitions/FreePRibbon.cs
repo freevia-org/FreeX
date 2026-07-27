@@ -205,6 +205,13 @@ public static class FreePRibbon
             KeyTip = FreePRibbonText.TableCellFillKeyTip,
             Width = 96
         });
+        group.ComboBox("freep.table-cell-anchor", FreePRibbonText.TableCellAnchorLabel, control => control with
+        {
+            Items = FreePRibbonDefinitionData.TableCellAnchorOptions,
+            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align),
+            KeyTip = FreePRibbonText.TableCellAnchorKeyTip,
+            Width = 100
+        });
         group.IconToggle("freep.bold", FreePRibbonText.BoldLabel, RibbonCommandIconKind.Bold, FreePRibbonText.BoldKeyTip);
         group.IconToggle("freep.italic", FreePRibbonText.ItalicLabel, RibbonCommandIconKind.Italic, FreePRibbonText.ItalicKeyTip);
         group.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline,
