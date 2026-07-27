@@ -755,8 +755,6 @@ public static class PresentationReviewWorkflowPlanner
         "Select one shape before changing reading order.";
     public const string EmptyReadingOrderMessage =
         "Current slide has no shapes in the reading order.";
-    public const string NestedReadingOrderReorderDeferredMessage =
-        "Nested/group child reading-order moves are deferred; select a top-level shape first.";
     public const string ReadingOrderAlreadyEarliestMessage =
         "Selected shape is already earliest in the reading order.";
     public const string ReadingOrderAlreadyLatestMessage =
