@@ -2071,6 +2071,22 @@ public sealed class EditingSession
         return true;
     }
 
+    /// <summary>Sets the width of the active table column in EMU. Undoable.</summary>
+    public bool TryApplyActiveTableColumnWidth(long widthEmu)
+    {
+        if (ActiveTableCell is not { } active)
+            return false;
+
+        var (shapeId, table) = RequireSelectedTable();
+        if (shapeId == 0 || table is null ||
+            active.Col < 0 || active.Col >= table.ColumnWidthsEmu.Count)
+            return false;
+
+        ExecuteTableCommand((si, id) => new SetTableColumnWidthCommand(
+            si, id, active.Col, widthEmu));
+        return true;
+    }
+
     /// <summary>Sets or clears one explicit border side of the active table cell. Undoable.</summary>
     public bool TryApplyActiveTableCellBorder(
         TableCellBorderSide side,

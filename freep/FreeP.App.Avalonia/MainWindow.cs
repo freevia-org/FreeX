@@ -1954,6 +1954,27 @@ public sealed partial class MainWindow : Window
         Add("Delete Column", () => { Editor.Select(shape.Id); Editor.DeleteColumn(); });
         menu.Items.Add(new Separator());
 
+        var widthMenu = new MenuItem { Header = "Column Width" };
+        foreach (var (label, inches) in new[]
+        {
+            ("0.75 in", 0.75),
+            ("1.00 in", 1.00),
+            ("1.25 in", 1.25),
+            ("1.50 in", 1.50),
+            ("2.00 in", 2.00),
+        })
+        {
+            var widthItem = new MenuItem { Header = label };
+            widthItem.Click += (_, _) =>
+            {
+                Editor.Select(shape.Id);
+                Editor.TryApplyActiveTableColumnWidth(
+                    (long)Math.Round(inches * DrawingMlCoordinateUnits.EmuPerInch));
+            };
+            widthMenu.Items.Add(widthItem);
+        }
+        menu.Items.Add(widthMenu);
+
         var table = shape.Table!;
         var activeCell = Editor.ActiveTableCell;
         var canMerge = activeCell.HasValue &&
