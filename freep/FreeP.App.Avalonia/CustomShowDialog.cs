@@ -61,6 +61,7 @@ internal sealed class CustomShowDialog : Window
         _customShowSlideList.PointerReleased += OnCustomShowSlideListPointerReleased;
         _customShowSlideList.AddHandler(DragDrop.DragOverEvent, OnCustomShowSlideListDragOver);
         _customShowSlideList.AddHandler(DragDrop.DropEvent, OnCustomShowSlideListDrop);
+        PointerCaptureLost += OnCustomShowSlidePointerCaptureLost;
 
         _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
         _validationText.TextWrapping = TextWrapping.Wrap;
@@ -382,6 +383,7 @@ internal sealed class CustomShowDialog : Window
         }
 
         _customShowSlideDragActive = true;
+        e.Pointer.Capture(this);
         e.Handled = true;
     }
 
@@ -394,10 +396,23 @@ internal sealed class CustomShowDialog : Window
         }
 
         var sourceSlideIndex = _customShowSlideDragSourceIndex;
-        var targetDropIndex = ResolveCustomShowSlideDropIndex(e);
+        var pointerPosition = e.GetPosition(_customShowSlideList);
+        var isInsideList = new Rect(
+            0,
+            0,
+            _customShowSlideList.Bounds.Width,
+            _customShowSlideList.Bounds.Height).Contains(pointerPosition);
+        var targetDropIndex = isInsideList ? ResolveCustomShowSlideDropIndex(e) : -1;
+        e.Pointer.Capture(null);
         ResetCustomShowSlideDrag();
-        ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
+        CompleteCustomShowSlideDrag(sourceSlideIndex, targetDropIndex, isInsideList);
         e.Handled = true;
+    }
+
+    private void OnCustomShowSlidePointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (_customShowSlideDragActive || _customShowSlideDragSourceIndex >= 0)
+            ResetCustomShowSlideDrag();
     }
 
     private void OnCustomShowSlideListDragOver(object? sender, DragEventArgs e)
@@ -424,11 +439,13 @@ internal sealed class CustomShowDialog : Window
 
     private int ResolveCustomShowSlideDropIndex(PointerEventArgs e)
     {
-        var item = FindControlAncestor<ListBoxItem>(e.Source);
+        var pointerPosition = e.GetPosition(_customShowSlideList);
+        var item = FindControlAncestor<ListBoxItem>(
+            _customShowSlideList.InputHitTest(pointerPosition) ?? e.Source);
         if (item?.DataContext is CustomShowSlideListItem slide)
         {
-            var position = e.GetPosition(item);
-            return position.Y > item.Bounds.Height / 2
+            var itemPosition = e.GetPosition(item);
+            return itemPosition.Y > item.Bounds.Height / 2
                 ? slide.Index + 1
                 : slide.Index;
         }
@@ -455,6 +472,35 @@ internal sealed class CustomShowDialog : Window
         _customShowSlideDragStartPoint = null;
         _customShowSlideDragSourceIndex = -1;
         _customShowSlideDragActive = false;
+    }
+
+    private bool CompleteCustomShowSlideDrag(
+        int sourceSlideIndex,
+        int targetDropIndex,
+        bool isInsideList)
+    {
+        if (!isInsideList)
+            return false;
+
+        return ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex).ShouldApplyMutation;
+    }
+
+    internal bool CompleteCustomShowSlideDragForTests(
+        int sourceSlideIndex,
+        int targetDropIndex,
+        bool isInsideList) =>
+        CompleteCustomShowSlideDrag(sourceSlideIndex, targetDropIndex, isInsideList);
+
+    internal bool IsCustomShowSlideDragActiveForTests => _customShowSlideDragActive;
+
+    internal IPointer BeginCustomShowSlideDragForTests(int sourceSlideIndex)
+    {
+        _customShowSlideDragStartPoint = new Point();
+        _customShowSlideDragSourceIndex = sourceSlideIndex;
+        _customShowSlideDragActive = true;
+        var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, isPrimary: true);
+        pointer.Capture(this);
+        return pointer;
     }
 
     private SlideShowCustomShowDragReorderPlan ApplyCustomShowSlideDragReorder(
