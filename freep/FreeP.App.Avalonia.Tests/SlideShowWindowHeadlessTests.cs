@@ -533,6 +533,10 @@ public sealed class SlideShowWindowHeadlessTests
             window.ExecuteAdvance(started.AddMilliseconds(1800));
 
             review = window.RecordingReviewPlan;
+            var applied = window.ApplyRecordingReview();
+            applied.MediaArtifactCount.Should().Be(2);
+            applied.CaptionArtifactCount.Should().Be(2);
+            pres.RecordingMediaArtifacts.Should().HaveCount(4);
             window.ApplyPresenterToolIntent(nowUtc: started.AddMilliseconds(1800));
             window.Close();
             persistedMediaArtifactCount = pres.RecordingMediaArtifacts.Count(artifact =>
