@@ -52,6 +52,7 @@ public sealed partial class MainWindow
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, ErrorCheckingDialogChromeStyle);
         AutomationProperties.SetAutomationId(dialog, ErrorCheckingDialogPlanner.DialogAutomationId);
 
         var header = new TextBlock
@@ -437,22 +438,5 @@ public sealed partial class MainWindow
     }
 
     private static IReadOnlyList<FormulaErrorIssue> CreateErrorCheckingParityIssues(SheetId sheetId) =>
-    [
-        new(
-            sheetId,
-            "Sheet1",
-            new CellAddress(sheetId, 6, 4),
-            "D6",
-            ErrorValue.DivByZero.Code,
-            "=D2/0",
-            "Formula divides by zero."),
-        new(
-            sheetId,
-            "Sheet1",
-            new CellAddress(sheetId, 7, 4),
-            "D7",
-            FormulaAuditingService.FormulaStoredAsTextErrorCode,
-            null,
-            "The formula in this cell is stored as text."),
-    ];
+        ErrorCheckingDialogPlanner.CreateParityIssues(sheetId);
 }

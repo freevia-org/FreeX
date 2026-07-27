@@ -581,6 +581,11 @@ internal static class ParityCapture
             {
                 CaptureConsolidateDialogDirect(results, outDir, sheet.Id, ResolveSheetId(workbook));
             }
+            else if (string.Equals(targetSurfaceId, "dialog.ErrorChecking", StringComparison.Ordinal))
+            {
+                CaptureDialog(results, "dialog.ErrorChecking", outDir, () =>
+                    new ErrorCheckingDialog(ErrorCheckingDialogPlanner.CreateParityIssues(sheet.Id), _ => { }, _ => true, _ => { }));
+            }
             else if (string.Equals(targetSurfaceId, "dialog.Options.Save", StringComparison.Ordinal) ||
                 string.Equals(targetSurfaceId, "dialog.Options.Language", StringComparison.Ordinal))
             {
@@ -596,7 +601,7 @@ internal static class ParityCapture
             }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, and dialog.Options.Save in this lane.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, and dialog.Options.Save in this lane.");
             }
 
             return;
@@ -1057,24 +1062,7 @@ internal static class ParityCapture
     }
 
     private static IReadOnlyList<FormulaErrorIssue> CreateErrorCheckingIssues(SheetId sheetId) =>
-    [
-        new(
-            sheetId,
-            "Sheet1",
-            new CellAddress(sheetId, 6, 4),
-            "D6",
-            ErrorValue.DivByZero.Code,
-            "=D2/0",
-            "Formula divides by zero."),
-        new(
-            sheetId,
-            "Sheet1",
-            new CellAddress(sheetId, 7, 4),
-            "D7",
-            FormulaAuditingService.FormulaStoredAsTextErrorCode,
-            null,
-            "The formula in this cell is stored as text."),
-    ];
+        ErrorCheckingDialogPlanner.CreateParityIssues(sheetId);
 
     private static IReadOnlyList<WatchWindowEntry> CreateWatchEntries(SheetId sheetId) =>
     [

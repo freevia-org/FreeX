@@ -428,6 +428,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         autoFilterSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton], new Thickness(0, 6, 0, 0))");
 
         errorCheckingSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle ErrorCheckingDialogChromeStyle => new(FormulaBarFontFamily);");
+        errorCheckingSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, ErrorCheckingDialogChromeStyle);");
+        errorCheckingSource.Should().Contain("ErrorCheckingDialogPlanner.CreateParityIssues(sheetId)");
         errorCheckingSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(");
         errorCheckingSource.Should().Contain("ErrorCheckingDialogChromeStyle,");
         errorCheckingSource.Should().NotContain("Height=24, Padding=(4,1), white background");

@@ -44,6 +44,24 @@ public sealed class ErrorCheckingDialogPlannerTests
         none.CanNext.Should().BeFalse();
     }
 
+    [Fact]
+    public void CreateParityIssues_ProvidesTheSharedWpfAndAvaloniaCaptureFixture()
+    {
+        var sheetId = SheetId.New();
+
+        var issues = ErrorCheckingDialogPlanner.CreateParityIssues(sheetId);
+
+        issues.Should().HaveCount(2);
+        issues[0].Address.Should().Be(new CellAddress(sheetId, 6, 4));
+        issues[0].ErrorCode.Should().Be(ErrorValue.DivByZero.Code);
+        issues[0].FormulaText.Should().Be("=D2/0");
+        issues[1].Address.Should().Be(new CellAddress(sheetId, 7, 4));
+        issues[1].FormulaText.Should().BeNull();
+        issues.Select(issue => issue.Description).Should().Equal(
+            "Formula divides by zero.",
+            "The formula in this cell is stored as text.");
+    }
+
     private static FormulaErrorIssue CreateIssue(string? formulaText)
     {
         var sheetId = SheetId.New();

@@ -52,6 +52,15 @@ public sealed class ErrorCheckingDialogSourceTests
     }
 
     [Fact]
+    public void ErrorCheckingParityCapture_UsesTheSharedIssueFixture()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+
+        source.Should().Contain("ErrorCheckingDialogPlanner.CreateParityIssues(sheetId)");
+        source.Should().Contain("targetSurfaceId, \"dialog.ErrorChecking\"");
+    }
+
+    [Fact]
     public void ErrorCheckingOptionsCommand_FocusesFormulaErrorCheckingOptions()
     {
         // After the declarative-ribbon cutover the "Error Checking Options" command lives as a menu
