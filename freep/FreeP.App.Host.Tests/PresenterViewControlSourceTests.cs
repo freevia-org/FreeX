@@ -26,7 +26,9 @@ public sealed class PresenterViewControlSourceTests
         presenter.Should().Contain("_clearInk?.Invoke()");
         presenter.Should().Contain("_selectPointerMode?.Invoke");
         presenter.Should().Contain("Record timings");
+        presenter.Should().Contain("Rehearse timings");
         presenter.Should().Contain("SlideShowTimingIntent.RecordTimings");
+        presenter.Should().Contain("SlideShowTimingIntent.RehearseTimings");
         presenter.Should().Contain("_setTimingIntent");
         presenter.Should().Contain("plan.CanGoBack");
         presenter.Should().Contain("plan.CanAdvance");

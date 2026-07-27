@@ -24,6 +24,7 @@ public sealed class PresenterViewWindow : Window
     private readonly Button _backButton;
     private readonly Button _advanceButton;
     private readonly Button _recordTimingsButton;
+    private readonly Button _rehearseTimingsButton;
     private readonly Action? _goBack;
     private readonly Action? _goNext;
     private readonly ComboBox _pointerModeCombo;
@@ -98,9 +99,21 @@ public sealed class PresenterViewWindow : Window
                 RefreshFromState();
             }
         });
+        _rehearseTimingsButton = MakeActionButton("Rehearse timings", () =>
+        {
+            if (_setTimingIntent is not null)
+            {
+                var current = _stateProvider().ToolPlan.Recording.TimingIntent;
+                _setTimingIntent(current == SlideShowTimingIntent.RehearseTimings
+                    ? SlideShowTimingIntent.None
+                    : SlideShowTimingIntent.RehearseTimings);
+                RefreshFromState();
+            }
+        });
         controls.Children.Add(_backButton);
         controls.Children.Add(_advanceButton);
         controls.Children.Add(_recordTimingsButton);
+        controls.Children.Add(_rehearseTimingsButton);
         var normalButton = MakeActionButton("Show", () => _setScreenMode?.Invoke(SlideShowScreenMode.Normal));
         var blackButton = MakeActionButton("Black", () => _setScreenMode?.Invoke(SlideShowScreenMode.Black));
         var whiteButton = MakeActionButton("White", () => _setScreenMode?.Invoke(SlideShowScreenMode.White));
@@ -205,6 +218,8 @@ public sealed class PresenterViewWindow : Window
             _advanceButton.IsEnabled = plan.CanAdvance && _goNext is not null;
             _recordTimingsButton.Content = plan.IsRecordingTimings ? "Stop recording" : "Record timings";
             _recordTimingsButton.IsEnabled = _setTimingIntent is not null;
+            _rehearseTimingsButton.Content = plan.IsRehearsingTimings ? "Stop rehearsal" : "Rehearse timings";
+            _rehearseTimingsButton.IsEnabled = _setTimingIntent is not null;
             _pointerModeCombo.SelectedItem = plan.PointerMode;
             _currentPreview.Slide = plan.CurrentSlide;
             _nextPreview.Slide = plan.NextSlide;
