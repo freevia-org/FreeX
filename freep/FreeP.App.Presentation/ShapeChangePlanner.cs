@@ -38,6 +38,17 @@ public static class ShapeChangePlanner
     public const string RectangularCalloutCommandId = "freep.arrange.change-shape.rectangular-callout";
     public const string RoundedRectangularCalloutCommandId = "freep.arrange.change-shape.rounded-rectangular-callout";
     public const string OvalCalloutCommandId = "freep.arrange.change-shape.oval-callout";
+    public const string ExplosionCommandId = "freep.arrange.change-shape.explosion";
+    public const string RibbonCommandId = "freep.arrange.change-shape.ribbon";
+    public const string FlowchartProcessCommandId = "freep.arrange.change-shape.flowchart-process";
+    public const string FlowchartDecisionCommandId = "freep.arrange.change-shape.flowchart-decision";
+    public const string FlowchartDataCommandId = "freep.arrange.change-shape.flowchart-data";
+    public const string FlowchartPredefinedProcessCommandId = "freep.arrange.change-shape.flowchart-predefined-process";
+    public const string FlowchartDocumentCommandId = "freep.arrange.change-shape.flowchart-document";
+    public const string FlowchartTerminatorCommandId = "freep.arrange.change-shape.flowchart-terminator";
+    public const string LineCalloutCommandId = "freep.arrange.change-shape.line-callout";
+    public const string CylinderCommandId = "freep.arrange.change-shape.cylinder";
+    public const string ChordCommandId = "freep.arrange.change-shape.chord";
 
     public static IReadOnlyList<(string CommandId, DrawingShapeKind Kind)> Presets =>
     [
@@ -73,5 +84,16 @@ public static class ShapeChangePlanner
         (RectangularCalloutCommandId, DrawingShapeKind.RectangularCallout),
         (RoundedRectangularCalloutCommandId, DrawingShapeKind.RoundedRectangularCallout),
         (OvalCalloutCommandId, DrawingShapeKind.OvalCallout),
+        (ExplosionCommandId, DrawingShapeKind.Explosion),
+        (RibbonCommandId, DrawingShapeKind.Ribbon),
+        (FlowchartProcessCommandId, DrawingShapeKind.FlowchartProcess),
+        (FlowchartDecisionCommandId, DrawingShapeKind.FlowchartDecision),
+        (FlowchartDataCommandId, DrawingShapeKind.FlowchartData),
+        (FlowchartPredefinedProcessCommandId, DrawingShapeKind.FlowchartPredefinedProcess),
+        (FlowchartDocumentCommandId, DrawingShapeKind.FlowchartDocument),
+        (FlowchartTerminatorCommandId, DrawingShapeKind.FlowchartTerminator),
+        (LineCalloutCommandId, DrawingShapeKind.LineCallout),
+        (CylinderCommandId, DrawingShapeKind.Cylinder),
+        (ChordCommandId, DrawingShapeKind.Chord),
     ];
 }

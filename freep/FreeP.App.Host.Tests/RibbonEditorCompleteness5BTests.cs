@@ -290,6 +290,17 @@ public class RibbonEditorCompleteness5BTests
         Assert.Contains(SlideObjectInsertionPlanner.RectangularCalloutCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.RoundedRectangularCalloutCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.OvalCalloutCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.ExplosionCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.RibbonCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.FlowchartProcessCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.FlowchartDecisionCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.FlowchartDataCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.FlowchartPredefinedProcessCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.FlowchartDocumentCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.FlowchartTerminatorCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.LineCalloutCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.CylinderCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.ChordCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.ConnectorCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.ElbowConnectorCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.CurvedConnectorCommandId, ids);
@@ -417,6 +428,17 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.arrange.change-shape.rectangular-callout", DrawingShapeKind.RectangularCallout)]
     [InlineData("freep.arrange.change-shape.rounded-rectangular-callout", DrawingShapeKind.RoundedRectangularCallout)]
     [InlineData("freep.arrange.change-shape.oval-callout", DrawingShapeKind.OvalCallout)]
+    [InlineData("freep.arrange.change-shape.explosion", DrawingShapeKind.Explosion)]
+    [InlineData("freep.arrange.change-shape.ribbon", DrawingShapeKind.Ribbon)]
+    [InlineData("freep.arrange.change-shape.flowchart-process", DrawingShapeKind.FlowchartProcess)]
+    [InlineData("freep.arrange.change-shape.flowchart-decision", DrawingShapeKind.FlowchartDecision)]
+    [InlineData("freep.arrange.change-shape.flowchart-data", DrawingShapeKind.FlowchartData)]
+    [InlineData("freep.arrange.change-shape.flowchart-predefined-process", DrawingShapeKind.FlowchartPredefinedProcess)]
+    [InlineData("freep.arrange.change-shape.flowchart-document", DrawingShapeKind.FlowchartDocument)]
+    [InlineData("freep.arrange.change-shape.flowchart-terminator", DrawingShapeKind.FlowchartTerminator)]
+    [InlineData("freep.arrange.change-shape.line-callout", DrawingShapeKind.LineCallout)]
+    [InlineData("freep.arrange.change-shape.cylinder", DrawingShapeKind.Cylinder)]
+    [InlineData("freep.arrange.change-shape.chord", DrawingShapeKind.Chord)]
     public void Cmd_ChangeShape_RoutesThroughSharedEditingSession(
         string commandId,
         DrawingShapeKind expectedKind)
@@ -1175,6 +1197,17 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.shape-rectangular-callout")]
     [InlineData("freep.shape-rounded-rectangular-callout")]
     [InlineData("freep.shape-oval-callout")]
+    [InlineData("freep.shape-explosion")]
+    [InlineData("freep.shape-ribbon")]
+    [InlineData("freep.shape-flowchart-process")]
+    [InlineData("freep.shape-flowchart-decision")]
+    [InlineData("freep.shape-flowchart-data")]
+    [InlineData("freep.shape-flowchart-predefined-process")]
+    [InlineData("freep.shape-flowchart-document")]
+    [InlineData("freep.shape-flowchart-terminator")]
+    [InlineData("freep.shape-line-callout")]
+    [InlineData("freep.shape-cylinder")]
+    [InlineData("freep.shape-chord")]
     [InlineData("freep.header-footer")]
     [InlineData("freep.date-time")]
     [InlineData("freep.slide-number")]

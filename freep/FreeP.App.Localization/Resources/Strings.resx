@@ -784,6 +784,72 @@
   <data name="Ribbon_Command_ShapeOvalCallout_KeyTip" xml:space="preserve">
     <value>OC</value>
   </data>
+  <data name="Ribbon_Command_ShapeExplosion_Label" xml:space="preserve">
+    <value>Explosion</value>
+  </data>
+  <data name="Ribbon_Command_ShapeExplosion_KeyTip" xml:space="preserve">
+    <value>EX</value>
+  </data>
+  <data name="Ribbon_Command_ShapeRibbon_Label" xml:space="preserve">
+    <value>Ribbon</value>
+  </data>
+  <data name="Ribbon_Command_ShapeRibbon_KeyTip" xml:space="preserve">
+    <value>RB</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFlowchartProcess_Label" xml:space="preserve">
+    <value>Process</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFlowchartProcess_KeyTip" xml:space="preserve">
+    <value>FP</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFlowchartDecision_Label" xml:space="preserve">
+    <value>Decision</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFlowchartDecision_KeyTip" xml:space="preserve">
+    <value>FD</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFlowchartData_Label" xml:space="preserve">
+    <value>Data</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFlowchartData_KeyTip" xml:space="preserve">
+    <value>FI</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFlowchartPredefinedProcess_Label" xml:space="preserve">
+    <value>Predefined Process</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFlowchartPredefinedProcess_KeyTip" xml:space="preserve">
+    <value>PR</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFlowchartDocument_Label" xml:space="preserve">
+    <value>Document</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFlowchartDocument_KeyTip" xml:space="preserve">
+    <value>DO</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFlowchartTerminator_Label" xml:space="preserve">
+    <value>Terminator</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFlowchartTerminator_KeyTip" xml:space="preserve">
+    <value>FT</value>
+  </data>
+  <data name="Ribbon_Command_ShapeLineCallout_Label" xml:space="preserve">
+    <value>Line Callout</value>
+  </data>
+  <data name="Ribbon_Command_ShapeLineCallout_KeyTip" xml:space="preserve">
+    <value>LC</value>
+  </data>
+  <data name="Ribbon_Command_ShapeCylinder_Label" xml:space="preserve">
+    <value>Cylinder</value>
+  </data>
+  <data name="Ribbon_Command_ShapeCylinder_KeyTip" xml:space="preserve">
+    <value>CY</value>
+  </data>
+  <data name="Ribbon_Command_ShapeChord_Label" xml:space="preserve">
+    <value>Chord</value>
+  </data>
+  <data name="Ribbon_Command_ShapeChord_KeyTip" xml:space="preserve">
+    <value>CH</value>
+  </data>
   <data name="Ribbon_Command_Connector_Label" xml:space="preserve">
     <value>Connector</value>
   </data>

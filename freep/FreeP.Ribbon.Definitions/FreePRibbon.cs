@@ -358,6 +358,17 @@ public static class FreePRibbon
         menu.Item(ShapeChangePlanner.RectangularCalloutCommandId, FreePRibbonText.ShapeRectangularCalloutLabel, FreePRibbonText.ShapeRectangularCalloutKeyTip);
         menu.Item(ShapeChangePlanner.RoundedRectangularCalloutCommandId, FreePRibbonText.ShapeRoundedRectangularCalloutLabel, FreePRibbonText.ShapeRoundedRectangularCalloutKeyTip);
         menu.Item(ShapeChangePlanner.OvalCalloutCommandId, FreePRibbonText.ShapeOvalCalloutLabel, FreePRibbonText.ShapeOvalCalloutKeyTip);
+        menu.Item(ShapeChangePlanner.ExplosionCommandId, FreePRibbonText.ShapeExplosionLabel, FreePRibbonText.ShapeExplosionKeyTip);
+        menu.Item(ShapeChangePlanner.RibbonCommandId, FreePRibbonText.ShapeRibbonLabel, FreePRibbonText.ShapeRibbonKeyTip);
+        menu.Item(ShapeChangePlanner.FlowchartProcessCommandId, FreePRibbonText.ShapeFlowchartProcessLabel, FreePRibbonText.ShapeFlowchartProcessKeyTip);
+        menu.Item(ShapeChangePlanner.FlowchartDecisionCommandId, FreePRibbonText.ShapeFlowchartDecisionLabel, FreePRibbonText.ShapeFlowchartDecisionKeyTip);
+        menu.Item(ShapeChangePlanner.FlowchartDataCommandId, FreePRibbonText.ShapeFlowchartDataLabel, FreePRibbonText.ShapeFlowchartDataKeyTip);
+        menu.Item(ShapeChangePlanner.FlowchartPredefinedProcessCommandId, FreePRibbonText.ShapeFlowchartPredefinedProcessLabel, FreePRibbonText.ShapeFlowchartPredefinedProcessKeyTip);
+        menu.Item(ShapeChangePlanner.FlowchartDocumentCommandId, FreePRibbonText.ShapeFlowchartDocumentLabel, FreePRibbonText.ShapeFlowchartDocumentKeyTip);
+        menu.Item(ShapeChangePlanner.FlowchartTerminatorCommandId, FreePRibbonText.ShapeFlowchartTerminatorLabel, FreePRibbonText.ShapeFlowchartTerminatorKeyTip);
+        menu.Item(ShapeChangePlanner.LineCalloutCommandId, FreePRibbonText.ShapeLineCalloutLabel, FreePRibbonText.ShapeLineCalloutKeyTip);
+        menu.Item(ShapeChangePlanner.CylinderCommandId, FreePRibbonText.ShapeCylinderLabel, FreePRibbonText.ShapeCylinderKeyTip);
+        menu.Item(ShapeChangePlanner.ChordCommandId, FreePRibbonText.ShapeChordLabel, FreePRibbonText.ShapeChordKeyTip);
     }
 
     private static void AddInsertGroups(RibbonTabBuilder tab)
@@ -528,6 +539,28 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Callout, FreePRibbonText.ShapeRoundedRectangularCalloutKeyTip);
             group.Medium(SlideObjectInsertionPlanner.OvalCalloutCommandId, FreePRibbonText.ShapeOvalCalloutLabel,
                 RibbonCommandIconKind.Callout, FreePRibbonText.ShapeOvalCalloutKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ExplosionCommandId, FreePRibbonText.ShapeExplosionLabel,
+                RibbonCommandIconKind.Explosion, FreePRibbonText.ShapeExplosionKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.RibbonCommandId, FreePRibbonText.ShapeRibbonLabel,
+                RibbonCommandIconKind.RibbonShape, FreePRibbonText.ShapeRibbonKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.FlowchartProcessCommandId, FreePRibbonText.ShapeFlowchartProcessLabel,
+                RibbonCommandIconKind.FlowchartProcess, FreePRibbonText.ShapeFlowchartProcessKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.FlowchartDecisionCommandId, FreePRibbonText.ShapeFlowchartDecisionLabel,
+                RibbonCommandIconKind.FlowchartDecision, FreePRibbonText.ShapeFlowchartDecisionKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.FlowchartDataCommandId, FreePRibbonText.ShapeFlowchartDataLabel,
+                RibbonCommandIconKind.FlowchartData, FreePRibbonText.ShapeFlowchartDataKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.FlowchartPredefinedProcessCommandId, FreePRibbonText.ShapeFlowchartPredefinedProcessLabel,
+                RibbonCommandIconKind.FlowchartProcess, FreePRibbonText.ShapeFlowchartPredefinedProcessKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.FlowchartDocumentCommandId, FreePRibbonText.ShapeFlowchartDocumentLabel,
+                RibbonCommandIconKind.FlowchartDocument, FreePRibbonText.ShapeFlowchartDocumentKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.FlowchartTerminatorCommandId, FreePRibbonText.ShapeFlowchartTerminatorLabel,
+                RibbonCommandIconKind.FlowchartTerminator, FreePRibbonText.ShapeFlowchartTerminatorKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.LineCalloutCommandId, FreePRibbonText.ShapeLineCalloutLabel,
+                RibbonCommandIconKind.LineCallout, FreePRibbonText.ShapeLineCalloutKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.CylinderCommandId, FreePRibbonText.ShapeCylinderLabel,
+                RibbonCommandIconKind.Rectangle, FreePRibbonText.ShapeCylinderKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChordCommandId, FreePRibbonText.ShapeChordLabel,
+                RibbonCommandIconKind.Diamond, FreePRibbonText.ShapeChordKeyTip);
             group.Medium(SlideObjectInsertionPlanner.ConnectorCommandId, FreePRibbonText.ConnectorLabel,
                 RibbonCommandIconKind.Line, FreePRibbonText.ConnectorKeyTip);
             group.Medium(SlideObjectInsertionPlanner.ElbowConnectorCommandId, FreePRibbonText.ElbowConnectorLabel,

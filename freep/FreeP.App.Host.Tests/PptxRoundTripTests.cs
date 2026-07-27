@@ -351,7 +351,28 @@ public sealed class PptxRoundTripTests : IDisposable
             DrawingShapeKind.Chevron,
             DrawingShapeKind.Pentagon,
             DrawingShapeKind.Hexagon,
-            DrawingShapeKind.Star5
+            DrawingShapeKind.Star5,
+            DrawingShapeKind.RightTriangle,
+            DrawingShapeKind.MinusSign,
+            DrawingShapeKind.MultiplySign,
+            DrawingShapeKind.DivideSign,
+            DrawingShapeKind.EqualSign,
+            DrawingShapeKind.NotEqualSign,
+            DrawingShapeKind.Wave,
+            DrawingShapeKind.RectangularCallout,
+            DrawingShapeKind.RoundedRectangularCallout,
+            DrawingShapeKind.OvalCallout,
+            DrawingShapeKind.Explosion,
+            DrawingShapeKind.Ribbon,
+            DrawingShapeKind.FlowchartProcess,
+            DrawingShapeKind.FlowchartDecision,
+            DrawingShapeKind.FlowchartData,
+            DrawingShapeKind.FlowchartPredefinedProcess,
+            DrawingShapeKind.FlowchartDocument,
+            DrawingShapeKind.FlowchartTerminator,
+            DrawingShapeKind.LineCallout,
+            DrawingShapeKind.Cylinder,
+            DrawingShapeKind.Chord
         };
 
         var pres = new Presentation();

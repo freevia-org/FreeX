@@ -83,6 +83,17 @@ public static class SlideObjectInsertionPlanner
     public const string RectangularCalloutCommandId = "freep.shape-rectangular-callout";
     public const string RoundedRectangularCalloutCommandId = "freep.shape-rounded-rectangular-callout";
     public const string OvalCalloutCommandId = "freep.shape-oval-callout";
+    public const string ExplosionCommandId = "freep.shape-explosion";
+    public const string RibbonCommandId = "freep.shape-ribbon";
+    public const string FlowchartProcessCommandId = "freep.shape-flowchart-process";
+    public const string FlowchartDecisionCommandId = "freep.shape-flowchart-decision";
+    public const string FlowchartDataCommandId = "freep.shape-flowchart-data";
+    public const string FlowchartPredefinedProcessCommandId = "freep.shape-flowchart-predefined-process";
+    public const string FlowchartDocumentCommandId = "freep.shape-flowchart-document";
+    public const string FlowchartTerminatorCommandId = "freep.shape-flowchart-terminator";
+    public const string LineCalloutCommandId = "freep.shape-line-callout";
+    public const string CylinderCommandId = "freep.shape-cylinder";
+    public const string ChordCommandId = "freep.shape-chord";
     public const string ConnectorCommandId = "freep.insert-connector";
     public const string ElbowConnectorCommandId = "freep.insert-elbow-connector";
     public const string CurvedConnectorCommandId = "freep.insert-curved-connector";
@@ -156,6 +167,17 @@ public static class SlideObjectInsertionPlanner
         new(RectangularCalloutCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.RectangularCallout),
         new(RoundedRectangularCalloutCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.RoundedRectangularCallout),
         new(OvalCalloutCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.OvalCallout),
+        new(ExplosionCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Explosion),
+        new(RibbonCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Ribbon),
+        new(FlowchartProcessCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.FlowchartProcess),
+        new(FlowchartDecisionCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.FlowchartDecision),
+        new(FlowchartDataCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.FlowchartData),
+        new(FlowchartPredefinedProcessCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.FlowchartPredefinedProcess),
+        new(FlowchartDocumentCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.FlowchartDocument),
+        new(FlowchartTerminatorCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.FlowchartTerminator),
+        new(LineCalloutCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.LineCallout),
+        new(CylinderCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Cylinder),
+        new(ChordCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Chord),
         new(ConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.Line),
         new(ElbowConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.ElbowConnector),
         new(CurvedConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.CurvedConnector),
