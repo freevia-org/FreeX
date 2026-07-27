@@ -197,6 +197,67 @@ public sealed class KeyboardContextParityTests
     }
 
     [Fact]
+    public async Task AvaloniaAltKeyTipsDefersExactBlinkUntilLongerBlindsPrefixIsResolved()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var shape = new SlideShape { Id = 704, Name = "Animation target" };
+            try
+            {
+                window.Editor.CurrentSlide!.Shapes.Add(shape);
+                window.Editor.Select(shape.Id);
+
+                Press(window, Key.LeftAlt);
+                Press(window, Key.A);
+                Press(window, Key.N);
+                Press(window, Key.B).Handled.Should().BeTrue();
+
+                window.RibbonKeyTipsVisibleForTests.Should().BeTrue();
+                window.RibbonKeyTipMenuOpenForTests.Should().BeFalse();
+                window.Editor.CurrentSlide.Animations.Should().BeEmpty(
+                    "Blink=B must wait while Blinds In=BI remains an enabled prefix");
+
+                Press(window, Key.I).Handled.Should().BeTrue();
+                window.RibbonKeyTipMenuOpenForTests.Should().BeTrue();
+
+                Press(window, Key.Escape).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaAltKeyTipsExecutesUniqueExactAnimationLeaf()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var shape = new SlideShape { Id = 705, Name = "Animation target" };
+            try
+            {
+                window.Editor.CurrentSlide!.Shapes.Add(shape);
+                window.Editor.Select(shape.Id);
+
+                Press(window, Key.LeftAlt).Handled.Should().BeTrue();
+                PressKeyTip(window, "ANF");
+
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+                window.Editor.CurrentSlide.Animations.Should().ContainSingle(animation =>
+                    animation.ShapeId == shape.Id && animation.Preset == AnimationPreset.Fade);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task AvaloniaAltKeyTipsCancelAndRejectUnmatchedDropdownMenuInput()
     {
         await Session.Dispatch(() =>
@@ -223,6 +284,31 @@ public sealed class KeyboardContextParityTests
                 Press(window, Key.Q).Handled.Should().BeTrue();
                 window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
                 window.RibbonKeyTipMenuOpenForTests.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaAltKeyTipsKeepsModeOnUnmatchedPlannerInputUntilEscape()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                Press(window, Key.LeftAlt);
+                Press(window, Key.A);
+                Press(window, Key.N);
+                Press(window, Key.Q).Handled.Should().BeTrue();
+
+                window.RibbonKeyTipsVisibleForTests.Should().BeTrue();
+                window.RibbonKeyTipMenuOpenForTests.Should().BeFalse();
+                Press(window, Key.Escape).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
             }
             finally
             {

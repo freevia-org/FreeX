@@ -17,6 +17,7 @@ using Free.Shared.IO;
 using Free.Shared.Pdf.Skia;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
+using Free.Shared.Ribbon.KeyTips;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
@@ -8418,40 +8419,52 @@ public sealed partial class MainWindow : Window
 
         if (_ribbonKeyTipGroupId is null)
         {
-            var exactGroup = tab.Groups.FirstOrDefault(group =>
-                KeyTipEquals(GetVisibleRibbonGroupKeyTip(tab, group), _ribbonKeyTipSequence));
-            if (exactGroup is not null)
+            var groupResolution = RibbonKeyTipResolutionPlanner.Resolve(
+                tab.Groups,
+                _ribbonKeyTipSequence,
+                group => GetVisibleRibbonGroupKeyTip(tab, group));
+            if (groupResolution.Kind == RibbonKeyTipResolutionKind.Exact)
             {
+                var exactGroup = tab.Groups[groupResolution.ExactIndex];
                 _ribbonKeyTipGroupId = exactGroup.Id;
                 _ribbonKeyTipSequence = string.Empty;
                 TryEnterCollapsedRibbonGroupKeyTipScope(exactGroup);
                 return true;
             }
 
-            if (tab.Groups.Any(group =>
-                KeyTipStartsWith(GetVisibleRibbonGroupKeyTip(tab, group), _ribbonKeyTipSequence)))
+            if (groupResolution.Kind == RibbonKeyTipResolutionKind.Prefix)
                 return true;
 
             // Some WPF ribbons expose a command directly after the tab. Support that
             // form when the key tip is unique across the active tab.
-            var directMatches = tab.Groups
+            var directControls = tab.Groups
                 .SelectMany(group => group.Controls)
-                .Where(control => KeyTipEquals(control.KeyTip, _ribbonKeyTipSequence))
                 .ToArray();
-            return directMatches.Length == 1 && TryExecuteRibbonKeyTipCommand(directMatches[0]);
+            var directResolution = RibbonKeyTipResolutionPlanner.Resolve(
+                directControls,
+                _ribbonKeyTipSequence,
+                control => control.KeyTip,
+                control => IsRibbonCommandEnabled(control.CommandId));
+            return directResolution.Kind == RibbonKeyTipResolutionKind.Exact &&
+                   TryExecuteRibbonKeyTipCommand(directControls[directResolution.ExactIndex]);
         }
 
         var group = tab.FindGroup(_ribbonKeyTipGroupId);
         if (group is null)
             return false;
 
-        var exactControl = group.Controls.FirstOrDefault(control =>
-            KeyTipEquals(control.KeyTip, _ribbonKeyTipSequence));
-        if (exactControl is not null)
-            return TryExecuteRibbonKeyTipCommand(exactControl);
-
-        return group.Controls.Any(control =>
-            KeyTipStartsWith(control.KeyTip, _ribbonKeyTipSequence));
+        var resolution = RibbonKeyTipResolutionPlanner.Resolve(
+            group.Controls,
+            _ribbonKeyTipSequence,
+            control => control.KeyTip,
+            control => IsRibbonCommandEnabled(control.CommandId));
+        return resolution.Kind switch
+        {
+            RibbonKeyTipResolutionKind.Exact =>
+                TryExecuteRibbonKeyTipCommand(group.Controls[resolution.ExactIndex]),
+            RibbonKeyTipResolutionKind.Prefix => true,
+            _ => false,
+        };
     }
 
     private bool TryHandleRibbonMenuKeyTip(string token)
@@ -8461,13 +8474,15 @@ public sealed partial class MainWindow : Window
             return false;
 
         _ribbonKeyTipSequence += token;
-        var exactItem = items.FirstOrDefault(item =>
-            KeyTipEquals(item.KeyTip, _ribbonKeyTipSequence));
-        if (exactItem is not null)
+        var resolution = RibbonKeyTipResolutionPlanner.Resolve(
+            items,
+            _ribbonKeyTipSequence,
+            item => item.KeyTip,
+            item => item.IsEnabled,
+            item => item.Children.Count > 0);
+        if (resolution.Kind == RibbonKeyTipResolutionKind.Exact)
         {
-            if (!exactItem.IsEnabled)
-                return false;
-
+            var exactItem = items[resolution.ExactIndex];
             if (exactItem.Children.Count > 0)
             {
                 var renderedParent = FindRenderedMenuItem(exactItem, items);
@@ -8492,8 +8507,7 @@ public sealed partial class MainWindow : Window
             return true;
         }
 
-        return items.Any(item =>
-            item.IsEnabled && KeyTipStartsWith(item.KeyTip, _ribbonKeyTipSequence));
+        return resolution.Kind == RibbonKeyTipResolutionKind.Prefix;
     }
 
     private bool TryExecuteRibbonKeyTipCommand(RibbonControl control)
