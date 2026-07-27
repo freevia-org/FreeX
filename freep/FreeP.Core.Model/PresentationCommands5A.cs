@@ -141,6 +141,52 @@ public sealed class SetSlideSizeCommand : IPresentationCommand
 
 // ── Format painter — shape fill + outline + run defaults ─────────────────────
 
+/// <summary>Sets or clears the explicit background fill of one slide.</summary>
+public sealed class SetSlideBackgroundCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly ShapeFill? _newFill;
+    private ShapeFill? _oldFill;
+
+    public SetSlideBackgroundCommand(int slideIndex, ShapeFill? fill)
+    {
+        _slideIndex = slideIndex;
+        _newFill = fill;
+    }
+
+    public string Label => _newFill is null ? "Reset Slide Background" : "Set Slide Background";
+
+    public bool HasEffect(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
+            return false;
+
+        var current = p.Slides[_slideIndex].Background;
+        if (_newFill is null)
+            return current is not null;
+        if (current is not ShapeFill.Solid currentSolid || _newFill is not ShapeFill.Solid nextSolid)
+            return true;
+
+        return currentSolid.Color.Resolved != nextSolid.Color.Resolved ||
+               currentSolid.Color.Alpha != nextSolid.Color.Alpha;
+    }
+
+    public void Apply(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
+            return;
+
+        _oldFill = p.Slides[_slideIndex].Background;
+        p.Slides[_slideIndex].Background = _newFill;
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (_slideIndex >= 0 && _slideIndex < p.Slides.Count)
+            p.Slides[_slideIndex].Background = _oldFill;
+    }
+}
+
 /// <summary>
 /// Applies a captured fill/outline and run-format snapshot to all selected shapes.
 /// Stores per-shape old values (fill, outline, textBody) for undo.

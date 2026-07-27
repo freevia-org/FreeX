@@ -134,6 +134,10 @@ internal static class FreePRibbonIcons
             // ── Wave 5B: Design tab — Slide Size ─────────────────────────────────────
             ["freep.slide-size-16x9"] = RibbonCommandIconKind.Page,
             ["freep.slide-size-4x3"]  = RibbonCommandIconKind.Page,
+            ["freep.background-white"] = RibbonCommandIconKind.Fill,
+            ["freep.background-black"] = RibbonCommandIconKind.Fill,
+            ["freep.background-blue"]  = RibbonCommandIconKind.Fill,
+            ["freep.background-reset"] = RibbonCommandIconKind.Clear,
 
             // ── Wave 4C: Transition gallery ───────────────────────────────────────────
             ["freep.transition.none"]     = RibbonCommandIconKind.Clear,

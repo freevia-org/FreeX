@@ -411,6 +411,10 @@ internal static class FreePRibbonText
     public static RibbonText SlideSizeWidescreenCommand { get; } = new("Ribbon_Command_SlideSizeWidescreen_Label", "Ribbon_Command_SlideSizeWidescreen_KeyTip");
     public static RibbonText SlideSizeStandardCommand { get; } = new("Ribbon_Command_SlideSizeStandard_Label", "Ribbon_Command_SlideSizeStandard_KeyTip");
     public static RibbonText SlideSizeCustomCommand { get; } = new("Ribbon_Command_SlideSizeCustom_Label", "Ribbon_Command_SlideSizeCustom_KeyTip");
+    public static RibbonText BackgroundWhiteCommand { get; } = new("Ribbon_Command_BackgroundWhite_Label", "Ribbon_Command_BackgroundWhite_KeyTip");
+    public static RibbonText BackgroundBlackCommand { get; } = new("Ribbon_Command_BackgroundBlack_Label", "Ribbon_Command_BackgroundBlack_KeyTip");
+    public static RibbonText BackgroundBlueCommand { get; } = new("Ribbon_Command_BackgroundBlue_Label", "Ribbon_Command_BackgroundBlue_KeyTip");
+    public static RibbonText BackgroundResetCommand { get; } = new("Ribbon_Command_BackgroundReset_Label", "Ribbon_Command_BackgroundReset_KeyTip");
 
     public static RibbonText TransitionsTab { get; } = new("Ribbon_Tab_Transitions_Label", "Ribbon_Tab_Transitions_KeyTip");
     public static RibbonText TransitionGalleryGroup { get; } = new("Ribbon_Group_TransitionGallery_Label", "Ribbon_Group_TransitionGallery_KeyTip");
