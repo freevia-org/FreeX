@@ -520,6 +520,19 @@ internal static class TextBodyFlowDocumentConverter
             mr.Color = originalRun?.Color;
         }
 
+        // FlowDocument has no native representation for DrawingML run effects. When the
+        // reconstructed inline is paired with an unchanged source run, carry the
+        // renderer-neutral effect state through the WPF editing round-trip.
+        if (originalRun is not null)
+        {
+            mr.TextFill = originalRun.TextFill;
+            mr.TextOutline = originalRun.TextOutline;
+            mr.TextShadow = originalRun.TextShadow;
+            mr.TextReflection = originalRun.TextReflection;
+            mr.TextGlow = originalRun.TextGlow;
+            mr.TextSoftEdge = originalRun.TextSoftEdge;
+        }
+
         for (DependencyObject? parent = inline.Parent;
              parent is not null;
              parent = (parent as FrameworkContentElement)?.Parent)

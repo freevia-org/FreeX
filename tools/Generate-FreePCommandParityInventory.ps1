@@ -385,6 +385,7 @@ internal static class FreePCommandInventory
             EvidenceDocs:
             [
                 "docs/parity/freep-rich-clipboard-wave15-20260727.md",
+                "docs/parity/freep-rich-effects-clipboard-wave16-20260727.md",
                 "docs/parity/freep-rich-table-cell-editing-shared-visual-2026-07-27.md",
                 "docs/parity/freep-table-cell-rich-editor-fidelity-2026-07-03.md",
                 "docs/parity/freep-list-gallery-image-bullet-ui-2026-07-05.md",
@@ -409,7 +410,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Avalonia.Tests/PresentationClipboardInteropTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "WPF/Avalonia now share mixed-run and paragraph-preserving edits, marker sequencing, selection/caret rendering, rich copy/cut/paste payloads, plain-text clipboard interoperability, picture-bullet picker payload execution, paragraph authoring, PPTX media-part persistence, Tab/Shift+Tab navigation, focused-editor keyboard ownership, and commit/cancel routing. Avalonia still uses a custom rich surface over a native TextBox rather than a framework-native RichTextBox. Arbitrary external RTF/XamlPackage import on Avalonia, broader IME/RTL/FlowDocument behavior, advanced inline effects, and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
+            RemainingWork: "WPF/Avalonia now share mixed-run and paragraph-preserving edits, marker sequencing, selection/caret rendering, rich copy/cut/paste payloads including all modeled inline effects, plain-text clipboard interoperability, picture-bullet picker payload execution, paragraph authoring, PPTX media-part persistence, Tab/Shift+Tab navigation, focused-editor keyboard ownership, and commit/cancel routing. Avalonia still uses a custom rich surface over a native TextBox rather than a framework-native RichTextBox. Arbitrary external RTF/XamlPackage import on Avalonia, broader IME/RTL/FlowDocument behavior, and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
         new(
             EvidenceId: "freep.header-footer.placeholder-creation",
             Area: "Header/Footer date, footer, and slide-number placeholder creation",

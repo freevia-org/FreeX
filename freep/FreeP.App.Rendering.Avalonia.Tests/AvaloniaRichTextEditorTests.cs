@@ -62,6 +62,82 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task ClipboardPayload_PreservesAllModeledInlineEffectsFromAvaloniaBuffer()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run
+                    {
+                        Text = "effects",
+                        TextFill = new ShapeFill.Solid(
+                            new ThemeAwareColor(SrgbColor.FromRgb(0x336699), 0xC0)),
+                        TextOutline = new ShapeOutline.Visible(
+                            new ThemeAwareColor(SrgbColor.FromRgb(0x102030)),
+                            widthPt: 1.5),
+                        TextShadow = new RunTextShadow
+                        {
+                            Color = new ThemeAwareColor(SrgbColor.FromRgb(0x202020)),
+                            Alpha = 0x70,
+                            BlurPt = 3.0,
+                            DistPt = 2.0,
+                            DirDeg = 45.0,
+                        },
+                        TextReflection = new RunTextReflection
+                        {
+                            Alpha = 0x60,
+                            BlurPt = 1.0,
+                            DistPt = 2.0,
+                            DirDeg = 90.0,
+                            ScaleY = -0.5,
+                            EndPos = 0.75,
+                        },
+                        TextGlow = new RunTextGlow
+                        {
+                            Color = new ThemeAwareColor(SrgbColor.FromRgb(0xF0C000)),
+                            Alpha = 0x90,
+                            RadiusPt = 5.0,
+                        },
+                        TextSoftEdge = new RunTextSoftEdge { RadiusPt = 2.0 },
+                    },
+                },
+            });
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.SelectionStart = 0;
+                editor.SelectionEnd = editor.Text.Length;
+
+                var payload = editor.CreateClipboardPayload();
+                var decoded = InCanvasRichClipboardPlanner.Deserialize(
+                    InCanvasRichClipboardPlanner.Serialize(payload));
+
+                decoded.Should().NotBeNull();
+                var run = decoded!.Body.Paragraphs.Single().Runs.Single();
+                run.TextFill.Should().BeOfType<ShapeFill.Solid>();
+                run.TextOutline.Should().BeOfType<ShapeOutline.Visible>();
+                run.TextShadow.Should().NotBeNull();
+                run.TextReflection.Should().NotBeNull();
+                run.TextGlow.Should().NotBeNull();
+                run.TextSoftEdge!.RadiusPt.Should().BeApproximately(2.0, 0.0001);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task EnterSplit_PreservesNumberingMetadataThroughHostBuffer()
     {
         await Session.Dispatch(async () =>
