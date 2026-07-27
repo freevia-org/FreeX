@@ -63,6 +63,10 @@ namespace FreeP.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
+    // Avalonia-only compensations for the WPF Reading Order pane geometry.
+    private const double ReadingOrderScrollbarGutter = 16;
+    private const double ReadingOrderActionButtonMinHeight = 27;
+
     private const string DefaultTitle = "FreeP";
     private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Presentation;
     private static readonly FilePickerFileType PictureFileType =
@@ -1674,6 +1678,7 @@ public sealed partial class MainWindow : Window
         _readingOrderMoveEarlierButton = new Button
         {
             MinWidth = 94,
+            MinHeight = ReadingOrderActionButtonMinHeight,
             FontSize = 12,
             Padding = new Thickness(10, 4),
             Margin = new Thickness(0, 0, 8, 0),
@@ -1681,6 +1686,7 @@ public sealed partial class MainWindow : Window
         _readingOrderMoveLaterButton = new Button
         {
             MinWidth = 84,
+            MinHeight = ReadingOrderActionButtonMinHeight,
             FontSize = 12,
             Padding = new Thickness(10, 4),
         };
@@ -1689,6 +1695,8 @@ public sealed partial class MainWindow : Window
         _readingOrderPaneItemsPanel = new StackPanel
         {
             Orientation = Orientation.Vertical,
+            // Avalonia's default scrollbar overlays the content; reserve the WPF scrollbar gutter.
+            Margin = new Thickness(0, 0, ReadingOrderScrollbarGutter, 0),
         };
 
         var actionPanel = new StackPanel
