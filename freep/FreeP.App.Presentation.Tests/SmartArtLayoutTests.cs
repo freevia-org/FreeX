@@ -1583,6 +1583,23 @@ public sealed class SmartArtLayoutTests
         result[1].OffsetXEmu.Should().BeLessThan(result[0].OffsetXEmu + result[0].ExtentCxEmu);
     }
 
+    [Fact]
+    public void OpposingIdeas_UsesInwardFacingArrows()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "For", "Against");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/opposingIdeas";
+        data.IsLiveLayoutSupported = true;
+
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().NotBeNull("opposingIdeas is admitted to the shared live Relationship engine");
+        result!.Should().HaveCount(2);
+        result[0].AutoShapeKind.Should().Be(DrawingShapeKind.RightArrow);
+        result[1].AutoShapeKind.Should().Be(DrawingShapeKind.LeftArrow);
+        result[0].OffsetXEmu.Should().BeLessThan(result[1].OffsetXEmu);
+        result[0].OffsetYEmu.Should().Be(result[1].OffsetYEmu);
+    }
+
     // BI2: when nodes parse to zero, Layout returns null so compositor uses cached-drawing fallback.
     [Fact]
     public void EmptyNodes_SupportedFamily_ReturnsNull_SoCompositorUsesFallback()
