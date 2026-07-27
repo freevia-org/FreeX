@@ -247,6 +247,29 @@ public sealed class BackstagePaneSurfacePlannerTests
     }
 
     [Fact]
+    public void BuildOpenPane_PreservesCrossHostActionOrderAndDescriptions()
+    {
+        var surface = BackstagePaneSurfacePlanner.BuildOpenPane(
+            [new RecentFileEntry { Path = @"C:\Docs\Budget.docx" }],
+            filter: null,
+            openRecent: static _ => { },
+            openFolder: static _ => { },
+            browse: static () => { },
+            recoverUnsaved: static () => { });
+
+        surface.Plan.DocumentRows.Select(row => row.Label)
+            .Concat(surface.Plan.FolderRows.Select(row => row.Label))
+            .Concat(surface.Plan.PlaceRows.Select(row => row.Label))
+            .Concat(surface.Plan.RecoveryRows.Select(row => row.Label))
+            .Should().Equal("Budget.docx", "Docs", "This PC", "Browse", "Recover Unsaved Documents");
+
+        surface.Plan.PlaceRows.Select(row => row.Description)
+            .Should().Equal(
+                "Browse local folders and connected drives.",
+                "Open the Windows file picker.");
+    }
+
+    [Fact]
     public void BuildSaveAsPane_ReturnsInlineSurfacePlacesAndFileTypes()
     {
         var saveAsCount = 0;

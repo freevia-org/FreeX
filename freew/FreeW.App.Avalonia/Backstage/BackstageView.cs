@@ -205,7 +205,7 @@ internal sealed class BackstageView : Window
 
         var searchBox = new TextBox
         {
-            PlaceholderText = surface.Search.AutomationName,
+            Width = 520,
             MinWidth = 360,
             MaxWidth = 520,
             Height = 30,
@@ -226,11 +226,13 @@ internal sealed class BackstageView : Window
             Margin = new Thickness(0, 0, 0, 14),
             Items =
             {
-                new TabItem { Header = surface.Tabs.DocumentsTabLabel, Content = documentsPanel },
-                new TabItem { Header = surface.Tabs.FoldersTabLabel, Content = foldersPanel },
+                new TabItem { Header = surface.Tabs.DocumentsTabLabel },
+                new TabItem { Header = surface.Tabs.FoldersTabLabel },
             },
         };
+        var tabContent = new global::Avalonia.Controls.ContentControl { Content = documentsPanel };
         content.Children.Add(tabs);
+        content.Children.Add(tabContent);
 
         var placesPanel = new StackPanel { Spacing = 4 };
         var recoveryPanel = new StackPanel { Spacing = 4 };
@@ -241,12 +243,22 @@ internal sealed class BackstageView : Window
         {
             var refreshed = BuildOpenSurface(filter);
             PopulateOpenRows(documentsPanel, refreshed.Plan.DocumentRows, refreshed.Tabs.EmptyDocumentsText);
-            PopulateOpenRows(foldersPanel, refreshed.Plan.FolderRows, refreshed.Tabs.EmptyFoldersText);
+            if (tabs.SelectedIndex == 1)
+            {
+                PopulateOpenRows(foldersPanel, refreshed.Plan.FolderRows, refreshed.Tabs.EmptyFoldersText);
+                tabContent.Content = foldersPanel;
+            }
+            else
+            {
+                foldersPanel.Children.Clear();
+                tabContent.Content = documentsPanel;
+            }
             PopulateOpenGroup(placesPanel, refreshed.Tabs.PlacesHeading, refreshed.Plan.PlaceRows);
             PopulateOpenGroup(recoveryPanel, refreshed.Tabs.RecoveryHeading, refreshed.Plan.RecoveryRows);
         }
 
         searchBox.TextChanged += (_, _) => Refresh(searchBox.Text);
+        tabs.SelectionChanged += (_, _) => Refresh(searchBox.Text);
         Refresh(filter: null);
 
         return CreateScroll(content);
@@ -592,6 +604,25 @@ internal sealed class BackstageView : Window
         return button;
     }
 
+    private static Control BuildOpenActionRow(BackstageActionRow action)
+    {
+        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        stack.Children.Add(CreateLinkButton(
+            action.Label,
+            action.Invoke,
+            fontSize: 13,
+            automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}"));
+        stack.Children.Add(new TextBlock
+        {
+            Text = action.Description,
+            Foreground = SecondaryInk,
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        return stack;
+    }
+
     // ── Chrome helpers ────────────────────────────────────────────────────────
 
     private BackstageOpenPaneSurfaceSpec BuildOpenSurface(string? filter) =>
@@ -611,7 +642,7 @@ internal sealed class BackstageView : Window
         panel.Children.Clear();
         panel.Children.Add(BuildSectionHeader(heading));
         foreach (var row in rows)
-            panel.Children.Add(BuildActionRow(row));
+            panel.Children.Add(BuildOpenActionRow(row));
     }
 
     private static void PopulateOpenRows(
@@ -630,7 +661,7 @@ internal sealed class BackstageView : Window
         }
 
         foreach (var row in rows)
-            panel.Children.Add(BuildActionRow(row));
+            panel.Children.Add(BuildOpenActionRow(row));
     }
 
     private static Control BuildSurfaceActionRow(BackstageSurfaceActionRow action)

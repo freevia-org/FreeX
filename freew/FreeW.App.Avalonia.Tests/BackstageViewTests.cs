@@ -151,6 +151,32 @@ public class BackstageViewTests
     }
 
     [Fact]
+    public async Task BackstageView_Open_actions_keep_labels_as_direct_button_content()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks() with
+            {
+                GetRecentEntries = () => [new RecentFileEntry { Path = @"C:\Docs\Budget.docx" }],
+            });
+
+            view.TryActivateEntry("Open").Should().BeTrue();
+
+            var buttons = view.GetLogicalDescendants()
+                .OfType<Button>()
+                .Where(button => (AutomationProperties.GetAutomationId(button) ?? string.Empty).StartsWith("BackstageAction_", StringComparison.Ordinal))
+                .ToArray();
+
+            buttons.Select(button => button.Content).Should().Equal(
+                "Budget.docx",
+                "This PC",
+                "Browse",
+                "Recover Unsaved Documents");
+            buttons.Select(button => button.Content).Should().OnlyContain(content => content is string);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task BackstageView_back_button_is_focusable_and_closes_through_shared_frame()
     {
         await Session.Dispatch(() =>
