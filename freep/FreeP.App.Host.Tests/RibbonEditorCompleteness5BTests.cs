@@ -346,12 +346,18 @@ public class RibbonEditorCompleteness5BTests
 
     [Theory]
     [InlineData("freep.arrange.change-shape.rectangle", DrawingShapeKind.Rectangle)]
+    [InlineData("freep.arrange.change-shape.rounded-rectangle", DrawingShapeKind.RoundedRectangle)]
     [InlineData("freep.arrange.change-shape.ellipse", DrawingShapeKind.Ellipse)]
     [InlineData("freep.arrange.change-shape.triangle", DrawingShapeKind.Triangle)]
     [InlineData("freep.arrange.change-shape.diamond", DrawingShapeKind.Diamond)]
     [InlineData("freep.arrange.change-shape.right-arrow", DrawingShapeKind.RightArrow)]
     [InlineData("freep.arrange.change-shape.hexagon", DrawingShapeKind.Hexagon)]
+    [InlineData("freep.arrange.change-shape.parallelogram", DrawingShapeKind.Parallelogram)]
+    [InlineData("freep.arrange.change-shape.trapezoid", DrawingShapeKind.Trapezoid)]
+    [InlineData("freep.arrange.change-shape.left-arrow", DrawingShapeKind.LeftArrow)]
     [InlineData("freep.arrange.change-shape.star5", DrawingShapeKind.Star5)]
+    [InlineData("freep.arrange.change-shape.up-arrow", DrawingShapeKind.UpArrow)]
+    [InlineData("freep.arrange.change-shape.down-arrow", DrawingShapeKind.DownArrow)]
     [InlineData("freep.arrange.change-shape.cross", DrawingShapeKind.Cross)]
     [InlineData("freep.arrange.change-shape.plus-sign", DrawingShapeKind.PlusSign)]
     public void Cmd_ChangeShape_RoutesThroughSharedEditingSession(

@@ -299,6 +299,9 @@ public static class FreePRibbon
         menu.Item(ShapeChangePlanner.RectangleCommandId,
             FreePRibbonText.ArrangeChangeShapeRectangleCommand.Label,
             FreePRibbonText.ArrangeChangeShapeRectangleCommand.KeyTip);
+        menu.Item(ShapeChangePlanner.RoundedRectangleCommandId,
+            FreePRibbonText.ShapeRoundedRectangleLabel,
+            FreePRibbonText.ShapeRoundedRectangleKeyTip);
         menu.Item(ShapeChangePlanner.EllipseCommandId,
             FreePRibbonText.ArrangeChangeShapeEllipseCommand.Label,
             FreePRibbonText.ArrangeChangeShapeEllipseCommand.KeyTip);
@@ -314,9 +317,24 @@ public static class FreePRibbon
         menu.Item(ShapeChangePlanner.HexagonCommandId,
             FreePRibbonText.ShapeHexagonLabel,
             FreePRibbonText.ShapeHexagonKeyTip);
+        menu.Item(ShapeChangePlanner.ParallelogramCommandId,
+            FreePRibbonText.ShapeParallelogramLabel,
+            FreePRibbonText.ShapeParallelogramKeyTip);
+        menu.Item(ShapeChangePlanner.TrapezoidCommandId,
+            FreePRibbonText.ShapeTrapezoidLabel,
+            FreePRibbonText.ShapeTrapezoidKeyTip);
+        menu.Item(ShapeChangePlanner.LeftArrowCommandId,
+            FreePRibbonText.ShapeLeftArrowLabel,
+            FreePRibbonText.ShapeLeftArrowKeyTip);
         menu.Item(ShapeChangePlanner.Star5CommandId,
             FreePRibbonText.ShapeStar5Label,
             FreePRibbonText.ShapeStar5KeyTip);
+        menu.Item(ShapeChangePlanner.UpArrowCommandId,
+            FreePRibbonText.ShapeUpArrowLabel,
+            FreePRibbonText.ShapeUpArrowKeyTip);
+        menu.Item(ShapeChangePlanner.DownArrowCommandId,
+            FreePRibbonText.ShapeDownArrowLabel,
+            FreePRibbonText.ShapeDownArrowKeyTip);
         menu.Item(ShapeChangePlanner.CrossCommandId,
             FreePRibbonText.ArrangeChangeShapeCrossCommand.Label,
             FreePRibbonText.ArrangeChangeShapeCrossCommand.KeyTip);
