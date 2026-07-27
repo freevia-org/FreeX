@@ -2512,6 +2512,12 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => StartSlideShow(fromStart: true)));
         r.Register("freep.slideshow.from-current-slide",
             new ActionRibbonCommand(() => StartSlideShow(fromStart: false)));
+        r.Register("freep.slideshow.rehearse-timings",
+            new ActionRibbonCommand(() => StartSlideShowWithTiming(
+                FreeP.App.Compositor.SlideShowTimingIntent.RehearseTimings)));
+        r.Register("freep.slideshow.record-timings",
+            new ActionRibbonCommand(() => StartSlideShowWithTiming(
+                FreeP.App.Compositor.SlideShowTimingIntent.RecordTimings)));
         r.Register("freep.slideshow.custom-shows",
             new ActionRibbonCommand(OpenCustomShowDialog));
 
@@ -8728,6 +8734,14 @@ public sealed partial class MainWindow : Window
     ///   false = start from the currently selected slide (Shift+F5 / "From Current").
     /// </param>
     internal void StartSlideShow(bool fromStart)
+        => StartSlideShow(fromStart, FreeP.App.Compositor.SlideShowTimingIntent.None);
+
+    private void StartSlideShowWithTiming(FreeP.App.Compositor.SlideShowTimingIntent timingIntent)
+        => StartSlideShow(fromStart: true, timingIntent: timingIntent);
+
+    private void StartSlideShow(
+        bool fromStart,
+        FreeP.App.Compositor.SlideShowTimingIntent timingIntent)
     {
         if (_presentation.Slides.Count == 0)
             return; // nothing to show
@@ -8745,6 +8759,8 @@ public sealed partial class MainWindow : Window
         }
 
         var slideShow = new SlideShowWindow(_presentation, route);
+        if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
+            slideShow.SetPresenterTimingIntent(timingIntent);
 
         // DA5: restore the editor's selected slide to wherever the slideshow ended.
         slideShow.Closed += (_, _) =>

@@ -428,6 +428,8 @@ public sealed partial class MainWindow : Window
             Editor,
             onStartFromStart:   () => StartSlideShow(true),
             onStartFromCurrent: () => StartSlideShow(false),
+            onRehearseTimings:  () => StartSlideShowWithTiming(FreeP.App.Compositor.SlideShowTimingIntent.RehearseTimings),
+            onRecordTimings:    () => StartSlideShowWithTiming(FreeP.App.Compositor.SlideShowTimingIntent.RecordTimings),
             onEditChartData:    () => OpenChartDataDialog(),
             onEditChartOptions: () => OpenChartDisplayOptionsDialog(),
             onEditChartAxisOptions: () => OpenChartAxisOptionsDialog(),
@@ -3833,6 +3835,14 @@ public sealed partial class MainWindow : Window
     /// Wave 4C adds ribbon buttons that call this method; keep internal/public + discoverable.
     /// </summary>
     internal void StartSlideShow(bool fromStart)
+        => StartSlideShow(fromStart, FreeP.App.Compositor.SlideShowTimingIntent.None);
+
+    private void StartSlideShowWithTiming(FreeP.App.Compositor.SlideShowTimingIntent timingIntent)
+        => StartSlideShow(fromStart: true, timingIntent: timingIntent);
+
+    private void StartSlideShow(
+        bool fromStart,
+        FreeP.App.Compositor.SlideShowTimingIntent timingIntent)
     {
         if (_presentation.Slides.Count == 0) return;
 
@@ -3849,6 +3859,8 @@ public sealed partial class MainWindow : Window
         }
 
         var window = new SlideShowWindow(_presentation, route);
+        if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
+            window.SetPresenterTimingIntent(timingIntent);
         // Owner can only be set when the main window is already shown (not during unit tests).
         if (IsVisible)
             window.Owner = this;
