@@ -459,24 +459,60 @@ public sealed partial class MainWindow
         moveAfterEnterBox.IsCheckedChanged += (_, _) =>
             afterEnterDirectionBox.IsEnabled = moveAfterEnterBox.IsChecked == true;
 
+        var advancedFillHandleBox = OptionsCheckBox(
+            OptionsText("Options_EnableFillHandleAndCellDragAndDrop"),
+            isChecked: true,
+            isEnabled: false);
+        var advancedAutoCompleteBox = OptionsCheckBox(
+            OptionsText("Options_EnableAutoCompleteForCellValues"),
+            isChecked: current.EnableAutoCompleteForCellValues);
+        var objectsDisplayBox = OptionsComboBox(
+            new[]
+            {
+                OptionsText("Options_ObjectsDisplayAll"),
+                OptionsText("Options_ObjectsDisplayPlaceholders"),
+                OptionsText("Options_ObjectsDisplayNothing"),
+            },
+            selectedIndex: current.ObjectsDisplay switch
+            {
+                AppOptionsObjectDisplay.Placeholders => 1,
+                AppOptionsObjectDisplay.Nothing => 2,
+                _ => 0,
+            },
+            isEnabled: true,
+            minWidth: OptionsDialogPlanner.AdvancedObjectsControlWidth);
+        AutomationProperties.SetAutomationId(objectsDisplayBox, "OptionsObjectsDisplayComboBox");
+
+        var advancedDirectionRow = OptionsLabeled(
+            OptionsText("Options_Direction"),
+            afterEnterDirectionBox,
+            labelWidth: OptionsDialogPlanner.AdvancedDirectionLabelWidth,
+            fieldWidth: OptionsDialogPlanner.AdvancedDirectionControlWidth,
+            spacing: 0,
+            margin: new Thickness(
+                OptionsDialogPlanner.AdvancedDirectionLeftMargin,
+                0,
+                0,
+                OptionsDialogPlanner.AdvancedDirectionBottomMargin));
+        var advancedObjectsRow = OptionsLabeled(
+            OptionsText("Options_ForObjectsShow"),
+            objectsDisplayBox,
+            labelWidth: OptionsDialogPlanner.AdvancedObjectsLabelWidth,
+            fieldWidth: OptionsDialogPlanner.AdvancedObjectsControlWidth,
+            spacing: 0,
+            margin: new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedObjectsBottomMargin));
+
         var advancedPanel = OptionsCategoryPanel(
-            OptionsSectionHeader(OptionsText("Options_EditingOptions")),
-            moveAfterEnterBox,
-            OptionsLabeled(OptionsText("Options_Direction"), afterEnterDirectionBox, labelWidth: 160, fieldWidth: 140),
-            OptionsCheckBox(OptionsText("Options_EnableFillHandleAndCellDragAndDrop"), isChecked: true, isEnabled: false),
-            OptionsCheckBox(OptionsText("Options_EnableAutoCompleteForCellValues"), isChecked: true, isEnabled: false),
-            OptionsSectionHeader(OptionsText("Options_DisplayOptionsForThisWorkbook")),
-            showGridlinesBox,
-            showHeadingsBox,
-            OptionsLabeled(OptionsText("Options_ForObjectsShow"), OptionsComboBox(
-                new[]
-                {
-                    OptionsText("Options_ObjectsDisplayAll"),
-                    OptionsText("Options_ObjectsDisplayPlaceholders"),
-                    OptionsText("Options_ObjectsDisplayNothing"),
-                },
-                selectedIndex: 0,
-                isEnabled: false)));
+            OptionsSectionHeader(OptionsText("Options_EditingOptions"), topMargin: 0),
+            WithMargin(moveAfterEnterBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedMoveAfterEnterBottomMargin)),
+            advancedDirectionRow,
+            WithMargin(advancedFillHandleBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedDisabledFillHandleBottomMargin)),
+            WithMargin(advancedAutoCompleteBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedAutoCompleteBottomMargin)),
+            OptionsSectionHeader(OptionsText("Options_DisplayOptionsForThisWorkbook"), topMargin: OptionsDialogPlanner.AdvancedDisplaySectionTopMargin),
+            WithMargin(showGridlinesBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedGridlinesBottomMargin)),
+            WithMargin(showHeadingsBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedHeadingsBottomMargin)),
+            advancedObjectsRow);
+        advancedPanel.Spacing = 0;
 
         var customizeRibbonPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_CustomizeTheRibbon")),
@@ -850,9 +886,9 @@ public sealed partial class MainWindow
         var selectedCategoryIndex = 0;
         var categoryList = new StackPanel
         {
-            Width = 220,
+            Width = OptionsDialogPlanner.CategoryColumnWidth,
             Background = Brush(245, 245, 245),
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, OptionsDialogPlanner.CategoryTopMargin, 0, 0),
         };
         AutomationProperties.SetAutomationId(categoryList, "OptionsCategoryList");
         AutomationProperties.SetName(categoryList, UiText.Get("Options_OptionsCategories"));
@@ -863,7 +899,9 @@ public sealed partial class MainWindow
             var index = i;
             var row = new Border
             {
-                Padding = new Thickness(16, 9),
+                Padding = new Thickness(
+                    OptionsDialogPlanner.CategoryItemHorizontalPadding,
+                    OptionsDialogPlanner.CategoryItemVerticalPadding),
                 BorderThickness = new Thickness(1),
                 BorderBrush = Brushes.Transparent,
                 Background = Brushes.Transparent,
@@ -871,6 +909,8 @@ public sealed partial class MainWindow
                 {
                     Text = categoryNames[i],
                     FontSize = 13,
+                    Foreground = Brushes.Black,
+                    FontFamily = OptionsDialogChromeStyle.FontFamily,
                     VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 },
             };
@@ -979,9 +1019,15 @@ public sealed partial class MainWindow
                     OptionsDialogPlanner.IndexToDefaultFormat(defaultFormatBox.SelectedIndex),
                     screenTipsBox.IsChecked == true,
                     moveAfterEnterBox.IsChecked == true,
-                    OptionsDialogPlanner.IndexToAfterEnterDirection(afterEnterDirectionBox.SelectedIndex),
-                    out var input,
-                    out var inputError))
+                     OptionsDialogPlanner.IndexToAfterEnterDirection(afterEnterDirectionBox.SelectedIndex),
+                     out var input,
+                     out var inputError,
+                     objectsDisplay: objectsDisplayBox.SelectedIndex switch
+                     {
+                         1 => AppOptionsObjectDisplay.Placeholders,
+                         2 => AppOptionsObjectDisplay.Nothing,
+                         _ => AppOptionsObjectDisplay.All,
+                     }))
             {
                 warningText.Text = inputError == OptionsDialogPlanner.OptionsInputError.InvalidFontSize
                     ? UiText.Get("Options_InvalidFontSizeMessage")
@@ -1049,7 +1095,12 @@ public sealed partial class MainWindow
             Background = Brush(245, 245, 245),
             BorderBrush = Brush(200, 200, 200),
             BorderThickness = new Thickness(0, 1, 0, 0),
-            Padding = new Thickness(16, 10),
+            Padding = new Thickness(
+                OptionsDialogPlanner.FooterPaddingHorizontal,
+                OptionsDialogPlanner.FooterPaddingVertical),
+            Height = OptionsDialogPlanner.FooterHeight,
+            MinHeight = OptionsDialogPlanner.FooterHeight,
+            MaxHeight = OptionsDialogPlanner.FooterHeight,
             Child = footerActions,
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
@@ -1069,7 +1120,11 @@ public sealed partial class MainWindow
         var scrollHost = new ScrollViewer
         {
             Content = contentHost,
-            Padding = new Thickness(28, 20, 28, 20),
+            Padding = new Thickness(
+                OptionsDialogPlanner.ContentPaddingHorizontal,
+                OptionsDialogPlanner.ContentPaddingVertical,
+                OptionsDialogPlanner.ContentPaddingHorizontal,
+                OptionsDialogPlanner.ContentPaddingVertical),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
         Grid.SetColumn(scrollHost, 1);
@@ -1336,7 +1391,9 @@ public sealed partial class MainWindow
         Control field,
         double labelWidth = 230,
         double? fieldWidth = null,
-        bool stretchField = false)
+        bool stretchField = false,
+        double spacing = 8,
+        Thickness? margin = null)
     {
         if (fieldWidth.HasValue)
             field.Width = fieldWidth.Value;
@@ -1346,13 +1403,21 @@ public sealed partial class MainWindow
         return new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = spacing,
+            Margin = margin ?? new Thickness(0),
             Children =
             {
                 new TextBlock { Text = label, VerticalAlignment = AvaloniaVerticalAlignment.Center, Width = labelWidth, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 field,
             },
         };
+    }
+
+    private static T WithMargin<T>(T control, Thickness margin)
+        where T : Control
+    {
+        control.Margin = margin;
+        return control;
     }
 
 }

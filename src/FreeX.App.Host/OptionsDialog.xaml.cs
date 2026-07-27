@@ -97,12 +97,46 @@ public partial class OptionsDialog : Window
         InitializeComponent();
         Width = OptionsDialogPlanner.WindowWidth;
         Height = OptionsDialogPlanner.WindowHeight;
+        ApplySharedOptionsLayoutMetrics();
         TabList.SelectedIndex = _initialSection == OptionsDialogInitialSection.FormulaErrorChecking ? 1 : 0;
         Loaded += (_, _) =>
         {
             Populate();
             FocusInitialKeyboardTarget();
         };
+    }
+
+    private void ApplySharedOptionsLayoutMetrics()
+    {
+        OptionsCategoryColumn.Width = new GridLength(OptionsDialogPlanner.CategoryColumnWidth);
+        TabList.Margin = new Thickness(0, OptionsDialogPlanner.CategoryTopMargin, 0, 0);
+        OptionsContentScrollViewer.Padding = new Thickness(
+            OptionsDialogPlanner.ContentPaddingHorizontal,
+            OptionsDialogPlanner.ContentPaddingVertical,
+            OptionsDialogPlanner.ContentPaddingHorizontal,
+            OptionsDialogPlanner.ContentPaddingVertical);
+        OptionsFooterBorder.Padding = new Thickness(
+            OptionsDialogPlanner.FooterPaddingHorizontal,
+            OptionsDialogPlanner.FooterPaddingVertical,
+            OptionsDialogPlanner.FooterPaddingHorizontal,
+            OptionsDialogPlanner.FooterPaddingVertical);
+        OptionsFooterBorder.MinHeight = OptionsDialogPlanner.FooterHeight;
+        OptionsFooterBorder.MaxHeight = OptionsDialogPlanner.FooterHeight;
+        OkBtn.Height = OptionsDialogPlanner.ButtonHeight;
+        CancelBtn.Height = OptionsDialogPlanner.ButtonHeight;
+
+        AdvancedDirectionGrid.Margin = new Thickness(
+            OptionsDialogPlanner.AdvancedDirectionLeftMargin,
+            0,
+            0,
+            OptionsDialogPlanner.AdvancedDirectionBottomMargin);
+        AdvancedDirectionLabelColumn.Width = new GridLength(OptionsDialogPlanner.AdvancedDirectionLabelWidth);
+        AdvancedDirectionControlColumn.Width = new GridLength(OptionsDialogPlanner.AdvancedDirectionControlWidth);
+        AdvancedObjectsGrid.Margin = new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedObjectsBottomMargin);
+        AdvancedObjectsLabelColumn.Width = new GridLength(OptionsDialogPlanner.AdvancedObjectsLabelWidth);
+        AdvancedObjectsControlColumn.Width = new GridLength(OptionsDialogPlanner.AdvancedObjectsControlWidth);
+        OptAfterEnterDirection.Height = OptionsDialogPlanner.ControlHeight;
+        OptObjectsDisplay.Height = OptionsDialogPlanner.ControlHeight;
     }
 
     private void Populate()

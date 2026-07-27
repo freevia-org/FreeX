@@ -47,9 +47,9 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0">
+        <Grid x:Name="OptionsBodyGrid" Grid.Row="0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="220"/>
+                <ColumnDefinition x:Name="OptionsCategoryColumn" Width="220"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
@@ -79,7 +79,7 @@
             </Border>
 
             <!-- ── Right content area ─────────────────────────────── -->
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+            <ScrollViewer x:Name="OptionsContentScrollViewer" Grid.Column="1" VerticalScrollBarVisibility="Auto"
                           Padding="28,20,28,20">
                 <Grid>
 
@@ -395,10 +395,10 @@
                                   IsChecked="True" FontSize="12" Margin="0,0,0,8"
                                   Checked="MoveAfterEnter_Changed"
                                   Unchecked="MoveAfterEnter_Changed"/>
-                        <Grid Margin="18,0,0,9">
+                        <Grid x:Name="AdvancedDirectionGrid" Margin="18,0,0,9">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="160"/>
-                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition x:Name="AdvancedDirectionLabelColumn" Width="160"/>
+                                <ColumnDefinition x:Name="AdvancedDirectionControlColumn" Width="140"/>
                             </Grid.ColumnDefinitions>
                             <Label Grid.Column="0" Content="{local:Loc Key=Options_Direction}"
                                    Target="{Binding ElementName=OptAfterEnterDirection}"
@@ -420,10 +420,10 @@
                                   IsChecked="True" FontSize="12" Margin="0,0,0,6"/>
                         <CheckBox x:Name="OptShowHeadings" Content="{local:Loc Key=Options_ShowRowAndColumnHeadings}"
                                   IsChecked="True" FontSize="12" Margin="0,0,0,8"/>
-                        <Grid Margin="0,0,0,9">
+                        <Grid x:Name="AdvancedObjectsGrid" Margin="0,0,0,9">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="230"/>
-                                <ColumnDefinition Width="220"/>
+                                <ColumnDefinition x:Name="AdvancedObjectsLabelColumn" Width="230"/>
+                                <ColumnDefinition x:Name="AdvancedObjectsControlColumn" Width="220"/>
                             </Grid.ColumnDefinitions>
                             <Label Grid.Column="0" Content="{local:Loc Key=Options_ForObjectsShow}"
                                    Target="{Binding ElementName=OptObjectsDisplay}"
@@ -643,7 +643,7 @@
         </Grid>
 
         <!-- ── OK / Cancel ──────────────────────────────────────────── -->
-        <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#C8C8C8"
+        <Border x:Name="OptionsFooterBorder" Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#C8C8C8"
                 Padding="16,10" Background="#F5F5F5">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="OkBtn" Content="{local:Loc Key=Common_Ok}" Width="80" Height="26"

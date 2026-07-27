@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Windows.Controls;
+using System.Xml.Linq;
 using FreeX.App.Host;
 using FluentAssertions;
 
@@ -7,6 +8,40 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class OptionsDialogSourceTests
 {
+    [Fact]
+    public void OptionsDialog_AdvancedConsumesSharedFrameAndRowMetrics()
+    {
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
+
+        xaml.Should().Contain("x:Name=\"OptionsCategoryColumn\"");
+        xaml.Should().Contain("x:Name=\"OptionsContentScrollViewer\"");
+        xaml.Should().Contain("x:Name=\"OptionsFooterBorder\"");
+        xaml.Should().Contain("x:Name=\"AdvancedDirectionGrid\"");
+        xaml.Should().Contain("x:Name=\"AdvancedObjectsGrid\"");
+        source.Should().Contain("private void ApplySharedOptionsLayoutMetrics()");
+        source.Should().Contain("OptionsDialogPlanner.CategoryColumnWidth");
+        source.Should().Contain("OptionsDialogPlanner.FooterHeight");
+        source.Should().Contain("OptionsDialogPlanner.AdvancedDirectionLabelWidth");
+        source.Should().Contain("OptionsDialogPlanner.AdvancedObjectsControlWidth");
+    }
+
+    [Fact]
+    public void OptionsDialog_AdvancedInteractiveControlsRemainEnabled()
+    {
+        var xaml = XamlLocalizationTestHelper.LoadLocalizedXaml("OptionsDialog.xaml");
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xamlNamespace = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var autoComplete = xaml.Descendants(presentation + "CheckBox")
+            .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "OptAdvancedAutoComplete");
+        autoComplete.Attribute("IsEnabled").Should().BeNull();
+
+        var objectsDisplay = xaml.Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "OptObjectsDisplay");
+        objectsDisplay.Attribute("IsEnabled").Should().BeNull();
+    }
+
     // R83-app-flashfill-autocomplete-5-2: "Enable AutoComplete for cell values" used to be shown
     // permanently checked AND disabled -- an unconditional claim of an active feature with no way
     // to turn it off and no feature behind it at all. It is now a real, persisted, user-togglable

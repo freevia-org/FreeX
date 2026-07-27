@@ -5,6 +5,19 @@ namespace FreeX.App.Services.Tests;
 public sealed class OptionsDialogPlannerTests
 {
     [Fact]
+    public void AdvancedLayout_UsesSharedWpfCaptureMetrics()
+    {
+        OptionsDialogPlanner.CategoryColumnWidth.Should().Be(220);
+        OptionsDialogPlanner.ContentPaddingHorizontal.Should().Be(28);
+        OptionsDialogPlanner.ContentPaddingVertical.Should().Be(20);
+        OptionsDialogPlanner.FooterHeight.Should().Be(46);
+        OptionsDialogPlanner.AdvancedDirectionLabelWidth.Should().Be(160);
+        OptionsDialogPlanner.AdvancedDirectionControlWidth.Should().Be(140);
+        OptionsDialogPlanner.AdvancedObjectsLabelWidth.Should().Be(230);
+        OptionsDialogPlanner.AdvancedObjectsControlWidth.Should().Be(220);
+    }
+
+    [Fact]
     public void OptionsDialogFrameConstants_PinSharedWpfAndAvaloniaCaptureContract()
     {
         OptionsDialogPlanner.WindowWidth.Should().Be(760);
@@ -111,6 +124,27 @@ public sealed class OptionsDialogPlannerTests
         input.ShowScreenTips.Should().BeFalse();
         input.MoveSelectionAfterEnter.Should().BeFalse();
         input.AfterEnterDirection.Should().Be(AppOptionsEnterDirection.Up);
+    }
+
+    [Fact]
+    public void TryBuildInput_ProjectsObjectsDisplayWhenAdvancedPickerChanges()
+    {
+        var ok = OptionsDialogPlanner.TryBuildInput(
+            "Calibri", "12", "2", "Tester",
+            autoCalculate: true, useR1C1ReferenceStyle: false, errorCheckingEnabled: true,
+            proofingIgnoreUppercase: true, proofingIgnoreNumbers: false,
+            showFormulaBar: true, showGridlines: true, showHeadings: true,
+            defaultFormat: ".xlsx", showScreenTips: true,
+            moveSelectionAfterEnter: true, afterEnterDirection: AppOptionsEnterDirection.Down,
+            out var input, out var error,
+            objectsDisplay: AppOptionsObjectDisplay.Nothing);
+
+        ok.Should().BeTrue();
+        error.Should().Be(OptionsDialogPlanner.OptionsInputError.None);
+        input.ObjectsDisplay.Should().Be(AppOptionsObjectDisplay.Nothing);
+
+        var projected = OptionsDialogPlanner.Project(new AppOptions(), input);
+        projected.ObjectsDisplay.Should().Be(AppOptionsObjectDisplay.Nothing);
     }
 
     [Fact]
