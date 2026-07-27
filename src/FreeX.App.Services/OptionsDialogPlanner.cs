@@ -114,7 +114,8 @@ public static class OptionsDialogPlanner
         AppOptionsEnterDirection AfterEnterDirection,
         AppOptionsObjectDisplay? ObjectsDisplay = null,
         bool? CollapseRibbonAutomatically = null,
-        string? AppLanguage = null);
+        string? AppLanguage = null,
+        bool? CrashAnalyticsEnabled = null);
 
     /// <summary>Font names offered in the Options dialog's default-font picker (parity with the WPF host).</summary>
     public static IReadOnlyList<string> FontNames { get; } =
@@ -177,7 +178,8 @@ public static class OptionsDialogPlanner
         out OptionsInputError error,
         AppOptionsObjectDisplay? objectsDisplay = null,
         bool? collapseRibbonAutomatically = null,
-        string? appLanguage = null)
+        string? appLanguage = null,
+        bool? crashAnalyticsEnabled = null)
     {
         input = null!;
 
@@ -213,14 +215,15 @@ public static class OptionsDialogPlanner
             afterEnterDirection,
             objectsDisplay,
             collapseRibbonAutomatically,
-            appLanguage);
+            appLanguage,
+            crashAnalyticsEnabled);
         return true;
     }
 
     /// <summary>
     /// Projects validated dialog input onto a fresh <see cref="AppOptions"/>, carrying over every field the
-    /// dialog does not surface (status-bar layout, language, custom dictionary, quick-access toolbar, crash
-    /// analytics, PDF export language, …) from <paramref name="existing"/> so saving the dialog never clears
+    /// dialog does not surface (status-bar layout, language, custom dictionary, quick-access toolbar, PDF
+    /// export language, …) from <paramref name="existing"/> so saving the dialog never clears
     /// settings the user could not see. The result is normalized and ready to persist via
     /// <see cref="AppOptionsStore.SaveToPath"/>.
     /// </summary>
@@ -270,8 +273,8 @@ public static class OptionsDialogPlanner
             StatusBarShowZoomSlider = existing.StatusBarShowZoomSlider,
             QuickAccessToolbarBelowRibbon = existing.QuickAccessToolbarBelowRibbon,
             QuickAccessToolbarCommands = existing.QuickAccessToolbarCommands,
-            CrashAnalyticsEnabled = existing.CrashAnalyticsEnabled,
-            CrashAnalyticsPrompted = existing.CrashAnalyticsPrompted,
+            CrashAnalyticsEnabled = input.CrashAnalyticsEnabled ?? existing.CrashAnalyticsEnabled,
+            CrashAnalyticsPrompted = existing.CrashAnalyticsPrompted || input.CrashAnalyticsEnabled == true,
             PdfExportLanguage = existing.PdfExportLanguage,
         };
 

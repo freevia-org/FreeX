@@ -899,14 +899,33 @@ public sealed partial class MainWindow
             OptionsDescription(OptionsText("Options_ActiveApplicationAddIns")),
             OptionsButton(OptionsText("Options_Go"), width: 72, isEnabled: false));
 
+        var crashAnalyticsBox = new CheckBox
+        {
+            Content = OptionsText("Options_SendOptInCrashReports"),
+            IsChecked = current.CrashAnalyticsEnabled,
+        };
+        ApplyOptionsCheckBoxChrome(crashAnalyticsBox);
+        AutomationProperties.SetAutomationId(crashAnalyticsBox, "OptionsCrashAnalyticsCheckBox");
+        AutomationProperties.SetHelpText(
+            crashAnalyticsBox,
+            OptionsText("Options_CrashReportsIncludeAppVersionRuntimeOperatingSystemSessi"));
+
+        var trustCenterSettingsButton = OptionsButton(OptionsText("Options_TrustCenterSettings"), width: 170);
+        trustCenterSettingsButton.Click += async (_, _) =>
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                dialog,
+                UiText.Get("DeferredCommand_TrustCenter_Body"),
+                UiText.Get("DeferredCommand_TrustCenter_Title"));
+
         var trustCenterPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_TrustCenter2")),
             OptionsDescription(OptionsText("Options_SecurityAndPrivacySettingsForFreeX")),
-            OptionsCheckBox(OptionsText("Options_SendOptInCrashReports"), isEnabled: false),
+            crashAnalyticsBox,
             OptionsDescription(OptionsText("Options_CrashReportsAreSentOnlyWhenThisOptionIsEnabledAndTheTest")),
             OptionsSectionHeader(OptionsText("Options_LocalTesterDiagnostics")),
             OptionsDescription(OptionsText("Options_FreeXWritesLocalUsageEventsAndCrashFilesToLOCALAPPDATAFr")),
-            OptionsButton(OptionsText("Options_TrustCenterSettings"), width: 150, isEnabled: false));
+            trustCenterSettingsButton);
+        trustCenterPanel.Width = OptionsDialogPlanner.GeneralContentWidth;
 
         // ── Category list + content host ──────────────────────────────────────────
         var panels = new[]
@@ -1114,10 +1133,11 @@ public sealed partial class MainWindow
                          2 => AppOptionsObjectDisplay.Nothing,
                          _ => AppOptionsObjectDisplay.All,
                      },
-                     collapseRibbonAutomatically: collapseRibbonBox.IsChecked == true,
-                     appLanguage: languageOptions.Count > 0 && languageBox.SelectedIndex >= 0 && languageBox.SelectedIndex < languageOptions.Count
-                         ? AppLanguageCatalog.NormalizeCultureName(languageOptions[languageBox.SelectedIndex].CultureName)
-                         : current.AppLanguage))
+                    collapseRibbonAutomatically: collapseRibbonBox.IsChecked == true,
+                    appLanguage: languageOptions.Count > 0 && languageBox.SelectedIndex >= 0 && languageBox.SelectedIndex < languageOptions.Count
+                        ? AppLanguageCatalog.NormalizeCultureName(languageOptions[languageBox.SelectedIndex].CultureName)
+                        : current.AppLanguage,
+                    crashAnalyticsEnabled: crashAnalyticsBox.IsChecked == true))
             {
                 warningText.Text = inputError == OptionsDialogPlanner.OptionsInputError.InvalidFontSize
                     ? UiText.Get("Options_InvalidFontSizeMessage")

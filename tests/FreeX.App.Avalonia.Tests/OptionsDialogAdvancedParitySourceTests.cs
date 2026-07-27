@@ -64,6 +64,25 @@ public sealed class OptionsDialogAdvancedParitySourceTests
         wpf.Should().Contain("Padding=\"16,10\"");
     }
 
+    [Fact]
+    public void TrustCenter_UsesWpfControlStatesGeometryAndDeferredSettingsRoute()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+
+        source.Should().Contain("IsChecked = current.CrashAnalyticsEnabled");
+        source.Should().Contain("OptionsCrashAnalyticsCheckBox");
+        source.Should().Contain("trustCenterPanel.Width = OptionsDialogPlanner.GeneralContentWidth;");
+        source.Should().Contain("OptionsButton(OptionsText(\"Options_TrustCenterSettings\"), width: 170)");
+        source.Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync");
+        source.Should().Contain("UiText.Get(\"DeferredCommand_TrustCenter_Body\")");
+        source.Should().Contain("crashAnalyticsEnabled: crashAnalyticsBox.IsChecked == true");
+        source.Should().Contain("Key.Enter or Key.Space");
+        source.Should().Contain("IsDefault = true");
+        source.Should().Contain("IsCancel = true");
+        source.Should().Contain("cancelButton.Click += (_, _) => dialog.Close();");
+        source.Should().Contain("await dialog.ShowDialog(this);");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

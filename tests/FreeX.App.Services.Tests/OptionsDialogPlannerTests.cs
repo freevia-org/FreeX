@@ -265,6 +265,44 @@ public sealed class OptionsDialogPlannerTests
         existing.SpellCheckCustomDictionaryWords.Should().Equal("Foo", "Bar");
     }
 
+    [Fact]
+    public void Project_UpdatesTrustCenterConsentWithoutClearingPromptHistory()
+    {
+        var existing = new AppOptions
+        {
+            CrashAnalyticsEnabled = false,
+            CrashAnalyticsPrompted = false,
+        };
+
+        OptionsDialogPlanner.TryBuildInput(
+            "Calibri", "12", "2", "Grace",
+            autoCalculate: true, useR1C1ReferenceStyle: false, errorCheckingEnabled: true,
+            proofingIgnoreUppercase: true, proofingIgnoreNumbers: false,
+            showFormulaBar: true, showGridlines: true, showHeadings: true,
+            defaultFormat: ".xlsx", showScreenTips: true,
+            moveSelectionAfterEnter: true, afterEnterDirection: AppOptionsEnterDirection.Down,
+            out var enabledInput, out _, crashAnalyticsEnabled: true).Should().BeTrue();
+
+        var enabled = OptionsDialogPlanner.Project(existing, enabledInput);
+
+        enabled.CrashAnalyticsEnabled.Should().BeTrue();
+        enabled.CrashAnalyticsPrompted.Should().BeTrue();
+
+        OptionsDialogPlanner.TryBuildInput(
+            "Calibri", "12", "2", "Grace",
+            autoCalculate: true, useR1C1ReferenceStyle: false, errorCheckingEnabled: true,
+            proofingIgnoreUppercase: true, proofingIgnoreNumbers: false,
+            showFormulaBar: true, showGridlines: true, showHeadings: true,
+            defaultFormat: ".xlsx", showScreenTips: true,
+            moveSelectionAfterEnter: true, afterEnterDirection: AppOptionsEnterDirection.Down,
+            out var disabledInput, out _, crashAnalyticsEnabled: false).Should().BeTrue();
+
+        var disabled = OptionsDialogPlanner.Project(enabled, disabledInput);
+
+        disabled.CrashAnalyticsEnabled.Should().BeFalse();
+        disabled.CrashAnalyticsPrompted.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData(".xlsx", 0)]
     [InlineData(".fxl", 1)]

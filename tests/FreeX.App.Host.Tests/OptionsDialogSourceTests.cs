@@ -70,6 +70,15 @@ public sealed partial class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void ParityCapture_TargetsOptionsTrustCenterForFocusedEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+
+        source.Should().Contain("string.Equals(targetSurfaceId, \"dialog.Options.TrustCenter\", StringComparison.Ordinal)");
+        source.Should().Contain("captureOnlySurfaceId: targetSurfaceId");
+    }
+
+    [Fact]
     public void ParityCapture_OptionsAdvancedRendersActionFooterInsideCanonicalClientFrame()
     {
         StaTestRunner.Run(() =>

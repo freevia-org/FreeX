@@ -594,7 +594,8 @@ internal static class ParityCapture
                     new ScenarioManagerDialog(workbook, sheet.Id, ResolveSheetId(workbook)));
             }
             else if (string.Equals(targetSurfaceId, "dialog.Options.Save", StringComparison.Ordinal) ||
-                string.Equals(targetSurfaceId, "dialog.Options.Language", StringComparison.Ordinal))
+                string.Equals(targetSurfaceId, "dialog.Options.Language", StringComparison.Ordinal) ||
+                string.Equals(targetSurfaceId, "dialog.Options.TrustCenter", StringComparison.Ordinal))
             {
                 CaptureDialogTabs(results, "dialog.Options", outDir,
                     () => new OptionsDialog(FreeXOptions.Load()),
@@ -608,7 +609,7 @@ internal static class ParityCapture
             }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, dialog.ScenarioManager, and dialog.Options.Save in this lane.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, dialog.ScenarioManager, and the targeted Options tabs.");
             }
 
             return;
