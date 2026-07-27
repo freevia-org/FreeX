@@ -42,9 +42,8 @@ internal static class AvaloniaImageAdjustHelper
         var height = size.Height;
         var stride = checked(width * 4);
         var pixels = new byte[checked(stride * height)];
-        // Match WPF's Pbgra32 pipeline: BGRA channel bytes are premultiplied by alpha.
-        // Use the explicit pixel-buffer overload here; Avalonia 12's framebuffer overload
-        // does not preserve the alpha representation when copying between bitmap backends.
+        // Match WPF's Pbgra32 pipeline. Use the pointer overload to preserve the source
+        // channel bytes; the framebuffer overload may transcode through the active backend.
         var sourcePixels = GCHandle.Alloc(pixels, GCHandleType.Pinned);
         try
         {
@@ -80,7 +79,7 @@ internal static class AvaloniaImageAdjustHelper
         return output;
     }
 
-    private static void ApplyPixels(
+    internal static void ApplyPixels(
         byte[] pixels,
         double brightnessPct,
         double contrastPct,
