@@ -226,6 +226,110 @@ public sealed class SetTableCellAnchorCommand : IPresentationCommand
     }
 }
 
+/// <summary>Sets or clears one explicit border side of a table cell.</summary>
+public sealed class SetTableCellBorderCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _row;
+    private readonly int _col;
+    private readonly TableCellBorderSide _side;
+    private readonly ShapeOutline? _newOutline;
+    private TableCellBorders? _oldBorders;
+
+    public SetTableCellBorderCommand(
+        int slideIndex,
+        uint shapeId,
+        int row,
+        int col,
+        TableCellBorderSide side,
+        ShapeOutline? newOutline)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _row = row;
+        _col = col;
+        _side = side;
+        _newOutline = newOutline;
+    }
+
+    public string Label => _newOutline is null ? "Clear Cell Border" : "Set Cell Border";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        return cell is not null && GetSide(cell.Borders, _side) != _newOutline;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        if (cell is null) return;
+
+        _oldBorders = cell.Borders;
+        var borders = CloneBorders(cell.Borders);
+        SetSide(borders, _side, _newOutline);
+        cell.Borders = HasAnySide(borders) ? borders : null;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        if (cell is not null)
+            cell.Borders = _oldBorders;
+    }
+
+    private TableCell? GetCell(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null || _row < 0 || _row >= table.Rows.Count)
+            return null;
+
+        var row = table.Rows[_row];
+        return _col >= 0 && _col < row.Cells.Count ? row.Cells[_col] : null;
+    }
+
+    private static TableCellBorders CloneBorders(TableCellBorders? source) => new()
+    {
+        Left = source?.Left,
+        Right = source?.Right,
+        Top = source?.Top,
+        Bottom = source?.Bottom,
+    };
+
+    private static bool HasAnySide(TableCellBorders borders) =>
+        borders.Left is not null || borders.Right is not null ||
+        borders.Top is not null || borders.Bottom is not null;
+
+    private static ShapeOutline? GetSide(TableCellBorders? borders, TableCellBorderSide side) => side switch
+    {
+        TableCellBorderSide.Left => borders?.Left,
+        TableCellBorderSide.Right => borders?.Right,
+        TableCellBorderSide.Top => borders?.Top,
+        TableCellBorderSide.Bottom => borders?.Bottom,
+        _ => null,
+    };
+
+    private static void SetSide(TableCellBorders borders, TableCellBorderSide side, ShapeOutline? outline)
+    {
+        switch (side)
+        {
+            case TableCellBorderSide.Left:
+                borders.Left = outline;
+                break;
+            case TableCellBorderSide.Right:
+                borders.Right = outline;
+                break;
+            case TableCellBorderSide.Top:
+                borders.Top = outline;
+                break;
+            case TableCellBorderSide.Bottom:
+                borders.Bottom = outline;
+                break;
+        }
+    }
+}
+
 /// <summary>
 /// Inserts a new blank row at <paramref name="atRow"/> (rows at and after shift down).
 /// The new row gets the same height as the adjacent row (or a default if the table is empty).

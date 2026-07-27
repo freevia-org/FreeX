@@ -2088,6 +2088,15 @@ public sealed partial class MainWindow : Window
 
             Editor.TryApplyActiveTableCellAnchor(anchor);
         }));
+        r.Register("freep.table-cell-border", new ContextRibbonCommand(ctx =>
+        {
+            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                value is not string selection ||
+                !TableCellBorderOptionParser.TryParse(selection, out var side, out var outline))
+                return;
+
+            Editor.TryApplyActiveTableCellBorder(side, outline);
+        }));
         r.Register("freep.bold", new ActionRibbonCommand(() =>
         {
             if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold) == true) return;

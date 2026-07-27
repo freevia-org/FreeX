@@ -495,6 +495,17 @@ internal static class FreePRibbonCommands
                 editor.TryApplyActiveTableCellAnchor(anchor);
             }));
 
+        registry.Register("freep.table-cell-border",
+            new ContextRibbonCommand(ctx =>
+            {
+                if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                    value is not string selection ||
+                    !TableCellBorderOptionParser.TryParse(selection, out var side, out var outline))
+                    return;
+
+                editor.TryApplyActiveTableCellBorder(side, outline);
+            }));
+
         // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
 
         RegisterTransitionCommands(registry, stateStore, editor);

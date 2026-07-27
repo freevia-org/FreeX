@@ -172,6 +172,12 @@
   <data name="Ribbon_Command_TableCellAnchor_KeyTip" xml:space="preserve">
     <value>TA</value>
   </data>
+  <data name="Ribbon_Command_TableCellBorder_Label" xml:space="preserve">
+    <value>Table Cell Border</value>
+  </data>
+  <data name="Ribbon_Command_TableCellBorder_KeyTip" xml:space="preserve">
+    <value>TB</value>
+  </data>
   <data name="Ribbon_Command_Bullets_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>
