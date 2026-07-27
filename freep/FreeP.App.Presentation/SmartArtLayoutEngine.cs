@@ -139,6 +139,8 @@ public static class SmartArtLayoutEngine
                     ? LayoutBasicRelationship(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                 : IsOpposingIdeasLayout(data.LayoutUniqueId)
                     ? LayoutOpposingIdeas(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
+                : IsConvergingRadialLayout(data.LayoutUniqueId)
+                    ? LayoutConvergingRadial(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                 : IsRadialVennLayout(data.LayoutUniqueId)
                     ? LayoutRadialVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                     : IsTargetListLayout(data.LayoutUniqueId)
@@ -1099,6 +1101,60 @@ public static class SmartArtLayoutEngine
                 left ? leftX : rightX, y, arrowW, arrowH,
                 NodeFontSizePt,
                 left ? DrawingShapeKind.RightArrow : DrawingShapeKind.LeftArrow));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Bounded Converging Radial geometry: three or four inward-facing arrows
+    /// arranged around the frame center. The arrows are ordinary shared shape
+    /// operations so both hosts can edit and regenerate the same live layout.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutConvergingRadial(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Count is < 3 or > 4)
+            return null;
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long innerH = Math.Max(fcy - 2 * outerPadY, 1L);
+        long arrowW = Math.Max((long)(innerW * 0.24), 1L);
+        long arrowH = Math.Max((long)(innerH * 0.22), 1L);
+        long centerX = fx + outerPadX + innerW / 2;
+        long centerY = fy + outerPadY + innerH / 2;
+        long horizontalOffset = Math.Max((long)(innerW * 0.31), arrowW / 2);
+        long verticalOffset = Math.Max((long)(innerH * 0.31), arrowH / 2);
+
+        var positions = nodes.Count == 3
+            ? new[]
+            {
+                (centerX - arrowW / 2, centerY - verticalOffset - arrowH / 2, DrawingShapeKind.DownArrow),
+                (centerX - horizontalOffset - arrowW / 2, centerY - arrowH / 2, DrawingShapeKind.RightArrow),
+                (centerX + horizontalOffset - arrowW / 2, centerY - arrowH / 2, DrawingShapeKind.LeftArrow)
+            }
+            : new[]
+            {
+                (centerX - arrowW / 2, centerY - verticalOffset - arrowH / 2, DrawingShapeKind.DownArrow),
+                (centerX + horizontalOffset - arrowW / 2, centerY - arrowH / 2, DrawingShapeKind.LeftArrow),
+                (centerX - arrowW / 2, centerY + verticalOffset - arrowH / 2, DrawingShapeKind.UpArrow),
+                (centerX - horizontalOffset - arrowW / 2, centerY - arrowH / 2, DrawingShapeKind.RightArrow)
+            };
+
+        var shapes = new List<SlideShape>(nodes.Count);
+        uint idCounter = 536;
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Relationship);
+            var (x, y, shapeKind) = positions[i];
+            shapes.Add(MakeBox(
+                idCounter++, nodes[i].Text, nodeStyle,
+                x, y, arrowW, arrowH,
+                NodeFontSizePt, shapeKind));
         }
 
         return shapes;
@@ -2161,6 +2217,14 @@ public static class SmartArtLayoutEngine
             return false;
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "opposingideas", StringComparison.Ordinal);
+    }
+
+    private static bool IsConvergingRadialLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "convergingradial", StringComparison.Ordinal);
     }
 
     private static bool IsRadialVennLayout(string uniqueId)

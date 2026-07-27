@@ -751,6 +751,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.TitledMatrix, SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.BasicRelationship, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.OpposingIdeas, SmartArtFamily.Relationship)]
+    [InlineData(SmartArtLayoutPreset.ConvergingRadial, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.BasicVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.RadialVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.TargetList, SmartArtFamily.Relationship)]
@@ -2344,6 +2345,24 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
             "opposingIdeas now has bounded shared opposing-arrow geometry");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("For", "Against");
+    }
+
+    [Fact]
+    public void Reader_ParsesConvergingRadialAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/convergingRadial",
+            nodes: [("id1", "Top"), ("id2", "Right"), ("id3", "Bottom"), ("id4", "Left")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "convergingRadial now has bounded shared compass-arrow geometry");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Top", "Right", "Bottom", "Left");
     }
 
     [Fact]

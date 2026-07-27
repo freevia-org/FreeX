@@ -49,6 +49,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.GridMatrix, "gridMatrix", SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.BasicRelationship, "relationship1", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.OpposingIdeas, "opposingIdeas", SmartArtFamily.Relationship)]
+    [InlineData(SmartArtLayoutPreset.ConvergingRadial, "convergingRadial", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.BasicVenn, "basicVenn", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.RadialVenn, "radialVenn", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.TargetList, "targetList", SmartArtFamily.Relationship)]
