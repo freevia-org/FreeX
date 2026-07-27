@@ -883,6 +883,26 @@ public sealed class BulletsAutofitTests
     }
 
     [Fact]
+    public void TextAutoFit_AllThreeModes_RoundTripThroughPptx()
+    {
+        foreach (var mode in new[] { TextAutoFitKind.None, TextAutoFitKind.Normal, TextAutoFitKind.Shape })
+        {
+            var body = new TextBody { AutoFitKind = mode };
+            body.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = "Autofit mode" } } });
+            var presentation = MakePresentation();
+            presentation.Slides[0].Shapes.Clear();
+            presentation.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+            using var stream = new System.IO.MemoryStream();
+            FreeP.Core.IO.PptxPackageWriter.Write(presentation, stream);
+            stream.Position = 0;
+            var reopened = FreeP.Core.IO.PptxPackageReader.Read(stream);
+
+            reopened.Slides[0].Shapes[0].TextBody!.AutoFitKind.Should().Be(mode);
+        }
+    }
+
+    [Fact]
     public void PptxImport_BuBlip_ResolvesImageBulletIntoSharedRenderPlan()
     {
         var imageBytes = Minimal1x1Png();

@@ -6363,10 +6363,29 @@ public static class DocxReader
 
     private static string? NormalizeVmlColor(string? value)
     {
-        var hex = value?.Trim().TrimStart('#');
+        var normalized = value?.Trim();
+        var hex = normalized?.TrimStart('#');
         return hex is { Length: 6 } && hex.All(Uri.IsHexDigit)
             ? "#" + hex.ToUpperInvariant()
-            : null;
+            : normalized?.ToLowerInvariant() switch
+            {
+                "black" => "#000000",
+                "blue" => "#0000FF",
+                "fuchsia" or "magenta" => "#FF00FF",
+                "gray" or "grey" => "#808080",
+                "green" => "#008000",
+                "lime" => "#00FF00",
+                "maroon" => "#800000",
+                "navy" => "#000080",
+                "olive" => "#808000",
+                "purple" => "#800080",
+                "red" => "#FF0000",
+                "silver" => "#C0C0C0",
+                "teal" => "#008080",
+                "white" => "#FFFFFF",
+                "yellow" => "#FFFF00",
+                _ => null
+            };
     }
 
     private static void ReadStyles(ZipArchive archive, TextDocument document)

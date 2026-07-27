@@ -1059,6 +1059,24 @@ public sealed class EditingSession
         }
     }
 
+    /// <summary>Sets the DrawingML text-frame autofit mode on all selected text shapes as one undo step.</summary>
+    public int SetTextAutoFitOnSelection(TextAutoFitKind kind)
+    {
+        if (CurrentSlide is null)
+            return 0;
+
+        var commands = _selectedShapeIds
+            .Where(id => CurrentSlide.Shapes.FirstOrDefault(shape => shape.Id == id)?.TextBody is not null)
+            .Select(id => (IPresentationCommand)new SetShapeTextAutoFitCommand(_currentSlideIndex, id, kind))
+            .ToArray();
+
+        if (commands.Length == 0)
+            return 0;
+
+        Bus.Execute(new BatchCommand("Set Text Autofit", commands));
+        return commands.Length;
+    }
+
     // ── Notes operations ─────────────────────────────────────────────────────────
 
     /// <summary>
@@ -1431,6 +1449,30 @@ public sealed class EditingSession
                 Bytes = mediaBytes.ToArray(),
                 ContentType = contentType,
             },
+        };
+        AddShape(shape);
+        return shape;
+    }
+
+    /// <summary>
+    /// Creates and inserts an embedded OLE package from raw file bytes. The package payload
+    /// remains editable/activatable after save and the insertion is one undoable shape add.
+    /// </summary>
+    public SlideShape InsertEmbeddedObject(byte[] embeddedBytes, string fileName)
+    {
+        var (x, y, cx, cy) = DefaultShapeBounds();
+        var shape = new SlideShape
+        {
+            Id = NextShapeId(),
+            Name = string.IsNullOrWhiteSpace(Path.GetFileNameWithoutExtension(fileName))
+                ? "Embedded Object"
+                : Path.GetFileNameWithoutExtension(fileName),
+            Kind = SlideShapeKind.Ole,
+            OffsetXEmu = x,
+            OffsetYEmu = y,
+            ExtentCxEmu = cx,
+            ExtentCyEmu = cy,
+            OleObject = OleInsertionPlanner.CreatePayload(embeddedBytes, fileName),
         };
         AddShape(shape);
         return shape;

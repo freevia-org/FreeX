@@ -496,6 +496,21 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_InsertEmbeddedObject_RoutesToHostPickerCallback()
+    {
+        var (ed, _) = MakeSession();
+        var invoked = false;
+        var registry = FreePRibbonCommands.Build(
+            new RibbonStateStore(),
+            ed,
+            onInsertEmbeddedObject: () => invoked = true);
+
+        Exec(registry, OleInsertionPlanner.InsertEmbeddedObjectCommandId);
+
+        Assert.True(invoked);
+    }
+
+    [Fact]
     public void Cmd_Paste_WithNoClipboard_IsNoOp()
     {
         var (ed, pres) = MakeSession();
@@ -811,6 +826,22 @@ public class RibbonEditorCompleteness5BTests
         // Execute with no SelectedValue — must not throw.
         var ex = Record.Exception(() => Exec(reg, "freep.font-family", RibbonCommandContext.Empty));
         Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Cmd_TextAutoFit_WithSelectedValue_RoutesToEditor()
+    {
+        var (ed, pres) = MakeSession();
+        ed.InsertDefaultTextBox();
+        var shape = pres.Slides[0].Shapes.Last();
+        ed.Select(shape.Id);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.text-autofit", RibbonCommandContext.ForSelectedValue("Shrink text on overflow"));
+
+        Assert.Equal(TextAutoFitKind.Normal, shape.TextBody!.AutoFitKind);
+        ed.Undo();
+        Assert.Equal(TextAutoFitKind.None, shape.TextBody.AutoFitKind);
     }
 
     [Fact]
@@ -1191,6 +1222,7 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.font-family")]
     [InlineData("freep.font-size")]
     [InlineData("freep.font-color")]
+    [InlineData("freep.text-autofit")]
     [InlineData("freep.table-cell-fill")]
     [InlineData("freep.table-cell-anchor")]
     [InlineData("freep.table-cell-border")]

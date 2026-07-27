@@ -129,6 +129,32 @@ public class WatermarkOptionsRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadWithWordNativeWatermarkColor(TextDocument document, string color)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            var shape = xml.Descendants(vml + "shape")
+                .Single(candidate => candidate.Attribute("id")?.Value == "PowerPlusWaterMarkObject");
+            shape.SetAttributeValue("fillcolor", color);
+            shape.Element(vml + "fill")!.SetAttributeValue("color", color);
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+            zip.GetEntry("docProps/custom.xml")!.Delete();
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     private static TextDocument ReadWithMutatedVmlTextSize(TextDocument document, double widthPt, double heightPt)
     {
         using var stream = new MemoryStream();
@@ -428,6 +454,7 @@ public class WatermarkOptionsRoundTripTests
         var w = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
         var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
         var shape = xml.Descendants(vml + "shape").Single();
+        var shapeType = xml.Descendants(vml + "shapetype").Single();
         var textPath = shape.Element(vml + "textpath");
 
         xml.Descendants(w + "docPartGallery")
@@ -441,6 +468,25 @@ public class WatermarkOptionsRoundTripTests
         textPath.Attribute("on")!.Value.Should().Be("t");
         textPath.Attribute("fitshape")!.Value.Should().Be("t");
         textPath.Attribute("style")!.Value.Should().Contain("font-family:Arial");
+        shapeType.Attribute("path")!.Value.Should().Be("m@7,l@8,m@5,21600l@6,21600e");
+        shapeType.Element(vml + "formulas")!.Elements(vml + "f")
+            .Select(formula => formula.Attribute("eqn")!.Value)
+            .Should().Equal(
+                "sum #0 0 10800",
+                "prod #0 2 1",
+                "sum 21600 0 @1",
+                "sum 0 0 @2",
+                "sum 21600 0 @3",
+                "if @0 @3 0",
+                "if @0 21600 @1",
+                "if @0 0 @2",
+                "if @0 @3 21600",
+                "mid @5 @6",
+                "mid @8 @5",
+                "mid @7 @8",
+                "mid @6 @7",
+                "sum @6 0 @5");
+        shapeType.Descendants(vml + "h").Single().Attribute("position")!.Value.Should().Be("#0,bottomRight");
     }
 
     [Fact]
@@ -475,6 +521,17 @@ public class WatermarkOptionsRoundTripTests
         var loaded = ReadWithWordNativeWatermarkShapeId(doc);
 
         loaded.Page.WatermarkOptions!.Text.Should().Be("NATIVE WORD");
+    }
+
+    [Fact]
+    public void NativeVmlTextWatermark_ImportsWordNamedSilverColor()
+    {
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions("NATIVE WORD");
+
+        var loaded = ReadWithWordNativeWatermarkColor(doc, "silver");
+
+        loaded.Page.WatermarkOptions!.FontColorHex.Should().Be("#C0C0C0");
     }
 
     [Fact]

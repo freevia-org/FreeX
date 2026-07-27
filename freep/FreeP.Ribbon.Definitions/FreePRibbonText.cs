@@ -49,6 +49,8 @@ internal static class FreePRibbonText
     public static string FontSizeKeyTip => Get("Ribbon_Command_FontSize_KeyTip");
     public static string FontColorLabel => Get("Ribbon_Command_FontColor_Label");
     public static string FontColorKeyTip => Get("Ribbon_Command_FontColor_KeyTip");
+    public static string TextAutoFitLabel => Get("Ribbon_Command_TextAutoFit_Label");
+    public static string TextAutoFitKeyTip => Get("Ribbon_Command_TextAutoFit_KeyTip");
     public static string TableCellFillLabel => Get("Ribbon_Command_TableCellFill_Label");
     public static string TableCellFillKeyTip => Get("Ribbon_Command_TableCellFill_KeyTip");
     public static string TableCellAnchorLabel => Get("Ribbon_Command_TableCellAnchor_Label");
@@ -320,6 +322,7 @@ internal static class FreePRibbonText
     public static RibbonText ArrangeChangeShapeCrossCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeCross_Label", "Ribbon_Command_ArrangeChangeShapeCross_KeyTip");
     public static RibbonText ArrangeChangeShapePlusSignCommand { get; } = new("Ribbon_Command_ArrangeChangeShapePlusSign_Label", "Ribbon_Command_ArrangeChangeShapePlusSign_KeyTip");
     public static RibbonText OpenEmbeddedObjectCommand { get; } = new("Ribbon_Command_OpenEmbeddedObject_Label", "Ribbon_Command_OpenEmbeddedObject_KeyTip");
+    public static RibbonText InsertEmbeddedObjectCommand { get; } = new("Ribbon_Command_InsertEmbeddedObject_Label", "Ribbon_Command_InsertEmbeddedObject_KeyTip");
     public static RibbonText ArrangeEditPointsCommand { get; } = new("Ribbon_Command_ArrangeEditPoints_Label", "Ribbon_Command_ArrangeEditPoints_KeyTip");
     public static RibbonText ArrangeBringToFrontCommand { get; } = new("Ribbon_Command_ArrangeBringToFront_Label", "Ribbon_Command_ArrangeBringToFront_KeyTip");
     public static RibbonText ArrangeBringForwardCommand { get; } = new("Ribbon_Command_ArrangeBringForward_Label", "Ribbon_Command_ArrangeBringForward_KeyTip");

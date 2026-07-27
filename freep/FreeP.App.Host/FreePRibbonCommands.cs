@@ -122,6 +122,7 @@ internal static class FreePRibbonCommands
         Action?             onEditChart3DViewOptions = null,
         Action?             onEditChartTextOptions = null,
         Action?             onEditChartAreaOptions = null,
+        Action?             onInsertEmbeddedObject = null,
         Action<OleObjectInfo>? onOpenEmbeddedObject = null,
         Action?             onTransitionSound = null)
     {
@@ -141,6 +142,9 @@ internal static class FreePRibbonCommands
         // ── Insert shapes ────────────────────────────────────────────────────────
 
         RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true, onTablePicker);
+        registry.Register(
+            OleInsertionPlanner.InsertEmbeddedObjectCommandId,
+            new ActionRibbonCommand(() => onInsertEmbeddedObject?.Invoke()));
         registry.Register(
             PictureCropAuthoringPlanner.InsetCommandId,
             new ActionRibbonCommand(() => editor.SetSelectedPictureCrop(PictureCropAuthoringPlanner.Inset())));
@@ -487,6 +491,17 @@ internal static class FreePRibbonCommands
                     return;
                 if (editor.TryApplyActiveTableCellColor(color)) return;
                 editor.SetColorOnSelection(color);
+            }));
+
+        registry.Register("freep.text-autofit",
+            new ContextRibbonCommand(ctx =>
+            {
+                if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                    value is not string selection ||
+                    !TextAutoFitOptionParser.TryParse(selection, out var kind))
+                    return;
+
+                editor.SetTextAutoFitOnSelection(kind);
             }));
 
         registry.Register("freep.table-cell-fill",

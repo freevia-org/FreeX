@@ -160,6 +160,12 @@
   <data name="Ribbon_Command_FontColor_KeyTip" xml:space="preserve">
     <value>FC</value>
   </data>
+  <data name="Ribbon_Command_TextAutoFit_Label" xml:space="preserve">
+    <value>Text Autofit</value>
+  </data>
+  <data name="Ribbon_Command_TextAutoFit_KeyTip" xml:space="preserve">
+    <value>TA</value>
+  </data>
   <data name="Ribbon_Command_TableCellFill_Label" xml:space="preserve">
     <value>Table Cell Fill</value>
   </data>
@@ -963,6 +969,12 @@
   </data>
   <data name="Ribbon_Command_OpenEmbeddedObject_KeyTip" xml:space="preserve">
     <value>O</value>
+  </data>
+  <data name="Ribbon_Command_InsertEmbeddedObject_Label" xml:space="preserve">
+    <value>Insert Embedded Object</value>
+  </data>
+  <data name="Ribbon_Command_InsertEmbeddedObject_KeyTip" xml:space="preserve">
+    <value>IO</value>
   </data>
   <data name="Ribbon_Command_ArrangeEditPoints_Label" xml:space="preserve">
     <value>Edit Points</value>
