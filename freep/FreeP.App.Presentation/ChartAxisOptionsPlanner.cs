@@ -6,6 +6,9 @@ public sealed record ChartAxisKindOption(ChartAxisKind Value, string Label);
 public sealed record ChartTickMarkOption(ChartTickMark? Value, string Label);
 public sealed record ChartTickLabelPositionOption(ChartTickLabelPosition? Value, string Label);
 public sealed record ChartAxisCrossingOption(ChartAxisCrossing? Value, string Label);
+public sealed record ChartCrossBetweenOption(ChartCrossBetween? Value, string Label);
+public sealed record ChartLabelAlignmentOption(ChartLabelAlignment? Value, string Label);
+public sealed record ChartAxisBooleanOption(bool? Value, string Label);
 
 public sealed record ChartAxisOptionsSurfacePlan(
     string CommandId,
@@ -26,6 +29,11 @@ public sealed record ChartAxisOptionsSurfacePlan(
     string TickLabelPositionLabel,
     string CrossingLabel,
     string CrossesAtLabel,
+    string CrossBetweenLabel,
+    string LabelAlignmentLabel,
+    string LabelOffsetLabel,
+    string MultiLevelLabelsLabel,
+    string AutoCrossingLabel,
     string AutoHint,
     string OkLabel,
     string CancelLabel);
@@ -54,11 +62,16 @@ public sealed class ChartAxisOptionsPlanner
     public const string TickLabelPositionLabel = "Tick labels";
     public const string CrossingLabel = "Axis crosses";
     public const string CrossesAtLabel = "Crosses at";
+    public const string CrossBetweenLabel = "Cross between";
+    public const string LabelAlignmentLabel = "Label alignment";
+    public const string LabelOffsetLabel = "Label offset (%)";
+    public const string MultiLevelLabelsLabel = "Multi-level labels";
+    public const string AutoCrossingLabel = "Automatic crossing";
     public const string AutoHint = "Blank values use automatic chart scaling.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
     public const double DefaultDialogWidth = 480;
-    public const double DefaultDialogHeight = 430;
+    public const double DefaultDialogHeight = 490;
 
     public static IReadOnlyList<ChartAxisKindOption> AxisOptions { get; } =
     [
@@ -92,6 +105,35 @@ public sealed class ChartAxisOptionsPlanner
         new(ChartAxisCrossing.Max, "Maximum"),
     ];
 
+    public static IReadOnlyList<ChartCrossBetweenOption> CrossBetweenOptions { get; } =
+    [
+        new(null, "Automatic"),
+        new(ChartCrossBetween.Between, "Between categories"),
+        new(ChartCrossBetween.MidCat, "On category"),
+    ];
+
+    public static IReadOnlyList<ChartLabelAlignmentOption> LabelAlignmentOptions { get; } =
+    [
+        new(null, "Automatic"),
+        new(ChartLabelAlignment.Left, "Left"),
+        new(ChartLabelAlignment.Center, "Center"),
+        new(ChartLabelAlignment.Right, "Right"),
+    ];
+
+    public static IReadOnlyList<ChartAxisBooleanOption> MultiLevelLabelsOptions { get; } =
+    [
+        new(null, "Automatic"),
+        new(false, "Show multi-level labels"),
+        new(true, "Hide multi-level labels"),
+    ];
+
+    public static IReadOnlyList<ChartAxisBooleanOption> AutoCrossingOptions { get; } =
+    [
+        new(null, "Automatic"),
+        new(true, "Enable automatic crossing"),
+        new(false, "Use explicit crossing"),
+    ];
+
     private readonly ChartShape _chart;
     private ChartAxisKind _axisKind;
     private string _title = string.Empty;
@@ -107,6 +149,11 @@ public sealed class ChartAxisOptionsPlanner
     private ChartTickLabelPosition? _tickLabelPosition;
     private ChartAxisCrossing? _crosses;
     private double? _crossesAt;
+    private ChartCrossBetween? _crossBetween;
+    private ChartLabelAlignment? _labelAlignment;
+    private int? _labelOffsetPercent;
+    private bool? _noMultiLevelLabels;
+    private bool? _autoCrossing;
 
     private ChartAxisOptionsPlanner(ChartShape chart)
     {
@@ -134,6 +181,11 @@ public sealed class ChartAxisOptionsPlanner
             TickLabelPositionLabel,
             CrossingLabel,
             CrossesAtLabel,
+            CrossBetweenLabel,
+            LabelAlignmentLabel,
+            LabelOffsetLabel,
+            MultiLevelLabelsLabel,
+            AutoCrossingLabel,
             AutoHint,
             OkLabel,
             CancelLabel);
@@ -158,6 +210,11 @@ public sealed class ChartAxisOptionsPlanner
     public ChartTickLabelPosition? TickLabelPosition => _tickLabelPosition;
     public ChartAxisCrossing? Crosses => _crosses;
     public double? CrossesAt => _crossesAt;
+    public ChartCrossBetween? CrossBetween => _crossBetween;
+    public ChartLabelAlignment? LabelAlignment => _labelAlignment;
+    public int? LabelOffsetPercent => _labelOffsetPercent;
+    public bool? NoMultiLevelLabels => _noMultiLevelLabels;
+    public bool? AutoCrossing => _autoCrossing;
 
     public void SetAxis(ChartAxisKind axisKind)
     {
@@ -176,6 +233,11 @@ public sealed class ChartAxisOptionsPlanner
         _tickLabelPosition = axis.TickLabelPosition;
         _crosses = axis.Crosses;
         _crossesAt = axis.CrossesAt;
+        _crossBetween = axis.CrossBetween;
+        _labelAlignment = axis.LabelAlignment;
+        _labelOffsetPercent = axis.LabelOffsetPercent;
+        _noMultiLevelLabels = axis.NoMultiLevelLabels;
+        _autoCrossing = axis.AutoCrossing;
     }
 
     public void SetTitle(string? title) => _title = title ?? string.Empty;
@@ -191,6 +253,11 @@ public sealed class ChartAxisOptionsPlanner
     public void SetTickLabelPosition(ChartTickLabelPosition? value) => _tickLabelPosition = value;
     public void SetCrosses(ChartAxisCrossing? value) => _crosses = value;
     public void SetCrossesAt(double? value) => _crossesAt = value;
+    public void SetCrossBetween(ChartCrossBetween? value) => _crossBetween = value;
+    public void SetLabelAlignment(ChartLabelAlignment? value) => _labelAlignment = value;
+    public void SetLabelOffsetPercent(int? value) => _labelOffsetPercent = value;
+    public void SetNoMultiLevelLabels(bool? value) => _noMultiLevelLabels = value;
+    public void SetAutoCrossing(bool? value) => _autoCrossing = value;
 
     public ChartAxisOptions BuildCommitPlan() => new(
         _axisKind,
@@ -206,7 +273,12 @@ public sealed class ChartAxisOptionsPlanner
         _tickLabelPosition,
         _crossesAt is null ? _crosses : null,
         _crossesAt,
-        _showAxis);
+        _showAxis,
+        _crossBetween,
+        _labelAlignment,
+        _labelOffsetPercent,
+        _noMultiLevelLabels,
+        _autoCrossing);
 
     private ChartAxis ResolveAxis() =>
         _axisKind == ChartAxisKind.Category ? _chart.CategoryAxis : _chart.ValueAxis;

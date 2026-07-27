@@ -6474,6 +6474,11 @@ public sealed class MainWindowHeadlessTests
                 ChartTickLabelPosition.NextTo,
                 ChartAxisCrossing.Min,
                 10,
+                false,
+                ChartCrossBetween.MidCat,
+                ChartLabelAlignment.Right,
+                35,
+                true,
                 false);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
@@ -6483,7 +6488,8 @@ public sealed class MainWindowHeadlessTests
         options.Should().Be(new ChartAxisOptions(
             ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false,
             ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
-            null, 10, false));
+            null, 10, false, ChartCrossBetween.MidCat, ChartLabelAlignment.Right,
+            35, true, false));
     }
 
     [Fact]

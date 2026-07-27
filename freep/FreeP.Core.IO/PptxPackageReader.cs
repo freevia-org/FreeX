@@ -1144,11 +1144,13 @@ public static class PptxPackageReader
             SlideShape? shape = effectiveEl.Name.LocalName switch
             {
                 "sp"           => ReadSp(effectiveEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
-                "pic"          => ReadPic(effectiveEl, archive, partPath, scheme),
+                "pic"          => ReadPic(effectiveEl, archive, partPath, scheme,
+                                      slideRels, allSlides, slideDir, slidePartPathToId),
                 "cxnSp"        => ReadCxnSp(effectiveEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
                 "grpSp"        => ReadGrpSp(effectiveEl, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId),
                 // EA3: pass mcChoiceEl so ReadGraphicFrame can capture the Requires token
                 "graphicFrame" => ReadGraphicFrame(effectiveEl, archive, partPath, scheme, tableStyles,
+                                      slideRels, allSlides, slideDir, slidePartPathToId,
                                       wasAlternateContent: child != effectiveEl, mcChoiceEl: mcChoiceEl),
                 // Wave 25A: ink annotations arrive as p:contentPart (possibly inside mc:AlternateContent)
                 "contentPart"  => ReadContentPartInk(child, effectiveEl, archive, partPath, mcChoiceEl),
@@ -1180,13 +1182,13 @@ public static class PptxPackageReader
     /// correct for reordered decks (where slideN.xml filename ≠ presentation order).
     /// </param>
     private static Hyperlink? ResolveHlinkClick(
-        XElement hlinkEl,
+        XElement? hlinkEl,
         IReadOnlyList<OpcRelationshipTarget>? slideRels,
         List<Slide>? allSlides,
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
-        if (slideRels is null) return null;
+        if (hlinkEl is null || slideRels is null) return null;
 
         var rId     = hlinkEl.Attribute(R + "id")?.Value;
         var action  = hlinkEl.Attribute("action")?.Value;
@@ -1311,6 +1313,10 @@ public static class PptxPackageReader
         XElement gfEl, ZipArchive archive, string partPath,
         PresentationColorScheme scheme,
         Dictionary<string, TableStyleData>? tableStyles,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null,
         bool wasAlternateContent = false, XElement? mcChoiceEl = null)
     {
         var cNvPr = gfEl.Element(P + "nvGraphicFramePr")?.Element(P + "cNvPr");
@@ -1353,6 +1359,7 @@ public static class PptxPackageReader
                 OffsetYEmu = offY,
                 ExtentCxEmu = extCx,
                 ExtentCyEmu = extCy,
+                Hyperlink = ResolveHlinkClick(cNvPr?.Element(A + "hlinkClick"), slideRels, allSlides, slideDir, slidePartPathToId),
                 Table = tableShape
             };
         }
@@ -1387,6 +1394,7 @@ public static class PptxPackageReader
                 OffsetYEmu = offY,
                 ExtentCxEmu = extCx,
                 ExtentCyEmu = extCy,
+                Hyperlink = ResolveHlinkClick(cNvPr?.Element(A + "hlinkClick"), slideRels, allSlides, slideDir, slidePartPathToId),
                 Chart = chartShape
             };
         }
@@ -1408,6 +1416,7 @@ public static class PptxPackageReader
                 OffsetYEmu = offY,
                 ExtentCxEmu = extCx,
                 ExtentCyEmu = extCy,
+                Hyperlink = ResolveHlinkClick(cNvPr?.Element(A + "hlinkClick"), slideRels, allSlides, slideDir, slidePartPathToId),
                 SmartArt = smartArt
             };
         }
@@ -1435,6 +1444,9 @@ public static class PptxPackageReader
                     oleShape.OffsetYEmu = offY;
                     oleShape.ExtentCxEmu = extCx;
                     oleShape.ExtentCyEmu = extCy;
+                    var oleHlink = cNvPr?.Element(A + "hlinkClick");
+                    if (oleHlink is not null)
+                        oleShape.Hyperlink = ResolveHlinkClick(oleHlink, slideRels, allSlides, slideDir, slidePartPathToId);
                     return oleShape;
                 }
             }
@@ -1442,8 +1454,12 @@ public static class PptxPackageReader
 
         // Unknown graphicFrame type — preserve verbatim (Wave 25A: no-silent-loss guarantee).
         // EA3: pass mcChoiceEl so ReadPreservedGraphicFrame can capture the Requires token.
-        return ReadPreservedGraphicFrame(gfEl, graphicData, uri, cNvPr, offX, offY, extCx, extCy,
+        var preserved = ReadPreservedGraphicFrame(gfEl, graphicData, uri, cNvPr, offX, offY, extCx, extCy,
             archive, partPath, wasAlternateContent, mcChoiceEl);
+        var preservedHlink = cNvPr?.Element(A + "hlinkClick");
+        if (preservedHlink is not null)
+            preserved.Hyperlink = ResolveHlinkClick(preservedHlink, slideRels, allSlides, slideDir, slidePartPathToId);
+        return preserved;
     }
 
     // ── Wave 25A: Preserved modern objects (zoom / 3D / unknown graphicFrame) ─────────
@@ -3015,7 +3031,11 @@ public static class PptxPackageReader
 
     // ── p:pic ────────────────────────────────────────────────────────────────────
 
-    private static SlideShape ReadPic(XElement pic, ZipArchive archive, string partPath, PresentationColorScheme scheme)
+    private static SlideShape ReadPic(XElement pic, ZipArchive archive, string partPath, PresentationColorScheme scheme,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         var cNvPr = pic.Element(P + "nvPicPr")?.Element(P + "cNvPr");
         var nvPr  = pic.Element(P + "nvPicPr")?.Element(P + "nvPr");
@@ -3152,6 +3172,10 @@ public static class PptxPackageReader
                 shape.Kind  = SlideShapeKind.Media;
             }
         }
+
+        var shapeHlink = cNvPr?.Element(A + "hlinkClick");
+        if (shapeHlink is not null)
+            shape.Hyperlink = ResolveHlinkClick(shapeHlink, slideRels, allSlides, slideDir, slidePartPathToId);
 
         return shape;
     }
@@ -3442,6 +3466,10 @@ public static class PptxPackageReader
             IsHidden = ReadHidden(cNvPr),
             Kind = SlideShapeKind.Group
         };
+
+        var shapeHlink = cNvPr?.Element(A + "hlinkClick");
+        if (shapeHlink is not null)
+            shape.Hyperlink = ResolveHlinkClick(shapeHlink, slideRels, allSlides, slideDir, slidePartPathToId);
 
         ReadSpPr(grpSp.Element(P + "grpSpPr"), shape, scheme);
 

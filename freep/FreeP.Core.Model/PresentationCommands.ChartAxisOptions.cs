@@ -21,6 +21,11 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
     private ChartTickLabelPosition? _oldTickLabelPosition;
     private ChartAxisCrossing? _oldCrosses;
     private double? _oldCrossesAt;
+    private ChartCrossBetween? _oldCrossBetween;
+    private ChartLabelAlignment? _oldLabelAlignment;
+    private int? _oldLabelOffsetPercent;
+    private bool? _oldNoMultiLevelLabels;
+    private bool? _oldAutoCrossing;
 
     public SetChartAxisOptionsCommand(int slideIndex, uint shapeId, ChartAxisOptions options)
     {
@@ -55,6 +60,13 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         axis.TickLabelPosition = _newOptions.TickLabelPosition;
         axis.Crosses = _newOptions.CrossesAt is null ? _newOptions.Crosses : null;
         axis.CrossesAt = _newOptions.CrossesAt;
+        axis.CrossBetween = _newOptions.CrossBetween;
+        axis.LabelAlignment = _newOptions.LabelAlignment;
+        axis.LabelOffsetPercent = _newOptions.LabelOffsetPercent is { } offset
+            ? Math.Clamp(offset, 0, 100)
+            : null;
+        axis.NoMultiLevelLabels = _newOptions.NoMultiLevelLabels;
+        axis.AutoCrossing = _newOptions.AutoCrossing;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -79,6 +91,11 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         axis.TickLabelPosition = _oldTickLabelPosition;
         axis.Crosses = _oldCrosses;
         axis.CrossesAt = _oldCrossesAt;
+        axis.CrossBetween = _oldCrossBetween;
+        axis.LabelAlignment = _oldLabelAlignment;
+        axis.LabelOffsetPercent = _oldLabelOffsetPercent;
+        axis.NoMultiLevelLabels = _oldNoMultiLevelLabels;
+        axis.AutoCrossing = _oldAutoCrossing;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -98,6 +115,11 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         _oldTickLabelPosition = axis.TickLabelPosition;
         _oldCrosses = axis.Crosses;
         _oldCrossesAt = axis.CrossesAt;
+        _oldCrossBetween = axis.CrossBetween;
+        _oldLabelAlignment = axis.LabelAlignment;
+        _oldLabelOffsetPercent = axis.LabelOffsetPercent;
+        _oldNoMultiLevelLabels = axis.NoMultiLevelLabels;
+        _oldAutoCrossing = axis.AutoCrossing;
     }
 
     private static ChartAxis ResolveAxis(ChartShape chart, ChartAxisKind kind) =>

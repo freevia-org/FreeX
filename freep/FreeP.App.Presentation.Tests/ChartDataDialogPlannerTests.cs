@@ -430,11 +430,17 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetTickLabelPosition(ChartTickLabelPosition.NextTo);
         planner.SetCrosses(ChartAxisCrossing.Min);
         planner.SetCrossesAt(10);
+        planner.SetCrossBetween(ChartCrossBetween.MidCat);
+        planner.SetLabelAlignment(ChartLabelAlignment.Right);
+        planner.SetLabelOffsetPercent(35);
+        planner.SetNoMultiLevelLabels(true);
+        planner.SetAutoCrossing(false);
 
         planner.BuildCommitPlan().Should().Be(new ChartAxisOptions(
             ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false,
             ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
-            null, 10, false));
+            null, 10, false, ChartCrossBetween.MidCat, ChartLabelAlignment.Right,
+            35, true, false));
         chart.ValueAxis.Title.Should().Be("Amount", "axis dialogs must edit a working copy");
         chart.ValueAxis.Delete.Should().BeTrue("axis dialogs must edit a working copy");
         ChartAxisOptionsPlanner.BuildSurfacePlan().CommandId
