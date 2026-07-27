@@ -247,6 +247,10 @@ public static class FreePRibbon
             RibbonCommandIconKind.Next, FreePRibbonText.SlideShowFromBeginningKeyTip);
         group.Large("freep.slideshow.from-current-slide", FreePRibbonText.SlideShowFromCurrentSlideLabel,
             profile.SlideShowFromCurrentSlideIcon, FreePRibbonText.SlideShowFromCurrentSlideKeyTip);
+        group.Medium("freep.slideshow.rehearse-timings", FreePRibbonText.SlideShowRehearseTimingsLabel,
+            RibbonCommandIconKind.Watch, FreePRibbonText.SlideShowRehearseTimingsKeyTip);
+        group.Medium("freep.slideshow.record-timings", FreePRibbonText.SlideShowRecordTimingsLabel,
+            RibbonCommandIconKind.Watch, FreePRibbonText.SlideShowRecordTimingsKeyTip);
         group.Medium("freep.slideshow.custom-shows", FreePRibbonText.SlideShowCustomShowsLabel,
             RibbonCommandIconKind.List, FreePRibbonText.SlideShowCustomShowsKeyTip);
     }
