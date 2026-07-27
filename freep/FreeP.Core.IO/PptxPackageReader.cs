@@ -1982,7 +1982,7 @@ public static class PptxPackageReader
         try
         {
             smart.Data = ReadSmartArtData(smart);
-            TryAttachPictureCaptionListNodePictures(smart, archive);
+            TryAttachPictureNodePictures(smart, archive);
         }
         catch
         {
@@ -2379,7 +2379,7 @@ public static class PptxPackageReader
             dataDoc = OpcXml.LoadXml(ms2);
 
         var isLiveLayoutSupported = IsLiveSmartArtLayoutSupported(layoutUniqueId, family);
-        if (IsPictureCaptionListLayout(layoutUniqueId))
+        if (IsPictureNodeLayout(layoutUniqueId))
         {
             // Final admission for this picture layout depends on deterministic
             // node-level image import from the cached diagram drawing.
@@ -2504,10 +2504,10 @@ public static class PptxPackageReader
         return data;
     }
 
-    private static void TryAttachPictureCaptionListNodePictures(SmartArtShape smart, ZipArchive archive)
+    private static void TryAttachPictureNodePictures(SmartArtShape smart, ZipArchive archive)
     {
         var data = smart.Data;
-        if (data is null || !IsPictureCaptionListLayout(data.LayoutUniqueId))
+        if (data is null || !IsPictureNodeLayout(data.LayoutUniqueId))
             return;
 
         var nodes = FlattenSmartArtNodes(data);
@@ -2583,13 +2583,13 @@ public static class PptxPackageReader
         return pictures;
     }
 
-    private static bool IsPictureCaptionListLayout(string uniqueId)
+    private static bool IsPictureNodeLayout(string uniqueId)
     {
         if (string.IsNullOrWhiteSpace(uniqueId))
             return false;
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
-        return string.Equals(id.Split('/').Last(), "picturecaptionlist", StringComparison.Ordinal);
+        return id.Split('/').Last() is "picturecaptionlist" or "picturegrid";
     }
 
     /// <summary>
@@ -2622,7 +2622,7 @@ public static class PptxPackageReader
             return SmartArtFamily.Process;
 
         if (uid.Contains("list") || uid.Contains("lproc") || uid.Contains("bullet")
-            || uid.Contains("pyramid") || uid.Contains("stack"))
+            || uid.Contains("pyramid") || uid.Contains("stack") || uid.Contains("picturegrid"))
             return SmartArtFamily.List;
 
         return SmartArtFamily.Unknown;
@@ -2644,11 +2644,11 @@ public static class PptxPackageReader
         return family switch
         {
             SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "basictimeline" or "stepdownprocess" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess" or "basicchevronprocess" or "closedchevronprocess" or "bendingprocess" or "alternatingprocess" or "arrowribbon" or "circleprocess" or "funnelprocess" or "verticalprocess",
-            SmartArtFamily.List => layoutId is "list1" or "basicblocklist" or "verticalboxlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "picturecaptionlist",
+            SmartArtFamily.List => layoutId is "list1" or "basicblocklist" or "verticalboxlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "picturecaptionlist" or "picturegrid",
             SmartArtFamily.Cycle => layoutId is "cycle1" or "radial1" or "basiccycle" or "radialcycle" or "radiallist" or "gearcycle" or "textcycle" or "blockcycle" or "nondirectionalcycle" or "continuouscycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "hierarchy3" or "basichierarchy" or "horizontalhierarchy" or "labeledhierarchy" or "tablehierarchy" or "verticalbulletlist" or "orgchart",
             SmartArtFamily.Matrix => layoutId is "matrix1" or "basicmatrix" or "titledmatrix" or "gridmatrix",
-            SmartArtFamily.Relationship => layoutId is "basicvenn" or "radialvenn" or "targetlist" or "stackedvenn",
+            SmartArtFamily.Relationship => layoutId is "relationship1" or "basicvenn" or "radialvenn" or "targetlist" or "stackedvenn",
             _ => false
         };
     }

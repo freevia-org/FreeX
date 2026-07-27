@@ -147,7 +147,7 @@ internal static class SmartArtInsertionFactory
         int nodeCount,
         IReadOnlyList<SlideObjectPicturePayload>? pictures)
     {
-        if (preset != SmartArtLayoutPreset.PictureCaptionList)
+        if (preset is not (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureGrid))
             return null;
 
         if (pictures is null || pictures.Count == 0)
@@ -160,7 +160,7 @@ internal static class SmartArtInsertionFactory
             return Enumerable.Repeat(pictures[0], nodeCount).ToArray();
 
         throw new ArgumentException(
-            $"Picture Caption List requires one image or exactly {nodeCount} images.",
+            $"Picture SmartArt layouts require one image or exactly {nodeCount} images.",
             nameof(pictures));
     }
 
@@ -179,7 +179,7 @@ internal static class SmartArtInsertionFactory
             new XElement(DrawingMl + "spTree",
                 new XElement(DrawingMl + "nvGrpSpPr",
                     new XElement(DrawingMl + "cNvPr",
-                        new XAttribute("id", "1"), new XAttribute("name", "SmartArt Picture Caption List")),
+                        new XAttribute("id", "1"), new XAttribute("name", "SmartArt Picture Layout")),
                     new XElement(DrawingMl + "cNvGrpSpPr")),
                 new XElement(DrawingMl + "grpSpPr",
                     new XElement(Drawing + "xfrm",
@@ -263,6 +263,7 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.BasicMatrix => ("urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix", SmartArtFamily.Matrix),
             SmartArtLayoutPreset.TitledMatrix => ("urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix", SmartArtFamily.Matrix),
             SmartArtLayoutPreset.GridMatrix => ("urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix", SmartArtFamily.Matrix),
+            SmartArtLayoutPreset.BasicRelationship => ("urn:microsoft.com/office/officeart/2005/8/layout/relationship1", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.BasicVenn => ("urn:microsoft.com/office/officeart/2005/8/layout/basicVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.RadialVenn => ("urn:microsoft.com/office/officeart/2005/8/layout/radialVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.TargetList => ("urn:microsoft.com/office/officeart/2005/8/layout/targetList", SmartArtFamily.Relationship),
@@ -274,6 +275,7 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.PictureCaptionList => ("urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList", SmartArtFamily.List),
             SmartArtLayoutPreset.LabeledHierarchy => ("urn:microsoft.com/office/officeart/2005/8/layout/labeledHierarchy", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.TableHierarchy => ("urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.PictureGrid => ("urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid", SmartArtFamily.List),
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
         };
 

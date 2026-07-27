@@ -56,6 +56,7 @@ public enum SmartArtLayoutPreset
     BasicMatrix,
     TitledMatrix,
     GridMatrix,
+    BasicRelationship,
     BasicVenn,
     RadialVenn,
     TargetList,
@@ -67,6 +68,7 @@ public enum SmartArtLayoutPreset
     PictureCaptionList,
     LabeledHierarchy,
     TableHierarchy,
+    PictureGrid,
 }
 
 /// <summary>Bounded PowerPoint SmartArt Quick Style choices.</summary>
@@ -152,6 +154,7 @@ public static class SmartArtAuthoringPlanner
     public const string BasicMatrixLayoutCommandId = "freep.smartart.layout.basic-matrix";
     public const string TitledMatrixLayoutCommandId = "freep.smartart.layout.titled-matrix";
     public const string GridMatrixLayoutCommandId = "freep.smartart.layout.grid-matrix";
+    public const string BasicRelationshipLayoutCommandId = "freep.smartart.layout.basic-relationship";
     public const string BasicVennLayoutCommandId = "freep.smartart.layout.basic-venn";
     public const string RadialVennLayoutCommandId = "freep.smartart.layout.radial-venn";
     public const string TargetListLayoutCommandId = "freep.smartart.layout.target-list";
@@ -163,6 +166,7 @@ public static class SmartArtAuthoringPlanner
     public const string PictureCaptionListLayoutCommandId = "freep.smartart.layout.picture-caption-list";
     public const string LabeledHierarchyLayoutCommandId = "freep.smartart.layout.labeled-hierarchy";
     public const string TableHierarchyLayoutCommandId = "freep.smartart.layout.table-hierarchy";
+    public const string PictureGridLayoutCommandId = "freep.smartart.layout.picture-grid";
     public const string SimpleQuickStyleCommandId = "freep.smartart.style.simple";
     public const string ModerateQuickStyleCommandId = "freep.smartart.style.moderate";
     public const string IntenseQuickStyleCommandId = "freep.smartart.style.intense";
@@ -273,10 +277,10 @@ public static class SmartArtAuthoringPlanner
         if (smartArt?.Data is null)
             return NotAppliedLayout("No SmartArt data model is available.");
 
-        if (preset == SmartArtLayoutPreset.PictureCaptionList &&
+        if (preset is SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureGrid &&
             smartArt.Data.Nodes.Any(node => node.Picture?.Bytes is not { Length: > 0 }))
         {
-            return NotAppliedLayout("Picture Caption List requires image content for every SmartArt node.");
+            return NotAppliedLayout("Picture-based SmartArt layouts require image content for every SmartArt node.");
         }
 
         var layoutPart = smartArt.Parts.Values.FirstOrDefault(candidate =>
@@ -355,6 +359,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix", SmartArtFamily.Matrix),
             SmartArtLayoutPreset.GridMatrix =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix", SmartArtFamily.Matrix),
+            SmartArtLayoutPreset.BasicRelationship =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/relationship1", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.BasicVenn =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.RadialVenn =>
@@ -377,6 +383,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/labeledHierarchy", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.TableHierarchy =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.PictureGrid =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid", SmartArtFamily.List),
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
         };
 

@@ -2346,6 +2346,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TitledMatrix)));
         r.Register(SmartArtAuthoringPlanner.GridMatrixLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.GridMatrix)));
+        r.Register(SmartArtAuthoringPlanner.BasicRelationshipLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicRelationship)));
         r.Register(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicVenn)));
         r.Register(SmartArtAuthoringPlanner.RadialVennLayoutCommandId,
@@ -2364,6 +2366,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.OrgChart)));
         r.Register(SmartArtAuthoringPlanner.PictureCaptionListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureCaptionList)));
+        r.Register(SmartArtAuthoringPlanner.PictureGridLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureGrid)));
         r.Register(SmartArtAuthoringPlanner.LabeledHierarchyLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.LabeledHierarchy)));
         r.Register(SmartArtAuthoringPlanner.TableHierarchyLayoutCommandId,

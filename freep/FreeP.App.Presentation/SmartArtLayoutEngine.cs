@@ -81,6 +81,9 @@ public static class SmartArtLayoutEngine
         if (IsPictureCaptionListLayout(data.LayoutUniqueId))
             return LayoutPictureCaptionList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsPictureGridLayout(data.LayoutUniqueId))
+            return LayoutPictureGrid(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsAlternatingProcessLayout(data.LayoutUniqueId))
             return LayoutAlternatingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -135,6 +138,8 @@ public static class SmartArtLayoutEngine
             SmartArtFamily.Matrix    => LayoutMatrix    (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
             SmartArtFamily.Relationship => IsBasicVennLayout(data.LayoutUniqueId)
                 ? LayoutBasicVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
+                : IsBasicRelationshipLayout(data.LayoutUniqueId)
+                    ? LayoutBasicRelationship(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                 : IsRadialVennLayout(data.LayoutUniqueId)
                     ? LayoutRadialVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                     : IsTargetListLayout(data.LayoutUniqueId)
@@ -940,6 +945,59 @@ public static class SmartArtLayoutEngine
         return shapes;
     }
 
+    private static IReadOnlyList<SlideShape>? LayoutPictureGrid(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Any(n => n.Picture is not { Bytes.Length: > 0 }))
+            return null;
+
+        var columns = Math.Min(2, Math.Max(1, nodes.Count));
+        var rows = (nodes.Count + columns - 1) / columns;
+        var padX = (long)(fcx * OuterPaddingFrac);
+        var padY = (long)(fcy * OuterPaddingFrac);
+        var gapX = Math.Max((long)(fcx * 0.03), 1L);
+        var gapY = Math.Max((long)(fcy * 0.03), 1L);
+        var cellW = Math.Max((fcx - 2 * padX - (columns - 1) * gapX) / columns, 1L);
+        var cellH = Math.Max((fcy - 2 * padY - (rows - 1) * gapY) / rows, 1L);
+        var pictureH = Math.Max((long)(cellH * 0.62), 1L);
+        var captionH = Math.Max(cellH - pictureH, 1L);
+        var shapes = new List<SlideShape>(nodes.Count * 2);
+        uint idCounter = 310;
+
+        for (var index = 0; index < nodes.Count; index++)
+        {
+            var column = index % columns;
+            var row = index / columns;
+            var x = fx + padX + column * (cellW + gapX);
+            var y = fy + padY + row * (cellH + gapY);
+            shapes.Add(new SlideShape
+            {
+                Id = idCounter++,
+                Name = $"SmartArt_GridPicture_{index + 1}",
+                Kind = SlideShapeKind.Picture,
+                OffsetXEmu = x,
+                OffsetYEmu = y,
+                ExtentCxEmu = cellW,
+                ExtentCyEmu = pictureH,
+                Picture = nodes[index].Picture,
+            });
+
+            var nodeStyle = stylePlan.GetNodeStyle(index, nodes[index].Level, SmartArtFamily.List);
+            shapes.Add(MakeCaption(
+                idCounter++,
+                nodes[index].Text,
+                nodeStyle,
+                x,
+                y + pictureH,
+                cellW,
+                captionH));
+        }
+
+        return shapes;
+    }
+
     /// <summary>
     /// Basic pyramid geometry: top-to-bottom centered segments that widen toward
     /// the base. This owns renderer-neutral segment placement, not exact
@@ -1045,6 +1103,46 @@ public static class SmartArtLayoutEngine
     /// frame. This models bounded relationship-family placement with shared
     /// shape ops, not exact PowerPoint blend math or text offsets.
     /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutBasicRelationship(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Count is < 2 or > 3)
+            return null;
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long innerH = Math.Max(fcy - 2 * outerPadY, 1L);
+        const double overlapStepFrac = 0.58;
+        long diameter = Math.Min(
+            (long)(innerW / (1.0 + overlapStepFrac * (nodes.Count - 1))),
+            (long)(innerH * 0.82));
+        diameter = Math.Max(diameter, 1L);
+        long step = Math.Max((long)(diameter * overlapStepFrac), 1L);
+        long totalW = diameter + (nodes.Count - 1) * step;
+        long leftX = fx + outerPadX + Math.Max((innerW - totalW) / 2, 0L);
+        long topY = fy + outerPadY + Math.Max((innerH - diameter) / 2, 0L);
+
+        var shapes = new List<SlideShape>(nodes.Count);
+        uint idCounter = 530;
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var baseStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Relationship);
+            var translucentStyle = baseStyle with
+            {
+                Fill = new ThemeAwareColor(baseStyle.Fill.Resolved, alpha: 150)
+            };
+            shapes.Add(MakeBox(
+                idCounter++, nodes[i].Text, translucentStyle,
+                leftX + i * step, topY, diameter, diameter,
+                NodeFontSizePt, DrawingShapeKind.Ellipse));
+        }
+
+        return shapes;
+    }
+
     private static IReadOnlyList<SlideShape>? LayoutBasicVenn(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
@@ -1958,6 +2056,15 @@ public static class SmartArtLayoutEngine
         return string.Equals(id.Split('/').Last(), "picturecaptionlist", StringComparison.Ordinal);
     }
 
+    private static bool IsPictureGridLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "picturegrid", StringComparison.Ordinal);
+    }
+
     private static bool IsAlternatingProcessLayout(string uniqueId)
     {
         if (string.IsNullOrWhiteSpace(uniqueId))
@@ -2064,6 +2171,14 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "basicvenn", StringComparison.Ordinal);
+    }
+
+    private static bool IsBasicRelationshipLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "relationship1", StringComparison.Ordinal);
     }
 
     private static bool IsRadialVennLayout(string uniqueId)

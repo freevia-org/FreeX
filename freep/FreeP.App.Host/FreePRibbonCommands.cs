@@ -232,6 +232,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.TitledMatrix)));
         registry.Register(SmartArtAuthoringPlanner.GridMatrixLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.GridMatrix)));
+        registry.Register(SmartArtAuthoringPlanner.BasicRelationshipLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicRelationship)));
         registry.Register(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicVenn)));
         registry.Register(SmartArtAuthoringPlanner.RadialVennLayoutCommandId,
@@ -250,6 +252,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.OrgChart)));
         registry.Register(SmartArtAuthoringPlanner.PictureCaptionListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.PictureCaptionList)));
+        registry.Register(SmartArtAuthoringPlanner.PictureGridLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.PictureGrid)));
         registry.Register(SmartArtAuthoringPlanner.LabeledHierarchyLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.LabeledHierarchy)));
         registry.Register(SmartArtAuthoringPlanner.TableHierarchyLayoutCommandId,

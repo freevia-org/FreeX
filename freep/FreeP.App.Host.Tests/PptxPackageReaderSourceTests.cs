@@ -63,7 +63,7 @@ public sealed class PptxPackageReaderSourceTests
     }
 
     [Fact]
-    public void SmartArtPictureCaptionList_IsAdmittedOnlyThroughDeterministicNodeImages()
+    public void SmartArtPictureLayouts_AreAdmittedOnlyThroughDeterministicNodeImages()
     {
         var source = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
@@ -74,11 +74,11 @@ public sealed class PptxPackageReaderSourceTests
         ExtractMethod(source, "private static SmartArtData? ReadSmartArtData(")
             .Should()
             .Contain("var isLiveLayoutSupported = IsLiveSmartArtLayoutSupported(layoutUniqueId, family);")
-            .And.Contain("if (IsPictureCaptionListLayout(layoutUniqueId))")
+            .And.Contain("if (IsPictureNodeLayout(layoutUniqueId))")
             .And.Contain("isLiveLayoutSupported = false;")
             .And.Contain("IsLiveLayoutSupported = isLiveLayoutSupported");
 
-        ExtractMethod(source, "private static void TryAttachPictureCaptionListNodePictures(")
+        ExtractMethod(source, "private static void TryAttachPictureNodePictures(")
             .Should()
             .Contain("if (pictures.Count != nodes.Count)")
             .And.Contain("data.IsLiveLayoutSupported = false;")
@@ -94,6 +94,9 @@ public sealed class PptxPackageReaderSourceTests
         ExtractMethod(source, "private static bool IsLiveSmartArtLayoutSupported(")
             .Should()
             .Contain("picturecaptionlist")
+            .And.Contain("picturegrid")
+            .And.Contain("pyramidlist")
+            .And.Contain("relationship1")
             .And.Contain("verticalprocess")
             .And.Contain("horizontalhierarchy")
             .And.Contain("hierarchy3");
