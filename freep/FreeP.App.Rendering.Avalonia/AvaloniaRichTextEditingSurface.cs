@@ -53,6 +53,15 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         }
     }
 
+    internal IReadOnlyList<FlowDirection> LayoutFlowDirections
+    {
+        get
+        {
+            EnsureLayouts();
+            return _layouts.Select(item => item.FlowDirection).ToArray();
+        }
+    }
+
     internal Rect CaretRect
     {
         get
@@ -238,7 +247,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 origin,
                 CreateBulletLayout(paragraph),
                 bulletOrigin,
-                CreateBulletImage(paragraph)));
+                CreateBulletImage(paragraph),
+                paragraph.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight));
             y += layout.Height + paragraph.SpaceAfterDip;
         }
     }
@@ -269,7 +279,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             TextWrapping.Wrap,
             TextTrimming.None,
             textDecorations: null,
-            FlowDirection.LeftToRight,
+            paragraph.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight,
             maxWidth,
             double.PositiveInfinity,
             lineHeight: double.NaN,
@@ -302,7 +312,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             TextWrapping.NoWrap,
             TextTrimming.None,
             textDecorations: null,
-            FlowDirection.LeftToRight,
+            paragraph.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight,
             double.PositiveInfinity,
             double.PositiveInfinity,
             lineHeight: double.NaN,
@@ -458,7 +468,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         Point Origin,
         TextLayout? BulletLayout,
         Point BulletOrigin,
-        Bitmap? BulletImage)
+        Bitmap? BulletImage,
+        FlowDirection FlowDirection)
     {
         internal double Bottom => Origin.Y + Layout.Height + Paragraph.SpaceAfterDip;
     }

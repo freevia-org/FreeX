@@ -30,7 +30,8 @@ public sealed record InCanvasRichTextVisualParagraph(
     double? BulletFontSizePt = null,
     ThemeAwareColor? BulletColor = null,
     double IndentDip = 0,
-    double HangingDip = 0)
+    double HangingDip = 0,
+    bool RightToLeft = false)
 {
     public int GlobalEnd => GlobalStart + Text.Length;
 }
@@ -137,7 +138,10 @@ public static class InCanvasRichTextVisualPlanner
                 paragraph.BulletSizePt ?? ResolveBulletSize(seedRun, paragraph.BulletSizePct),
                 paragraph.BulletColor ?? seedRun?.Color,
                 indentDip,
-                hangingDip));
+                hangingDip,
+                paragraph.RightToLeft ?? body.LstStyle?.Resolve(paragraph.Level)?.RightToLeft
+                    ?? body.DefaultParaRightToLeft
+                    ?? false));
 
             globalStart += text.Length + (paragraphIndex + 1 < body.Paragraphs.Count ? 1 : 0);
         }

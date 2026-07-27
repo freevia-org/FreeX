@@ -2509,7 +2509,10 @@ public static class PptxPackageWriter
         return el;
     }
 
-    private static XElement BuildLvlpPrEl(string localName, TextStyleLevel level)
+    private static XElement BuildLvlpPrEl(
+        string localName,
+        TextStyleLevel level,
+        bool? rightToLeftOverride = null)
     {
         var el = new XElement(A + localName);
 
@@ -2522,6 +2525,9 @@ public static class PptxPackageWriter
                 TextAlign.Distributed => "dist",
                 _ => "l"
             }));
+        var rightToLeft = level.RightToLeft ?? rightToLeftOverride;
+        if (rightToLeft.HasValue)
+            el.Add(new XAttribute("rtl", rightToLeft.Value ? "1" : "0"));
         if (level.MarginLeftEmu.HasValue) el.Add(new XAttribute("marL", level.MarginLeftEmu.Value));
         if (level.IndentEmu.HasValue)     el.Add(new XAttribute("indent", level.IndentEmu.Value));
 
@@ -3432,7 +3438,9 @@ public static class PptxPackageWriter
 
             txBody = new XElement(A + "txBody",
                 bodyPr,
-                BuildLstStyleEl(cell.TextBody.LstStyle),
+                BuildLstStyleEl(
+                    cell.TextBody.LstStyle,
+                    cell.TextBody.DefaultParaRightToLeft),
                 cell.TextBody.Paragraphs.Select(p => BuildParaEl(p, bulletImageRelIds: bulletImageRelIds)));
         }
         else
@@ -3723,17 +3731,24 @@ public static class PptxPackageWriter
     /// style) emits an empty element so the XML remains valid. When levels are present each
     /// non-null level is emitted as <c>a:lvlNpPr</c>.
     /// </summary>
-    private static XElement BuildLstStyleEl(TextStyleLevels? levels)
+    private static XElement BuildLstStyleEl(
+        TextStyleLevels? levels,
+        bool? defaultParaRightToLeft = null)
     {
-        if (levels is null || !levels.HasAny)
+        if ((levels is null || !levels.HasAny) && !defaultParaRightToLeft.HasValue)
             return new XElement(A + "lstStyle");
 
         var el = new XElement(A + "lstStyle");
         for (int i = 0; i < 9; i++)
         {
-            var level = levels[i];
-            if (level is null) continue;
-            el.Add(BuildLvlpPrEl($"lvl{i + 1}pPr", level));
+            var level = levels?[i];
+            if (level is null)
+            {
+                if (i == 0 && defaultParaRightToLeft.HasValue)
+                    el.Add(BuildLvlpPrEl("lvl1pPr", new TextStyleLevel(), defaultParaRightToLeft));
+                continue;
+            }
+            el.Add(BuildLvlpPrEl($"lvl{i + 1}pPr", level, i == 0 ? defaultParaRightToLeft : null));
         }
         return el;
     }
@@ -3836,7 +3851,7 @@ public static class PptxPackageWriter
         // Body-level elements use a: namespace, paragraphs/runs use a: namespace.
         return new XElement(P + "txBody",
             bodyPr,
-            BuildLstStyleEl(body.LstStyle),
+            BuildLstStyleEl(body.LstStyle, body.DefaultParaRightToLeft),
             body.Paragraphs.Select(p => BuildParaEl(p, hlinkRelIds, allSlides, bulletImageRelIds)));
     }
 
@@ -3858,6 +3873,11 @@ public static class PptxPackageWriter
                 TextAlign.Distributed => "dist",
                 _ => "l"
             }));
+            hasPPr = true;
+        }
+        if (para.RightToLeft.HasValue)
+        {
+            pPr.Add(new XAttribute("rtl", para.RightToLeft.Value ? "1" : "0"));
             hasPPr = true;
         }
         if (para.Level > 0) { pPr.Add(new XAttribute("lvl", para.Level)); hasPPr = true; }

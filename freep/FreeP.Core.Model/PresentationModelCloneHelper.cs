@@ -90,6 +90,7 @@ internal static class PresentationModelCloneHelper
         {
             Anchor = source.Anchor,
             DefaultParaAlign = source.DefaultParaAlign,
+            DefaultParaRightToLeft = source.DefaultParaRightToLeft,
             InsetLeftPt = source.InsetLeftPt,
             InsetRightPt = source.InsetRightPt,
             InsetTopPt = source.InsetTopPt,
@@ -194,6 +195,7 @@ internal static class PresentationModelCloneHelper
         var copy = new Paragraph
         {
             Align = source.Align,
+            RightToLeft = source.RightToLeft,
             Level = source.Level,
             BulletKind = source.BulletKind,
             BulletSuppressed = source.BulletSuppressed,
@@ -394,6 +396,7 @@ internal static class PresentationModelCloneHelper
             : new TextStyleLevel
             {
                 Align = source.Align,
+                RightToLeft = source.RightToLeft,
                 MarginLeftEmu = source.MarginLeftEmu,
                 IndentEmu = source.IndentEmu,
                 FontSizePt = source.FontSizePt,

@@ -233,6 +233,8 @@ public static class SlideCompositor
 
             var effectiveAnchor = ResolveVerticalAnchor(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody, shape.Placeholder);
             var effectiveDefaultAlign = ResolveDefaultParaAlign(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody);
+            var effectiveDefaultRightToLeft = ResolveDefaultParaRightToLeft(
+                shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody);
 
             // MM3: resolve the master TextStyles for this slide's master (for text-style inheritance).
             var resolvedLayout = presentation.Layouts.Find(l => l.Id == slide.LayoutId);
@@ -247,7 +249,8 @@ public static class SlideCompositor
                 ? ResolveShapeShadowAsTextShadow(shape.Effects)
                 : null;
 
-            text = ResolveTextLayout(shape.TextBody, effectiveAnchor, effectiveDefaultAlign, shape.Placeholder,
+            text = ResolveTextLayout(shape.TextBody, effectiveAnchor, effectiveDefaultAlign,
+                effectiveDefaultRightToLeft, shape.Placeholder,
                 theme, slideIndex, effectiveClrMap, layoutPh?.TextBody, masterPh?.TextBody, resolvedMaster?.TextStyles,
                 inheritedTextShadow);
         }
@@ -415,6 +418,17 @@ public static class SlideCompositor
         if (body.DefaultParaAlign.HasValue) return body.DefaultParaAlign.Value;
         if (layoutBody?.DefaultParaAlign.HasValue == true) return layoutBody.DefaultParaAlign!.Value;
         if (masterBody?.DefaultParaAlign.HasValue == true) return masterBody.DefaultParaAlign!.Value;
+        return null;
+    }
+
+    private static bool? ResolveDefaultParaRightToLeft(
+        TextBody body,
+        TextBody? layoutBody,
+        TextBody? masterBody)
+    {
+        if (body.DefaultParaRightToLeft.HasValue) return body.DefaultParaRightToLeft.Value;
+        if (layoutBody?.DefaultParaRightToLeft.HasValue == true) return layoutBody.DefaultParaRightToLeft!.Value;
+        if (masterBody?.DefaultParaRightToLeft.HasValue == true) return masterBody.DefaultParaRightToLeft!.Value;
         return null;
     }
 
@@ -1169,6 +1183,10 @@ public static class SlideCompositor
             {
                 Runs         = resolvedRuns,
                 Align        = para.Align ?? TextAlign.Left,
+                RightToLeft  = para.RightToLeft
+                    ?? body.LstStyle?.Resolve(para.Level)?.RightToLeft
+                    ?? body.DefaultParaRightToLeft
+                    ?? false,
                 Level        = para.Level,
                 BulletKind   = para.BulletKind,
                 BulletChar   = para.BulletChar,
@@ -1358,6 +1376,7 @@ public static class SlideCompositor
         TextBody body,
         VerticalAnchor effectiveAnchor,
         TextAlign? effectiveDefaultAlign,
+        bool? effectiveDefaultRightToLeft,
         Placeholder? placeholder,
         PresentationTheme theme,
         int slideIndex = 0,
@@ -1705,6 +1724,11 @@ public static class SlideCompositor
                 Runs = resolvedRuns,
                 // P0: use the inherited default alignment when the paragraph has no explicit align.
                 Align = para.Align ?? fallbackAlign,
+                RightToLeft = para.RightToLeft
+                    ?? body.LstStyle?.Resolve(para.Level)?.RightToLeft
+                    ?? effectiveDefaultRightToLeft
+                    ?? inheritedStyle?.RightToLeft
+                    ?? false,
                 Level = para.Level,
                 BulletKind = effectiveBulletKind,
                 BulletChar = effectiveBulletChar,

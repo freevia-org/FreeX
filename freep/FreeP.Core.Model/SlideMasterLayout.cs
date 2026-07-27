@@ -10,6 +10,9 @@ public sealed class TextStyleLevel
     /// <summary>Paragraph alignment, or null if not set at this level.</summary>
     public TextAlign? Align { get; set; }
 
+    /// <summary>Paragraph reading direction, or null if not set at this level.</summary>
+    public bool? RightToLeft { get; set; }
+
     /// <summary>Left margin (first-line hanging indent) in EMU, or null if not set.</summary>
     public long? MarginLeftEmu { get; set; }
 

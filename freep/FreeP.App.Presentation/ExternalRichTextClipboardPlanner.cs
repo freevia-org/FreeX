@@ -100,6 +100,7 @@ public static class ExternalRichTextClipboardPlanner
             public int Green = -1;
             public int Blue = -1;
             public TextAlign? ParagraphAlignment;
+            public bool? ParagraphRightToLeft;
             public int? ListOverrideId;
             public int ListLevel;
             public int? LeftIndentTwips;
@@ -493,6 +494,8 @@ public static class ExternalRichTextClipboardPlanner
                 case "qr": _state.ParagraphAlignment = TextAlign.Right; break;
                 case "qc": _state.ParagraphAlignment = TextAlign.Center; break;
                 case "qj": _state.ParagraphAlignment = TextAlign.Justify; break;
+                case "rtlpar": _state.ParagraphRightToLeft = true; break;
+                case "ltrpar": _state.ParagraphRightToLeft = false; break;
                 case "li": _state.LeftIndentTwips = parameter is { } left ? Math.Clamp(left, -100_000, 100_000) : 0; break;
                 case "fi": _state.FirstLineIndentTwips = parameter is { } first ? Math.Clamp(first, -100_000, 100_000) : 0; break;
                 case "sb": _state.SpaceBeforeTwips = parameter is { } before ? Math.Clamp(before, -100_000, 100_000) : 0; break;
@@ -794,6 +797,7 @@ public static class ExternalRichTextClipboardPlanner
         private void ResetParagraphFormatting()
         {
             _state.ParagraphAlignment = null;
+            _state.ParagraphRightToLeft = null;
             _state.ListOverrideId = null;
             _state.ListLevel = 0;
             _state.LeftIndentTwips = null;
@@ -807,6 +811,7 @@ public static class ExternalRichTextClipboardPlanner
         private void ApplyParagraphState(Paragraph paragraph)
         {
             paragraph.Align = _state.ParagraphAlignment;
+            paragraph.RightToLeft = _state.ParagraphRightToLeft;
             paragraph.Level = Math.Clamp(
                 _state.ListOverrideId is not null ? _state.ListLevel : 0,
                 0,
