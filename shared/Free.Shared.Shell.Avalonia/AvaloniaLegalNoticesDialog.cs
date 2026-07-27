@@ -32,10 +32,10 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         ArgumentNullException.ThrowIfNull(notices);
 
         Title = windowTitle;
-        Width = 840;
-        Height = 620;
-        MinWidth = 620;
-        MinHeight = 420;
+        Width = LegalNoticesDialogMetrics.Width;
+        Height = LegalNoticesDialogMetrics.Height;
+        MinWidth = LegalNoticesDialogMetrics.MinWidth;
+        MinHeight = LegalNoticesDialogMetrics.MinHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = true;
         ShowInTaskbar = false;
@@ -48,7 +48,13 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         Opened += (_, _) =>
         {
             foreach (var textBox in _noticeTextBoxes)
-                textBox.Padding = new Thickness(8);
+            {
+                textBox.Padding = new Thickness(
+                    LegalNoticesDialogMetrics.AvaloniaTextPaddingLeft,
+                    LegalNoticesDialogMetrics.TextPadding,
+                    LegalNoticesDialogMetrics.AvaloniaTextPaddingRight,
+                    LegalNoticesDialogMetrics.TextPadding);
+            }
             FocusInitialKeyboardTarget();
         };
     }
@@ -61,14 +67,13 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         string closeButtonContent,
         string helpText)
     {
-        var root = new DockPanel { Margin = new Thickness(16) };
+        var root = new DockPanel { Margin = new Thickness(LegalNoticesDialogMetrics.ContentMargin) };
 
         var intro = new TextBlock
         {
             Text = introText,
             TextWrapping = TextWrapping.Wrap,
-            // WPF's compact dialog typography leaves a three-pixel lead before the tab strip.
-            Margin = new Thickness(0, 0, 0, 13),
+            Margin = new Thickness(0, 0, 0, LegalNoticesDialogMetrics.AvaloniaIntroBottomMargin),
             Foreground = Brushes.Black,
         };
         AutomationProperties.SetName(intro, "Legal Notices summary");
@@ -92,7 +97,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         close.Click += (_, _) => Close();
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [close],
-            new Thickness(0, 12, 0, 0));
+            new Thickness(0, LegalNoticesDialogMetrics.ActionRowTopMargin, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(buttonRow);
 
@@ -111,8 +116,12 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             "Choose a legal notice section to read and copy.");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             _tabControl,
-            AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = 21 },
-            contentPaneMargin: new Thickness(-11, 0, -11, 0));
+            AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = LegalNoticesDialogMetrics.TabControlHeight },
+            contentPaneMargin: new Thickness(
+                LegalNoticesDialogMetrics.AvaloniaTabContentLeftMargin,
+                LegalNoticesDialogMetrics.AvaloniaTabContentTopMargin,
+                LegalNoticesDialogMetrics.AvaloniaTabContentRightMargin,
+                0));
         root.Children.Add(_tabControl);
 
         return root;
@@ -129,9 +138,14 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             AcceptsTab = true,
             TextWrapping = TextWrapping.Wrap,
             FontFamily = new FontFamily("Consolas"),
-            FontSize = 12,
-            Padding = new Thickness(8),
-            MinHeight = 280,
+            FontSize = LegalNoticesDialogMetrics.TextFontSize,
+            LineHeight = LegalNoticesDialogMetrics.TextLineHeight,
+            Padding = new Thickness(
+                LegalNoticesDialogMetrics.AvaloniaTextPaddingLeft,
+                LegalNoticesDialogMetrics.TextPadding,
+                LegalNoticesDialogMetrics.AvaloniaTextPaddingRight,
+                LegalNoticesDialogMetrics.TextPadding),
+            MinHeight = LegalNoticesDialogMetrics.TextMinHeight,
             Foreground = Brushes.Black,
         };
         AutomationProperties.SetName(textBox, notice.Title);
