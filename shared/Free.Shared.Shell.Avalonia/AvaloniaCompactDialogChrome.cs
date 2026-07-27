@@ -181,7 +181,13 @@ public static class AvaloniaCompactDialogChrome
         if (style.TextSelectionBrush is not null)
             textBox.SelectionForegroundBrush = Brushes.Black;
         textBox.VerticalContentAlignment = VerticalAlignment.Center;
+        var textBoxBackground = style.TextBoxBackgroundBrush ?? Brushes.White;
+        textBox.Styles.Add(new Style(selector => selector.OfType<Border>())
+        {
+            Setters = { new Setter(Border.BackgroundProperty, textBoxBackground) },
+        });
         if (style.DisabledTextBoxBackgroundBrush is not null)
+        {
             textBox.Styles.Add(new Style(selector => selector.OfType<TextBox>().Class(":disabled"))
             {
                 Setters =
@@ -190,6 +196,16 @@ public static class AvaloniaCompactDialogChrome
                     new Setter(TextBox.BorderBrushProperty, inputBorder),
                 },
             });
+            // Avalonia's Fluent disabled template supplies its own surface after the class
+            // style is applied. Keep WPF-authority palettes visible for controls that are
+            // already disabled when the dialog chrome is installed.
+            if (!textBox.IsEnabled)
+            {
+                textBox.Opacity = 1;
+                textBox.Background = style.DisabledTextBoxBackgroundBrush;
+                textBox.Foreground = new ImmutableSolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70));
+            }
+        }
     }
 
     public static void FocusAndSelect(TextBox textBox)
@@ -213,10 +229,22 @@ public static class AvaloniaCompactDialogChrome
         comboBox.CornerRadius = new CornerRadius(0);
         comboBox.FontSize = style.FontSize;
         comboBox.FontFamily = style.FontFamily;
-        comboBox.Background = style.ComboBoxBackgroundBrush ?? ComboBoxBackgroundBrush;
+        var comboBackground = style.ComboBoxBackgroundBrush ?? ComboBoxBackgroundBrush;
+        comboBox.Background = comboBackground;
         comboBox.BorderBrush = style.InputBorderBrush ?? InputBorderBrush;
         comboBox.BorderThickness = new Thickness(1);
         comboBox.VerticalContentAlignment = VerticalAlignment.Center;
+        // Fluent renders the selected value through named template parts, so setting only the
+        // ComboBox surface does not reach the field behind the text and arrow. Keep those parts
+        // on the same WPF-authority surface when a dialog opts into a palette.
+        comboBox.Styles.Add(new Style(selector => selector.OfType<Border>().Name("PART_LayoutRoot"))
+        {
+            Setters = { new Setter(Border.BackgroundProperty, comboBackground) },
+        });
+        comboBox.Styles.Add(new Style(selector => selector.OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        {
+            Setters = { new Setter(ContentPresenter.BackgroundProperty, comboBackground) },
+        });
     }
 
     public static void ApplyCheckBox(CheckBox checkBox, AvaloniaCompactDialogChromeStyle style)

@@ -7,7 +7,17 @@ using SkiaSharp;
 
 const string InventorySchema = "freew.dialog-route-inventory.v1";
 
-var command = args.FirstOrDefault()?.ToLowerInvariant() ?? "help";
+var firstArgument = args
+    .FirstOrDefault(argument => !string.Equals(argument, "--", StringComparison.Ordinal))
+    ?.ToLowerInvariant();
+var command = firstArgument switch
+{
+    "inventory" => "inventory",
+    "compare" => "compare",
+    _ when args.Contains("--repo-root", StringComparer.Ordinal) => "inventory",
+    _ when args.Contains("--wpf", StringComparer.Ordinal) => "compare",
+    _ => "help",
+};
 try
 {
     return command switch
