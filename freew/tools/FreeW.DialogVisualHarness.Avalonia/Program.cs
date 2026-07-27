@@ -15,6 +15,7 @@ using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
 using FreeW.App.Presentation.Options;
+using FreeW.DialogVisualHarness;
 using SkiaSharp;
 
 [assembly: AvaloniaTestApplication(typeof(HarnessApp))]
@@ -208,12 +209,21 @@ static Semantics ReadSemantics(Window dialog)
     return new Semantics(
         focused is null ? null : Avalonia.Automation.AutomationProperties.GetAutomationId(focused),
         buttons.FirstOrDefault(b => b.IsDefault) is { } d
-            ? Avalonia.Automation.AutomationProperties.GetName(d) ?? d.Content?.ToString()
+            ? DialogSemanticText.ResolveButtonText(
+                Avalonia.Automation.AutomationProperties.GetName(d),
+                d.Content?.ToString(),
+                d.GetType().Name)
             : null,
         buttons.FirstOrDefault(b => b.IsCancel) is { } c
-            ? Avalonia.Automation.AutomationProperties.GetName(c) ?? c.Content?.ToString()
+            ? DialogSemanticText.ResolveButtonText(
+                Avalonia.Automation.AutomationProperties.GetName(c),
+                c.Content?.ToString(),
+                c.GetType().Name)
             : null,
-        buttons.Select(b => Avalonia.Automation.AutomationProperties.GetName(b) ?? b.Content?.ToString() ?? b.GetType().Name).ToArray(), controls);
+        buttons.Select(b => DialogSemanticText.ResolveButtonText(
+            Avalonia.Automation.AutomationProperties.GetName(b),
+            b.Content?.ToString(),
+            b.GetType().Name)).ToArray(), controls);
 }
 
 static RenderedFrame ReadFrame(

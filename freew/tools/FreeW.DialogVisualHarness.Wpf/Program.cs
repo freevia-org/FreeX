@@ -13,6 +13,7 @@ using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
+using FreeW.DialogVisualHarness;
 
 internal static class Program
 {
@@ -251,7 +252,10 @@ static Semantics ReadSemantics(Window dialog)
 // WPF stores access-key markers in Content (for example "_OK"), while Avalonia exposes the
 // normalized automation name. Compare the shared semantic name so the report does not flag a
 // framework-specific accelerator encoding as a dialog action mismatch.
-static string ButtonText(Button button) => AutomationProperties.GetName(button) ?? button.Content?.ToString() ?? button.GetType().Name;
+static string ButtonText(Button button) => DialogSemanticText.ResolveButtonText(
+    AutomationProperties.GetName(button),
+    button.Content?.ToString(),
+    button.GetType().Name);
 static Capture Unsupported(Scenario scenario, string note) => new(scenario.Id, "wpf", scenario.RouteId, scenario.State, "unsupported", "", 0, 0, 0, 0, 96, 96, new Rect(0, 0, 0, 0), new Semantics(null, null, null, [], []), scenario.Limitation, note);
 static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
 {
