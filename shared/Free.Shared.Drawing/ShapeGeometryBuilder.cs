@@ -103,7 +103,7 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.LineCallout => LineCallout(rect),
             DrawingShapeKind.Chevron => Chevron(rect, adjustments),
             DrawingShapeKind.HomePlate => HomePlate(rect, adjustments),
-            DrawingShapeKind.Cylinder => CylinderShape(rect),
+            DrawingShapeKind.Cylinder => CylinderShape(rect, adjustments),
             DrawingShapeKind.Chord => Chord(rect, adjustments),
             _ => Rectangle(rect)
         };
@@ -526,12 +526,20 @@ public static class ShapeGeometryBuilder
     /// This produces the classic database/storage "can" symbol.  Excel's default adjust ratio puts
     /// the top ellipse at roughly 25 % of the total shape height.
     /// </summary>
-    private static ShapeGeometry CylinderShape(LayoutRect rect)
+    private static ShapeGeometry CylinderShape(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments)
     {
-        // Top ellipse height is 25% of total shape height (Excel default adj ratio).
-        const double EllipseHeightFraction = 0.25;
+        // The native "can" preset uses a single 0..50000 `adj` guide for the
+        // top-cap height. Keep the established 25% fallback for new/legacy
+        // shapes with no authored guide.
+        const double DefaultAdjustment = 25000;
+        var ellipseHeightFraction = Math.Clamp(
+            GetAdjustment(adjustments, "adj", DefaultAdjustment),
+            0,
+            50000) / 100000.0;
         var ew = rect.Width;
-        var eh = rect.Height * EllipseHeightFraction;
+        var eh = rect.Height * ellipseHeightFraction;
         var rx = ew / 2;
         var ry = eh / 2;
         var cx = rect.Left + rx;

@@ -80,6 +80,8 @@ public static class ShapeGeometryAdjustmentPlanner
     private const double MaxWaveAmplitudeAdjustment = 20000;
     private const double MinWavePhaseAdjustment = -10000;
     private const double MaxWavePhaseAdjustment = 10000;
+    private const double DefaultCylinderAdjustment = 25000;
+    private const double MaxCylinderAdjustment = 50000;
 
     public const string UnsupportedShapeMessage =
         "This preset shape does not expose shared edit points yet.";
@@ -99,7 +101,8 @@ public static class ShapeGeometryAdjustmentPlanner
                 DrawingShapeKind.Chevron or DrawingShapeKind.HomePlate or
                 DrawingShapeKind.Parallelogram or DrawingShapeKind.Trapezoid or
                 DrawingShapeKind.Cross or DrawingShapeKind.PlusSign or
-                DrawingShapeKind.Ribbon or DrawingShapeKind.Wave))
+                DrawingShapeKind.Ribbon or DrawingShapeKind.Wave or
+                DrawingShapeKind.Cylinder))
         {
             return new ShapeGeometryAdjustmentPlan(
                 shape.Id,
@@ -416,6 +419,28 @@ public static class ShapeGeometryAdjustmentPlanner
                 ]);
         }
 
+        if (shape.AutoShapeKind == DrawingShapeKind.Cylinder)
+        {
+            var adjustment = ReadAdjustment(
+                shape,
+                "adj",
+                DefaultCylinderAdjustment,
+                MaxCylinderAdjustment);
+            return new ShapeGeometryAdjustmentPlan(
+                shape.Id,
+                CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
+                boundsDip.Width > 0 && boundsDip.Height > 0 ? null : UnsupportedShapeMessage,
+                [new ShapeGeometryAdjustmentHandlePlan(
+                    "adj",
+                    "Cylinder cap height",
+                    new LayoutPoint(
+                        boundsDip.Left + boundsDip.Width / 2,
+                        boundsDip.Top + boundsDip.Height * adjustment / 100000.0),
+                    adjustment,
+                    0,
+                    MaxCylinderAdjustment)]);
+        }
+
         var start = ReadAngle(shape, "adj1", DefaultStartAngle);
         var end = ReadAngle(shape, "adj2", DefaultEndAngle);
         return new ShapeGeometryAdjustmentPlan(
@@ -659,6 +684,19 @@ public static class ShapeGeometryAdjustmentPlanner
             }
 
             return new(false, null, null, InvalidHandleMessage);
+        }
+
+        if (shape.AutoShapeKind == DrawingShapeKind.Cylinder)
+        {
+            if (handleName != "adj")
+                return new(false, null, null, InvalidHandleMessage);
+
+            var adjustment = (pointerDip.Y - boundsDip.Top) / boundsDip.Height * 100000.0;
+            return new(
+                true,
+                "adj",
+                Math.Clamp(adjustment, 0, MaxCylinderAdjustment),
+                null);
         }
 
         if (handleName is not ("adj1" or "adj2"))
