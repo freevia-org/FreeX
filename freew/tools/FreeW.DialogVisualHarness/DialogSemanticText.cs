@@ -9,6 +9,27 @@ public static class DialogSemanticText
         var resolved = string.IsNullOrWhiteSpace(automationName)
             ? content ?? fallback
             : automationName;
-        return resolved.Replace("_", string.Empty, StringComparison.Ordinal);
+        return RemoveAccessKeyMarkers(resolved);
+    }
+
+    private static string RemoveAccessKeyMarkers(string value)
+    {
+        var normalized = new System.Text.StringBuilder(value.Length);
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (value[index] != '_')
+            {
+                normalized.Append(value[index]);
+                continue;
+            }
+
+            if (index + 1 < value.Length && value[index + 1] == '_')
+            {
+                normalized.Append('_');
+                index++;
+            }
+        }
+
+        return normalized.ToString();
     }
 }

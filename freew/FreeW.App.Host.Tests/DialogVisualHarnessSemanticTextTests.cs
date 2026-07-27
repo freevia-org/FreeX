@@ -11,7 +11,8 @@ public sealed class DialogVisualHarnessSemanticTextTests
         var helper = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness", "DialogSemanticText.cs"));
 
         helper.Should().Contain("var resolved = string.IsNullOrWhiteSpace(automationName)");
-        helper.Should().Contain("return resolved.Replace(\"_\", string.Empty, StringComparison.Ordinal);");
+        helper.Should().Contain("return RemoveAccessKeyMarkers(resolved);");
+        helper.Should().Contain("normalized.Append('_');");
     }
 
     [Fact]
@@ -22,7 +23,7 @@ public sealed class DialogVisualHarnessSemanticTextTests
 
         helper.Should().Contain("string.IsNullOrWhiteSpace(automationName)");
         helper.Should().Contain("? content ?? fallback");
-        helper.Should().Contain("resolved.Replace(\"_\", string.Empty, StringComparison.Ordinal)");
+        helper.Should().Contain("RemoveAccessKeyMarkers(resolved)");
     }
 
     [Fact]
