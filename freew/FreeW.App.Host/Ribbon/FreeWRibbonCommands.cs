@@ -2830,59 +2830,10 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             var owner = Window.GetWindow(editor);
-            var (chosen, hex) = ShowPicker(owner);
-            if (!chosen)
+            var result = CellShadingDialog.Prompt(owner);
+            if (result is not { Accepted: true })
                 return;
-            editor.SetCaretCellShading(hex);
-        }
-
-        private (bool Chosen, string? Hex) ShowPicker(Window? owner)
-        {
-            var chosen = false;
-            string? hex = null;
-            var window = new Window
-            {
-                Title = "Cell Shading",
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = owner is null
-                    ? WindowStartupLocation.CenterScreen
-                    : WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var panel = new StackPanel { Margin = new Thickness(8) };
-            var grid = new WrapPanel { Width = 6 * 26 };
-            foreach (var choice in CellShadingDialogPlanner.Palette)
-            {
-                var swatch = new Button
-                {
-                    Width = 22,
-                    Height = 22,
-                    Margin = new Thickness(2),
-                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(choice.Hex)),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
-                    BorderThickness = new Thickness(1),
-                    ToolTip = choice.Hex
-                };
-                swatch.Click += (_, _) => { chosen = true; hex = choice.Hex; window.Close(); };
-                grid.Children.Add(swatch);
-            }
-            panel.Children.Add(grid);
-
-            var clear = new Button
-            {
-                Content = CellShadingDialogPlanner.NoColorLabel,
-                Margin = new Thickness(2, 6, 2, 0),
-                Padding = new Thickness(8, 2, 8, 2)
-            };
-            clear.Click += (_, _) => { chosen = true; hex = null; window.Close(); };
-            panel.Children.Add(clear);
-
-            window.Content = panel;
-            window.ShowDialog();
-            return (chosen, hex);
+            editor.SetCaretCellShading(result.Hex);
         }
     }
 

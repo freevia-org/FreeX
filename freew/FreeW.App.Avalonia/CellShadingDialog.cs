@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -20,22 +21,37 @@ internal sealed class CellShadingDialog : FreeWDialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        var panel = new StackPanel { Margin = new Thickness(8) };
-        var palette = new WrapPanel { Width = 6 * 26 };
+        var layout = CellShadingDialogPlanner.Layout;
+        var panel = new StackPanel { Margin = new Thickness(layout.PanelMargin) };
+        var palette = new WrapPanel { Width = layout.PaletteWidth };
         for (var index = 0; index < CellShadingDialogPlanner.Palette.Count; index++)
         {
             var choice = CellShadingDialogPlanner.Palette[index];
             var swatch = new Button
             {
-                Width = 22,
-                Height = 22,
-                Margin = new Thickness(2),
+                Width = layout.SwatchSize,
+                Height = layout.SwatchSize,
+                MinWidth = 0,
+                MinHeight = 0,
+                Margin = new Thickness(layout.SwatchMargin),
                 Padding = new Thickness(0),
-                Background = Brush.Parse(choice.Hex),
-                BorderBrush = Brush.Parse("#808080"),
-                BorderThickness = new Thickness(1),
+                Background = Brushes.Transparent,
+                BorderBrush = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Focusable = true,
+                Content = new Border
+                {
+                    Width = layout.SwatchSize,
+                    Height = layout.SwatchSize,
+                    Background = Brush.Parse(choice.Hex),
+                    BorderBrush = Brush.Parse(layout.SwatchBorderHex),
+                    BorderThickness = new Thickness(1),
+                    IsHitTestVisible = false,
+                },
             };
             ToolTip.SetTip(swatch, choice.Hex);
+            AutomationProperties.SetAutomationId(swatch, $"CellShadingSwatch{index}");
+            AutomationProperties.SetName(swatch, choice.Label);
             var selectedIndex = index;
             swatch.Click += (_, _) => Close(CellShadingDialogPlanner.SelectPaletteColor(selectedIndex));
             palette.Children.Add(swatch);
@@ -45,13 +61,21 @@ internal sealed class CellShadingDialog : FreeWDialogWindow
         var clear = new Button
         {
             Content = CellShadingDialogPlanner.NoColorLabel,
-            Margin = new Thickness(2, 6, 2, 0),
-            Padding = new Thickness(8, 2),
+            Margin = new Thickness(layout.ClearHorizontalMargin, layout.ClearTopMargin, layout.ClearHorizontalMargin, 0),
+            Padding = new Thickness(layout.ClearHorizontalPadding, 2),
             HorizontalAlignment = HorizontalAlignment.Left,
+            Focusable = true,
         };
+        AutomationProperties.SetAutomationId(clear, "CellShadingNoColorButton");
         clear.Click += (_, _) => Close(CellShadingDialogPlanner.SelectNoColor());
         panel.Children.Add(clear);
         Content = panel;
+
+        Opened += (_, _) =>
+        {
+            if (palette.Children[0] is Button first)
+                first.Focus();
+        };
 
         KeyDown += (_, e) =>
         {

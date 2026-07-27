@@ -390,7 +390,7 @@ static IReadOnlyList<string> ValidStates(string routeId, string surfaceKind, IRe
     "legal-notices" => new[] { "initial" }.Concat(tabs.Select(tab => $"tab-{Kebab(tab)}")).ToArray(),
     "password-prompt" => ["initial", "populated"],
     "screen-clip-overlay" => ["open"],
-    "symbol-picker" => ["initial"],
+    "symbol-picker" or "cell-shading" => ["initial"],
     _ => StateIds(surfaceKind, tabs),
 };
 static string Sha256(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();

@@ -26,6 +26,7 @@ internal static class WpfDialogRouteFactory
         ["chart-axis-titles"] = "ChartAxisTitlesDialog",
         ["chart-size"] = "ChartSizeDialog",
         ["chart-title"] = "ChartTitleDialog",
+        ["cell-shading"] = "CellShadingDialog",
         ["columns"] = "ColumnsDialog",
         ["compare-documents"] = "CompareDocumentsDialog",
         ["cross-reference"] = "CrossReferenceDialog",

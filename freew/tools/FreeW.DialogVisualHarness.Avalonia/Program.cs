@@ -178,7 +178,7 @@ static Semantics ReadSemantics(Window dialog)
         focused is null ? null : Avalonia.Automation.AutomationProperties.GetAutomationId(focused),
         buttons.FirstOrDefault(b => b.IsDefault) is { } d ? d.Content?.ToString() : null,
         buttons.FirstOrDefault(b => b.IsCancel) is { } c ? c.Content?.ToString() : null,
-        buttons.Select(b => b.Content?.ToString() ?? b.GetType().Name).ToArray(), controls);
+        buttons.Select(b => Avalonia.Automation.AutomationProperties.GetName(b) ?? b.Content?.ToString() ?? b.GetType().Name).ToArray(), controls);
 }
 
 static RenderedFrame ReadFrame(

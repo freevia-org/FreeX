@@ -31,6 +31,7 @@ internal static class AvaloniaDialogRouteFactory
         ["chart-axis-titles"] = "ChartAxisTitlesDialog",
         ["chart-size"] = "ChartSizeDialog",
         ["chart-title"] = "ChartTitleDialog",
+        ["cell-shading"] = "CellShadingDialog",
         ["citation-source-picker"] = "CitationSourcePickerDialog",
         ["comment-list"] = "CommentListDialog",
         ["comment-reply"] = "CommentReplyDialog",
