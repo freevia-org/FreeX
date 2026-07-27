@@ -24,4 +24,7 @@ public sealed record ChartAxisOptions(
     double? CrossesAt = null,
     bool ShowAxis = true,
     ChartCrossBetween? CrossBetween = null,
-    ChartLabelAlignment? LabelAlignment = null);
+    ChartLabelAlignment? LabelAlignment = null,
+    int? LabelOffsetPercent = null,
+    bool? NoMultiLevelLabels = null,
+    bool? AutoCrossing = null);

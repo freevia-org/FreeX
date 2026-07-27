@@ -30,6 +30,9 @@ internal sealed class ChartAxisOptionsDialog : Window
     private readonly TextBox _crossesAtBox;
     private readonly ComboBox _crossBetweenCombo;
     private readonly ComboBox _labelAlignmentCombo;
+    private readonly TextBox _labelOffsetBox;
+    private readonly ComboBox _multiLevelLabelsCombo;
+    private readonly ComboBox _autoCrossingCombo;
 
     internal ChartAxisOptionsDialog(EditingSession editor)
     {
@@ -76,6 +79,9 @@ internal sealed class ChartAxisOptionsDialog : Window
         _crossesAtBox = new TextBox { MinWidth = 130 };
         _crossBetweenCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.CrossBetweenOptions.Select(x => x.Label));
         _labelAlignmentCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.LabelAlignmentOptions.Select(x => x.Label));
+        _labelOffsetBox = new TextBox { MinWidth = 130 };
+        _multiLevelLabelsCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.MultiLevelLabelsOptions.Select(x => x.Label));
+        _autoCrossingCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.AutoCrossingOptions.Select(x => x.Label));
         LoadControls();
 
         var buttons = new StackPanel
@@ -114,6 +120,9 @@ internal sealed class ChartAxisOptionsDialog : Window
                 MakeRow(surface.CrossesAtLabel, _crossesAtBox),
                 MakeRow(surface.CrossBetweenLabel, _crossBetweenCombo),
                 MakeRow(surface.LabelAlignmentLabel, _labelAlignmentCombo),
+                MakeRow(surface.LabelOffsetLabel, _labelOffsetBox),
+                MakeRow(surface.MultiLevelLabelsLabel, _multiLevelLabelsCombo),
+                MakeRow(surface.AutoCrossingLabel, _autoCrossingCombo),
                 buttons,
             },
         };
@@ -141,7 +150,10 @@ internal sealed class ChartAxisOptionsDialog : Window
         double? crossesAt = null,
         bool showAxis = true,
         ChartCrossBetween? crossBetween = null,
-        ChartLabelAlignment? labelAlignment = null)
+        ChartLabelAlignment? labelAlignment = null,
+        int? labelOffsetPercent = null,
+        bool? noMultiLevelLabels = null,
+        bool? autoCrossing = null)
     {
         _axisCombo.SelectedIndex = (int)axis;
         _titleBox.Text = title;
@@ -159,6 +171,9 @@ internal sealed class ChartAxisOptionsDialog : Window
         _crossesAtBox.Text = Format(crossesAt);
         _crossBetweenCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.CrossBetweenOptions, crossBetween);
         _labelAlignmentCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.LabelAlignmentOptions, labelAlignment);
+        _labelOffsetBox.Text = Format(labelOffsetPercent);
+        _multiLevelLabelsCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.MultiLevelLabelsOptions, noMultiLevelLabels);
+        _autoCrossingCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.AutoCrossingOptions, autoCrossing);
     }
 
     private void OnOk()
@@ -191,6 +206,9 @@ internal sealed class ChartAxisOptionsDialog : Window
         _crossesAtBox.Text = Format(_planner.CrossesAt);
         _crossBetweenCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.CrossBetweenOptions, _planner.CrossBetween);
         _labelAlignmentCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.LabelAlignmentOptions, _planner.LabelAlignment);
+        _labelOffsetBox.Text = Format(_planner.LabelOffsetPercent);
+        _multiLevelLabelsCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.MultiLevelLabelsOptions, _planner.NoMultiLevelLabels);
+        _autoCrossingCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.AutoCrossingOptions, _planner.AutoCrossing);
     }
 
     private void UpdatePlannerFromControls()
@@ -210,6 +228,9 @@ internal sealed class ChartAxisOptionsDialog : Window
         _planner.SetCrossesAt(ParseOptional(_crossesAtBox.Text, "Crosses at"));
         _planner.SetCrossBetween(ChartAxisOptionsPlanner.CrossBetweenOptions[_crossBetweenCombo.SelectedIndex].Value);
         _planner.SetLabelAlignment(ChartAxisOptionsPlanner.LabelAlignmentOptions[_labelAlignmentCombo.SelectedIndex].Value);
+        _planner.SetLabelOffsetPercent(ParseOptionalInt(_labelOffsetBox.Text, "Label offset"));
+        _planner.SetNoMultiLevelLabels(ChartAxisOptionsPlanner.MultiLevelLabelsOptions[_multiLevelLabelsCombo.SelectedIndex].Value);
+        _planner.SetAutoCrossing(ChartAxisOptionsPlanner.AutoCrossingOptions[_autoCrossingCombo.SelectedIndex].Value);
     }
 
     private static double? ParseOptional(string? text, string label)
@@ -224,6 +245,19 @@ internal sealed class ChartAxisOptionsDialog : Window
 
     private static string Format(double? value) =>
         value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static string Format(int? value) =>
+        value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static int? ParseOptionalInt(string? text, string label)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) &&
+            value is >= 0 and <= 100)
+            return value;
+        throw new FormatException($"{label} must be an integer from 0 to 100 or blank.");
+    }
 
     private static Control MakeRow(string label, Control control)
     {
@@ -255,6 +289,7 @@ internal sealed class ChartAxisOptionsDialog : Window
                 ChartAxisCrossingOption crossing => Equals(crossing.Value, value),
                 ChartCrossBetweenOption crossBetween => Equals(crossBetween.Value, value),
                 ChartLabelAlignmentOption alignment => Equals(alignment.Value, value),
+                ChartAxisBooleanOption toggle => Equals(toggle.Value, value),
                 _ => false,
             }).index;
 
