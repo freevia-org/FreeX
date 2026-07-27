@@ -45,7 +45,7 @@ public sealed record SlideObjectInsertionPlan(
 
     public bool RequiresSmartArtPicturePayload =>
         Kind == SlideObjectInsertionKind.SmartArt &&
-        SmartArtLayout == SmartArtLayoutPreset.PictureCaptionList;
+        SmartArtLayout is SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureGrid;
 }
 
 public static class SlideObjectInsertionPlanner
@@ -246,7 +246,7 @@ public static class SlideObjectInsertionPlanner
         ArgumentNullException.ThrowIfNull(pictures);
         var materialized = pictures.ToArray();
         if (materialized.Length == 0)
-            throw new ArgumentException("At least one picture is required for Picture Caption List.", nameof(pictures));
+            throw new ArgumentException("At least one picture is required for a picture-based SmartArt layout.", nameof(pictures));
 
         return new SlideObjectSmartArtPicturePayload(materialized);
     }

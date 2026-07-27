@@ -265,6 +265,38 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void PictureGrid_WithNodePictures_UsesTwoColumnsAndCaptions()
+    {
+        var data = MakeData(SmartArtFamily.List, "Alpha", "Beta", "Gamma");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid";
+        data.IsLiveLayoutSupported = true;
+        foreach (var node in data.Nodes)
+            node.Picture = new ImagePart { Bytes = Minimal1x1Png(), ContentType = "image/png" };
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        shapes!.Where(s => s.Kind == SlideShapeKind.Picture).Should().HaveCount(3);
+        shapes.Where(s => s.Kind == SlideShapeKind.AutoShape)
+            .Select(s => s.PlainText)
+            .Should().Equal("Alpha", "Beta", "Gamma");
+        var pictures = shapes.Where(s => s.Kind == SlideShapeKind.Picture).OrderBy(s => s.OffsetYEmu).ThenBy(s => s.OffsetXEmu).ToArray();
+        pictures[1].OffsetXEmu.Should().BeGreaterThan(pictures[0].OffsetXEmu);
+        pictures[2].OffsetYEmu.Should().BeGreaterThan(pictures[0].OffsetYEmu);
+    }
+
+    [Fact]
+    public void PictureGrid_WithoutNodePictures_ReturnsNullForCachedFallback()
+    {
+        var data = MakeData(SmartArtFamily.List, "Alpha");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid";
+        data.IsLiveLayoutSupported = true;
+
+        SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void Cycle_FiveNodes_ProducesFiveBoxesPlusFiveConnectors()
     {
         var data = MakeData(SmartArtFamily.Cycle, "A", "B", "C", "D", "E");

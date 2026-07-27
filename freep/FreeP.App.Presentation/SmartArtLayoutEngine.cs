@@ -81,6 +81,9 @@ public static class SmartArtLayoutEngine
         if (IsPictureCaptionListLayout(data.LayoutUniqueId))
             return LayoutPictureCaptionList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsPictureGridLayout(data.LayoutUniqueId))
+            return LayoutPictureGrid(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsAlternatingProcessLayout(data.LayoutUniqueId))
             return LayoutAlternatingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -888,6 +891,59 @@ public static class SmartArtLayoutEngine
                 rowH));
 
             curY += rowH + gapY;
+        }
+
+        return shapes;
+    }
+
+    private static IReadOnlyList<SlideShape>? LayoutPictureGrid(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Any(n => n.Picture is not { Bytes.Length: > 0 }))
+            return null;
+
+        var columns = Math.Min(2, Math.Max(1, nodes.Count));
+        var rows = (nodes.Count + columns - 1) / columns;
+        var padX = (long)(fcx * OuterPaddingFrac);
+        var padY = (long)(fcy * OuterPaddingFrac);
+        var gapX = Math.Max((long)(fcx * 0.03), 1L);
+        var gapY = Math.Max((long)(fcy * 0.03), 1L);
+        var cellW = Math.Max((fcx - 2 * padX - (columns - 1) * gapX) / columns, 1L);
+        var cellH = Math.Max((fcy - 2 * padY - (rows - 1) * gapY) / rows, 1L);
+        var pictureH = Math.Max((long)(cellH * 0.62), 1L);
+        var captionH = Math.Max(cellH - pictureH, 1L);
+        var shapes = new List<SlideShape>(nodes.Count * 2);
+        uint idCounter = 310;
+
+        for (var index = 0; index < nodes.Count; index++)
+        {
+            var column = index % columns;
+            var row = index / columns;
+            var x = fx + padX + column * (cellW + gapX);
+            var y = fy + padY + row * (cellH + gapY);
+            shapes.Add(new SlideShape
+            {
+                Id = idCounter++,
+                Name = $"SmartArt_GridPicture_{index + 1}",
+                Kind = SlideShapeKind.Picture,
+                OffsetXEmu = x,
+                OffsetYEmu = y,
+                ExtentCxEmu = cellW,
+                ExtentCyEmu = pictureH,
+                Picture = nodes[index].Picture,
+            });
+
+            var nodeStyle = stylePlan.GetNodeStyle(index, nodes[index].Level, SmartArtFamily.List);
+            shapes.Add(MakeCaption(
+                idCounter++,
+                nodes[index].Text,
+                nodeStyle,
+                x,
+                y + pictureH,
+                cellW,
+                captionH));
         }
 
         return shapes;
@@ -1772,6 +1828,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "picturecaptionlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsPictureGridLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "picturegrid", StringComparison.Ordinal);
     }
 
     private static bool IsAlternatingProcessLayout(string uniqueId)

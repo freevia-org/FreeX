@@ -56,6 +56,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.HorizontalHierarchy, "horizontalHierarchy", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.OrgChart, "orgChart", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.PictureCaptionList, "pictureCaptionList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.PictureGrid, "pictureGrid", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.LabeledHierarchy, "labeledHierarchy", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.TableHierarchy, "tableHierarchy", SmartArtFamily.Hierarchy)]
     public void ApplyLayoutPreset_UpdatesLiveModelAndNativeLayoutPart(
@@ -67,7 +68,7 @@ public sealed class SmartArtEditingPlannerTests
         {
             Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan"), ("n2", "Build")),
         };
-        if (preset == SmartArtLayoutPreset.PictureCaptionList)
+        if (preset is SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureGrid)
         {
             foreach (var node in smartArt.Data!.Nodes)
                 node.Picture = new ImagePart { Bytes = [0x89, 0x50, 0x4E, 0x47], ContentType = "image/png" };
@@ -119,6 +120,20 @@ public sealed class SmartArtEditingPlannerTests
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(
             smartArt,
             SmartArtLayoutPreset.PictureCaptionList);
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Contain("requires image content for every SmartArt node");
+    }
+
+    [Fact]
+    public void ApplyPictureGrid_RequiresPicturePayloadOnEveryNode()
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
+        };
+
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureGrid);
 
         result.Applied.Should().BeFalse();
         result.Message.Should().Contain("requires image content for every SmartArt node");
