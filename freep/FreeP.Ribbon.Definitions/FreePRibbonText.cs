@@ -99,6 +99,10 @@ internal static class FreePRibbonText
     public static string SlideShowFromCurrentSlideKeyTip => Get("Ribbon_Command_SlideShowFromCurrentSlide_KeyTip");
     public static string SlideShowCustomShowsLabel => Get("Ribbon_Command_SlideShowCustomShows_Label");
     public static string SlideShowCustomShowsKeyTip => Get("Ribbon_Command_SlideShowCustomShows_KeyTip");
+    public static string SlideShowRehearseTimingsLabel => Get("Ribbon_Command_SlideShowRehearseTimings_Label");
+    public static string SlideShowRehearseTimingsKeyTip => Get("Ribbon_Command_SlideShowRehearseTimings_KeyTip");
+    public static string SlideShowRecordTimingsLabel => Get("Ribbon_Command_SlideShowRecordTimings_Label");
+    public static string SlideShowRecordTimingsKeyTip => Get("Ribbon_Command_SlideShowRecordTimings_KeyTip");
 
     public static string InsertTabLabel => Get("Ribbon_Tab_Insert_Label");
     public static string InsertTabKeyTip => Get("Ribbon_Tab_Insert_KeyTip");

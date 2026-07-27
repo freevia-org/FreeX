@@ -68,6 +68,8 @@ internal static class FreePRibbonCommands
         EditingSession      editor,
         Action?             onStartFromStart   = null,
         Action?             onStartFromCurrent = null,
+        Action?             onRehearseTimings  = null,
+        Action?             onRecordTimings    = null,
         Action?             onEditChartData    = null,
         Func<SlideCanvas?>? getSlideCanvas     = null,
         Action?             onEditPoints       = null,
@@ -521,6 +523,12 @@ internal static class FreePRibbonCommands
         // From Current Slide — delegates to MainWindow.StartSlideShow(false) via onStartFromCurrent.
         registry.Register("freep.slideshow.from-current-slide",
             new ActionRibbonCommand(() => onStartFromCurrent?.Invoke()));
+
+        // Rehearse/Record Timings initialize the shared timing intent before playback.
+        registry.Register("freep.slideshow.rehearse-timings",
+            new ActionRibbonCommand(() => onRehearseTimings?.Invoke()));
+        registry.Register("freep.slideshow.record-timings",
+            new ActionRibbonCommand(() => onRecordTimings?.Invoke()));
 
         registry.Register("freep.slideshow.custom-shows",
             new ActionRibbonCommand(() => onCustomShows?.Invoke()));

@@ -38,12 +38,15 @@ public class RibbonTransitionsAnimationsTests
 
     /// <summary>Builds a command registry with the given session (no slideshow Actions).</summary>
     private static RibbonCommandRegistry MakeRegistry(EditingSession editor,
-        Action? onStart = null, Action? onCurrent = null, Action? onCustomShows = null)
+        Action? onStart = null, Action? onCurrent = null, Action? onCustomShows = null,
+        Action? onRehearseTimings = null, Action? onRecordTimings = null)
         => FreePRibbonCommands.Build(
             new RibbonStateStore(),
             editor,
             onStart,
             onCurrent,
+            onRehearseTimings,
+            onRecordTimings,
             onCustomShows: onCustomShows);
 
     /// <summary>Executes a registered command by id.</summary>
@@ -512,6 +515,26 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
+    public void Cmd_RehearseTimings_InvokesOnRehearseTimings()
+    {
+        var (ed, _) = MakeSession();
+        bool fired = false;
+        var reg = MakeRegistry(ed, onRehearseTimings: () => fired = true);
+        Exec(reg, "freep.slideshow.rehearse-timings");
+        Assert.True(fired);
+    }
+
+    [Fact]
+    public void Cmd_RecordTimings_InvokesOnRecordTimings()
+    {
+        var (ed, _) = MakeSession();
+        bool fired = false;
+        var reg = MakeRegistry(ed, onRecordTimings: () => fired = true);
+        Exec(reg, "freep.slideshow.record-timings");
+        Assert.True(fired);
+    }
+
+    [Fact]
     public void Cmd_FromBeginning_NullAction_DoesNotThrow()
     {
         var (ed, _) = MakeSession();
@@ -555,6 +578,8 @@ public class RibbonTransitionsAnimationsTests
     [InlineData("freep.transition.apply-all")]
     [InlineData("freep.slideshow.from-beginning")]
     [InlineData("freep.slideshow.from-current-slide")]
+    [InlineData("freep.slideshow.rehearse-timings")]
+    [InlineData("freep.slideshow.record-timings")]
     [InlineData("freep.slideshow.custom-shows")]
     [InlineData("freep.anim.entrance.appear")]
     [InlineData("freep.anim.entrance.fade")]

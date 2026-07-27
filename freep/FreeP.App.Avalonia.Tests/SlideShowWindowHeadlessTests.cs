@@ -1283,6 +1283,8 @@ public sealed class SlideShowWindowHeadlessTests
         var ids   = sg.Controls.Select(i => i.CommandId.Value).ToList();
         ids.Should().Contain("freep.slideshow.from-beginning");
         ids.Should().Contain("freep.slideshow.from-current-slide");
+        ids.Should().Contain("freep.slideshow.rehearse-timings");
+        ids.Should().Contain("freep.slideshow.record-timings");
         ids.Should().Contain("freep.slideshow.custom-shows");
     }
 

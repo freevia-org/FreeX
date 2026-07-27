@@ -286,6 +286,18 @@
   <data name="Ribbon_Command_SlideShowCustomShows_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>
+  <data name="Ribbon_Command_SlideShowRehearseTimings_Label" xml:space="preserve">
+    <value>Rehearse Timings</value>
+  </data>
+  <data name="Ribbon_Command_SlideShowRehearseTimings_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="Ribbon_Command_SlideShowRecordTimings_Label" xml:space="preserve">
+    <value>Record Timings</value>
+  </data>
+  <data name="Ribbon_Command_SlideShowRecordTimings_KeyTip" xml:space="preserve">
+    <value>E</value>
+  </data>
   <data name="Ribbon_Tab_Insert_Label" xml:space="preserve">
     <value>Insert</value>
   </data>
