@@ -16,7 +16,9 @@ internal sealed class StyleDialog : FreeWDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
-            ControlHeight = 22,
+            // WPF's compact combo fields render at 21 logical pixels in this dialog.
+            // Keep the correction local; other dialogs retain the shared 22px density.
+            ControlHeight = 21,
             ButtonHeight = 21,
             ButtonPadding = new Thickness(10, 1),
         };
@@ -34,6 +36,8 @@ internal sealed class StyleDialog : FreeWDialogWindow
     private readonly ComboBox _alignment = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly RunFormatting _seedRun;
     private readonly ParagraphFormatting _seedParagraph;
+
+    internal static double ControlHeightForTests => DialogChromeStyle.ControlHeight;
 
     private StyleDialog(
         string title,

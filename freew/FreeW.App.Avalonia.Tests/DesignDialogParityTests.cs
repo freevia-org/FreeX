@@ -28,6 +28,16 @@ public sealed class DesignDialogParityTests
         var borderSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogs.cs"));
         borderSource.Should().Contain("BordersAndShadingDialogPlanner.TryBuildResult(");
         borderSource.Should().Contain("BordersAndShadingDialogPlanner.ArtBorders");
+
+        var styleSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "StyleDialog.cs"));
+        styleSource.Should().Contain("ControlHeight = 21");
+        styleSource.Should().Contain("other dialogs retain the shared 22px density");
+    }
+
+    [Fact]
+    public void StyleDialog_UsesWpfCompactControlHeight()
+    {
+        StyleDialog.ControlHeightForTests.Should().Be(21);
     }
 
     [Fact]
