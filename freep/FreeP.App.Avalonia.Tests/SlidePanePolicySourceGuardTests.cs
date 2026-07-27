@@ -40,6 +40,8 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("_slidePaneRenderedThumbnailPlans.Add(plan)");
         source.Should().Contain("Width        = plan.ThumbnailWidth");
         source.Should().Contain("Height       = plan.ThumbnailHeight");
+        source.Should().Contain("IsHitTestVisible = false");
+        source.Should().Contain("IsEnabled        = false");
         source.Should().Contain("FontSize            = plan.LabelFontSize");
         source.Should().Contain("Margin              = new Thickness(0, 0, 0, plan.LabelBottomMargin)");
         source.Should().Contain("BorderThickness = new Thickness(plan.ThumbnailBorderThickness)");

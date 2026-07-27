@@ -7284,6 +7284,11 @@ public sealed partial class MainWindow : Window
                     SlideIndex   = plan.SlideIndex,
                     Width        = plan.ThumbnailWidth,
                     Height       = plan.ThumbnailHeight,
+                    // Slide-pane thumbnails are previews; pointer and keyboard input belongs
+                    // to the surrounding item so selection, drag, and context-menu routes stay
+                    // identical to the WPF host.
+                    IsHitTestVisible = false,
+                    IsEnabled        = false,
                 };
 
                 // Slide number label beneath thumbnail.

@@ -996,12 +996,20 @@ public sealed class MainWindowHeadlessTests
     {
         SlidePaneThumbnailVisualPlan? firstPlan = null;
         var paneItems = -1;
+        var thumbnailHitTestVisible = true;
+        var thumbnailEnabled = true;
 
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
             paneItems = window.SlidePaneSlideItemCount;
             firstPlan = window.SlidePaneRenderedThumbnailPlans.FirstOrDefault();
+            var itemChrome = window.SelectedSlidePaneItemForTests?.Content as Border;
+            var panel = itemChrome?.Child as StackPanel;
+            var thumbnailBorder = panel?.Children.OfType<Border>().SingleOrDefault();
+            var thumbnail = thumbnailBorder?.Child as SlideCanvas;
+            thumbnailHitTestVisible = thumbnail?.IsHitTestVisible ?? true;
+            thumbnailEnabled = thumbnail?.IsEnabled ?? true;
         });
 
         if (!ran) return;
@@ -1023,6 +1031,8 @@ public sealed class MainWindowHeadlessTests
         firstPlan.ItemCornerRadius.Should().Be(SlidePanePlanner.DefaultItemCornerRadius);
         firstPlan.NormalBorderThickness.Should().Be(SlidePanePlanner.DefaultNormalBorderThickness);
         firstPlan.SelectedBorderThickness.Should().Be(SlidePanePlanner.DefaultSelectedBorderThickness);
+        thumbnailHitTestVisible.Should().BeFalse("the preview must leave pointer routing to the slide-pane item");
+        thumbnailEnabled.Should().BeFalse("the preview must not own keyboard focus or editing input");
     }
 
     [Fact]
