@@ -499,6 +499,7 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
         var controls = new RowControls { Category = categoryBox, Values = boxes, View = row };
         _rows.Add(controls);
         _rowsPanel.Children.Add(row);
+        ApplyRowContextMenu(controls);
         foreach (var box in new[] { categoryBox }.Concat(boxes))
         {
             box.KeyDown += (_, e) =>
@@ -523,6 +524,18 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
             return;
         _rows.Remove(controls);
         _rowsPanel.Children.Remove(controls.View);
+    }
+
+    private void ApplyRowContextMenu(RowControls controls)
+    {
+        var menu = new ContextMenu();
+        var add = new MenuItem { Header = "Add Row" };
+        add.Click += (_, _) => AddRow(string.Empty, _seriesNames.Select(_ => string.Empty).ToArray());
+        var remove = new MenuItem { Header = "Remove Row" };
+        remove.Click += (_, _) => RemoveRow(controls);
+        menu.Items.Add(add);
+        menu.Items.Add(remove);
+        controls.View.ContextMenu = menu;
     }
 
     private void Accept()

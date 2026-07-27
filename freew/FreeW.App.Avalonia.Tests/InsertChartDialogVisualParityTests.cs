@@ -31,6 +31,11 @@ public sealed class InsertChartDialogVisualParityTests
             dialog.GetLogicalDescendants().OfType<ComboBox>().Should().ContainSingle();
             Field<TextBox>(dialog, "_title").Text.Should().Be("Quarterly Sales");
             ((System.Collections.ICollection)Field<object>(dialog, "_rows")).Count.Should().BeGreaterThan(0);
+            Field<StackPanel>(dialog, "_rowsPanel").Children
+                .OfType<Grid>()
+                .Skip(1)
+                .Should()
+                .AllSatisfy(row => row.ContextMenu.Should().NotBeNull());
         }, CancellationToken.None);
     }
 
