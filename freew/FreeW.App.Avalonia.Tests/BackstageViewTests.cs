@@ -425,6 +425,30 @@ public class BackstageViewTests
     }
 
     [Fact]
+    public async Task Export_pane_uses_direct_label_buttons_with_sibling_descriptions()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks() with { ExportXps = () => { } });
+
+            view.TryActivateEntry("Export").Should().BeTrue();
+
+            var pdf = FindControl<Button>(view, "BackstageAction_Create_PDF_or_XPS");
+            pdf.Content.Should().Be("Create PDF or XPS");
+            pdf.FontSize.Should().Be(14);
+            pdf.Parent.Should().BeOfType<StackPanel>();
+            ((StackPanel)pdf.Parent!).Children.OfType<TextBlock>()
+                .Single(block => (block.Text ?? string.Empty).Contains("Export-only fixed-layout PDF copy", StringComparison.Ordinal));
+
+            var xps = FindControl<Button>(view, "BackstageAction_Export_to_XPS");
+            xps.Content.Should().Be("Export to XPS");
+            xps.Parent.Should().BeOfType<StackPanel>();
+            ((StackPanel)xps.Parent!).Children.OfType<TextBlock>()
+                .Single(block => (block.Text ?? string.Empty).Contains("Export-only fixed-layout XPS copy", StringComparison.Ordinal));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task PrintPreviewDialog_Escape_closes_the_real_window()
     {
         await Session.Dispatch(() =>

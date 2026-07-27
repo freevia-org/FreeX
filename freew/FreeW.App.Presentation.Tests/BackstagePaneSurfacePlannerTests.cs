@@ -375,6 +375,40 @@ public sealed class BackstagePaneSurfacePlannerTests
     }
 
     [Fact]
+    public void BuildExportPane_WhenXpsIsUnavailable_KeepsPdfAndEditableFormatOrder()
+    {
+        var surface = BackstagePaneSurfacePlanner.BuildExportPane(
+            Formats(),
+            exportPdf: static () => { },
+            exportXps: null,
+            saveAsFormat: static (_, _) => { });
+
+        surface.Groups.Select(group => group.Heading)
+            .Should().Equal("Create PDF/XPS Document", "Change File Type");
+        surface.Groups[0].Actions.Select(action => action.Label)
+            .Should().Equal("Create PDF");
+        surface.Groups[1].Actions.Select(action => action.Label)
+            .Should().Equal(
+                "Word Document (*.docx)",
+                "Strict Open XML Document (*.docx)",
+                "Word Macro-Enabled Document (*.docm)",
+                "Word Template (*.dotx)",
+                "Word Macro-Enabled Template (*.dotm)",
+                "Word XML Document (*.xml)",
+                "Word 2003 XML Document (*.xml)",
+                "Web Page, Filtered (*.htm, *.html)",
+                "Web Page (*.htm, *.html)",
+                "Single File Web Page (*.mht, *.mhtml)",
+                "OpenDocument Text (*.odt)",
+                "OpenDocument Text Template (*.ott)",
+                "Rich Text Format (*.rtf)",
+                "Plain Text (*.txt, *.text)",
+                "Log File (*.log)",
+                "Word 97-2003 Document (*.doc)",
+                "Word 97-2003 Template (*.dot)");
+    }
+
+    [Fact]
     public void BackstageExportPaneSurfaceText_FallsBackForUnresolvedDescriptorResources()
     {
         var descriptor = SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW).Export;

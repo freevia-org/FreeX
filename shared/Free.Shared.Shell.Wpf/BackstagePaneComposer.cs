@@ -182,7 +182,15 @@ public sealed class BackstagePaneComposer
         return _kit.Scroll(panel);
     }
 
-    public UIElement BuildActionPane(BackstageActionPaneSpec spec)
+    public UIElement BuildActionPane(BackstageActionPaneSpec spec) =>
+        BuildActionPane(spec, ActionRow);
+
+    public UIElement BuildExportActionPane(BackstageActionPaneSpec spec) =>
+        BuildActionPane(spec, ExportActionRow);
+
+    private UIElement BuildActionPane(
+        BackstageActionPaneSpec spec,
+        Func<BackstageActionRow, UIElement> actionRow)
     {
         ArgumentNullException.ThrowIfNull(spec);
 
@@ -202,7 +210,9 @@ public sealed class BackstagePaneComposer
 
         foreach (var group in spec.Groups)
         {
-            AddActionGroup(panel, group);
+            panel.Children.Add(_kit.SubHeading(group.Heading));
+            foreach (var action in group.Actions)
+                panel.Children.Add(actionRow(action));
         }
 
         return _kit.Scroll(panel);
@@ -264,6 +274,28 @@ public sealed class BackstagePaneComposer
 
         button.Content = stack;
         return button;
+    }
+
+    private UIElement ExportActionRow(BackstageActionRow action)
+    {
+        var row = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var button = _kit.LinkButton(action.Label, action.Invoke);
+        button.FontSize = 14;
+        row.Children.Add(button);
+
+        if (!string.IsNullOrWhiteSpace(action.Description))
+        {
+            row.Children.Add(new TextBlock
+            {
+                Text = action.Description,
+                Foreground = _kit.Muted,
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 2, 0, 0)
+            });
+        }
+
+        return row;
     }
 }
 

@@ -390,7 +390,7 @@ internal sealed class BackstageView : Window
             exportXps: _callbacks.ExportXps is { } exportXps ? DismissThen(exportXps) : null,
             saveAsFormat: (ext, filterIndex) => { Dismiss(); _callbacks.SaveAsFormat(ext, filterIndex); });
 
-        return BuildActionGroupContent(surface);
+        return BuildExportActionGroupContent(surface);
 
     }
 
@@ -558,6 +558,39 @@ internal sealed class BackstageView : Window
 
     private Control BuildActionGroupContent(BackstageActionPaneSurfaceSpec surface) =>
         BuildActionGroupContent(surface.Title, surface.Groups, surface.Description);
+
+    private static Control BuildExportActionGroupContent(BackstageActionPaneSurfaceSpec surface)
+    {
+        var content = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+        content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
+        foreach (var group in surface.Groups)
+        {
+            content.Children.Add(BuildSectionHeader(group.Heading));
+            foreach (var action in group.Actions)
+                content.Children.Add(BuildExportActionRow(action));
+        }
+
+        return CreateScroll(content);
+    }
+
+    private static Control BuildExportActionRow(BackstageActionRow action)
+    {
+        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        stack.Children.Add(CreateLinkButton(
+            action.Label,
+            action.Invoke,
+            fontSize: 14,
+            automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}"));
+        stack.Children.Add(new TextBlock
+        {
+            Text = action.Description,
+            Foreground = SecondaryInk,
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        return stack;
+    }
 
     private Control BuildActionGroup(BackstageActionGroup group, bool isLast)
     {

@@ -150,6 +150,35 @@ public sealed class SharedBackstagePaneComposerTests
         invoked.Should().Equal("browse");
     }
 
+    [StaFact]
+    public void BuildExportActionPane_RendersDirectLabelsAndSiblingDescriptions()
+    {
+        var invoked = false;
+
+        var pane = _composer.BuildExportActionPane(new BackstageActionPaneSpec(
+            Heading: "Export",
+            Description: "Create a fixed-layout copy.",
+            Groups:
+            [
+                new("Create PDF/XPS Document",
+                [
+                    new("Create PDF or XPS", "Export-only PDF copy.", () => invoked = true),
+                ]),
+            ]));
+
+        var scroller = Assert.IsType<ScrollViewer>(pane);
+        var panel = Assert.IsType<StackPanel>(scroller.Content);
+        var button = Descendants<Button>(panel).Single();
+
+        button.Content.Should().Be("Create PDF or XPS");
+        button.FontSize.Should().Be(14);
+        var row = Assert.IsType<StackPanel>(button.Parent);
+        row.Children.OfType<TextBlock>().Single().Text.Should().Be("Export-only PDF copy.");
+
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        invoked.Should().BeTrue();
+    }
+
     [Fact]
     public void BackstageApplicationOptionsPanePlanner_AdaptsSharedSummaryRows()
     {

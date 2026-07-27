@@ -144,7 +144,7 @@ internal sealed class BackstageView : UserControl
             _backstage.HideThen<string>(_actions.SaveAsType),
             exportText);
 
-        return Panes.BuildActionPane(ToActionPaneSpec(surface));
+        return Panes.BuildExportActionPane(ToActionPaneSpec(surface));
     }
 
     private UIElement BuildPrintPane()

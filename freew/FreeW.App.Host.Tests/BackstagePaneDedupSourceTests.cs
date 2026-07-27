@@ -87,7 +87,7 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("RestrictEditing");
             source.Should().Contain("InspectDocument");
             source.Should().Contain("CheckAccessibility");
-            source.Should().Contain("Panes.BuildActionPane(");
+            source.Should().Contain("Panes.BuildExportActionPane(");
             source.Should().Contain("ToActionPaneSpec(surface)");
             source.Should().Contain("_backstage.ShowPane(\"Open\")");
             source.Should().Contain("RecoverUnsaved");
