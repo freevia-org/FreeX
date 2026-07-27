@@ -197,7 +197,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
-    public void FidelityRender_GeneratedTablePagesResolveTheirFooterSlot()
+    public void FidelityRender_GeneratedTablePagesResolveTheirHeaderAndFooterSlots()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
 
@@ -205,6 +205,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("generatedSegmentBox.OwnerSectionHf ?? doc.FinalSectionHeadersFooters");
         source.Should().Contain("HeaderFooterPagePlanner.ResolveSlots(");
         source.Should().Contain("footerSlotName = generatedSegmentSlots.FooterSlotName");
+        source.Should().Contain("if (slots.Header is { IsEmpty: false } headerSlot)");
+        source.Should().Contain("if (slots.Footer is { IsEmpty: false } footerSlot)");
         source.Should().Contain("dc.PushClip(new RectangleGeometry(new Rect(");
         source.Should().Contain("dc.DrawImage(footnoteBmp, new Rect(0, fnY, thisPixW, fnH))");
     }
