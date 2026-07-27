@@ -2376,6 +2376,14 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => Editor.SetSelectedPictureColorEffects(PictureColorEffectAuthoringPlanner.Reset())));
 
         r.Register(ChartDataDialogPlanner.EditDataCommandId, new ActionRibbonCommand(OpenChartDataDialog));
+        r.Register(ChartDataDialogPlanner.ChangeChartTypeCommandId, new ActionRibbonCommand(OpenChartDataDialog));
+        foreach (var option in ChartDataDialogPlanner.ChartTypeOptions)
+        {
+            var chartType = option.Value;
+            r.Register(
+                ChartDataDialogPlanner.ChangeChartTypeOptionCommandId(chartType),
+                new ActionRibbonCommand(() => Editor.ChangeSelectedChartType(chartType)));
+        }
         r.Register(ChartDisplayOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDisplayOptionsDialog));
         r.Register(ChartAxisOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAxisOptionsDialog));
         r.Register(ChartSeriesOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartSeriesOptionsDialog));

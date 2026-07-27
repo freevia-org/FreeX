@@ -621,6 +621,15 @@ internal static class FreePRibbonCommands
                 if (onEditChartData is not null)
                     onEditChartData();
             }));
+        registry.Register(ChartDataDialogPlanner.ChangeChartTypeCommandId,
+            new ActionRibbonCommand(() => onEditChartData?.Invoke()));
+        foreach (var option in ChartDataDialogPlanner.ChartTypeOptions)
+        {
+            var chartType = option.Value;
+            registry.Register(
+                ChartDataDialogPlanner.ChangeChartTypeOptionCommandId(chartType),
+                new ActionRibbonCommand(() => editor.ChangeSelectedChartType(chartType)));
+        }
         registry.Register(ChartDisplayOptionsPlanner.CommandId,
             new ActionRibbonCommand(() => onEditChartOptions?.Invoke()));
         registry.Register(ChartAxisOptionsPlanner.CommandId,
