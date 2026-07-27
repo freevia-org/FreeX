@@ -393,6 +393,26 @@ public sealed class SmartArtLayoutTests
             .Should().HaveCount(4, "one live box should be emitted per radial-list node");
         shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
             .Should().HaveCount(4, "radialList should reuse the shared circular connector planner");
+
+        var centerX = FrameX + FrameCx / 2;
+        var centerY = FrameY + FrameCy / 2;
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().OnlyContain(connector =>
+                connector.OffsetXEmu <= centerX && connector.OffsetXEmu + connector.ExtentCxEmu >= centerX &&
+                connector.OffsetYEmu <= centerY && connector.OffsetYEmu + connector.ExtentCyEmu >= centerY,
+                "radialList uses four spokes from an implicit center rather than a closed adjacent-item loop");
+    }
+
+    [Fact]
+    public void RadialList_UsesCachedFallbackBeyondBoundedItemCount()
+    {
+        var data = MakeData(
+            SmartArtFamily.Cycle,
+            Enumerable.Range(1, 9).Select(index => $"Item {index}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radialList";
+
+        SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
+            .Should().BeNull("radialList live geometry is intentionally bounded to eight readable items");
     }
 
     [Fact]

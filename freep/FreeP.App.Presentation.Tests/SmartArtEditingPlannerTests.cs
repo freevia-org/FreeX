@@ -935,6 +935,36 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void RegenerateDrawingCache_RadialListUsesSharedSpokePlan()
+    {
+        var data = MakeFlatData(
+            SmartArtFamily.Cycle,
+            ("one", "Discover"),
+            ("two", "Plan"),
+            ("three", "Build"),
+            ("four", "Review"));
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radialList";
+        var smartArt = new SmartArtShape { Data = data, DrawingPartPath = "ppt/diagrams/drawing1.xml" };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+
+        var result = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Applied.Should().BeTrue(result.Message);
+        result.NodeCount.Should().Be(4);
+        result.ShapeCount.Should().Be(8, "radialList caches four live item boxes and four center spokes");
+        smartArt.FallbackShapes.Count(shape => shape.AutoShapeKind == Free.Shared.Drawing.DrawingShapeKind.Line)
+            .Should().Be(4);
+        smartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Contain(["Discover", "Plan", "Build", "Review"]);
+    }
+
+    [Fact]
     public void RegenerateDrawingCache_TableHierarchyUsesSharedCellPlan()
     {
         var root = new SmartArtNode { ModelId = "root", Text = "Portfolio", Level = 0 };

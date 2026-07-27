@@ -5384,6 +5384,14 @@ public sealed class MainWindowHeadlessTests
             smartArt.Data.LayoutUniqueId.Should().EndWith("/radial1");
             window.Editor.Undo();
             smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
+
+            registry.TryGet(SmartArtAuthoringPlanner.RadialListLayoutCommandId, out var radialListCommand)
+                .Should().BeTrue();
+            radialListCommand!.Execute(RibbonCommandContext.Empty);
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/radialList");
+            smartArt.Data.Family.Should().Be(SmartArtFamily.Cycle);
+            window.Editor.Undo();
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
         });
 
         if (!ran) return;

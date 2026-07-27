@@ -93,6 +93,9 @@ public static class SmartArtLayoutEngine
         if (IsBasicRadialLayout(data.LayoutUniqueId))
             return LayoutBasicRadial(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsRadialListLayout(data.LayoutUniqueId))
+            return LayoutRadialList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsStepDownProcessLayout(data.LayoutUniqueId))
             return LayoutStepDownProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1480,6 +1483,67 @@ public static class SmartArtLayoutEngine
         return shapes;
     }
 
+    /// <summary>
+    /// Radial List geometry: every list item radiates from the shared center while
+    /// the center remains an implicit routing point. This keeps the list items equal
+    /// and editable, unlike the generic cycle plan which links adjacent items into a
+    /// closed loop.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutRadialList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var shapes = new List<SlideShape>();
+        if (nodes.Count == 0 || nodes.Count > 8) return null;
+
+        long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long padY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);
+        long innerCx = Math.Max(fcx - 2 * padX, 1L);
+        long innerCy = Math.Max(fcy - 2 * padY, 1L);
+        double centerX = fx + padX + innerCx / 2.0;
+        double centerY = fy + padY + innerCy / 2.0;
+
+        int itemCount = nodes.Count;
+        double angleStep = 360.0 / itemCount;
+        double radiusX = innerCx / 2.0 * 0.62;
+        double radiusY = innerCy / 2.0 * 0.62;
+        double halfChord = Math.Sin(Math.PI / itemCount);
+        long boxW = Math.Max((long)(innerCx * Math.Min(0.28, halfChord * 0.82)), 1L);
+        long boxH = Math.Max((long)(innerCy * Math.Min(0.24, halfChord * 0.82)), 1L);
+        var centers = new (double x, double y)[itemCount];
+        uint idCounter = 820;
+
+        for (int i = 0; i < itemCount; i++)
+        {
+            double angle = (-90 + i * angleStep) * Math.PI / 180.0;
+            centers[i] = (centerX + radiusX * Math.Cos(angle), centerY + radiusY * Math.Sin(angle));
+            shapes.Add(MakeConnector(
+                idCounter++,
+                (long)centerX,
+                (long)centerY,
+                (long)centers[i].x,
+                (long)centers[i].y,
+                stylePlan.Connector));
+        }
+
+        for (int i = 0; i < itemCount; i++)
+        {
+            var node = nodes[i];
+            var nodeStyle = stylePlan.GetNodeStyle(i, node.Level, SmartArtFamily.Cycle);
+            shapes.Add(MakeBox(
+                idCounter++,
+                node.Text,
+                nodeStyle,
+                (long)(centers[i].x - boxW / 2.0),
+                (long)(centers[i].y - boxH / 2.0),
+                boxW,
+                boxH));
+        }
+
+        return shapes;
+    }
+
     private static IReadOnlyList<SlideShape> LayoutCycle(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
@@ -2135,6 +2199,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "radial1", StringComparison.Ordinal);
+    }
+
+    private static bool IsRadialListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "radiallist", StringComparison.Ordinal);
     }
 
     private static bool IsStepDownProcessLayout(string uniqueId)

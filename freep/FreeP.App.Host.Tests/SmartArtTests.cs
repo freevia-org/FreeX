@@ -3086,8 +3086,21 @@ public sealed class SmartArtTests : IDisposable
         liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .Should().Contain("Discover")
             .And.Contain("Review");
+        var radialBounds = liveShapes.Select(op => op.BoundsDip).ToArray();
+        var radialCenterX = (radialBounds.Min(bounds => bounds.X) + radialBounds.Max(bounds => bounds.X + bounds.Width)) / 2;
+        var radialCenterY = (radialBounds.Min(bounds => bounds.Y) + radialBounds.Max(bounds => bounds.Y + bounds.Height)) / 2;
         liveShapes.Where(op => op.Text is null)
             .Should().HaveCount(4, "WPF and Avalonia hosts consume shared radial-list connector DrawOps");
+        liveShapes.Where(op => op.Text is null)
+            .Should().OnlyContain(op =>
+                new[]
+                {
+                    Math.Sqrt(Math.Pow(op.BoundsDip.X - radialCenterX, 2) + Math.Pow(op.BoundsDip.Y - radialCenterY, 2)),
+                    Math.Sqrt(Math.Pow(op.BoundsDip.X + op.BoundsDip.Width - radialCenterX, 2) + Math.Pow(op.BoundsDip.Y - radialCenterY, 2)),
+                    Math.Sqrt(Math.Pow(op.BoundsDip.X - radialCenterX, 2) + Math.Pow(op.BoundsDip.Y + op.BoundsDip.Height - radialCenterY, 2)),
+                    Math.Sqrt(Math.Pow(op.BoundsDip.X + op.BoundsDip.Width - radialCenterX, 2) + Math.Pow(op.BoundsDip.Y + op.BoundsDip.Height - radialCenterY, 2))
+                }.Min() < 0.25,
+                "the WPF compositor must receive four spokes with a shared radial center endpoint");
     }
 
     [Fact]
