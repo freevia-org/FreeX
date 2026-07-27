@@ -414,6 +414,22 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "WPF/Avalonia now share mixed-run and paragraph-preserving edits, marker sequencing, selection/caret rendering, rich copy/cut/paste payloads including all modeled inline effects, plain-text clipboard interoperability, picture-bullet picker payload execution, paragraph authoring, PPTX media-part persistence, Tab/Shift+Tab navigation, focused-editor keyboard ownership, commit/cancel routing, and bounded common external RTF paste in Avalonia. Avalonia still uses a custom rich surface over a native TextBox rather than a framework-native RichTextBox. XamlPackage import, unsupported RTF destinations and controls, richer RTF lists/objects/fields, broader IME/RTL/FlowDocument behavior, and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
         new(
+            EvidenceId: "freep.clipboard.external-rtf-depth",
+            Area: "External RTF list, paragraph-layout, and hyperlink paste depth",
+            Status: "shared-planner-and-host-evidence",
+            HostCoverage: "WPF/Avalonia renderer-neutral rich-text model and paste adapters consume the same bounded external RTF planner; WPF remains authoritative and no platform-specific semantic fork was added",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-external-rtf-paste-wave18-20260727.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/ExternalRichTextClipboardPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/ExternalRichTextClipboardTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/AvaloniaRichTextEditorTests.cs"
+            ],
+            RemainingWork: "The bounded subset now preserves common Word/LibreOffice list markers, nested levels, continuation/restart intent where the existing model can represent it, paragraph alignment/indent/spacing, and safe http/https/mailto HYPERLINK field results while retaining custom-v2 > RTF > plain-text precedence. XamlPackage, objects/pictures, arbitrary fields, rich RTF table semantics, RTL/IME nuances, and PowerPoint-authoritative external RTF visual baselines remain deferred."),
+        new(
             EvidenceId: "freep.header-footer.placeholder-creation",
             Area: "Header/Footer date, footer, and slide-number placeholder creation",
             Status: "shared-planner-and-host-evidence",

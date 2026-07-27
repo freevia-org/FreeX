@@ -204,6 +204,48 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task ClipboardPaste_ExternalRtfAppliesSharedParagraphAndHyperlinkMetadata()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var editor = new AvaloniaRichTextEditor(
+                InCanvasRichClipboardPayload.FromPlainText("target").Body,
+                backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.SelectionStart = 0;
+                editor.SelectionEnd = editor.Text.Length;
+                using var transfer = new DataTransfer();
+                var item = new DataTransferItem();
+                item.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.ExternalRtfWindowsFormat
+                        : AvaloniaRichTextEditor.ExternalRtfLinuxFormat,
+                    Encoding.ASCII.GetBytes(
+                        @"{\rtf1\ansi\pard\qc\li360\sa80 {\field{\*\fldinst HYPERLINK ""https://example.com/paste""}{\fldrslt Linked}}}"));
+                item.SetText("plain");
+                transfer.Add(item);
+
+                (await editor.PasteDataTransferAsync(transfer)).Should().BeTrue();
+                var paragraph = editor.EditedBody.Paragraphs.Single();
+                paragraph.Align.Should().Be(TextAlign.Center);
+                paragraph.MarginLeftEmu.Should().Be(228600);
+                paragraph.SpaceAfterPt.Should().Be(4);
+                paragraph.Runs.Single().Hyperlink!.Url.Should().Be("https://example.com/paste");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ClipboardPaste_MalformedRtfFallsBackToPlainText()
     {
         await Session.Dispatch(async () =>

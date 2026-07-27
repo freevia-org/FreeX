@@ -938,6 +938,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.export.pdf-picture-frame-clips",
             "freep.export.pdf-shape-opacity",
             "freep.table.inline-text.workflow-depth",
+            "freep.clipboard.external-rtf-depth",
             "freep.header-footer.placeholder-creation",
             "freep.chart.number-format-rendering",
             "freep.chart.edge-manual-layout",
@@ -1099,6 +1100,23 @@ public sealed class FreePRibbonDefinitionProfileTests
         tableInlineText.GetProperty("remainingWork").GetString()
             .Should()
             .NotContain("rich clipboard formats");
+
+        var externalRtfDepth = workflowEvidence.Single(row =>
+            row.GetProperty("evidenceId").GetString() == "freep.clipboard.external-rtf-depth");
+        externalRtfDepth.GetProperty("area").GetString()
+            .Should()
+            .Contain("External RTF");
+        externalRtfDepth.GetProperty("verification").EnumerateArray()
+            .Select(path => path.GetString())
+            .Should()
+            .Contain("freep/FreeP.App.Presentation.Tests/ExternalRichTextClipboardTests.cs");
+        externalRtfDepth.GetProperty("evidenceDocs").EnumerateArray()
+            .Select(path => path.GetString())
+            .Should()
+            .Contain("docs/parity/freep-external-rtf-paste-wave18-20260727.md");
+        externalRtfDepth.GetProperty("remainingWork").GetString()
+            .Should()
+            .Contain("XamlPackage");
 
         var animationPane = workflowEvidence.Single(row =>
             row.GetProperty("evidenceId").GetString() == "freep.animation-pane.workflow-depth");

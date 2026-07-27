@@ -6,7 +6,8 @@ namespace FreeP.App.Compositor;
 /// <summary>
 /// Converts a bounded subset of external RTF into the renderer-neutral in-canvas clipboard
 /// payload. The parser deliberately ignores unsupported destinations and controls while keeping
-/// plain text, paragraph boundaries, and common character formatting usable.
+/// plain text, paragraph boundaries, common character formatting, bounded list metadata,
+/// paragraph layout, and external hyperlink fields usable.
 /// </summary>
 public static class ExternalRichTextClipboardPlanner
 {
@@ -37,7 +38,42 @@ public static class ExternalRichTextClipboardPlanner
             Body,
             FontTable,
             ColorTable,
+            ListTable,
+            ListOverrideTable,
+            ListLevelText,
+            FieldInstruction,
             Skip,
+        }
+
+        private sealed class ListDefinition
+        {
+            public int Id { get; set; }
+            public Dictionary<int, ListLevelDefinition> Levels { get; } = new();
+        }
+
+        private sealed class ListLevelDefinition
+        {
+            public int NumberFormat { get; set; }
+            public int StartAt { get; set; } = 1;
+        }
+
+        private sealed class ListOverrideDefinition
+        {
+            public int ListId { get; set; }
+        }
+
+        private sealed class FieldContext
+        {
+            public StringBuilder Instruction { get; } = new();
+        }
+
+        private sealed class LegacyListDefinition
+        {
+            public BulletKind Kind { get; set; } = BulletKind.Auto;
+            public string? BulletChar { get; set; }
+            public int Level { get; set; }
+            public int StartAt { get; set; } = 1;
+            public bool StartSpecified { get; set; }
         }
 
         private sealed class State
@@ -61,6 +97,15 @@ public static class ExternalRichTextClipboardPlanner
             public int Red = -1;
             public int Green = -1;
             public int Blue = -1;
+            public TextAlign? ParagraphAlignment;
+            public int? ListOverrideId;
+            public int ListLevel;
+            public int? LeftIndentTwips;
+            public int? FirstLineIndentTwips;
+            public int? SpaceBeforeTwips;
+            public int? SpaceAfterTwips;
+            public FieldContext? Field;
+            public Hyperlink? Hyperlink;
 
             public State Clone() => (State)MemberwiseClone();
         }
@@ -73,11 +118,14 @@ public static class ExternalRichTextClipboardPlanner
             bool Underline,
             SrgbColor? Color,
             bool BoldSet,
-            bool ItalicSet);
+            bool ItalicSet,
+            Hyperlink? Hyperlink);
 
         private readonly byte[] _bytes;
         private readonly Dictionary<int, string> _fonts = new();
         private readonly List<SrgbColor?> _colors = new();
+        private readonly Dictionary<int, ListDefinition> _lists = new();
+        private readonly Dictionary<int, ListOverrideDefinition> _listOverrides = new();
         private readonly Stack<State> _states = new();
         private readonly TextBody _body = new();
         private State _state = new();
@@ -91,6 +139,13 @@ public static class ExternalRichTextClipboardPlanner
         private CharacterStyle _activeStyle;
         private bool _hasActiveStyle;
         private readonly StringBuilder _activeText = new();
+        private ListDefinition? _currentList;
+        private ListLevelDefinition? _currentListLevel;
+        private int _currentListLevelIndex = -1;
+        private ListOverrideDefinition? _currentListOverride;
+        private int _currentListOverrideId;
+        private LegacyListDefinition? _legacyList;
+        private readonly HashSet<(int ListId, int Level)> _seenListLevels = new();
 
         public RtfReader(byte[] bytes) => _bytes = bytes;
 
@@ -264,15 +319,93 @@ public static class ExternalRichTextClipboardPlanner
                 case "deff": _state.DefaultFontIndex = Math.Max(0, value); break;
                 case "fonttbl": _state.Destination = Destination.FontTable; _state.SkipOutput = true; break;
                 case "colortbl": ResetColorTable(); _state.Destination = Destination.ColorTable; _state.SkipOutput = true; break;
+                case "listtable": _state.Destination = Destination.ListTable; _state.SkipOutput = true; break;
+                case "listoverridetable": _state.Destination = Destination.ListOverrideTable; _state.SkipOutput = true; break;
+                case "list":
+                    if (_state.Destination == Destination.ListTable)
+                    {
+                        _currentList = new ListDefinition();
+                        _currentListLevel = null;
+                        _currentListLevelIndex = -1;
+                    }
+                    break;
+                case "listoverride":
+                    if (_state.Destination == Destination.ListOverrideTable)
+                    {
+                        _currentListOverride = new ListOverrideDefinition();
+                        _currentListOverrideId = 0;
+                    }
+                    break;
+                case "listlevel":
+                    if (_state.Destination == Destination.ListTable && _currentList is not null)
+                    {
+                        _currentListLevelIndex = Math.Clamp(_currentListLevelIndex + 1, 0, 8);
+                        _currentListLevel = new ListLevelDefinition();
+                        _currentList.Levels[_currentListLevelIndex] = _currentListLevel;
+                    }
+                    break;
+                case "listid":
+                    if (_state.Destination == Destination.ListTable && _currentList is not null && parameter is { } listId)
+                    {
+                        _currentList.Id = Math.Max(0, listId);
+                        if (_currentList.Id > 0)
+                            _lists[_currentList.Id] = _currentList;
+                    }
+                    else if (_state.Destination == Destination.ListOverrideTable
+                             && _currentListOverride is not null
+                             && parameter is { } overrideListId)
+                    {
+                        _currentListOverride.ListId = Math.Max(0, overrideListId);
+                    }
+                    break;
+                case "ls":
+                    if (_state.Destination == Destination.ListOverrideTable
+                        && _currentListOverride is not null
+                        && parameter is { } overrideId)
+                    {
+                        _currentListOverrideId = Math.Max(0, overrideId);
+                        if (_currentListOverrideId > 0)
+                            _listOverrides[_currentListOverrideId] = _currentListOverride;
+                    }
+                    else if (_state.Destination == Destination.Body)
+                    {
+                        _state.ListOverrideId = parameter is > 0 ? parameter : null;
+                    }
+                    break;
+                case "ilvl":
+                    _state.ListLevel = Math.Clamp(value, 0, 8);
+                    break;
+                case "levelnfc":
+                    if (_state.Destination == Destination.ListTable && _currentListLevel is not null)
+                        _currentListLevel.NumberFormat = Math.Clamp(value, 0, 255);
+                    break;
+                case "levelstartat":
+                    if (_state.Destination == Destination.ListTable && _currentListLevel is not null)
+                        _currentListLevel.StartAt = Math.Clamp(value, 1, 1_000_000);
+                    break;
+                case "leveltext":
+                    _state.Destination = Destination.ListLevelText;
+                    _state.SkipOutput = true;
+                    break;
+                case "field":
+                    _state.Field = new FieldContext();
+                    break;
+                case "fldinst":
+                    _state.Field ??= new FieldContext();
+                    _state.Destination = Destination.FieldInstruction;
+                    _state.SkipOutput = true;
+                    break;
+                case "fldrslt":
+                    _state.Destination = Destination.Body;
+                    _state.SkipOutput = false;
+                    _state.Hyperlink = TryReadExternalHyperlink(_state.Field?.Instruction.ToString());
+                    break;
                 case "stylesheet":
                 case "info":
                 case "pict":
                 case "object":
                 case "filetbl":
-                case "listtable":
-                case "listoverridetable":
                 case "generator":
-                case "fldinst":
                 case "listtext":
                 case "pntext":
                     _state.Destination = Destination.Skip;
@@ -301,6 +434,7 @@ public static class ExternalRichTextClipboardPlanner
                 case "ul0": _state.Underline = false; break;
                 case "cf": _state.ColorIndex = Math.Max(0, value); break;
                 case "plain": ResetCharacterFormatting(); break;
+                case "pard": ResetParagraphFormatting(); break;
                 case "uc": _state.UnicodeSkip = Math.Clamp(value, 0, 16); break;
                 case "u":
                     if (parameter is { } unicode)
@@ -327,6 +461,44 @@ public static class ExternalRichTextClipboardPlanner
                 case "rquote": AppendText("\u2019"); break;
                 case "ldblquote": AppendText("\u201C"); break;
                 case "rdblquote": AppendText("\u201D"); break;
+                case "ql": _state.ParagraphAlignment = TextAlign.Left; break;
+                case "qr": _state.ParagraphAlignment = TextAlign.Right; break;
+                case "qc": _state.ParagraphAlignment = TextAlign.Center; break;
+                case "qj": _state.ParagraphAlignment = TextAlign.Justify; break;
+                case "li": _state.LeftIndentTwips = parameter is { } left ? Math.Clamp(left, -100_000, 100_000) : 0; break;
+                case "fi": _state.FirstLineIndentTwips = parameter is { } first ? Math.Clamp(first, -100_000, 100_000) : 0; break;
+                case "sb": _state.SpaceBeforeTwips = parameter is { } before ? Math.Clamp(before, -100_000, 100_000) : 0; break;
+                case "sa": _state.SpaceAfterTwips = parameter is { } after ? Math.Clamp(after, -100_000, 100_000) : 0; break;
+                case "pn":
+                    _legacyList = new LegacyListDefinition();
+                    break;
+                case "pnlvlblt":
+                    _legacyList ??= new LegacyListDefinition();
+                    _legacyList.Kind = BulletKind.Char;
+                    _legacyList.BulletChar = "\u2022";
+                    break;
+                case "pnlvlbody":
+                    _legacyList ??= new LegacyListDefinition();
+                    _legacyList.Kind = BulletKind.Auto;
+                    break;
+                case "pnlvlcont":
+                    _legacyList ??= new LegacyListDefinition();
+                    _legacyList.StartSpecified = false;
+                    break;
+                case "pnlvlrestart":
+                case "pnrestart":
+                    _legacyList ??= new LegacyListDefinition();
+                    _legacyList.StartSpecified = true;
+                    break;
+                case "pnstart":
+                    _legacyList ??= new LegacyListDefinition();
+                    _legacyList.StartAt = Math.Clamp(value, 1, 1_000_000);
+                    _legacyList.StartSpecified = true;
+                    break;
+                case "pnseclvl":
+                    _legacyList ??= new LegacyListDefinition();
+                    _legacyList.Level = Math.Clamp(value - 1, 0, 8);
+                    break;
                 case "pararsid":
                 case "charrsid":
                 case "lang":
@@ -340,11 +512,12 @@ public static class ExternalRichTextClipboardPlanner
                 case "fscript":
                 case "viewkind":
                 case "viewscale":
-                case "pard":
-                case "ql":
-                case "qr":
-                case "qc":
-                case "qj":
+                case "ri":
+                case "sl":
+                case "slmult":
+                case "tx":
+                case "pnf":
+                case "pnfs":
                     break;
             }
         }
@@ -372,6 +545,18 @@ public static class ExternalRichTextClipboardPlanner
                 return;
             }
 
+            if (_state.Destination == Destination.FieldInstruction)
+            {
+                AppendFieldInstruction(DecodeByte(value));
+                return;
+            }
+
+            if (_state.Destination is Destination.ListTable
+                or Destination.ListOverrideTable
+                or Destination.ListLevelText
+                or Destination.Skip)
+                return;
+
             if (_state.SkipOutput || _state.Destination != Destination.Body)
                 return;
 
@@ -380,12 +565,22 @@ public static class ExternalRichTextClipboardPlanner
 
         private void AppendText(string text)
         {
-            if (text.Length == 0 || _state.SkipOutput || _state.Destination != Destination.Body)
+            if (text.Length == 0)
+                return;
+
+            if (_state.Destination == Destination.FieldInstruction)
+            {
+                AppendFieldInstruction(text);
+                return;
+            }
+
+            if (_state.SkipOutput || _state.Destination != Destination.Body)
                 return;
             if (_outputCharacters > MaxOutputCharacters - text.Length)
                 throw new InvalidDataException("RTF output limit exceeded.");
 
             var paragraph = _body.Paragraphs[^1];
+            ApplyParagraphState(paragraph);
             var style = CurrentStyle();
             if (!ReferenceEquals(_activeParagraph, paragraph)
                 || !_hasActiveStyle
@@ -407,6 +602,8 @@ public static class ExternalRichTextClipboardPlanner
                 return;
             FlushActiveRun();
             EnsureParagraph();
+            ApplyParagraphState(_body.Paragraphs[^1]);
+            _legacyList = null;
             _body.Paragraphs.Add(new Paragraph());
             _lastWasParagraphBreak = true;
         }
@@ -430,7 +627,8 @@ public static class ExternalRichTextClipboardPlanner
                 _state.Underline,
                 color,
                 _state.BoldSet,
-                _state.ItalicSet);
+                _state.ItalicSet,
+                _state.Hyperlink);
         }
 
         private void FlushActiveRun()
@@ -454,6 +652,7 @@ public static class ExternalRichTextClipboardPlanner
                 ItalicSet = _activeStyle.ItalicSet,
                 Underline = _activeStyle.Underline,
                 Color = _activeStyle.Color is { } color ? new ThemeAwareColor(color) : null,
+                Hyperlink = _activeStyle.Hyperlink,
             });
             _activeParagraph = null;
             _hasActiveStyle = false;
@@ -468,7 +667,8 @@ public static class ExternalRichTextClipboardPlanner
             && left.Underline == right.Underline
             && Nullable.Equals(left.Color, right.Color)
             && left.BoldSet == right.BoldSet
-            && left.ItalicSet == right.ItalicSet;
+            && left.ItalicSet == right.ItalicSet
+            && SameHyperlink(left.Hyperlink, right.Hyperlink);
 
         private void ResetCharacterFormatting()
         {
@@ -481,6 +681,117 @@ public static class ExternalRichTextClipboardPlanner
             _state.Underline = false;
             _state.ColorIndex = 0;
         }
+
+        private void ResetParagraphFormatting()
+        {
+            _state.ParagraphAlignment = null;
+            _state.ListOverrideId = null;
+            _state.ListLevel = 0;
+            _state.LeftIndentTwips = null;
+            _state.FirstLineIndentTwips = null;
+            _state.SpaceBeforeTwips = null;
+            _state.SpaceAfterTwips = null;
+        }
+
+        private void ApplyParagraphState(Paragraph paragraph)
+        {
+            paragraph.Align = _state.ParagraphAlignment;
+            paragraph.Level = Math.Clamp(
+                _state.ListOverrideId is not null ? _state.ListLevel : 0,
+                0,
+                8);
+            paragraph.MarginLeftEmu = ToEmu(_state.LeftIndentTwips);
+            paragraph.IndentEmu = ToEmu(_state.FirstLineIndentTwips);
+            paragraph.SpaceBeforePt = ToPoints(_state.SpaceBeforeTwips);
+            paragraph.SpaceAfterPt = ToPoints(_state.SpaceAfterTwips);
+
+            if (_legacyList is { } legacyList)
+            {
+                paragraph.Level = legacyList.Level;
+                paragraph.BulletKind = legacyList.Kind;
+                paragraph.BulletChar = legacyList.BulletChar;
+                paragraph.AutoNumStartAt = legacyList.StartAt;
+                paragraph.AutoNumStartAtSpecified = legacyList.StartSpecified;
+                return;
+            }
+
+            if (_state.ListOverrideId is not { } overrideId
+                || !_listOverrides.TryGetValue(overrideId, out var listOverride)
+                || !_lists.TryGetValue(listOverride.ListId, out var list)
+                || !list.Levels.TryGetValue(_state.ListLevel, out var level))
+            {
+                paragraph.BulletKind = BulletKind.None;
+                paragraph.AutoNumStartAtSpecified = false;
+                return;
+            }
+
+            if (level.NumberFormat == 23)
+            {
+                paragraph.BulletKind = BulletKind.Char;
+                paragraph.BulletChar = "\u2022";
+                paragraph.AutoNumStartAtSpecified = false;
+                return;
+            }
+
+            paragraph.BulletKind = BulletKind.Auto;
+            paragraph.AutoNumType = MapAutoNumType(level.NumberFormat);
+            paragraph.AutoNumStartAt = level.StartAt;
+            bool firstOccurrence = !paragraph.AutoNumStartAtSpecified
+                && _seenListLevels.Add((overrideId, _state.ListLevel));
+            paragraph.AutoNumStartAtSpecified |= firstOccurrence;
+        }
+
+        private void AppendFieldInstruction(string text)
+        {
+            if (_state.Field is null || _state.Field.Instruction.Length > 4096 - text.Length)
+                return;
+            _state.Field.Instruction.Append(text);
+        }
+
+        private static Hyperlink? TryReadExternalHyperlink(string? instruction)
+        {
+            if (string.IsNullOrWhiteSpace(instruction))
+                return null;
+
+            const string prefix = "HYPERLINK";
+            string value = instruction.Trim();
+            if (!value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            value = value[prefix.Length..].TrimStart();
+            if (value.Length < 2 || value[0] != '"')
+                return null;
+            int endQuote = value.IndexOf('"', 1);
+            if (endQuote <= 1 || endQuote > 4096)
+                return null;
+
+            string url = value[1..endQuote];
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+                || uri.Scheme is not ("http" or "https" or "mailto"))
+                return null;
+
+            return new Hyperlink { Url = uri.AbsoluteUri };
+        }
+
+        private static bool SameHyperlink(Hyperlink? left, Hyperlink? right) =>
+            string.Equals(left?.Url, right?.Url, StringComparison.Ordinal)
+            && string.Equals(left?.TargetSlideId, right?.TargetSlideId, StringComparison.Ordinal)
+            && string.Equals(left?.Tooltip, right?.Tooltip, StringComparison.Ordinal);
+
+        private static long? ToEmu(int? twips) => twips is { } value
+            ? Math.Clamp((long)value * 635L, -63_500_000_000L, 63_500_000_000L)
+            : null;
+
+        private static double? ToPoints(int? twips) => twips / 20.0;
+
+        private static AutoNumType MapAutoNumType(int numberFormat) => numberFormat switch
+        {
+            1 => AutoNumType.RomanUcPeriod,
+            2 => AutoNumType.RomanLcPeriod,
+            3 => AutoNumType.AlphaUcPeriod,
+            4 => AutoNumType.AlphaLcPeriod,
+            _ => AutoNumType.ArabicPeriod,
+        };
 
         private void ResetColorTable()
         {

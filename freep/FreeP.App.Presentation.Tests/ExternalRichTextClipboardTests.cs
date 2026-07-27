@@ -72,4 +72,112 @@ public sealed class ExternalRichTextClipboardTests
         updated.Paragraphs.SelectMany(paragraph => paragraph.Runs)
             .Should().Contain(run => run.Text == "External" && run.Bold);
     }
+
+    [Fact]
+    public void WordListTable_PreservesNestedLevelsNumberFormatRestartAndParagraphLayout()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\listtable
+{\list\listid1
+{\listlevel\levelnfc0\levelstartat3\leveltext\'02\'00.;\levelnumbers\'01;}
+{\listlevel\levelnfc23\levelstartat1\leveltext\'01\u8226?;\levelnumbers;}
+}}
+{\listoverridetable{\listoverride\listid1\ls1}}
+\pard\ls1\ilvl0\li720\fi-360\ql\sb120\sa240 First\par
+\pard\ls1\ilvl1\li1440\fi-360\qc Nested\par
+\pard\ls1\ilvl0\qr Second}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("First\nNested\nSecond");
+        payload.Body.Paragraphs.Should().HaveCount(3);
+
+        var first = payload.Body.Paragraphs[0];
+        first.BulletKind.Should().Be(BulletKind.Auto);
+        first.AutoNumType.Should().Be(AutoNumType.ArabicPeriod);
+        first.AutoNumStartAt.Should().Be(3);
+        first.AutoNumStartAtSpecified.Should().BeTrue();
+        first.Level.Should().Be(0);
+        first.Align.Should().Be(TextAlign.Left);
+        first.MarginLeftEmu.Should().Be(457200);
+        first.IndentEmu.Should().Be(-228600);
+        first.SpaceBeforePt.Should().Be(6);
+        first.SpaceAfterPt.Should().Be(12);
+
+        var nested = payload.Body.Paragraphs[1];
+        nested.BulletKind.Should().Be(BulletKind.Char);
+        nested.BulletChar.Should().Be("\u2022");
+        nested.Level.Should().Be(1);
+        nested.Align.Should().Be(TextAlign.Center);
+
+        var continuation = payload.Body.Paragraphs[2];
+        continuation.BulletKind.Should().Be(BulletKind.Auto);
+        continuation.AutoNumStartAt.Should().Be(3);
+        continuation.AutoNumStartAtSpecified.Should().BeFalse();
+        continuation.Align.Should().Be(TextAlign.Right);
+    }
+
+    [Fact]
+    public void HyperlinkField_PreservesResultTextAndRejectsUnsafeTargets()
+    {
+        const string rtf =
+            @"{\rtf1\ansi Before {\field{\*\fldinst HYPERLINK ""https://example.com/review""}{\fldrslt Click here}} "
+            + @"{\field{\*\fldinst HYPERLINK ""javascript:alert(1)""}{\fldrslt Unsafe}} After}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("Before Click here Unsafe After");
+        payload.Body.Paragraphs.Single().Runs
+            .Single(run => run.Text == "Click here")
+            .Hyperlink!.Url.Should().Be("https://example.com/review");
+        payload.Body.Paragraphs.Single().Runs
+            .Single(run => run.Text.Contains("Unsafe", StringComparison.Ordinal))
+            .Hyperlink.Should().BeNull();
+    }
+
+    [Fact]
+    public void LegacyPnGroups_PreserveBulletLevelAndExplicitNumberRestart()
+    {
+        const string rtf =
+            @"{\rtf1\ansi{\pn\pnlvlblt\pnseclvl2}\pard\li360\fi-360 Bullet\par
+{\pn\pnlvlbody\pnstart4}\pard\li720\fi-360 Number}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Should().HaveCount(2);
+        payload.Body.Paragraphs[0].BulletKind.Should().Be(BulletKind.Char);
+        payload.Body.Paragraphs[0].BulletChar.Should().Be("\u2022");
+        payload.Body.Paragraphs[0].Level.Should().Be(1);
+        payload.Body.Paragraphs[1].BulletKind.Should().Be(BulletKind.Auto);
+        payload.Body.Paragraphs[1].AutoNumStartAt.Should().Be(4);
+        payload.Body.Paragraphs[1].AutoNumStartAtSpecified.Should().BeTrue();
+    }
+
+    [Fact]
+    public void LibreOfficeAndMalformedFragments_KeepEscapesBoundedAndDoNotLeakDestinations()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\uc1\b LibreOffice\b0 {\*\generator LibreOffice} \u233? {\object ignored} \{literal\}\par
+\pard\qj\li360\sa80 Text {\field{\*\fldinst NOT_A_HYPERLINK}{\fldrslt field text}}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("LibreOffice \u00E9  {literal}\nText field text");
+        payload.Body.Paragraphs.Should().HaveCount(2);
+        payload.Body.Paragraphs[1].Align.Should().Be(TextAlign.Justify);
+        payload.Body.Paragraphs[1].MarginLeftEmu.Should().Be(228600);
+        payload.Body.Paragraphs[1].SpaceAfterPt.Should().Be(4);
+        payload.Body.Paragraphs[1].Runs
+            .Single(run => run.Text.Contains("field text", StringComparison.Ordinal))
+            .Hyperlink.Should().BeNull();
+
+        ExternalRichTextClipboardPlanner.TryParseRtf(
+                Encoding.ASCII.GetBytes(@"{\rtf1\ansi {\field{\*\fldinst HYPERLINK ""https://example.com""}"))
+            .Should().NotBeNull();
+    }
 }
