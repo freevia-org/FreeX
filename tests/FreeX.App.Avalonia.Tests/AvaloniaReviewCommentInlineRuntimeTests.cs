@@ -12,6 +12,8 @@ using Avalonia.Media;
 using Avalonia.VisualTree;
 using FluentAssertions;
 
+using Free.Shared.Drawing;
+using FreeX.App.Presentation.Comments;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -42,10 +44,10 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
         double expectedWidth,
         double expectedMaxHeight)
     {
-        var placement = MainWindow.CalculateInlineCommentEditorPlacement(
-            new Rect(cellLeft, cellTop, cellWidth, cellHeight),
-            new Size(viewportWidth, viewportHeight),
-            new Size(300, 230));
+        var placement = CommentPreviewPlacementPlanner.Calculate(
+            new LayoutRect(cellLeft, cellTop, cellWidth, cellHeight),
+            new CommentPreviewLayoutSize(viewportWidth, viewportHeight),
+            new CommentPreviewLayoutSize(300, 230));
 
         placement.HorizontalOffset.Should().Be(expectedLeft);
         placement.VerticalOffset.Should().Be(expectedTop);

@@ -66,6 +66,25 @@ public sealed class GridCommentPreviewPlacementPlannerTests
         placement.VerticalOffset.Should().Be(40);
         placement.Width.Should().Be(300);
         placement.MaxHeight.Should().Be(220);
+
+        GridCommentPreviewPlacementPlanner.EdgePadding.Should()
+            .Be(global::FreeX.App.Presentation.Comments.CommentPreviewPlacementPlanner.EdgePadding);
+        GridCommentPreviewPlacementPlanner.CellGap.Should()
+            .Be(global::FreeX.App.Presentation.Comments.CommentPreviewPlacementPlanner.CellGap);
+        GridCommentPreviewPlacementPlanner.MinWidth.Should()
+            .Be(global::FreeX.App.Presentation.Comments.CommentPreviewPlacementPlanner.MinWidth);
+        GridCommentPreviewPlacementPlanner.MaxWidth.Should()
+            .Be(global::FreeX.App.Presentation.Comments.CommentPreviewPlacementPlanner.MaxWidth);
+        GridCommentPreviewPlacementPlanner.MinHeight.Should()
+            .Be(global::FreeX.App.Presentation.Comments.CommentPreviewPlacementPlanner.MinHeight);
+        GridCommentPreviewPlacementPlanner.MaxHeight.Should()
+            .Be(global::FreeX.App.Presentation.Comments.CommentPreviewPlacementPlanner.MaxHeight);
+
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridCommentPreviewPlacementPlanner.cs");
+        source.Should().Contain("SharedCommentPreviewPlacementPlanner");
+        source.Should().Contain("ToLayout");
+        source.Should().NotContain("var availableWidth =");
+        source.Should().NotContain("private static double Clamp");
     }
 
     [Fact]

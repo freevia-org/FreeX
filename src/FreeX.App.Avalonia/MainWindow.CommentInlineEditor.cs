@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
+using Free.Shared.Drawing;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.Shell;
@@ -19,18 +20,6 @@ public sealed partial class MainWindow
     private const double InlineCommentEditorWidth = 300;
     private const double InlineCommentEditorNewHeight = 230;
     private const double InlineCommentEditorExistingHeight = 300;
-    private const double InlineCommentEditorEdgePadding = 8;
-    private const double InlineCommentEditorCellGap = 6;
-    private const double InlineCommentEditorMinWidth = 180;
-    private const double InlineCommentEditorMaxWidth = 320;
-    private const double InlineCommentEditorMinHeight = 72;
-    private const double InlineCommentEditorMaxHeight = 220;
-
-    internal readonly record struct InlineCommentEditorPlacement(
-        double HorizontalOffset,
-        double VerticalOffset,
-        double Width,
-        double MaxHeight);
 
     private CellAddress? _inlineThreadedCommentEditAddress;
     private ThreadedComment? _inlineThreadedCommentEditExisting;
@@ -120,10 +109,14 @@ public sealed partial class MainWindow
             return;
         }
 
-        var placement = CalculateInlineCommentEditorPlacement(
-            new Rect(cellLeft, cellTop, cellWidth, cellHeight),
-            new Size(Math.Max(0, overlay.Width), Math.Max(0, overlay.Height)),
-            new Size(InlineCommentEditorWidth, InlineCommentEditorNewHeight));
+        var placement = CommentPreviewPlacementPlanner.Calculate(
+            new LayoutRect(cellLeft, cellTop, cellWidth, cellHeight),
+            new CommentPreviewLayoutSize(
+                Math.Max(0, overlay.Width),
+                Math.Max(0, overlay.Height)),
+            new CommentPreviewLayoutSize(
+                InlineCommentEditorWidth,
+                InlineCommentEditorNewHeight));
 
         var editor = new Border
         {
@@ -147,42 +140,6 @@ public sealed partial class MainWindow
         Canvas.SetLeft(editor, placement.HorizontalOffset);
         Canvas.SetTop(editor, placement.VerticalOffset);
         overlay.Children.Add(editor);
-    }
-
-    /// <summary>
-    /// Mirrors WPF's GridCommentPreviewPlacementPlanner for the worksheet-anchored editor.
-    /// The displayed Avalonia cell bounds are already zoom-adjusted.
-    /// </summary>
-    internal static InlineCommentEditorPlacement CalculateInlineCommentEditorPlacement(
-        Rect cellRect,
-        Size viewportSize,
-        Size desiredSize)
-    {
-        var availableWidth = Math.Max(1, viewportSize.Width - InlineCommentEditorEdgePadding * 2);
-        var minWidth = Math.Min(InlineCommentEditorMinWidth, availableWidth);
-        var maxWidth = Math.Max(minWidth, Math.Min(InlineCommentEditorMaxWidth, availableWidth));
-        var width = Math.Clamp(desiredSize.Width, minWidth, maxWidth);
-
-        var availableHeight = Math.Max(1, viewportSize.Height - InlineCommentEditorEdgePadding * 2);
-        var minHeight = Math.Min(InlineCommentEditorMinHeight, availableHeight);
-        var maxHeight = Math.Max(minHeight, Math.Min(InlineCommentEditorMaxHeight, availableHeight));
-        var height = Math.Clamp(desiredSize.Height, minHeight, maxHeight);
-
-        var right = cellRect.Right + InlineCommentEditorCellGap;
-        var left = cellRect.Left - InlineCommentEditorCellGap - width;
-        var x = right + width <= viewportSize.Width - InlineCommentEditorEdgePadding ? right : left;
-        if (x < InlineCommentEditorEdgePadding)
-            x = Math.Max(InlineCommentEditorEdgePadding, viewportSize.Width - InlineCommentEditorEdgePadding - width);
-        if (x + width > viewportSize.Width - InlineCommentEditorEdgePadding)
-            x = Math.Max(InlineCommentEditorEdgePadding, viewportSize.Width - InlineCommentEditorEdgePadding - width);
-
-        var y = cellRect.Top;
-        if (y + height > viewportSize.Height - InlineCommentEditorEdgePadding)
-            y = viewportSize.Height - InlineCommentEditorEdgePadding - height;
-        if (y < InlineCommentEditorEdgePadding)
-            y = InlineCommentEditorEdgePadding;
-
-        return new InlineCommentEditorPlacement(x, y, width, maxHeight);
     }
 
     private StackPanel BuildInlineNotePanel(CellAddress address)
