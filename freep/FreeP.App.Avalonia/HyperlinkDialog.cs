@@ -1,7 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
+using Avalonia.VisualTree;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -10,7 +13,10 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class HyperlinkDialog : Window
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = 26 };
+    private static readonly IBrush WpfDefaultButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
+    private static readonly IBrush WpfCancelButtonBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xF1, 0xF1, 0xF1));
 
     private readonly RadioButton _urlRadio;
     private readonly RadioButton _slideRadio;
@@ -50,7 +56,7 @@ internal sealed class HyperlinkDialog : Window
         Height = 216;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = Brushes.White;
+        AvaloniaCompactDialogChrome.ApplyWindow(this, DialogChromeStyle);
 
         _urlRadio = new RadioButton
         {
@@ -68,11 +74,10 @@ internal sealed class HyperlinkDialog : Window
         {
             Margin = new Thickness(0, 0, 0, 4),
             MinWidth = 260,
-            PlaceholderText = "https://example.com",
         };
         _slideCombo = new ComboBox
         {
-            Margin = new Thickness(0, 0, 0, 4),
+            Margin = new Thickness(0, 0, 0, 2),
             MinWidth = 260,
             ItemsSource = request.SlideOptions,
             SelectedIndex = request.SelectedSlideIndex,
@@ -88,33 +93,44 @@ internal sealed class HyperlinkDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 8),
         };
-        AvaloniaCompactDialogChrome.ApplyRadioButton(_urlRadio, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyRadioButton(_slideRadio, DialogChromeStyle);
-        foreach (var radio in new[] { _urlRadio, _slideRadio })
-        {
-            radio.Height = 20;
-            radio.MinHeight = 20;
-            radio.MaxHeight = 20;
-            radio.Padding = new Thickness(0);
-        }
+        AvaloniaCompactDialogChrome.ApplyCompactRadioButton(_urlRadio, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactRadioButton(_slideRadio, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_urlBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_slideCombo, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_tooltipBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(
             _validationText,
             DialogChromeStyle,
-            new Thickness(0, 2, 0, 4));
+            new Thickness(0, 2, 0, 8));
+        _validationText.IsVisible = true;
+        _slideCombo.Opacity = 1;
+        _slideCombo.Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70));
+        _slideCombo.Styles.Add(new Style(selector => selector.OfType<ComboBox>().Class(":disabled"))
+        {
+            Setters =
+            {
+                new Setter(ComboBox.OpacityProperty, 1d),
+                new Setter(ComboBox.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0))),
+                new Setter(ComboBox.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70))),
+            },
+        });
 
         var initial = request.InitialState;
         _urlRadio.IsChecked = initial.TargetKind == HyperlinkDialogTargetKind.Url;
         _slideRadio.IsChecked = initial.TargetKind == HyperlinkDialogTargetKind.Slide;
         _urlBox.Text = initial.UrlText;
         _tooltipBox.Text = initial.TooltipText;
+        _urlRadio.TabIndex = 0;
+        _slideRadio.TabIndex = 1;
+        _urlBox.TabIndex = 2;
+        _slideCombo.TabIndex = 3;
+        _tooltipBox.TabIndex = 4;
 
         _urlRadio.IsCheckedChanged += (_, _) => UpdateEnabled();
         _slideRadio.IsCheckedChanged += (_, _) => UpdateEnabled();
 
         Content = BuildContent();
+        Opened += (_, _) => ApplyWpfButtonChrome();
         UpdateEnabled();
     }
 
@@ -141,7 +157,7 @@ internal sealed class HyperlinkDialog : Window
 
         var radioPanel = new StackPanel
         {
-            Margin = new Thickness(0, 0, 0, 6),
+            Margin = new Thickness(0, 0, 0, -4),
             Children = { _urlRadio, _slideRadio },
         };
         Grid.SetRow(radioPanel, 0);
@@ -171,13 +187,15 @@ internal sealed class HyperlinkDialog : Window
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Children =
-            {
-                MakeDialogButton("OK", isDefault: true, OnOk),
-                MakeDialogButton("Cancel", isDefault: false, () => Close(null)),
-            },
+            Spacing = 13,
+            Margin = new Thickness(0, 2, 0, 0),
         };
+        var ok = MakeDialogButton("OK", isDefault: true, OnOk);
+        var cancel = MakeDialogButton("Cancel", isDefault: false, () => Close(null));
+        ok.TabIndex = 5;
+        cancel.TabIndex = 6;
+        buttons.Children.Add(ok);
+        buttons.Children.Add(cancel);
         Grid.SetRow(buttons, 5);
         Grid.SetColumnSpan(buttons, 2);
         grid.Children.Add(buttons);
@@ -206,7 +224,11 @@ internal sealed class HyperlinkDialog : Window
             IsDefault = isDefault,
             IsCancel = !isDefault,
         };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 74, isDefault: isDefault);
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 75, isDefault: isDefault);
+        button.Background = isDefault ? Brushes.White : WpfCancelButtonBackgroundBrush;
+        button.BorderBrush = isDefault
+            ? WpfDefaultButtonBorderBrush
+            : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8));
         button.Click += (_, _) => onClick();
         return button;
     }
@@ -216,6 +238,62 @@ internal sealed class HyperlinkDialog : Window
         var isUrl = _urlRadio.IsChecked == true;
         _urlBox.IsEnabled = isUrl;
         _slideCombo.IsEnabled = !isUrl;
+        _slideCombo.Opacity = 1;
+        _slideCombo.Foreground = isUrl
+            ? new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70))
+            : Brushes.Black;
+    }
+
+    private void ApplyWpfButtonChrome()
+    {
+        if (Content is not Grid grid)
+            return;
+
+        var row = grid.Children
+            .OfType<StackPanel>()
+            .FirstOrDefault(panel => Grid.GetRow(panel) == 5);
+        if (row is null)
+            return;
+
+        var buttons = row.Children.OfType<Button>().ToArray();
+        if (buttons.Length > 0)
+        {
+            buttons[0].Background = Brushes.White;
+            buttons[0].BorderBrush = WpfDefaultButtonBorderBrush;
+        }
+        if (buttons.Length > 1)
+        {
+            buttons[1].Background = WpfCancelButtonBackgroundBrush;
+            buttons[1].BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8));
+        }
+
+        var disabledComboBackground = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));
+        _slideCombo.Styles.Add(new Style(selector => selector.OfType<Border>().Name("PART_LayoutRoot"))
+        {
+            Setters =
+            {
+                new Setter(Border.BackgroundProperty, disabledComboBackground),
+                new Setter(Border.OpacityProperty, 1d),
+            },
+        });
+        _slideCombo.Styles.Add(new Style(selector => selector.OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        {
+            Setters =
+            {
+                new Setter(ContentPresenter.BackgroundProperty, disabledComboBackground),
+                new Setter(ContentPresenter.OpacityProperty, 1d),
+            },
+        });
+        foreach (var border in _slideCombo.GetVisualDescendants().OfType<Border>())
+        {
+            border.Background = disabledComboBackground;
+            border.Opacity = 1;
+        }
+        foreach (var presenter in _slideCombo.GetVisualDescendants().OfType<ContentPresenter>())
+        {
+            presenter.Background = disabledComboBackground;
+            presenter.Opacity = 1;
+        }
     }
 
     private void OnOk() => Apply();
@@ -235,11 +313,14 @@ internal sealed class HyperlinkDialog : Window
         {
             var validation = plan.Validation!;
             _validationText.Text = validation.Message;
+            _validationText.IsVisible = true;
             FocusField(validation.FocusField);
             return false;
         }
 
         Result = plan.Result;
+        _validationText.Text = string.Empty;
+        _validationText.IsVisible = true;
         if (IsVisible)
             Close(Result);
         return true;
