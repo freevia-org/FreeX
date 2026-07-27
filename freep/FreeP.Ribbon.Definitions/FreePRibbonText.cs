@@ -55,6 +55,8 @@ internal static class FreePRibbonText
     public static string TableCellAnchorKeyTip => Get("Ribbon_Command_TableCellAnchor_KeyTip");
     public static string TableCellBorderLabel => Get("Ribbon_Command_TableCellBorder_Label");
     public static string TableCellBorderKeyTip => Get("Ribbon_Command_TableCellBorder_KeyTip");
+    public static string TableCellInsetLabel => Get("Ribbon_Command_TableCellInset_Label");
+    public static string TableCellInsetKeyTip => Get("Ribbon_Command_TableCellInset_KeyTip");
     public static string BoldLabel => Get("Ribbon_Command_Bold_Label");
     public static string BoldKeyTip => Get("Ribbon_Command_Bold_KeyTip");
     public static string ItalicLabel => Get("Ribbon_Command_Italic_Label");

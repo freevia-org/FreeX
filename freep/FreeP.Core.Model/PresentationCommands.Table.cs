@@ -226,6 +226,129 @@ public sealed class SetTableCellAnchorCommand : IPresentationCommand
     }
 }
 
+/// <summary>Sets or clears one explicit cell inset side, in points.</summary>
+public sealed class SetTableCellInsetCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _row;
+    private readonly int _col;
+    private readonly TableCellInsetSide _side;
+    private readonly double? _newInsetPt;
+    private double? _oldLeftPt;
+    private double? _oldRightPt;
+    private double? _oldTopPt;
+    private double? _oldBottomPt;
+
+    public SetTableCellInsetCommand(
+        int slideIndex,
+        uint shapeId,
+        int row,
+        int col,
+        TableCellInsetSide side,
+        double? newInsetPt)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _row = row;
+        _col = col;
+        _side = side;
+        _newInsetPt = newInsetPt;
+    }
+
+    public string Label => _newInsetPt is null ? "Clear Cell Inset" : "Set Cell Inset";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        return cell is not null && (_side == TableCellInsetSide.All
+            ? cell.InsetLeftPt != _newInsetPt || cell.InsetRightPt != _newInsetPt ||
+              cell.InsetTopPt != _newInsetPt || cell.InsetBottomPt != _newInsetPt
+            : GetSide(cell, _side) != _newInsetPt);
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        if (cell is null) return;
+        _oldLeftPt = cell.InsetLeftPt;
+        _oldRightPt = cell.InsetRightPt;
+        _oldTopPt = cell.InsetTopPt;
+        _oldBottomPt = cell.InsetBottomPt;
+        SetSide(cell, _side, _newInsetPt);
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        if (cell is not null)
+        {
+            if (_side == TableCellInsetSide.All)
+            {
+                cell.InsetLeftPt = _oldLeftPt;
+                cell.InsetRightPt = _oldRightPt;
+                cell.InsetTopPt = _oldTopPt;
+                cell.InsetBottomPt = _oldBottomPt;
+            }
+            else
+                SetSide(cell, _side, GetOldSide(_side));
+        }
+    }
+
+    private TableCell? GetCell(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null || _row < 0 || _row >= table.Rows.Count)
+            return null;
+
+        var row = table.Rows[_row];
+        return _col >= 0 && _col < row.Cells.Count ? row.Cells[_col] : null;
+    }
+
+    private static double? GetSide(TableCell cell, TableCellInsetSide side) => side switch
+    {
+        TableCellInsetSide.Left => cell.InsetLeftPt,
+        TableCellInsetSide.Right => cell.InsetRightPt,
+        TableCellInsetSide.Top => cell.InsetTopPt,
+        TableCellInsetSide.Bottom => cell.InsetBottomPt,
+        _ => null,
+    };
+
+    private double? GetOldSide(TableCellInsetSide side) => side switch
+    {
+        TableCellInsetSide.Left => _oldLeftPt,
+        TableCellInsetSide.Right => _oldRightPt,
+        TableCellInsetSide.Top => _oldTopPt,
+        TableCellInsetSide.Bottom => _oldBottomPt,
+        _ => null,
+    };
+
+    private static void SetSide(TableCell cell, TableCellInsetSide side, double? value)
+    {
+        switch (side)
+        {
+            case TableCellInsetSide.All:
+                cell.InsetLeftPt = value;
+                cell.InsetRightPt = value;
+                cell.InsetTopPt = value;
+                cell.InsetBottomPt = value;
+                break;
+            case TableCellInsetSide.Left:
+                cell.InsetLeftPt = value;
+                break;
+            case TableCellInsetSide.Right:
+                cell.InsetRightPt = value;
+                break;
+            case TableCellInsetSide.Top:
+                cell.InsetTopPt = value;
+                break;
+            case TableCellInsetSide.Bottom:
+                cell.InsetBottomPt = value;
+                break;
+        }
+    }
+}
+
 /// <summary>Sets or clears one explicit border side of a table cell.</summary>
 public sealed class SetTableCellBorderCommand : IPresentationCommand
 {

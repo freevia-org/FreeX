@@ -173,6 +173,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(wpf, "freep.table-cell-anchor").KeyTip!,
                 RequiredControl(wpf, "freep.table-cell-border").Label,
                 RequiredControl(wpf, "freep.table-cell-border").KeyTip!,
+                RequiredControl(wpf, "freep.table-cell-inset").Label,
+                RequiredControl(wpf, "freep.table-cell-inset").KeyTip!,
                 RequiredControl(wpf, "freep.bold").Label,
                 RequiredControl(wpf, "freep.bold").KeyTip!,
                 RequiredControl(wpf, "freep.italic").Label,
@@ -221,6 +223,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(avalonia, "freep.table-cell-anchor").KeyTip!,
                 RequiredControl(avalonia, "freep.table-cell-border").Label,
                 RequiredControl(avalonia, "freep.table-cell-border").KeyTip!,
+                RequiredControl(avalonia, "freep.table-cell-inset").Label,
+                RequiredControl(avalonia, "freep.table-cell-inset").KeyTip!,
                 RequiredControl(avalonia, "freep.bold").Label,
                 RequiredControl(avalonia, "freep.bold").KeyTip!,
                 RequiredControl(avalonia, "freep.italic").Label,
@@ -557,11 +561,13 @@ public sealed class FreePRibbonDefinitionProfileTests
         var wpfFill = RequiredCombo(wpf, "freep.table-cell-fill");
         var wpfAnchor = RequiredCombo(wpf, "freep.table-cell-anchor");
         var wpfBorder = RequiredCombo(wpf, "freep.table-cell-border");
+        var wpfInset = RequiredCombo(wpf, "freep.table-cell-inset");
         var size = RequiredCombo(avalonia, "freep.font-size");
         var color = RequiredCombo(avalonia, "freep.font-color");
         var fill = RequiredCombo(avalonia, "freep.table-cell-fill");
         var anchor = RequiredCombo(avalonia, "freep.table-cell-anchor");
         var border = RequiredCombo(avalonia, "freep.table-cell-border");
+        var inset = RequiredCombo(avalonia, "freep.table-cell-inset");
 
         wpfCommandIds.Should().ContainInOrder(
             "freep.font-family",
@@ -570,6 +576,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.table-cell-fill",
             "freep.table-cell-anchor",
             "freep.table-cell-border",
+            "freep.table-cell-inset",
             "freep.bold",
             "freep.italic",
             "freep.underline",
@@ -582,6 +589,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.table-cell-fill",
             "freep.table-cell-anchor",
             "freep.table-cell-border",
+            "freep.table-cell-inset",
             "freep.bold",
             "freep.italic",
             "freep.underline",
@@ -592,11 +600,13 @@ public sealed class FreePRibbonDefinitionProfileTests
         wpfFill.Items.Should().Equal(FreePRibbonDefinitionData.TableCellFillColors);
         wpfAnchor.Items.Should().Equal(FreePRibbonDefinitionData.TableCellAnchorOptions);
         wpfBorder.Items.Should().Equal(FreePRibbonDefinitionData.TableCellBorderOptions);
+        wpfInset.Items.Should().Equal(FreePRibbonDefinitionData.TableCellInsetOptions);
         size.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
         color.Items.Should().Equal(FreePRibbonDefinitionData.FontColors);
         fill.Items.Should().Equal(FreePRibbonDefinitionData.TableCellFillColors);
         anchor.Items.Should().Equal(FreePRibbonDefinitionData.TableCellAnchorOptions);
         border.Items.Should().Equal(FreePRibbonDefinitionData.TableCellBorderOptions);
+        inset.Items.Should().Equal(FreePRibbonDefinitionData.TableCellInsetOptions);
     }
 
     [Fact]
