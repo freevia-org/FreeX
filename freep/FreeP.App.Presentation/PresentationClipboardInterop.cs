@@ -13,6 +13,8 @@ public static class PresentationClipboardFormats
     // Native rich text names used by Avalonia's platform-format bridge.
     public const string WindowsRtf = "Rich Text Format";
     public const string LinuxRtf = "text/rtf";
+    public const string WindowsXamlPackage = "XamlPackage";
+    public const string LinuxXamlPackage = "application/xamlpackage";
 }
 
 /// <summary>Framework-neutral payload written to or read from a system clipboard.</summary>
@@ -21,13 +23,15 @@ public sealed record PresentationClipboardContent(
     byte[]? PngBytes = null,
     string? Text = null,
     string? OwnerToken = null,
-    byte[]? RichTextBytes = null)
+    byte[]? RichTextBytes = null,
+    byte[]? XamlPackageBytes = null)
 {
     public bool HasSelection => SelectionBytes is { Length: > 0 };
     public bool HasImage => PngBytes is { Length: > 0 };
     public bool HasText => !string.IsNullOrEmpty(Text);
     public bool HasRichText => RichTextBytes is { Length: > 0 };
-    public bool IsEmpty => !HasSelection && !HasImage && !HasText && !HasRichText;
+    public bool HasXamlPackage => XamlPackageBytes is { Length: > 0 };
+    public bool IsEmpty => !HasSelection && !HasImage && !HasText && !HasRichText && !HasXamlPackage;
 }
 
 /// <summary>Creates and reads the native FreeP selection clipboard format.</summary>

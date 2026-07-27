@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text;
 using FreeP.App.Compositor;
 
@@ -5,6 +6,40 @@ namespace FreeP.App.Compositor.Tests;
 
 public sealed class ExternalRichTextClipboardTests
 {
+    [Fact]
+    public void XamlPackageFlowDocument_PreservesCommonParagraphAndInlineFormatting()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <Paragraph TextAlignment="Center" Margin="12,4,0,8">
+                <Run FontFamily="Arial" FontSize="16" FontWeight="Bold" Foreground="#FF0080C0" Text="Title" />
+                <Span FontStyle="Italic"><Run Text=" and detail" /></Span>
+                <LineBreak />
+                <Underline>underlined</Underline>
+              </Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("Title and detail\nunderlined");
+        payload.Body.Paragraphs.Should().ContainSingle();
+        var paragraph = payload.Body.Paragraphs.Single();
+        paragraph.Align.Should().Be(TextAlign.Center);
+        paragraph.MarginLeftEmu.Should().Be(114300);
+        paragraph.SpaceBeforePt.Should().Be(3);
+        paragraph.SpaceAfterPt.Should().Be(6);
+        paragraph.Runs[0].FontFamily.Should().Be("Arial");
+        paragraph.Runs[0].FontSizePt.Should().Be(12);
+        paragraph.Runs[0].Bold.Should().BeTrue();
+        paragraph.Runs[0].Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x0080C0));
+        paragraph.Runs[1].Italic.Should().BeTrue();
+        paragraph.Runs[2].Text.Should().Be("\n");
+        paragraph.Runs[3].Underline.Should().BeTrue();
+    }
+
     [Fact]
     public void Rtf1Success_PreservesParagraphsRunsFontColorUnicodeTabsAndLineBreaks()
     {
@@ -226,5 +261,14 @@ Three\cell Four\cell\row}";
         ExternalRichTextClipboardPlanner.TryParseRtf(
                 Encoding.ASCII.GetBytes(@"{\rtf1\ansi {\field{\*\fldinst HYPERLINK ""https://example.com""}"))
             .Should().NotBeNull();
+    }
+
+    private static byte[] CreateXamlPackage(string xaml)
+    {
+        using var output = new MemoryStream();
+        using (var package = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        using (var writer = new StreamWriter(package.CreateEntry("Xaml/Document.xaml").Open(), Encoding.UTF8))
+            writer.Write(xaml);
+        return output.ToArray();
     }
 }

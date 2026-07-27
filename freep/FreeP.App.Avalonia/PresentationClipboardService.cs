@@ -42,6 +42,10 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
         DataFormat.CreateBytesApplicationFormat(PresentationClipboardFormats.RichText);
     internal static readonly DataFormat<byte[]> RichTextPlatformFormat =
         DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.RichText);
+    internal static readonly DataFormat<byte[]> ExternalXamlPackageWindowsFormat =
+        DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.WindowsXamlPackage);
+    internal static readonly DataFormat<byte[]> ExternalXamlPackageLinuxFormat =
+        DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.LinuxXamlPackage);
 
     public async Task WriteAsync(PresentationClipboardContent content)
     {
@@ -85,6 +89,8 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
             item.Set(OwnerTokenPlatformFormat, content.OwnerToken);
             if (content.RichTextBytes is { Length: > 0 })
                 item.Set(RichTextPlatformFormat, content.RichTextBytes);
+            if (content.XamlPackageBytes is { Length: > 0 })
+                item.Set(ExternalXamlPackageWindowsFormat, content.XamlPackageBytes);
         }
         else
         {
@@ -92,6 +98,8 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
             item.Set(OwnerTokenFormat, content.OwnerToken);
             if (content.RichTextBytes is { Length: > 0 })
                 item.Set(RichTextFormat, content.RichTextBytes);
+            if (content.XamlPackageBytes is { Length: > 0 })
+                item.Set(ExternalXamlPackageLinuxFormat, content.XamlPackageBytes);
         }
         item.SetText(content.Text);
         bitmap = null;
@@ -130,6 +138,7 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
         byte[]? selection = null;
         string? ownerToken = null;
         byte[]? richText = null;
+        byte[]? xamlPackage = null;
         string? text = null;
         selection = await TryGetValueAsync(transfer, SelectionPlatformFormat)
             ?? await TryGetValueAsync(transfer, SelectionFormat);
@@ -137,6 +146,8 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
             ?? await TryGetValueAsync(transfer, OwnerTokenFormat);
         richText = await TryGetValueAsync(transfer, RichTextPlatformFormat)
             ?? await TryGetValueAsync(transfer, RichTextFormat);
+        xamlPackage = await TryGetValueAsync(transfer, ExternalXamlPackageWindowsFormat)
+            ?? await TryGetValueAsync(transfer, ExternalXamlPackageLinuxFormat);
         try { text = await transfer.TryGetTextAsync(); }
         catch { }
 
@@ -155,7 +166,7 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
         {
         }
 
-        return new PresentationClipboardContent(selection, png, text, ownerToken, richText);
+        return new PresentationClipboardContent(selection, png, text, ownerToken, richText, xamlPackage);
     }
 
     private static async Task<T?> TryGetValueAsync<T>(

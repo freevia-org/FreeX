@@ -24,6 +24,10 @@ internal sealed class AvaloniaRichTextEditor : Grid
         DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.WindowsRtf);
     internal static readonly DataFormat<byte[]> ExternalRtfLinuxFormat =
         DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.LinuxRtf);
+    internal static readonly DataFormat<byte[]> ExternalXamlPackageWindowsFormat =
+        DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.WindowsXamlPackage);
+    internal static readonly DataFormat<byte[]> ExternalXamlPackageLinuxFormat =
+        DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.LinuxXamlPackage);
 
     private readonly InCanvasRichTextEditBuffer _buffer;
     private readonly AvaloniaRichTextEditingSurface _richTextView;
@@ -190,6 +194,24 @@ internal sealed class AvaloniaRichTextEditor : Grid
         {
             _buffer.ApplyClipboardPayload(payload, Selection, out var caret);
             ApplyBufferText(caret);
+            return true;
+        }
+
+        byte[]? xamlBytes = await TryGetValueAsync(
+            transfer,
+            OperatingSystem.IsWindows()
+                ? ExternalXamlPackageWindowsFormat
+                : ExternalXamlPackageLinuxFormat);
+        xamlBytes ??= await TryGetValueAsync(
+            transfer,
+            OperatingSystem.IsWindows()
+                ? ExternalXamlPackageLinuxFormat
+                : ExternalXamlPackageWindowsFormat);
+        var xamlPayload = ExternalXamlClipboardPlanner.TryParseXamlPackage(xamlBytes);
+        if (xamlPayload is not null)
+        {
+            _buffer.ApplyClipboardPayload(xamlPayload, Selection, out var xamlCaret);
+            ApplyBufferText(xamlCaret);
             return true;
         }
 

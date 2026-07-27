@@ -1,3 +1,6 @@
+using System.IO;
+using System.IO.Compression;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
@@ -8,6 +11,29 @@ namespace FreeP.App.Host.Tests;
 
 public sealed class WpfRichTextClipboardAdapterTests
 {
+    [StaFact]
+    public void TryPasteDataObject_UsesSharedXamlPackageBeforeRtfAndPlainText()
+    {
+        var target = InCanvasRichClipboardPayload.FromPlainText("replace me").Body;
+        var targetBox = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(target, 12));
+        targetBox.SelectAll();
+        var data = new DataObject();
+        data.SetData(
+            DataFormats.XamlPackage,
+            new MemoryStream(CreateXamlPackage(
+                "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Paragraph><Bold>Package</Bold><Italic> text</Italic></Paragraph></FlowDocument>")),
+            autoConvert: false);
+        data.SetData(DataFormats.Rtf, Encoding.ASCII.GetBytes(@"{\rtf1\ansi\b ignored\b0}"));
+        data.SetText("plain fallback");
+
+        WpfRichTextClipboardAdapter.TryPasteDataObject(targetBox, target, data, out var updated)
+            .Should().BeTrue();
+
+        InCanvasTextEditPlanner.ExtractPlainText(updated!).Should().Be("Package text");
+        updated!.Paragraphs[0].Runs[0].Bold.Should().BeTrue();
+        updated.Paragraphs[0].Runs[1].Italic.Should().BeTrue();
+    }
+
     [StaFact]
     public void ExternalRtfTable_UsesNativeWpfTableBlockAndTabRowTextProjection()
     {
@@ -198,5 +224,14 @@ public sealed class WpfRichTextClipboardAdapterTests
             Runs = { new Run { Text = "second" } },
         });
         return body;
+    }
+
+    private static byte[] CreateXamlPackage(string xaml)
+    {
+        using var output = new MemoryStream();
+        using (var package = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        using (var writer = new StreamWriter(package.CreateEntry("Xaml/Document.xaml").Open(), Encoding.UTF8))
+            writer.Write(xaml);
+        return output.ToArray();
     }
 }

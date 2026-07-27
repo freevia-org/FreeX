@@ -90,6 +90,12 @@ internal static class WpfRichTextClipboardAdapter
         var payload = InCanvasRichClipboardPlanner.Deserialize(bytes);
         if (payload is null)
         {
+            payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+                ReadBytes(data, DataFormats.XamlPackage));
+        }
+
+        if (payload is null)
+        {
             // WPF's native RTF loader is authoritative for the control itself. FreeP's
             // TextBody has no inline table node, however, so use the shared bounded planner
             // before plain-text fallback to preserve the same logical tab/row projection in

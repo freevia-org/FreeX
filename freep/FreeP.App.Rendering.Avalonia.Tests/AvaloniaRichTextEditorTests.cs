@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text;
@@ -237,6 +238,51 @@ public sealed class AvaloniaRichTextEditorTests
                 paragraph.MarginLeftEmu.Should().Be(228600);
                 paragraph.SpaceAfterPt.Should().Be(4);
                 paragraph.Runs.Single().Hyperlink!.Url.Should().Be("https://example.com/paste");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ClipboardPaste_XamlPackagePrecedesRtfAndPlainText()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var editor = new AvaloniaRichTextEditor(
+                InCanvasRichClipboardPayload.FromPlainText("target").Body,
+                backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.SelectionStart = 0;
+                editor.SelectionEnd = editor.Text.Length;
+                using var transfer = new DataTransfer();
+                var item = new DataTransferItem();
+                item.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.ExternalXamlPackageWindowsFormat
+                        : AvaloniaRichTextEditor.ExternalXamlPackageLinuxFormat,
+                    CreateXamlPackage(
+                        "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Paragraph><Bold>Package</Bold><Italic> text</Italic></Paragraph></FlowDocument>"));
+                item.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.ExternalRtfWindowsFormat
+                        : AvaloniaRichTextEditor.ExternalRtfLinuxFormat,
+                    Encoding.ASCII.GetBytes(@"{\rtf1\ansi\b ignored\b0}"));
+                item.SetText("plain fallback");
+                transfer.Add(item);
+
+                (await editor.PasteDataTransferAsync(transfer)).Should().BeTrue();
+                editor.Text.Should().Be("Package text");
+                editor.EditedBody.Paragraphs.Single().Runs[0].Bold.Should().BeTrue();
+                editor.EditedBody.Paragraphs.Single().Runs[1].Italic.Should().BeTrue();
             }
             finally
             {
@@ -856,6 +902,15 @@ public sealed class AvaloniaRichTextEditorTests
             AutoNumStartAtSpecified = startSpecified,
             Runs = { new Run { Text = text } },
         };
+    }
+
+    private static byte[] CreateXamlPackage(string xaml)
+    {
+        using var output = new MemoryStream();
+        using (var package = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        using (var writer = new StreamWriter(package.CreateEntry("Xaml/Document.xaml").Open(), Encoding.UTF8))
+            writer.Write(xaml);
+        return output.ToArray();
     }
 
 }
