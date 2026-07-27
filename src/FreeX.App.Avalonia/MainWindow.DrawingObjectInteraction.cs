@@ -96,7 +96,7 @@ public sealed partial class MainWindow
                 RunGuarded(OpenFormatPictureDialogAsync);
                 break;
             case WorksheetContextMenuAction.CropPicture:
-                RunGuarded(OpenPictureCropDialogAsync);
+                BeginSelectedPictureCropMode();
                 break;
             case WorksheetContextMenuAction.ResetPictureCrop:
                 ResetSelectedPictureCrop();

@@ -112,6 +112,7 @@ public sealed class DrawCommandSourceTests
     {
         var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
+        var contextMenuSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         windowSource.Should().Contain("SheetGrid.PictureCropped += OnPictureCropped;");
         drawingSource.Should().Contain("private void OnPictureCropped");
@@ -123,6 +124,10 @@ public sealed class DrawCommandSourceTests
         drawingSource.Should().Contain("SheetGrid.Focus();");
         drawingSource.Should().Contain("SheetGrid.InvalidateVisual();");
         drawingSource.Should().Contain("UpdateViewport();");
+        contextMenuSource.Should().Contain("case WorksheetContextMenuAction.CropPicture:");
+        contextMenuSource.Should().Contain(
+            "PictureCropBtn_Click(this, new RoutedEventArgs());",
+            "WPF's picture context-menu Crop Picture must enter the same live crop mode as the ribbon command");
     }
 
 }

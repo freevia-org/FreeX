@@ -92,6 +92,53 @@ public sealed class AvaloniaPictureCropRuntimeTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task PictureContextMenuCropCommand_EntersLiveCropMode()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("PictureContextMenuFixture");
+            window.Session.SelectSheet(sheet.Id);
+
+            var picture = new PictureModel
+            {
+                Anchor = new CellAddress(sheet.Id, 1, 1),
+                Kind = PictureKind.Image,
+                Width = 200,
+                Height = 100,
+                ImageBytes = [1, 2, 3],
+                ContentType = "image/png",
+            };
+            sheet.Pictures.Add(picture);
+
+            var bounds = new DrawingObjectBounds(
+                SelectionPaneObjectKind.Picture,
+                picture.Id,
+                "Picture",
+                1,
+                1,
+                0,
+                0,
+                picture.Width,
+                picture.Height,
+                PictureKind: PictureKind.Image,
+                ImageBytes: picture.ImageBytes,
+                ImageContentType: picture.ContentType,
+                PictureCells: []);
+
+            InvokePrivate(window, "SelectDrawingObject", bounds);
+            InvokePrivate(
+                window,
+                "DispatchDrawingObjectContextMenuCommand",
+                new Free.Shared.Ribbon.RibbonCommandId("CropPicture"));
+
+            GetPrivateField<bool>(window, "_isPictureCropMode").Should().BeTrue();
+            window.Session.CanUndo.Should().BeFalse("entering crop mode must not mutate the picture until a drag is committed");
+            window.Close();
+        }, CancellationToken.None);
+    }
+
     private static object? InvokePrivate(MainWindow window, string methodName, params object[] args) =>
         typeof(MainWindow)
             .GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
