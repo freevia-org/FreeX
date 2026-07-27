@@ -13,6 +13,8 @@ public sealed class ErrorCheckingDialogPlannerTests
     {
         ErrorCheckingDialogPlanner.Width.Should().Be(720);
         ErrorCheckingDialogPlanner.Height.Should().Be(420);
+        ErrorCheckingDialogPlanner.AvaloniaClientWidth.Should().Be(704);
+        ErrorCheckingDialogPlanner.AvaloniaClientHeight.Should().Be(383);
         ErrorCheckingDialogPlanner.ActionPanelWidth.Should().Be(180);
         ErrorCheckingDialogPlanner.ButtonHeight.Should().Be(26);
         ErrorCheckingDialogPlanner.SheetColumnWidth.Should().Be(110);
@@ -52,6 +54,7 @@ public sealed class ErrorCheckingDialogPlannerTests
         var issues = ErrorCheckingDialogPlanner.CreateParityIssues(sheetId);
 
         issues.Should().HaveCount(2);
+        issues.Should().AllSatisfy(issue => issue.SheetName.Should().Be("Sheet1"));
         issues[0].Address.Should().Be(new CellAddress(sheetId, 6, 4));
         issues[0].ErrorCode.Should().Be(ErrorValue.DivByZero.Code);
         issues[0].FormulaText.Should().Be("=D2/0");

@@ -175,7 +175,15 @@ public sealed partial class MainWindow
         root.Children.Add(buttons);
         root.Children.Add(actionPanel);
         root.Children.Add(listPanel);
-        dialog.Content = root;
+        dialog.Content = new Border
+        {
+            Width = ErrorCheckingDialogPlanner.AvaloniaClientWidth,
+            Height = ErrorCheckingDialogPlanner.AvaloniaClientHeight,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            Background = Brushes.White,
+            Child = root,
+        };
 
         rowsPanel.KeyDown += (_, args) =>
         {
