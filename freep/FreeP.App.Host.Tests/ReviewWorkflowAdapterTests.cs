@@ -507,7 +507,7 @@ public sealed class ReviewWorkflowAdapterTests
                 row.Category == "Chart" &&
                 row.ShapeId == chart.Id &&
                 row.ActionLabel == "Add Chart Title" &&
-                row.CommandHint == null &&
+                row.CommandHint == PresentationReviewWorkflowPlanner.ChartTitleCommandId &&
                 row.ShouldNavigateToSlide &&
                 row.ShouldSelectShape);
             opened.Rows[3].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>

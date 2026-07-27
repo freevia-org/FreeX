@@ -716,6 +716,7 @@ public static class PresentationReviewWorkflowPlanner
     public const string ReopenCommentCommandId = "freep.review.comments.reopen";
     public const string AccessibilityCommandId = "freep.review.accessibility.check";
     public const string SetSlideTitleCommandId = "freep.review.accessibility.set-slide-title";
+    public const string ChartTitleCommandId = "freep.review.accessibility.chart-title";
     public const string AltTextCommandId = "freep.review.alt-text";
     public const string AltTextPaneApplyCommandId = "freep.review.alt-text.apply";
     public const string AltTextPaneDecorativeCommandId = "freep.review.alt-text.decorative";
@@ -2613,6 +2614,7 @@ public static class PresentationReviewWorkflowPlanner
             AltTextCommandId => "Open Alt Text",
             InsertLinkCommandId => "Edit Hyperlink",
             SetSlideTitleCommandId => "Set Slide Title",
+            ChartTitleCommandId => "Add Chart Title",
             SetTableHeaderRowCommandId => "Set Header Row",
             ReviewTableStructureCommandId => "Review Table Structure",
             _ when issue.Title == "Chart title missing" => "Add Chart Title",
@@ -4709,10 +4711,10 @@ public static class PresentationReviewWorkflowPlanner
             shape.Id,
             "Chart title missing",
             $"{DescribeShape(shape)} does not have a chart title.",
-            new PresentationAccessibilityIssueActionSummary(
-                MissingChartTitleActionSummary,
-                null,
-                true)));
+                    new PresentationAccessibilityIssueActionSummary(
+                        MissingChartTitleActionSummary,
+                        ChartTitleCommandId,
+                        true)));
     }
 
     private static void AddMediaAccessibilityIssues(

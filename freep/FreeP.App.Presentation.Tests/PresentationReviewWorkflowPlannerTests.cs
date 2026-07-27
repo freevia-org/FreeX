@@ -1403,7 +1403,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
             "Sales chart does not have a chart title.",
             new PresentationAccessibilityIssueActionSummary(
                 PresentationReviewWorkflowPlanner.MissingChartTitleActionSummary,
-                null,
+                PresentationReviewWorkflowPlanner.ChartTitleCommandId,
                 true)));
         pane.Rows[0].Should().Be(new PresentationAccessibilityCheckerRowPlan(
             0,
@@ -1417,7 +1417,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
             "Sales chart does not have a chart title.",
             true,
             "Add Chart Title",
-            null,
+            PresentationReviewWorkflowPlanner.ChartTitleCommandId,
             true,
             true));
     }
