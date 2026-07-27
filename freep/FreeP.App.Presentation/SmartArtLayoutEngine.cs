@@ -140,6 +140,8 @@ public static class SmartArtLayoutEngine
                 ? LayoutBasicVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                 : IsBasicRelationshipLayout(data.LayoutUniqueId)
                     ? LayoutBasicRelationship(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
+                : IsOpposingIdeasLayout(data.LayoutUniqueId)
+                    ? LayoutOpposingIdeas(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                 : IsRadialVennLayout(data.LayoutUniqueId)
                     ? LayoutRadialVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                     : IsTargetListLayout(data.LayoutUniqueId)
@@ -1103,6 +1105,49 @@ public static class SmartArtLayoutEngine
     /// frame. This models bounded relationship-family placement with shared
     /// shape ops, not exact PowerPoint blend math or text offsets.
     /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutOpposingIdeas(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Count is < 2 or > 4)
+            return null;
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long innerH = Math.Max(fcy - 2 * outerPadY, 1L);
+        long arrowW = Math.Max((long)(innerW * 0.38), 1L);
+        long arrowH = Math.Max((long)(innerH * 0.28), 1L);
+        long rowGap = Math.Max((long)(innerH * 0.08), 1L);
+        long totalH = arrowH * 2 + rowGap;
+        long firstY = fy + outerPadY + Math.Max((innerH - totalH) / 2, 0L);
+        long leftX = fx + outerPadX;
+        long rightX = fx + fcx - outerPadX - arrowW;
+
+        int leftCount = (nodes.Count + 1) / 2;
+        int rightCount = nodes.Count - leftCount;
+        var shapes = new List<SlideShape>(nodes.Count);
+        uint idCounter = 535;
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            bool left = i < leftCount;
+            int row = left ? i : i - leftCount;
+            int count = left ? leftCount : rightCount;
+            long y = firstY + row * (arrowH + rowGap);
+            if (count == 1)
+                y = fy + outerPadY + Math.Max((innerH - arrowH) / 2, 0L);
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Relationship);
+            shapes.Add(MakeBox(
+                idCounter++, nodes[i].Text, nodeStyle,
+                left ? leftX : rightX, y, arrowW, arrowH,
+                NodeFontSizePt,
+                left ? DrawingShapeKind.RightArrow : DrawingShapeKind.LeftArrow));
+        }
+
+        return shapes;
+    }
+
     private static IReadOnlyList<SlideShape>? LayoutBasicRelationship(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
@@ -2179,6 +2224,14 @@ public static class SmartArtLayoutEngine
             return false;
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "relationship1", StringComparison.Ordinal);
+    }
+
+    private static bool IsOpposingIdeasLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "opposingideas", StringComparison.Ordinal);
     }
 
     private static bool IsRadialVennLayout(string uniqueId)

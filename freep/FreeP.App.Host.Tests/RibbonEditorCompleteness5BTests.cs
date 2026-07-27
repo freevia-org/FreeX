@@ -141,6 +141,7 @@ public class RibbonEditorCompleteness5BTests
             [SmartArtAuthoringPlanner.TitledMatrixLayoutCommandId] = SmartArtLayoutPreset.TitledMatrix,
             [SmartArtAuthoringPlanner.GridMatrixLayoutCommandId] = SmartArtLayoutPreset.GridMatrix,
             [SmartArtAuthoringPlanner.BasicRelationshipLayoutCommandId] = SmartArtLayoutPreset.BasicRelationship,
+            [SmartArtAuthoringPlanner.OpposingIdeasLayoutCommandId] = SmartArtLayoutPreset.OpposingIdeas,
             [SmartArtAuthoringPlanner.Hierarchy3LayoutCommandId] = SmartArtLayoutPreset.Hierarchy3,
             [SmartArtAuthoringPlanner.GearCycleLayoutCommandId] = SmartArtLayoutPreset.GearCycle,
             [SmartArtAuthoringPlanner.ContinuousCycleLayoutCommandId] = SmartArtLayoutPreset.ContinuousCycle,
