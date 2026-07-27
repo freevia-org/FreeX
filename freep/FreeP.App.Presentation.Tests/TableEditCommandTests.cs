@@ -6,7 +6,7 @@ namespace FreeP.App.Compositor.Tests;
 /// <summary>
 /// Unit tests for table-edit commands (Wave 9A):
 ///   SetTableCellTextCommand, SetTableCellFillCommand, SetTableCellAnchorCommand, InsertTableRowCommand, DeleteTableRowCommand,
-///   InsertTableColumnCommand, DeleteTableColumnCommand,
+///   InsertTableColumnCommand, DeleteTableColumnCommand, SetTableColumnWidthCommand,
 ///   MergeTableCellsCommand, SplitTableCellCommand.
 ///
 /// Also covers EditingSession table API (active-cell, SetTableCellText, InsertRow/Col, etc.)
@@ -364,6 +364,21 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void SetTableColumnWidth_UndoRedo_Works()
+    {
+        var (p, bus, shape) = MakeTable();
+        var original = shape.Table!.ColumnWidthsEmu[1];
+
+        bus.Execute(new SetTableColumnWidthCommand(0, shape.Id, 1, 1371600));
+
+        shape.Table.ColumnWidthsEmu[1].Should().Be(1371600);
+        bus.Undo();
+        shape.Table.ColumnWidthsEmu[1].Should().Be(original);
+        bus.Redo();
+        shape.Table.ColumnWidthsEmu[1].Should().Be(1371600);
+    }
+
+    [Fact]
     public void SetTableCellFill_RoundTripsThroughPptx()
     {
         var (presentation, bus, shape) = MakeTable(1, 1);
@@ -452,6 +467,20 @@ public sealed class TableEditCommandTests
 
         PptxPackageReader.Read(stream).Slides[0].Shapes[0].Table!.Rows[0].HeightEmu
             .Should().Be(685800);
+    }
+
+    [Fact]
+    public void SetTableColumnWidth_RoundTripsThroughPptx()
+    {
+        var (presentation, bus, shape) = MakeTable(1, 2);
+        bus.Execute(new SetTableColumnWidthCommand(0, shape.Id, 1, 1371600));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+
+        PptxPackageReader.Read(stream).Slides[0].Shapes[0].Table!.ColumnWidthsEmu[1]
+            .Should().Be(1371600);
     }
 
     [Fact]
@@ -978,6 +1007,20 @@ public sealed class TableEditCommandTests
 
         sess.Undo();
         shape.Table.Rows[0].HeightEmu.Should().Be(original);
+    }
+
+    [Fact]
+    public void EditingSession_SetActiveTableColumnWidth_IsUndoable()
+    {
+        var sess = MakeSession(out var shape);
+        var original = shape.Table!.ColumnWidthsEmu[0];
+        sess.SetActiveTableCell(0, 0);
+
+        sess.TryApplyActiveTableColumnWidth(1371600).Should().BeTrue();
+        shape.Table.ColumnWidthsEmu[0].Should().Be(1371600);
+
+        sess.Undo();
+        shape.Table.ColumnWidthsEmu[0].Should().Be(original);
     }
 
     [Fact]

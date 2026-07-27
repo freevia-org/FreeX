@@ -512,6 +512,58 @@ public sealed class SetTableRowHeightCommand : IPresentationCommand
     }
 }
 
+/// <summary>Sets the width of one table grid column, preserving the prior width for undo.</summary>
+public sealed class SetTableColumnWidthCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _columnIndex;
+    private readonly long _newWidthEmu;
+    private long _oldWidthEmu;
+
+    public SetTableColumnWidthCommand(
+        int slideIndex,
+        uint shapeId,
+        int columnIndex,
+        long newWidthEmu)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _columnIndex = columnIndex;
+        _newWidthEmu = Math.Max(1, newWidthEmu);
+    }
+
+    public string Label => "Set Column Width";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        return table is not null &&
+               _columnIndex >= 0 &&
+               _columnIndex < table.ColumnWidthsEmu.Count &&
+               table.ColumnWidthsEmu[_columnIndex] != _newWidthEmu;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null || _columnIndex < 0 || _columnIndex >= table.ColumnWidthsEmu.Count)
+            return;
+
+        _oldWidthEmu = table.ColumnWidthsEmu[_columnIndex];
+        table.ColumnWidthsEmu[_columnIndex] = _newWidthEmu;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null || _columnIndex < 0 || _columnIndex >= table.ColumnWidthsEmu.Count)
+            return;
+
+        table.ColumnWidthsEmu[_columnIndex] = _oldWidthEmu;
+    }
+}
+
 public sealed class InsertTableRowCommand : IPresentationCommand
 {
     private readonly int  _slideIndex;

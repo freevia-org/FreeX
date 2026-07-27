@@ -146,10 +146,14 @@ public sealed class KeyboardContextParityTests
 
             var menu = window.BuildTableContextMenuForTests(table.Id);
             menu.Should().NotBeNull();
-            menu!.Items.Cast<object>().Should().HaveCount(11);
+            menu!.Items.Cast<object>().Should().HaveCount(12);
             menu.Items.OfType<MenuItem>().Select(item => item.Header).Should().Equal(
                 "Insert Row Above", "Insert Row Below", "Insert Column Left", "Insert Column Right",
-                "Delete Row", "Delete Column", "Merge with Right Cell", "Split Cell");
+                "Delete Row", "Delete Column", "Column Width", "Merge with Right Cell", "Split Cell");
+            var widthMenu = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Column Width"));
+            widthMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "1.50 in"))
+                .RaiseEvent(new System.Windows.RoutedEventArgs(MenuItem.ClickEvent));
+            table.Table.ColumnWidthsEmu[0].Should().Be(1371600);
             menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Merge with Right Cell"))
                 .IsEnabled.Should().BeTrue();
             menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Split Cell"))
