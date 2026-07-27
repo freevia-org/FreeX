@@ -11,7 +11,8 @@ public sealed class AvaloniaOptionsProofingSourceTests
         var wpf = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml"));
 
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, OptionsDialogChromeStyle);");
-        source.Should().Contain("Padding = new Thickness(16, 9)");
+        source.Should().Contain("OptionsDialogPlanner.CategoryItemHorizontalPadding");
+        source.Should().Contain("OptionsDialogPlanner.CategoryItemVerticalPadding");
         source.Should().Contain("BorderThickness = new Thickness(1)");
         source.Should().Contain("Brush(160, 160, 160)");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"128,10,92,10,127,10,92\")");
@@ -19,9 +20,10 @@ public sealed class AvaloniaOptionsProofingSourceTests
         source.Should().Contain("Margin = new Thickness(10, 0)");
         source.Should().Contain("Margin = new Thickness(10, 0, 0, 0)");
         source.Should().Contain("BorderThickness = new Thickness(0, 1, 0, 0)");
-        source.Should().Contain("Padding = new Thickness(16, 10)");
-        source.Should().Contain("ApplyOptionsButtonChrome(okButton, 80, isDefault: true);");
-        source.Should().Contain("ApplyOptionsButtonChrome(cancelButton, 80);");
+        source.Should().Contain("OptionsDialogPlanner.FooterPaddingHorizontal");
+        source.Should().Contain("OptionsDialogPlanner.FooterPaddingVertical");
+        source.Should().Contain("ApplyOptionsButtonChrome(okButton, OptionsDialogPlanner.FooterButtonWidth, isDefault: true);");
+        source.Should().Contain("ApplyOptionsButtonChrome(cancelButton, OptionsDialogPlanner.FooterButtonWidth);");
         source.Should().Contain("listBox.FontFamily = OptionsDialogChromeStyle.FontFamily;");
 
         wpf.Should().Contain("Value=\"16,9\"");
@@ -42,7 +44,8 @@ public sealed class AvaloniaOptionsProofingSourceTests
         source.Should().Contain("QuickAccessToolbarCommandSearchBox");
         source.Should().Contain("QuickAccessToolbarImportCustomizationMenuItem");
         source.Should().Contain("QuickAccessToolbarExportCustomizationMenuItem");
-        source.Should().Contain("KeyModifiers.Control) && args.Key == Key.Up");
+        source.Should().Contain("args.KeyModifiers.HasFlag(KeyModifiers.Control) &&");
+        source.Should().Contain("args.Key == Key.Up");
         source.Should().Contain("args.Key is Key.Delete or Key.Back");
         source.Should().Contain("ProofingCustomDictionaryWordsList");
         source.Should().Contain("ProofingCustomDictionaryAddWordButton");
@@ -67,7 +70,7 @@ public sealed class AvaloniaOptionsProofingSourceTests
         var initialRefresh = source.IndexOf("RefreshQuickAccessLists();", StringComparison.Ordinal);
         initialRefresh.Should().BeGreaterThanOrEqualTo(0);
         source[initialRefresh..].Should().Contain("var quickAccessPanel");
-        source.Should().Contain("OptionsSectionHeader(OptionsText(\"Options_CustomDictionary\"), topMargin: 26)");
+        source.Should().Contain("OptionsSectionHeader(OptionsText(\"Options_CustomDictionary\"), topMargin: 30, bottomMargin: 8)");
         source.Should().NotContain("Options_IgnoreNumbers");
     }
 }

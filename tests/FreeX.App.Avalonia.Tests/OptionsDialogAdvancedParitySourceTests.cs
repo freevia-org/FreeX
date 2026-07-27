@@ -32,6 +32,38 @@ public sealed class OptionsDialogAdvancedParitySourceTests
         source.Should().Contain("AppOptionsObjectDisplay.Nothing");
     }
 
+    [Fact]
+    public void ProofingOptions_UsesWpfGeometryAndKeyboardCategoryNavigation()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+        var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+
+        source.Should().Contain("Width = OptionsDialogPlanner.ProofingContentWidth");
+        source.Should().Contain("Height = OptionsDialogPlanner.ProofingWordsListHeight");
+        source.Should().Contain("proofingPanel.Spacing = 0;");
+        source.Should().Contain("HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden");
+        source.Should().Contain("VerticalContentAlignment = AvaloniaVerticalAlignment.Top");
+        source.Should().Contain("Width = OptionsDialogPlanner.FooterButtonWidth");
+        source.Should().Contain("dialog.Opened += (_, _) => categoryRows[0].Focus();");
+        source.Should().Contain("Key.Up or Key.Left");
+        source.Should().Contain("Key.Down or Key.Right");
+        source.Should().Contain("Key.Home");
+        source.Should().Contain("Key.End");
+        source.Should().Contain("Key.Enter or Key.Space");
+        source.Should().Contain("args.Handled = true;");
+        source.Should().Contain("SpellCheckWorkflowPlanner.AddCustomDictionaryWord");
+        source.Should().Contain("SpellCheckWorkflowPlanner.RemoveCustomDictionaryWordAndSelectNext");
+        source.Should().Contain("SpellCheckWorkflowPlanner.ClearCustomDictionaryWords");
+        source.Should().Contain("proofingAddButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));");
+
+        wpf.Should().Contain("Height=\"108\"");
+        wpf.Should().Contain("Width=\"78\" Height=\"26\"");
+        wpf.Should().Contain("Width=\"92\" Height=\"26\"");
+        wpf.Should().Contain("Width=\"82\" Height=\"26\"");
+        wpf.Should().Contain("Width=\"80\" Height=\"26\"");
+        wpf.Should().Contain("Padding=\"16,10\"");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

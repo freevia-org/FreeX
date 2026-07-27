@@ -224,8 +224,8 @@ public sealed partial class MainWindow
         // ── Proofing ────────────────────────────────────────────────────────────
         var proofingWordsList = new ListBox
         {
-            Width = 468,
-            Height = 108,
+            Width = OptionsDialogPlanner.ProofingContentWidth,
+            Height = OptionsDialogPlanner.ProofingWordsListHeight,
             ItemsSource = customDictionaryWords.ToList(),
         };
         ApplyOptionsListBoxChrome(proofingWordsList);
@@ -239,20 +239,20 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(proofingWordBox, "ProofingCustomDictionaryWordBox");
         AutomationProperties.SetHelpText(proofingWordBox, OptionsText("Options_CustomDictionaryWordHelpText"));
 
-        var proofingAddButton = new Button { Content = OptionsText("Options_CustomDictionaryAddWordButton"), Width = 78, Height = 26, IsEnabled = false };
-        ApplyOptionsButtonChrome(proofingAddButton, 78);
+        var proofingAddButton = new Button { Content = OptionsText("Options_CustomDictionaryAddWordButton"), Width = OptionsDialogPlanner.ProofingAddWordButtonWidth, Height = OptionsDialogPlanner.ButtonHeight, IsEnabled = false };
+        ApplyOptionsButtonChrome(proofingAddButton, OptionsDialogPlanner.ProofingAddWordButtonWidth);
         AutomationProperties.SetName(proofingAddButton, OptionsText("Options_CustomDictionaryAddWordButtonAutomationName"));
         AutomationProperties.SetAutomationId(proofingAddButton, "ProofingCustomDictionaryAddWordButton");
         AutomationProperties.SetHelpText(proofingAddButton, OptionsText("Options_CustomDictionaryAddWordHelpText"));
 
-        var proofingRemoveButton = new Button { Content = OptionsText("Options_CustomDictionaryRemoveWordButton"), Width = 92, Height = 26, IsEnabled = false };
-        ApplyOptionsButtonChrome(proofingRemoveButton, 92);
+        var proofingRemoveButton = new Button { Content = OptionsText("Options_CustomDictionaryRemoveWordButton"), Width = OptionsDialogPlanner.ProofingRemoveWordButtonWidth, Height = OptionsDialogPlanner.ButtonHeight, IsEnabled = false };
+        ApplyOptionsButtonChrome(proofingRemoveButton, OptionsDialogPlanner.ProofingRemoveWordButtonWidth);
         AutomationProperties.SetName(proofingRemoveButton, OptionsText("Options_CustomDictionaryRemoveWordButtonAutomationName"));
         AutomationProperties.SetAutomationId(proofingRemoveButton, "ProofingCustomDictionaryRemoveWordButton");
         AutomationProperties.SetHelpText(proofingRemoveButton, OptionsText("Options_CustomDictionaryRemoveWordHelpText"));
 
-        var proofingClearButton = new Button { Content = OptionsText("Options_CustomDictionaryClearAllButton"), Width = 82, Height = 26, IsEnabled = customDictionaryWords.Count > 0 };
-        ApplyOptionsButtonChrome(proofingClearButton, 82);
+        var proofingClearButton = new Button { Content = OptionsText("Options_CustomDictionaryClearAllButton"), Width = OptionsDialogPlanner.ProofingClearWordsButtonWidth, Height = OptionsDialogPlanner.ButtonHeight, IsEnabled = customDictionaryWords.Count > 0 };
+        ApplyOptionsButtonChrome(proofingClearButton, OptionsDialogPlanner.ProofingClearWordsButtonWidth);
         AutomationProperties.SetName(proofingClearButton, OptionsText("Options_CustomDictionaryClearAllButtonAutomationName"));
         AutomationProperties.SetAutomationId(proofingClearButton, "ProofingCustomDictionaryClearWordsButton");
         AutomationProperties.SetHelpText(proofingClearButton, OptionsText("Options_CustomDictionaryClearAllHelpText"));
@@ -322,8 +322,8 @@ public sealed partial class MainWindow
 
         var proofingAddRow = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("94,*,86"),
-            Margin = new Thickness(0, 8, 0, 8),
+            ColumnDefinitions = new ColumnDefinitions($"{OptionsDialogPlanner.ProofingAddWordLabelWidth},*,86"),
+            Margin = new Thickness(0, 8, 0, 7),
         };
         var proofingAddLabel = new TextBlock
         {
@@ -343,19 +343,19 @@ public sealed partial class MainWindow
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
-            Margin = new Thickness(0, 0, 0, 14),
+            Margin = new Thickness(0, 0, 0, 15),
             Children = { proofingRemoveButton, proofingClearButton },
         };
         var proofingWordsSection = new StackPanel
         {
-            Spacing = 4,
+            Spacing = 6,
             Children =
             {
                 new TextBlock { Text = OptionsText("Options_CustomDictionaryWords"), FontSize = 12 },
                 proofingWordsList,
             },
         };
-        var autoCorrectButton = OptionsButton(OptionsText("Options_AutoCorrectOptions2"), width: 150);
+        var autoCorrectButton = OptionsButton(OptionsText("Options_AutoCorrectOptions2"), OptionsDialogPlanner.ProofingAutoCorrectButtonWidth);
         autoCorrectButton.Click += (_, _) => ShowOptionsWarning(UiText.Get("DeferredCommand_AutoCorrectOptions_Body"));
 
         var proofingChecks = new StackPanel
@@ -371,13 +371,15 @@ public sealed partial class MainWindow
         var proofingPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_AutoCorrectOptions"), topMargin: 0),
             proofingChecks,
-            OptionsSectionHeader(OptionsText("Options_CustomDictionary"), topMargin: 26),
-            OptionsDescription(OptionsText("Options_CustomDictionaryDescription")),
+            OptionsSectionHeader(OptionsText("Options_CustomDictionary"), topMargin: 30, bottomMargin: 8),
+            OptionsDescription(OptionsText("Options_CustomDictionaryDescription"), bottomMargin: 8),
             proofingWordsSection,
             proofingAddRow,
             proofingActionRow,
             autoCorrectButton);
-        proofingPanel.Spacing = 4;
+        // The WPF page uses control margins rather than a uniform StackPanel gap. Keeping this
+        // page at zero spacing preserves the measured list/add/remove/footer rhythm exactly.
+        proofingPanel.Spacing = 0;
 
         // ── View ────────────────────────────────────────────────────────────────
         var showFormulaBarBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Options_ShowFormulaBar")), IsChecked = current.ShowFormulaBar };
@@ -913,8 +915,33 @@ public sealed partial class MainWindow
                     FontFamily = OptionsDialogChromeStyle.FontFamily,
                     VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 },
+                Focusable = true,
+                IsTabStop = i == 0,
             };
-            row.PointerPressed += (_, _) => SelectCategory(index);
+            row.PointerPressed += (_, args) =>
+            {
+                row.Focus();
+                SelectCategory(index);
+                args.Handled = true;
+            };
+            row.KeyDown += (_, args) =>
+            {
+                var nextIndex = args.Key switch
+                {
+                    Key.Up or Key.Left => index - 1,
+                    Key.Down or Key.Right => index + 1,
+                    Key.Home => 0,
+                    Key.End => categoryRows.Length - 1,
+                    Key.Enter or Key.Space => index,
+                    _ => -1,
+                };
+                if (nextIndex < 0 || nextIndex >= categoryNames.Length)
+                    return;
+
+                SelectCategory(nextIndex);
+                categoryRows[nextIndex].Focus();
+                args.Handled = true;
+            };
             row.PointerEntered += (_, _) =>
             {
                 if (selectedCategoryIndex != index)
@@ -929,6 +956,7 @@ public sealed partial class MainWindow
             categoryList.Children.Add(row);
         }
         SelectCategory(0);
+        dialog.Opened += (_, _) => categoryRows[0].Focus();
         // Expose the category selector so the parity capture can switch left-list categories (which are
         // Border rows in this StackPanel, not a TabControl) to render one PNG per category.
         categoryList.Tag = (Action<int>)SelectCategory;
@@ -967,11 +995,11 @@ public sealed partial class MainWindow
         }
 
         // ── Warning + buttons ─────────────────────────────────────────────────────
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
-        ApplyOptionsButtonChrome(okButton, 80, isDefault: true);
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, Width = OptionsDialogPlanner.FooterButtonWidth };
+        ApplyOptionsButtonChrome(okButton, OptionsDialogPlanner.FooterButtonWidth, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "OptionsOkButton");
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
-        ApplyOptionsButtonChrome(cancelButton, 80);
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, Width = OptionsDialogPlanner.FooterButtonWidth };
+        ApplyOptionsButtonChrome(cancelButton, OptionsDialogPlanner.FooterButtonWidth);
         AutomationProperties.SetAutomationId(cancelButton, "OptionsCancelButton");
 
         bool ApplyFormulaErrorCheckingOptions()
@@ -1126,6 +1154,9 @@ public sealed partial class MainWindow
                 OptionsDialogPlanner.ContentPaddingHorizontal,
                 OptionsDialogPlanner.ContentPaddingVertical),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Stretch,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };
         Grid.SetColumn(scrollHost, 1);
         body.Children.Add(categoryFrame);
@@ -1365,10 +1396,10 @@ public sealed partial class MainWindow
         public override string ToString() => Label;
     }
 
-    private static Control OptionsSectionHeader(string text, double topMargin = 10) =>
+    private static Control OptionsSectionHeader(string text, double topMargin = 10, double bottomMargin = 4) =>
         new StackPanel
         {
-            Margin = new Thickness(0, topMargin, 0, 4),
+            Margin = new Thickness(0, topMargin, 0, bottomMargin),
             Children =
             {
                 new TextBlock { Text = text, FontWeight = FontWeight.SemiBold, FontSize = 13 },
@@ -1376,13 +1407,13 @@ public sealed partial class MainWindow
             },
         };
 
-    private static TextBlock OptionsDescription(string text, double leftMargin = 0) =>
+    private static TextBlock OptionsDescription(string text, double leftMargin = 0, double bottomMargin = 4) =>
         new()
         {
             Text = text,
             FontSize = 12,
             Foreground = Brush(85, 85, 85),
-            Margin = new Thickness(leftMargin, 0, 0, 4),
+            Margin = new Thickness(leftMargin, 0, 0, bottomMargin),
             TextWrapping = TextWrapping.Wrap,
         };
 

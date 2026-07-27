@@ -11,6 +11,14 @@ public sealed class OptionsDialogPlannerTests
         OptionsDialogPlanner.ContentPaddingHorizontal.Should().Be(28);
         OptionsDialogPlanner.ContentPaddingVertical.Should().Be(20);
         OptionsDialogPlanner.FooterHeight.Should().Be(46);
+        OptionsDialogPlanner.FooterButtonWidth.Should().Be(80);
+        OptionsDialogPlanner.ProofingContentWidth.Should().Be(468);
+        OptionsDialogPlanner.ProofingWordsListHeight.Should().Be(108);
+        OptionsDialogPlanner.ProofingAddWordLabelWidth.Should().Be(94);
+        OptionsDialogPlanner.ProofingAddWordButtonWidth.Should().Be(78);
+        OptionsDialogPlanner.ProofingRemoveWordButtonWidth.Should().Be(92);
+        OptionsDialogPlanner.ProofingClearWordsButtonWidth.Should().Be(82);
+        OptionsDialogPlanner.ProofingAutoCorrectButtonWidth.Should().Be(150);
         OptionsDialogPlanner.AdvancedDirectionLabelWidth.Should().Be(160);
         OptionsDialogPlanner.AdvancedDirectionControlWidth.Should().Be(140);
         OptionsDialogPlanner.AdvancedObjectsLabelWidth.Should().Be(230);

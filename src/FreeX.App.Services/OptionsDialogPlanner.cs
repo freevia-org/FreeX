@@ -46,8 +46,16 @@ public static class OptionsDialogPlanner
     public const double FooterPaddingHorizontal = 16;
     public const double FooterPaddingVertical = 10;
     public const double FooterHeight = 46;
+    public const double FooterButtonWidth = 80;
     public const double ButtonHeight = 26;
     public const double ControlHeight = 24;
+    public const double ProofingContentWidth = CaptureWidth - CategoryColumnWidth - (ContentPaddingHorizontal * 2);
+    public const double ProofingWordsListHeight = 108;
+    public const double ProofingAddWordLabelWidth = 94;
+    public const double ProofingAddWordButtonWidth = 78;
+    public const double ProofingRemoveWordButtonWidth = 92;
+    public const double ProofingClearWordsButtonWidth = 82;
+    public const double ProofingAutoCorrectButtonWidth = 150;
     public const double AdvancedDirectionLeftMargin = 18;
     public const double AdvancedDirectionLabelWidth = 160;
     public const double AdvancedDirectionControlWidth = 140;
