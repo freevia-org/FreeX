@@ -11,6 +11,7 @@ using Avalonia.Skia;
 using Avalonia.Threading;
 using Avalonia.Themes.Fluent;
 using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
@@ -189,6 +190,14 @@ static void Populate(Window dialog, Scenario scenario)
     }
     var textBoxes = FindVisualChildren<TextBox>(dialog).ToArray();
     if (state == "populated") foreach (var box in textBoxes) if (string.IsNullOrWhiteSpace(box.Text)) box.Text = "12";
+    if (state == "populated")
+    {
+        // WPF's visual-tree walker reaches the editable ComboBox template textbox;
+        // mirror that authority state without changing the dialog's normal model seed.
+        foreach (var box in dialog.GetVisualDescendants().OfType<TextBox>()
+                     .Where(box => box.Name == "PART_EditableTextBox" && string.IsNullOrWhiteSpace(box.Text)))
+            box.Text = "12";
+    }
     if (state == "validation-error" && textBoxes.Length > 0) textBoxes[0].Text = "not-a-number";
     var tabs = FindVisualChildren<TabControl>(dialog).FirstOrDefault();
     if (tabs is not null)

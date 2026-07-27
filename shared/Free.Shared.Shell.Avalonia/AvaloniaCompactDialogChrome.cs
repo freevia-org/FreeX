@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Free.Shared.Shell;
 
@@ -51,7 +52,9 @@ public static class AvaloniaCompactDialogChrome
     private static readonly IBrush ButtonBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(221, 221, 221));
     private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(200, 200, 200));
     private static readonly IBrush DefaultButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
-    private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(130, 130, 130));
+    // WPF TextBox/ComboBox authority border (AB AD B3), rather than Fluent's darker
+    // neutral border. Keeping this in the shared chrome aligns all compact dialogs.
+    private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(171, 173, 179));
     private static readonly IBrush ComboBoxBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(240, 240, 240));
     private static readonly IBrush TextSelectionBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
     private static readonly IBrush SelectedItemBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(204, 232, 255));
@@ -102,9 +105,10 @@ public static class AvaloniaCompactDialogChrome
                 case TextBox textBox:
                 {
                     var explicitFamily = textBox.FontFamily;
-                    var isMultiline = textBox.AcceptsReturn
+                    var isEditableComboTextBox = textBox.Name == "PART_EditableTextBox";
+                    var isMultiline = !isEditableComboTextBox && (textBox.AcceptsReturn
                         || textBox.MinHeight > style.ControlHeight
-                        || (!double.IsNaN(textBox.Height) && textBox.Height > style.ControlHeight);
+                        || (!double.IsNaN(textBox.Height) && textBox.Height > style.ControlHeight));
                     ApplyTextBox(textBox, style, fixedHeight: !isMultiline);
                     if (explicitFamily != FontFamily.Default && explicitFamily != window.FontFamily)
                         textBox.FontFamily = explicitFamily;
@@ -229,6 +233,10 @@ public static class AvaloniaCompactDialogChrome
         comboBox.CornerRadius = new CornerRadius(0);
         comboBox.FontSize = style.FontSize;
         comboBox.FontFamily = style.FontFamily;
+        // Fluent's editable ComboBox template hosts the text presenter separately from
+        // the arrow. Stretch the content slot so an editable field remains a full-width
+        // WPF-style input instead of collapsing to the text's desired width.
+        comboBox.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         var comboBackground = style.ComboBoxBackgroundBrush ?? ComboBoxBackgroundBrush;
         comboBox.Background = comboBackground;
         comboBox.BorderBrush = style.InputBorderBrush ?? InputBorderBrush;
@@ -609,6 +617,34 @@ public static class AvaloniaCompactDialogChrome
         contentPaneStyle.Setters.Add(new Setter(ContentPresenter.PaddingProperty, new Thickness(0)));
         contentPaneStyle.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.White));
         tabControl.Styles.Add(contentPaneStyle);
+
+        if (contentPaneMargin is { } authorityPaneMargin)
+        {
+            void ApplyAuthorityPaneMargin()
+            {
+                tabControl.ApplyTemplate();
+                var selectedPane = tabControl.GetVisualDescendants()
+                    .OfType<ContentPresenter>()
+                    .FirstOrDefault(presenter => presenter.Name == "PART_SelectedContentHost");
+                if (selectedPane is not null)
+                {
+                    // Fluent's template contributes a 12px horizontal inset outside the
+                    // presenter. A raw negative margin participates in its measure pass and
+                    // can collapse the pane, so consume that compensation at the template
+                    // boundary while keeping the selected content host stretched.
+                    selectedPane.Margin = new Thickness(
+                        authorityPaneMargin.Left < 0 ? 0 : authorityPaneMargin.Left,
+                        authorityPaneMargin.Top,
+                        authorityPaneMargin.Right < 0 ? 0 : authorityPaneMargin.Right,
+                        authorityPaneMargin.Bottom);
+                    selectedPane.HorizontalAlignment = HorizontalAlignment.Stretch;
+                }
+            }
+
+            tabControl.AttachedToVisualTree += (_, _) =>
+                Dispatcher.UIThread.Post(ApplyAuthorityPaneMargin, DispatcherPriority.Render);
+            Dispatcher.UIThread.Post(ApplyAuthorityPaneMargin, DispatcherPriority.Render);
+        }
 
         var tabStyle = new Style(s => s.OfType<TabItem>());
         tabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, style.DialogInactiveTabBorderBrush ?? DialogInactiveTabBorderBrush));

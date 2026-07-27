@@ -1,8 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -77,10 +80,11 @@ public sealed class CommonDialogChromeParityTests
         button.FontSize.Should().Be(12);
         textBox.FontSize.Should().Be(12);
         comboBox.FontSize.Should().Be(12);
+        comboBox.HorizontalContentAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Stretch);
         ((ISolidColorBrush)button.Background!).Color.Should().Be(Color.FromRgb(221, 221, 221));
         ((ISolidColorBrush)button.BorderBrush!).Color.Should().Be(Color.FromRgb(0, 120, 215));
         ((ISolidColorBrush)listBox.Background!).Color.Should().Be(Colors.White);
-        ((ISolidColorBrush)listBox.BorderBrush!).Color.Should().Be(Color.FromRgb(130, 130, 130));
+        ((ISolidColorBrush)listBox.BorderBrush!).Color.Should().Be(Color.FromRgb(171, 173, 179));
         listBox.BorderThickness.Should().Be(new Thickness(1));
         ((ISolidColorBrush)comboBox.Background!).Color.Should().Be(Color.FromRgb(240, 240, 240));
         row.Spacing.Should().Be(style.ActionSpacing);
@@ -175,6 +179,44 @@ public sealed class CommonDialogChromeParityTests
                 && setter.Value is Thickness margin
                 && margin == new Thickness(-11, 0, -11, 0));
         hasAuthorityPaneMargin.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Font_dialog_keeps_editable_size_and_tab_pane_at_Wpf_width()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new FontDialog(new FreeW.Core.Model.RunFormatting { FontSizePt = 12 });
+            try
+            {
+                dialog.Width = 460;
+                dialog.Height = 340;
+                dialog.Show();
+                dialog.Measure(new Size(460, 340));
+                dialog.Arrange(new Rect(0, 0, 460, 340));
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var editableCombo = dialog.GetVisualDescendants()
+                    .OfType<ComboBox>()
+                    .Single(combo => combo.IsEditable);
+                var editableTextBox = editableCombo.GetVisualDescendants()
+                    .OfType<TextBox>()
+                    .Single(textBox => textBox.Name == "PART_EditableTextBox");
+                var selectedPane = dialog.GetVisualDescendants()
+                    .OfType<ContentPresenter>()
+                    .Single(presenter => presenter.Name == "PART_SelectedContentHost");
+
+                editableTextBox.Bounds.Width.Should().BeGreaterThan(300);
+                editableTextBox.Bounds.Height.Should().BeLessThanOrEqualTo(24);
+                selectedPane.Bounds.X.Should().Be(0);
+                selectedPane.Bounds.Width.Should().BeGreaterThanOrEqualTo(420);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
     }
 
     private sealed class TestDialog : AvaloniaDialogWindow

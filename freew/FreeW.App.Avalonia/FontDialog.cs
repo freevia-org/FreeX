@@ -171,7 +171,10 @@ public sealed class FontDialog : FreeWDialogWindow
                 VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
             },
         });
-        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
+            tabs,
+            DialogChromeStyle,
+            contentPaneMargin: new Thickness(-12, 0, -12, 0));
 
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(0, 6, 0, 0));
         var buttons = AvaloniaCompactDialogChrome.CreateOkCancelRow(
