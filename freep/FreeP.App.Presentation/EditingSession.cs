@@ -1205,6 +1205,28 @@ public sealed class EditingSession
             body.Paragraphs.Add(para);
         }
 
+        return InsertTextBox(body, x, y, cx, cy);
+    }
+
+    /// <summary>
+    /// Creates and inserts a text-box shape from a shared rich text body. The body is cloned
+    /// before it enters the undo command so clipboard payload ownership never leaks into the
+    /// presentation model.
+    /// </summary>
+    public SlideShape InsertTextBox(TextBody body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        var (x, y, cx, cy) = DefaultShapeBounds();
+        return InsertTextBox(body, x, y, cx, cy);
+    }
+
+    private SlideShape InsertTextBox(TextBody body, long x, long y, long cx, long cy)
+    {
+        var copiedBody = TextBodyModelCloner.CloneTextBody(body) ?? new TextBody { Wrap = true };
+        copiedBody.Wrap = true;
+        if (copiedBody.Paragraphs.Count == 0)
+            copiedBody.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = string.Empty } } });
+
         var shape = new SlideShape
         {
             Id            = NextShapeId(),
@@ -1216,7 +1238,7 @@ public sealed class EditingSession
             ExtentCxEmu   = cx,
             ExtentCyEmu   = cy,
             Fill          = ShapeFill.None.Instance,
-            TextBody      = body
+            TextBody      = copiedBody
         };
         AddShape(shape);
         return shape;

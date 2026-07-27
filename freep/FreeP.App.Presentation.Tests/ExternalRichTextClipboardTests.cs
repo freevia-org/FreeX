@@ -41,6 +41,51 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_FlattensTablesLikeWpfProjection_AndPreservesCellFormatting()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <Paragraph>Before</Paragraph>
+              <Table>
+                <TableRowGroup>
+                  <TableRow>
+                    <TableCell><Paragraph><Bold>Header</Bold></Paragraph></TableCell>
+                    <TableCell><Paragraph><Italic>Value</Italic></Paragraph></TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell><Paragraph>Left</Paragraph></TableCell>
+                    <TableCell><Paragraph><Underline>Right</Underline></Paragraph></TableCell>
+                  </TableRow>
+                </TableRowGroup>
+              </Table>
+              <Paragraph>After</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("Before\nHeader\tValue\nLeft\tRight\nAfter");
+        payload.Body.Paragraphs.Should().HaveCount(4);
+        payload.Body.Paragraphs[1].Runs.Should().Contain(run => run.Text == "Header" && run.Bold);
+        payload.Body.Paragraphs[1].Runs.Should().Contain(run => run.Text == "Value" && run.Italic);
+        payload.Body.Paragraphs[2].Runs.Should().Contain(run => run.Text == "Right" && run.Underline);
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_RejectsOversizedTableRows()
+    {
+        var cells = string.Concat(Enumerable.Repeat(
+            "<TableCell><Paragraph>x</Paragraph></TableCell>",
+            ExternalXamlClipboardPlanner.MaxTableCellsPerRow + 1));
+        var xaml = $"<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Table><TableRowGroup><TableRow>{cells}</TableRow></TableRowGroup></Table></FlowDocument>";
+
+        ExternalXamlClipboardPlanner.TryParseXamlPackage(CreateXamlPackage(xaml))
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void Rtf1Success_PreservesParagraphsRunsFontColorUnicodeTabsAndLineBreaks()
     {
         const string rtf =

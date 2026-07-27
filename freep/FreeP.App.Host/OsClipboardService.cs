@@ -375,7 +375,9 @@ public sealed class OsClipboardService
                 content.HasImage,
                 content.HasText,
                 editor.CanPaste,
-                ownCopy);
+                ownCopy,
+                content.HasRichText,
+                content.HasXamlPackage);
 
         if (source == PresentationClipboardPasteSource.NativeSelection)
         {
@@ -395,9 +397,47 @@ public sealed class OsClipboardService
 
             source = PresentationClipboardPastePlanner.Decide(
                 hasNativeSelection: false,
-                content.HasImage,
-                content.HasText,
-                editor.CanPaste,
+                hasImage: content.HasImage,
+                hasText: content.HasText,
+                internalHasData: editor.CanPaste,
+                ownCopyIsCurrent: false,
+                hasRichText: content.HasRichText,
+                hasXamlPackage: content.HasXamlPackage);
+        }
+
+        if (source == PresentationClipboardPasteSource.RichText)
+        {
+            var payload = InCanvasRichClipboardPlanner.Deserialize(content.RichTextBytes);
+            if (payload is not null)
+            {
+                editor.InsertTextBox(payload.Body);
+                return source;
+            }
+
+            source = PresentationClipboardPastePlanner.Decide(
+                hasNativeSelection: false,
+                hasImage: content.HasImage,
+                hasText: content.HasText,
+                internalHasData: editor.CanPaste,
+                ownCopyIsCurrent: false,
+                hasRichText: false,
+                hasXamlPackage: content.HasXamlPackage);
+        }
+
+        if (source == PresentationClipboardPasteSource.XamlPackage)
+        {
+            var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(content.XamlPackageBytes);
+            if (payload is not null)
+            {
+                editor.InsertTextBox(payload.Body);
+                return source;
+            }
+
+            source = PresentationClipboardPastePlanner.Decide(
+                hasNativeSelection: false,
+                hasImage: content.HasImage,
+                hasText: content.HasText,
+                internalHasData: editor.CanPaste,
                 ownCopyIsCurrent: false);
         }
 
@@ -457,19 +497,25 @@ public sealed class OsClipboardService
         bool osHasText,
         bool internalHasData,
         bool preferOsClipboard = true,
-        bool ownCopyIsCurrentOnOs = false)
+        bool ownCopyIsCurrentOnOs = false,
+        bool osHasRichText = false,
+        bool osHasXamlPackage = false)
     {
         var source = !preferOsClipboard && internalHasData
             ? PresentationClipboardPasteSource.Internal
             : PresentationClipboardPastePlanner.Decide(
                 hasNativeSelection: false,
-                osHasImage,
-                osHasText,
-                internalHasData,
-                ownCopyIsCurrentOnOs);
+                hasImage: osHasImage,
+                hasText: osHasText,
+                internalHasData: internalHasData,
+                ownCopyIsCurrent: ownCopyIsCurrentOnOs,
+                hasRichText: osHasRichText,
+                hasXamlPackage: osHasXamlPackage);
         return source switch
         {
             PresentationClipboardPasteSource.Image => PasteAction.OsImage,
+            PresentationClipboardPasteSource.RichText => PasteAction.OsText,
+            PresentationClipboardPasteSource.XamlPackage => PasteAction.OsText,
             PresentationClipboardPasteSource.Text => PasteAction.OsText,
             PresentationClipboardPasteSource.Internal => PasteAction.Internal,
             _ => PasteAction.Nothing,

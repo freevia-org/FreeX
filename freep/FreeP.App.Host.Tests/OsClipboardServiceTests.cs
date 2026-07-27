@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using System.Text;
@@ -36,6 +37,8 @@ public sealed class OsClipboardServiceTests
         public byte[]? ImageBytes { get; set; }
         public string? Text    { get; set; }
         public byte[]? SelectionBytes { get; set; }
+        public byte[]? RichTextBytes { get; set; }
+        public byte[]? XamlPackageBytes { get; set; }
         public string? OwnerToken { get; set; }
         public bool ThrowOnRead { get; set; }
         public bool ThrowOnWrite { get; set; }
@@ -55,10 +58,12 @@ public sealed class OsClipboardServiceTests
             if (ThrowOnRead)
                 throw new InvalidOperationException("clipboard locked");
             return new PresentationClipboardContent(
-                SelectionBytes,
-                HasImage ? ImageBytes : null,
-                HasText ? Text : null,
-                OwnerToken);
+                SelectionBytes: SelectionBytes,
+                PngBytes: HasImage ? ImageBytes : null,
+                Text: HasText ? Text : null,
+                OwnerToken: OwnerToken,
+                RichTextBytes: RichTextBytes,
+                XamlPackageBytes: XamlPackageBytes);
         }
 
         public bool ContainsImage() => HasImage;
@@ -75,6 +80,8 @@ public sealed class OsClipboardServiceTests
             WasSetCalled   = true;
             LastContent = content;
             SelectionBytes = content.SelectionBytes;
+            RichTextBytes = content.RichTextBytes;
+            XamlPackageBytes = content.XamlPackageBytes;
             ImageBytes = content.PngBytes;
             Text = content.Text;
             OwnerToken = content.OwnerToken;
@@ -195,6 +202,21 @@ public sealed class OsClipboardServiceTests
 
         action.Should().Be(PresentationClipboardPasteSource.Image,
             "image takes priority over text in OS-preferred mode");
+    }
+
+    [Fact]
+    public void SharedPlanner_RichTextPrecedesXamlPackageAndPlainText()
+    {
+        var source = PresentationClipboardPastePlanner.Decide(
+            hasNativeSelection: false,
+            hasImage: false,
+            hasText: true,
+            internalHasData: false,
+            ownCopyIsCurrent: false,
+            hasRichText: true,
+            hasXamlPackage: true);
+
+        source.Should().Be(PresentationClipboardPasteSource.RichText);
     }
 
     // ════════════════════════════════════════════════════════════════════════════════
@@ -461,6 +483,78 @@ public sealed class OsClipboardServiceTests
         var inserted = sess.CurrentSlide!.Shapes.Last();
         inserted.Kind.Should().Be(SlideShapeKind.AutoShape);
         inserted.TextBody.Should().NotBeNull();
+    }
+
+    [StaFact]
+    public void Paste_RichTextPayload_InsertsFormattedTextBox()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run
+                {
+                    Text = "Rich paste",
+                    FontFamily = "Arial",
+                    FontSizePt = 18,
+                    Bold = true,
+                    BoldSet = true,
+                    Color = new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79)),
+                },
+            },
+        });
+        var fake = new FakeOsClipboard
+        {
+            RichTextBytes = InCanvasRichClipboardPlanner.Serialize(
+                new InCanvasRichClipboardPayload(body, "Rich paste")),
+            HasText = true,
+            Text = "plain fallback",
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        var run = editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Single().Runs.Single();
+        run.Text.Should().Be("Rich paste");
+        run.FontFamily.Should().Be("Arial");
+        run.FontSizePt.Should().Be(18);
+        run.Bold.Should().BeTrue();
+        run.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+    }
+
+    [StaFact]
+    public void Paste_XamlPackageTable_InsertsProjectedTextBox()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <Table><TableRowGroup><TableRow>
+                <TableCell><Paragraph><Bold>Q1</Bold></Paragraph></TableCell>
+                <TableCell><Paragraph>42</Paragraph></TableCell>
+              </TableRow></TableRowGroup></Table>
+            </FlowDocument>
+            """;
+        var fake = new FakeOsClipboard
+        {
+            XamlPackageBytes = CreateXamlPackage(xaml),
+            HasText = true,
+            Text = "plain fallback",
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.XamlPackage);
+        var body = editor.CurrentSlide!.Shapes.Single().TextBody!;
+        body.Paragraphs.Single().Runs.Select(run => run.Text).Should().ContainInOrder("Q1", "\t", "42");
+        body.Paragraphs.Single().Runs.Single(run => run.Text == "Q1").Bold.Should().BeTrue();
     }
 
     [StaFact]
@@ -805,6 +899,15 @@ public sealed class OsClipboardServiceTests
         // Empty text → guard in Paste() → no shape inserted.
         sess.CurrentSlide!.Shapes.Count.Should().Be(before,
             "Y9: empty OS text should not insert a textbox");
+    }
+
+    private static byte[] CreateXamlPackage(string xaml)
+    {
+        using var output = new MemoryStream();
+        using (var package = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        using (var writer = new StreamWriter(package.CreateEntry("Xaml/Document.xaml").Open(), Encoding.UTF8))
+            writer.Write(xaml);
+        return output.ToArray();
     }
 
     // ════════════════════════════════════════════════════════════════════════════════

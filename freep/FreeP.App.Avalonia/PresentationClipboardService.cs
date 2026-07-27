@@ -368,7 +368,9 @@ internal sealed class AvaloniaPresentationClipboardService(
             content.HasImage,
             content.HasText,
             request.Editor.CanPaste,
-            ownCopy);
+            ownCopy,
+            content.HasRichText,
+            content.HasXamlPackage);
 
         if (source == PresentationClipboardPasteSource.NativeSelection)
         {
@@ -388,9 +390,47 @@ internal sealed class AvaloniaPresentationClipboardService(
 
             source = PresentationClipboardPastePlanner.Decide(
                 hasNativeSelection: false,
-                content.HasImage,
-                content.HasText,
-                request.Editor.CanPaste,
+                hasImage: content.HasImage,
+                hasText: content.HasText,
+                internalHasData: request.Editor.CanPaste,
+                ownCopyIsCurrent: false,
+                hasRichText: content.HasRichText,
+                hasXamlPackage: content.HasXamlPackage);
+        }
+
+        if (source == PresentationClipboardPasteSource.RichText)
+        {
+            var payload = InCanvasRichClipboardPlanner.Deserialize(content.RichTextBytes);
+            if (payload is not null)
+            {
+                request.Editor.InsertTextBox(payload.Body);
+                return source;
+            }
+
+            source = PresentationClipboardPastePlanner.Decide(
+                hasNativeSelection: false,
+                hasImage: content.HasImage,
+                hasText: content.HasText,
+                internalHasData: request.Editor.CanPaste,
+                ownCopyIsCurrent: false,
+                hasRichText: false,
+                hasXamlPackage: content.HasXamlPackage);
+        }
+
+        if (source == PresentationClipboardPasteSource.XamlPackage)
+        {
+            var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(content.XamlPackageBytes);
+            if (payload is not null)
+            {
+                request.Editor.InsertTextBox(payload.Body);
+                return source;
+            }
+
+            source = PresentationClipboardPastePlanner.Decide(
+                hasNativeSelection: false,
+                hasImage: content.HasImage,
+                hasText: content.HasText,
+                internalHasData: request.Editor.CanPaste,
                 ownCopyIsCurrent: false);
         }
 
