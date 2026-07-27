@@ -86,7 +86,7 @@ open_backstage_print() {
         sleep "$settle_seconds"
         # Selecting the Print rail entry shows the pane; the app-owned direct-print action is
         # the first button in that pane, at a stable window-relative location.
-        xdotool mousemove --window "$backstage_id" 260 358 click 1
+        xdotool mousemove --window "$backstage_id" 260 398 click 1
         sleep "$settle_seconds"
         dialog_id="$(wait_for_window '^Print$' 35 || true)"
     fi
