@@ -226,6 +226,13 @@ public static class FreePRibbon
             KeyTip = FreePRibbonText.TableCellInsetKeyTip,
             Width = 132
         });
+        group.ComboBox("freep.table-row-height", FreePRibbonText.TableRowHeightLabel, control => control with
+        {
+            Items = FreePRibbonDefinitionData.TableRowHeightOptions,
+            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Size),
+            KeyTip = FreePRibbonText.TableRowHeightKeyTip,
+            Width = 100
+        });
         group.IconToggle("freep.bold", FreePRibbonText.BoldLabel, RibbonCommandIconKind.Bold, FreePRibbonText.BoldKeyTip);
         group.IconToggle("freep.italic", FreePRibbonText.ItalicLabel, RibbonCommandIconKind.Italic, FreePRibbonText.ItalicKeyTip);
         group.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline,

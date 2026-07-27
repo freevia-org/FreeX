@@ -525,6 +525,17 @@ internal static class FreePRibbonCommands
                 editor.TryApplyActiveTableCellInset(side, insetPt);
             }));
 
+        registry.Register("freep.table-row-height",
+            new ContextRibbonCommand(ctx =>
+            {
+                if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                    value is not string selection ||
+                    !TableRowHeightOptionParser.TryParse(selection, out var heightEmu))
+                    return;
+
+                editor.TryApplyActiveTableRowHeight(heightEmu);
+            }));
+
         // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
 
         RegisterTransitionCommands(registry, stateStore, editor, onTransitionSound);
