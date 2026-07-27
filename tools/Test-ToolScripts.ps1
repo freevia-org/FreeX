@@ -307,9 +307,18 @@ function Assert-GeneratedProjectOrchestrationBehavior {
     try {
         @'
 $arguments = @($args)
-$projectIndex = [Array]::IndexOf([object[]]$arguments, "--project")
-$projectPath = $arguments[$projectIndex + 1]
+$isBuild = $arguments.Count -gt 1 -and $arguments[0] -ceq "build"
+$projectPath = if ($isBuild) {
+    $arguments[1]
+}
+else {
+    $projectIndex = [Array]::IndexOf([object[]]$arguments, "--project")
+    $arguments[$projectIndex + 1]
+}
 [IO.File]::WriteAllText($env:FREEX_TOOL_GENERATOR_PROJECT, $projectPath)
+if ($isBuild) {
+    exit 0
+}
 [ordered]@{ Arguments = $arguments } | ConvertTo-Json -Compress | Set-Content -LiteralPath $env:FREEX_TOOL_GENERATOR_CAPTURE
 $separatorIndex = [Array]::IndexOf([object[]]$arguments, "--")
 if ($env:FREEX_TOOL_GENERATOR_EXIT_CODE -ne "0") {
@@ -356,9 +365,10 @@ exit /b %ERRORLEVEL%
         }
 
         $capture = Get-Content -LiteralPath $capturePath -Raw | ConvertFrom-Json
-        if ($capture.Arguments[0] -cne "run" -or $capture.Arguments[1] -cne "--project" -or
-            $capture.Arguments[3] -cne "--configuration" -or $capture.Arguments[4] -cne "Release" -or
-            $capture.Arguments[5] -cne "--" -or $capture.Arguments.Count -ne 8) {
+        if ($capture.Arguments[0] -cne "run" -or $capture.Arguments[1] -cne "--no-build" -or
+            $capture.Arguments[2] -cne "--project" -or $capture.Arguments[4] -cne "--configuration" -or
+            $capture.Arguments[5] -cne "Release" -or $capture.Arguments[6] -cne "--" -or
+            $capture.Arguments.Count -ne 9) {
             throw "Invoke-ToolGeneratedProject did not preserve dotnet run argument ordering."
         }
 
