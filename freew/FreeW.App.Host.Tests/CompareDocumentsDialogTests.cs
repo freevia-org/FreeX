@@ -102,4 +102,18 @@ public sealed class CompareDocumentsDialogTests
         result.Should().NotBeNull();
         result!.Settings.Should().NotBeNull();
     }
+
+    [StaFact]
+    public void Dialog_MoreExpander_StartsCollapsed_AndCanRevealSettings()
+    {
+        var dlg = CompareDocumentsDialog.CreateForTest(FakePath, DefaultAuthor, RevisedTitle);
+
+        dlg.MoreExpanderForTest.IsExpanded.Should().BeFalse();
+        dlg.MoreExpanderForTest.Header.Should().Be("More");
+        dlg.MoreExpanderForTest.Content.Should().NotBeNull();
+
+        dlg.MoreExpanderForTest.IsExpanded = true;
+
+        dlg.MoreExpanderForTest.IsExpanded.Should().BeTrue();
+    }
 }

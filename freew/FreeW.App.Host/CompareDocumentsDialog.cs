@@ -49,6 +49,7 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly RadioButton _radioNew;
     private readonly RadioButton _radioOriginal;
     private readonly RadioButton _radioRevised;
+    private readonly Expander _moreExpander;
 
     private Result? _result;
 
@@ -100,7 +101,7 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         settingsPanel.Children.Add(_radioRevised);
 
         // ---- "More >>" expander ----
-        var expander = new Expander
+        _moreExpander = new Expander
         {
             Header = "More",
             Content = settingsPanel,
@@ -126,9 +127,9 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         AddFieldRow(grid, 3, "Label revisions with:", _authorBox);
 
-        Grid.SetRow(expander, 4);
-        Grid.SetColumnSpan(expander, 2);
-        grid.Children.Add(expander);
+        Grid.SetRow(_moreExpander, 4);
+        Grid.SetColumnSpan(_moreExpander, 2);
+        grid.Children.Add(_moreExpander);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Grid.SetRow(buttons, 5);
@@ -247,6 +248,8 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         TryAccept(showWarnings: false);
         return _result;
     }
+
+    internal Expander MoreExpanderForTest => _moreExpander;
 
     // -----------------------------------------------------------------------
     // Entry point

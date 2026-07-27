@@ -96,6 +96,20 @@ public sealed class CommonDialogChromeParityTests
     }
 
     [Fact]
+    public void Wpf_expander_uses_an_unframed_full_width_template()
+    {
+        var expander = new Expander { Header = "More" };
+
+        AvaloniaCompactDialogChrome.ApplyWpfExpander(expander);
+
+        expander.Template.Should().NotBeNull();
+        expander.HorizontalAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Stretch);
+        expander.HorizontalContentAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Stretch);
+        expander.BorderThickness.Should().Be(new Thickness(0));
+        expander.Background.Should().Be(Brushes.Transparent);
+    }
+
+    [Fact]
     public void Shared_ok_cancel_row_uses_shell_strings_and_WPF_action_semantics()
     {
         var accepted = false;
