@@ -165,6 +165,8 @@ public enum PresentationClipboardPasteSource
 {
     NativeSelection,
     Image,
+    RichText,
+    XamlPackage,
     Text,
     Internal,
     Nothing,
@@ -177,7 +179,9 @@ public static class PresentationClipboardPastePlanner
         bool hasImage,
         bool hasText,
         bool internalHasData,
-        bool ownCopyIsCurrent)
+        bool ownCopyIsCurrent,
+        bool hasRichText = false,
+        bool hasXamlPackage = false)
     {
         if (ownCopyIsCurrent && internalHasData)
             return PresentationClipboardPasteSource.Internal;
@@ -185,6 +189,10 @@ public static class PresentationClipboardPastePlanner
             return PresentationClipboardPasteSource.NativeSelection;
         if (hasImage)
             return PresentationClipboardPasteSource.Image;
+        if (hasRichText)
+            return PresentationClipboardPasteSource.RichText;
+        if (hasXamlPackage)
+            return PresentationClipboardPasteSource.XamlPackage;
         if (hasText)
             return PresentationClipboardPasteSource.Text;
         if (internalHasData)
