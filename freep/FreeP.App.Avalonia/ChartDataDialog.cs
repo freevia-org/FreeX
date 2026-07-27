@@ -21,6 +21,7 @@ internal sealed class ChartDataDialog : Window
     private readonly List<IndexedTextBox> _seriesNameBoxes = new();
     private readonly List<IndexedTextBox> _categoryBoxes = new();
     private readonly List<ValueTextBox> _valueBoxes = new();
+    private int _activeSeriesIndex;
     private readonly ComboBox _chartTypeCombo;
     private readonly TextBlock _validationText = new();
 
@@ -101,6 +102,13 @@ internal sealed class ChartDataDialog : Window
             _chartTypeCombo.SelectedIndex = index;
     }
 
+    internal void MoveSeriesForTests(int seriesIndex, bool down)
+    {
+        FlushTextBoxEdits();
+        _activeSeriesIndex = seriesIndex;
+        MoveActiveSeries(down ? 1 : -1);
+    }
+
     private Control BuildContent()
     {
         var root = new Grid();
@@ -118,6 +126,8 @@ internal sealed class ChartDataDialog : Window
             {
                 MakeToolbarButton(_surface.AddSeriesLabel, OnAddSeries),
                 MakeToolbarButton(_surface.RemoveSeriesLabel, OnRemoveSeries),
+                MakeToolbarButton(_surface.MoveSeriesUpLabel, OnMoveSeriesUp),
+                MakeToolbarButton(_surface.MoveSeriesDownLabel, OnMoveSeriesDown),
                 new Border { Width = 12 },
                 MakeToolbarButton(_surface.AddCategoryLabel, OnAddCategory),
                 MakeToolbarButton(_surface.RemoveCategoryLabel, OnRemoveCategory),
@@ -209,6 +219,7 @@ internal sealed class ChartDataDialog : Window
             if (seriesColumn.IsSeriesNameColumn)
             {
                 var headerBox = MakeTextBox(seriesColumn.Name, minWidth: 100);
+                TrackSeriesFocus(headerBox, seriesColumn.SeriesIndex);
                 _seriesNameBoxes.Add(new IndexedTextBox(seriesColumn.SeriesIndex, headerBox));
                 AddCell(headerBox, row: 0, column: seriesColumnIndex + 1);
             }
@@ -234,6 +245,7 @@ internal sealed class ChartDataDialog : Window
                 var valueBox = MakeTextBox(
                     ChartDataDialogPlanner.FormatCellValue(cell.Value, _culture),
                     minWidth: 90);
+                TrackSeriesFocus(valueBox, cell.SeriesIndex);
                 _valueBoxes.Add(new ValueTextBox(
                     cell.SeriesIndex,
                     cell.CategoryIndex,
@@ -271,6 +283,22 @@ internal sealed class ChartDataDialog : Window
         FlushTextBoxEdits();
         _planner.RemoveLastSeries();
         RebuildTable();
+    }
+
+    private void OnMoveSeriesUp() => MoveActiveSeries(-1);
+
+    private void OnMoveSeriesDown() => MoveActiveSeries(1);
+
+    private void MoveActiveSeries(int delta)
+    {
+        if (!TryFlushTextBoxEdits())
+            return;
+
+        if (_planner.MoveSeries(_activeSeriesIndex, _activeSeriesIndex + delta))
+        {
+            _activeSeriesIndex = Math.Clamp(_activeSeriesIndex + delta, 0, _planner.SeriesCount - 1);
+            RebuildTable();
+        }
     }
 
     private void OnAddCategory()
@@ -367,6 +395,9 @@ internal sealed class ChartDataDialog : Window
             Background = Brushes.Transparent,
         };
     }
+
+    private void TrackSeriesFocus(TextBox textBox, int seriesIndex) =>
+        textBox.GotFocus += (_, _) => _activeSeriesIndex = seriesIndex;
 
     private static Button MakeToolbarButton(string label, Action onClick)
     {

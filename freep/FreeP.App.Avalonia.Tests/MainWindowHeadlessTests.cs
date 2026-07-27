@@ -6280,6 +6280,7 @@ public sealed class MainWindowHeadlessTests
             seriesColumns = dialog.RenderedSeriesColumnCount;
             categoryRows = dialog.RenderedCategoryRowCount;
             valueCells = dialog.RenderedValueCellCount;
+            dialog.MoveSeriesForTests(1, down: false);
             dialog.SwitchRowsAndColumnsForTests();
             dialog.SetChartTypeForTests(ChartType.LineMarkers);
             commit = dialog.BuildCommitPlanForTests();
@@ -6292,11 +6293,11 @@ public sealed class MainWindowHeadlessTests
         categoryRows.Should().Be(3);
         valueCells.Should().Be(6);
         commit.Should().NotBeNull();
-        commit!.Categories.Should().Equal("Series 1", "Series 2");
+        commit!.Categories.Should().Equal("Series 2", "Series 1");
         commit.SeriesNames.Should().Equal("Q1", "Q2", "Q3");
-        commit.Values[0].Should().Equal(new double?[] { 4.3, 2.4 });
-        commit.Values[1].Should().Equal(new double?[] { 2.5, 4.4 });
-        commit.Values[2].Should().Equal(new double?[] { 3.5, 1.8 });
+        commit.Values[0].Should().Equal(new double?[] { 2.4, 4.3 });
+        commit.Values[1].Should().Equal(new double?[] { 4.4, 2.5 });
+        commit.Values[2].Should().Equal(new double?[] { 1.8, 3.5 });
         commit.ChartType.Should().Be(ChartType.LineMarkers);
     }
 
