@@ -671,7 +671,7 @@ static void RenderDocumentComposite(
         if (panel is not null && i < panel.PageBoxes.Count)
         {
             var box = panel.PageBoxes[i];
-            const double headerH = 42;
+            const double headerH = 43;
             const double footerH = 36;
             var printableWidthDip = Math.Max(1, thisPageWDip - thisMarginLeft - thisMarginRight);
 
@@ -772,7 +772,7 @@ static void RenderDocumentComposite(
                 i + 1,
                 thisPageSettings,
                 differentOddEvenHeaderFooterPages);
-            const double headerH = 42;
+            const double headerH = 43;
             const double footerH = 36;
             var printableWidthDip = Math.Max(1, thisPageWDip - thisMarginLeft - thisMarginRight);
             const double DefaultHeaderFooterDistanceDip = 48;

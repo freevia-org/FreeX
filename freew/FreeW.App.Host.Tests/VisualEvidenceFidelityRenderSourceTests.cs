@@ -212,6 +212,15 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void FidelityRender_UsesTheSharedMeasuredHeaderSurfaceHeight()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Split("const double headerH = 43;", StringSplitOptions.None)
+            .Should().HaveCount(3, "both normal and generated-table header paths must use the measured surface height");
+    }
+
+    [Fact]
     public void FidelityRender_UsesArrangedAnchorOnlyForDrawingGroups()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
