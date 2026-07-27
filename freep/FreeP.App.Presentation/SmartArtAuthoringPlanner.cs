@@ -67,6 +67,7 @@ public enum SmartArtLayoutPreset
     PictureCaptionList,
     LabeledHierarchy,
     TableHierarchy,
+    PictureGrid,
 }
 
 /// <summary>Bounded PowerPoint SmartArt Quick Style choices.</summary>
@@ -163,6 +164,7 @@ public static class SmartArtAuthoringPlanner
     public const string PictureCaptionListLayoutCommandId = "freep.smartart.layout.picture-caption-list";
     public const string LabeledHierarchyLayoutCommandId = "freep.smartart.layout.labeled-hierarchy";
     public const string TableHierarchyLayoutCommandId = "freep.smartart.layout.table-hierarchy";
+    public const string PictureGridLayoutCommandId = "freep.smartart.layout.picture-grid";
     public const string SimpleQuickStyleCommandId = "freep.smartart.style.simple";
     public const string ModerateQuickStyleCommandId = "freep.smartart.style.moderate";
     public const string IntenseQuickStyleCommandId = "freep.smartart.style.intense";
@@ -273,10 +275,10 @@ public static class SmartArtAuthoringPlanner
         if (smartArt?.Data is null)
             return NotAppliedLayout("No SmartArt data model is available.");
 
-        if (preset == SmartArtLayoutPreset.PictureCaptionList &&
+        if (preset is SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureGrid &&
             smartArt.Data.Nodes.Any(node => node.Picture?.Bytes is not { Length: > 0 }))
         {
-            return NotAppliedLayout("Picture Caption List requires image content for every SmartArt node.");
+            return NotAppliedLayout("Picture-based SmartArt layouts require image content for every SmartArt node.");
         }
 
         var layoutPart = smartArt.Parts.Values.FirstOrDefault(candidate =>
@@ -377,6 +379,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/labeledHierarchy", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.TableHierarchy =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.PictureGrid =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid", SmartArtFamily.List),
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
         };
 

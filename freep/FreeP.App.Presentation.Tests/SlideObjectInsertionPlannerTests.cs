@@ -218,7 +218,7 @@ public sealed class SlideObjectInsertionPlannerTests
             var added = SlideObjectInsertionPlanner.ApplyCommand(
                 editor,
                 commandId,
-                smartArtPicturePayload: preset == SmartArtLayoutPreset.PictureCaptionList
+                smartArtPicturePayload: preset is SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureGrid
                     ? SlideObjectInsertionPlanner.CreateSmartArtPicturePayload(
                         [SlideObjectInsertionPlanner.CreatePicturePayload([1, 2, 3], "sample.png")])
                     : null);
@@ -312,7 +312,7 @@ public sealed class SlideObjectInsertionPlannerTests
             SlideObjectInsertionPlanner.ApplyCommand(
                 editor,
                 commandId,
-                smartArtPicturePayload: preset == SmartArtLayoutPreset.PictureCaptionList
+                smartArtPicturePayload: preset is SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureGrid
                     ? SlideObjectInsertionPlanner.CreateSmartArtPicturePayload(
                         [SlideObjectInsertionPlanner.CreatePicturePayload([1, 2, 3], "sample.png")])
                     : null).Should().NotBeNull(preset.ToString());

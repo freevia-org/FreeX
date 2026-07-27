@@ -1982,7 +1982,7 @@ public static class PptxPackageReader
         try
         {
             smart.Data = ReadSmartArtData(smart);
-            TryAttachPictureCaptionListNodePictures(smart, archive);
+            TryAttachPictureNodePictures(smart, archive);
         }
         catch
         {
@@ -2379,7 +2379,7 @@ public static class PptxPackageReader
             dataDoc = OpcXml.LoadXml(ms2);
 
         var isLiveLayoutSupported = IsLiveSmartArtLayoutSupported(layoutUniqueId, family);
-        if (IsPictureCaptionListLayout(layoutUniqueId))
+        if (IsPictureNodeLayout(layoutUniqueId))
         {
             // Final admission for this picture layout depends on deterministic
             // node-level image import from the cached diagram drawing.
@@ -2504,10 +2504,10 @@ public static class PptxPackageReader
         return data;
     }
 
-    private static void TryAttachPictureCaptionListNodePictures(SmartArtShape smart, ZipArchive archive)
+    private static void TryAttachPictureNodePictures(SmartArtShape smart, ZipArchive archive)
     {
         var data = smart.Data;
-        if (data is null || !IsPictureCaptionListLayout(data.LayoutUniqueId))
+        if (data is null || !IsPictureNodeLayout(data.LayoutUniqueId))
             return;
 
         var nodes = FlattenSmartArtNodes(data);
@@ -2583,13 +2583,13 @@ public static class PptxPackageReader
         return pictures;
     }
 
-    private static bool IsPictureCaptionListLayout(string uniqueId)
+    private static bool IsPictureNodeLayout(string uniqueId)
     {
         if (string.IsNullOrWhiteSpace(uniqueId))
             return false;
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
-        return string.Equals(id.Split('/').Last(), "picturecaptionlist", StringComparison.Ordinal);
+        return id.Split('/').Last() is "picturecaptionlist" or "picturegrid";
     }
 
     /// <summary>
