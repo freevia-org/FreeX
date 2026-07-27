@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 using Free.Shared.Shell;
 
 namespace FreeW.App.Host.Tests;
@@ -126,6 +128,71 @@ public sealed class FreeWHelpInfoTests
             .OnlyContain(source => source == "Consolas");
     }
 
+    [StaFact]
+    public void LegalNoticesDialog_preserves_the_shared_close_and_read_only_copy_contract()
+    {
+        var dialog = new LegalNoticesDialog(
+        [
+            ("Project License", "license text"),
+            ("Legal Notices", "legal text"),
+        ]);
+
+        var close = LogicalDescendants<Button>(dialog)
+            .Single(button => AutomationProperties.GetAutomationId(button) == "LegalNoticesCloseButton");
+        close.IsDefault.Should().BeTrue();
+        close.IsCancel.Should().BeTrue();
+
+        LogicalDescendants<TextBox>(dialog)
+            .Should()
+            .OnlyContain(text => text.IsReadOnly && text.AcceptsReturn && text.AcceptsTab);
+    }
+
+    [StaFact]
+    public void WpfAuthority_read_only_textbox_key_contract_is_observable_at_runtime()
+    {
+        var dialog = new LegalNoticesDialog(
+        [
+            ("Project License", "license text"),
+            ("Legal Notices", "legal text"),
+        ]);
+        try
+        {
+            dialog.Show();
+            dialog.UpdateLayout();
+            var text = VisualDescendants<TextBox>(dialog).First();
+            Keyboard.Focus(text).Should().BeSameAs(text);
+
+            var tab = CreateKeyDown(dialog, Key.Tab);
+            text.RaiseEvent(tab);
+            tab.Handled.Should().BeTrue("WPF consumes plain Tab from a read-only AcceptsTab text box");
+            Keyboard.FocusedElement.Should().BeSameAs(text);
+
+            Keyboard.Focus(text).Should().BeSameAs(text);
+            var enter = CreateKeyDown(dialog, Key.Enter);
+            text.RaiseEvent(enter);
+            enter.Handled.Should().BeFalse("WPF read-only text must not consume plain Enter");
+            dialog.IsVisible.Should().BeTrue("the routed authority probe does not synthesize a default-button click");
+        }
+        finally
+        {
+            if (dialog.IsVisible)
+                dialog.Close();
+        }
+    }
+
+    private static KeyEventArgs CreateKeyDown(Window source, Key key)
+    {
+        var args = new KeyEventArgs(
+            Keyboard.PrimaryDevice,
+            PresentationSource.FromVisual(source)!,
+            0,
+            key)
+        {
+            RoutedEvent = Keyboard.KeyDownEvent,
+        };
+        return args;
+    }
+
     private static IEnumerable<T> LogicalDescendants<T>(DependencyObject root) where T : DependencyObject
     {
         foreach (var child in LogicalTreeHelper.GetChildren(root))
@@ -137,6 +204,16 @@ public sealed class FreeWHelpInfoTests
                 foreach (var descendant in LogicalDescendants<T>(dependencyObject))
                     yield return descendant;
             }
+    }
+
+    private static IEnumerable<T> VisualDescendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        if (root is T result)
+            yield return result;
+
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+            foreach (var descendant in VisualDescendants<T>(VisualTreeHelper.GetChild(root, index)))
+                yield return descendant;
     }
 
 }

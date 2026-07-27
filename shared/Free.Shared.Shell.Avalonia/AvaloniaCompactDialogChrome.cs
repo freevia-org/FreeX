@@ -212,6 +212,40 @@ public static class AvaloniaCompactDialogChrome
         }
     }
 
+    /// <summary>
+    /// Applies Avalonia-host template compensation for the shared WPF read-only document padding.
+    /// The resulting Avalonia <see cref="Thickness"/> is host-specific, not a shared WPF metric:
+    /// Avalonia's TextBox template contributes a six-pixel leading content inset for this surface family.
+    /// </summary>
+    public static void ApplyAvaloniaReadOnlyDocumentTemplatePadding(TextBox textBox, double sharedPadding)
+    {
+        ArgumentNullException.ThrowIfNull(textBox);
+
+        textBox.Padding = new Thickness(
+            sharedPadding + 6,
+            sharedPadding,
+            sharedPadding,
+            sharedPadding);
+    }
+
+    /// <summary>
+    /// Applies the Avalonia-host intro arrangement compensation for the shared WPF dialog margin.
+    /// Avalonia's dialog template needs three additional pixels before a following tab body;
+    /// the extra space belongs to this host template, not to shared dialog geometry.
+    /// </summary>
+    public static void ApplyAvaloniaDocumentIntroTemplateCompensation(
+        TextBlock intro,
+        double sharedBottomMargin)
+    {
+        ArgumentNullException.ThrowIfNull(intro);
+
+        intro.Margin = new Thickness(
+            intro.Margin.Left,
+            intro.Margin.Top,
+            intro.Margin.Right,
+            sharedBottomMargin + 3);
+    }
+
     public static void FocusAndSelect(TextBox textBox)
     {
         ArgumentNullException.ThrowIfNull(textBox);

@@ -48,13 +48,9 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         Opened += (_, _) =>
         {
             foreach (var textBox in _noticeTextBoxes)
-            {
-                textBox.Padding = new Thickness(
-                    LegalNoticesDialogMetrics.AvaloniaTextPaddingLeft,
-                    LegalNoticesDialogMetrics.TextPadding,
-                    LegalNoticesDialogMetrics.AvaloniaTextPaddingRight,
+                AvaloniaCompactDialogChrome.ApplyAvaloniaReadOnlyDocumentTemplatePadding(
+                    textBox,
                     LegalNoticesDialogMetrics.TextPadding);
-            }
             FocusInitialKeyboardTarget();
         };
     }
@@ -73,9 +69,12 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         {
             Text = introText,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, LegalNoticesDialogMetrics.AvaloniaIntroBottomMargin),
+            Margin = new Thickness(0, 0, 0, LegalNoticesDialogMetrics.IntroBottomMargin),
             Foreground = Brushes.Black,
         };
+        AvaloniaCompactDialogChrome.ApplyAvaloniaDocumentIntroTemplateCompensation(
+            intro,
+            LegalNoticesDialogMetrics.IntroBottomMargin);
         AutomationProperties.SetName(intro, "Legal Notices summary");
         AutomationProperties.SetAutomationId(intro, "LegalNoticesSummaryText");
         DockPanel.SetDock(intro, Dock.Top);
@@ -117,11 +116,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             _tabControl,
             AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = LegalNoticesDialogMetrics.TabControlHeight },
-            contentPaneMargin: new Thickness(
-                LegalNoticesDialogMetrics.AvaloniaTabContentLeftMargin,
-                LegalNoticesDialogMetrics.AvaloniaTabContentTopMargin,
-                LegalNoticesDialogMetrics.AvaloniaTabContentRightMargin,
-                0));
+            contentPaneMargin: new Thickness(0, 1, 0, 0));
         root.Children.Add(_tabControl);
 
         return root;
@@ -140,14 +135,13 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             FontFamily = new FontFamily("Consolas"),
             FontSize = LegalNoticesDialogMetrics.TextFontSize,
             LineHeight = LegalNoticesDialogMetrics.TextLineHeight,
-            Padding = new Thickness(
-                LegalNoticesDialogMetrics.AvaloniaTextPaddingLeft,
-                LegalNoticesDialogMetrics.TextPadding,
-                LegalNoticesDialogMetrics.AvaloniaTextPaddingRight,
-                LegalNoticesDialogMetrics.TextPadding),
+            Padding = new Thickness(LegalNoticesDialogMetrics.TextPadding),
             MinHeight = LegalNoticesDialogMetrics.TextMinHeight,
             Foreground = Brushes.Black,
         };
+        AvaloniaCompactDialogChrome.ApplyAvaloniaReadOnlyDocumentTemplatePadding(
+            textBox,
+            LegalNoticesDialogMetrics.TextPadding);
         AutomationProperties.SetName(textBox, notice.Title);
         AutomationProperties.SetAutomationId(
             textBox,

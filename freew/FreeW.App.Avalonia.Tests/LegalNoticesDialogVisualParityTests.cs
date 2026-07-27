@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Free.Shared.Shell;
@@ -58,9 +60,9 @@ public sealed class LegalNoticesDialogVisualParityTests
                 text.AcceptsReturn.Should().BeTrue();
                 text.AcceptsTab.Should().BeTrue();
                 text.Padding.Should().Be(new Thickness(
-                    LegalNoticesDialogMetrics.AvaloniaTextPaddingLeft,
+                    LegalNoticesDialogMetrics.TextPadding + 6,
                     LegalNoticesDialogMetrics.TextPadding,
-                    LegalNoticesDialogMetrics.AvaloniaTextPaddingRight,
+                    LegalNoticesDialogMetrics.TextPadding,
                     LegalNoticesDialogMetrics.TextPadding));
                 text.FontSize.Should().Be(LegalNoticesDialogMetrics.TextFontSize);
                 text.LineHeight.Should().Be(LegalNoticesDialogMetrics.TextLineHeight);
@@ -72,6 +74,71 @@ public sealed class LegalNoticesDialogVisualParityTests
             tabs.SelectedIndex = 4;
             tabs.SelectedIndex.Should().Be(4);
             dialog.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Legal_notices_preserves_shared_keyboard_scroll_and_automation_contract()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new LegalNoticesDialog(
+            [
+                ("Project License", "license text"),
+                ("Legal Notices", "legal text"),
+                ("Privacy Notice", "privacy text"),
+            ]);
+            var tabs = dialog.GetLogicalDescendants().OfType<TabControl>().Single();
+            var close = dialog.GetLogicalDescendants().OfType<Button>().Single();
+            var textBoxes = dialog.GetLogicalDescendants().OfType<TextBox>().ToArray();
+            try
+            {
+                dialog.Show();
+                dialog.UpdateLayout();
+                var first = textBoxes[0];
+                first.Focus().Should().BeTrue();
+                first.RaiseEvent(new KeyEventArgs
+                {
+                    RoutedEvent = InputElement.KeyDownEvent,
+                    Key = Key.Tab,
+                    KeyModifiers = KeyModifiers.None,
+                });
+                tabs.SelectedIndex.Should().Be(0);
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(first);
+
+                first.RaiseEvent(new KeyEventArgs
+                {
+                    RoutedEvent = InputElement.KeyDownEvent,
+                    Key = Key.Tab,
+                    KeyModifiers = KeyModifiers.Control,
+                });
+                tabs.SelectedIndex.Should().Be(0, "WPF leaves Ctrl+Tab to the native read-only text control");
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(first);
+
+                first.RaiseEvent(new KeyEventArgs
+                {
+                    RoutedEvent = InputElement.KeyDownEvent,
+                    Key = Key.Tab,
+                    KeyModifiers = KeyModifiers.Shift | KeyModifiers.Control,
+                });
+                tabs.SelectedIndex.Should().Be(0);
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(first);
+
+                textBoxes.Should().OnlyContain(text =>
+                    text.IsReadOnly &&
+                    text.Focusable &&
+                    text.GetValue(ScrollViewer.VerticalScrollBarVisibilityProperty) == ScrollBarVisibility.Auto &&
+                    text.GetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty) == ScrollBarVisibility.Disabled);
+                AutomationProperties.GetAutomationId(tabs).Should().Be("LegalNoticesSectionTabs");
+                AutomationProperties.GetAutomationId(close).Should().Be("LegalNoticesCloseButton");
+                close.IsDefault.Should().BeTrue();
+                close.IsCancel.Should().BeTrue();
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
+            }
         }, CancellationToken.None);
     }
 }
