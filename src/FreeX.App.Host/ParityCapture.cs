@@ -16,6 +16,7 @@ using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Protection;
+using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -586,6 +587,12 @@ internal static class ParityCapture
                 CaptureDialog(results, "dialog.ErrorChecking", outDir, () =>
                     new ErrorCheckingDialog(ErrorCheckingDialogPlanner.CreateParityIssues(sheet.Id), _ => { }, _ => true, _ => { }));
             }
+            else if (string.Equals(targetSurfaceId, "dialog.ScenarioManager", StringComparison.Ordinal))
+            {
+                ScenarioManagerParityFixture.Seed(workbook, sheet.Id);
+                CaptureDialog(results, "dialog.ScenarioManager", outDir, () =>
+                    new ScenarioManagerDialog(workbook, sheet.Id, ResolveSheetId(workbook)));
+            }
             else if (string.Equals(targetSurfaceId, "dialog.Options.Save", StringComparison.Ordinal) ||
                 string.Equals(targetSurfaceId, "dialog.Options.Language", StringComparison.Ordinal))
             {
@@ -601,7 +608,7 @@ internal static class ParityCapture
             }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, and dialog.Options.Save in this lane.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, dialog.ScenarioManager, and dialog.Options.Save in this lane.");
             }
 
             return;
@@ -1188,13 +1195,23 @@ internal static class ParityCapture
                 dialog.UpdateLayout();
                 PumpDispatcher();
 
-                if (TryGetFixedDialogCaptureSize(surfaceId, out var fixedWidth, out var fixedHeight))
+                var hasClientCaptureSize = TryGetFixedDialogClientCaptureSize(surfaceId, out var clientWidth, out var clientHeight);
+                var hasOuterCaptureSize = TryGetFixedDialogCaptureSize(surfaceId, out var fixedWidth, out var fixedHeight);
+                if (hasClientCaptureSize)
+                {
+                    ApplyDialogClientCaptureSize(dialog, (clientWidth, clientHeight));
+                }
+                else if (hasOuterCaptureSize)
                 {
                     ApplyOuterDialogCaptureSize(dialog, (fixedWidth, fixedHeight));
                 }
 
-                var width = fixedWidth > 0 ? fixedWidth : dialog.ActualWidth > 0 ? dialog.ActualWidth : dialog.Width;
-                var height = fixedHeight > 0 ? fixedHeight : dialog.ActualHeight > 0 ? dialog.ActualHeight : dialog.Height;
+                var width = hasClientCaptureSize
+                    ? clientWidth
+                    : fixedWidth > 0 ? fixedWidth : dialog.ActualWidth > 0 ? dialog.ActualWidth : dialog.Width;
+                var height = hasClientCaptureSize
+                    ? clientHeight
+                    : fixedHeight > 0 ? fixedHeight : dialog.ActualHeight > 0 ? dialog.ActualHeight : dialog.Height;
                 if (double.IsNaN(width) || width <= 0) width = 480;
                 if (double.IsNaN(height) || height <= 0) height = 360;
                 return RenderDialog(dialog, width, height);
@@ -1215,6 +1232,18 @@ internal static class ParityCapture
             "dialog.ProtectWorkbook" => (ProtectionDialogPlanner.ProtectWorkbookCaptureWidth, ProtectionDialogPlanner.ProtectWorkbookCaptureHeight),
             "dialog.Sparkline" => (SparklinePlanner.InsertDialogCaptureWidth, SparklinePlanner.InsertDialogCaptureHeight),
             "dialog.Consolidate" => (ConsolidateDialogPlanner.CaptureWidth, ConsolidateDialogPlanner.CaptureHeight),
+            _ => (0, 0)
+        };
+
+        return width > 0 && height > 0;
+    }
+
+    private static bool TryGetFixedDialogClientCaptureSize(string surfaceId, out double width, out double height)
+    {
+        (width, height) = surfaceId switch
+        {
+            "dialog.ScenarioManager" =>
+                (ScenarioManagerDialogLayout.DialogWidth, ScenarioManagerDialogLayout.DialogHeight),
             _ => (0, 0)
         };
 

@@ -57,7 +57,7 @@ public sealed partial class MainWindow
                 AutomationProperties.GetAutomationId(textBox),
                 textBoxAutomationId,
                 StringComparison.Ordinal));
-        if (target?.Parent is not StackPanel field || field.Children.Contains(target) is false)
+        if (target?.Parent is not Panel field || field.Children.Contains(target) is false)
             return;
 
         var targetIndex = field.Children.IndexOf(target);
@@ -73,7 +73,19 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(picker, pickerAutomationName);
 
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        if (field is Grid parentGrid)
+        {
+            Grid.SetRow(row, Grid.GetRow(target));
+            Grid.SetColumn(row, Grid.GetColumn(target));
+            Grid.SetRowSpan(row, Grid.GetRowSpan(target));
+            Grid.SetColumnSpan(row, Grid.GetColumnSpan(target));
+        }
+
         field.Children.RemoveAt(targetIndex);
+        Grid.SetRow(target, 0);
+        Grid.SetColumn(target, 0);
+        Grid.SetRowSpan(target, 1);
+        Grid.SetColumnSpan(target, 1);
         row.Children.Add(target);
         Grid.SetColumn(picker, 1);
         row.Children.Add(picker);

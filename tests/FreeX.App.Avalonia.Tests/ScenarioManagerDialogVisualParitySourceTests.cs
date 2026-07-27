@@ -26,6 +26,18 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
         source.Should().NotContain("dialog.Content = new ScrollViewer");
     }
 
+    [Fact]
+    public void ScenarioManagerRangePickers_WrapGridFieldsAndRemainSharedSessionBacked()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ScenarioManagerRangePickers.cs"));
+
+        source.Should().Contain("target?.Parent is not Panel field");
+        source.Should().Contain("if (field is Grid parentGrid)");
+        source.Should().Contain("ScenarioManagerChangingCellsPickerButton");
+        source.Should().Contain("ScenarioManagerResultCellsPickerButton");
+        source.Should().Contain("owner.AttachDialogRangePicker(dialog, picker, target, targetId);");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
