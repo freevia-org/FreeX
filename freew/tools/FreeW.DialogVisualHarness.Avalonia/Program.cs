@@ -253,7 +253,8 @@ static Semantics ReadSemantics(Window dialog)
         Avalonia.Automation.AutomationProperties.GetAutomationId(c), c.GetType().Name, Avalonia.Automation.AutomationProperties.GetName(c), c.IsEffectivelyEnabled,
         c is CheckBox check ? check.IsChecked : c is ToggleButton toggle ? toggle.IsChecked : null,
         c is SelectingItemsControl selector ? selector.SelectedIndex : null)).ToArray();
-    var buttons = FindVisualChildren<Button>(dialog)
+    var buttons = dialog.GetVisualDescendants()
+        .OfType<Button>()
         .Where(button => button is not ToggleButton)
         .ToArray();
     var focused = FindVisualChildren<Control>(dialog).FirstOrDefault(c => c.IsFocused);
