@@ -599,6 +599,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicRelationshipLayoutCommandId,
                 FreePRibbonText.SmartArtBasicRelationshipCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.SmartArtBasicRelationshipCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.OpposingIdeasLayoutCommandId,
+                FreePRibbonText.SmartArtOpposingIdeasCommand.Label, RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtOpposingIdeasCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
                 FreePRibbonText.SmartArtBasicVennCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.SmartArtBasicVennCommand.KeyTip);

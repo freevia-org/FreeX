@@ -750,6 +750,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.BasicMatrix, SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.TitledMatrix, SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.BasicRelationship, SmartArtFamily.Relationship)]
+    [InlineData(SmartArtLayoutPreset.OpposingIdeas, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.BasicVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.RadialVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.TargetList, SmartArtFamily.Relationship)]
@@ -2325,6 +2326,24 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
             "relationship1 now has bounded shared overlapping-ellipse geometry");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("A", "B", "C");
+    }
+
+    [Fact]
+    public void Reader_ParsesOpposingIdeasAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/opposingIdeas",
+            nodes: [("id1", "For"), ("id2", "Against")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "opposingIdeas now has bounded shared opposing-arrow geometry");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("For", "Against");
     }
 
     [Fact]
