@@ -108,9 +108,9 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         ApplyOptionPolicy();
         AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_replaceBox, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCheckBox(_matchCase, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCheckBox(_wholeWord, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCheckBox(_useWildcards, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_matchCase, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_wholeWord, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_useWildcards, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_goToTarget, DialogChromeStyle);
 
         // --- Main grid (Find label | Find box, Replace label | Replace box) ------
