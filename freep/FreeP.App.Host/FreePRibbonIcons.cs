@@ -166,6 +166,15 @@ internal static class FreePRibbonIcons
             ["freep.anim.emphasis.pulse"]       = RibbonCommandIconKind.Flash,
             ["freep.anim.emphasis.spin"]        = RibbonCommandIconKind.Rotate,
             ["freep.anim.emphasis.grow-shrink"] = RibbonCommandIconKind.Scale,
+            ["freep.anim.emphasis.teeter"]       = RibbonCommandIconKind.Rotate,
+            ["freep.anim.emphasis.blink"]        = RibbonCommandIconKind.Flash,
+            ["freep.anim.emphasis.color-pulse"]  = RibbonCommandIconKind.Color,
+            ["freep.anim.emphasis.change-color"] = RibbonCommandIconKind.Color,
+            ["freep.anim.emphasis.grow-with-color"] = RibbonCommandIconKind.Color,
+            ["freep.anim.emphasis.wave"]         = RibbonCommandIconKind.Effects,
+            ["freep.anim.emphasis.shimmer"]      = RibbonCommandIconKind.Effects,
+            ["freep.anim.emphasis.bold"]         = RibbonCommandIconKind.Bold,
+            ["freep.anim.emphasis.underline"]   = RibbonCommandIconKind.Underline,
 
             // Wave 4C: Animation exit effects
             ["freep.anim.exit.disappear"] = RibbonCommandIconKind.Delete,

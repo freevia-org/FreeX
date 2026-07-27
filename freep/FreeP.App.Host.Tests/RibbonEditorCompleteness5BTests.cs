@@ -64,6 +64,36 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void AnimationEmphasisCommands_AreDefinedAndRouted()
+    {
+        var definition = FreePRibbon.Build();
+        var effects = definition.Tabs
+            .Single(tab => tab.Id == "animations")
+            .Groups.Single(group => group.Id == "animation-effects");
+        var expected = new[]
+        {
+            "freep.anim.emphasis.teeter",
+            "freep.anim.emphasis.blink",
+            "freep.anim.emphasis.color-pulse",
+            "freep.anim.emphasis.change-color",
+            "freep.anim.emphasis.grow-with-color",
+            "freep.anim.emphasis.wave",
+            "freep.anim.emphasis.shimmer",
+            "freep.anim.emphasis.bold",
+            "freep.anim.emphasis.underline",
+        };
+
+        foreach (var commandId in expected)
+        {
+            Assert.Contains(effects.Controls, control => control.CommandId.Value == commandId);
+            Assert.Contains(
+                PresentationAnimationCommandPlanner.BuiltInPlans,
+                plan => plan.CommandId == commandId
+                    && plan.Intent == PresentationAnimationCommandIntentKind.AddEffect);
+        }
+    }
+
+    [Fact]
     public void SmartArtContinuousBlockProcess_IsDefinedAndRoutedByHost()
     {
         var definition = FreePRibbon.Build();

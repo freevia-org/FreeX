@@ -1768,6 +1768,60 @@
   <data name="Ribbon_Command_AnimationEmphasisGrowShrink_KeyTip" xml:space="preserve">
     <value>G</value>
   </data>
+  <data name="Ribbon_Command_AnimationEmphasisTeeter_Label" xml:space="preserve">
+    <value>Teeter</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisTeeter_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisBlink_Label" xml:space="preserve">
+    <value>Blink</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisBlink_KeyTip" xml:space="preserve">
+    <value>B</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisColorPulse_Label" xml:space="preserve">
+    <value>Color Pulse</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisColorPulse_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeColor_Label" xml:space="preserve">
+    <value>Change Color</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeColor_KeyTip" xml:space="preserve">
+    <value>H</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisGrowWithColor_Label" xml:space="preserve">
+    <value>Grow With Color</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisGrowWithColor_KeyTip" xml:space="preserve">
+    <value>W</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisWave_Label" xml:space="preserve">
+    <value>Wave</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisWave_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisShimmer_Label" xml:space="preserve">
+    <value>Shimmer</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisShimmer_KeyTip" xml:space="preserve">
+    <value>Y</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisBold_Label" xml:space="preserve">
+    <value>Bold</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisBold_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisUnderline_Label" xml:space="preserve">
+    <value>Underline</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisUnderline_KeyTip" xml:space="preserve">
+    <value>U</value>
+  </data>
   <data name="Ribbon_Command_AnimationExitDisappear_Label" xml:space="preserve">
     <value>Disappear</value>
   </data>

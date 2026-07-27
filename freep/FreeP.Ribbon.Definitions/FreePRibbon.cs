@@ -826,6 +826,15 @@ public static class FreePRibbon
             group.Medium("freep.anim.emphasis.pulse", FreePRibbonText.AnimationEmphasisPulseCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.AnimationEmphasisPulseCommand.KeyTip);
             group.Medium("freep.anim.emphasis.spin", FreePRibbonText.AnimationEmphasisSpinCommand.Label, RibbonCommandIconKind.Rotate, FreePRibbonText.AnimationEmphasisSpinCommand.KeyTip);
             group.Medium("freep.anim.emphasis.grow-shrink", FreePRibbonText.AnimationEmphasisGrowShrinkCommand.Label, RibbonCommandIconKind.Scale, FreePRibbonText.AnimationEmphasisGrowShrinkCommand.KeyTip);
+            group.Medium("freep.anim.emphasis.teeter", FreePRibbonText.AnimationEmphasisTeeterCommand.Label, RibbonCommandIconKind.Rotate, FreePRibbonText.AnimationEmphasisTeeterCommand.KeyTip);
+            group.Medium("freep.anim.emphasis.blink", FreePRibbonText.AnimationEmphasisBlinkCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.AnimationEmphasisBlinkCommand.KeyTip);
+            group.Medium("freep.anim.emphasis.color-pulse", FreePRibbonText.AnimationEmphasisColorPulseCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.AnimationEmphasisColorPulseCommand.KeyTip);
+            group.Medium("freep.anim.emphasis.change-color", FreePRibbonText.AnimationEmphasisChangeColorCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.AnimationEmphasisChangeColorCommand.KeyTip);
+            group.Medium("freep.anim.emphasis.grow-with-color", FreePRibbonText.AnimationEmphasisGrowWithColorCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.AnimationEmphasisGrowWithColorCommand.KeyTip);
+            group.Medium("freep.anim.emphasis.wave", FreePRibbonText.AnimationEmphasisWaveCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationEmphasisWaveCommand.KeyTip);
+            group.Medium("freep.anim.emphasis.shimmer", FreePRibbonText.AnimationEmphasisShimmerCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationEmphasisShimmerCommand.KeyTip);
+            group.Medium("freep.anim.emphasis.bold", FreePRibbonText.AnimationEmphasisBoldCommand.Label, RibbonCommandIconKind.Bold, FreePRibbonText.AnimationEmphasisBoldCommand.KeyTip);
+            group.Medium("freep.anim.emphasis.underline", FreePRibbonText.AnimationEmphasisUnderlineCommand.Label, RibbonCommandIconKind.Underline, FreePRibbonText.AnimationEmphasisUnderlineCommand.KeyTip);
             if (profile.IncludeAnimationSeparators) group.Separator();
             group.Medium("freep.anim.exit.disappear", FreePRibbonText.AnimationExitDisappearCommand.Label, RibbonCommandIconKind.Delete, FreePRibbonText.AnimationExitDisappearCommand.KeyTip);
             group.Medium("freep.anim.exit.fade-out", FreePRibbonText.AnimationExitFadeOutCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationExitFadeOutCommand.KeyTip);
