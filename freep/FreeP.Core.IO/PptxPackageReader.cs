@@ -2985,8 +2985,10 @@ public static class PptxPackageReader
                 _      => (TableCellAnchor?)null
             };
 
-            // Explicit fill
-            cell.Fill = PptxColorReader.TryReadFill(tcPr, scheme);
+            // Explicit fill. The schema stores fill properties directly under tcPr;
+            // accept the older nested form as well so existing FreeP files remain readable.
+            var fillOwner = tcPr.Element(A + "fill") ?? tcPr;
+            cell.Fill = PptxColorReader.TryReadFill(fillOwner, scheme);
 
             // Per-side borders
             var borders = new TableCellBorders

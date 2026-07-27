@@ -35,6 +35,7 @@ internal static class FreePRibbonIcons
 
             // Font
             ["freep.font-family"] = RibbonCommandIconKind.Font,
+            ["freep.table-cell-fill"] = RibbonCommandIconKind.Fill,
             ["freep.bold"] = RibbonCommandIconKind.Bold,
             ["freep.italic"] = RibbonCommandIconKind.Italic,
             ["freep.underline"] = RibbonCommandIconKind.Underline,

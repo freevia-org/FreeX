@@ -2074,6 +2074,13 @@ public sealed partial class MainWindow : Window
             if (Editor.TryApplyActiveTableCellColor(color)) return;
             Editor.SetColorOnSelection(color);
         }));
+        r.Register("freep.table-cell-fill", new ContextRibbonCommand(ctx =>
+        {
+            if (!TryGetRibbonFontColor(ctx, out var color))
+                return;
+
+            Editor.TryApplyActiveTableCellFill(color);
+        }));
         r.Register("freep.bold", new ActionRibbonCommand(() =>
         {
             if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold) == true) return;

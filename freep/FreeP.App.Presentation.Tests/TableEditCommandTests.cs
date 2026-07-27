@@ -1,10 +1,11 @@
 using FreeP.App.Compositor;
+using FreeP.Core.IO;
 
 namespace FreeP.App.Compositor.Tests;
 
 /// <summary>
 /// Unit tests for table-edit commands (Wave 9A):
-///   SetTableCellTextCommand, InsertTableRowCommand, DeleteTableRowCommand,
+///   SetTableCellTextCommand, SetTableCellFillCommand, InsertTableRowCommand, DeleteTableRowCommand,
 ///   InsertTableColumnCommand, DeleteTableColumnCommand,
 ///   MergeTableCellsCommand, SplitTableCellCommand.
 ///
@@ -279,6 +280,42 @@ public sealed class TableEditCommandTests
         bus.Redo();
 
         CellText(shape, 2, 2).Should().Be("Redo");
+    }
+
+    [Fact]
+    public void SetTableCellFill_UndoRedo_Works()
+    {
+        var (p, bus, shape) = MakeTable();
+        var fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x336699));
+
+        bus.Execute(new SetTableCellFillCommand(0, shape.Id, 1, 1, fill));
+
+        shape.Table!.Rows[1].Cells[1].Fill.Should().BeSameAs(fill);
+        bus.Undo();
+        shape.Table.Rows[1].Cells[1].Fill.Should().BeNull();
+        bus.Redo();
+        shape.Table.Rows[1].Cells[1].Fill.Should().BeSameAs(fill);
+    }
+
+    [Fact]
+    public void SetTableCellFill_RoundTripsThroughPptx()
+    {
+        var (presentation, bus, shape) = MakeTable(1, 1);
+        bus.Execute(new SetTableCellFillCommand(
+            0,
+            shape.Id,
+            0,
+            0,
+            new ShapeFill.Solid(SrgbColor.FromRgb(0xE6B800))));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+
+        var reopened = PptxPackageReader.Read(stream);
+        var cell = reopened.Slides[0].Shapes[0].Table!.Rows[0].Cells[0];
+        var solid = cell.Fill.Should().BeOfType<ShapeFill.Solid>().Subject;
+        solid.Color.Resolved.Should().Be(SrgbColor.FromRgb(0xE6B800));
     }
 
     [Fact]
@@ -733,6 +770,21 @@ public sealed class TableEditCommandTests
         sess.SetTableCellText(0, 0, "Hello");
         sess.Undo();
         CellText(shape, 0, 0).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void EditingSession_SetActiveTableCellFill_IsUndoable()
+    {
+        var sess = MakeSession(out var shape);
+        sess.SetActiveTableCell(0, 0);
+
+        sess.TryApplyActiveTableCellFill(new ThemeAwareColor(SrgbColor.FromRgb(0x8844CC)))
+            .Should().BeTrue();
+        var solid = shape.Table!.Rows[0].Cells[0].Fill.Should().BeOfType<ShapeFill.Solid>().Subject;
+        solid.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x8844CC));
+
+        sess.Undo();
+        shape.Table.Rows[0].Cells[0].Fill.Should().BeNull();
     }
 
     [Fact]
