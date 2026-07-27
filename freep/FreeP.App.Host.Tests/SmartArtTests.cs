@@ -2089,10 +2089,31 @@ public sealed class SmartArtTests : IDisposable
 
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.Matrix,
-            "titledMatrix is a matrix-family layout and should stay renderer-neutral");
+            "titledMatrix is a matrix-family layout with shared title-band semantics");
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
-            "titledMatrix is in the bounded shared matrix-family live-layout planner");
+            "titledMatrix is in the bounded shared titled-matrix live-layout planner");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Title", "North", "East", "South");
+    }
+
+    [Fact]
+    public void Compositor_TitledMatrix_UsesSharedTitleBandAndBodyCells()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix",
+            nodes: [("id1", "Title"), ("id2", "North"), ("id3", "East"), ("id4", "South")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(4, "the shared WPF/Avalonia compositor should emit one title and three body cells");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Title", "North", "East", "South");
+        liveShapes[0].BoundsDip.Width.Should().BeGreaterThan(liveShapes[1].BoundsDip.Width,
+            "the title band should span the full matrix width");
+        liveShapes[1].BoundsDip.Y.Should().BeGreaterThan(liveShapes[0].BoundsDip.Y,
+            "body cells should render below the title band");
     }
 
     [Fact]

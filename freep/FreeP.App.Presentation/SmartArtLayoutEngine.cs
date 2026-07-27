@@ -120,6 +120,9 @@ public static class SmartArtLayoutEngine
         if (IsPyramidListLayout(data.LayoutUniqueId))
             return LayoutPyramidList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsTitledMatrixLayout(data.LayoutUniqueId))
+            return LayoutTitledMatrix(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (data.Family == SmartArtFamily.Hierarchy && IsHierarchy3Layout(data.LayoutUniqueId))
             return LayoutHierarchy3(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -383,6 +386,72 @@ public static class SmartArtLayoutEngine
             }
 
             curX += boxW + gap + connectorW;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Titled matrix: a full-width title band followed by a bounded two-column body.
+    /// The first node is semantic title content rather than a quadrant. Returning null
+    /// for malformed or overlarge input keeps the imported PowerPoint cache authoritative.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutTitledMatrix(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Count is < 2 or > 9 || string.IsNullOrWhiteSpace(nodes[0].Text))
+            return null;
+
+        var bodyNodes = nodes.Skip(1).ToList();
+        int columns = bodyNodes.Count == 1 ? 1 : 2;
+        int rows = (bodyNodes.Count + columns - 1) / columns;
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapX = columns > 1 ? (long)(fcx * GapFrac) : 0;
+        long gapY = (long)(fcy * GapFrac);
+        long titleH = Math.Max((long)(fcy * 0.18), 1L);
+        long titleGap = Math.Max((long)(fcy * 0.035), 1L);
+        long bodyY = fy + outerPadY + titleH + titleGap;
+        long bodyH = fcy - 2 * outerPadY - titleH - titleGap;
+        if (bodyH <= 0)
+            return null;
+
+        long bodyW = fcx - 2 * outerPadX;
+        long boxW = Math.Max((bodyW - (columns - 1) * gapX) / columns, 1L);
+        long boxH = Math.Max((bodyH - (rows - 1) * gapY) / rows, 1L);
+
+        var shapes = new List<SlideShape>(bodyNodes.Count + 1)
+        {
+            MakeBox(
+                520,
+                nodes[0].Text,
+                stylePlan.GetNodeStyle(0, nodes[0].Level, SmartArtFamily.Matrix),
+                fx + outerPadX,
+                fy + outerPadY,
+                bodyW,
+                titleH,
+                NodeFontSizeLargePt,
+                DrawingShapeKind.Rectangle)
+        };
+
+        uint idCounter = 521;
+        for (int i = 0; i < bodyNodes.Count; i++)
+        {
+            int row = i / columns;
+            int column = i % columns;
+            shapes.Add(MakeBox(
+                idCounter++,
+                bodyNodes[i].Text,
+                stylePlan.GetNodeStyle(i + 1, bodyNodes[i].Level, SmartArtFamily.Matrix),
+                fx + outerPadX + column * (boxW + gapX),
+                bodyY + row * (boxH + gapY),
+                boxW,
+                boxH,
+                NodeFontSizePt,
+                DrawingShapeKind.Rectangle));
         }
 
         return shapes;
@@ -2327,6 +2396,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "pyramidlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsTitledMatrixLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "titledmatrix", StringComparison.Ordinal);
     }
 
     private static bool IsDescendingBlockListLayout(string uniqueId)

@@ -1303,7 +1303,7 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void TitledMatrix_ReturnsLiveQuadrantBoxesWithoutConnectors()
+    public void TitledMatrix_ReturnsLiveTitleBandAndBodyCells()
     {
         var data = MakeData(SmartArtFamily.Matrix, "Title", "North", "East", "South");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix";
@@ -1311,20 +1311,36 @@ public sealed class SmartArtLayoutTests
         var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
         shapes.Should().NotBeNull("titledMatrix is a bounded shared matrix-family layout");
-        shapes!.Should().HaveCount(4, "one shared quadrant shape should be emitted per titled matrix node");
+        shapes!.Should().HaveCount(4, "one title band plus one body shape should be emitted per body node");
         shapes.Should().OnlyContain(s => s.AutoShapeKind == DrawingShapeKind.Rectangle,
-            "the matrix-family planner emits quadrant boxes without connector ops");
+            "the titled matrix planner emits rectangular title/body cells without connector ops");
 
         var boxes = shapes.ToList();
         boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .Should().Equal("Title", "North", "East", "South");
 
-        boxes[1].OffsetXEmu.Should().BeGreaterThan(boxes[0].OffsetXEmu,
-            "the second quadrant should be to the right of the first");
-        boxes[2].OffsetYEmu.Should().BeGreaterThan(boxes[0].OffsetYEmu,
-            "the third quadrant should start the lower row");
-        boxes[3].OffsetXEmu.Should().BeGreaterThan(boxes[2].OffsetXEmu,
-            "the fourth quadrant should be to the right of the third");
+        boxes[0].ExtentCxEmu.Should().BeGreaterThan(boxes[1].ExtentCxEmu,
+            "the title band should span the full matrix width");
+        boxes[1].OffsetYEmu.Should().BeGreaterThan(boxes[0].OffsetYEmu,
+            "body cells should be below the title band");
+        boxes[2].OffsetXEmu.Should().BeGreaterThan(boxes[1].OffsetXEmu,
+            "the second body cell should be to the right of the first");
+        boxes[3].OffsetYEmu.Should().BeGreaterThan(boxes[1].OffsetYEmu,
+            "the third body cell should start the lower row");
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(10)]
+    public void TitledMatrix_MalformedBodyFallsBackToCachedDrawing(int nodeCount)
+    {
+        var data = MakeData(
+            SmartArtFamily.Matrix,
+            Enumerable.Range(0, nodeCount).Select(i => $"Node{i}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix";
+
+        SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
+            .Should().BeNull("malformed or overlarge titled matrices must keep the imported cache authoritative");
     }
 
     [Fact]

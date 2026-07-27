@@ -5597,6 +5597,35 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_titled_matrix_shape_composes_shared_title_band_and_body_cells()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Matrix,
+                "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix",
+                ["Title", "North", "East", "South"]);
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.ShapeId is >= 520 and < 530)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(4,
+            "Avalonia consumes the shared titled-matrix title band and three body cells");
+        liveShapes.Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Title", "North", "East", "South");
+        liveShapes[0].BoundsDip.Width.Should().BeGreaterThan(liveShapes[1].BoundsDip.Width);
+        liveShapes[1].BoundsDip.Y.Should().BeGreaterThan(liveShapes[0].BoundsDip.Y);
+    }
+
+    [Fact]
     public async Task SmartArt_table_hierarchy_shape_composes_shared_cells_without_connectors()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];
