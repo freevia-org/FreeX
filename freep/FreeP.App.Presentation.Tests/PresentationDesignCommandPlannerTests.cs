@@ -1,4 +1,5 @@
 using FreeP.App.Compositor;
+using FreeP.Core.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
@@ -42,6 +43,27 @@ public sealed class PresentationDesignCommandPlannerTests
         plan.Intent.Should().Be(PresentationDesignCommandIntentKind.SetSlideSize);
         plan.SlideSizeCxEmu.Should().Be(expectedCxEmu);
         plan.SlideSizeCyEmu.Should().Be(expectedCyEmu);
+    }
+
+    [Theory]
+    [InlineData("freep.background-white", 0xFFFFFF)]
+    [InlineData("freep.background-black", 0x000000)]
+    [InlineData("freep.background-blue", 0xD9EAF7)]
+    public void TryPlan_MapsBackgroundCommandIdsToSolidFillIntents(string commandId, int expectedRgb)
+    {
+        PresentationDesignCommandPlanner.TryPlan(commandId, out var plan).Should().BeTrue();
+
+        plan.Intent.Should().Be(PresentationDesignCommandIntentKind.SetSlideBackground);
+        plan.BackgroundRgb.Should().Be(expectedRgb);
+    }
+
+    [Fact]
+    public void TryPlan_MapsBackgroundResetToInheritanceIntent()
+    {
+        PresentationDesignCommandPlanner.TryPlan("freep.background-reset", out var plan).Should().BeTrue();
+
+        plan.Intent.Should().Be(PresentationDesignCommandIntentKind.SetSlideBackground);
+        plan.BackgroundRgb.Should().BeNull();
     }
 
     [Fact]
@@ -386,6 +408,42 @@ public sealed class PresentationDesignCommandPlannerTests
 
         presentation.SlideSizeCxEmu.Should().Be(PresentationDesignCommandPlanner.SlideSizeStandard4x3CxEmu);
         presentation.SlideSizeCyEmu.Should().Be(PresentationDesignCommandPlanner.SlideSizeStandardCyEmu);
+    }
+
+    [Fact]
+    public void TryApply_SetSlideBackgroundCommand_IsUndoableAndResetRestoresInheritance()
+    {
+        var editor = MakeSession(out var presentation);
+        var slide = presentation.Slides[0];
+
+        PresentationDesignCommandPlanner.TryPlan("freep.background-blue", out var blue).Should().BeTrue();
+        PresentationDesignCommandPlanner.TryApply(editor, blue).Should().BeTrue();
+        slide.Background.Should().BeOfType<ShapeFill.Solid>()
+            .Which.Color.Resolved.Should().Be(SrgbColor.FromRgb(0xD9EAF7));
+
+        editor.Undo();
+        slide.Background.Should().BeNull();
+
+        PresentationDesignCommandPlanner.TryApply(editor, blue).Should().BeTrue();
+        PresentationDesignCommandPlanner.TryPlan("freep.background-reset", out var reset).Should().BeTrue();
+        PresentationDesignCommandPlanner.TryApply(editor, reset).Should().BeTrue();
+        slide.Background.Should().BeNull();
+    }
+
+    [Fact]
+    public void SetSlideBackgroundCommand_PersistsThroughPptxRoundTrip()
+    {
+        var editor = MakeSession(out var presentation);
+        PresentationDesignCommandPlanner.TryPlan("freep.background-blue", out var plan).Should().BeTrue();
+        PresentationDesignCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+
+        var reopened = PptxPackageReader.Read(stream);
+        reopened.Slides[0].Background.Should().BeOfType<ShapeFill.Solid>()
+            .Which.Color.Resolved.Should().Be(SrgbColor.FromRgb(0xD9EAF7));
     }
 
     [Fact]

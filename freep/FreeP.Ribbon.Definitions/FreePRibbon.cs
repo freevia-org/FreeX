@@ -603,6 +603,10 @@ public static class FreePRibbon
             group.Large("freep.slide-size-16x9", FreePRibbonText.SlideSizeWidescreenCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeWidescreenCommand.KeyTip);
             group.Large("freep.slide-size-4x3", FreePRibbonText.SlideSizeStandardCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeStandardCommand.KeyTip);
             group.Medium("freep.slide-size-custom", FreePRibbonText.SlideSizeCustomCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeCustomCommand.KeyTip);
+            group.Medium("freep.background-white", FreePRibbonText.BackgroundWhiteCommand.Label, RibbonCommandIconKind.Fill, FreePRibbonText.BackgroundWhiteCommand.KeyTip);
+            group.Medium("freep.background-black", FreePRibbonText.BackgroundBlackCommand.Label, RibbonCommandIconKind.Fill, FreePRibbonText.BackgroundBlackCommand.KeyTip);
+            group.Medium("freep.background-blue", FreePRibbonText.BackgroundBlueCommand.Label, RibbonCommandIconKind.Fill, FreePRibbonText.BackgroundBlueCommand.KeyTip);
+            group.Medium("freep.background-reset", FreePRibbonText.BackgroundResetCommand.Label, RibbonCommandIconKind.Clear, FreePRibbonText.BackgroundResetCommand.KeyTip);
         });
         tab.Group("smartart-colors", FreePRibbonText.SmartArtColorsGroup.Label, FreePRibbonText.SmartArtColorsGroup.KeyTip, 80, group =>
         {
