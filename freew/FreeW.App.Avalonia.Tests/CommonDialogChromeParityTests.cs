@@ -69,8 +69,11 @@ public sealed class CommonDialogChromeParityTests
         var row = AvaloniaCompactDialogChrome.CreateActionRow([button], style: style);
 
         button.Height.Should().Be(26);
+        button.CornerRadius.Should().Be(new CornerRadius(0));
         textBox.Height.Should().Be(24);
+        textBox.CornerRadius.Should().Be(new CornerRadius(0));
         comboBox.Height.Should().Be(24);
+        comboBox.CornerRadius.Should().Be(new CornerRadius(0));
         button.FontSize.Should().Be(12);
         textBox.FontSize.Should().Be(12);
         comboBox.FontSize.Should().Be(12);

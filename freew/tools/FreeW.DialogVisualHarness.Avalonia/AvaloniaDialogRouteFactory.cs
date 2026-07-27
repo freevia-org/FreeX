@@ -121,6 +121,9 @@ internal static class AvaloniaDialogRouteFactory
         if (routeId == "table-properties")
             return CreateTableProperties(state, tab);
 
+        if (routeId == "style")
+            return CreateStyle(state);
+
         if (!DialogTypes.TryGetValue(routeId, out var typeName))
             return null;
         return CreateType(typeName, state);
@@ -340,6 +343,24 @@ internal static class AvaloniaDialogRouteFactory
             type.GetMethod("AcceptForTest", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(dialog, null);
         }
         return dialog;
+    }
+
+    private static Window CreateStyle(string state)
+    {
+        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.StyleDialog", true)!;
+        var catalog = state == "populated"
+            ? new Dictionary<string, string>
+            {
+                ["Normal"] = "Normal",
+                ["Heading1"] = "Heading 1",
+            }
+            : new Dictionary<string, string>();
+        return (Window)Activator.CreateInstance(
+            type,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            ["New Style", catalog, null, null, RunFormatting.Default, ParagraphFormatting.Default, null],
+            null)!;
     }
 
     private static Window WrapControl(Control control)

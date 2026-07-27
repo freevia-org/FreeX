@@ -239,7 +239,7 @@ static List<ComparisonRow> CompareCaptures(EvidenceInventory inventory, CaptureM
         {
             var routeExistsOnOtherHost = left is not null
                 ? inventory.Scenarios.Any(s => s.Host == "avalonia" && s.RouteId.Equals(left.RouteId, StringComparison.OrdinalIgnoreCase))
-                : inventory.Scenarios.Any(s => s.Host == "wpf" && s.RouteId.Equals(right!.RouteId, StringComparison.OrdinalIgnoreCase));
+                : right is not null && inventory.Scenarios.Any(s => s.Host == "wpf" && s.RouteId.Equals(right.RouteId, StringComparison.OrdinalIgnoreCase));
             var classification = routeExistsOnOtherHost ? "state-not-applicable" : "product-parity-gap";
             var note = left is null
                 ? "No WPF route/state row was generated."

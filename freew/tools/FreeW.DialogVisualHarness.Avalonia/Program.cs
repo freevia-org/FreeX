@@ -128,6 +128,34 @@ static Capture? CaptureOne(Scenario scenario, string output, Capture? authorityC
 static void Populate(Window dialog, Scenario scenario)
 {
     var state = scenario.State;
+    if (scenario.RouteId == "style")
+    {
+        var styleTextBoxes = FindVisualChildren<TextBox>(dialog).ToArray();
+        var combos = FindVisualChildren<ComboBox>(dialog).ToArray();
+        var checks = FindVisualChildren<CheckBox>(dialog).ToArray();
+        if (state == "populated")
+        {
+            if (styleTextBoxes.Length > 0) styleTextBoxes[0].Text = "Sample Style";
+            if (combos.Length >= 5)
+            {
+                combos[0].SelectedIndex = 1;
+                combos[1].SelectedIndex = 2;
+                combos[2].SelectedIndex = 7;
+                combos[3].SelectedIndex = 5;
+                combos[4].SelectedIndex = 1;
+            }
+            if (checks.Length >= 3)
+            {
+                checks[0].IsChecked = true;
+                checks[1].IsChecked = true;
+                checks[2].IsChecked = false;
+            }
+        }
+        else if (state == "validation-error" && styleTextBoxes.Length > 0)
+            styleTextBoxes[0].Text = string.Empty;
+        FocusScenarioTarget(dialog, scenario);
+        return;
+    }
     if (scenario.RouteId == "footnote-endnote-options")
     {
         var combos = FindVisualChildren<ComboBox>(dialog).ToArray();
@@ -176,6 +204,17 @@ static void Populate(Window dialog, Scenario scenario)
 
 static void FocusScenarioTarget(Window dialog, Scenario scenario)
 {
+    if (scenario.RouteId == "style")
+    {
+        var name = FindVisualChildren<TextBox>(dialog).FirstOrDefault();
+        if (name is not null)
+        {
+            name.Focus(NavigationMethod.Tab);
+            name.SelectionStart = name.Text?.Length ?? 0;
+            name.SelectionEnd = name.SelectionStart;
+        }
+        return;
+    }
     if (scenario.RouteId == "symbol-picker")
         return;
 

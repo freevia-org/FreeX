@@ -29,9 +29,9 @@ internal sealed class StyleDialog : FreeWDialogWindow
     private readonly CheckBox _bold = new() { Content = "Bold", Margin = new Thickness(0, 0, 12, 0) };
     private readonly CheckBox _italic = new() { Content = "Italic", Margin = new Thickness(0, 0, 12, 0) };
     private readonly CheckBox _underline = new() { Content = "Underline" };
-    private readonly ComboBox _size = new() { MinWidth = 280 };
-    private readonly ComboBox _color = new() { MinWidth = 280 };
-    private readonly ComboBox _alignment = new() { MinWidth = 280 };
+    private readonly ComboBox _size = new() { MinWidth = 100, HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly ComboBox _color = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly ComboBox _alignment = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly RunFormatting _seedRun;
     private readonly ParagraphFormatting _seedParagraph;
 
@@ -197,7 +197,14 @@ internal sealed class StyleDialog : FreeWDialogWindow
 
     private static void AddRow(Panel panel, string label, Control field)
     {
-        panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 2) });
+        panel.Children.Add(new TextBlock
+        {
+            Text = label,
+            Foreground = Brushes.Black,
+            FontFamily = DialogChromeStyle.FontFamily,
+            FontSize = DialogChromeStyle.FontSize,
+            Margin = new Thickness(0, 0, 0, 2),
+        });
         field.Margin = new Thickness(0, 0, 0, 10);
         panel.Children.Add(field);
     }
@@ -205,6 +212,7 @@ internal sealed class StyleDialog : FreeWDialogWindow
     private void ApplyCompactChrome()
     {
         AvaloniaCompactDialogChrome.ApplyTextBox(_name, DialogChromeStyle);
+        _name.Foreground = Brushes.Black;
         _name.Height = 18;
         _name.MinHeight = 18;
         _name.MaxHeight = 18;
@@ -213,8 +221,13 @@ internal sealed class StyleDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyComboBox(_size, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_color, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_alignment, DialogChromeStyle);
+        foreach (var comboBox in new[] { _basedOn, _nextStyle, _size, _color, _alignment })
+            comboBox.Foreground = Brushes.Black;
         foreach (var checkBox in new[] { _bold, _italic, _underline })
+        {
             AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, DialogChromeStyle);
+            checkBox.Foreground = Brushes.Black;
+        }
     }
 }
 

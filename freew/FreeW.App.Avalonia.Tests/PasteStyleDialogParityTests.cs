@@ -1,4 +1,5 @@
 using System.Reflection;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
@@ -56,7 +57,7 @@ public sealed class PasteStyleDialogParityTests
             labels.Should().Contain("Text colour:");
             labels.Should().NotContain(StyleDialogPlanner.ValidationMessageFor(StyleDialogValidationError.EmptyName));
             comboBoxes.Should().HaveCount(5);
-            comboBoxes.Should().OnlyContain(comboBox => comboBox.MinWidth == 280);
+            comboBoxes.Select(comboBox => comboBox.MinWidth).Should().Equal(280, 280, 100, 160, 160);
             name.IsFocused.Should().BeTrue();
             comboBoxes.Should().NotContain(comboBox => comboBox.IsFocused);
             checkBoxes.Should().OnlyContain(checkBox => checkBox.Height == 18 && checkBox.Template != null);
@@ -66,6 +67,31 @@ public sealed class PasteStyleDialogParityTests
             buttons[0].IsDefault.Should().BeTrue();
             buttons[1].IsCancel.Should().BeTrue();
             dialog.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Style_uses_WPF_field_metrics_and_square_compact_controls()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = Create<StyleDialog>(
+                "New Style",
+                new Dictionary<string, string>(),
+                null,
+                null,
+                RunFormatting.Default,
+                ParagraphFormatting.Default,
+                null);
+            var textBox = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
+            var combos = dialog.GetLogicalDescendants().OfType<ComboBox>().ToArray();
+
+            textBox.MinWidth.Should().Be(280);
+            combos.Select(combo => combo.MinWidth).Should().Equal(280, 280, 100, 160, 160);
+            combos.Skip(2).Should().OnlyContain(combo => combo.HorizontalAlignment == global::Avalonia.Layout.HorizontalAlignment.Stretch);
+            textBox.CornerRadius.Should().Be(new CornerRadius(0));
+            combos.Should().OnlyContain(combo => combo.CornerRadius == new CornerRadius(0));
+            Buttons(dialog).Should().OnlyContain(button => button.CornerRadius == new CornerRadius(0));
         }, CancellationToken.None);
     }
 
@@ -101,10 +127,23 @@ public sealed class PasteStyleDialogParityTests
             "Program.cs"));
 
         source.Should().Contain("--wpf-authority");
-        source.Should().Contain("scenario.RouteId is \"paste-special\" or \"style\" or \"manage-styles\"");
+        source.Should().Contain("scenario.RouteId is \"font\" or \"paragraph\"");
+        source.Should().Contain("or \"style\" or \"manage-styles\"");
         source.Should().Contain("authorityCapture!.LogicalWidth");
         source.Should().Contain("authorityCapture!.LogicalHeight");
         source.Should().Contain("Where(button => button is not ToggleButton)");
+        source.Should().Contain("scenario.RouteId == \"style\"");
+        source.Should().Contain("Sample Style");
+        source.Should().Contain("name.Focus(NavigationMethod.Tab)");
+
+        var wpfSource = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "tools",
+            "FreeW.DialogVisualHarness.Wpf",
+            "Program.cs"));
+        wpfSource.Should().Contain("scenario.RouteId is \"font\" or \"paragraph\" or \"style\"");
+        wpfSource.Should().Contain("Sample Style");
     }
 
     private static T Create<T>(params object?[] arguments) where T : Window

@@ -112,7 +112,7 @@ internal static class WpfDialogRouteFactory
             "paragraph" => ("ParagraphBreaksDialog", "Prompt", new object?[] { owner, DefaultValue(typeof(ParagraphFormatting)) }),
             "multilevel-list" => ("MultilevelListDialog", "Prompt", new object?[] { owner, Array.Empty<ListNumberFormat>() }),
             "paste-special" => ("PasteSpecialDialog", "Prompt", new object?[] { owner }),
-            "style" => ("StyleDialog", "AskNew", new object?[] { owner, new Dictionary<string, string>(), null }),
+            "style" => ("StyleDialog", "AskNew", new object?[] { owner, StyleCatalogForState(state), null }),
             "manage-styles" => ("ManageStylesDialog", "Ask", new object?[] { owner, new TextDocument(), null }),
             _ => throw new ArgumentOutOfRangeException(nameof(routeId)),
         };
@@ -128,6 +128,15 @@ internal static class WpfDialogRouteFactory
         type.GetField("Default", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
         ?? type.GetProperty("Default", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
         ?? Activator.CreateInstance(type);
+
+    private static IReadOnlyDictionary<string, string> StyleCatalogForState(string state) =>
+        state == "populated"
+            ? new Dictionary<string, string>
+            {
+                ["Normal"] = "Normal",
+                ["Heading1"] = "Heading 1",
+            }
+            : new Dictionary<string, string>();
 
     private static Window? CreateBackstage(string routeId)
     {

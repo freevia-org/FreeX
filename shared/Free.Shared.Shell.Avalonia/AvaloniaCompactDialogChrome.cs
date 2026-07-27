@@ -138,6 +138,7 @@ public static class AvaloniaCompactDialogChrome
         button.MinHeight = style.ButtonHeight;
         button.MaxHeight = style.ButtonHeight;
         button.Padding = style.ButtonPadding;
+        button.CornerRadius = new CornerRadius(0);
         button.Background = ButtonBackgroundBrush;
         button.BorderBrush = isDefault ? DefaultButtonBorderBrush : ButtonBorderBrush;
         button.BorderThickness = new Thickness(1);
@@ -161,6 +162,7 @@ public static class AvaloniaCompactDialogChrome
             textBox.MaxHeight = style.ControlHeight;
         }
         textBox.Padding = style.TextBoxPadding;
+        textBox.CornerRadius = new CornerRadius(0);
         textBox.FontSize = style.FontSize;
         textBox.FontFamily = style.FontFamily;
         textBox.BorderBrush = InputBorderBrush;
@@ -186,6 +188,7 @@ public static class AvaloniaCompactDialogChrome
         comboBox.MinHeight = style.ControlHeight;
         comboBox.MaxHeight = style.ControlHeight;
         comboBox.Padding = style.ComboBoxPadding;
+        comboBox.CornerRadius = new CornerRadius(0);
         comboBox.FontSize = style.FontSize;
         comboBox.FontFamily = style.FontFamily;
         comboBox.Background = ComboBoxBackgroundBrush;
