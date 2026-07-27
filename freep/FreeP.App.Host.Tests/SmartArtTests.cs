@@ -1764,6 +1764,24 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesPyramidListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/pyramidList",
+            nodes: [("id1", "Foundation"), ("id2", "Growth"), ("id3", "Vision")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "pyramidList has a shared live geometry planner and must not fall back to the cached drawing on import");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Foundation", "Growth", "Vision");
+    }
+
+    [Fact]
     public void Reader_ParsesBasicVennAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
