@@ -20,12 +20,15 @@ public sealed class LinuxCameraCaptureWiringTests
             "freep/FreeP.App.Recording/Recording/LinuxCameraCapturePlanner.cs"));
         var backend = File.ReadAllText(RepoFile(
             "freep/FreeP.App.Recording/Recording/LinuxCameraCaptureBackend.cs"));
+        var policy = File.ReadAllText(RepoFile(
+            "freep/FreeP.App.Recording/Recording/LinuxMediaCapturePolicies.cs"));
 
         planner.Should().Contain("\"v4l2\"");
         planner.Should().Contain("\"-c:v\"");
         planner.Should().Contain("LinuxNarrationCaptureToolKind.FfmpegCamera");
-        backend.Should().Contain("LinuxVideoExportAdapter.HasNonEmptyMp4Payload");
-        backend.Should().Contain("SlideShowRecordingCaptureResult.Captured");
+        backend.Should().Contain("LinuxMediaCaptureLifecycle");
+        policy.Should().Contain("LinuxVideoExportAdapter.HasNonEmptyMp4Payload");
+        policy.Should().Contain("SlideShowRecordingMediaArtifactKind.CameraVideo");
     }
 
     private static string RepoFile(string relativePath) =>
