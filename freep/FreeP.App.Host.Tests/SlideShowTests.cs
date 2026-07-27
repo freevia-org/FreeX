@@ -635,6 +635,11 @@ public sealed class SlideShowWindowTests
                 artifact.IsPersistable &&
                 artifact.PackagePath.StartsWith("ppt/media/freep-recordings/wpf/", StringComparison.Ordinal));
 
+            var applied = window.ApplyRecordingReview();
+            applied.MediaArtifactCount.Should().Be(2);
+            applied.CaptionArtifactCount.Should().Be(2);
+            pres.RecordingMediaArtifacts.Should().HaveCount(4);
+
             window.ApplyPresenterToolIntent(nowUtc: started.AddMilliseconds(1800));
             window.Close();
 
