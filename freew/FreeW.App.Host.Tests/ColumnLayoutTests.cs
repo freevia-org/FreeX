@@ -1,4 +1,8 @@
+using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 using Xunit;
@@ -7,8 +11,9 @@ namespace FreeW.App.Host.Tests;
 
 /// <summary>
 /// Verifies the editor flows body text into the page's multi-column layout: the rendered
-/// <see cref="FlowDocument"/> picks up the column gap, the "line between" rule, and a finite column width
-/// (so WPF lays out more than one column). Also checks that applying column settings mutates the model.
+/// <see cref="FlowDocument"/> picks up the column gap and a finite column width (so WPF lays out more
+/// than one column). The visible rule is page chrome rather than WPF's native half-pixel flow rule.
+/// Also checks that applying column settings mutates the model.
 /// Runs on STA (WPF FlowDocument).
 /// </summary>
 public sealed class ColumnLayoutTests
@@ -48,11 +53,42 @@ public sealed class ColumnLayoutTests
     }
 
     [StaFact]
-    public void LineBetween_AddsAColumnRule()
+    public void LineBetween_ReservesTheRuleForPixelAlignedPageChrome()
     {
         var view = ViewWith(new PageSettings { ColumnCount = 2, ColumnsLineBetween = true });
 
-        Assert.True(view.Document.ColumnRuleWidth > 0);
+        Assert.Equal(0, view.Document.ColumnRuleWidth);
+    }
+
+    [StaFact]
+    public void LineBetween_AddsANonInteractivePixelAlignedAdornerInPrintLayout()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Column-rule overlay evidence."));
+        doc.Page.ColumnCount = 2;
+        doc.Page.ColumnsLineBetween = true;
+
+        var view = new DocumentView();
+        var host = new AdornerDecorator { Child = view };
+        host.Measure(new Size(816, 1056));
+        host.Arrange(new Rect(0, 0, 816, 1056));
+        view.LoadModel(doc);
+        host.UpdateLayout();
+
+        var layer = AdornerLayer.GetAdornerLayer(view);
+        var adorner = Assert.Single(
+            layer?.GetAdorners(view) ?? [],
+            candidate => candidate.GetType().Name == "ColumnRuleAdorner");
+        Assert.False(adorner.IsHitTestVisible);
+
+        var bitmap = new RenderTargetBitmap(816, 1056, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(host);
+        var pixel = new byte[4];
+        bitmap.CopyPixels(new Int32Rect(408, 500, 1, 1), pixel, 4, 0);
+        Assert.Equal(0, pixel[0]);
+        Assert.Equal(0, pixel[1]);
+        Assert.Equal(0, pixel[2]);
     }
 
     [StaFact]
@@ -70,8 +106,8 @@ public sealed class ColumnLayoutTests
         Assert.Equal(3, view.Model.Page.ColumnCount);
         Assert.Equal(18, view.Model.Page.ColumnSpacingPt);
         Assert.True(view.Model.Page.ColumnsLineBetween);
-        // The re-render picked up the new layout.
-        Assert.True(view.Document.ColumnRuleWidth > 0);
+        // The re-render picked up the new layout and leaves the visible divider to page chrome.
+        Assert.Equal(0, view.Document.ColumnRuleWidth);
         Assert.False(double.IsPositiveInfinity(view.Document.ColumnWidth));
     }
 

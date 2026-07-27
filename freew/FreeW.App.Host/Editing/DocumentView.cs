@@ -154,6 +154,10 @@ public sealed class DocumentView : RichTextBox
     // geometry from the current Document + model PageSettings and is recomputed cheaply on relayout.
     private PageBreakAdorner? _pageBreakAdorner;
 
+    // Page-aligned column rules are visual chrome. WPF's native FlowDocument rule straddles two
+    // device pixels, so the live editor draws the shared pixel-aligned rule through this overlay.
+    private ColumnRuleAdorner? _columnRuleAdorner;
+
     // The live overlay drawing line numbers in the left margin when the document enables them
     // (w:lnNumType), or null when line numbering is off. Like the page-break overlay it is an
     // AdornerLayer overlay, never part of the FlowDocument content, and recomputed on relayout.
@@ -303,6 +307,7 @@ public sealed class DocumentView : RichTextBox
         _viewDepthLayout = DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
         ApplyPageChrome();
         SyncPageBreakAdorner();
+        SyncColumnRuleAdorner();
         SyncLineNumberAdorner();
     }
 
@@ -4575,7 +4580,7 @@ public sealed class DocumentView : RichTextBox
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
-        ApplyColumnLayout(flow, _model.Page);
+        ApplyColumnLayout(flow, _model.Page, useNativeColumnRule: false);
 
         // Outline collapse is view-only: compute the model blocks hidden beneath collapsed headings,
         // skip building them, and remember them (with their preceding-visible-block count) so
@@ -4746,6 +4751,7 @@ public sealed class DocumentView : RichTextBox
         ApplyProtection();
         SyncFormattingMarksAdorner();
         SyncPageBreakAdorner();
+        SyncColumnRuleAdorner();
         SyncLineNumberAdorner();
         SyncChangeBarAdorner();
         SyncPageGridlinesAdorner();
@@ -5062,6 +5068,42 @@ public sealed class DocumentView : RichTextBox
     {
         Loaded -= OnLoadedSyncPageBreaks;
         SyncPageBreakAdorner();
+    }
+
+    private void SyncColumnRuleAdorner()
+    {
+        var enabled = PrintLayoutEnabled && _model.Page.ColumnsLineBetween && _model.Page.ColumnCount > 1;
+        var layer = AdornerLayer.GetAdornerLayer(this);
+        if (layer is null)
+        {
+            if (enabled)
+            {
+                Loaded -= OnLoadedSyncColumnRules;
+                Loaded += OnLoadedSyncColumnRules;
+            }
+            return;
+        }
+
+        if (enabled)
+        {
+            if (_columnRuleAdorner is null)
+            {
+                _columnRuleAdorner = new ColumnRuleAdorner(this);
+                layer.Add(_columnRuleAdorner);
+            }
+            _columnRuleAdorner.InvalidateVisual();
+        }
+        else if (_columnRuleAdorner is not null)
+        {
+            layer.Remove(_columnRuleAdorner);
+            _columnRuleAdorner = null;
+        }
+    }
+
+    private void OnLoadedSyncColumnRules(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoadedSyncColumnRules;
+        SyncColumnRuleAdorner();
     }
 
     // Test seam (FreeW.App.Host.Tests has InternalsVisibleTo). Returns the cached pagination result
@@ -7106,18 +7148,29 @@ public sealed class DocumentView : RichTextBox
         double contentBottomDip)
     {
         var visual = new DrawingVisual();
+        using var dc = visual.RenderOpen();
+        DrawColumnRules(dc, page, contentLeftDip, contentTopDip, contentWidthDip, contentBottomDip);
+        return visual;
+    }
+
+    internal static void DrawColumnRules(
+        DrawingContext drawingContext,
+        PageSettings page,
+        double contentLeftDip,
+        double contentTopDip,
+        double contentWidthDip,
+        double contentBottomDip)
+    {
         if (!page.ColumnsLineBetween || page.ColumnCount <= 1 || contentWidthDip <= 0 || contentBottomDip <= contentTopDip)
-            return visual;
+            return;
 
         var plan = DocumentViewLayoutPlanner.BuildColumnPlan(page, contentWidthDip, usePageColumns: true);
-        using var dc = visual.RenderOpen();
         var pen = new Pen(Brushes.Black, 1);
         for (var column = 1; column < page.ColumnCount; column++)
         {
             var x = contentLeftDip + column * (plan.WidthDip + plan.GapDip) - plan.GapDip / 2 + 0.5;
-            dc.DrawLine(pen, new Point(x, contentTopDip + 0.5), new Point(x, contentBottomDip - 0.5));
+            drawingContext.DrawLine(pen, new Point(x, contentTopDip + 0.5), new Point(x, contentBottomDip - 0.5));
         }
-        return visual;
     }
 
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
@@ -15829,6 +15882,90 @@ public sealed class DocumentView : RichTextBox
             }
 
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Draws pixel-aligned inter-column rules over the continuous Print-Layout editor. The flow still
+    /// owns text columns and pagination; this chrome replaces only WPF's half-pixel rule raster.
+    /// </summary>
+    private sealed class ColumnRuleAdorner : Adorner
+    {
+        private readonly DocumentView _view;
+        private DocumentPagination? _pagination;
+
+        public ColumnRuleAdorner(DocumentView view) : base(view)
+        {
+            _view = view;
+            IsHitTestVisible = false;
+            _view.LayoutUpdated += (_, _) => InvalidateVisual();
+            _view.TextChanged += (_, _) => _pagination = null;
+        }
+
+        protected override void OnRender(DrawingContext drawingContext)
+        {
+            base.OnRender(drawingContext);
+
+            if (_view.Document is not { } doc)
+                return;
+
+            var page = _view._model.Page;
+            if (!page.ColumnsLineBetween || page.ColumnCount <= 1)
+                return;
+
+            double firstContentTop;
+            try
+            {
+                var firstRect = doc.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+                if (firstRect.IsEmpty)
+                    return;
+                firstContentTop = firstRect.Top;
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
+
+            try
+            {
+                _pagination ??= PaginationEngine.Compute(_view);
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
+
+            var (_, contentHeightDip) = PageLayout.ContentAreaDip(page);
+            var (marginLeftDip, _, marginRightDip, _) = PageLayout.MarginsDip(page);
+            var contentWidthDip = Math.Max(0, _view.RenderSize.Width - marginLeftDip - marginRightDip);
+            if (contentHeightDip <= 0 || contentWidthDip <= 0)
+                return;
+
+            var bounds = new Rect(_view.RenderSize);
+            drawingContext.PushClip(new RectangleGeometry(bounds));
+            try
+            {
+                double pageStartOffset = 0;
+                for (var pageIndex = 0; pageIndex < Math.Max(1, _pagination.PageCount); pageIndex++)
+                {
+                    var nextBreakOffset = pageIndex < _pagination.PageBreakYsDip.Count
+                        ? _pagination.PageBreakYsDip[pageIndex]
+                        : pageStartOffset + contentHeightDip;
+                    if (nextBreakOffset <= pageStartOffset)
+                        nextBreakOffset = pageStartOffset + contentHeightDip;
+
+                    var top = firstContentTop + pageStartOffset;
+                    var bottom = firstContentTop + nextBreakOffset;
+                    if (bottom >= bounds.Top && top <= bounds.Bottom)
+                        DrawColumnRules(drawingContext, page, marginLeftDip, top, contentWidthDip, bottom);
+
+                    pageStartOffset = nextBreakOffset;
+                }
+            }
+            finally
+            {
+                drawingContext.Pop();
+            }
         }
     }
 
