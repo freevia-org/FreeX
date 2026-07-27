@@ -63,6 +63,7 @@ public enum SmartArtLayoutPreset
     RadialVenn,
     TargetList,
     StackedVenn,
+    InterlockingRings,
     BasicHierarchy,
     Hierarchy3,
     HorizontalHierarchy,
@@ -163,6 +164,7 @@ public static class SmartArtAuthoringPlanner
     public const string RadialVennLayoutCommandId = "freep.smartart.layout.radial-venn";
     public const string TargetListLayoutCommandId = "freep.smartart.layout.target-list";
     public const string StackedVennLayoutCommandId = "freep.smartart.layout.stacked-venn";
+    public const string InterlockingRingsLayoutCommandId = "freep.smartart.layout.interlocking-rings";
     public const string BasicHierarchyLayoutCommandId = "freep.smartart.layout.basic-hierarchy";
     public const string Hierarchy3LayoutCommandId = "freep.smartart.layout.hierarchy-3";
     public const string HorizontalHierarchyLayoutCommandId = "freep.smartart.layout.horizontal-hierarchy";
@@ -377,6 +379,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/targetList", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.StackedVenn =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn", SmartArtFamily.Relationship),
+            SmartArtLayoutPreset.InterlockingRings =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/interlockingRings", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.BasicHierarchy =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.Hierarchy3 =>

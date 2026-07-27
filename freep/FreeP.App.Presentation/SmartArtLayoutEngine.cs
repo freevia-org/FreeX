@@ -159,6 +159,8 @@ public static class SmartArtLayoutEngine
                         ? LayoutTargetList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                         : IsStackedVennLayout(data.LayoutUniqueId)
                             ? LayoutStackedVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
+                            : IsInterlockingRingsLayout(data.LayoutUniqueId)
+                                ? LayoutInterlockingRings(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                             : null,
             _                        => null
         };
@@ -1640,6 +1642,57 @@ public static class SmartArtLayoutEngine
     }
 
     /// <summary>
+    /// Interlocking Rings geometry: translucent equal-sized ellipses overlap in a
+    /// readable horizontal chain. The native relationship layout ID remains the
+    /// source of truth while both hosts consume the same editable shape plan.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutInterlockingRings(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        if (n is < 2 or > 5)
+            return null;
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long innerH = Math.Max(fcy - 2 * outerPadY, 1L);
+        const double overlapFrac = 0.46;
+        long diameter = Math.Max(
+            Math.Min((long)(innerW / (1.0 + overlapFrac * (n - 1))), (long)(innerH * 0.84)),
+            1L);
+        long step = Math.Max((long)(diameter * overlapFrac), 1L);
+        long totalW = diameter + (n - 1) * step;
+        long leftX = fx + outerPadX + Math.Max((innerW - totalW) / 2, 0L);
+        long topY = fy + outerPadY + Math.Max((innerH - diameter) / 2, 0L);
+
+        var shapes = new List<SlideShape>(n);
+        uint idCounter = 660;
+        for (int i = 0; i < n; i++)
+        {
+            var baseStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Relationship);
+            var ringStyle = baseStyle with
+            {
+                Fill = new ThemeAwareColor(baseStyle.Fill.Resolved, alpha: 165)
+            };
+            shapes.Add(MakeBox(
+                idCounter++,
+                nodes[i].Text,
+                ringStyle,
+                leftX + i * step,
+                topY,
+                diameter,
+                diameter,
+                NodeFontSizePt,
+                DrawingShapeKind.Ellipse));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
     /// Basic Radial geometry: the first logical node is the central topic and the
     /// remaining nodes radiate from it with direct spoke connectors. This preserves
     /// the defining hub-and-spoke interaction of PowerPoint's radial1 layout while
@@ -2587,5 +2640,14 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "stackedvenn", StringComparison.Ordinal);
+    }
+
+    private static bool IsInterlockingRingsLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "interlockingrings", StringComparison.Ordinal);
     }
 }

@@ -847,6 +847,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.RadialVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.TargetList, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.StackedVenn, SmartArtFamily.Relationship)]
+    [InlineData(SmartArtLayoutPreset.InterlockingRings, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.BasicHierarchy, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.Hierarchy3, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.HorizontalHierarchy, SmartArtFamily.Hierarchy)]
@@ -2459,6 +2460,32 @@ public sealed class SmartArtTests : IDisposable
             .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared stacked-Venn X offsets");
         liveShapes.Select(op => op.BoundsDip.Y)
             .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared stacked-Venn Y offsets");
+    }
+
+    [Fact]
+    public void Reader_ParsesInterlockingRingsAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/interlockingRings",
+            nodes: [("id1", "Plan"), ("id2", "Build"), ("id3", "Review"), ("id4", "Share")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "Interlocking Rings is admitted through the shared relationship-family layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Plan", "Build", "Review", "Share");
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        liveShapes.Should().HaveCount(4);
+        liveShapes.Should().OnlyContain(op => op.Text != null);
+        liveShapes.Select(op => op.BoundsDip.X)
+            .Should().BeInAscendingOrder("WPF and Avalonia consume the same live ring positions");
+        liveShapes.Select(op => op.BoundsDip.Width).Distinct().Should().ContainSingle();
     }
 
     [Fact]

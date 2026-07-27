@@ -5490,6 +5490,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.RadialVennLayoutCommandId,
                 SmartArtAuthoringPlanner.TargetListLayoutCommandId,
                 SmartArtAuthoringPlanner.StackedVennLayoutCommandId,
+                SmartArtAuthoringPlanner.InterlockingRingsLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
                 SmartArtAuthoringPlanner.Hierarchy3LayoutCommandId,
                 SmartArtAuthoringPlanner.HorizontalHierarchyLayoutCommandId,

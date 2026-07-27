@@ -752,6 +752,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.StackedVennLayoutCommandId,
                 FreePRibbonText.SmartArtStackedVennCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.SmartArtStackedVennCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.InterlockingRingsLayoutCommandId,
+                FreePRibbonText.SmartArtInterlockingRingsCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtInterlockingRingsCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
                 FreePRibbonText.SmartArtBasicHierarchyCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtBasicHierarchyCommand.KeyTip);

@@ -1360,6 +1360,12 @@
   <data name="Ribbon_Command_SmartArtStackedVenn_KeyTip" xml:space="preserve">
     <value>S</value>
   </data>
+  <data name="Ribbon_Command_SmartArtInterlockingRings_Label" xml:space="preserve">
+    <value>Interlocking Rings</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtInterlockingRings_KeyTip" xml:space="preserve">
+    <value>I</value>
+  </data>
   <data name="Ribbon_Command_SmartArtBasicHierarchy_Label" xml:space="preserve">
     <value>Basic Hierarchy</value>
   </data>
