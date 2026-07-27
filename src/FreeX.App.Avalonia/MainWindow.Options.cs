@@ -574,10 +574,18 @@ public sealed partial class MainWindow
             advancedObjectsRow);
         advancedPanel.Spacing = 0;
 
+        var customizeRibbonImportExportButton = OptionsButton(OptionsText("Options_ImportExport"), width: 130);
+        AutomationProperties.SetAutomationId(customizeRibbonImportExportButton, "RibbonImportExportButton");
+        customizeRibbonImportExportButton.Click += async (_, _) =>
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                dialog,
+                UiText.Get("DeferredCommand_RibbonCustomization_Body"),
+                UiText.Get("DeferredCommand_RibbonCustomization_Title"));
+
         var customizeRibbonPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_CustomizeTheRibbon")),
             OptionsDescription(OptionsText("Options_ChooseCommandsFromPopularCommands")),
-            OptionsButton(OptionsText("Options_ImportExport"), width: 130, isEnabled: false));
+            customizeRibbonImportExportButton);
 
         var quickAccessBelowRibbonBox = new CheckBox
         {

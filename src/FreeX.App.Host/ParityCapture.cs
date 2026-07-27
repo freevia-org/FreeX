@@ -595,6 +595,7 @@ internal static class ParityCapture
             }
             else if (string.Equals(targetSurfaceId, "dialog.Options.Save", StringComparison.Ordinal) ||
                 string.Equals(targetSurfaceId, "dialog.Options.Language", StringComparison.Ordinal) ||
+                string.Equals(targetSurfaceId, "dialog.Options.CustomizeRibbon", StringComparison.Ordinal) ||
                 string.Equals(targetSurfaceId, "dialog.Options.TrustCenter", StringComparison.Ordinal))
             {
                 CaptureDialogTabs(results, "dialog.Options", outDir,

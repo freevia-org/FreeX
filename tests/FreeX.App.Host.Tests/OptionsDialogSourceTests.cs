@@ -79,6 +79,15 @@ public sealed partial class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void ParityCapture_TargetsOptionsCustomizeRibbonForFocusedEvidence()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+
+        source.Should().Contain("string.Equals(targetSurfaceId, \"dialog.Options.CustomizeRibbon\", StringComparison.Ordinal)");
+        source.Should().Contain("captureOnlySurfaceId: targetSurfaceId");
+    }
+
+    [Fact]
     public void ParityCapture_OptionsAdvancedRendersActionFooterInsideCanonicalClientFrame()
     {
         StaTestRunner.Run(() =>
