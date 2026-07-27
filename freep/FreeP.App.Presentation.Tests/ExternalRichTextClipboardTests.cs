@@ -120,6 +120,53 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void WordTableControls_FlattenRowsAndCellsLikeWpfProjection_AndPreserveCellFormatting()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+\trowd\trgaph108\cellx1440\cellx2880
+{\b Header}\cell{\i Value}\cell\row
+\trowd\cellx1440\cellx2880
+Left\cell{\ul Right}\ul0\cell\row}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("Header\tValue\nLeft\tRight");
+        payload.Body.Paragraphs.Should().HaveCount(2);
+        payload.Body.Paragraphs[0].Runs.Should().Contain(run => run.Text == "Header" && run.Bold);
+        payload.Body.Paragraphs[0].Runs.Should().Contain(run => run.Text == "Value" && run.Italic);
+        payload.Body.Paragraphs[1].Runs.Should().Contain(run => run.Text == "Right" && run.Underline);
+    }
+
+    [Fact]
+    public void NestedTableGroups_UseSameBoundedCellAndRowProjection()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\trowd\cellx1440\cellx2880
+Outer {\b one}\cell{\i two}\cell\row
+\trowd\cellx1440\cellx2880
+Three\cell Four\cell\row}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("Outer one\ttwo\nThree\tFour");
+        payload.Body.Paragraphs[0].Runs.Should().Contain(run => run.Text == "one" && run.Bold);
+        payload.Body.Paragraphs[0].Runs.Should().Contain(run => run.Text == "two" && run.Italic);
+    }
+
+    [Fact]
+    public void ExcessiveTableCells_AreRejectedAsUntrustedInput()
+    {
+        var cells = string.Concat(Enumerable.Repeat("x\\cell ",
+            ExternalRichTextClipboardPlanner.MaxTableCellsPerRow + 1));
+        var rtf = Encoding.ASCII.GetBytes("{\\rtf1\\ansi\\trowd " + cells + "\\row}");
+
+        ExternalRichTextClipboardPlanner.TryParseRtf(rtf).Should().BeNull();
+    }
+
+    [Fact]
     public void HyperlinkField_PreservesResultTextAndRejectsUnsafeTargets()
     {
         const string rtf =

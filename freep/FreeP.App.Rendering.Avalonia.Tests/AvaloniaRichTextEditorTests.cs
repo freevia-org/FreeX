@@ -246,6 +246,48 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task ClipboardPaste_ExternalRtfTableUsesSharedWpfCompatibleRowCellProjection()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var editor = new AvaloniaRichTextEditor(
+                InCanvasRichClipboardPayload.FromPlainText("target").Body,
+                backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.SelectionStart = 0;
+                editor.SelectionEnd = editor.Text.Length;
+                using var transfer = new DataTransfer();
+                var item = new DataTransferItem();
+                item.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.ExternalRtfWindowsFormat
+                        : AvaloniaRichTextEditor.ExternalRtfLinuxFormat,
+                    Encoding.ASCII.GetBytes(
+                        @"{\rtf1\ansi\trowd\cellx1440\cellx2880\b A\b0\cell\i B\i0\cell\row
+\trowd\cellx1440\cellx2880 C\cell{\ul D}\ul0\cell\row}"));
+                item.SetText("plain fallback");
+                transfer.Add(item);
+
+                (await editor.PasteDataTransferAsync(transfer)).Should().BeTrue();
+                editor.Text.Should().Be("A\tB\nC\tD");
+                editor.EditedBody.Paragraphs[0].Runs.Should().Contain(run => run.Text == "A" && run.Bold);
+                editor.EditedBody.Paragraphs[0].Runs.Should().Contain(run => run.Text == "B" && run.Italic);
+                editor.EditedBody.Paragraphs[1].Runs.Should().Contain(run => run.Text == "D" && run.Underline);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ClipboardPaste_MalformedRtfFallsBackToPlainText()
     {
         await Session.Dispatch(async () =>
