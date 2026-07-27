@@ -6,6 +6,18 @@ public sealed class ReviewCommandSourceTests
 {
 
     [Fact]
+    public void NewThreadedComment_UsesSelectedCellInlineEditorAndSharedSubmitRoute()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
+
+        source.Should().Contain("var target = ReviewSessionController.GetSelectedThreadedCommentTarget();");
+        source.Should().Contain("SheetGrid.BeginThreadedCommentInlineEdit(target.Address, target.Address.ToA1(), target.ThreadedComment);");
+        source.Should().Contain("SheetGrid_ThreadedCommentInlineEditSubmitted");
+        source.Should().Contain("ReviewSessionController.ApplyThreadedComment(");
+        source.Should().NotContain("new ThreadedCommentDialog(addr.ToA1(), existing)");
+    }
+
+    [Fact]
     public void ReviewCommandHandlers_RouteThroughExpectedPlannersDialogsAndServices()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
