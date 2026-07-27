@@ -110,6 +110,18 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"SortOptionsDialog\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(firstKeyBox, \"SortOptionsFirstKeySortOrderBox\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(leftToRightButton, \"SortOptionsLeftToRightRadio\")");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog)");
+        source.Should().Contain("StripContentMnemonic(caseSensitiveBox)");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCompactCheckBox(caseSensitiveBox");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCompactRadioButton(topToBottomButton");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(firstKeyBox");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(");
+        source.Should().Contain("LastChildFill = false");
+        source.Should().Contain("DockPanel.SetDock(buttons, Dock.Bottom)");
+        source.Should().Contain("okButton.Height = okButton.MinHeight = okButton.MaxHeight = 52");
+        source.Should().Contain("cancelButton.Height = cancelButton.MinHeight = cancelButton.MaxHeight = 52");
+        source.Should().NotContain("SortOptionsCheckBoxTemplate");
+        source.Should().NotContain("SortOptionsRadioButtonTemplate");
 
         captureSource.Should().Contain("CaseSensitive: true");
         captureSource.Should().Contain("LeftToRight: true");

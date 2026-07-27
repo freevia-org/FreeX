@@ -18767,121 +18767,14 @@ public sealed partial class MainWindow : Window
         button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
     }
 
-    private static readonly FuncControlTemplate<CheckBox> SortOptionsCheckBoxTemplate = new((checkBox, _) =>
-    {
-        var checkMark = new global::Avalonia.Controls.Shapes.Path
-        {
-            Data = Geometry.Parse("M2,6 L5,9 L10,2.5"),
-            Stroke = Brushes.Black,
-            StrokeThickness = 1.4,
-            StrokeLineCap = PenLineCap.Round,
-            StrokeJoin = PenLineJoin.Round,
-            Fill = Brushes.Transparent,
-            IsVisible = checkBox.IsChecked == true,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-        };
-        checkBox.PropertyChanged += (_, args) =>
-        {
-            if (args.Property == ToggleButton.IsCheckedProperty)
-                checkMark.IsVisible = checkBox.IsChecked == true;
-        };
-
-        var indicator = new Border
-        {
-            Width = 13,
-            Height = 13,
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            Margin = new Thickness(0, 0, 5, 0),
-            Child = checkMark,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-        };
-
-        var presenter = new ContentPresenter { VerticalAlignment = AvaloniaVerticalAlignment.Center };
-        presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = checkBox });
-        presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = checkBox });
-
-        return new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Children =
-            {
-                indicator,
-                presenter,
-            },
-        };
-    });
-
-    private static readonly FuncControlTemplate<RadioButton> SortOptionsRadioButtonTemplate = new((radioButton, _) =>
-    {
-        var selectedDot = new AvaloniaEllipse
-        {
-            Width = 6,
-            Height = 6,
-            Fill = Brushes.Black,
-            IsVisible = radioButton.IsChecked == true,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-        };
-        radioButton.PropertyChanged += (_, args) =>
-        {
-            if (args.Property == ToggleButton.IsCheckedProperty)
-                selectedDot.IsVisible = radioButton.IsChecked == true;
-        };
-
-        var indicator = new Border
-        {
-            Width = 13,
-            Height = 13,
-            CornerRadius = new CornerRadius(6.5),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            Margin = new Thickness(0, 0, 5, 0),
-            Child = selectedDot,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-        };
-
-        var presenter = new ContentPresenter { VerticalAlignment = AvaloniaVerticalAlignment.Center };
-        presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = radioButton });
-        presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = radioButton });
-
-        return new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Children =
-            {
-                indicator,
-                presenter,
-            },
-        };
-    });
-
+    // ── Data Tools / Sparkline dialog chrome helpers ─────────────────────────────
+    // Selection Pane visibility toggles share the compact checkbox treatment that Sort Options uses.
     private static void ApplySortOptionsCheckBoxChrome(CheckBox checkBox)
     {
         StripContentMnemonic(checkBox);
-        checkBox.FontSize = 12;
-        checkBox.MinHeight = 18;
-        checkBox.Height = 18;
-        checkBox.Padding = new Thickness(0);
-        checkBox.Template = SortOptionsCheckBoxTemplate;
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, AvaloniaCompactDialogChrome.WindowsStyle);
     }
 
-    private static void ApplySortOptionsRadioButtonChrome(RadioButton radioButton)
-    {
-        StripContentMnemonic(radioButton);
-        radioButton.FontSize = 12;
-        radioButton.MinHeight = 18;
-        radioButton.Height = 18;
-        radioButton.Padding = new Thickness(0);
-        radioButton.Template = SortOptionsRadioButtonTemplate;
-    }
-
-    // ── Data Tools / Sparkline dialog chrome helpers ─────────────────────────────
     private static void ApplyDataToolsButtonChrome(Button button, double width, bool isDefault = false)
     {
         button.Width = width;
@@ -18991,6 +18884,7 @@ public sealed partial class MainWindow : Window
             FontSize = 12,
         };
         AutomationProperties.SetAutomationId(dialog, "SortOptionsDialog");
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog);
 
         var caseSensitiveBox = new CheckBox
         {
@@ -18998,7 +18892,8 @@ public sealed partial class MainWindow : Window
             IsChecked = current.CaseSensitive,
             Margin = new Thickness(0, 0, 0, 10),
         };
-        ApplySortOptionsCheckBoxChrome(caseSensitiveBox);
+        StripContentMnemonic(caseSensitiveBox);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(caseSensitiveBox, AvaloniaCompactDialogChrome.WindowsStyle);
         AutomationProperties.SetAutomationId(caseSensitiveBox, "SortOptionsCaseSensitiveCheckBox");
 
         var firstKeyChoices = new[]
@@ -19018,16 +18913,8 @@ public sealed partial class MainWindow : Window
             SelectedItem = normalizedFirstKey,
             Margin = new Thickness(0, 0, 0, 10),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(5, 0, 4, 0),
-            FontSize = 12,
-            Background = Brush(230, 230, 230),
-            BorderBrush = Brush(130, 130, 130),
-            BorderThickness = new Thickness(1),
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        AvaloniaCompactDialogChrome.ApplyComboBox(firstKeyBox, AvaloniaCompactDialogChrome.WindowsStyle);
         AutomationProperties.SetAutomationId(firstKeyBox, "SortOptionsFirstKeySortOrderBox");
 
         var topToBottomButton = new RadioButton
@@ -19043,17 +18930,17 @@ public sealed partial class MainWindow : Window
             IsChecked = current.LeftToRight,
             GroupName = "SortOptionsOrientation",
         };
-        ApplySortOptionsRadioButtonChrome(topToBottomButton);
-        ApplySortOptionsRadioButtonChrome(leftToRightButton);
+        StripContentMnemonic(topToBottomButton);
+        StripContentMnemonic(leftToRightButton);
+        AvaloniaCompactDialogChrome.ApplyCompactRadioButton(topToBottomButton, AvaloniaCompactDialogChrome.WindowsStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactRadioButton(leftToRightButton, AvaloniaCompactDialogChrome.WindowsStyle);
         AutomationProperties.SetAutomationId(topToBottomButton, "SortOptionsTopToBottomRadio");
         AutomationProperties.SetAutomationId(leftToRightButton, "SortOptionsLeftToRightRadio");
 
-        var okButton = new Button { Content = "OK", IsDefault = true, MinWidth = 72 };
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
-        ApplySortDialogButtonChrome(okButton, isDefault: true);
-        ApplySortDialogButtonChrome(cancelButton);
-        okButton.Background = Brush(221, 221, 221);
-        cancelButton.Background = Brush(221, 221, 221);
+        var okButton = new Button { Content = UiText.Ok, IsDefault = true };
+        var cancelButton = new Button { Content = UiText.Cancel, IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, AvaloniaCompactDialogChrome.WindowsStyle, 75, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, AvaloniaCompactDialogChrome.WindowsStyle, 75);
         AutomationProperties.SetAutomationId(okButton, "SortOptionsOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "SortOptionsCancelButton");
 
@@ -19084,7 +18971,7 @@ public sealed partial class MainWindow : Window
 
         var body = new StackPanel
         {
-            Margin = new Thickness(12),
+            Margin = new Thickness(0),
             Children =
             {
                 caseSensitiveBox,
@@ -19093,11 +18980,8 @@ public sealed partial class MainWindow : Window
                 new GroupBox
                 {
                     Header = StripDisplayMnemonic(UiText.Get("SortOptions_Orientation")),
-                    Padding = new Thickness(8, 7, 8, 7),
+                    Padding = new Thickness(8),
                     Margin = new Thickness(0, 0, 0, 10),
-                    BorderBrush = Brush(209, 218, 224),
-                    BorderThickness = new Thickness(1),
-                    FontSize = 12,
                     Content = new StackPanel
                     {
                         Children =
@@ -19107,21 +18991,40 @@ public sealed partial class MainWindow : Window
                         },
                     },
                 },
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Margin = new Thickness(0, 2, 0, 0),
-                    Children =
-                    {
-                        okButton,
-                        cancelButton,
-                    },
-                },
             },
         };
-        dialog.Content = body;
+        var orientation = (GroupBox)body.Children[3];
+        AvaloniaCompactDialogChrome.ApplyGroupBox(
+            orientation,
+            AvaloniaCompactDialogChrome.WindowsStyle,
+            borderBrush: Brush(209, 218, 224));
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                okButton,
+                cancelButton,
+            },
+        };
+        DockPanel.SetDock(body, Dock.Top);
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        var root = new DockPanel { Margin = new Thickness(12), LastChildFill = false };
+        root.Children.Add(body);
+        root.Children.Add(buttons);
+        dialog.Content = root;
+        dialog.Opened += (_, _) =>
+        {
+            // The shared chrome supplies the Windows control language; these measured footer dimensions
+            // preserve the authoritative WPF Sort Options capture inside the fixed 330x260 frame.
+            AvaloniaCompactDialogChrome.ApplyButton(okButton, AvaloniaCompactDialogChrome.WindowsStyle, 75, isDefault: true);
+            AvaloniaCompactDialogChrome.ApplyButton(cancelButton, AvaloniaCompactDialogChrome.WindowsStyle, 75);
+            okButton.Height = okButton.MinHeight = okButton.MaxHeight = 52;
+            cancelButton.Height = cancelButton.MinHeight = cancelButton.MaxHeight = 52;
+        };
         await dialog.ShowDialog(this);
         return result;
     }
