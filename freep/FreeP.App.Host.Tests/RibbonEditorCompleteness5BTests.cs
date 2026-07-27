@@ -46,6 +46,14 @@ public class RibbonEditorCompleteness5BTests
             editor,
             onSmartArtLayoutPreset: onSmartArtLayoutPreset);
 
+    private static RibbonCommandRegistry MakeSmartArtQuickStyleRegistry(
+        EditingSession editor,
+        Action<SmartArtQuickStylePreset> onSmartArtQuickStylePreset)
+        => FreePRibbonCommands.Build(
+            new RibbonStateStore(),
+            editor,
+            onSmartArtQuickStylePreset: onSmartArtQuickStylePreset);
+
     private static void Exec(RibbonCommandRegistry registry, string id,
         RibbonCommandContext? context = null)
     {
@@ -110,6 +118,41 @@ public class RibbonEditorCompleteness5BTests
             SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId);
 
         Assert.Equal(SmartArtLayoutPreset.ContinuousBlockProcess, applied);
+    }
+
+    [Fact]
+    public void SmartArtQuickStyleGallery_IsDefinedAndAllEntriesRouteThroughHost()
+    {
+        var definition = FreePRibbon.Build();
+        var styles = definition.Tabs
+            .SelectMany(tab => tab.Groups)
+            .Single(group => group.Id == "smartart-styles");
+        var expected = new Dictionary<string, SmartArtQuickStylePreset>
+        {
+            [SmartArtAuthoringPlanner.SimpleQuickStyleCommandId] = SmartArtQuickStylePreset.SimpleFill,
+            [SmartArtAuthoringPlanner.SoftEdgeQuickStyleCommandId] = SmartArtQuickStylePreset.WhiteOutline,
+            [SmartArtAuthoringPlanner.SubtleQuickStyleCommandId] = SmartArtQuickStylePreset.SubtleEffect,
+            [SmartArtAuthoringPlanner.ModerateQuickStyleCommandId] = SmartArtQuickStylePreset.ModerateEffect,
+            [SmartArtAuthoringPlanner.IntenseQuickStyleCommandId] = SmartArtQuickStylePreset.IntenseEffect,
+            [SmartArtAuthoringPlanner.PolishedQuickStyleCommandId] = SmartArtQuickStylePreset.Polished,
+            [SmartArtAuthoringPlanner.InsertQuickStyleCommandId] = SmartArtQuickStylePreset.Inset,
+            [SmartArtAuthoringPlanner.CartoonQuickStyleCommandId] = SmartArtQuickStylePreset.Cartoon,
+            [SmartArtAuthoringPlanner.PowderQuickStyleCommandId] = SmartArtQuickStylePreset.Powder,
+            [SmartArtAuthoringPlanner.BrickSceneQuickStyleCommandId] = SmartArtQuickStylePreset.BrickScene,
+            [SmartArtAuthoringPlanner.FlatSceneQuickStyleCommandId] = SmartArtQuickStylePreset.FlatScene,
+            [SmartArtAuthoringPlanner.MetallicSceneQuickStyleCommandId] = SmartArtQuickStylePreset.MetallicScene,
+            [SmartArtAuthoringPlanner.SunsetSceneQuickStyleCommandId] = SmartArtQuickStylePreset.SunsetScene,
+            [SmartArtAuthoringPlanner.BirdsEyeSceneQuickStyleCommandId] = SmartArtQuickStylePreset.BirdsEyeScene,
+        };
+
+        foreach (var (commandId, preset) in expected)
+        {
+            Assert.Contains(styles.Controls, control => control.CommandId.Value == commandId);
+            var (editor, _) = MakeSession();
+            SmartArtQuickStylePreset? applied = null;
+            Exec(MakeSmartArtQuickStyleRegistry(editor, value => applied = value), commandId);
+            Assert.Equal(preset, applied);
+        }
     }
 
     [Fact]

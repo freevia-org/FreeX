@@ -1457,37 +1457,37 @@
     <value>Y</value>
   </data>
   <data name="Ribbon_Command_SmartArtSimpleStyle_Label" xml:space="preserve">
-    <value>Simple</value>
+    <value>Simple Fill</value>
   </data>
   <data name="Ribbon_Command_SmartArtSimpleStyle_KeyTip" xml:space="preserve">
     <value>S</value>
   </data>
   <data name="Ribbon_Command_SmartArtModerateStyle_Label" xml:space="preserve">
-    <value>Moderate</value>
+    <value>Moderate Effect</value>
   </data>
   <data name="Ribbon_Command_SmartArtModerateStyle_KeyTip" xml:space="preserve">
     <value>M</value>
   </data>
   <data name="Ribbon_Command_SmartArtIntenseStyle_Label" xml:space="preserve">
-    <value>Intense</value>
+    <value>Intense Effect</value>
   </data>
   <data name="Ribbon_Command_SmartArtIntenseStyle_KeyTip" xml:space="preserve">
     <value>I</value>
   </data>
   <data name="Ribbon_Command_SmartArtSubtleStyle_Label" xml:space="preserve">
-    <value>Subtle</value>
+    <value>Subtle Effect</value>
   </data>
   <data name="Ribbon_Command_SmartArtSubtleStyle_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>
   <data name="Ribbon_Command_SmartArtSoftEdgeStyle_Label" xml:space="preserve">
-    <value>Soft Edge</value>
+    <value>White Outline</value>
   </data>
   <data name="Ribbon_Command_SmartArtSoftEdgeStyle_KeyTip" xml:space="preserve">
     <value>O</value>
   </data>
   <data name="Ribbon_Command_SmartArtInsertStyle_Label" xml:space="preserve">
-    <value>Insert</value>
+    <value>Inset</value>
   </data>
   <data name="Ribbon_Command_SmartArtInsertStyle_KeyTip" xml:space="preserve">
     <value>R</value>
@@ -1503,6 +1503,42 @@
   </data>
   <data name="Ribbon_Command_SmartArtPowderStyle_KeyTip" xml:space="preserve">
     <value>P</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPolishedStyle_Label" xml:space="preserve">
+    <value>Polished</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPolishedStyle_KeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBrickSceneStyle_Label" xml:space="preserve">
+    <value>Brick Scene</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBrickSceneStyle_KeyTip" xml:space="preserve">
+    <value>B</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtFlatSceneStyle_Label" xml:space="preserve">
+    <value>Flat Scene</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtFlatSceneStyle_KeyTip" xml:space="preserve">
+    <value>F</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMetallicSceneStyle_Label" xml:space="preserve">
+    <value>Metallic Scene</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMetallicSceneStyle_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtSunsetSceneStyle_Label" xml:space="preserve">
+    <value>Sunset Scene</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtSunsetSceneStyle_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBirdsEyeSceneStyle_Label" xml:space="preserve">
+    <value>Bird's Eye Scene</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBirdsEyeSceneStyle_KeyTip" xml:space="preserve">
+    <value>D</value>
   </data>
   <data name="Ribbon_Command_SmartArtConvertToShapes_Label" xml:space="preserve">
     <value>Convert to Shapes</value>

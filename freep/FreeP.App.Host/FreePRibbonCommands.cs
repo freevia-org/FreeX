@@ -290,6 +290,18 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Cartoon)));
         registry.Register(SmartArtAuthoringPlanner.PowderQuickStyleCommandId,
             new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Powder)));
+        registry.Register(SmartArtAuthoringPlanner.PolishedQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Polished)));
+        registry.Register(SmartArtAuthoringPlanner.BrickSceneQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.BrickScene)));
+        registry.Register(SmartArtAuthoringPlanner.FlatSceneQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.FlatScene)));
+        registry.Register(SmartArtAuthoringPlanner.MetallicSceneQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.MetallicScene)));
+        registry.Register(SmartArtAuthoringPlanner.SunsetSceneQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.SunsetScene)));
+        registry.Register(SmartArtAuthoringPlanner.BirdsEyeSceneQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.BirdsEyeScene)));
         registry.Register(SmartArtAuthoringPlanner.ConvertToShapesCommandId,
             new ActionRibbonCommand(() =>
             {

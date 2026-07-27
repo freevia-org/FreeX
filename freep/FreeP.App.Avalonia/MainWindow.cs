@@ -2533,6 +2533,18 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Cartoon)));
         r.Register(SmartArtAuthoringPlanner.PowderQuickStyleCommandId,
             new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Powder)));
+        r.Register(SmartArtAuthoringPlanner.PolishedQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Polished)));
+        r.Register(SmartArtAuthoringPlanner.BrickSceneQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.BrickScene)));
+        r.Register(SmartArtAuthoringPlanner.FlatSceneQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.FlatScene)));
+        r.Register(SmartArtAuthoringPlanner.MetallicSceneQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.MetallicScene)));
+        r.Register(SmartArtAuthoringPlanner.SunsetSceneQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.SunsetScene)));
+        r.Register(SmartArtAuthoringPlanner.BirdsEyeSceneQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.BirdsEyeScene)));
         r.Register(SmartArtAuthoringPlanner.ConvertToShapesCommandId,
             new ActionRibbonCommand(() =>
             {
