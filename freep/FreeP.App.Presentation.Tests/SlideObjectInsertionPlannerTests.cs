@@ -551,4 +551,61 @@ public sealed class SlideObjectInsertionPlannerTests
             .Should()
             .BeNull();
     }
+
+    [Theory]
+    [InlineData("budget.xlsx", "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Excel.Sheet.12")]
+    [InlineData("report.docx", "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "Word.Document.12")]
+    public void CreatePayload_MapsOfficeFileMetadata(
+        string fileName,
+        string extension,
+        string contentType,
+        string progId)
+    {
+        var payload = OleInsertionPlanner.CreatePayload([1, 2, 3], fileName);
+
+        payload.EmbeddedExtension.Should().Be(extension);
+        payload.EmbeddedContentType.Should().Be(contentType);
+        payload.ProgId.Should().Be(progId);
+        payload.OleObjXml.Should().Contain("type=\"Embed\"");
+        payload.OleObjXml.Should().Contain($"progId=\"{progId}\"");
+        payload.EmbeddedBytes.Should().Equal(1, 2, 3);
+    }
+
+    [Fact]
+    public void InsertEmbeddedObject_IsUndoableAndPreservesPayload()
+    {
+        var editor = MakeSession();
+        var initialCount = editor.CurrentSlide!.Shapes.Count;
+
+        var added = editor.InsertEmbeddedObject([7, 8, 9], "budget.xlsx");
+
+        added.Kind.Should().Be(SlideShapeKind.Ole);
+        added.OleObject.Should().NotBeNull();
+        added.OleObject!.EmbeddedExtension.Should().Be("xlsx");
+        added.OleObject.ProgId.Should().Be("Excel.Sheet.12");
+        added.OleObject.EmbeddedBytes.Should().Equal(7, 8, 9);
+        editor.CurrentSlide.Shapes.Should().HaveCount(initialCount + 1);
+
+        editor.Undo();
+        editor.CurrentSlide.Shapes.Should().HaveCount(initialCount);
+        editor.Redo();
+        editor.CurrentSlide.Shapes.Should().ContainSingle(shape => shape.Kind == SlideShapeKind.Ole);
+
+        using var package = new MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(editor.Presentation, package);
+        package.Position = 0;
+        var reopened = FreeP.Core.IO.PptxPackageReader.Read(package);
+        var reopenedOle = reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Ole);
+        reopenedOle.OleObject.Should().NotBeNull();
+        reopenedOle.OleObject!.EmbeddedBytes.Should().Equal(7, 8, 9);
+        reopenedOle.OleObject.ProgId.Should().Be("Excel.Sheet.12");
+    }
+
+    [Fact]
+    public void CreatePayload_RejectsEmptyFile()
+    {
+        var action = () => OleInsertionPlanner.CreatePayload([], "budget.xlsx");
+
+        action.Should().Throw<ArgumentException>();
+    }
 }

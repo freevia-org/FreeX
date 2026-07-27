@@ -496,6 +496,21 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_InsertEmbeddedObject_RoutesToHostPickerCallback()
+    {
+        var (ed, _) = MakeSession();
+        var invoked = false;
+        var registry = FreePRibbonCommands.Build(
+            new RibbonStateStore(),
+            ed,
+            onInsertEmbeddedObject: () => invoked = true);
+
+        Exec(registry, OleInsertionPlanner.InsertEmbeddedObjectCommandId);
+
+        Assert.True(invoked);
+    }
+
+    [Fact]
     public void Cmd_Paste_WithNoClipboard_IsNoOp()
     {
         var (ed, pres) = MakeSession();

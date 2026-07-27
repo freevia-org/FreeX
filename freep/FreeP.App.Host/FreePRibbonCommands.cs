@@ -122,6 +122,7 @@ internal static class FreePRibbonCommands
         Action?             onEditChart3DViewOptions = null,
         Action?             onEditChartTextOptions = null,
         Action?             onEditChartAreaOptions = null,
+        Action?             onInsertEmbeddedObject = null,
         Action<OleObjectInfo>? onOpenEmbeddedObject = null,
         Action?             onTransitionSound = null)
     {
@@ -141,6 +142,9 @@ internal static class FreePRibbonCommands
         // ── Insert shapes ────────────────────────────────────────────────────────
 
         RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true, onTablePicker);
+        registry.Register(
+            OleInsertionPlanner.InsertEmbeddedObjectCommandId,
+            new ActionRibbonCommand(() => onInsertEmbeddedObject?.Invoke()));
         registry.Register(
             PictureCropAuthoringPlanner.InsetCommandId,
             new ActionRibbonCommand(() => editor.SetSelectedPictureCrop(PictureCropAuthoringPlanner.Inset())));

@@ -502,6 +502,9 @@ public static class FreePRibbon
             group.Medium(PictureColorEffectAuthoringPlanner.ResetCommandId,
                 FreePRibbonText.PictureEffectsResetCommand.Label, RibbonCommandIconKind.Delete,
                 FreePRibbonText.PictureEffectsResetCommand.KeyTip);
+            group.Medium(OleInsertionPlanner.InsertEmbeddedObjectCommandId,
+                FreePRibbonText.InsertEmbeddedObjectCommand.Label, RibbonCommandIconKind.RibbonShape,
+                FreePRibbonText.InsertEmbeddedObjectCommand.KeyTip);
             group.Medium("freep.shape-rectangle", FreePRibbonText.ShapeRectangleLabel, RibbonCommandIconKind.Rectangle, FreePRibbonText.ShapeRectangleKeyTip);
             group.Medium(SlideObjectInsertionPlanner.RoundedRectangleCommandId, FreePRibbonText.ShapeRoundedRectangleLabel,
                 RibbonCommandIconKind.Rectangle, FreePRibbonText.ShapeRoundedRectangleKeyTip);
