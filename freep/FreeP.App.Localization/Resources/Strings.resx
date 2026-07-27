@@ -160,6 +160,12 @@
   <data name="Ribbon_Command_FontColor_KeyTip" xml:space="preserve">
     <value>FC</value>
   </data>
+  <data name="Ribbon_Command_TableCellFill_Label" xml:space="preserve">
+    <value>Table Cell Fill</value>
+  </data>
+  <data name="Ribbon_Command_TableCellFill_KeyTip" xml:space="preserve">
+    <value>TF</value>
+  </data>
   <data name="Ribbon_Command_Bullets_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>

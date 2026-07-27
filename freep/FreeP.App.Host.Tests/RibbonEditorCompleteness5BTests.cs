@@ -762,6 +762,23 @@ public class RibbonEditorCompleteness5BTests
         Assert.True(runs[1].Bold);
     }
 
+    [Fact]
+    public void Cmd_TableCellFill_WithActiveTableCell_UsesSharedCommand()
+    {
+        var (ed, pres) = MakeSession();
+        var shape = AddSingleCellTable(pres, 801, MakeTextBody("Cell"));
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.table-cell-fill", RibbonCommandContext.ForSelectedValue("#336699"));
+
+        var solid = shape.Table!.Rows[0].Cells[0].Fill.Should().BeOfType<ShapeFill.Solid>().Subject;
+        Assert.Equal(SrgbColor.FromRgb(0x336699), solid.Color.Resolved);
+        ed.Undo();
+        Assert.Null(shape.Table.Rows[0].Cells[0].Fill);
+    }
+
     [Theory]
     [InlineData("freep.bold", TableCellTextFormatKind.Bold)]
     [InlineData("freep.italic", TableCellTextFormatKind.Italic)]
@@ -1012,6 +1029,7 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.font-family")]
     [InlineData("freep.font-size")]
     [InlineData("freep.font-color")]
+    [InlineData("freep.table-cell-fill")]
     [InlineData("freep.format-painter")]
     [InlineData("freep.theme.office")]
     [InlineData("freep.theme.berlin")]

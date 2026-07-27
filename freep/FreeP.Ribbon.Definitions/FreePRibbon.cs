@@ -198,6 +198,13 @@ public static class FreePRibbon
             KeyTip = FreePRibbonText.FontColorKeyTip,
             Width = 96
         });
+        group.ComboBox("freep.table-cell-fill", FreePRibbonText.TableCellFillLabel, control => control with
+        {
+            Items = FreePRibbonDefinitionData.TableCellFillColors,
+            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Color),
+            KeyTip = FreePRibbonText.TableCellFillKeyTip,
+            Width = 96
+        });
         group.IconToggle("freep.bold", FreePRibbonText.BoldLabel, RibbonCommandIconKind.Bold, FreePRibbonText.BoldKeyTip);
         group.IconToggle("freep.italic", FreePRibbonText.ItalicLabel, RibbonCommandIconKind.Italic, FreePRibbonText.ItalicKeyTip);
         group.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline,

@@ -481,6 +481,13 @@ internal static class FreePRibbonCommands
                 editor.SetColorOnSelection(color);
             }));
 
+        registry.Register("freep.table-cell-fill",
+            new ContextRibbonCommand(ctx =>
+            {
+                if (!TryGetRibbonFontColor(ctx, out var color)) return;
+                editor.TryApplyActiveTableCellFill(color);
+            }));
+
         // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
 
         RegisterTransitionCommands(registry, stateStore, editor);

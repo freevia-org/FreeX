@@ -116,6 +116,59 @@ public sealed class SetTableCellTextCommand : IPresentationCommand
     }
 }
 
+/// <summary>Sets or clears the explicit fill of one table cell.</summary>
+public sealed class SetTableCellFillCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _row;
+    private readonly int _col;
+    private readonly ShapeFill? _newFill;
+    private ShapeFill? _oldFill;
+
+    public SetTableCellFillCommand(int slideIndex, uint shapeId, int row, int col, ShapeFill? newFill)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _row = row;
+        _col = col;
+        _newFill = newFill;
+    }
+
+    public string Label => _newFill is null or ShapeFill.None ? "Clear Cell Fill" : "Set Cell Fill";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        return cell is not null && !ReferenceEquals(cell.Fill, _newFill);
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        if (cell is null) return;
+        _oldFill = cell.Fill;
+        cell.Fill = _newFill;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        if (cell is not null)
+            cell.Fill = _oldFill;
+    }
+
+    private TableCell? GetCell(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null || _row < 0 || _row >= table.Rows.Count)
+            return null;
+
+        var row = table.Rows[_row];
+        return _col >= 0 && _col < row.Cells.Count ? row.Cells[_col] : null;
+    }
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // 2. InsertTableRowCommand
 // ════════════════════════════════════════════════════════════════════════════════

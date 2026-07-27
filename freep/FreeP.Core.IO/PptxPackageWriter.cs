@@ -3528,7 +3528,7 @@ public static class PptxPackageWriter
         {
             var fillEl = BuildFillEl(cell.Fill, scheme);
             if (fillEl is not null)
-                tcPr.Add(new XElement(A + "fill", fillEl));
+                tcPr.Add(fillEl);
         }
 
         // Build the tc element.

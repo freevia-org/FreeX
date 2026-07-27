@@ -1970,6 +1970,29 @@ public sealed class EditingSession
     public void SetTableCellText(int row, int col, TextBody? newBody)
         => ExecuteTableCommand((si, id) => new SetTableCellTextCommand(si, id, row, col, newBody));
 
+    /// <summary>Sets or clears the explicit fill of the active table cell. Undoable.</summary>
+    public bool TryApplyActiveTableCellFill(ThemeAwareColor? color)
+    {
+        if (ActiveTableCell is not { } active)
+            return false;
+
+        var (shapeId, table) = RequireSelectedTable();
+        if (shapeId == 0 || table is null || active.Row < 0 || active.Row >= table.Rows.Count)
+            return false;
+
+        var row = table.Rows[active.Row];
+        if (active.Col < 0 || active.Col >= row.Cells.Count)
+            return false;
+
+        ExecuteTableCommand((si, id) => new SetTableCellFillCommand(
+            si,
+            id,
+            active.Row,
+            active.Col,
+            color is null ? null : new ShapeFill.Solid(color)));
+        return true;
+    }
+
     public TableCellTextFormatPlan PlanActiveTableCellTextFormat(
         TableCellTextFormatKind kind,
         (int Start, int End)? selection = null) =>
