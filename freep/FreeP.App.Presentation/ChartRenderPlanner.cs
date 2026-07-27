@@ -2643,7 +2643,9 @@ public static partial class ChartRenderPlanner
             double categoryStep = plot.Height / Math.Max(1, categoryCount);
             for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
             {
-                int renderRow = categoryCount - 1 - categoryIndex;
+                int renderRow = chart.CategoryAxis.ReverseOrder
+                    ? categoryIndex
+                    : categoryCount - 1 - categoryIndex;
                 double y = plot.Y + renderRow * categoryStep;
                 labels.Add(new ChartTextPlan(
                     FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
@@ -2662,7 +2664,9 @@ public static partial class ChartRenderPlanner
                 : 2.0;
             for (int categoryIndex = 0; categoryIndex < chart.Categories.Count; categoryIndex++)
             {
-                double x = plot.X + categoryIndex * categoryStep;
+                int renderCategoryIndex = ResolveCategoryRenderIndex(
+                    chart.CategoryAxis, categoryIndex, chart.Categories.Count);
+                double x = plot.X + renderCategoryIndex * categoryStep;
                 labels.Add(new ChartTextPlan(
                     FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
                     new ChartPlanRect(x, plot.Bottom + labelOffset, categoryStep, ResolveCategoryLabelHeight(chart)),
@@ -2870,7 +2874,9 @@ public static partial class ChartRenderPlanner
             double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
             for (int categoryIndex = 0; categoryIndex < chart.Categories.Count; categoryIndex++)
             {
-                double x = plot.X + categoryIndex * categoryStep + categoryStep / 2.0;
+                int renderCategoryIndex = ResolveCategoryRenderIndex(
+                    chart.CategoryAxis, categoryIndex, chart.Categories.Count);
+                double x = plot.X + renderCategoryIndex * categoryStep + categoryStep / 2.0;
                 ticks.Add(new ChartGridLinePlan(
                     new ChartPlanPoint(x, plot.Bottom),
                     new ChartPlanPoint(x, plot.Bottom + AxisMajorTickLength)));
@@ -3337,7 +3343,9 @@ public static partial class ChartRenderPlanner
         var primitives = new List<ChartRectPrimitive>();
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
         {
-            var slot = ResolveBarClusterSlot(plot.X, categoryIndex, spacing);
+            int renderCategoryIndex = ResolveCategoryRenderIndex(
+                chart.CategoryAxis, categoryIndex, categoryCount);
+            var slot = ResolveBarClusterSlot(plot.X, renderCategoryIndex, spacing);
             if (importedPercentStackedCluster)
                 slot = ResolveImportedPercentStackedClusterSlot(slot);
             double stackedY = plot.Bottom;
@@ -3484,7 +3492,9 @@ public static partial class ChartRenderPlanner
         var primitives = new List<ChartRectPrimitive>();
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
         {
-            int renderRow = categoryCount - 1 - categoryIndex;
+            int renderRow = chart.CategoryAxis.ReverseOrder
+                ? categoryIndex
+                : categoryCount - 1 - categoryIndex;
             var slot = ResolveBarClusterSlot(plot.Y, renderRow, spacing);
             if (importedPercentStackedCluster)
                 slot = ResolveImportedPercentStackedClusterSlot(slot);
@@ -3602,7 +3612,9 @@ public static partial class ChartRenderPlanner
             if (high is null || low is null)
                 continue;
 
-            double x = plot.X + (categoryIndex + 0.5) * categoryWidth;
+            int renderCategoryIndex = ResolveCategoryRenderIndex(
+                chart.CategoryAxis, categoryIndex, categoryCount);
+            double x = plot.X + (renderCategoryIndex + 0.5) * categoryWidth;
             var lowPoint = new ChartPlanPoint(x, MapCartesianValueToY(low.Value, primaryMin, primaryRange, plot));
             var highPoint = new ChartPlanPoint(x, MapCartesianValueToY(high.Value, primaryMin, primaryRange, plot));
             highLowLines.Add(new ChartLineSegmentPrimitive(
@@ -3746,7 +3758,9 @@ public static partial class ChartRenderPlanner
                 continue;
 
             double height = Math.Max(0.5, volume.Value / maxVolume * bandHeight);
-            double x = plot.X + categoryIndex * categoryWidth + (categoryWidth - barWidth) / 2.0;
+            int renderCategoryIndex = ResolveCategoryRenderIndex(
+                chart.CategoryAxis, categoryIndex, categoryCount);
+            double x = plot.X + renderCategoryIndex * categoryWidth + (categoryWidth - barWidth) / 2.0;
             primitives.Add(new ChartRectPrimitive(
                 volumeSeriesIndex,
                 categoryIndex,
@@ -5183,6 +5197,12 @@ public static partial class ChartRenderPlanner
         return Math.Max(1, categoryCount);
     }
 
+    private static int ResolveCategoryRenderIndex(
+        ChartAxis axis,
+        int categoryIndex,
+        int categoryCount) =>
+        axis.ReverseOrder ? categoryCount - 1 - categoryIndex : categoryIndex;
+
     private static double? TryGetSeriesValue(ChartShape chart, int seriesIndex, int categoryIndex)
     {
         if (seriesIndex < 0 || seriesIndex >= chart.Series.Count)
@@ -5260,9 +5280,11 @@ public static partial class ChartRenderPlanner
                 if (rawValue is null)
                     continue;
 
+                int renderCategoryIndex = ResolveCategoryRenderIndex(
+                    chart.CategoryAxis, categoryIndex, categoryCount);
                 double x = importedLineMarkers
-                    ? plot.X + (categoryIndex + 0.5) * stepX
-                    : plot.X + categoryIndex * stepX;
+                    ? plot.X + (renderCategoryIndex + 0.5) * stepX
+                    : plot.X + renderCategoryIndex * stepX;
                 double y = plot.Bottom - (rawValue.Value - effectiveMin) / effectiveRange * plot.Height;
                 points[categoryIndex] = new ChartPlanPoint(x, y);
             }
@@ -5329,7 +5351,9 @@ public static partial class ChartRenderPlanner
                 if (rawValue is null)
                     continue;
 
-                double x = plot.X + (categoryIndex + 0.5) * stepX;
+                int renderCategoryIndex = ResolveCategoryRenderIndex(
+                    chart.CategoryAxis, categoryIndex, categoryCount);
+                double x = plot.X + (renderCategoryIndex + 0.5) * stepX;
                 double y = plot.Bottom - (rawValue.Value - effectiveMin) / effectiveRange * plot.Height;
                 points[categoryIndex] = new ChartPlanPoint(x, y);
             }
@@ -5566,7 +5590,9 @@ public static partial class ChartRenderPlanner
                 if (!value.HasValue)
                     continue;
 
-                double x = plot.X + categoryIndex * stepX;
+                int renderCategoryIndex = ResolveCategoryRenderIndex(
+                    chart.CategoryAxis, categoryIndex, categoryCount);
+                double x = plot.X + renderCategoryIndex * stepX;
                 double y = plot.Bottom - (value.Value - minValue) / range * plot.Height;
                 pointSlots[categoryIndex] = new ChartPlanPoint(x, y);
             }
@@ -5627,7 +5653,9 @@ public static partial class ChartRenderPlanner
                 else
                     negativeStack[categoryIndex] = plottedValue;
 
-                double x = plot.X + categoryIndex * stepX;
+                int renderCategoryIndex = ResolveCategoryRenderIndex(
+                    chart.CategoryAxis, categoryIndex, categoryCount);
+                double x = plot.X + renderCategoryIndex * stepX;
                 double baselineY = plot.Bottom - (baselineValue - minValue) / range * plot.Height;
                 double y = plot.Bottom - (plottedValue - minValue) / range * plot.Height;
                 baselineSlots[categoryIndex] = new ChartPlanPoint(x, baselineY);

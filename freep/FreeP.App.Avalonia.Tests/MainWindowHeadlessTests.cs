@@ -6659,7 +6659,8 @@ public sealed class MainWindowHeadlessTests
                 ChartLabelAlignment.Right,
                 35,
                 true,
-                false);
+                false,
+                reverseOrder: true);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6669,7 +6670,7 @@ public sealed class MainWindowHeadlessTests
             ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false,
             ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
             null, 10, false, ChartCrossBetween.MidCat, ChartLabelAlignment.Right,
-            35, true, false));
+            35, true, false, true));
     }
 
     [Fact]

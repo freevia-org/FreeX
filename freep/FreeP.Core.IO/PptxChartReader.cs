@@ -1196,6 +1196,8 @@ internal static class PptxChartReader
         var scaling = axEl.Element(C + "scaling");
         if (scaling is not null)
         {
+            axis.ReverseOrder = scaling.Element(C + "orientation")?.Attribute("val")?.Value
+                is "maxMin" or "max-min";
             var minStr = scaling.Element(C + "min")?.Attribute("val")?.Value;
             var maxStr = scaling.Element(C + "max")?.Attribute("val")?.Value;
             if (minStr is not null &&

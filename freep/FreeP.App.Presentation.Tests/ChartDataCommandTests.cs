@@ -1251,7 +1251,7 @@ public sealed class ChartDataCommandTests
                 ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
                 ChartAxisCrossing.Min, 10, false,
                 ChartCrossBetween.MidCat, ChartLabelAlignment.Right,
-                35, true, false)));
+                35, true, false, true)));
 
         chart.ValueAxis.Title.Should().Be("Revenue");
         chart.ValueAxis.Delete.Should().BeTrue();
@@ -1272,6 +1272,7 @@ public sealed class ChartDataCommandTests
         chart.ValueAxis.LabelOffsetPercent.Should().Be(35);
         chart.ValueAxis.NoMultiLevelLabels.Should().BeTrue();
         chart.ValueAxis.AutoCrossing.Should().BeFalse();
+        chart.ValueAxis.ReverseOrder.Should().BeTrue();
 
         using var stream = new MemoryStream();
         PptxPackageWriter.Write(p, stream);
@@ -1295,6 +1296,7 @@ public sealed class ChartDataCommandTests
         roundTripped.ValueAxis.LabelOffsetPercent.Should().Be(35);
         roundTripped.ValueAxis.NoMultiLevelLabels.Should().BeTrue();
         roundTripped.ValueAxis.AutoCrossing.Should().BeFalse();
+        roundTripped.ValueAxis.ReverseOrder.Should().BeTrue();
 
         bus.Undo();
         chart.ValueAxis.Title.Should().Be("Old axis");
@@ -1315,6 +1317,7 @@ public sealed class ChartDataCommandTests
         chart.ValueAxis.LabelOffsetPercent.Should().Be(20);
         chart.ValueAxis.NoMultiLevelLabels.Should().BeFalse();
         chart.ValueAxis.AutoCrossing.Should().BeTrue();
+        chart.ValueAxis.ReverseOrder.Should().BeFalse();
     }
 
     [Fact]

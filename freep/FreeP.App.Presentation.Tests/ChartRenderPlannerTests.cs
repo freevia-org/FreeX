@@ -2029,6 +2029,20 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildColumnPrimitives_ReverseCategoryAxisOrderMirrorsCategorySlots()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.CategoryAxis.ReverseOrder = true;
+
+        var primitives = ChartRenderPlanner.BuildColumnPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var first = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 0);
+        first.Bounds.X.Should().BeApproximately(121.4286, 0.0001);
+    }
+
+    [Fact]
     public void BuildColumnPrimitives_ImportedLabeledStyle2ColumnsUseFullSeriesSlot()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);

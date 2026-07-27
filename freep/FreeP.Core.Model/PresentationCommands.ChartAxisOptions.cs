@@ -26,6 +26,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
     private int? _oldLabelOffsetPercent;
     private bool? _oldNoMultiLevelLabels;
     private bool? _oldAutoCrossing;
+    private bool _oldReverseOrder;
 
     public SetChartAxisOptionsCommand(int slideIndex, uint shapeId, ChartAxisOptions options)
     {
@@ -67,6 +68,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
             : null;
         axis.NoMultiLevelLabels = _newOptions.NoMultiLevelLabels;
         axis.AutoCrossing = _newOptions.AutoCrossing;
+        axis.ReverseOrder = _newOptions.ReverseOrder;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -96,6 +98,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         axis.LabelOffsetPercent = _oldLabelOffsetPercent;
         axis.NoMultiLevelLabels = _oldNoMultiLevelLabels;
         axis.AutoCrossing = _oldAutoCrossing;
+        axis.ReverseOrder = _oldReverseOrder;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -120,6 +123,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         _oldLabelOffsetPercent = axis.LabelOffsetPercent;
         _oldNoMultiLevelLabels = axis.NoMultiLevelLabels;
         _oldAutoCrossing = axis.AutoCrossing;
+        _oldReverseOrder = axis.ReverseOrder;
     }
 
     private static ChartAxis ResolveAxis(ChartShape chart, ChartAxisKind kind) =>
