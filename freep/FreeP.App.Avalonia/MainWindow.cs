@@ -5821,6 +5821,10 @@ public sealed partial class MainWindow : Window
         {
             OpenHyperlinkDialog();
         }
+        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.ChartTitleCommandId)
+        {
+            OpenChartDisplayOptionsDialog();
+        }
         else if (row?.Category == "Media")
         {
             ShowMediaCaptionPane();

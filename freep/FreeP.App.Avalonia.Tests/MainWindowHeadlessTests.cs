@@ -4148,7 +4148,7 @@ public sealed class MainWindowHeadlessTests
             row.Category == "Chart" &&
             row.ShapeId == 910 &&
             row.ActionLabel == "Add Chart Title" &&
-            row.CommandHint == null &&
+            row.CommandHint == PresentationReviewWorkflowPlanner.ChartTitleCommandId &&
             row.ShouldNavigateToSlide &&
             row.ShouldSelectShape);
         opened.Rows[3].Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
