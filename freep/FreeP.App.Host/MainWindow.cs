@@ -4152,7 +4152,7 @@ public sealed partial class MainWindow : Window
     {
         var result = WpfFileDialogService.ShowOpenDialog(
             owner: this,
-            filter: $"{PresentationFileTextResources.AudioFileTypeName}|*.mp3;*.m4a;*.wav;*.wma;*.aac;*.ogg;*.flac|All files|*.*",
+            filter: PresentationMediaFileTypeCatalog.BuildWpfAudioFilter(),
             title: PresentationFileTextResources.InsertAudioPickerTitle);
 
         if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))

@@ -92,6 +92,16 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public void TransitionSoundPicker_UsesSharedAudioFileTypeCatalog()
+    {
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("PresentationMediaFileTypeCatalog.AudioFilePatterns");
+        source.Should().Contain("PresentationMediaFileTypeCatalog.AudioMimeTypes");
+        source.Should().NotContain("[\"*.mp3\", \"*.m4a\", \"*.wav\", \"*.wma\"]");
+    }
+
+    [Fact]
     public async Task MainWindow_canvas_interaction_layers_share_margined_origin()
     {
         await Session.Dispatch(() =>

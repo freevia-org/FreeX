@@ -83,8 +83,8 @@ public sealed partial class MainWindow : Window
     private static readonly FilePickerFileType AudioFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType(
             PresentationFileTextResources.AudioFileTypeName,
-            ["*.mp3", "*.m4a", "*.wav", "*.wma"],
-            ["audio/mpeg", "audio/mp4", "audio/wav", "audio/x-ms-wma"]);
+            PresentationMediaFileTypeCatalog.AudioFilePatterns,
+            PresentationMediaFileTypeCatalog.AudioMimeTypes);
 
     private static readonly (string CommandId, Action<EditingSession> Execute)[] ArrangeCommandRoutes =
     [
