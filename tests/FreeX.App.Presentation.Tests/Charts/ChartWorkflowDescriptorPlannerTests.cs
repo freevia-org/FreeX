@@ -117,6 +117,31 @@ public sealed class ChartWorkflowDescriptorPlannerTests
     }
 
     [Fact]
+    public void FormatDataSeries_UsesSharedPlannerForEverySeriesField()
+    {
+        var chart = Chart(ChartType.Line, endCol: 3);
+        var plan = ChartSeriesFormatPlanner.Plan(chart, new ChartSeriesFormatInput(
+            SeriesIndex: 1,
+            FillColor: new CellColor(10, 20, 30),
+            StrokeColor: new CellColor(40, 50, 60),
+            StrokeThickness: 2.5,
+            MarkerStyle: ChartMarkerStyle.Diamond,
+            MarkerSize: 9,
+            DashStyle: ChartLineDashStyle.Dash));
+
+        ChartWorkflowCommandCatalog.CanOpenDialog(chart, ChartWorkflowCommandCatalog.FormatDataSeries)
+            .Should().BeTrue();
+        plan.SeriesFormats.Should().ContainSingle(format => format.SeriesIndex == 1)
+            .Which.Should().Match<ChartSeriesFormat>(format =>
+                format.FillColor == new CellColor(10, 20, 30) &&
+                format.StrokeColor == new CellColor(40, 50, 60) &&
+                format.StrokeThickness == 2.5 &&
+                format.MarkerStyle == ChartMarkerStyle.Diamond &&
+                format.MarkerSize == 9 &&
+                format.DashStyle == ChartLineDashStyle.Dash);
+    }
+
+    [Fact]
     public void AxisWorkflowCommands_MapLabelsMessagesAndQuickCommands()
     {
         var xGridlines = ChartAxisWorkflowCommandCatalog.Gridlines(useXAxis: true);

@@ -387,6 +387,19 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
+    public void ChartSeriesColorCommand_UsesTheFullSeriesFormatDialog()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ChartCommands.cs");
+        var handlerStart = source.IndexOf("private void ChartSeriesColorBtn_Click", StringComparison.Ordinal);
+        handlerStart.Should().BeGreaterThanOrEqualTo(0);
+        var nextHandler = source.IndexOf("private void ", handlerStart + 1, StringComparison.Ordinal);
+        var handler = source[handlerStart..(nextHandler >= 0 ? nextHandler : source.Length)];
+
+        handler.Should().Contain("ShowChartSeriesFormatDialog();");
+        handler.Should().NotContain("ShowMoreColorsDialogAsync");
+    }
+
+    [Fact]
     public void ChartSeriesFormatDialogInvalidInputs_ShowOwnedWarningsAndRefocusEditors()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartSeriesFormatDialog.cs");

@@ -59,9 +59,11 @@ public sealed partial class MainWindow
             ["chartFormat.chartAreaFill"] = () => RunGuarded(ShowChartShapeFillDialog),
             ["chartFormat.plotAreaFill"] = () => RunGuarded(ShowChartPlotAreaFillDialog),
             ["chartFormat.plotAreaBorder"] = () => RunGuarded(ShowChartShapeOutlineDialog),
-            ["chartFormat.seriesColor"] = () => RunGuarded(ShowChartSeriesColorDialog),
-            // The Series Width button opens the full per-series fill/line/marker dialog
-            // (ChartSeriesFormatPlanner); Series Color keeps its quick picker.
+            // WPF routes both Series Color and Series Marker through the full per-series
+            // fill/line/marker dialog. Keep the Avalonia route on the same shared planner-backed
+            // dialog so Series Color can also edit the selected series, dash, marker, and size.
+            ["chartFormat.seriesColor"] = () => RunGuarded(ShowChartSeriesFormatDialog),
+            // The Series Width button also opens the full per-series fill/line/marker dialog.
             ["chartFormat.seriesWidth"] = () => RunGuarded(ShowChartSeriesFormatDialog),
             // The Legend button opens the show/hide + position options dialog (ChartLegendPlanner).
             ["chartFormat.legendText"] = () => RunGuarded(ShowChartLegendDialog),

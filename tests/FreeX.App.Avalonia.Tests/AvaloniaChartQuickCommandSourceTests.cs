@@ -46,6 +46,17 @@ public sealed class AvaloniaChartQuickCommandSourceTests
         quickSource.Should().Contain("ChartQuickCommandCatalog.ComboToggle");
     }
 
+    [Fact]
+    public void SeriesColorRibbonRoute_MatchesWpfFullSeriesFormatDialog()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ContextualTabs.cs"));
+
+        source.Should().Contain("[\"chartFormat.seriesColor\"] = () => RunGuarded(ShowChartSeriesFormatDialog)");
+        source.Should().Contain("[\"chartFormat.seriesWidth\"] = () => RunGuarded(ShowChartSeriesFormatDialog)");
+        source.Should().NotContain("[\"chartFormat.seriesColor\"] = () => RunGuarded(ShowChartSeriesColorDialog)");
+        source.Should().Contain("ChartSeriesFormatPlanner");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

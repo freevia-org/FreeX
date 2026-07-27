@@ -899,34 +899,6 @@ public sealed partial class MainWindow
             ApplyChartLayout("Plot Area Fill", chart, new ChartLayoutOptions(PlotAreaFillColor: chosen));
     }
 
-    private async Task ShowChartSeriesColorDialog()
-    {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
-            return;
-        if (!TryGetSelectedChart("Series Color", out var chart))
-            return;
-
-        if (ChartTypeSupport.GetDataSeriesCount(chart) <= 0)
-        {
-            RefreshShell(UiText.Get("ChartLoc_NoDataSeriesToColor"));
-            return;
-        }
-
-        var existing = ChartQuickFormatCycler.ReadFirstSeriesFormat(chart).FillColor;
-        var color = await ShowMoreColorsDialogAsync(
-            UiText.Get("ChartLoc_SeriesColor"),
-            existing ?? ChartQuickFormatCycler.DefaultSeriesColor);
-        if (color is not { } chosen)
-            return;
-
-        // Re-resolve after the dialog in case the selection changed while it was open.
-        if (!TryGetSelectedChart("Series Color", out chart))
-            return;
-
-        ApplyChartLayout("Series Color", chart, new ChartLayoutOptions(
-            SeriesFormats: ChartQuickFormatCycler.MergeFirstSeriesFillColor(chart, chosen)));
-    }
-
     private void CycleChartXAxisGridlines()
     {
         ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.Gridlines(useXAxis: true), "ChartLoc_NoAxesForGridlines");
