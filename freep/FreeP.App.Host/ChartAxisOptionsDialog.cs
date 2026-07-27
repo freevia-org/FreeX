@@ -27,6 +27,9 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _crossesAtBox;
     private readonly ComboBox _crossBetweenCombo;
     private readonly ComboBox _labelAlignmentCombo;
+    private readonly TextBox _labelOffsetBox;
+    private readonly ComboBox _multiLevelLabelsCombo;
+    private readonly ComboBox _autoCrossingCombo;
 
     public ChartAxisOptionsDialog(EditingSession editor)
     {
@@ -72,6 +75,9 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _crossesAtBox = new TextBox { MinWidth = 120 };
         _crossBetweenCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.CrossBetweenOptions);
         _labelAlignmentCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.LabelAlignmentOptions);
+        _labelOffsetBox = new TextBox { MinWidth = 120 };
+        _multiLevelLabelsCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.MultiLevelLabelsOptions);
+        _autoCrossingCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.AutoCrossingOptions);
         LoadControls();
 
         var buttons = new StackPanel
@@ -105,6 +111,9 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         content.Children.Add(MakeRow(surface.CrossesAtLabel, _crossesAtBox));
         content.Children.Add(MakeRow(surface.CrossBetweenLabel, _crossBetweenCombo));
         content.Children.Add(MakeRow(surface.LabelAlignmentLabel, _labelAlignmentCombo));
+        content.Children.Add(MakeRow(surface.LabelOffsetLabel, _labelOffsetBox));
+        content.Children.Add(MakeRow(surface.MultiLevelLabelsLabel, _multiLevelLabelsCombo));
+        content.Children.Add(MakeRow(surface.AutoCrossingLabel, _autoCrossingCombo));
         content.Children.Add(buttons);
         Content = content;
     }
@@ -145,6 +154,9 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _crossesAtBox.Text = Format(_planner.CrossesAt);
         _crossBetweenCombo.SelectedItem = ChartAxisOptionsPlanner.CrossBetweenOptions.FirstOrDefault(x => x.Value == _planner.CrossBetween);
         _labelAlignmentCombo.SelectedItem = ChartAxisOptionsPlanner.LabelAlignmentOptions.FirstOrDefault(x => x.Value == _planner.LabelAlignment);
+        _labelOffsetBox.Text = Format(_planner.LabelOffsetPercent);
+        _multiLevelLabelsCombo.SelectedItem = ChartAxisOptionsPlanner.MultiLevelLabelsOptions.FirstOrDefault(x => x.Value == _planner.NoMultiLevelLabels);
+        _autoCrossingCombo.SelectedItem = ChartAxisOptionsPlanner.AutoCrossingOptions.FirstOrDefault(x => x.Value == _planner.AutoCrossing);
     }
 
     private void UpdatePlannerFromControls()
@@ -164,6 +176,9 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _planner.SetCrossesAt(ParseOptional(_crossesAtBox.Text, "Crosses at"));
         _planner.SetCrossBetween(((ChartCrossBetweenOption)_crossBetweenCombo.SelectedItem).Value);
         _planner.SetLabelAlignment(((ChartLabelAlignmentOption)_labelAlignmentCombo.SelectedItem).Value);
+        _planner.SetLabelOffsetPercent(ParseOptionalInt(_labelOffsetBox.Text, surfaceLabel: "Label offset"));
+        _planner.SetNoMultiLevelLabels(((ChartAxisBooleanOption)_multiLevelLabelsCombo.SelectedItem).Value);
+        _planner.SetAutoCrossing(((ChartAxisBooleanOption)_autoCrossingCombo.SelectedItem).Value);
     }
 
     private static double? ParseOptional(string text, string label)
@@ -178,6 +193,19 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private static string Format(double? value) =>
         value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static string Format(int? value) =>
+        value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static int? ParseOptionalInt(string text, string surfaceLabel)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) &&
+            value is >= 0 and <= 100)
+            return value;
+        throw new FormatException($"{surfaceLabel} must be an integer from 0 to 100 or blank.");
+    }
 
     private static StackPanel MakeRow(string label, Control control)
     {
