@@ -2781,22 +2781,22 @@ public static class PptxPackageWriter
         Dictionary<Paragraph, string>? bulletImageRelIds = null) =>
         shape.Kind switch
         {
-            SlideShapeKind.Picture => BuildPicEl(shape, mediaById),
-            SlideShapeKind.Media   => BuildMediaPicEl(shape, mediaById, captionTracksByShape),
+            SlideShapeKind.Picture => BuildPicEl(shape, mediaById, hlinkRelIds, allSlides),
+            SlideShapeKind.Media   => BuildMediaPicEl(shape, mediaById, captionTracksByShape, hlinkRelIds, allSlides),
             SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById, prvRelIdByShapeAndOldId, captionTracksByShape, bulletImageRelIds),
             SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme, hlinkRelIds, fillBlipById),
-            SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme, bulletImageRelIds),
-            SlideShapeKind.Chart when shape.Chart is not null => BuildChartGraphicFrameEl(shape, mediaById),
+            SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme, hlinkRelIds, allSlides, bulletImageRelIds),
+            SlideShapeKind.Chart when shape.Chart is not null => BuildChartGraphicFrameEl(shape, mediaById, hlinkRelIds, allSlides),
             SlideShapeKind.SmartArt when shape.SmartArt is not null =>
                 BuildSmartArtGraphicFrameEl(shape,
-                    smartArtRelIdRemap?.GetValueOrDefault(shape.Id)),
+                    smartArtRelIdRemap?.GetValueOrDefault(shape.Id), hlinkRelIds, allSlides),
             // Theme 21: OLE embedded objects — emit the verbatim graphicFrame wrapper
             SlideShapeKind.Ole when shape.OleObject is not null =>
-                BuildOleGraphicFrameEl(shape, mediaById),
+                BuildOleGraphicFrameEl(shape, mediaById, hlinkRelIds, allSlides),
             // Wave 25A: preserved modern objects — emit verbatim XML with patched rel IDs
             SlideShapeKind.Zoom or SlideShapeKind.Ink or SlideShapeKind.Model3d
                 or SlideShapeKind.PreservedObject when shape.PreservedObject is not null =>
-                    BuildPreservedObjectEl(shape, prvRelIdByShapeAndOldId),
+                    BuildPreservedObjectEl(shape, prvRelIdByShapeAndOldId, hlinkRelIds, allSlides),
             _ => BuildSpEl(shape, scheme, hlinkRelIds, allSlides, fillBlipById, bulletImageRelIds)
         };
 
@@ -2844,7 +2844,8 @@ public static class PptxPackageWriter
             BuildSpPrEl(shape, scheme, fillBlipRelId: fillBlipRelId));
     }
 
-    private static XElement BuildPicEl(SlideShape shape, Dictionary<uint, string> mediaById)
+    private static XElement BuildPicEl(SlideShape shape, Dictionary<uint, string> mediaById,
+        Dictionary<string, string>? hlinkRelIds = null, List<Slide>? allSlides = null)
     {
         // Look up by shape Id (collision-safe); fall back to a placeholder only if somehow missing.
         mediaById.TryGetValue(shape.Id, out var embedRelId);
@@ -2864,7 +2865,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
-                CnvPr(shape),
+                CnvPrWithHlink(shape, hlinkRelIds, allSlides),
                 new XElement(P + "cNvPicPr"),
                 new XElement(P + "nvPr")),
             blipFillEl,
@@ -2937,7 +2938,9 @@ public static class PptxPackageWriter
     private static XElement BuildMediaPicEl(
         SlideShape shape,
         Dictionary<uint, string> mediaById,
-        IReadOnlyDictionary<uint, IReadOnlyList<MediaCaptionTrackRelationship>>? captionTracksByShape = null)
+        IReadOnlyDictionary<uint, IReadOnlyList<MediaCaptionTrackRelationship>>? captionTracksByShape = null,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null)
     {
         // Poster image rel id (written by WriteSlideMedia with the shape's Id key)
         mediaById.TryGetValue(shape.Id, out var posterRelId);
@@ -2976,7 +2979,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
-                CnvPr(shape),
+                CnvPrWithHlink(shape, hlinkRelIds, allSlides),
                 new XElement(P + "cNvPicPr"),
                 new XElement(P + "nvPr", nvPrChildren)),
             blipFillEl,
@@ -3019,7 +3022,7 @@ public static class PptxPackageWriter
         Dictionary<Paragraph, string>? bulletImageRelIds = null) =>
         new XElement(P + "grpSp",
             new XElement(P + "nvGrpSpPr",
-                CnvPr(shape),
+                CnvPrWithHlink(shape, hlinkRelIds, allSlides),
                 new XElement(P + "cNvGrpSpPr"),
                 new XElement(P + "nvPr")),
             BuildGrpSpPrEl(shape),
@@ -3301,6 +3304,8 @@ public static class PptxPackageWriter
     private static XElement BuildGraphicFrameEl(
         SlideShape shape,
         PresentationColorScheme scheme,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null,
         Dictionary<Paragraph, string>? bulletImageRelIds = null)
     {
         var table = shape.Table!;
@@ -3316,7 +3321,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
-                CnvPr(shape),
+                CnvPrWithHlink(shape, hlinkRelIds, allSlides),
                 new XElement(P + "cNvGraphicFramePr",
                     new XElement(A + "graphicFrameLocks",
                         new XAttribute("noGrp", "1"))),
@@ -3340,7 +3345,8 @@ public static class PptxPackageWriter
     /// <see cref="WriteSlideCharts"/> (keyed by shape.Id).
     /// </summary>
     private static XElement BuildChartGraphicFrameEl(
-        SlideShape shape, Dictionary<uint, string> mediaById)
+        SlideShape shape, Dictionary<uint, string> mediaById,
+        Dictionary<string, string>? hlinkRelIds = null, List<Slide>? allSlides = null)
     {
         mediaById.TryGetValue(shape.Id, out var chartRelId);
         chartRelId ??= "rIdChart1"; // fallback (should not happen)
@@ -3355,7 +3361,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
-                CnvPr(shape),
+                CnvPrWithHlink(shape, hlinkRelIds, allSlides),
                 new XElement(P + "cNvGraphicFramePr",
                     new XElement(A + "graphicFrameLocks",
                         new XAttribute("noGrp", "1"))),
@@ -3388,7 +3394,8 @@ public static class PptxPackageWriter
     /// must be dropped entirely to avoid dangling relationships.
     /// </summary>
     private static XElement? BuildSmartArtGraphicFrameEl(
-        SlideShape shape, Dictionary<string, string>? relIdRemap)
+        SlideShape shape, Dictionary<string, string>? relIdRemap,
+        Dictionary<string, string>? hlinkRelIds = null, List<Slide>? allSlides = null)
     {
         // S2: if dm (data) part is absent, the SmartArt can't render — drop the frame.
         if (relIdRemap is null || !relIdRemap.ContainsKey("dm"))
@@ -3415,7 +3422,7 @@ public static class PptxPackageWriter
 
         return new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
-                CnvPr(shape),
+                CnvPrWithHlink(shape, hlinkRelIds, allSlides),
                 new XElement(P + "cNvGraphicFramePr",
                     new XElement(A + "graphicFrameLocks",
                         new XAttribute("noGrp", "1"))),
@@ -5131,7 +5138,8 @@ public static class PptxPackageWriter
     /// real (uint shapeId, string oldRelId) tuple — no hashing, no bit-packing, no collisions.
     /// </param>
     private static XElement? BuildPreservedObjectEl(
-        SlideShape shape, Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId)
+        SlideShape shape, Dictionary<(uint shapeId, string oldRelId), string>? prvRelIdByShapeAndOldId,
+        Dictionary<string, string>? hlinkRelIds = null, List<Slide>? allSlides = null)
     {
         if (shape.PreservedObject is not { } info) return null;
         if (string.IsNullOrWhiteSpace(info.RawXml)) return null;
@@ -5151,6 +5159,20 @@ public static class PptxPackageWriter
             if (prvRelIdByShapeAndOldId is not null &&
                 prvRelIdByShapeAndOldId.TryGetValue((shape.Id, oldId), out var newId))
                 attr.SetValue(newId);
+        }
+
+        // Preserved graphic frames keep their original cNvPr subtree. Refresh only the
+        // shape-level hyperlink so its relationship id follows the current slide rels.
+        if (shape.Hyperlink is not null)
+        {
+            var cNvPr = el.Descendants(P + "cNvPr").FirstOrDefault();
+            if (cNvPr is not null)
+            {
+                cNvPr.Element(A + "hlinkClick")?.Remove();
+                var hlink = BuildHlinkClickEl(shape.Hyperlink, hlinkRelIds, allSlides);
+                if (hlink is not null)
+                    cNvPr.Add(hlink);
+            }
         }
 
         // EA3/FA2: Re-wrap in mc:AlternateContent if the original was wrapped.
@@ -5311,7 +5333,8 @@ public static class PptxPackageWriter
     /// Deserializes the stored OleObjXml verbatim and re-inserts the fallback p:pic child.
     /// </summary>
     private static XElement? BuildOleGraphicFrameEl(
-        SlideShape shape, Dictionary<uint, string> mediaById)
+        SlideShape shape, Dictionary<uint, string> mediaById,
+        Dictionary<string, string>? hlinkRelIds = null, List<Slide>? allSlides = null)
     {
         if (shape.OleObject is not { } ole) return null;
 
@@ -5359,7 +5382,7 @@ public static class PptxPackageWriter
         // Build the p:graphicFrame
         var graphicFrame = new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
-                CnvPr(shape),
+                CnvPrWithHlink(shape, hlinkRelIds, allSlides),
                 new XElement(P + "cNvGraphicFramePr"),
                 new XElement(P + "nvPr")),
             xfrm,
