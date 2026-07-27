@@ -17,6 +17,45 @@ public enum SmartArtColorPreset
     MonochromaticAccent5,
     MonochromaticAccent6,
     Grayscale,
+
+    Dark1Outline,
+    Dark2Outline,
+    Dark2Fill,
+    ColorfulAccentColors,
+    ColorfulRangeAccentColors2To3,
+    ColorfulRangeAccentColors3To4,
+    ColorfulRangeAccentColors4To5,
+    ColorfulRangeAccentColors5To6,
+    ColoredOutlineAccent1,
+    ColoredFillAccent1,
+    GradientRangeAccent1,
+    GradientLoopAccent1,
+    TransparentGradientRangeAccent1,
+    ColoredOutlineAccent2,
+    ColoredFillAccent2,
+    GradientRangeAccent2,
+    GradientLoopAccent2,
+    TransparentGradientRangeAccent2,
+    ColoredOutlineAccent3,
+    ColoredFillAccent3,
+    GradientRangeAccent3,
+    GradientLoopAccent3,
+    TransparentGradientRangeAccent3,
+    ColoredOutlineAccent4,
+    ColoredFillAccent4,
+    GradientRangeAccent4,
+    GradientLoopAccent4,
+    TransparentGradientRangeAccent4,
+    ColoredOutlineAccent5,
+    ColoredFillAccent5,
+    GradientRangeAccent5,
+    GradientLoopAccent5,
+    TransparentGradientRangeAccent5,
+    ColoredOutlineAccent6,
+    ColoredFillAccent6,
+    GradientRangeAccent6,
+    GradientLoopAccent6,
+    TransparentGradientRangeAccent6,
 }
 
 /// <summary>Bounded SmartArt layout choices whose live layout engine can regenerate the cache.</summary>
@@ -107,6 +146,14 @@ public sealed record SmartArtColorApplyResult(
     string? PartPath,
     int ColorCount);
 
+/// <summary>One PowerPoint Change Colors gallery entry with its native diagram identity.</summary>
+public sealed record SmartArtColorGalleryEntry(
+    SmartArtColorPreset Preset,
+    string CommandId,
+    string UniqueId,
+    string Title,
+    string Category);
+
 public sealed record SmartArtLayoutApplyResult(
     bool Applied,
     string Message,
@@ -137,6 +184,7 @@ public static class SmartArtAuthoringPlanner
     public const string MonochromaticAccent5CommandId = "freep.smartart.colors.monochromatic-accent-5";
     public const string MonochromaticAccent6CommandId = "freep.smartart.colors.monochromatic-accent-6";
     public const string GrayscaleCommandId = "freep.smartart.colors.grayscale";
+    public const string SmartArtColorsGalleryCommandId = "freep.smartart.colors.gallery";
     public const string BasicProcessLayoutCommandId = "freep.smartart.layout.basic-process";
     public const string BasicTimelineLayoutCommandId = "freep.smartart.layout.basic-timeline";
     public const string StepDownProcessLayoutCommandId = "freep.smartart.layout.step-down-process";
@@ -202,6 +250,64 @@ public static class SmartArtAuthoringPlanner
     public const string SunsetSceneQuickStyleCommandId = "freep.smartart.style.sunset-scene";
     public const string BirdsEyeSceneQuickStyleCommandId = "freep.smartart.style.birds-eye-scene";
     public const string ConvertToShapesCommandId = "freep.smartart.convert-to-shapes";
+
+    /// <summary>
+    /// The complete PowerPoint SmartArt Change Colors catalog observed through the native COM
+    /// gallery. Legacy FreeP commands remain separate compatibility routes below.
+    /// </summary>
+    public static IReadOnlyList<SmartArtColorGalleryEntry> ColorGallery { get; } =
+    [
+        Gallery(SmartArtColorPreset.Dark1Outline, "dark-1-outline", "accent0_1", "Dark 1 Outline", "mainScheme"),
+        Gallery(SmartArtColorPreset.Dark2Outline, "dark-2-outline", "accent0_2", "Dark 2 Outline", "mainScheme"),
+        Gallery(SmartArtColorPreset.Dark2Fill, "dark-2-fill", "accent0_3", "Dark 2 Fill", "mainScheme"),
+        Gallery(SmartArtColorPreset.ColorfulAccentColors, "colorful-accent-colors", "colorful1", "Colorful - Accent Colors", "colorful"),
+        Gallery(SmartArtColorPreset.ColorfulRangeAccentColors2To3, "colorful-range-accent-2-to-3", "colorful2", "Colorful Range - Accent Colors 2 to 3", "colorful"),
+        Gallery(SmartArtColorPreset.ColorfulRangeAccentColors3To4, "colorful-range-accent-3-to-4", "colorful3", "Colorful Range - Accent Colors 3 to 4", "colorful"),
+        Gallery(SmartArtColorPreset.ColorfulRangeAccentColors4To5, "colorful-range-accent-4-to-5", "colorful4", "Colorful Range - Accent Colors 4 to 5", "colorful"),
+        Gallery(SmartArtColorPreset.ColorfulRangeAccentColors5To6, "colorful-range-accent-5-to-6", "colorful5", "Colorful Range - Accent Colors 5 to 6", "colorful"),
+        Gallery(SmartArtColorPreset.ColoredOutlineAccent1, "colored-outline-accent-1", "accent1_1", "Colored Outline - Accent 1", "accent1"),
+        Gallery(SmartArtColorPreset.ColoredFillAccent1, "colored-fill-accent-1", "accent1_2", "Colored Fill - Accent 1", "accent1"),
+        Gallery(SmartArtColorPreset.GradientRangeAccent1, "gradient-range-accent-1", "accent1_3", "Gradient Range - Accent 1", "accent1"),
+        Gallery(SmartArtColorPreset.GradientLoopAccent1, "gradient-loop-accent-1", "accent1_4", "Gradient Loop - Accent 1", "accent1"),
+        Gallery(SmartArtColorPreset.TransparentGradientRangeAccent1, "transparent-gradient-range-accent-1", "accent1_5", "Transparent Gradient Range - Accent 1", "accent1"),
+        Gallery(SmartArtColorPreset.ColoredOutlineAccent2, "colored-outline-accent-2", "accent2_1", "Colored Outline - Accent 2", "accent2"),
+        Gallery(SmartArtColorPreset.ColoredFillAccent2, "colored-fill-accent-2", "accent2_2", "Colored Fill - Accent 2", "accent2"),
+        Gallery(SmartArtColorPreset.GradientRangeAccent2, "gradient-range-accent-2", "accent2_3", "Gradient Range - Accent 2", "accent2"),
+        Gallery(SmartArtColorPreset.GradientLoopAccent2, "gradient-loop-accent-2", "accent2_4", "Gradient Loop - Accent 2", "accent2"),
+        Gallery(SmartArtColorPreset.TransparentGradientRangeAccent2, "transparent-gradient-range-accent-2", "accent2_5", "Transparent Gradient Range - Accent 2", "accent2"),
+        Gallery(SmartArtColorPreset.ColoredOutlineAccent3, "colored-outline-accent-3", "accent3_1", "Colored Outline - Accent 3", "accent3"),
+        Gallery(SmartArtColorPreset.ColoredFillAccent3, "colored-fill-accent-3", "accent3_2", "Colored Fill - Accent 3", "accent3"),
+        Gallery(SmartArtColorPreset.GradientRangeAccent3, "gradient-range-accent-3", "accent3_3", "Gradient Range - Accent 3", "accent3"),
+        Gallery(SmartArtColorPreset.GradientLoopAccent3, "gradient-loop-accent-3", "accent3_4", "Gradient Loop - Accent 3", "accent3"),
+        Gallery(SmartArtColorPreset.TransparentGradientRangeAccent3, "transparent-gradient-range-accent-3", "accent3_5", "Transparent Gradient Range - Accent 3", "accent3"),
+        Gallery(SmartArtColorPreset.ColoredOutlineAccent4, "colored-outline-accent-4", "accent4_1", "Colored Outline - Accent 4", "accent4"),
+        Gallery(SmartArtColorPreset.ColoredFillAccent4, "colored-fill-accent-4", "accent4_2", "Colored Fill - Accent 4", "accent4"),
+        Gallery(SmartArtColorPreset.GradientRangeAccent4, "gradient-range-accent-4", "accent4_3", "Gradient Range - Accent 4", "accent4"),
+        Gallery(SmartArtColorPreset.GradientLoopAccent4, "gradient-loop-accent-4", "accent4_4", "Gradient Loop - Accent 4", "accent4"),
+        Gallery(SmartArtColorPreset.TransparentGradientRangeAccent4, "transparent-gradient-range-accent-4", "accent4_5", "Transparent Gradient Range - Accent 4", "accent4"),
+        Gallery(SmartArtColorPreset.ColoredOutlineAccent5, "colored-outline-accent-5", "accent5_1", "Colored Outline - Accent 5", "accent5"),
+        Gallery(SmartArtColorPreset.ColoredFillAccent5, "colored-fill-accent-5", "accent5_2", "Colored Fill - Accent 5", "accent5"),
+        Gallery(SmartArtColorPreset.GradientRangeAccent5, "gradient-range-accent-5", "accent5_3", "Gradient Range - Accent 5", "accent5"),
+        Gallery(SmartArtColorPreset.GradientLoopAccent5, "gradient-loop-accent-5", "accent5_4", "Gradient Loop - Accent 5", "accent5"),
+        Gallery(SmartArtColorPreset.TransparentGradientRangeAccent5, "transparent-gradient-range-accent-5", "accent5_5", "Transparent Gradient Range - Accent 5", "accent5"),
+        Gallery(SmartArtColorPreset.ColoredOutlineAccent6, "colored-outline-accent-6", "accent6_1", "Colored Outline - Accent 6", "accent6"),
+        Gallery(SmartArtColorPreset.ColoredFillAccent6, "colored-fill-accent-6", "accent6_2", "Colored Fill - Accent 6", "accent6"),
+        Gallery(SmartArtColorPreset.GradientRangeAccent6, "gradient-range-accent-6", "accent6_3", "Gradient Range - Accent 6", "accent6"),
+        Gallery(SmartArtColorPreset.GradientLoopAccent6, "gradient-loop-accent-6", "accent6_4", "Gradient Loop - Accent 6", "accent6"),
+        Gallery(SmartArtColorPreset.TransparentGradientRangeAccent6, "transparent-gradient-range-accent-6", "accent6_5", "Transparent Gradient Range - Accent 6", "accent6"),
+    ];
+
+    private static SmartArtColorGalleryEntry Gallery(
+        SmartArtColorPreset preset,
+        string commandSlug,
+        string nativeSlug,
+        string title,
+        string category) =>
+        new(preset,
+            $"freep.smartart.colors.{commandSlug}",
+            $"urn:microsoft.com/office/officeart/2005/8/colors/{nativeSlug}",
+            title,
+            category);
 
     public static SmartArtQuickStyleApplyResult ApplyQuickStylePreset(
         SmartArtShape? smartArt,
@@ -521,7 +627,20 @@ public static class SmartArtAuthoringPlanner
         if (firstPalette is null || firstPalette.Count == 0)
             return NotApplied("The SmartArt colors part has no node fill palette.");
 
-        var appliedColors = BuildColors(preset, firstPalette.Count, theme, effectiveClrMap);
+        var gallery = ResolveGalleryEntry(preset);
+        var appliedColors = BuildColors(gallery, firstPalette.Count, theme, effectiveClrMap);
+        var root = document.Root!;
+        root.SetAttributeValue("uniqueId", gallery.UniqueId);
+        var titleElement = root.Descendants(Diagram + "title").FirstOrDefault();
+        if (titleElement is null)
+            root.AddFirst(new XElement(Diagram + "title", new XAttribute("val", gallery.Title)));
+        else
+            titleElement.SetAttributeValue("val", gallery.Title);
+        var categoryElement = root.Descendants(Diagram + "cat").FirstOrDefault();
+        if (categoryElement is null)
+            root.Add(new XElement(Diagram + "cat", new XAttribute("type", gallery.Category)));
+        else
+            categoryElement.SetAttributeValue("type", gallery.Category);
         foreach (var fillList in fillLists)
         {
             var colors = fillList.Elements().Where(IsColorElement).ToList();
@@ -534,12 +653,15 @@ public static class SmartArtAuthoringPlanner
 
         part.Bytes = Serialize(document);
         smartArt.Colors ??= new SmartArtColorMetadata();
+        smartArt.Colors.UniqueId = gallery.UniqueId;
+        smartArt.Colors.Title = gallery.Title;
+        smartArt.Colors.Category = gallery.Category;
         smartArt.Colors.Palette.Clear();
         smartArt.Colors.Palette.AddRange(appliedColors.Select(color => color.ModelColor));
 
         return new SmartArtColorApplyResult(
             true,
-            $"SmartArt colors changed to the {preset} preset.",
+            $"SmartArt colors changed to {gallery.Title}.",
             part.PartPath,
             appliedColors.Count);
     }
@@ -625,8 +747,25 @@ public static class SmartArtAuthoringPlanner
         return new XElement(Drawing + name, attributes, previous.Nodes());
     }
 
+    private static SmartArtColorGalleryEntry ResolveGalleryEntry(SmartArtColorPreset preset) =>
+        preset switch
+        {
+            SmartArtColorPreset.ThemeAccents => FindGallery(SmartArtColorPreset.ColorfulAccentColors),
+            SmartArtColorPreset.SingleAccent => FindGallery(SmartArtColorPreset.ColoredFillAccent1),
+            SmartArtColorPreset.MonochromaticAccent2 => FindGallery(SmartArtColorPreset.ColoredFillAccent2),
+            SmartArtColorPreset.MonochromaticAccent3 => FindGallery(SmartArtColorPreset.ColoredFillAccent3),
+            SmartArtColorPreset.MonochromaticAccent4 => FindGallery(SmartArtColorPreset.ColoredFillAccent4),
+            SmartArtColorPreset.MonochromaticAccent5 => FindGallery(SmartArtColorPreset.ColoredFillAccent5),
+            SmartArtColorPreset.MonochromaticAccent6 => FindGallery(SmartArtColorPreset.ColoredFillAccent6),
+            SmartArtColorPreset.Grayscale => FindGallery(SmartArtColorPreset.Dark1Outline),
+            _ => FindGallery(preset),
+        };
+
+    private static SmartArtColorGalleryEntry FindGallery(SmartArtColorPreset preset) =>
+        ColorGallery.First(entry => entry.Preset == preset);
+
     private static IReadOnlyList<PaletteColor> BuildColors(
-        SmartArtColorPreset preset,
+        SmartArtColorGalleryEntry gallery,
         int count,
         PresentationTheme theme,
         IReadOnlyDictionary<string, string>? effectiveClrMap)
@@ -641,9 +780,11 @@ public static class SmartArtAuthoringPlanner
             ThemeColorSlot.Accent6,
         };
 
-        if (preset == SmartArtColorPreset.Grayscale)
+        if (gallery.Category == "mainScheme")
         {
-            var grays = new[] { 0x404040, 0x666666, 0x808080, 0x999999, 0xB3B3B3, 0xD9D9D9 };
+            var grays = gallery.Preset == SmartArtColorPreset.Dark2Fill
+                ? new[] { 0x262626, 0x404040, 0x595959, 0x737373, 0x8C8C8C, 0xA6A6A6 }
+                : new[] { 0x404040, 0x666666, 0x808080, 0x999999, 0xB3B3B3, 0xD9D9D9 };
             return Enumerable.Range(0, count)
                 .Select(index =>
                 {
@@ -653,24 +794,37 @@ public static class SmartArtAuthoringPlanner
                 .ToArray();
         }
 
-        var monochromaticSlot = preset switch
+        var categorySlot = gallery.Category.StartsWith("accent", StringComparison.OrdinalIgnoreCase)
+            ? int.Parse(gallery.Category[6..], System.Globalization.CultureInfo.InvariantCulture) - 1
+            : -1;
+        if (categorySlot >= 0)
         {
-            SmartArtColorPreset.SingleAccent => accents[0],
-            SmartArtColorPreset.MonochromaticAccent2 => accents[1],
-            SmartArtColorPreset.MonochromaticAccent3 => accents[2],
-            SmartArtColorPreset.MonochromaticAccent4 => accents[3],
-            SmartArtColorPreset.MonochromaticAccent5 => accents[4],
-            SmartArtColorPreset.MonochromaticAccent6 => accents[5],
-            _ => (ThemeColorSlot?)null,
-        };
-        if (monochromaticSlot is { } slot)
-        {
-            var single = CreateSchemeColor(slot, theme, effectiveClrMap);
-            return Enumerable.Repeat(single, count).ToArray();
+            var style = gallery.UniqueId[^1];
+            return Enumerable.Range(0, count)
+                .Select(index =>
+                {
+                    var offset = style switch
+                    {
+                        '3' => index % 2,
+                        '4' => (index * 2) % 3,
+                        '5' => index % 3,
+                        _ => 0,
+                    };
+                    return CreateSchemeColor(accents[(categorySlot + offset) % accents.Length], theme, effectiveClrMap);
+                })
+                .ToArray();
         }
 
+        var colorfulOffset = gallery.UniqueId switch
+        {
+            var id when id.EndsWith("colorful2", StringComparison.OrdinalIgnoreCase) => 1,
+            var id when id.EndsWith("colorful3", StringComparison.OrdinalIgnoreCase) => 2,
+            var id when id.EndsWith("colorful4", StringComparison.OrdinalIgnoreCase) => 3,
+            var id when id.EndsWith("colorful5", StringComparison.OrdinalIgnoreCase) => 4,
+            _ => 0,
+        };
         return Enumerable.Range(0, count)
-            .Select(index => CreateSchemeColor(accents[index % accents.Length], theme, effectiveClrMap))
+            .Select(index => CreateSchemeColor(accents[(index + colorfulOffset) % accents.Length], theme, effectiveClrMap))
             .ToArray();
     }
 

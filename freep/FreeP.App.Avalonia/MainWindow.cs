@@ -2417,6 +2417,12 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent6)));
         r.Register(SmartArtAuthoringPlanner.GrayscaleCommandId,
             new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.Grayscale)));
+        foreach (var entry in SmartArtAuthoringPlanner.ColorGallery)
+        {
+            var preset = entry.Preset;
+            r.Register(entry.CommandId,
+                new ActionRibbonCommand(() => ApplySmartArtColorPreset(preset)));
+        }
         r.Register(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicProcess)));
         r.Register(SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
