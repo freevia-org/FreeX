@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using Avalonia;
 using Avalonia.Automation;
@@ -6,12 +7,14 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Controls.Templates;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.DrawingUI;
@@ -38,13 +41,44 @@ public sealed partial class MainWindow
     private static AvaloniaCompactDialogChromeStyle SelectionPaneDialogChromeStyle => new(FormulaBarFontFamily);
 
     /// <summary>A mutable working row for the Selection Pane dialog (visibility + name edited in place).</summary>
-    private sealed class SelectionPaneRow(SelectionPaneItem item)
+    private sealed class SelectionPaneRow(SelectionPaneItem item) : INotifyPropertyChanged
     {
         public SelectionPaneItem Item { get; set; } = item;
         public Guid Id => Item.Id;
         public SelectionPaneObjectKind Kind => Item.Kind;
         public bool IsVisible { get; set; } = item.IsVisible;
         public string Name { get; set; } = item.Name;
+
+        private bool _isDropBefore;
+        private bool _isDropAfter;
+
+        public bool IsDropBefore
+        {
+            get => _isDropBefore;
+            set
+            {
+                if (_isDropBefore == value)
+                    return;
+
+                _isDropBefore = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDropBefore)));
+            }
+        }
+
+        public bool IsDropAfter
+        {
+            get => _isDropAfter;
+            set
+            {
+                if (_isDropAfter == value)
+                    return;
+
+                _isDropAfter = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDropAfter)));
+            }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
     }
 
     private System.Threading.Tasks.Task OpenSelectionPaneDialogAsync() =>
@@ -66,8 +100,6 @@ public sealed partial class MainWindow
 
         var originals = planned;
         var rows = planned.Select(item => new SelectionPaneRow(item)).ToList();
-        var captureSelectedRow = captureItems is not null ? rows.FirstOrDefault() : null;
-
         var listBox = new ListBox
         {
             MinHeight = 140,
@@ -114,32 +146,25 @@ public sealed partial class MainWindow
         ApplySelectionPaneButtonChrome(hideAllButton, 82);
         AutomationProperties.SetAutomationId(hideAllButton, "SelectionPaneHideAllButton");
 
-        bool MatchesFilter(SelectionPaneRow row)
-        {
-            var search = searchBox.Text?.Trim() ?? string.Empty;
-            if (search.Length > 0 &&
-                !row.Name.Contains(search, System.StringComparison.OrdinalIgnoreCase) &&
-                !SelectionPaneKindLabel(row.Kind).Contains(search, System.StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            return filterBox.SelectedIndex switch
-            {
-                1 => row.IsVisible,
-                2 => !row.IsVisible,
-                3 => row.Kind == SelectionPaneObjectKind.Chart,
-                4 => row.Kind == SelectionPaneObjectKind.Picture,
-                5 => row.Kind == SelectionPaneObjectKind.Shape,
-                6 => row.Kind == SelectionPaneObjectKind.TextBox,
-                _ => true,
-            };
-        }
-
         void Rebind(Guid? preferredSelection)
         {
             var selected = preferredSelection ?? (listBox.SelectedItem as SelectionPaneRow)?.Id;
-            var filtered = rows.Where(MatchesFilter).ToList();
+            var filteredIds = SelectionPanePlanner.FilterItems(
+                    ToItemStates(rows),
+                    searchBox.Text?.Trim() ?? string.Empty,
+                    filterBox.SelectedIndex switch
+                    {
+                        1 => SelectionPaneFilterValues.Visible,
+                        2 => SelectionPaneFilterValues.Hidden,
+                        3 => SelectionPaneFilterValues.Charts,
+                        4 => SelectionPaneFilterValues.Pictures,
+                        5 => SelectionPaneFilterValues.Shapes,
+                        6 => SelectionPaneFilterValues.TextBoxes,
+                        _ => SelectionPaneFilterValues.All,
+                    })
+                .Select(item => item.Id)
+                .ToHashSet();
+            var filtered = rows.Where(row => filteredIds.Contains(row.Id)).ToList();
             listBox.ItemsSource = null;
             listBox.ItemsSource = filtered;
             if (selected is { } id)
@@ -149,7 +174,7 @@ public sealed partial class MainWindow
             }
             else
             {
-                listBox.SelectedItem = captureSelectedRow is null ? filtered.FirstOrDefault() : null;
+                listBox.SelectedItem = filtered.FirstOrDefault();
             }
         }
 
@@ -201,6 +226,21 @@ public sealed partial class MainWindow
             UpdateMoveButtons();
         }
 
+        void ToggleSelectedVisibility()
+        {
+            if (listBox.SelectedItem is not SelectionPaneRow selected)
+                return;
+
+            selected.IsVisible = !selected.IsVisible;
+            Rebind(selected.Id);
+        }
+
+        void FocusRenameBox()
+        {
+            renameBox.Focus();
+            renameBox.SelectAll();
+        }
+
         moveUpButton.Click += (_, _) => Move(forward: true);
         moveDownButton.Click += (_, _) => Move(forward: false);
         renameButton.Click += (_, _) =>
@@ -211,14 +251,7 @@ public sealed partial class MainWindow
             selected.Name = renameBox.Text ?? string.Empty;
             Rebind(selected.Id);
         };
-        toggleVisibilityButton.Click += (_, _) =>
-        {
-            if (listBox.SelectedItem is not SelectionPaneRow selected)
-                return;
-
-            selected.IsVisible = !selected.IsVisible;
-            Rebind(selected.Id);
-        };
+        toggleVisibilityButton.Click += (_, _) => ToggleSelectedVisibility();
         showAllButton.Click += (_, _) =>
         {
             foreach (var row in rows)
@@ -233,6 +266,187 @@ public sealed partial class MainWindow
         };
         searchBox.TextChanged += (_, _) => Rebind(null);
         filterBox.SelectionChanged += (_, _) => Rebind(null);
+
+        listBox.KeyDown += (_, e) =>
+        {
+            // Keep typing and checkbox activation inside their editors; WPF's list keyboard contract only
+            // applies when the list row itself owns focus.
+            if (e.Source is TextBox or CheckBox)
+                return;
+
+            var action = SelectionPanePlanner.PlanKeyboardAction(
+                ToSelectionPaneKeyboardKey(e.Key),
+                e.KeyModifiers.HasFlag(KeyModifiers.Control));
+            switch (action)
+            {
+                case SelectionPaneKeyboardAction.MoveUp:
+                    Move(forward: true);
+                    e.Handled = true;
+                    break;
+                case SelectionPaneKeyboardAction.MoveDown:
+                    Move(forward: false);
+                    e.Handled = true;
+                    break;
+                case SelectionPaneKeyboardAction.FocusRename:
+                    FocusRenameBox();
+                    e.Handled = true;
+                    break;
+                case SelectionPaneKeyboardAction.ToggleVisibility:
+                    ToggleSelectedVisibility();
+                    e.Handled = true;
+                    break;
+            }
+        };
+
+        SelectionPaneRow? dragRow = null;
+        IPointer? dragPointer = null;
+        Point dragStart = default;
+        var isDragging = false;
+
+        SelectionPaneRow? FindRow(object? source)
+        {
+            if (source is ListBoxItem item)
+                return item.DataContext as SelectionPaneRow;
+
+            return source is Visual visual
+                ? visual.GetVisualAncestors().OfType<ListBoxItem>()
+                    .Select(item => item.DataContext)
+                    .OfType<SelectionPaneRow>()
+                    .FirstOrDefault()
+                : null;
+        }
+
+        (SelectionPaneRow Row, SelectionPaneDropPlacement Placement)? FindDropTarget(Point position)
+        {
+            foreach (var item in listBox.GetVisualDescendants().OfType<ListBoxItem>())
+            {
+                var origin = item.TranslatePoint(new Point(0, 0), listBox);
+                if (origin is not { } topLeft)
+                    continue;
+
+                var bounds = new Rect(topLeft, item.Bounds.Size);
+                if (!bounds.Contains(position) || item.DataContext is not SelectionPaneRow row)
+                    continue;
+
+                var placement = position.Y > bounds.Top + bounds.Height / 2
+                    ? SelectionPaneDropPlacement.After
+                    : SelectionPaneDropPlacement.Before;
+                return (row, placement);
+            }
+
+            return null;
+        }
+
+        void ApplyDropVisual(SelectionPaneDropVisualPlan? plan)
+        {
+            foreach (var row in rows)
+            {
+                var isTarget = plan?.IsAllowed == true && row.Id == plan.TargetId;
+                row.IsDropBefore = isTarget && plan!.Placement == SelectionPaneDropPlacement.Before;
+                row.IsDropAfter = isTarget && plan!.Placement == SelectionPaneDropPlacement.After;
+            }
+        }
+
+        void UpdateDropVisual(Point position)
+        {
+            if (dragRow is null || FindDropTarget(position) is not { } target)
+            {
+                ApplyDropVisual(null);
+                return;
+            }
+
+            ApplyDropVisual(SelectionPanePlanner.PlanDropVisual(
+                ToItemStates(rows),
+                dragRow.Id,
+                target.Row.Id,
+                target.Placement));
+        }
+
+        void ClearDragState(bool releasePointer)
+        {
+            var pointer = dragPointer;
+            dragPointer = null;
+            dragRow = null;
+            isDragging = false;
+            ApplyDropVisual(null);
+            if (releasePointer)
+                pointer?.Capture(null);
+        }
+
+        listBox.AddHandler(
+            InputElement.PointerPressedEvent,
+            (_, e) =>
+            {
+                if (!e.GetCurrentPoint(listBox).Properties.IsLeftButtonPressed ||
+                    e.Source is TextBox or CheckBox ||
+                    FindRow(e.Source) is not { } row)
+                    return;
+
+                dragRow = row;
+                dragPointer = e.Pointer;
+                dragStart = e.GetPosition(listBox);
+                isDragging = false;
+                e.Pointer.Capture(listBox);
+            },
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
+        listBox.PointerMoved += (_, e) =>
+        {
+            if (dragRow is null || dragPointer != e.Pointer)
+                return;
+
+            var point = e.GetCurrentPoint(listBox);
+            if (!point.Properties.IsLeftButtonPressed)
+            {
+                ClearDragState(releasePointer: true);
+                return;
+            }
+
+            var position = e.GetPosition(listBox);
+            if (!isDragging &&
+                Math.Abs(position.X - dragStart.X) < 4 &&
+                Math.Abs(position.Y - dragStart.Y) < 4)
+            {
+                return;
+            }
+
+            isDragging = true;
+            UpdateDropVisual(position);
+        };
+        listBox.PointerReleased += (_, e) =>
+        {
+            if (dragRow is null || dragPointer != e.Pointer)
+                return;
+
+            var dragged = dragRow;
+            var wasDragging = isDragging;
+            var target = wasDragging ? FindDropTarget(e.GetPosition(listBox)) : null;
+            ClearDragState(releasePointer: true);
+            if (!wasDragging || target is not { } dropTarget)
+                return;
+
+            var plan = SelectionPanePlanner.PlanDragReorder(
+                ToItemStates(rows),
+                dragged.Id,
+                dropTarget.Row.Id,
+                dropTarget.Placement);
+            if (plan is null)
+                return;
+
+            moveChanges.AddRange(plan.MoveChanges);
+            var byId = rows.ToDictionary(row => row.Id);
+            rows.Clear();
+            foreach (var id in plan.OrderedIds)
+            {
+                if (byId.TryGetValue(id, out var row))
+                    rows.Add(row);
+            }
+
+            Rebind(dragged.Id);
+            UpdateMoveButtons();
+            e.Handled = true;
+        };
+        listBox.PointerCaptureLost += (_, _) => ClearDragState(releasePointer: false);
 
         listBox.ItemTemplate = new FuncDataTemplate<SelectionPaneRow>((row, _) =>
         {
@@ -260,8 +474,9 @@ public sealed partial class MainWindow
                 HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
-                Height = 24,
-                Padding = new Thickness(0, 1),
+                Height = 22,
+                Padding = new Thickness(0),
+                Margin = new Thickness(8, 0, 0, 0),
             };
             AutomationProperties.SetAutomationId(nameBox, "SelectionPaneName_" + row.Id.ToString("N"));
             AutomationProperties.SetName(nameBox, UiText.Get("SelectionPane_NameLabel"));
@@ -270,7 +485,7 @@ public sealed partial class MainWindow
             var kindText = new TextBlock
             {
                 Text = SelectionPaneKindLabel(row.Kind),
-                Foreground = SecondaryInk,
+                Foreground = Brush(128, 128, 128),
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 0, 0),
                 FontSize = 12,
@@ -287,8 +502,8 @@ public sealed partial class MainWindow
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 ColumnDefinitions =
                 {
-                    new ColumnDefinition { Width = new GridLength(28) },
-                    new ColumnDefinition { Width = new GridLength(150) },
+                    new ColumnDefinition { Width = new GridLength(32) },
+                    new ColumnDefinition { Width = new GridLength(160) },
                     new ColumnDefinition { Width = GridLength.Auto },
                     new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                 },
@@ -299,7 +514,35 @@ public sealed partial class MainWindow
             rowGrid.Children.Add(visibilityBox);
             rowGrid.Children.Add(nameBox);
             rowGrid.Children.Add(kindText);
-            return rowGrid;
+
+            var rowSurface = new Grid { MinHeight = 24 };
+            rowSurface.Children.Add(rowGrid);
+            rowSurface.Children.Add(new Border
+            {
+                Background = Brush(218, 218, 218),
+                Height = 1,
+                VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
+                IsHitTestVisible = false,
+            });
+            var beforeCue = new Border
+            {
+                Background = Brush(32, 122, 197),
+                Height = 2,
+                VerticalAlignment = AvaloniaVerticalAlignment.Top,
+                IsHitTestVisible = false,
+            };
+            beforeCue.Bind(Visual.IsVisibleProperty, new Binding(nameof(SelectionPaneRow.IsDropBefore)) { Source = row });
+            rowSurface.Children.Add(beforeCue);
+            var afterCue = new Border
+            {
+                Background = Brush(32, 122, 197),
+                Height = 2,
+                VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
+                IsHitTestVisible = false,
+            };
+            afterCue.Bind(Visual.IsVisibleProperty, new Binding(nameof(SelectionPaneRow.IsDropAfter)) { Source = row });
+            rowSurface.Children.Add(afterCue);
+            return rowSurface;
         });
 
         listBox.SelectionChanged += (_, _) => UpdateMoveButtons();
@@ -354,12 +597,16 @@ public sealed partial class MainWindow
         };
 
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);
+        buttonRow.Spacing = 6;
         var content = new Grid { Margin = new Thickness(16) };
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 140 });
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        // WPF's fixed 520x440 capture reserves the native title-bar/client-area delta below the action row;
+        // preserve that same visual baseline in Avalonia's borderless dialog client area.
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(37) });
         AddGridChild(content, searchRow, 0, isRow: true);
         AddGridChild(content, listBox, 1, isRow: true);
         AddGridChild(content, renameRow, 2, isRow: true);
@@ -370,18 +617,7 @@ public sealed partial class MainWindow
         ConfigureDeferredDialogCancel(dialog, cancel);
 
         Rebind(null);
-        if (captureSelectedRow is not null)
-        {
-            renameBox.Text = captureSelectedRow.Name;
-            renameButton.IsEnabled = true;
-            toggleVisibilityButton.IsEnabled = true;
-            moveUpButton.IsEnabled = false;
-            moveDownButton.IsEnabled = false;
-        }
-        else
-        {
-            UpdateMoveButtons();
-        }
+        UpdateMoveButtons();
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)
@@ -402,15 +638,17 @@ public sealed partial class MainWindow
 
     private static void ApplySelectionPaneListStyle(ListBox listBox)
     {
+        AvaloniaCompactDialogChrome.ApplyListBox(listBox, SelectionPaneDialogChromeStyle);
         listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
         {
             Setters =
             {
-                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BackgroundProperty, Brushes.White),
                 new Setter(TemplatedControl.ForegroundProperty, Brushes.Black),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
-                // Stretch each row so the name column (star-width) fills the list and the type
-                // column right-edge lines up row-to-row.
+                new Setter(TemplatedControl.BorderBrushProperty, Brush(218, 218, 218)),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 1)),
+                new Setter(Layoutable.MinHeightProperty, 28d),
                 new Setter(ContentControl.HorizontalContentAlignmentProperty, AvaloniaHorizontalAlignment.Stretch),
             },
         });
@@ -418,30 +656,46 @@ public sealed partial class MainWindow
         {
             Setters =
             {
-                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BackgroundProperty, Brush(246, 246, 246)),
                 new Setter(TemplatedControl.ForegroundProperty, Brushes.Black),
+                new Setter(TemplatedControl.BorderBrushProperty, Brush(218, 218, 218)),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 1)),
             },
         });
         listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>().Class(":selected").Template().OfType<Border>())
         {
             Setters =
             {
-                new Setter(Border.BackgroundProperty, Brushes.Transparent),
-                new Setter(Border.BorderBrushProperty, Brushes.Transparent),
+                new Setter(Border.BackgroundProperty, Brush(246, 246, 246)),
+                new Setter(Border.BorderBrushProperty, Brush(218, 218, 218)),
+                new Setter(Border.BorderThicknessProperty, new Thickness(0, 0, 0, 1)),
             },
         });
     }
 
     private static void ApplySelectionPaneTextBoxChrome(TextBox textBox)
-        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, SelectionPaneDialogChromeStyle);
+    {
+        AvaloniaCompactDialogChrome.ApplyTextBox(textBox, SelectionPaneDialogChromeStyle);
+        textBox.Height = 22;
+        textBox.MinHeight = 22;
+        textBox.MaxHeight = 22;
+    }
 
     private static void ApplySelectionPaneComboBoxChrome(ComboBox comboBox)
-        => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, SelectionPaneDialogChromeStyle);
+    {
+        AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, SelectionPaneDialogChromeStyle);
+        comboBox.Height = 22;
+        comboBox.MinHeight = 22;
+        comboBox.MaxHeight = 22;
+    }
 
     private static void ApplySelectionPaneButtonChrome(Button button, double width, bool isDefault = false)
     {
         button.Width = width;
         AvaloniaCompactDialogChrome.ApplyButton(button, SelectionPaneDialogChromeStyle, width, isDefault);
+        button.Height = 20;
+        button.MinHeight = 20;
+        button.MaxHeight = 20;
     }
 
     private static Viewbox CreateSelectionPaneEyeIcon()
@@ -528,5 +782,15 @@ public sealed partial class MainWindow
             SelectionPaneObjectKind.Shape => UiText.Get("SelectionPane_KindShape"),
             SelectionPaneObjectKind.TextBox => UiText.Get("SelectionPane_KindTextBox"),
             _ => kind.ToString()
+        };
+
+    private static SelectionPaneKeyboardKey ToSelectionPaneKeyboardKey(Key key) =>
+        key switch
+        {
+            Key.F2 => SelectionPaneKeyboardKey.F2,
+            Key.Space => SelectionPaneKeyboardKey.Space,
+            Key.Up => SelectionPaneKeyboardKey.Up,
+            Key.Down => SelectionPaneKeyboardKey.Down,
+            _ => SelectionPaneKeyboardKey.Other,
         };
 }
