@@ -684,7 +684,7 @@ static void RenderDocumentComposite(
             var footerDistance = thisPageSettings.FooterDistancePt > 0
                 ? PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)
                 : DefaultHeaderFooterDistanceDip;
-            var headerTop = headerDistance;
+            var headerTop = Math.Max(0, headerDistance - 1);
             var footerTop = thisPixH - footerDistance - footerH + 7;
 
             if (box.HeaderSubEditor is not null && box.HeaderSlotName is { } hSlotName)
@@ -772,17 +772,22 @@ static void RenderDocumentComposite(
                 i + 1,
                 thisPageSettings,
                 differentOddEvenHeaderFooterPages);
-            const double hfH = 36;
+            const double headerH = 42;
+            const double footerH = 36;
             var printableWidthDip = Math.Max(1, thisPageWDip - thisMarginLeft - thisMarginRight);
             const double DefaultHeaderFooterDistanceDip = 48;
+            var headerDistance = thisPageSettings.HeaderDistancePt > 0
+                ? PageLayout.PointsToDip(thisPageSettings.HeaderDistancePt)
+                : DefaultHeaderFooterDistanceDip;
             var footerDistance = thisPageSettings.FooterDistancePt > 0
                 ? PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)
                 : DefaultHeaderFooterDistanceDip;
-            var footerTop = thisPixH - footerDistance - hfH + 7;
+            var headerTop = Math.Max(0, headerDistance - 1);
+            var footerTop = thisPixH - footerDistance - footerH + 7;
 
-            if (slots.Footer is { IsEmpty: false } footerSlot)
+            if (slots.Header is { IsEmpty: false } headerSlot)
             {
-                var hfPage = RenderHfSlot(footerSlot, doc, printableWidthDip, hfH, i + 1, (i + 1).ToString(CultureInfo.InvariantCulture), actualPageCount);
+                var hfPage = RenderHfSlot(headerSlot, doc, printableWidthDip, headerH, i + 1, (i + 1).ToString(CultureInfo.InvariantCulture), actualPageCount);
                 if (hfPage is not null)
                 {
                     var hfVis = new DrawingVisual();
@@ -793,7 +798,25 @@ static void RenderDocumentComposite(
                             AlignmentX = AlignmentX.Left,
                             AlignmentY = AlignmentY.Top
                         },
-                            null, new Rect(thisMarginLeft, footerTop, printableWidthDip, hfH));
+                            null, new Rect(thisMarginLeft, headerTop, printableWidthDip, headerH));
+                    bmp.Render(hfVis);
+                }
+            }
+
+            if (slots.Footer is { IsEmpty: false } footerSlot)
+            {
+                var hfPage = RenderHfSlot(footerSlot, doc, printableWidthDip, footerH, i + 1, (i + 1).ToString(CultureInfo.InvariantCulture), actualPageCount);
+                if (hfPage is not null)
+                {
+                    var hfVis = new DrawingVisual();
+                    using (var dc = hfVis.RenderOpen())
+                        dc.DrawRectangle(new VisualBrush(hfPage.Visual)
+                        {
+                            Stretch = Stretch.None,
+                            AlignmentX = AlignmentX.Left,
+                            AlignmentY = AlignmentY.Top
+                        },
+                            null, new Rect(thisMarginLeft, footerTop, printableWidthDip, footerH));
                     bmp.Render(hfVis);
                 }
             }
