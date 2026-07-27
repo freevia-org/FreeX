@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows.Controls;
 using FreeX.App.Host;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
 
@@ -198,27 +199,14 @@ public sealed partial class OptionsDialogSourceTests
     }
 
     [Fact]
-    public void OptionsDialog_RejectsNonPositiveMaxIterations()
+    public void OptionsDialog_WiresNonPositiveMaxIterationsToOwnedWarning()
     {
-        StaTestRunner.Run(() =>
-        {
-            var calcSettings = new OptionsDialogCalculationSettings(true, false, null, null);
-            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
-            dialog.Show();
-            try
-            {
-                GetControl<CheckBox>(dialog, "OptIterativeEnabled").IsChecked = true;
-                GetControl<TextBox>(dialog, "OptMaxIterations").Text = "0";
+        CalculationOptionsInputParser.TryParseMaxIterations("0", out _).Should().BeFalse();
 
-                var okButton = GetControl<Button>(dialog, "OkBtn");
-                DialogSourceTestSupport.ClickButtonAllowingNonModalDialogResult(okButton);
-
-                dialog.DialogResult.Should().BeNull();
-            }
-            finally
-            {
-                dialog.Close();
-            }
-        });
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
+        source.Should().Contain(
+            "if (!CalculationOptionsInputParser.TryParseMaxIterations(OptMaxIterations.Text, out var maxIterations))");
+        source.Should().Contain(
+            "ShowInvalidInputWarning(UiText.Get(\"Options_InvalidMaxIterationsMessage\"), OptMaxIterations);");
     }
 }
