@@ -12,6 +12,12 @@ public sealed class OptionsDialogPlannerTests
         OptionsDialogPlanner.ContentPaddingVertical.Should().Be(20);
         OptionsDialogPlanner.FooterHeight.Should().Be(46);
         OptionsDialogPlanner.FooterButtonWidth.Should().Be(80);
+        OptionsDialogPlanner.GeneralContentWidth.Should().Be(468);
+        OptionsDialogPlanner.GeneralLabelWidth.Should().Be(230);
+        OptionsDialogPlanner.GeneralFontFieldWidth.Should().Be(200);
+        OptionsDialogPlanner.GeneralSmallFieldWidth.Should().Be(80);
+        OptionsDialogPlanner.GeneralFieldSpacing.Should().Be(0);
+        OptionsDialogPlanner.GeneralCheckBoxHeight.Should().Be(18);
         OptionsDialogPlanner.ProofingContentWidth.Should().Be(468);
         OptionsDialogPlanner.ProofingWordsListHeight.Should().Be(108);
         OptionsDialogPlanner.ProofingAddWordLabelWidth.Should().Be(94);
@@ -153,6 +159,34 @@ public sealed class OptionsDialogPlannerTests
 
         var projected = OptionsDialogPlanner.Project(new AppOptions(), input);
         projected.ObjectsDisplay.Should().Be(AppOptionsObjectDisplay.Nothing);
+    }
+
+    [Fact]
+    public void Project_ProjectsOptionalCollapseRibbonEditAndCarriesItForLegacyCallers()
+    {
+        OptionsDialogPlanner.TryBuildInput(
+            "Calibri", "12", "2", "Tester",
+            autoCalculate: true, useR1C1ReferenceStyle: false, errorCheckingEnabled: true,
+            proofingIgnoreUppercase: true, proofingIgnoreNumbers: false,
+            showFormulaBar: true, showGridlines: true, showHeadings: true,
+            defaultFormat: ".xlsx", showScreenTips: true,
+            moveSelectionAfterEnter: true, afterEnterDirection: AppOptionsEnterDirection.Down,
+            out var input, out _, collapseRibbonAutomatically: true);
+
+        OptionsDialogPlanner.Project(new AppOptions { CollapseRibbonAutomatically = false }, input)
+            .CollapseRibbonAutomatically.Should().BeTrue();
+
+        OptionsDialogPlanner.TryBuildInput(
+            "Calibri", "12", "2", "Tester",
+            autoCalculate: true, useR1C1ReferenceStyle: false, errorCheckingEnabled: true,
+            proofingIgnoreUppercase: true, proofingIgnoreNumbers: false,
+            showFormulaBar: true, showGridlines: true, showHeadings: true,
+            defaultFormat: ".xlsx", showScreenTips: true,
+            moveSelectionAfterEnter: true, afterEnterDirection: AppOptionsEnterDirection.Down,
+            out var legacyInput, out _);
+
+        OptionsDialogPlanner.Project(new AppOptions { CollapseRibbonAutomatically = true }, legacyInput)
+            .CollapseRibbonAutomatically.Should().BeTrue();
     }
 
     [Fact]

@@ -86,46 +86,61 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyWindow(dialog, OptionsDialogChromeStyle);
 
         // ── General ─────────────────────────────────────────────────────────────
-        var fontBox = new ComboBox { MinWidth = 200, ItemsSource = OptionsDialogPlanner.FontNames };
+        var fontBox = new ComboBox { MinWidth = OptionsDialogPlanner.GeneralFontFieldWidth, ItemsSource = OptionsDialogPlanner.FontNames };
         fontBox.SelectedIndex = OptionsDialogPlanner.DefaultFontToIndex(current.DefaultFontName);
         ApplyOptionsComboBoxChrome(fontBox);
         AutomationProperties.SetAutomationId(fontBox, "OptionsDefaultFontComboBox");
 
-        var fontSizeBox = new ComboBox { MinWidth = 100, ItemsSource = OptionsDialogPlanner.FontSizes };
+        var fontSizeBox = new ComboBox { MinWidth = OptionsDialogPlanner.GeneralSmallFieldWidth, IsEditable = true, ItemsSource = OptionsDialogPlanner.FontSizes };
         fontSizeBox.SelectedItem = current.DefaultFontSize.ToString();
         ApplyOptionsComboBoxChrome(fontSizeBox);
+        // The editable Avalonia template reserves the arrow gutter in addition to the shared
+        // combo padding. Keep the WPF 80 px field while leaving the two-digit value fully visible.
+        fontSizeBox.Text = current.DefaultFontSize.ToString();
+        fontSizeBox.Padding = new Thickness(2, 0, 0, 0);
+        fontSizeBox.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left;
         AutomationProperties.SetAutomationId(fontSizeBox, "OptionsDefaultFontSizeComboBox");
 
-        var sheetCountBox = new TextBox { MinWidth = 100, Text = current.DefaultSheetCount.ToString() };
+        var sheetCountBox = new TextBox { MinWidth = OptionsDialogPlanner.GeneralSmallFieldWidth, Text = current.DefaultSheetCount.ToString() };
         ApplyOptionsTextBoxChrome(sheetCountBox);
         AutomationProperties.SetAutomationId(sheetCountBox, "OptionsDefaultSheetCountBox");
 
-        var userNameBox = new TextBox { MinWidth = 200, Text = current.UserName };
+        var userNameBox = new TextBox { Text = current.UserName };
         ApplyOptionsTextBoxChrome(userNameBox);
         AutomationProperties.SetAutomationId(userNameBox, "OptionsUserNameBox");
 
-        var screenTipsBox = new CheckBox { Content = UiText.Get("Options_ShowScreenTips"), IsChecked = current.ShowScreenTips };
+        var screenTipsBox = new CheckBox { Content = OptionsText("Options_ShowFeatureDescriptionsInScreenTips"), IsChecked = current.ShowScreenTips };
         ApplyOptionsCheckBoxChrome(screenTipsBox);
+        screenTipsBox.Height = OptionsDialogPlanner.GeneralCheckBoxHeight;
+        screenTipsBox.MinHeight = OptionsDialogPlanner.GeneralCheckBoxHeight;
+        screenTipsBox.MaxHeight = OptionsDialogPlanner.GeneralCheckBoxHeight;
+        screenTipsBox.Margin = new Thickness(0, 0, 0, 4);
         AutomationProperties.SetAutomationId(screenTipsBox, "OptionsShowScreenTipsCheckBox");
         var collapseRibbonBox = new CheckBox
         {
             Content = OptionsText("Options_CollapseTheRibbonAutomatically"),
-            IsEnabled = false,
+            IsChecked = current.CollapseRibbonAutomatically,
         };
         ApplyOptionsCheckBoxChrome(collapseRibbonBox);
+        collapseRibbonBox.Height = OptionsDialogPlanner.GeneralCheckBoxHeight;
+        collapseRibbonBox.MinHeight = OptionsDialogPlanner.GeneralCheckBoxHeight;
+        collapseRibbonBox.MaxHeight = OptionsDialogPlanner.GeneralCheckBoxHeight;
+        collapseRibbonBox.Margin = new Thickness(0, 0, 0, 6);
         AutomationProperties.SetAutomationId(collapseRibbonBox, "OptionsCollapseRibbonAutomaticallyCheckBox");
 
         var generalPanel = OptionsCategoryPanel(
-            OptionsDescription(OptionsText("Options_GeneralOptionsForWorkingWithFreeX")),
-            OptionsSectionHeader(OptionsText("Options_UserInterfaceOptions")),
+            OptionsDescription(OptionsText("Options_GeneralOptionsForWorkingWithFreeX"), bottomMargin: OptionsDialogPlanner.GeneralDescriptionBottomMargin),
+            OptionsSectionHeader(OptionsText("Options_UserInterfaceOptions"), topMargin: 0, bottomMargin: OptionsDialogPlanner.GeneralSectionBottomMargin),
             collapseRibbonBox,
             screenTipsBox,
-            OptionsSectionHeader(OptionsText("Options_WhenCreatingNewWorkbooks")),
-            OptionsLabeled(OptionsText("Options_DefaultFont"), fontBox),
-            OptionsLabeled(OptionsText("Options_FontSize"), fontSizeBox, fieldWidth: 80),
-            OptionsLabeled(OptionsText("Options_IncludeThisManySheets"), sheetCountBox, fieldWidth: 80),
-            OptionsSectionHeader(OptionsText("Options_PersonalizeYourCopyOfFreeX")),
-            OptionsLabeled(OptionsText("Options_UserName"), userNameBox, stretchField: true));
+            OptionsSectionHeader(OptionsText("Options_WhenCreatingNewWorkbooks"), topMargin: OptionsDialogPlanner.GeneralSectionTopMargin, bottomMargin: OptionsDialogPlanner.GeneralSectionBottomMargin),
+            OptionsLabeled(OptionsText("Options_DefaultFont"), fontBox, labelWidth: OptionsDialogPlanner.GeneralLabelWidth, fieldWidth: OptionsDialogPlanner.GeneralFontFieldWidth, spacing: OptionsDialogPlanner.GeneralFieldSpacing, margin: new Thickness(0, 0, 0, OptionsDialogPlanner.GeneralFieldBottomMargin)),
+            OptionsLabeled(OptionsText("Options_FontSize"), fontSizeBox, labelWidth: OptionsDialogPlanner.GeneralLabelWidth, fieldWidth: OptionsDialogPlanner.GeneralSmallFieldWidth, spacing: OptionsDialogPlanner.GeneralFieldSpacing, margin: new Thickness(0, 0, 0, OptionsDialogPlanner.GeneralFieldBottomMargin)),
+            OptionsLabeled(OptionsText("Options_IncludeThisManySheets"), sheetCountBox, labelWidth: OptionsDialogPlanner.GeneralLabelWidth, fieldWidth: OptionsDialogPlanner.GeneralSmallFieldWidth, spacing: OptionsDialogPlanner.GeneralFieldSpacing, margin: new Thickness(0, 0, 0, OptionsDialogPlanner.GeneralFieldBottomMargin)),
+            OptionsSectionHeader(OptionsText("Options_PersonalizeYourCopyOfFreeX"), topMargin: OptionsDialogPlanner.GeneralSectionTopMargin, bottomMargin: OptionsDialogPlanner.GeneralSectionBottomMargin),
+            OptionsLabeled(OptionsText("Options_UserName"), userNameBox, labelWidth: OptionsDialogPlanner.GeneralLabelWidth, stretchField: true, spacing: OptionsDialogPlanner.GeneralFieldSpacing, margin: new Thickness(0, 0, 0, OptionsDialogPlanner.GeneralUserNameBottomMargin)));
+        generalPanel.MinWidth = OptionsDialogPlanner.GeneralContentWidth;
+        generalPanel.Spacing = 0;
 
         // ── Formulas ────────────────────────────────────────────────────────────
         // Calc mode and iterative-calculation settings are workbook-level state (Workbook.
@@ -888,9 +903,9 @@ public sealed partial class MainWindow
         var selectedCategoryIndex = 0;
         var categoryList = new StackPanel
         {
-            Width = OptionsDialogPlanner.CategoryColumnWidth,
             Background = Brush(245, 245, 245),
             Margin = new Thickness(0, OptionsDialogPlanner.CategoryTopMargin, 0, 0),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         AutomationProperties.SetAutomationId(categoryList, "OptionsCategoryList");
         AutomationProperties.SetName(categoryList, UiText.Get("Options_OptionsCategories"));
@@ -1055,7 +1070,8 @@ public sealed partial class MainWindow
                          1 => AppOptionsObjectDisplay.Placeholders,
                          2 => AppOptionsObjectDisplay.Nothing,
                          _ => AppOptionsObjectDisplay.All,
-                     }))
+                     },
+                    collapseRibbonAutomatically: collapseRibbonBox.IsChecked == true))
             {
                 warningText.Text = inputError == OptionsDialogPlanner.OptionsInputError.InvalidFontSize
                     ? UiText.Get("Options_InvalidFontSizeMessage")
@@ -1135,7 +1151,7 @@ public sealed partial class MainWindow
 
         var body = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnDefinitions = new ColumnDefinitions($"{OptionsDialogPlanner.CategoryColumnWidth},*"),
         };
         var categoryFrame = new Border
         {
@@ -1417,7 +1433,7 @@ public sealed partial class MainWindow
             TextWrapping = TextWrapping.Wrap,
         };
 
-    private static StackPanel OptionsLabeled(
+    private static Control OptionsLabeled(
         string label,
         Control field,
         double labelWidth = 230,
@@ -1430,6 +1446,27 @@ public sealed partial class MainWindow
             field.Width = fieldWidth.Value;
         if (stretchField)
             field.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+
+        if (stretchField)
+        {
+            var grid = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions($"{labelWidth},*"),
+                Margin = margin ?? new Thickness(0),
+            };
+            var labelControl = new TextBlock
+            {
+                Text = label,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+            };
+            Grid.SetColumn(labelControl, 0);
+            Grid.SetColumn(field, 1);
+            grid.Children.Add(labelControl);
+            grid.Children.Add(field);
+            return grid;
+        }
 
         return new StackPanel
         {

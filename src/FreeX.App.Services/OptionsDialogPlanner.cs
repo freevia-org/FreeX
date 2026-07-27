@@ -49,6 +49,17 @@ public static class OptionsDialogPlanner
     public const double FooterButtonWidth = 80;
     public const double ButtonHeight = 26;
     public const double ControlHeight = 24;
+    public const double GeneralContentWidth = CaptureWidth - CategoryColumnWidth - (ContentPaddingHorizontal * 2);
+    public const double GeneralLabelWidth = 230;
+    public const double GeneralFontFieldWidth = 200;
+    public const double GeneralSmallFieldWidth = 80;
+    public const double GeneralFieldSpacing = 0;
+    public const double GeneralDescriptionBottomMargin = 18;
+    public const double GeneralSectionBottomMargin = 12;
+    public const double GeneralSectionTopMargin = 18;
+    public const double GeneralCheckBoxHeight = 18;
+    public const double GeneralFieldBottomMargin = 9;
+    public const double GeneralUserNameBottomMargin = 6;
     public const double ProofingContentWidth = CaptureWidth - CategoryColumnWidth - (ContentPaddingHorizontal * 2);
     public const double ProofingWordsListHeight = 108;
     public const double ProofingAddWordLabelWidth = 94;
@@ -96,7 +107,8 @@ public static class OptionsDialogPlanner
         bool ShowScreenTips,
         bool MoveSelectionAfterEnter,
         AppOptionsEnterDirection AfterEnterDirection,
-        AppOptionsObjectDisplay? ObjectsDisplay = null);
+        AppOptionsObjectDisplay? ObjectsDisplay = null,
+        bool? CollapseRibbonAutomatically = null);
 
     /// <summary>Font names offered in the Options dialog's default-font picker (parity with the WPF host).</summary>
     public static IReadOnlyList<string> FontNames { get; } =
@@ -157,7 +169,8 @@ public static class OptionsDialogPlanner
         AppOptionsEnterDirection afterEnterDirection,
         out OptionsDialogInput input,
         out OptionsInputError error,
-        AppOptionsObjectDisplay? objectsDisplay = null)
+        AppOptionsObjectDisplay? objectsDisplay = null,
+        bool? collapseRibbonAutomatically = null)
     {
         input = null!;
 
@@ -191,7 +204,8 @@ public static class OptionsDialogPlanner
             showScreenTips,
             moveSelectionAfterEnter,
             afterEnterDirection,
-            objectsDisplay);
+            objectsDisplay,
+            collapseRibbonAutomatically);
         return true;
     }
 
@@ -229,7 +243,7 @@ public static class OptionsDialogPlanner
             ObjectsDisplay = input.ObjectsDisplay ?? existing.ObjectsDisplay,
 
             // Carried over verbatim — not surfaced by this dialog.
-            CollapseRibbonAutomatically = existing.CollapseRibbonAutomatically,
+            CollapseRibbonAutomatically = input.CollapseRibbonAutomatically ?? existing.CollapseRibbonAutomatically,
             AppLanguage = existing.AppLanguage,
             SpellCheckCustomDictionaryWords = existing.SpellCheckCustomDictionaryWords,
             FormulaBarExpanded = existing.FormulaBarExpanded,
