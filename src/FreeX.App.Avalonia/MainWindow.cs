@@ -20587,12 +20587,12 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = UiText.Get("ScenarioManager_ScenarioManager"),
-            Width = 360,
-            Height = 420,
-            MinWidth = 360,
-            MinHeight = 420,
-            MaxWidth = 360,
-            MaxHeight = 420,
+            Width = ScenarioManagerDialogLayout.DialogWidth,
+            Height = ScenarioManagerDialogLayout.DialogHeight,
+            MinWidth = ScenarioManagerDialogLayout.DialogWidth,
+            MinHeight = ScenarioManagerDialogLayout.DialogHeight,
+            MaxWidth = ScenarioManagerDialogLayout.DialogWidth,
+            MaxHeight = ScenarioManagerDialogLayout.DialogHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -20600,12 +20600,25 @@ public sealed partial class MainWindow : Window
             FontSize = 12,
         };
         AutomationProperties.SetAutomationId(dialog, "ScenarioManagerCompactDialog");
+        var dialogChrome = AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            FontFamily = FormulaBarFontFamily,
+        };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, dialogChrome);
 
         var scenarioList = new ListBox
         {
-            MinHeight = 118,
-            MaxHeight = 118,
+            Height = ScenarioManagerDialogLayout.ScenarioListHeight,
+            MinHeight = ScenarioManagerDialogLayout.ScenarioListHeight,
+            MaxHeight = ScenarioManagerDialogLayout.ScenarioListHeight,
         };
+        scenarioList.ItemTemplate = new FuncDataTemplate<ScenarioManagerDialogScenarioItem>(
+            (item, _) => new TextBlock
+            {
+                Text = item.Choice.Name,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            });
+        AvaloniaCompactDialogChrome.ApplyListBox(scenarioList, dialogChrome);
         AutomationProperties.SetName(scenarioList, StripDisplayMnemonic(UiText.Get("ScenarioManager_Scenarios")));
         AutomationProperties.SetAutomationId(scenarioList, "ScenarioManagerScenarioList");
         AutomationProperties.SetHelpText(scenarioList, "Select a saved scenario.");
@@ -20614,7 +20627,7 @@ public sealed partial class MainWindow : Window
         {
             MinWidth = 170,
         };
-        ApplyDataToolsTextBoxChrome(nameBox);
+        AvaloniaCompactDialogChrome.ApplyTextBox(nameBox, dialogChrome);
         AutomationProperties.SetName(nameBox, "Scenario name");
         AutomationProperties.SetAutomationId(nameBox, "ScenarioManagerNameBox");
         AutomationProperties.SetHelpText(nameBox, "Scenario name.");
@@ -20623,7 +20636,7 @@ public sealed partial class MainWindow : Window
         {
             MinWidth = 170,
         };
-        ApplyDataToolsTextBoxChrome(commentBox);
+        AvaloniaCompactDialogChrome.ApplyTextBox(commentBox, dialogChrome);
         AutomationProperties.SetName(commentBox, "Comment");
         AutomationProperties.SetAutomationId(commentBox, "ScenarioManagerCommentBox");
         AutomationProperties.SetHelpText(commentBox, "Scenario comment.");
@@ -20633,7 +20646,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 170,
             IsReadOnly = true,
         };
-        ApplyDataToolsTextBoxChrome(changingCellsBox);
+        AvaloniaCompactDialogChrome.ApplyTextBox(changingCellsBox, dialogChrome);
         AutomationProperties.SetName(changingCellsBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCellsAutomationName")));
         AutomationProperties.SetAutomationId(changingCellsBox, "ScenarioManagerChangingCellsBox");
         AutomationProperties.SetHelpText(changingCellsBox, UiText.Get("ScenarioManager_EnterTheWorksheetCellsWhoseValuesChangeInTheScenario"));
@@ -20644,7 +20657,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 170,
             IsReadOnly = true,
         };
-        ApplyDataToolsTextBoxChrome(resultCellsBox);
+        AvaloniaCompactDialogChrome.ApplyTextBox(resultCellsBox, dialogChrome);
         AutomationProperties.SetName(resultCellsBox, "Result cells");
         AutomationProperties.SetAutomationId(resultCellsBox, "ScenarioManagerResultCellsBox");
         AutomationProperties.SetHelpText(resultCellsBox, "The worksheet cells whose results the scenario reports.");
@@ -20655,6 +20668,7 @@ public sealed partial class MainWindow : Window
             IsChecked = true,
             FontSize = 12,
         };
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(preventChangesBox, dialogChrome);
         AutomationProperties.SetName(preventChangesBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_PreventChangesAutomationName")));
         AutomationProperties.SetAutomationId(preventChangesBox, "ScenarioManagerPreventChangesBox");
         AutomationProperties.SetHelpText(preventChangesBox, UiText.Get("ScenarioManager_PreventChangesToTheScenarioWhenTheSheetIsProtected"));
@@ -20664,6 +20678,7 @@ public sealed partial class MainWindow : Window
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Hide")),
             FontSize = 12,
         };
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(hideBox, dialogChrome);
         AutomationProperties.SetName(hideBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_HideAutomationName")));
         AutomationProperties.SetAutomationId(hideBox, "ScenarioManagerHideBox");
         AutomationProperties.SetHelpText(hideBox, UiText.Get("ScenarioManager_HideTheScenarioWhenTheSheetIsProtected"));
@@ -20681,10 +20696,10 @@ public sealed partial class MainWindow : Window
         var saveButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Add")),
-            Width = 82,
-            MinWidth = 82,
+            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
+            MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
-        ApplyDataToolsButtonChrome(saveButton, 82);
+        AvaloniaCompactDialogChrome.ApplyButton(saveButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth, isDefault: plan.Scenarios.Count == 0);
         AutomationProperties.SetName(saveButton, "Save/Add");
         AutomationProperties.SetAutomationId(saveButton, "ScenarioManagerSaveButton");
         AutomationProperties.SetHelpText(saveButton, "Save the selected cells as a new or updated scenario.");
@@ -20692,10 +20707,10 @@ public sealed partial class MainWindow : Window
         var editButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Edit")),
-            Width = 82,
-            MinWidth = 82,
+            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
+            MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
-        ApplyDataToolsButtonChrome(editButton, 82);
+        AvaloniaCompactDialogChrome.ApplyButton(editButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
         AutomationProperties.SetName(editButton, StripDisplayMnemonic(UiText.Get("ScenarioManager_EditScenarioAutomationName")));
         AutomationProperties.SetAutomationId(editButton, "ScenarioManagerEditButton");
         AutomationProperties.SetHelpText(editButton, UiText.Get("ScenarioManager_EditTheSelectedScenarioUsingTheScenarioFields"));
@@ -20703,10 +20718,10 @@ public sealed partial class MainWindow : Window
         var showButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Show")),
-            Width = 82,
-            MinWidth = 82,
+            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
+            MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
-        ApplyDataToolsButtonChrome(showButton, 82);
+        AvaloniaCompactDialogChrome.ApplyButton(showButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth, isDefault: plan.SelectedScenario is not null);
         AutomationProperties.SetName(showButton, "Show");
         AutomationProperties.SetAutomationId(showButton, "ScenarioManagerShowButton");
         AutomationProperties.SetHelpText(showButton, "Apply the selected scenario values to the workbook.");
@@ -20714,10 +20729,10 @@ public sealed partial class MainWindow : Window
         var deleteButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Delete")),
-            Width = 82,
-            MinWidth = 82,
+            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
+            MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
-        ApplyDataToolsButtonChrome(deleteButton, 82);
+        AvaloniaCompactDialogChrome.ApplyButton(deleteButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
         AutomationProperties.SetName(deleteButton, "Delete");
         AutomationProperties.SetAutomationId(deleteButton, "ScenarioManagerDeleteButton");
         AutomationProperties.SetHelpText(deleteButton, "Delete the selected scenario.");
@@ -20725,10 +20740,10 @@ public sealed partial class MainWindow : Window
         var summaryButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Summary")),
-            Width = 82,
-            MinWidth = 82,
+            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
+            MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
-        ApplyDataToolsButtonChrome(summaryButton, 82);
+        AvaloniaCompactDialogChrome.ApplyButton(summaryButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
         AutomationProperties.SetName(summaryButton, "Summary Report");
         AutomationProperties.SetAutomationId(summaryButton, "ScenarioManagerSummaryButton");
         AutomationProperties.SetHelpText(summaryButton, "Create a scenario summary report sheet.");
@@ -20736,10 +20751,10 @@ public sealed partial class MainWindow : Window
         var closeButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Close")),
-            Width = 82,
-            MinWidth = 82,
+            Width = ScenarioManagerDialogLayout.CloseButtonWidth,
+            MinWidth = ScenarioManagerDialogLayout.CloseButtonWidth,
         };
-        ApplyDataToolsButtonChrome(closeButton, 82);
+        AvaloniaCompactDialogChrome.ApplyButton(closeButton, dialogChrome, ScenarioManagerDialogLayout.CloseButtonWidth);
         AutomationProperties.SetName(closeButton, StripDisplayMnemonic(UiText.Get("ScenarioManager_Close")));
         AutomationProperties.SetAutomationId(closeButton, "ScenarioManagerCloseButton");
         AutomationProperties.SetHelpText(closeButton, "Close Scenario Manager.");
@@ -20758,6 +20773,7 @@ public sealed partial class MainWindow : Window
             showButton.IsEnabled = selected is not null;
             deleteButton.IsEnabled = selected is not null;
             editButton.IsEnabled = selected is not null;
+            AvaloniaCompactDialogChrome.ApplyButton(showButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth, isDefault: selected is not null);
 
             var selectedDialogItem = selected is null
                 ? null
@@ -20929,7 +20945,7 @@ public sealed partial class MainWindow : Window
         {
             Spacing = 6,
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(10, 20, 0, 0),
             Children =
             {
                 saveButton,
@@ -20940,81 +20956,58 @@ public sealed partial class MainWindow : Window
             },
         };
 
-        var listWithButtons = new AvaloniaGrid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-        };
-        listWithButtons.Children.Add(scenarioList);
-        AvaloniaGrid.SetColumn(scenarioList, 0);
-        listWithButtons.Children.Add(actionColumn);
-        AvaloniaGrid.SetColumn(actionColumn, 1);
-
         var scenariosHeader = new TextBlock
         {
             Text = StripDisplayMnemonic(UiText.Get("ScenarioManager_Scenarios")),
+            Margin = new Thickness(0, 0, 0, 4),
         };
 
-        // "Add/Edit Scenario" grouped box (matches the Windows bordered group): scenario
-        // name, changing cells, comment, plus the Prevent changes / Hide options.
-        var addEditGroup = new Border
+        var fields = new AvaloniaGrid
         {
-            BorderBrush = FormulaBarControlBorder,
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(12),
-            Child = new StackPanel
-            {
-                Spacing = 8,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = StripDisplayMnemonic(UiText.Get("ScenarioManager_AddEditScenario")),
-                        FontWeight = FontWeight.SemiBold,
-                        FontSize = 12,
-                    },
-                    CreateScenarioManagerField(
-                        StripDisplayMnemonic(UiText.Get("ScenarioManager_ScenarioName")),
-                        nameBox),
-                    CreateScenarioManagerField(
-                        StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCells")),
-                        changingCellsBox),
-                    CreateScenarioManagerField(
-                        "Result cells:",
-                        resultCellsBox),
-                    CreateScenarioManagerField(
-                        StripDisplayMnemonic(UiText.Get("ScenarioManager_Comment")),
-                        commentBox),
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 8,
-                        Children = { preventChangesBox, hideBox },
-                    },
-                },
-            },
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions($"{ScenarioManagerDialogLayout.FieldLabelColumnWidth},*"),
         };
+
+        AddScenarioManagerField(fields, 0, StripDisplayMnemonic(UiText.Get("ScenarioManager_ScenarioName")), nameBox);
+        AddScenarioManagerField(fields, 1, StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCells")), changingCellsBox);
+        AddScenarioManagerField(fields, 2, StripDisplayMnemonic(UiText.Get("ScenarioManager_ResultCells")), resultCellsBox);
+        AddScenarioManagerField(fields, 3, StripDisplayMnemonic(UiText.Get("ScenarioManager_Comment")), commentBox);
+        AddScenarioManagerCheckBox(fields, 4, preventChangesBox);
+        AddScenarioManagerCheckBox(fields, 5, hideBox);
+
+        var addEditGroup = new GroupBox
+        {
+            Header = StripDisplayMnemonic(UiText.Get("ScenarioManager_AddEditScenario")),
+            Margin = new Thickness(0, 12, 0, 0),
+            Padding = new Thickness(8),
+            Content = fields,
+        };
+        AvaloniaCompactDialogChrome.ApplyGroupBox(addEditGroup, dialogChrome);
+
+        var body = new AvaloniaGrid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+        };
+        var left = new StackPanel
+        {
+            Children = { scenariosHeader, scenarioList, addEditGroup },
+        };
+        body.Children.Add(left);
+        body.Children.Add(actionColumn);
+        AvaloniaGrid.SetColumn(actionColumn, 1);
 
         RefreshDialogPlan(selectedScenarioName);
         if (plan.SelectedScenario is null)
             nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
-        dialog.Content = new ScrollViewer
+        dialog.Content = new AvaloniaGrid
         {
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = new StackPanel
-            {
-                Margin = new Thickness(12),
-                Spacing = 8,
-                Children =
-                {
-                    scenariosHeader,
-                    listWithButtons,
-                    addEditGroup,
-                    errorText,
-                    closeButtonRow,
-                },
-            },
+            Margin = new Thickness(12),
+            RowDefinitions = new RowDefinitions("*,Auto,Auto"),
+            Children = { body, errorText, closeButtonRow },
         };
+        AvaloniaGrid.SetRow(body, 0);
+        AvaloniaGrid.SetRow(errorText, 1);
+        AvaloniaGrid.SetRow(closeButtonRow, 2);
         dialog.Opened += (_, _) =>
         {
             if (plan.Scenarios.Count > 0)
@@ -21082,16 +21075,34 @@ public sealed partial class MainWindow : Window
     private static string FormatCountLabel(long count, string singular) =>
         count == 1 ? singular : $"{singular}s";
 
-    private static StackPanel CreateScenarioManagerField(string label, Control control) =>
-        new()
+    private static void AddScenarioManagerField(AvaloniaGrid grid, int row, string label, Control control)
+    {
+        var labelText = new TextBlock
         {
-            Spacing = 4,
-            Children =
-            {
-                new TextBlock { Text = StripDisplayMnemonic(label), FontSize = 12 },
-                control,
-            },
+            Text = StripDisplayMnemonic(label),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 8),
         };
+        Grid.SetRow(labelText, row);
+        Grid.SetColumn(labelText, 0);
+        grid.Children.Add(labelText);
+
+        control.MinWidth = 0;
+        control.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+        control.Margin = new Thickness(0, 0, 0, 8);
+        Grid.SetRow(control, row);
+        Grid.SetColumn(control, 1);
+        grid.Children.Add(control);
+    }
+
+    private static void AddScenarioManagerCheckBox(AvaloniaGrid grid, int row, CheckBox checkBox)
+    {
+        Grid.SetRow(checkBox, row);
+        Grid.SetColumn(checkBox, 1);
+        grid.Children.Add(checkBox);
+    }
 
     private async Task ShowDataTableDialogAsync()
     {
