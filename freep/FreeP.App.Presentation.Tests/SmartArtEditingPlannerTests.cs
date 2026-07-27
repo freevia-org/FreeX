@@ -878,6 +878,45 @@ public sealed class SmartArtEditingPlannerTests
             .And.NotContain("Manager");
     }
 
+    [Fact]
+    public void RegenerateDrawingCache_Hierarchy3UsesSharedLeftToRightLayout()
+    {
+        var root = new SmartArtNode { ModelId = "root", Text = "Portfolio", Level = 0 };
+        root.Children.Add(new SmartArtNode { ModelId = "product", Text = "Product", Level = 1 });
+        root.Children.Add(new SmartArtNode { ModelId = "operations", Text = "Operations", Level = 1 });
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3"
+        };
+        data.Nodes.Add(root);
+
+        var smartArt = new SmartArtShape { Data = data, DrawingPartPath = "ppt/diagrams/drawing1.xml" };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+
+        var result = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme());
+
+        result.Applied.Should().BeTrue(result.Message);
+        result.ShapeCount.Should().Be(5, "hierarchy3 emits three boxes and two shared connectors");
+
+        var boxes = smartArt.FallbackShapes
+            .Where(shape => shape.AutoShapeKind == Free.Shared.Drawing.DrawingShapeKind.RoundedRectangle)
+            .ToDictionary(shape => shape.PlainText, StringComparer.Ordinal);
+        boxes["Product"].OffsetXEmu.Should().BeGreaterThan(boxes["Portfolio"].OffsetXEmu);
+        boxes["Operations"].OffsetXEmu.Should().Be(boxes["Product"].OffsetXEmu);
+    }
+
     private static PresentationTheme DefaultTheme() =>
         Presentation.CreateEmpty().Theme!;
 

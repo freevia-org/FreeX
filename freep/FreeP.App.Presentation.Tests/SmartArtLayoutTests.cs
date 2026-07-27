@@ -535,6 +535,16 @@ public sealed class SmartArtLayoutTests
             .Should().HaveCount(3, "hierarchy3 should emit the root and two child boxes");
         shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
             .Should().HaveCount(2, "hierarchy3 should emit one connector per parent-child relationship");
+
+        var boxesByText = shapes
+            .Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .ToDictionary(
+                s => s.TextBody!.Paragraphs.First().Runs.First().Text,
+                StringComparer.Ordinal);
+        boxesByText["Sales"].OffsetXEmu.Should().BeGreaterThan(boxesByText["CEO"].OffsetXEmu,
+            "hierarchy3's native hierChild/fromL semantics place children to the right of the root");
+        boxesByText["Engineering"].OffsetXEmu.Should().Be(boxesByText["Sales"].OffsetXEmu,
+            "hierarchy3 sibling branches share a depth column");
     }
 
     [Fact]
@@ -1686,16 +1696,40 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void Compositor_ImportedSmartArtCorpus_UsesCachedConnectorCalibration()
+    public void Compositor_Hierarchy3_UsesSharedLivePlan()
     {
-        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
-        var deck = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "14-smartart-live.pptx");
-        var presentation = FreeP.Core.IO.PptxPackageReader.Read(deck);
-        var ops = SlideCompositor.Compose(presentation, presentation.Slides[1]);
+        var data = MakeHierarchyData("CEO", "VP Sales", "VP Engineering");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3";
+        var smartArt = new SmartArtShape { Data = data };
+        var container = new SlideShape
+        {
+            Id = 52,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smartArt
+        };
+        var presentation = PresentationModel.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(container);
+        var shapeOps = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .ToList();
 
-        ops.OfType<DrawOp.Shape>()
-            .Count(op => op.Outline is ResolvedOutline.Visible outline && outline.Color == SrgbColor.FromRgb(0x0E4B66))
-            .Should().BeGreaterThan(0);
+        var textOps = shapeOps
+            .Select(op => new
+            {
+                Text = op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text,
+                X = op.BoundsDip.X
+            })
+            .Where(op => !string.IsNullOrWhiteSpace(op.Text))
+            .ToDictionary(op => op.Text!, StringComparer.Ordinal);
+        textOps.Keys.Should().Contain(["CEO", "VP Sales", "VP Engineering"]);
+        textOps["VP Sales"].X.Should().BeGreaterThan(textOps["CEO"].X,
+            "the compositor consumes hierarchy3's shared left-to-right plan");
+        textOps["VP Engineering"].X.Should().Be(textOps["VP Sales"].X);
     }
 
     [Fact]
