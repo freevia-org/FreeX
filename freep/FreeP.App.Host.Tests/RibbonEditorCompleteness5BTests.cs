@@ -243,6 +243,13 @@ public class RibbonEditorCompleteness5BTests
         Assert.Contains(SlideObjectInsertionPlanner.Star5CommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.CrossCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.PlusSignCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.PentagonCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.OctagonCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.LeftRightArrowCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.UpDownArrowCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.Star8CommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.ChevronCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.HomePlateCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.ConnectorCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.ElbowConnectorCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.CurvedConnectorCommandId, ids);
@@ -1101,6 +1108,13 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.shape-hexagon")]
     [InlineData("freep.shape-right-arrow")]
     [InlineData("freep.shape-star5")]
+    [InlineData("freep.shape-pentagon")]
+    [InlineData("freep.shape-octagon")]
+    [InlineData("freep.shape-left-right-arrow")]
+    [InlineData("freep.shape-up-down-arrow")]
+    [InlineData("freep.shape-star8")]
+    [InlineData("freep.shape-chevron")]
+    [InlineData("freep.shape-home-plate")]
     [InlineData("freep.header-footer")]
     [InlineData("freep.date-time")]
     [InlineData("freep.slide-number")]

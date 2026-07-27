@@ -35,6 +35,13 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.Star5CommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.CrossCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.PlusSignCommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.PentagonCommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.OctagonCommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.LeftRightArrowCommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.UpDownArrowCommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.Star8CommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.ChevronCommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.HomePlateCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.ConnectorCommandId, SlideObjectInsertionKind.Connector)]
     [InlineData(SlideObjectInsertionPlanner.ElbowConnectorCommandId, SlideObjectInsertionKind.Connector)]
     [InlineData(SlideObjectInsertionPlanner.CurvedConnectorCommandId, SlideObjectInsertionKind.Connector)]
@@ -75,6 +82,13 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.Star5CommandId, DrawingShapeKind.Star5, false)]
     [InlineData(SlideObjectInsertionPlanner.CrossCommandId, DrawingShapeKind.Cross, false)]
     [InlineData(SlideObjectInsertionPlanner.PlusSignCommandId, DrawingShapeKind.PlusSign, false)]
+    [InlineData(SlideObjectInsertionPlanner.PentagonCommandId, DrawingShapeKind.Pentagon, false)]
+    [InlineData(SlideObjectInsertionPlanner.OctagonCommandId, DrawingShapeKind.Octagon, false)]
+    [InlineData(SlideObjectInsertionPlanner.LeftRightArrowCommandId, DrawingShapeKind.LeftRightArrow, false)]
+    [InlineData(SlideObjectInsertionPlanner.UpDownArrowCommandId, DrawingShapeKind.UpDownArrow, false)]
+    [InlineData(SlideObjectInsertionPlanner.Star8CommandId, DrawingShapeKind.Star8, false)]
+    [InlineData(SlideObjectInsertionPlanner.ChevronCommandId, DrawingShapeKind.Chevron, false)]
+    [InlineData(SlideObjectInsertionPlanner.HomePlateCommandId, DrawingShapeKind.HomePlate, false)]
     public void ApplyCommand_InsertsExpectedAutoShape(
         string commandId,
         DrawingShapeKind expectedShape,

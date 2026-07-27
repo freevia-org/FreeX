@@ -341,6 +341,13 @@ public static class FreePRibbon
         menu.Item(ShapeChangePlanner.PlusSignCommandId,
             FreePRibbonText.ArrangeChangeShapePlusSignCommand.Label,
             FreePRibbonText.ArrangeChangeShapePlusSignCommand.KeyTip);
+        menu.Item(ShapeChangePlanner.PentagonCommandId, FreePRibbonText.ShapePentagonLabel, FreePRibbonText.ShapePentagonKeyTip);
+        menu.Item(ShapeChangePlanner.OctagonCommandId, FreePRibbonText.ShapeOctagonLabel, FreePRibbonText.ShapeOctagonKeyTip);
+        menu.Item(ShapeChangePlanner.LeftRightArrowCommandId, FreePRibbonText.ShapeLeftRightArrowLabel, FreePRibbonText.ShapeLeftRightArrowKeyTip);
+        menu.Item(ShapeChangePlanner.UpDownArrowCommandId, FreePRibbonText.ShapeUpDownArrowLabel, FreePRibbonText.ShapeUpDownArrowKeyTip);
+        menu.Item(ShapeChangePlanner.Star8CommandId, FreePRibbonText.ShapeStar8Label, FreePRibbonText.ShapeStar8KeyTip);
+        menu.Item(ShapeChangePlanner.ChevronCommandId, FreePRibbonText.ShapeChevronLabel, FreePRibbonText.ShapeChevronKeyTip);
+        menu.Item(ShapeChangePlanner.HomePlateCommandId, FreePRibbonText.ShapeHomePlateLabel, FreePRibbonText.ShapeHomePlateKeyTip);
     }
 
     private static void AddInsertGroups(RibbonTabBuilder tab)
@@ -477,6 +484,20 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Cross, FreePRibbonText.ShapeCrossKeyTip);
             group.Medium(SlideObjectInsertionPlanner.PlusSignCommandId, FreePRibbonText.ShapePlusSignLabel,
                 RibbonCommandIconKind.PlusSign, FreePRibbonText.ShapePlusSignKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.PentagonCommandId, FreePRibbonText.ShapePentagonLabel,
+                RibbonCommandIconKind.Pentagon, FreePRibbonText.ShapePentagonKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.OctagonCommandId, FreePRibbonText.ShapeOctagonLabel,
+                RibbonCommandIconKind.Octagon, FreePRibbonText.ShapeOctagonKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.LeftRightArrowCommandId, FreePRibbonText.ShapeLeftRightArrowLabel,
+                RibbonCommandIconKind.ArrowLeftRight, FreePRibbonText.ShapeLeftRightArrowKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.UpDownArrowCommandId, FreePRibbonText.ShapeUpDownArrowLabel,
+                RibbonCommandIconKind.ArrowUpDown, FreePRibbonText.ShapeUpDownArrowKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.Star8CommandId, FreePRibbonText.ShapeStar8Label,
+                RibbonCommandIconKind.Star, FreePRibbonText.ShapeStar8KeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChevronCommandId, FreePRibbonText.ShapeChevronLabel,
+                RibbonCommandIconKind.Pentagon, FreePRibbonText.ShapeChevronKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.HomePlateCommandId, FreePRibbonText.ShapeHomePlateLabel,
+                RibbonCommandIconKind.Pentagon, FreePRibbonText.ShapeHomePlateKeyTip);
             group.Medium(SlideObjectInsertionPlanner.ConnectorCommandId, FreePRibbonText.ConnectorLabel,
                 RibbonCommandIconKind.Line, FreePRibbonText.ConnectorKeyTip);
             group.Medium(SlideObjectInsertionPlanner.ElbowConnectorCommandId, FreePRibbonText.ElbowConnectorLabel,
