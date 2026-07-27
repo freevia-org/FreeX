@@ -2489,7 +2489,11 @@ public sealed partial class MainWindow : Window
         foreach (var plan in PresentationTransitionCommandPlanner.BuiltInPlans)
         {
             r.Register(plan.CommandId, new ContextRibbonCommand(ctx =>
-                PresentationTransitionCommandPlanner.TryApply(Editor, plan, ctx.SelectedValue)));
+                PresentationTransitionCommandPlanner.TryApply(
+                    Editor,
+                    plan,
+                    ctx.SelectedValue,
+                    () => _ = PickTransitionSoundAsync())));
         }
 
         foreach (var plan in PresentationDesignCommandPlanner.BuiltInPlans)
@@ -3146,6 +3150,48 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(command, ex.Message);
+        }
+    }
+
+    private async Task PickTransitionSoundAsync()
+    {
+        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
+                PresentationFileTextResources.InsertAudioCommand);
+            return;
+        }
+
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                PresentationFileTextResources.InsertAudioPickerTitle,
+                [AudioFileType]));
+
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var source = await file.OpenReadAsync();
+            using var memory = new MemoryStream();
+            await source.CopyToAsync(memory);
+
+            Editor.SetCurrentSlideTransitionSound(new TransitionSound
+            {
+                AudioBytes = memory.ToArray(),
+                ContentType = SlideObjectInsertionPlanner.InferMediaContentType(file.Name, isVideo: false),
+                IsBuiltIn = false,
+            });
+            _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                PresentationFileTextResources.InsertAudioCommand,
+                ex.Message);
         }
     }
 

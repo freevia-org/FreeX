@@ -880,6 +880,10 @@ public static class FreePRibbon
             });
             group.Medium("freep.transition.apply-all", FreePRibbonText.TransitionApplyAllCommand.Label,
                 RibbonCommandIconKind.Refresh, FreePRibbonText.TransitionApplyAllCommand.KeyTip);
+            group.Medium("freep.transition.sound", FreePRibbonText.TransitionSoundCommand.Label,
+                RibbonCommandIconKind.Picture, FreePRibbonText.TransitionSoundCommand.KeyTip);
+            group.Medium("freep.transition.sound-none", FreePRibbonText.TransitionSoundNoneCommand.Label,
+                RibbonCommandIconKind.Clear, FreePRibbonText.TransitionSoundNoneCommand.KeyTip);
         });
         tab.Group("slideshow-from-transitions", FreePRibbonText.SlideShowGroupLabel,
             profile.SlideShowGroupKeyTip(), 80, group => AddSlideShowControls(group, profile));

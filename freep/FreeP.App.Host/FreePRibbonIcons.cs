@@ -172,6 +172,8 @@ internal static class FreePRibbonIcons
             ["freep.transition.advance-on-click"] = RibbonCommandIconKind.Next,
             ["freep.transition.advance-after"]    = RibbonCommandIconKind.History,
             ["freep.transition.apply-all"]        = RibbonCommandIconKind.Refresh,
+            ["freep.transition.sound"]             = RibbonCommandIconKind.Picture,
+            ["freep.transition.sound-none"]        = RibbonCommandIconKind.Clear,
 
             // Wave 4C: Slide Show buttons
             ["freep.slideshow.from-beginning"]     = RibbonCommandIconKind.Next,

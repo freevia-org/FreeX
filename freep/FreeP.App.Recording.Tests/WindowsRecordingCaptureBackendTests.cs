@@ -14,6 +14,20 @@ public sealed class WindowsRecordingCaptureBackendTests
         "ppt/media/freep-recordings/wpf");
 
     [Fact]
+    public void WindowsDeviceCatalog_MicrophonesAdvertiseWavPayloads()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var microphones = new WindowsRecordingDeviceCatalog()
+            .EnumerateDevices()
+            .Where(device => device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone)
+            .ToArray();
+
+        microphones.Should().OnlyContain(device => device.ContentType == "audio/wav");
+    }
+
+    [Fact]
     public void Readiness_WithMicrophone_ProjectsNarrationCaptureAndDeferredCamera()
     {
         var backend = CreateBackend(

@@ -471,6 +471,7 @@ public sealed partial class MainWindow : Window
             onReopenComment: () => ReopenSelectedComment(),
             // Wave 16B: Animation pane toggle.
             onAnimPane:         () => ToggleAnimationPane(),
+            onTransitionSound:  () => PickTransitionSound(),
             onTablePicker:      () => OpenTablePicker(),
             onHeaderFooter:     focus => OpenHeaderFooterDialog(focus),
             getViewShowState:   () => _viewShowState,
@@ -4145,6 +4146,33 @@ public sealed partial class MainWindow : Window
         }
 
         return applied;
+    }
+
+    private void PickTransitionSound()
+    {
+        var result = WpfFileDialogService.ShowOpenDialog(
+            owner: this,
+            filter: $"{PresentationFileTextResources.AudioFileTypeName}|*.mp3;*.m4a;*.wav;*.wma;*.aac;*.ogg;*.flac|All files|*.*",
+            title: PresentationFileTextResources.InsertAudioPickerTitle);
+
+        if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
+        {
+            return;
+        }
+
+        try
+        {
+            Editor.SetCurrentSlideTransitionSound(new TransitionSound
+            {
+                AudioBytes = System.IO.File.ReadAllBytes(result.FileName),
+                ContentType = SlideObjectInsertionPlanner.InferMediaContentType(result.FileName, isVideo: false),
+                IsBuiltIn = false,
+            });
+        }
+        catch
+        {
+            // Match the existing ribbon media-pick behavior: a cancelled or unreadable file is a no-op.
+        }
     }
 
     private void ShowTablePicker(TableInsertionPickerPlan plan)

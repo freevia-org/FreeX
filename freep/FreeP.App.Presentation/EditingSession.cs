@@ -937,6 +937,21 @@ public sealed class EditingSession
         Bus.Execute(new SetSlideTransitionCommand(_currentSlideIndex, transition));
     }
 
+    /// <summary>Sets or clears the current slide's transition sound as one undoable edit.</summary>
+    public void SetCurrentSlideTransitionSound(TransitionSound? sound)
+    {
+        if (CurrentSlide is null || (CurrentSlideTransition is null && sound is null)) return;
+
+        var transition = PresentationTransitionCommandPlanner.CloneTransition(CurrentSlideTransition)
+            ?? new SlideTransition
+            {
+                Kind = TransitionKind.Fade,
+                DurationMs = PresentationTransitionCommandPlanner.DefaultDurationMs,
+            };
+        transition.Sound = sound;
+        SetTransition(transition);
+    }
+
     /// <summary>Gets the transition for the current slide, or null if none.</summary>
     public SlideTransition? CurrentSlideTransition => CurrentSlide?.Transition;
 

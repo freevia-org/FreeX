@@ -39,7 +39,8 @@ public class RibbonTransitionsAnimationsTests
     /// <summary>Builds a command registry with the given session (no slideshow Actions).</summary>
     private static RibbonCommandRegistry MakeRegistry(EditingSession editor,
         Action? onStart = null, Action? onCurrent = null, Action? onCustomShows = null,
-        Action? onRehearseTimings = null, Action? onRecordTimings = null)
+        Action? onRehearseTimings = null, Action? onRecordTimings = null,
+        Action? onTransitionSound = null)
         => FreePRibbonCommands.Build(
             new RibbonStateStore(),
             editor,
@@ -47,7 +48,8 @@ public class RibbonTransitionsAnimationsTests
             onCurrent,
             onRehearseTimings,
             onRecordTimings,
-            onCustomShows: onCustomShows);
+            onCustomShows: onCustomShows,
+            onTransitionSound: onTransitionSound);
 
     /// <summary>Executes a registered command by id.</summary>
     private static void Exec(RibbonCommandRegistry registry, string id, RibbonCommandContext? context = null)
@@ -87,6 +89,17 @@ public class RibbonTransitionsAnimationsTests
         var def = FreePRibbon.Build();
         var tab = def.Tabs.Single(t => t.Id == "transitions");
         Assert.Contains(tab.Groups, g => g.Id == "transition-timing");
+    }
+
+    [Fact]
+    public void TransitionTimingGroup_ContainsSoundAuthoringCommands()
+    {
+        var def = FreePRibbon.Build();
+        var tab = def.Tabs.Single(t => t.Id == "transitions");
+        var group = tab.Groups.Single(g => g.Id == "transition-timing");
+
+        Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.transition.sound");
+        Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.transition.sound-none");
     }
 
     [Fact]
@@ -143,6 +156,29 @@ public class RibbonTransitionsAnimationsTests
         var reg = MakeRegistry(ed);
         Exec(reg, "freep.transition.fade");
         Assert.Equal(TransitionKind.Fade, ed.CurrentSlideTransition?.Kind);
+    }
+
+    [Fact]
+    public void Cmd_TransitionSound_DelegatesPickerAndNoSoundClearsUndoably()
+    {
+        var (ed, pres) = MakeSession();
+        pres.Slides[0].Transition = new SlideTransition { Kind = TransitionKind.Fade };
+        bool pickerInvoked = false;
+        var reg = MakeRegistry(ed, onTransitionSound: () => pickerInvoked = true);
+
+        Exec(reg, "freep.transition.sound");
+        Assert.True(pickerInvoked);
+
+        ed.SetCurrentSlideTransitionSound(new TransitionSound
+        {
+            AudioBytes = [1, 2, 3],
+            ContentType = "audio/mpeg",
+        });
+        Exec(reg, "freep.transition.sound-none");
+        Assert.Null(ed.CurrentSlideTransition?.Sound);
+
+        ed.Undo();
+        Assert.Equal(new byte[] { 1, 2, 3 }, ed.CurrentSlideTransition?.Sound?.AudioBytes);
     }
 
     [Fact]

@@ -42,7 +42,7 @@ public sealed class WindowsRecordingDeviceCatalog : IWindowsRecordingDeviceCatal
                 displayName,
                 IsDefault: index == 0,
                 IsAvailable: true,
-                "audio/mp4"));
+                "audio/wav"));
         }
     }
 

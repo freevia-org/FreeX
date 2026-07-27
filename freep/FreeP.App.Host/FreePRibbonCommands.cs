@@ -63,6 +63,9 @@ internal static class FreePRibbonCommands
     ///   Wave 16B: callback that toggles the Animation Pane panel visibility.
     ///   Provided by MainWindow.ToggleAnimationPane().  When null the stub is a no-op.
     /// </param>
+    /// <param name="onTransitionSound">
+    ///   Callback that opens the host audio picker and applies the selected transition sound.
+    /// </param>
     public static RibbonCommandRegistry Build(
         RibbonStateStore    stateStore,
         EditingSession      editor,
@@ -119,7 +122,8 @@ internal static class FreePRibbonCommands
         Action?             onEditChart3DViewOptions = null,
         Action?             onEditChartTextOptions = null,
         Action?             onEditChartAreaOptions = null,
-        Action<OleObjectInfo>? onOpenEmbeddedObject = null)
+        Action<OleObjectInfo>? onOpenEmbeddedObject = null,
+        Action?             onTransitionSound = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -512,7 +516,7 @@ internal static class FreePRibbonCommands
 
         // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
 
-        RegisterTransitionCommands(registry, stateStore, editor);
+        RegisterTransitionCommands(registry, stateStore, editor, onTransitionSound);
 
         // ── Wave 4C: Slide Show buttons ──────────────────────────────────────────
 
@@ -938,7 +942,8 @@ internal static class FreePRibbonCommands
     private static void RegisterTransitionCommands(
         RibbonCommandRegistry registry,
         RibbonStateStore stateStore,
-        EditingSession editor)
+        EditingSession editor,
+        Action? onTransitionSound)
     {
         foreach (var plan in PresentationTransitionCommandPlanner.BuiltInPlans)
         {
@@ -947,7 +952,11 @@ internal static class FreePRibbonCommands
                 plan.Intent == PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick
                     ? new TransitionToggleCommand(stateStore, editor, plan)
                     : new ContextRibbonCommand(ctx =>
-                        PresentationTransitionCommandPlanner.TryApply(editor, plan, ctx.SelectedValue)));
+                        PresentationTransitionCommandPlanner.TryApply(
+                            editor,
+                            plan,
+                            ctx.SelectedValue,
+                            onTransitionSound)));
         }
     }
 
