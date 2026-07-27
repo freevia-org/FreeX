@@ -23,12 +23,14 @@ public sealed class PresenterViewWindow : Window
     private readonly TextBox _notesText;
     private readonly Button _backButton;
     private readonly Button _advanceButton;
+    private readonly Button _recordTimingsButton;
     private readonly Action? _goBack;
     private readonly Action? _goNext;
     private readonly ComboBox _pointerModeCombo;
     private readonly Action<SlideShowScreenMode>? _setScreenMode;
     private readonly Action<SlideShowPresenterPointerMode>? _selectPointerMode;
     private readonly Action? _clearInk;
+    private readonly Action<SlideShowTimingIntent>? _setTimingIntent;
     private bool _refreshing;
 
     public PresenterViewWindow(
@@ -38,7 +40,8 @@ public sealed class PresenterViewWindow : Window
         Action? goNext = null,
         Action<SlideShowScreenMode>? setScreenMode = null,
         Action<SlideShowPresenterPointerMode>? selectPointerMode = null,
-        Action? clearInk = null)
+        Action? clearInk = null,
+        Action<SlideShowTimingIntent>? setTimingIntent = null)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _stateProvider = stateProvider ?? throw new ArgumentNullException(nameof(stateProvider));
@@ -47,6 +50,7 @@ public sealed class PresenterViewWindow : Window
         _setScreenMode = setScreenMode;
         _selectPointerMode = selectPointerMode;
         _clearInk = clearInk;
+        _setTimingIntent = setTimingIntent;
 
         Title = "Presenter View";
         Width = 1200;
@@ -83,8 +87,20 @@ public sealed class PresenterViewWindow : Window
             _goNext?.Invoke();
             RefreshFromState();
         });
+        _recordTimingsButton = MakeActionButton("Record timings", () =>
+        {
+            if (_setTimingIntent is not null)
+            {
+                var current = _stateProvider().ToolPlan.Recording.TimingIntent;
+                _setTimingIntent(current == SlideShowTimingIntent.RecordTimings
+                    ? SlideShowTimingIntent.None
+                    : SlideShowTimingIntent.RecordTimings);
+                RefreshFromState();
+            }
+        });
         controls.Children.Add(_backButton);
         controls.Children.Add(_advanceButton);
+        controls.Children.Add(_recordTimingsButton);
         var normalButton = MakeActionButton("Show", () => _setScreenMode?.Invoke(SlideShowScreenMode.Normal));
         var blackButton = MakeActionButton("Black", () => _setScreenMode?.Invoke(SlideShowScreenMode.Black));
         var whiteButton = MakeActionButton("White", () => _setScreenMode?.Invoke(SlideShowScreenMode.White));
@@ -187,6 +203,8 @@ public sealed class PresenterViewWindow : Window
             _notesText.Text = plan.NotesText;
             _backButton.IsEnabled = plan.CanGoBack && _goBack is not null;
             _advanceButton.IsEnabled = plan.CanAdvance && _goNext is not null;
+            _recordTimingsButton.Content = plan.IsRecordingTimings ? "Stop recording" : "Record timings";
+            _recordTimingsButton.IsEnabled = _setTimingIntent is not null;
             _pointerModeCombo.SelectedItem = plan.PointerMode;
             _currentPreview.Slide = plan.CurrentSlide;
             _nextPreview.Slide = plan.NextSlide;
