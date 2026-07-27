@@ -475,7 +475,7 @@ public sealed class DocumentView : Control
     public void LoadDocument(TextDocument document)
     {
         _doc = document ?? throw new ArgumentNullException(nameof(document));
-        _bitmapCache.Clear();
+        ClearBitmapCache();
         if (_doc.Blocks.Count == 0)
             _doc.Blocks.Add(new Paragraph());
         _bus = new DocumentCommandBus(new ViewContext(this));
@@ -15810,9 +15810,16 @@ public sealed class DocumentView : Control
 
     private void OnModelChanged()
     {
-        _bitmapCache.Clear();
+        ClearBitmapCache();
         InvalidateLayoutAndVisual();
         DocumentChanged?.Invoke();
+    }
+
+    private void ClearBitmapCache()
+    {
+        foreach (var bitmap in _bitmapCache.Values)
+            bitmap?.Dispose();
+        _bitmapCache.Clear();
     }
 
     private void InvalidateLayoutAndVisual()

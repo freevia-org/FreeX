@@ -43,15 +43,20 @@ internal static class AvaloniaImageAdjustHelper
         var stride = checked(width * 4);
         var pixels = new byte[checked(stride * height)];
         // Match WPF's Pbgra32 pipeline: BGRA channel bytes are premultiplied by alpha.
-        var output = new WriteableBitmap(size, source.Dpi, PixelFormat.Bgra8888, AlphaFormat.Premul);
-
-        using (var framebuffer = output.Lock())
+        // Use the explicit pixel-buffer overload here; Avalonia 12's framebuffer overload
+        // does not preserve the alpha representation when copying between bitmap backends.
+        var sourcePixels = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+        try
         {
-            source.CopyPixels(framebuffer);
-            for (var y = 0; y < height; y++)
-            {
-                Marshal.Copy(IntPtr.Add(framebuffer.Address, y * framebuffer.RowBytes), pixels, y * stride, stride);
-            }
+            source.CopyPixels(
+                new PixelRect(0, 0, width, height),
+                sourcePixels.AddrOfPinnedObject(),
+                pixels.Length,
+                stride);
+        }
+        finally
+        {
+            sourcePixels.Free();
         }
 
         ApplyPixels(
@@ -63,6 +68,7 @@ internal static class AvaloniaImageAdjustHelper
             recolorMode,
             colorTemperature);
 
+        var output = new WriteableBitmap(size, source.Dpi, PixelFormat.Bgra8888, AlphaFormat.Premul);
         using (var framebuffer = output.Lock())
         {
             for (var y = 0; y < height; y++)
@@ -196,14 +202,6 @@ internal static class AvaloniaImageAdjustHelper
     private static double Clamp(double value) => Math.Clamp(value, 0, 1);
 
     private static byte ToByte(double value) => (byte)Math.Clamp(value * 255 + 0.5, 0, 255);
-
-    internal static void ApplyTransparencyToPremultipliedPixel(byte[] pixel, double transparencyPct)
-    {
-        if (pixel.Length < 4)
-            throw new ArgumentException("A BGRA pixel requires four bytes.", nameof(pixel));
-
-        ApplyPremultipliedTransparency(pixel, 0, 1.0 - transparencyPct / 100.0);
-    }
 
     private static void ApplyPremultipliedTransparency(byte[] pixels, int offset, double opacity)
     {

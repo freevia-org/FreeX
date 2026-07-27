@@ -1,4 +1,5 @@
 using System.Threading;
+using System.Runtime.InteropServices;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia;
@@ -221,6 +222,20 @@ public sealed class PictureCoreCommandParityTests
             first!.PixelSize.Should().Be(new PixelSize(1, 1));
             second.Should().BeSameAs(first);
             second!.PixelSize.Should().Be(new PixelSize(1, 1));
+
+            using var target = new WriteableBitmap(
+                first.PixelSize,
+                first.Dpi,
+                PixelFormat.Bgra8888,
+                AlphaFormat.Premul);
+            using var framebuffer = target.Lock();
+            first.CopyPixels(framebuffer);
+            framebuffer.Size.Should().Be(first.PixelSize);
+
+            view.LoadDocument(TextDocument.CreateEmpty());
+            var replacement = view.DecodeBitmap(image);
+            replacement.Should().NotBeNull();
+            replacement.Should().NotBeSameAs(first);
         }, CancellationToken.None);
     }
 
@@ -229,9 +244,28 @@ public sealed class PictureCoreCommandParityTests
     {
         await Session.Dispatch(() =>
         {
-            var pixels = new byte[] { 0, 0, 100, 128 };
+            using var source = new WriteableBitmap(
+                new PixelSize(1, 1),
+                new Vector(96, 96),
+                PixelFormat.Bgra8888,
+                AlphaFormat.Premul);
+            // 200 red at 50% alpha is stored as 100 in Pbgra32/BGRA premultiplied bytes.
+            using (var sourceFramebuffer = source.Lock())
+            {
+                Marshal.Copy(new byte[] { 0, 0, 100, 128 }, 0, sourceFramebuffer.Address, 4);
+            }
 
-            AvaloniaImageAdjustHelper.ApplyTransparencyToPremultipliedPixel(pixels, 50);
+            using var adjusted = (WriteableBitmap)AvaloniaImageAdjustHelper.ApplyCore(
+                source,
+                brightnessPct: 0,
+                contrastPct: 0,
+                saturationPct: 100,
+                transparencyPct: 50);
+            var pixels = new byte[4];
+            using (var framebuffer = adjusted.Lock())
+            {
+                Marshal.Copy(framebuffer.Address, pixels, 0, 4);
+            }
 
             // WPF's Pbgra32 math halves premultiplied red (100 -> 50) and alpha (128 -> 64).
             // Unpremultiplied output would retain roughly 100 in the red channel.
