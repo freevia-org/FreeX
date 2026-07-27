@@ -704,7 +704,11 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, headerTop, printableWidthDip, headerH));
+                                null, new Rect(
+                                    thisMarginLeft,
+                                    headerTop + (HeaderSlotContainsInlineImage(hfSlot) ? 1 : 0),
+                                    printableWidthDip,
+                                    headerH));
                         bmp.Render(hfVis);
                     }
                 }
@@ -798,7 +802,11 @@ static void RenderDocumentComposite(
                             AlignmentX = AlignmentX.Left,
                             AlignmentY = AlignmentY.Top
                         },
-                            null, new Rect(thisMarginLeft, headerTop, printableWidthDip, headerH));
+                            null, new Rect(
+                                thisMarginLeft,
+                                headerTop + (HeaderSlotContainsInlineImage(headerSlot) ? 1 : 0),
+                                printableWidthDip,
+                                headerH));
                     bmp.Render(hfVis);
                 }
             }
@@ -1912,6 +1920,9 @@ static HeaderFooter? ResolveHfSlotByName(SectionHeadersFooters hf, string slotNa
         _               => null,
     };
 }
+
+static bool HeaderSlotContainsInlineImage(HeaderFooter slot) =>
+    slot.Paragraphs.Any(paragraph => paragraph.Runs.Any(run => run.Image is not null));
 
 /// <summary>
 /// Renders a <see cref="HeaderFooter"/> slot's content to a <see cref="DocumentPage"/> via the

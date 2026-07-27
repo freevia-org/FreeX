@@ -221,6 +221,16 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void FidelityRender_OffsetsOnlyImageBearingHeaderSlotsAtTheHeaderOrigin()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Should().Contain("HeaderSlotContainsInlineImage(hfSlot) ? 1 : 0");
+        source.Should().Contain("HeaderSlotContainsInlineImage(headerSlot) ? 1 : 0");
+        source.Should().Contain("slot.Paragraphs.Any(paragraph => paragraph.Runs.Any(run => run.Image is not null))");
+    }
+
+    [Fact]
     public void FidelityRender_UsesArrangedAnchorOnlyForDrawingGroups()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
