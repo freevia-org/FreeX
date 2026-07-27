@@ -7,6 +7,7 @@ public enum PresentationDesignCommandIntentKind
 {
     SetTheme,
     SetSlideSize,
+    SetSlideBackground,
     RequestCustomSlideSize,
     RequestLayoutPicker,
 }
@@ -16,7 +17,8 @@ public sealed record PresentationDesignCommandPlan(
     PresentationDesignCommandIntentKind Intent,
     string? ThemeId = null,
     long? SlideSizeCxEmu = null,
-    long? SlideSizeCyEmu = null);
+    long? SlideSizeCyEmu = null,
+    int? BackgroundRgb = null);
 
 public enum PresentationLayoutChoiceChromeState
 {
@@ -127,6 +129,21 @@ public static class PresentationDesignCommandPlanner
             new PresentationDesignCommandPlan(
                 "freep.slide-size-custom",
                 PresentationDesignCommandIntentKind.RequestCustomSlideSize),
+            new PresentationDesignCommandPlan(
+                "freep.background-white",
+                PresentationDesignCommandIntentKind.SetSlideBackground,
+                BackgroundRgb: 0xFFFFFF),
+            new PresentationDesignCommandPlan(
+                "freep.background-black",
+                PresentationDesignCommandIntentKind.SetSlideBackground,
+                BackgroundRgb: 0x000000),
+            new PresentationDesignCommandPlan(
+                "freep.background-blue",
+                PresentationDesignCommandIntentKind.SetSlideBackground,
+                BackgroundRgb: 0xD9EAF7),
+            new PresentationDesignCommandPlan(
+                "freep.background-reset",
+                PresentationDesignCommandIntentKind.SetSlideBackground),
         };
 
     public static bool TryPlan(string commandId, out PresentationDesignCommandPlan plan)
@@ -247,6 +264,12 @@ public static class PresentationDesignCommandPlanner
 
                 editor.SetSlideSize(cxEmu, cyEmu);
                 return true;
+
+            case PresentationDesignCommandIntentKind.SetSlideBackground:
+                editor.SetCurrentSlideBackground(plan.BackgroundRgb is { } rgb
+                    ? new ShapeFill.Solid(SrgbColor.FromRgb(rgb))
+                    : null);
+                return editor.CurrentSlide is not null;
 
             case PresentationDesignCommandIntentKind.RequestCustomSlideSize:
             case PresentationDesignCommandIntentKind.RequestLayoutPicker:

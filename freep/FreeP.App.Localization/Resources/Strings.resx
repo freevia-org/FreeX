@@ -1504,6 +1504,30 @@
   <data name="Ribbon_Command_SlideSizeCustom_KeyTip" xml:space="preserve">
     <value>C</value>
   </data>
+  <data name="Ribbon_Command_BackgroundWhite_Label" xml:space="preserve">
+    <value>White Background</value>
+  </data>
+  <data name="Ribbon_Command_BackgroundWhite_KeyTip" xml:space="preserve">
+    <value>W</value>
+  </data>
+  <data name="Ribbon_Command_BackgroundBlack_Label" xml:space="preserve">
+    <value>Black Background</value>
+  </data>
+  <data name="Ribbon_Command_BackgroundBlack_KeyTip" xml:space="preserve">
+    <value>B</value>
+  </data>
+  <data name="Ribbon_Command_BackgroundBlue_Label" xml:space="preserve">
+    <value>Blue Background</value>
+  </data>
+  <data name="Ribbon_Command_BackgroundBlue_KeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Ribbon_Command_BackgroundReset_Label" xml:space="preserve">
+    <value>Reset Background</value>
+  </data>
+  <data name="Ribbon_Command_BackgroundReset_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
   <data name="Ribbon_Tab_Transitions_Label" xml:space="preserve">
     <value>Transitions</value>
   </data>

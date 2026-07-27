@@ -1599,6 +1599,16 @@ public sealed class EditingSession
     public void SetSlideSize(long cxEmu, long cyEmu)
         => SetSlideSizeCustom(cxEmu, cyEmu);
 
+    /// <summary>Sets or clears the current slide's explicit background fill. Undoable.</summary>
+    public bool SetCurrentSlideBackground(ShapeFill? fill)
+    {
+        if (CurrentSlide is null)
+            return false;
+
+        Bus.Execute(new SetSlideBackgroundCommand(_currentSlideIndex, fill));
+        return true;
+    }
+
     // ── Insert table ──────────────────────────────────────────────────────────────
 
     /// <summary>
