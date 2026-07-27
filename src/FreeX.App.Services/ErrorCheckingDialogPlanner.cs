@@ -44,6 +44,11 @@ public static class ErrorCheckingDialogPlanner
 
     public const double Width = 720;
     public const double Height = 420;
+    // WPF's 720x420 value is the outer dialog frame. Avalonia's borderless client
+    // surface must use the same client rectangle so its content does not consume
+    // the native frame reserve that WPF leaves empty in parity captures.
+    public const double AvaloniaClientWidth = 704;
+    public const double AvaloniaClientHeight = 383;
     public const double MinWidth = 540;
     public const double MinHeight = 240;
     public const double RootMargin = 10;
