@@ -1789,6 +1789,26 @@ internal static class FreePCommandInventory
             RemainingWork: "basicHierarchy now uses the bounded shared hierarchy-family live-layout path for parsed root/child nodes while unsupported hierarchy siblings remain on cached drawing fallback. Broader SmartArt geometry families, assistant/org-chart nuance, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
         ,
         new(
+            EvidenceId: "freep.smartart.hierarchy3",
+            Area: "SmartArt hierarchy3 live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume the same shared left-to-right hierarchy3 layout and connector ops; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-hierarchy3-live-layout-20260727.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.IO/PptxPackageReader.cs",
+                "freep/FreeP.App.Presentation/SmartArtLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Presentation.Tests/SmartArtEditingPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Host.Tests/PptxPackageReaderSourceTests.cs"
+            ],
+            RemainingWork: "hierarchy3 now uses the shared left-to-right hierarchy planner for imported and edited diagrams, matching the authored layout definition's fromL child direction. Exact PowerPoint node sizing, connector routing, style/effect metrics, and PowerPoint-authoritative visual baselines remain deferred; other unmodeled SmartArt layout IDs still use cached drawing fallback.")
+        ,
+        new(
             EvidenceId: "freep.smartart.horizontal-hierarchy",
             Area: "SmartArt horizontal hierarchy live layout",
             Status: "shared-render-planner-evidence",

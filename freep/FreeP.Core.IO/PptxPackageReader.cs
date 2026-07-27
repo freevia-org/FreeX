@@ -2429,11 +2429,19 @@ public static class PptxPackageReader
             foreach (var cxn in cxnLst.Elements(dgmNsData + "cxn"))
             {
                 var cxnType = cxn.Attribute("type")?.Value ?? string.Empty;
-                if (!string.Equals(cxnType, "parOf", StringComparison.OrdinalIgnoreCase)) continue;
+                // DiagramML defaults an untyped connection to parOf. PowerPoint omits
+                // @type on ordinary parent links, while presOf/presParOf are explicit.
+                if (!string.IsNullOrWhiteSpace(cxnType)
+                    && !string.Equals(cxnType, "parOf", StringComparison.OrdinalIgnoreCase))
+                    continue;
 
                 var srcId  = cxn.Attribute("srcId")?.Value  ?? string.Empty;
                 var destId = cxn.Attribute("destId")?.Value ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(srcId) || string.IsNullOrWhiteSpace(destId)) continue;
+
+                if (points.TryGetValue(srcId, out var sourcePoint)
+                    && string.Equals(sourcePoint.type, "doc", StringComparison.OrdinalIgnoreCase))
+                    continue;
 
                 if (!childrenOf.TryGetValue(srcId, out var kids))
                     childrenOf[srcId] = kids = new List<string>();
@@ -2622,7 +2630,7 @@ public static class PptxPackageReader
             SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "basictimeline" or "stepdownprocess" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess" or "basicchevronprocess" or "closedchevronprocess" or "bendingprocess" or "alternatingprocess" or "arrowribbon" or "circleprocess" or "funnelprocess" or "verticalprocess",
             SmartArtFamily.List => layoutId is "list1" or "basicblocklist" or "verticalboxlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "picturecaptionlist",
             SmartArtFamily.Cycle => layoutId is "cycle1" or "radial1" or "basiccycle" or "radialcycle" or "radiallist" or "gearcycle" or "textcycle" or "blockcycle" or "nondirectionalcycle" or "continuouscycle",
-            SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "basichierarchy" or "horizontalhierarchy" or "labeledhierarchy" or "tablehierarchy" or "verticalbulletlist" or "orgchart",
+            SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "hierarchy3" or "basichierarchy" or "horizontalhierarchy" or "labeledhierarchy" or "tablehierarchy" or "verticalbulletlist" or "orgchart",
             SmartArtFamily.Matrix => layoutId is "matrix1" or "basicmatrix" or "titledmatrix" or "gridmatrix",
             SmartArtFamily.Relationship => layoutId is "basicvenn" or "radialvenn" or "targetlist" or "stackedvenn",
             _ => false

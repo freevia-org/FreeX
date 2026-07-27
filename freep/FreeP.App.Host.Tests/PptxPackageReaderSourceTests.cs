@@ -85,11 +85,18 @@ public sealed class PptxPackageReaderSourceTests
             .And.Contain("nodes[i].Picture = pictures[i];")
             .And.Contain("data.IsLiveLayoutSupported = true;");
 
+        ExtractMethod(source, "private static SmartArtData? ReadSmartArtData(")
+            .Should()
+            .Contain("DiagramML defaults an untyped connection to parOf")
+            .And.Contain("sourcePoint.type")
+            .And.Contain("doc");
+
         ExtractMethod(source, "private static bool IsLiveSmartArtLayoutSupported(")
             .Should()
             .Contain("picturecaptionlist")
             .And.Contain("verticalprocess")
-            .And.Contain("horizontalhierarchy");
+            .And.Contain("horizontalhierarchy")
+            .And.Contain("hierarchy3");
     }
 
     [Fact]
