@@ -24,7 +24,7 @@ public sealed class SymbolPickerDialogParityTests
         source.Should().Contain("Class(\":focus\")");
         source.Should().Contain("Class(\":pressed\")");
         source.Should().Contain("IsCancel = true");
-        source.Should().Contain("_glyphButtons[0].Focus()");
+        source.Should().NotContain("_glyphButtons[0].Focus()");
         source.Should().NotContain("var Glyphs =");
     }
 
@@ -47,6 +47,9 @@ public sealed class SymbolPickerDialogParityTests
                 && button.FontSize == FreeWSymbolPickerDialogPlanner.ButtonFontSize);
             dialog.GlyphButtonsForTest.Select(global::Avalonia.Automation.AutomationProperties.GetAutomationId)
                 .Should().OnlyContain(id => id.StartsWith("SymbolPicker", StringComparison.Ordinal));
+            dialog.GlyphButtonsForTest
+                .Select(global::Avalonia.Automation.AutomationProperties.GetName)
+                .Should().Equal(FreeWSymbolPickerDialogPlanner.Glyphs);
             dialog.SelectGlyphForTest("\u03a9").Should().Be("\u03a9");
         }, CancellationToken.None);
     }

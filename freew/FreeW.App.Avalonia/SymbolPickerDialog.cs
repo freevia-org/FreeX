@@ -70,7 +70,7 @@ internal sealed class SymbolPickerDialog : FreeWDialogWindow
             };
             var codePoint = FreeWSymbolPickerDialogPlanner.BuildCodePointLabel(glyph);
             ToolTip.SetTip(button, codePoint);
-            AutomationProperties.SetName(button, $"{glyph} {codePoint}");
+            AutomationProperties.SetName(button, glyph);
             AutomationProperties.SetAutomationId(button, $"SymbolPicker{codePoint[2..]}Button");
             button.Click += (_, _) => SelectGlyph(glyph, close: true);
             _glyphButtons.Add(button);
@@ -99,7 +99,6 @@ internal sealed class SymbolPickerDialog : FreeWDialogWindow
         Opened += (_, _) =>
         {
             ApplyGlyphButtonChrome(grid);
-            _glyphButtons[0].Focus();
         };
     }
 

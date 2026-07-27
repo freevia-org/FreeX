@@ -176,6 +176,9 @@ static void Populate(Window dialog, Scenario scenario)
 
 static void FocusScenarioTarget(Window dialog, Scenario scenario)
 {
+    if (scenario.RouteId == "symbol-picker")
+        return;
+
     if (scenario.RouteId == "legal-notices")
     {
         var selectedText = FindVisualChildren<TabControl>(dialog)

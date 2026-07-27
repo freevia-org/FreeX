@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Free.Shared.Shell;
 
@@ -23,6 +24,8 @@ internal sealed class PasswordPromptDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        AutomationProperties.SetAutomationId(_passwordBox, "PasswordPromptPasswordBox");
+        AutomationProperties.SetName(_passwordBox, prompt);
 
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(new TextBlock
