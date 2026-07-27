@@ -9,6 +9,44 @@ namespace FreeP.App.Host.Tests;
 public sealed class ReviewWorkflowAdapterTests
 {
     [StaFact]
+    public void WpfCommentPanePlan_ExposesResolvedThreadActionAuthority()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Resolved thread.",
+                Idx = 1,
+                IsResolved = true,
+                ResolvedBy = "Reviewer",
+            });
+
+            var plan = window.ShowReviewCommentsPane();
+
+            plan.Actions
+                .Where(action => action.CommandId != PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
+                .Select(action => $"{action.CommandId}|{action.Label}|{action.IsEnabled}")
+                .Should()
+                .Equal(
+                    "freep.review.comments.pane|Show Comments|True",
+                    "freep.review.comments.add|New Comment|True",
+                    "freep.review.comments.edit|Edit Comment|True",
+                    "freep.review.comments.delete|Delete Comment|True",
+                    "freep.review.comments.previous|Previous Comment|False",
+                    "freep.review.comments.next|Next Comment|False",
+                    "freep.review.comments.resolve|Resolve Comment|False",
+                    "freep.review.comments.reopen|Reopen Comment|True");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ReviewWorkflowPlans_ComeFromSharedPlanner()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
