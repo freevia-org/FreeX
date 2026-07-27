@@ -21,6 +21,10 @@ public sealed partial class MainWindow
 
     private CellAddress? _inlineThreadedCommentEditAddress;
     private ThreadedComment? _inlineThreadedCommentEditExisting;
+    private CellAddress? _inlineNoteEditAddress;
+    private string _inlineNoteEditInitialText = string.Empty;
+    private TextBox? _inlineNoteEditBox;
+    private TextBlock? _inlineNoteError;
     private TextBox? _inlineThreadedCommentRootBox;
     private TextBox? _inlineThreadedCommentReplyBox;
     private TextBox? _inlineThreadedCommentSelectedReplyBox;
@@ -29,6 +33,27 @@ public sealed partial class MainWindow
     private Button? _inlineThreadedCommentDeleteReplyButton;
     private CheckBox? _inlineThreadedCommentResolvedBox;
     private TextBlock? _inlineThreadedCommentError;
+
+    private void BeginNoteInlineEdit()
+    {
+        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
+            return;
+
+        var target = ReviewSessionController.GetSelectedNoteTarget();
+        if (target is null)
+        {
+            RefreshShell(UiText.Get("MainLoc_ReviewTargetNotSelected"));
+            return;
+        }
+
+        ClearSelectedDrawingObject();
+        ClearInlineThreadedCommentEditorState();
+        EnsureInlineEditorAddressVisible(target.Address);
+        _inlineNoteEditAddress = target.Address;
+        _inlineNoteEditInitialText = target.NoteText;
+        RefreshShell("Ready");
+        Dispatcher.UIThread.Post(FocusInlineNoteEditor, DispatcherPriority.Input);
+    }
 
     private void BeginThreadedCommentInlineEdit(ThreadedComment? existing)
     {
@@ -43,10 +68,118 @@ public sealed partial class MainWindow
         }
 
         ClearSelectedDrawingObject();
+        ClearInlineNoteEditorState();
+        EnsureInlineEditorAddressVisible(target.Address);
         _inlineThreadedCommentEditAddress = target.Address;
         _inlineThreadedCommentEditExisting = existing ?? target.ThreadedComment;
         RefreshShell("Ready");
         Dispatcher.UIThread.Post(FocusInlineThreadedCommentEditor, DispatcherPriority.Input);
+    }
+
+    private void EnsureInlineEditorAddressVisible(CellAddress address)
+    {
+        var rowVisible = _session.Viewport.RowMetrics.Any(metric => metric.Row == address.Row);
+        var columnVisible = _session.Viewport.ColMetrics.Any(metric => metric.Col == address.Col);
+        if (rowVisible && columnVisible)
+            return;
+
+        var topRow = rowVisible ? _session.ActiveSheet.ViewTopRow ?? 1 : address.Row;
+        var leftColumn = columnVisible ? _session.ActiveSheet.ViewLeftCol ?? 1 : address.Col;
+        _session.SetViewportOrigin(topRow, leftColumn);
+    }
+
+    private void AddNoteInlineEditorOverlay(
+        Canvas overlay,
+        ViewportModel viewport,
+        bool showHeadings,
+        double zoomFactor)
+    {
+        ClearInlineNoteControlReferences();
+        if (_inlineNoteEditAddress is not { } address ||
+            !TryGetDisplayedCellBounds(viewport, address, showHeadings, zoomFactor,
+                out var cellLeft, out var cellTop, out _, out var cellHeight))
+        {
+            return;
+        }
+
+        var left = Math.Clamp(cellLeft, 0, Math.Max(0, overlay.Width - InlineCommentEditorWidth));
+        var top = cellTop + cellHeight + 2;
+        if (top + InlineCommentEditorNewHeight > overlay.Height && cellTop > InlineCommentEditorNewHeight + 2)
+            top = cellTop - InlineCommentEditorNewHeight - 2;
+        top = Math.Clamp(top, 0, Math.Max(0, overlay.Height - InlineCommentEditorNewHeight));
+
+        var editor = new Border
+        {
+            Width = InlineCommentEditorWidth,
+            MinHeight = InlineCommentEditorNewHeight,
+            MaxHeight = InlineCommentEditorNewHeight,
+            Background = new SolidColorBrush(Color.FromRgb(255, 255, 225)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(158, 151, 113)),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(8),
+            Child = BuildInlineNotePanel(address),
+        };
+        AutomationProperties.SetAutomationId(editor, "WorksheetNoteInlineEditor");
+        AutomationProperties.SetName(editor, "Note");
+        Canvas.SetLeft(editor, left);
+        Canvas.SetTop(editor, top);
+        overlay.Children.Add(editor);
+    }
+
+    private StackPanel BuildInlineNotePanel(CellAddress address)
+    {
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"Note - {FormatCellReference(address)}",
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = Brushes.Black,
+            Margin = new Thickness(0, 0, 0, 5),
+        });
+
+        _inlineNoteEditBox = new TextBox
+        {
+            Text = _inlineNoteEditInitialText,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 76,
+            MaxHeight = 132,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
+            Padding = new Thickness(5),
+        };
+        AvaloniaCompactDialogChrome.ApplyTextBox(_inlineNoteEditBox, CommentDialogChromeStyle, fixedHeight: false);
+        AutomationProperties.SetAutomationId(_inlineNoteEditBox, "GridNoteInlineTextBox");
+        AutomationProperties.SetName(_inlineNoteEditBox, "Note");
+        _inlineNoteEditBox.KeyDown += InlineNoteTextBoxKeyDown;
+        panel.Children.Add(_inlineNoteEditBox);
+
+        _inlineNoteError = new TextBlock
+        {
+            IsVisible = false,
+            Foreground = new SolidColorBrush(Color.FromRgb(178, 34, 34)),
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 5, 0, 0),
+        };
+        AutomationProperties.SetAutomationId(_inlineNoteError, "GridNoteInlineError");
+        panel.Children.Add(_inlineNoteError);
+
+        var save = CreateInlineCommentButton(
+            InlineCommentSaveText,
+            "GridCommentInlineSaveButton",
+            SubmitNoteInlineEdit,
+            isDefault: true);
+        var cancel = CreateInlineCommentButton(
+            InlineCommentCancelText,
+            "GridCommentInlineCancelButton",
+            CancelNoteInlineEdit,
+            isCancel: true);
+        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([save, cancel], new Thickness(0, 7, 0, 0)));
+        return panel;
     }
 
     private void AddThreadedCommentInlineEditorOverlay(
@@ -353,6 +486,46 @@ public sealed partial class MainWindow
         }
     }
 
+    private void InlineNoteTextBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && e.KeyModifiers == KeyModifiers.None)
+        {
+            CancelNoteInlineEdit();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.Control)
+        {
+            SubmitNoteInlineEdit();
+            e.Handled = true;
+        }
+    }
+
+    private void SubmitNoteInlineEdit()
+    {
+        var text = (_inlineNoteEditBox?.Text ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            ShowInlineNoteError("Enter a note.");
+            _inlineNoteEditBox?.Focus();
+            return;
+        }
+
+        if (_inlineNoteEditAddress is not { } address)
+            return;
+
+        var result = ReviewSessionController.ApplyNote(text);
+        if (!result.Success)
+        {
+            ShowInlineNoteError(result.ErrorMessage ?? UiText.Get("Comment_NoteFailed"));
+            _inlineNoteEditBox?.Focus();
+            return;
+        }
+
+        ClearInlineNoteEditorState();
+        ApplyReviewRefreshPlan(result.RefreshPlan, UiText.Format("Comment_NoteUpdated", FormatCellReference(address)));
+        FocusShellRegion(ShellFocusTarget.Worksheet);
+    }
+
     private void InlineThreadedCommentSelectedReplyKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.Control &&
@@ -459,6 +632,22 @@ public sealed partial class MainWindow
         FocusShellRegion(ShellFocusTarget.Worksheet);
     }
 
+    private void CancelNoteInlineEdit()
+    {
+        ClearInlineNoteEditorState();
+        RefreshShell("Ready");
+        FocusShellRegion(ShellFocusTarget.Worksheet);
+    }
+
+    private void ShowInlineNoteError(string message)
+    {
+        if (_inlineNoteError is null)
+            return;
+
+        _inlineNoteError.Text = message;
+        _inlineNoteError.IsVisible = true;
+    }
+
     private void ShowInlineThreadedCommentError(string message)
     {
         if (_inlineThreadedCommentError is null)
@@ -501,6 +690,21 @@ public sealed partial class MainWindow
         (_inlineThreadedCommentEditExisting is null
             ? _inlineThreadedCommentRootBox
             : _inlineThreadedCommentReplyBox ?? _inlineThreadedCommentRootBox)?.Focus();
+    }
+
+    private void FocusInlineNoteEditor() => _inlineNoteEditBox?.Focus();
+
+    private void ClearInlineNoteEditorState()
+    {
+        _inlineNoteEditAddress = null;
+        _inlineNoteEditInitialText = string.Empty;
+        ClearInlineNoteControlReferences();
+    }
+
+    private void ClearInlineNoteControlReferences()
+    {
+        _inlineNoteEditBox = null;
+        _inlineNoteError = null;
     }
 
     private void ClearInlineThreadedCommentEditorState()

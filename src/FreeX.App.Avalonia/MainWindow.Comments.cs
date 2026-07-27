@@ -16,18 +16,12 @@ public sealed partial class MainWindow
 {
     private static AvaloniaCompactDialogChromeStyle CommentDialogChromeStyle => new(FormulaBarFontFamily);
 
-    // New Note remains a prompt; New Comment uses the worksheet inline editor below. Both routes
-    // apply through the shared review-session commands for full undo/redo.
-
-    private async Task ShowNewNoteDialogAsync()
+    // WPF uses the same worksheet-anchored note editor for both New Note and Edit Note.
+    // Keep both routes on the shared review-session mutation path for matching undo/redo.
+    private Task ShowNewNoteDialogAsync()
     {
-        var text = await ShowCommentTextPromptAsync("New Note", "Note text");
-        if (string.IsNullOrWhiteSpace(text))
-            return;
-        var result = ReviewSessionController.ApplyNote(text);
-        ApplyReviewRefreshPlan(result.RefreshPlan, result.Success
-            ? $"Added note to {FormatCellReference(_session.ActiveCell)}"
-            : result.ErrorMessage ?? "Could not add note.");
+        BeginNoteInlineEdit();
+        return Task.CompletedTask;
     }
 
     private Task ShowNewThreadedCommentDialogAsync()
@@ -36,22 +30,10 @@ public sealed partial class MainWindow
         return Task.CompletedTask;
     }
 
-    private async Task ShowEditNoteDialogAsync()
+    private Task ShowEditNoteDialogAsync()
     {
-        var target = ReviewSessionController.GetSelectedNoteTarget();
-        if (target is null || !ReviewSessionController.HasNoteAtSelection())
-        {
-            RefreshShell(UiText.Get("Comment_NoNote"));
-            return;
-        }
-
-        var text = await ShowCommentTextPromptAsync(UiText.Get("Comment_EditNoteTitle"), UiText.Get("Comment_NoteLabel"), target.NoteText);
-        if (text is null)
-            return;
-        var result = ReviewSessionController.ApplyNote(text);
-        ApplyReviewRefreshPlan(result.RefreshPlan, result.Success
-            ? UiText.Format("Comment_NoteUpdated", FormatCellReference(_session.ActiveCell))
-            : result.ErrorMessage ?? UiText.Get("Comment_NoteFailed"));
+        BeginNoteInlineEdit();
+        return Task.CompletedTask;
     }
 
     private Task ShowEditThreadedCommentDialogAsync()

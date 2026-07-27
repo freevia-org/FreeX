@@ -26,6 +26,90 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
     [Fact]
+    public async Task NewNoteRoute_OpensAnchoredInlineEditorAndCtrlEnterCommitsUndoableNote()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("ReviewNoteFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var address = new CellAddress(sheet.Id, 2, 3);
+            window.Session.SelectCell(address);
+            window.Session.UpdateViewportSize(880, 1440);
+
+            ((Task)InvokePrivate(window, "ShowNewNoteDialogAsync")!).GetAwaiter().GetResult();
+            var renderedGrid = window.RebuildSheetGridForTest();
+            var editor = FindByAutomationId<Border>(renderedGrid, "WorksheetNoteInlineEditor");
+            editor.Should().NotBeNull();
+            editor!.Background.Should().BeOfType<SolidColorBrush>().Which.Color
+                .Should().Be(Color.FromRgb(255, 255, 225));
+            editor.Padding.Should().Be(new Thickness(8));
+
+            var noteBox = FindByAutomationId<TextBox>(editor, "GridNoteInlineTextBox");
+            noteBox.Should().NotBeNull();
+            noteBox!.Text.Should().BeEmpty();
+            var save = FindByAutomationId<Button>(editor, "GridCommentInlineSaveButton");
+            var cancel = FindByAutomationId<Button>(editor, "GridCommentInlineCancelButton");
+            save.Should().NotBeNull();
+            cancel.Should().NotBeNull();
+            save!.Content.Should().Be("Save");
+            save.Width.Should().Be(72);
+            save.MinHeight.Should().Be(24);
+            cancel!.Content.Should().Be("Cancel");
+            cancel.Width.Should().Be(72);
+            cancel.MinHeight.Should().Be(24);
+
+            noteBox.Text = "First note";
+            noteBox.RaiseEvent(new KeyEventArgs
+            {
+                RoutedEvent = InputElement.KeyDownEvent,
+                Key = Key.Enter,
+                KeyModifiers = KeyModifiers.Control,
+            });
+
+            sheet.Comments.Should().ContainKey(address);
+            sheet.Comments[address].Should().Be("First note");
+            window.Session.CanUndo.Should().BeTrue();
+            window.Session.UndoLastEdit().Success.Should().BeTrue();
+            sheet.Comments.Should().NotContainKey(address);
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task EditNoteRoute_SeedsExistingTextAndEscapeLeavesWorkbookUnchanged()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("ReviewNoteCancelFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var address = new CellAddress(sheet.Id, 1, 4);
+            sheet.Comments[address] = "Existing note";
+            window.Session.SelectCell(address);
+            window.Session.UpdateViewportSize(880, 1440);
+
+            ((Task)InvokePrivate(window, "ShowEditNoteDialogAsync")!).GetAwaiter().GetResult();
+            var renderedGrid = window.RebuildSheetGridForTest();
+            var editor = FindByAutomationId<Border>(renderedGrid, "WorksheetNoteInlineEditor");
+            var noteBox = FindByAutomationId<TextBox>(editor!, "GridNoteInlineTextBox");
+            noteBox.Should().NotBeNull();
+            noteBox!.Text.Should().Be("Existing note");
+            noteBox.Text = "Changed but cancelled";
+            noteBox.RaiseEvent(new KeyEventArgs
+            {
+                RoutedEvent = InputElement.KeyDownEvent,
+                Key = Key.Escape,
+                KeyModifiers = KeyModifiers.None,
+            });
+
+            sheet.Comments[address].Should().Be("Existing note");
+            window.Session.CanUndo.Should().BeFalse();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task NewCommentRibbonCommand_OpensInlineEditorAndCommitsUndoableComment()
     {
         await Session.Dispatch(() =>

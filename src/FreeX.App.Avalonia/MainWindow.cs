@@ -5176,6 +5176,7 @@ public sealed partial class MainWindow : Window
 
         // Review ▸ New/Edit Comment uses the same selected-cell inline editor as WPF. Keep it
         // above the worksheet even when the sheet has no drawing objects.
+        AddNoteInlineEditorOverlay(overlay, viewport, showHeadings, zoomFactor);
         AddThreadedCommentInlineEditorOverlay(overlay, viewport, showHeadings, zoomFactor);
 
         // Freeze Panes divider: the frozen rows/columns are already pinned at the head of
