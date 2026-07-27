@@ -400,10 +400,15 @@ public class WatermarkOptionsRoundTripTests
         };
 
         var xml = ReadHeaderXml(doc);
+        var w = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
         var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
         var shape = xml.Descendants(vml + "shape").Single();
         var textPath = shape.Element(vml + "textpath");
 
+        xml.Descendants(w + "docPartGallery")
+            .Single()
+            .Attribute(w + "val")!.Value.Should().Be("Watermarks");
+        xml.Descendants(w + "sdtContent").Single().Descendants(w + "noProof").Should().ContainSingle();
         shape.Attribute("style")!.Value.Should().Contain("rotation:0");
         shape.Attribute("fillcolor")!.Value.Should().Be("123456");
         shape.Element(vml + "fill")!.Attribute("opacity")!.Value.Should().Be("0.5");

@@ -6148,8 +6148,10 @@ public static class DocxReader
                          && entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
         {
             var root = LoadPart(archive, entry.FullName)?.Root;
-            var textShape = root?.Descendants(V + "shape")
-                .FirstOrDefault(shape => shape.Attribute("id")?.Value == "PowerPlusWaterMarkObject"
+            var textShape = root?.Descendants(W + "sdt")
+                .Where(IsWordWatermarkContentControl)
+                .SelectMany(control => control.Descendants(V + "shape"))
+                .FirstOrDefault(shape => shape.Attribute("id")?.Value?.StartsWith("PowerPlusWaterMarkObject", StringComparison.Ordinal) == true
                     && shape.Element(V + "textpath") is not null);
             var textPath = textShape?.Element(V + "textpath");
             var text = textPath?.Attribute("string")?.Value;
@@ -6244,6 +6246,12 @@ public static class DocxReader
             document.Page.WatermarkOptions = textWatermark with { NativeVmlTextPathEnabled = false };
         }
     }
+
+    private static bool IsWordWatermarkContentControl(XElement control) =>
+        string.Equals(
+            control.Element(W + "sdtPr")?.Element(W + "docPartObj")?.Element(W + "docPartGallery")?.Attribute(W + "val")?.Value,
+            "Watermarks",
+            StringComparison.Ordinal);
 
     private static string? ReadNativeVmlTextShapeTypeXml(XElement? root, XElement shape)
     {
