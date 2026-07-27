@@ -1189,7 +1189,7 @@ internal static class ParityCapture
 
                 if (TryGetFixedDialogCaptureSize(surfaceId, out var fixedWidth, out var fixedHeight))
                 {
-                    ApplyDialogCaptureSize(dialog, (fixedWidth, fixedHeight));
+                    ApplyOuterDialogCaptureSize(dialog, (fixedWidth, fixedHeight));
                 }
 
                 var width = fixedWidth > 0 ? fixedWidth : dialog.ActualWidth > 0 ? dialog.ActualWidth : dialog.Width;
@@ -1449,7 +1449,7 @@ internal static class ParityCapture
             CaptureSurface(results, surfaceId, "dialog", outDir, () =>
             {
                 var captureSize = captureSizeResolver?.Invoke(surfaceId);
-                ApplyDialogCaptureSize(liveDialog, captureSize);
+                ApplyDialogClientCaptureSize(liveDialog, captureSize);
                 return captureSize is { } size
                     ? RenderDialog(liveDialog, size.Width, size.Height)
                     : RenderDialog(liveDialog);
@@ -1486,7 +1486,7 @@ internal static class ParityCapture
                     liveDialog.UpdateLayout();
                     PumpDispatcher();
                     var captureSize = captureSizeResolver?.Invoke(tabSurfaceId);
-                    ApplyDialogCaptureSize(liveDialog, captureSize);
+                    ApplyDialogClientCaptureSize(liveDialog, captureSize);
                     return captureSize is { } size
                         ? RenderDialog(liveDialog, size.Width, size.Height)
                         : RenderDialog(liveDialog);
@@ -1506,7 +1506,7 @@ internal static class ParityCapture
         }
     }
 
-    private static void ApplyDialogCaptureSize(Window dialog, (double Width, double Height)? captureSize)
+    private static void ApplyOuterDialogCaptureSize(Window dialog, (double Width, double Height)? captureSize)
     {
         if (captureSize is not { } size || size.Width <= 0 || size.Height <= 0)
             return;
@@ -1519,6 +1519,48 @@ internal static class ParityCapture
         PumpDispatcher();
         dialog.UpdateLayout();
         PumpDispatcher();
+    }
+
+    private static void ApplyDialogClientCaptureSize(Window dialog, (double Width, double Height)? captureSize)
+    {
+        if (captureSize is not { } size || size.Width <= 0 || size.Height <= 0)
+            return;
+        if (dialog.Content is not FrameworkElement content)
+            throw new InvalidOperationException("A client-sized dialog capture requires FrameworkElement content.");
+
+        dialog.UpdateLayout();
+        PumpDispatcher();
+
+        var nonClientWidth = Math.Max(0, dialog.ActualWidth - content.ActualWidth);
+        var nonClientHeight = Math.Max(0, dialog.ActualHeight - content.ActualHeight);
+        var outerWidth = size.Width + nonClientWidth;
+        var outerHeight = size.Height + nonClientHeight;
+
+        dialog.SizeToContent = SizeToContent.Manual;
+        dialog.MinWidth = 0;
+        dialog.MinHeight = 0;
+        dialog.Width = outerWidth;
+        dialog.Height = outerHeight;
+        PumpDispatcher();
+        dialog.UpdateLayout();
+        PumpDispatcher();
+
+        // Correct a possible fractional-DIP/DPI rounding residual after WPF has applied its native chrome.
+        outerWidth += size.Width - content.ActualWidth;
+        outerHeight += size.Height - content.ActualHeight;
+        dialog.Width = outerWidth;
+        dialog.Height = outerHeight;
+        dialog.MinWidth = outerWidth;
+        dialog.MinHeight = outerHeight;
+        PumpDispatcher();
+        dialog.UpdateLayout();
+        PumpDispatcher();
+    }
+
+    internal static BitmapSource RenderDialogClientFrameForTest(Window dialog, double width, double height)
+    {
+        ApplyDialogClientCaptureSize(dialog, (width, height));
+        return RenderDialog(dialog, width, height);
     }
 
     private static BitmapSource RenderDialog(Window dialog)
