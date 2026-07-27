@@ -899,9 +899,6 @@ public static class SmartArtLayoutEngine
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan)
     {
-        if (nodes.Any(n => n.Picture is not { Bytes.Length: > 0 }))
-            return null;
-
         int n = nodes.Count;
         var shapes = new List<SlideShape>();
 
@@ -924,19 +921,27 @@ public static class SmartArtLayoutEngine
         for (int i = 0; i < n; i++)
         {
             var node = nodes[i];
-            shapes.Add(new SlideShape
-            {
-                Id = idCounter++,
-                Name = $"SmartArt_Picture_{idCounter}",
-                Kind = SlideShapeKind.Picture,
-                OffsetXEmu = leftX,
-                OffsetYEmu = curY,
-                ExtentCxEmu = pictureW,
-                ExtentCyEmu = rowH,
-                Picture = node.Picture
-            });
-
             var nodeStyle = stylePlan.GetNodeStyle(i, node.Level, SmartArtFamily.List);
+            shapes.Add(node.Picture is { Bytes.Length: > 0 }
+                ? new SlideShape
+                {
+                    Id = idCounter++,
+                    Name = $"SmartArt_Picture_{idCounter}",
+                    Kind = SlideShapeKind.Picture,
+                    OffsetXEmu = leftX,
+                    OffsetYEmu = curY,
+                    ExtentCxEmu = pictureW,
+                    ExtentCyEmu = rowH,
+                    Picture = node.Picture
+                }
+                : MakePicturePlaceholder(
+                    idCounter++,
+                    leftX,
+                    curY,
+                    pictureW,
+                    rowH,
+                    nodeStyle));
+
             shapes.Add(MakeCaption(
                 idCounter++,
                 node.Text,
@@ -957,9 +962,6 @@ public static class SmartArtLayoutEngine
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan)
     {
-        if (nodes.Any(n => n.Picture is not { Bytes.Length: > 0 }))
-            return null;
-
         var columns = Math.Min(2, Math.Max(1, nodes.Count));
         var rows = (nodes.Count + columns - 1) / columns;
         var padX = (long)(fcx * OuterPaddingFrac);
@@ -979,19 +981,27 @@ public static class SmartArtLayoutEngine
             var row = index / columns;
             var x = fx + padX + column * (cellW + gapX);
             var y = fy + padY + row * (cellH + gapY);
-            shapes.Add(new SlideShape
-            {
-                Id = idCounter++,
-                Name = $"SmartArt_GridPicture_{index + 1}",
-                Kind = SlideShapeKind.Picture,
-                OffsetXEmu = x,
-                OffsetYEmu = y,
-                ExtentCxEmu = cellW,
-                ExtentCyEmu = pictureH,
-                Picture = nodes[index].Picture,
-            });
-
             var nodeStyle = stylePlan.GetNodeStyle(index, nodes[index].Level, SmartArtFamily.List);
+            shapes.Add(nodes[index].Picture is { Bytes.Length: > 0 }
+                ? new SlideShape
+                {
+                    Id = idCounter++,
+                    Name = $"SmartArt_GridPicture_{index + 1}",
+                    Kind = SlideShapeKind.Picture,
+                    OffsetXEmu = x,
+                    OffsetYEmu = y,
+                    ExtentCxEmu = cellW,
+                    ExtentCyEmu = pictureH,
+                    Picture = nodes[index].Picture,
+                }
+                : MakePicturePlaceholder(
+                    idCounter++,
+                    x,
+                    y,
+                    cellW,
+                    pictureH,
+                    nodeStyle));
+
             shapes.Add(MakeCaption(
                 idCounter++,
                 nodes[index].Text,
@@ -1003,6 +1013,33 @@ public static class SmartArtLayoutEngine
         }
 
         return shapes;
+    }
+
+    private static SlideShape MakePicturePlaceholder(
+        uint id,
+        long x,
+        long y,
+        long width,
+        long height,
+        SmartArtNodeStyle style)
+    {
+        var placeholderStyle = new SmartArtNodeStyle(
+            new ThemeAwareColor(SrgbColor.FromRgb(0xE7E6E6)),
+            style.Outline,
+            new ThemeAwareColor(SrgbColor.FromRgb(0x666666)),
+            style.OutlineWidthPt);
+        var placeholder = MakeBox(
+            id,
+            "Add picture",
+            placeholderStyle,
+            x,
+            y,
+            width,
+            height,
+            10,
+            DrawingShapeKind.Rectangle);
+        placeholder.Name = $"SmartArt_PicturePlaceholder_{id}";
+        return placeholder;
     }
 
     /// <summary>
