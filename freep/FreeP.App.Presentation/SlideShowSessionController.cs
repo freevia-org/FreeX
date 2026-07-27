@@ -58,6 +58,20 @@ public sealed class SlideShowSessionController
     public SlideShowRecordingReviewPlan RecordingReviewPlan =>
         SlideShowRecordingReviewPlanner.BuildPlan(_presentation, RecordingExecutionState);
 
+    /// <summary>
+    /// Applies the current recording review to the presentation without ending the
+    /// slideshow. Rebuilding the plan on each call keeps the operation idempotent
+    /// when the presenter clicks Apply more than once.
+    /// </summary>
+    public SlideShowRecordingReviewApplyResult ApplyRecordingReview()
+    {
+        EnsureOpen();
+
+        var plan = RecordingReviewPlan;
+        SlideShowRecordingReviewPlanner.ApplyRecordedTimings(_presentation, plan);
+        return SlideShowRecordingReviewPlanner.ApplyPersistableArtifacts(_presentation, plan);
+    }
+
     public SlideShowPresenterToolPlan ApplyPresenterToolIntent(
         SlideShowTimingIntent timingIntent,
         SlideShowRecordingMediaIntent mediaIntent,

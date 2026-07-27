@@ -18,6 +18,8 @@ namespace FreeW.Core.IO;
 /// </summary>
 public static class DocxReader
 {
+    private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+
     private sealed class DuplicateDrawingIdentityMarker
     {
         public static readonly DuplicateDrawingIdentityMarker Instance = new();
@@ -3066,6 +3068,8 @@ public static class DocxReader
         TextDocument? preservedDrawingTarget = null,
         IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets = null)
     {
+        ResolveAlternateContent(r);
+
         void ApplyRevision(Run run)
         {
             if (revision.Kind == RevisionKind.None)
@@ -3308,6 +3312,17 @@ public static class DocxReader
         ApplyRevision(textRun);
         ApplyFormatRevision(textRun, rPr);
         paragraph.Runs.Add(textRun);
+    }
+
+    private static void ResolveAlternateContent(XElement run)
+    {
+        foreach (var alternateContent in run.Elements(Mc + "AlternateContent").ToList())
+        {
+            var replacement = alternateContent.Elements(Mc + "Choice").FirstOrDefault()?.Nodes().ToList()
+                ?? alternateContent.Element(Mc + "Fallback")?.Nodes().ToList();
+            if (replacement is not null)
+                alternateContent.ReplaceWith(replacement);
+        }
     }
 
     private static Table ReadTable(
@@ -6148,8 +6163,10 @@ public static class DocxReader
                          && entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
         {
             var root = LoadPart(archive, entry.FullName)?.Root;
-            var textShape = root?.Descendants(V + "shape")
-                .FirstOrDefault(shape => shape.Attribute("id")?.Value == "PowerPlusWaterMarkObject"
+            var textShape = root?.Descendants(W + "sdt")
+                .Where(IsWordWatermarkContentControl)
+                .SelectMany(control => control.Descendants(V + "shape"))
+                .FirstOrDefault(shape => shape.Attribute("id")?.Value?.StartsWith("PowerPlusWaterMarkObject", StringComparison.Ordinal) == true
                     && shape.Element(V + "textpath") is not null);
             var textPath = textShape?.Element(V + "textpath");
             var text = textPath?.Attribute("string")?.Value;
@@ -6244,6 +6261,12 @@ public static class DocxReader
             document.Page.WatermarkOptions = textWatermark with { NativeVmlTextPathEnabled = false };
         }
     }
+
+    private static bool IsWordWatermarkContentControl(XElement control) =>
+        string.Equals(
+            control.Element(W + "sdtPr")?.Element(W + "docPartObj")?.Element(W + "docPartGallery")?.Attribute(W + "val")?.Value,
+            "Watermarks",
+            StringComparison.Ordinal);
 
     private static string? ReadNativeVmlTextShapeTypeXml(XElement? root, XElement shape)
     {

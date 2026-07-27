@@ -339,6 +339,9 @@ public sealed class SlideShowWindow : Window
     public SlideShowRecordingReviewPlan RecordingReviewPlan =>
         _session.RecordingReviewPlan;
 
+    public SlideShowRecordingReviewApplyResult ApplyRecordingReview() =>
+        _session.ApplyRecordingReview();
+
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
     internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest => _lastAnimationFramePlan;
     internal IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> LastAnimationStepFrameEvidenceForTest => _lastAnimationStepFrameEvidence;
@@ -378,7 +381,9 @@ public sealed class SlideShowWindow : Window
             SetScreenMode,
             mode => SetPresenterPointerMode(mode),
             () => ClearPresenterInkStrokes(),
-            timing => SetPresenterTimingIntent(timing));
+            timing => SetPresenterTimingIntent(timing),
+            () => RecordingReviewPlan,
+            () => ApplyRecordingReview());
         _presenterViewWindow = window;
         window.Owner = this;
         window.Closed += (_, _) =>

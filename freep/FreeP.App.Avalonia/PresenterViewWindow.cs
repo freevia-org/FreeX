@@ -27,6 +27,8 @@ public sealed class PresenterViewWindow : Window
     private readonly Button _advanceButton;
     private readonly Button _recordTimingsButton;
     private readonly Button _rehearseTimingsButton;
+    private readonly Button _applyRecordingButton;
+    private readonly TextBlock _recordingStatusText;
     private readonly Action? _goBack;
     private readonly Action? _goNext;
     private readonly ComboBox _pointerModeCombo;
@@ -34,6 +36,8 @@ public sealed class PresenterViewWindow : Window
     private readonly Action<SlideShowPresenterPointerMode>? _selectPointerMode;
     private readonly Action? _clearInk;
     private readonly Action<SlideShowTimingIntent>? _setTimingIntent;
+    private readonly Func<SlideShowRecordingReviewPlan>? _recordingReviewProvider;
+    private readonly Func<SlideShowRecordingReviewApplyResult>? _applyRecordingReview;
     private bool _refreshing;
 
     public PresenterViewWindow(
@@ -44,7 +48,9 @@ public sealed class PresenterViewWindow : Window
         Action<SlideShowScreenMode>? setScreenMode = null,
         Action<SlideShowPresenterPointerMode>? selectPointerMode = null,
         Action? clearInk = null,
-        Action<SlideShowTimingIntent>? setTimingIntent = null)
+        Action<SlideShowTimingIntent>? setTimingIntent = null,
+        Func<SlideShowRecordingReviewPlan>? recordingReviewProvider = null,
+        Func<SlideShowRecordingReviewApplyResult>? applyRecordingReview = null)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _stateProvider = stateProvider ?? throw new ArgumentNullException(nameof(stateProvider));
@@ -54,6 +60,8 @@ public sealed class PresenterViewWindow : Window
         _selectPointerMode = selectPointerMode;
         _clearInk = clearInk;
         _setTimingIntent = setTimingIntent;
+        _recordingReviewProvider = recordingReviewProvider;
+        _applyRecordingReview = applyRecordingReview;
 
         Title = "Presenter View";
         Width = 1200;
@@ -72,6 +80,8 @@ public sealed class PresenterViewWindow : Window
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _statusText = MakeText(18, FontWeight.SemiBold);
         _elapsedText = MakeText(18, FontWeight.Normal);
         var controls = new StackPanel
@@ -111,10 +121,23 @@ public sealed class PresenterViewWindow : Window
                 RefreshFromState();
             }
         });
+        _recordingStatusText = MakeText(13, FontWeight.Normal);
+        _recordingStatusText.Foreground = new SolidColorBrush(Color.FromRgb(170, 178, 194));
+        _recordingStatusText.Margin = new Thickness(0, 6, 0, 0);
+        _applyRecordingButton = MakeActionButton("Apply recording", () =>
+        {
+            if (_applyRecordingReview is not null)
+            {
+                var result = _applyRecordingReview();
+                _recordingStatusText.Text = $"Applied {result.TotalArtifactCount} recording artifact(s).";
+                RefreshFromState();
+            }
+        });
         controls.Children.Add(_backButton);
         controls.Children.Add(_advanceButton);
         controls.Children.Add(_recordTimingsButton);
         controls.Children.Add(_rehearseTimingsButton);
+        controls.Children.Add(_applyRecordingButton);
         var normalButton = MakeActionButton("Show", () => _setScreenMode?.Invoke(SlideShowScreenMode.Normal));
         var blackButton = MakeActionButton("Black", () => _setScreenMode?.Invoke(SlideShowScreenMode.Black));
         var whiteButton = MakeActionButton("White", () => _setScreenMode?.Invoke(SlideShowScreenMode.White));
@@ -142,6 +165,9 @@ public sealed class PresenterViewWindow : Window
         header.Children.Add(_statusText);
         header.Children.Add(controls);
         header.Children.Add(_elapsedText);
+        Grid.SetRow(_recordingStatusText, 1);
+        Grid.SetColumnSpan(_recordingStatusText, 3);
+        header.Children.Add(_recordingStatusText);
         root.Children.Add(header);
 
         var previews = new Grid { Margin = new Thickness(0, 0, 0, 14) };
@@ -220,6 +246,15 @@ public sealed class PresenterViewWindow : Window
             _recordTimingsButton.IsEnabled = _setTimingIntent is not null;
             _rehearseTimingsButton.Content = plan.IsRehearsingTimings ? "Stop rehearsal" : "Rehearse timings";
             _rehearseTimingsButton.IsEnabled = _setTimingIntent is not null;
+            var recordingReview = _recordingReviewProvider?.Invoke();
+            _recordingStatusText.Text = recordingReview is null
+                ? "Recording review unavailable."
+                : BuildRecordingSummary(recordingReview);
+            _applyRecordingButton.IsEnabled = _applyRecordingReview is not null &&
+                recordingReview is not null &&
+                (recordingReview.CanApplyRecordedTimings ||
+                 recordingReview.PersistableMediaArtifactCount > 0 ||
+                 recordingReview.PersistableCaptionArtifactCount > 0);
             _pointerModeCombo.SelectedItem = plan.PointerMode;
             _currentPreview.Slide = plan.CurrentSlide;
             _nextPreview.Slide = plan.NextSlide;
@@ -275,6 +310,22 @@ public sealed class PresenterViewWindow : Window
         Foreground = Brushes.White,
         VerticalAlignment = VerticalAlignment.Center,
     };
+
+    private static string BuildRecordingSummary(SlideShowRecordingReviewPlan plan)
+    {
+        if (plan.CompletedSegmentCount == 0)
+        {
+            return "Recording: no completed slides yet.";
+        }
+
+        return $"Recording: {plan.CompletedSegmentCount} slide(s), " +
+            $"{plan.TotalRecordedDurationMs / 1000d:F1}s; " +
+            $"{plan.PersistableMediaArtifactCount} media + " +
+            $"{plan.PersistableCaptionArtifactCount} caption(s) ready" +
+            (plan.DeferredMediaArtifactCount > 0
+                ? $"; {plan.DeferredMediaArtifactCount} deferred."
+                : ".");
+    }
 
     private static Button MakeActionButton(string label, Action action)
     {

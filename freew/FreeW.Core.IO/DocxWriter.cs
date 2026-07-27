@@ -1647,10 +1647,20 @@ public static class DocxWriter
             new XElement(W10 + "wrap", new XAttribute("anchorx", "margin"), new XAttribute("anchory", "margin")));
 
         return new XElement(W + "p",
-            new XElement(W + "r",
-                new XElement(W + "pict",
-                    shapeType,
-                    shape)));
+            new XElement(W + "pPr",
+                new XElement(W + "pStyle", new XAttribute(W + "val", "Header"))),
+            new XElement(W + "sdt",
+                new XElement(W + "sdtPr",
+                    new XElement(W + "id", new XAttribute(W + "val", "-824503837")),
+                    new XElement(W + "docPartObj",
+                        new XElement(W + "docPartGallery", new XAttribute(W + "val", "Watermarks")),
+                        new XElement(W + "docPartUnique"))),
+                new XElement(W + "sdtContent",
+                    new XElement(W + "r",
+                        new XElement(W + "rPr", new XElement(W + "noProof")),
+                        new XElement(W + "pict",
+                            shapeType,
+                            shape)))));
     }
 
     private static XElement? TryParseNativeVmlTextShapeType(string? xml)

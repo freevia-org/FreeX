@@ -128,7 +128,7 @@ public static class CanvasGesturePlanner
         var states = new List<CanvasMoveShapeState>();
         foreach (var id in selectedShapeIds)
         {
-            var shape = slide.Shapes.FirstOrDefault(s => s.Id == id);
+            var shape = ShapeHitTester.FindShape(slide, id);
             if (shape is null)
                 continue;
 
