@@ -2254,6 +2254,7 @@ public sealed class SlideCanvas : Control
                 }
             },
             Align = paragraph.Align,
+            RightToLeft = paragraph.RightToLeft,
             Level = paragraph.Level,
             BulletKind = paragraph.BulletKind,
             BulletChar = paragraph.BulletChar,
@@ -2410,11 +2411,17 @@ public sealed class SlideCanvas : Control
             para,
             startX,
             tabStops,
-            (run, text) => BuildSingleRunFormattedTextAt(run, text).Width);
+            (run, text) => BuildSingleRunFormattedTextAt(
+                run,
+                text,
+                flowDirection: para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight).Width);
 
         foreach (var segment in plan.Segments)
         {
-            var ft = BuildSingleRunFormattedTextAt(para.Runs[segment.RunIndex], segment.Text);
+            var ft = BuildSingleRunFormattedTextAt(
+                para.Runs[segment.RunIndex],
+                segment.Text,
+                flowDirection: para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight);
             dc.DrawText(ft, new Point(segment.X, startY));
         }
     }
@@ -2435,14 +2442,20 @@ public sealed class SlideCanvas : Control
             .Select(run => BuildSingleRunFormattedTextAt(
                 run,
                 run.Text,
-                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0))
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
+                    para.RightToLeft,
+                    run.Text))))
             .ToArray();
         var widths = para.Runs
             .Select((run, index) => MeasureBaselineTextWidth(
                 run,
                 run.Text,
                 run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                formatted[index]))
+                formatted[index],
+                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
+                    para.RightToLeft,
+                    run.Text))))
             .ToArray();
         double lineAscent = formatted.Length == 0 ? 0 : formatted.Max(ft => ft.Baseline);
         double baselineY = ComputeBaselineY(startY, lineAscent);
@@ -2452,21 +2465,21 @@ public sealed class SlideCanvas : Control
             RenderWrappedBaseline(dc, para, startX, startY, maxWidth);
             return;
         }
-        double alignWidth = maxWidth > 0 ? maxWidth : totalWidth;
-        double x = startX + (para.Align switch
+        var placements = TextLayoutPlanner.PlanRunPlacements(
+            para,
+            startX,
+            maxWidth,
+            (run, rightToLeft) => MeasureBaselineTextWidth(
+                run,
+                run.Text,
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                flowDirection: ToFlowDirection(rightToLeft)));
+        foreach (var placement in placements)
         {
-            TextAlign.Center => Math.Max(0, (alignWidth - totalWidth) / 2.0),
-            TextAlign.Right => Math.Max(0, alignWidth - totalWidth),
-            _ => 0
-        });
-
-        for (int i = 0; i < para.Runs.Count; i++)
-        {
-            var run = para.Runs[i];
-            var ft = formatted[i];
+            var run = para.Runs[placement.RunIndex];
+            var ft = formatted[placement.RunIndex];
             double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(run.BaselineOffset, run.FontSizePt);
-            dc.DrawText(ft, new Point(x, baselineY - ft.Baseline - offsetDip));
-            x += widths[i];
+            dc.DrawText(ft, new Point(placement.X, baselineY - ft.Baseline - offsetDip));
         }
     }
 
@@ -2495,22 +2508,31 @@ public sealed class SlideCanvas : Control
                 continue;
             }
 
-            double x = startX + (para.Align switch
-            {
-                TextAlign.Center => Math.Max(0, (maxWidth - line.Width) / 2.0),
-                TextAlign.Right => Math.Max(0, maxWidth - line.Width),
-                _ => 0
-            });
             double baselineY = ComputeBaselineY(lineY, line.Ascent);
-            foreach (var fragment in line.Fragments)
+            var lineParagraph = new ResolvedParagraph
             {
+                Runs = line.Fragments.Select(fragment => fragment.Run).ToArray(),
+                Align = para.Align,
+                RightToLeft = para.RightToLeft,
+            };
+            var placements = TextLayoutPlanner.PlanRunPlacements(
+                lineParagraph,
+                startX,
+                maxWidth,
+                (run, rightToLeft) => MeasureBaselineTextWidth(
+                    run,
+                    run.Text,
+                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                    flowDirection: ToFlowDirection(rightToLeft)));
+            foreach (var placement in placements)
+            {
+                var fragment = line.Fragments[placement.RunIndex];
                 double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(
                     fragment.Run.BaselineOffset,
                     fragment.Run.FontSizePt);
                 dc.DrawText(
                     fragment.Text,
-                    new Point(x, baselineY - fragment.Text.Baseline - offsetDip));
-                x += fragment.Width;
+                    new Point(placement.X, baselineY - fragment.Text.Baseline - offsetDip));
             }
             lineY += Math.Max(1, line.Height);
         }
@@ -2529,12 +2551,18 @@ public sealed class SlideCanvas : Control
             var formatted = BuildSingleRunFormattedTextAt(
                 run,
                 text,
-                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0);
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
+                    para.RightToLeft,
+                    text)));
             double width = MeasureBaselineTextWidth(
                 run,
                 text,
                 run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                formatted);
+                formatted,
+                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
+                    para.RightToLeft,
+                    text)));
             var line = lines[^1];
             if (line.Fragments.Count > 0 && line.Width + width > maxWidth)
             {
@@ -2572,12 +2600,18 @@ public sealed class SlideCanvas : Control
                 var tokenText = BuildSingleRunFormattedTextAt(
                     run,
                     token,
-                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0);
+                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                    ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
+                        para.RightToLeft,
+                        token)));
                 double tokenWidth = MeasureBaselineTextWidth(
                     run,
                     token,
                     run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                    tokenText);
+                    tokenText,
+                    ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
+                        para.RightToLeft,
+                        token)));
                 if (whitespace && (line.Fragments.Count == 0 || line.Width + tokenWidth > maxWidth))
                 {
                     index = end;
@@ -2611,15 +2645,16 @@ public sealed class SlideCanvas : Control
         ResolvedRun run,
         string text,
         double fontScale,
-        FormattedText? formatted = null)
+        FormattedText? formatted = null,
+        FlowDirection flowDirection = FlowDirection.LeftToRight)
     {
-        formatted ??= BuildSingleRunFormattedTextAt(run, text, fontScale);
+        formatted ??= BuildSingleRunFormattedTextAt(run, text, fontScale, flowDirection);
         if (text.Length == 0 || !char.IsWhiteSpace(text[^1]))
             return formatted.Width;
 
         const string sentinel = "M";
-        var withSentinel = BuildSingleRunFormattedTextAt(run, text + sentinel, fontScale);
-        var sentinelWidth = BuildSingleRunFormattedTextAt(run, sentinel, fontScale).Width;
+        var withSentinel = BuildSingleRunFormattedTextAt(run, text + sentinel, fontScale, flowDirection);
+        var sentinelWidth = BuildSingleRunFormattedTextAt(run, sentinel, fontScale, flowDirection).Width;
         return Math.Max(formatted.Width, withSentinel.Width - sentinelWidth);
     }
 
@@ -2652,7 +2687,12 @@ public sealed class SlideCanvas : Control
             }
             else if (!string.IsNullOrEmpty(run.Text))
             {
-                var ft = BuildSingleRunFormattedTextAt(run, run.Text);
+                var ft = BuildSingleRunFormattedTextAt(
+                    run,
+                    run.Text,
+                    flowDirection: ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
+                        para.RightToLeft,
+                        run.Text)));
                 formatted[i] = ft;
                 lineAscent = Math.Max(lineAscent, ft.Baseline);
             }
@@ -2661,25 +2701,32 @@ public sealed class SlideCanvas : Control
         double baselineY = ComputeBaselineY(startY, lineAscent);
 
         // Pass 2: draw each run with its top placed so its ascent lands on baselineY.
-        double x = startX;
-        for (int i = 0; i < para.Runs.Count; i++)
+        var placements = TextLayoutPlanner.PlanRunPlacements(
+            para,
+            startX,
+            0,
+            (run, rightToLeft) => run.IsMathRun && run.MathLayout is not null
+                ? run.MathLayout.Metrics.Width
+                : BuildSingleRunFormattedTextAt(
+                    run,
+                    run.Text,
+                    flowDirection: ToFlowDirection(rightToLeft)).Width);
+        foreach (var placement in placements)
         {
-            var run = para.Runs[i];
+            var run = para.Runs[placement.RunIndex];
             if (run.IsMathRun && run.MathLayout is not null)
             {
                 double runY = ComputeRunTopY(baselineY, run.MathLayout.Metrics.Ascent);
                 var mathOps = MathBoxRenderPlanner.Plan(
-                    run.MathLayout, x, runY, run.Color, run.FontFamily);
+                    run.MathLayout, placement.X, runY, run.Color, run.FontFamily);
                 foreach (var op in mathOps)
                     DrawMathOpAvalonia(dc, op);
-                x += run.MathLayout.Metrics.Width;
             }
             else if (!string.IsNullOrEmpty(run.Text))
             {
-                var ft = formatted[i]!;
+                var ft = formatted[placement.RunIndex]!;
                 double runY = ComputeRunTopY(baselineY, ft.Baseline);
-                dc.DrawText(ft, new Point(x, runY));
-                x += ft.Width;
+                dc.DrawText(ft, new Point(placement.X, runY));
             }
         }
     }
@@ -2785,7 +2832,8 @@ public sealed class SlideCanvas : Control
     private static FormattedText BuildSingleRunFormattedTextAt(
         ResolvedRun run,
         string text,
-        double fontSizeScale = 1.0)
+        double fontSizeScale = 1.0,
+        FlowDirection flowDirection = FlowDirection.LeftToRight)
     {
         string txt = text.Length == 0 ? " " : text;
         var typeface = new Typeface(
@@ -2797,12 +2845,15 @@ public sealed class SlideCanvas : Control
         var brush = new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B));
         var ft = new FormattedText(txt,
             System.Globalization.CultureInfo.CurrentUICulture,
-            FlowDirection.LeftToRight,
+            flowDirection,
             typeface, emPx, brush);
         if (run.Underline)     ft.SetTextDecorations(TextDecorations.Underline, 0, txt.Length);
         if (run.Strikethrough) ft.SetTextDecorations(TextDecorations.Strikethrough, 0, txt.Length);
         return ft;
     }
+
+    private static FlowDirection ToFlowDirection(bool rightToLeft) =>
+        rightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
 
     private static TextGlyphMeasure MeasureStackedGlyphAvalonia(ResolvedRun run, string text)
     {
@@ -2877,7 +2928,7 @@ public sealed class SlideCanvas : Control
         var ft = new FormattedText(
             txt,
             System.Globalization.CultureInfo.CurrentUICulture,
-            FlowDirection.LeftToRight,
+            para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight,
             typeface,
             emSizePx,
             brush);
@@ -2972,7 +3023,9 @@ public sealed class SlideCanvas : Control
         };
     }
 
-    private static FormattedText BuildSingleRunFormattedText(ResolvedRun run)
+    private static FormattedText BuildSingleRunFormattedText(
+        ResolvedRun run,
+        FlowDirection flowDirection = FlowDirection.LeftToRight)
     {
         string txt = run.Text.Length == 0 ? " " : run.Text;
         var typeface = new Typeface(
@@ -2984,25 +3037,11 @@ public sealed class SlideCanvas : Control
         var brush = new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B));
         var ft = new FormattedText(txt,
             System.Globalization.CultureInfo.CurrentUICulture,
-            FlowDirection.LeftToRight,
+            flowDirection,
             typeface, emPx, brush);
         if (run.Underline)     ft.SetTextDecorations(TextDecorations.Underline, 0, txt.Length);
         if (run.Strikethrough) ft.SetTextDecorations(TextDecorations.Strikethrough, 0, txt.Length);
         return ft;
-    }
-
-    private static double ComputeRunOffsetX(ResolvedParagraph para, int targetPos)
-    {
-        double accX = 0;
-        int p = 0;
-        foreach (var run in para.Runs)
-        {
-            if (p == targetPos) break;
-            var prev = BuildSingleRunFormattedText(run);
-            accX += prev.Width;
-            p += run.Text.Length;
-        }
-        return accX;
     }
 
     private static void RenderParaWithEffects(
@@ -3012,13 +3051,21 @@ public sealed class SlideCanvas : Control
         LayoutRect shapeBounds,
         ResolvedTextLayout text)
     {
-        int pos = 0;
-        foreach (var run in para.Runs)
+        var placements = TextLayoutPlanner.PlanRunPlacements(
+            para,
+            x,
+            0,
+            (run, rightToLeft) => BuildSingleRunFormattedText(
+                run,
+                ToFlowDirection(rightToLeft)).Width);
+        foreach (var placement in placements)
         {
-            double runOffX = ComputeRunOffsetX(para, pos);
-            double drawX = x + runOffX;
+            var run = para.Runs[placement.RunIndex];
+            double drawX = placement.X;
 
-            var runFt = BuildSingleRunFormattedText(run);
+            var runFt = BuildSingleRunFormattedText(
+                run,
+                ToFlowDirection(placement.RightToLeft));
             double progress = shapeBounds.Width > 0 ? (drawX - shapeBounds.X) / shapeBounds.Width : 0;
             var plan = TextRunEffectRenderPlanner.Plan(
                 run,
@@ -3027,7 +3074,7 @@ public sealed class SlideCanvas : Control
                 shapeBounds,
                 text);
             var geo = runFt.BuildGeometry(new Point(plan.GlyphBoundsDip.X, plan.GlyphBoundsDip.Y));
-            if (geo is null) { pos += run.Text.Length; continue; }
+            if (geo is null) continue;
 
             using IDisposable? warpScope = plan.WarpTransform is { HasAffineTransform: true } warp
                 ? dc.PushTransform(BuildWordArtWarpMatrix(warp, plan.GlyphBoundsDip))
@@ -3105,8 +3152,6 @@ public sealed class SlideCanvas : Control
                         break;
                 }
             }
-
-            pos += run.Text.Length;
         }
     }
 

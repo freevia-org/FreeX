@@ -272,6 +272,7 @@ public static class InCanvasRichClipboardPlanner
     private static ClipboardBodyDto ToDto(TextBody body) => new()
     {
         DefaultParaAlign = body.DefaultParaAlign,
+        DefaultParaRightToLeft = body.DefaultParaRightToLeft,
         InsetLeftPt = body.InsetLeftPt,
         InsetRightPt = body.InsetRightPt,
         InsetTopPt = body.InsetTopPt,
@@ -287,6 +288,7 @@ public static class InCanvasRichClipboardPlanner
     private static ClipboardParagraphDto ToDto(Paragraph paragraph) => new()
     {
         Align = paragraph.Align,
+        RightToLeft = paragraph.RightToLeft,
         Level = paragraph.Level,
         BulletKind = paragraph.BulletKind,
         BulletSuppressed = paragraph.BulletSuppressed,
@@ -406,6 +408,7 @@ public static class InCanvasRichClipboardPlanner
         var body = new TextBody
         {
             DefaultParaAlign = dto.DefaultParaAlign,
+            DefaultParaRightToLeft = dto.DefaultParaRightToLeft,
             InsetLeftPt = dto.InsetLeftPt,
             InsetRightPt = dto.InsetRightPt,
             InsetTopPt = dto.InsetTopPt,
@@ -428,6 +431,7 @@ public static class InCanvasRichClipboardPlanner
         var paragraph = new Paragraph
         {
             Align = dto.Align,
+            RightToLeft = dto.RightToLeft,
             Level = dto.Level,
             BulletKind = dto.BulletKind,
             BulletSuppressed = dto.BulletSuppressed,
@@ -702,6 +706,7 @@ public static class InCanvasRichClipboardPlanner
     private sealed class ClipboardBodyDto
     {
         public TextAlign? DefaultParaAlign { get; set; }
+        public bool? DefaultParaRightToLeft { get; set; }
         public double? InsetLeftPt { get; set; }
         public double? InsetRightPt { get; set; }
         public double? InsetTopPt { get; set; }
@@ -717,6 +722,7 @@ public static class InCanvasRichClipboardPlanner
     private sealed class ClipboardParagraphDto
     {
         public TextAlign? Align { get; set; }
+        public bool? RightToLeft { get; set; }
         public int Level { get; set; }
         public BulletKind BulletKind { get; set; }
         public bool BulletSuppressed { get; set; }

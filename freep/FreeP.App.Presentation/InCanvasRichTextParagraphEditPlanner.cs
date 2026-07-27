@@ -21,6 +21,7 @@ public static class InCanvasRichTextParagraphEditPlanner
         var copy = new Paragraph
         {
             Align = source.Align,
+            RightToLeft = source.RightToLeft,
             Level = source.Level,
             BulletKind = source.BulletKind,
             BulletSuppressed = source.BulletSuppressed,

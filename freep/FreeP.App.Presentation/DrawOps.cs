@@ -121,6 +121,8 @@ public sealed class ResolvedParagraph
 {
     public IReadOnlyList<ResolvedRun> Runs { get; init; } = Array.Empty<ResolvedRun>();
     public TextAlign Align { get; init; } = TextAlign.Left;
+    /// <summary>Resolved paragraph reading direction after model/style inheritance.</summary>
+    public bool RightToLeft { get; init; }
     public int Level { get; init; }
     public BulletKind BulletKind { get; init; } = BulletKind.None;
     public string? BulletChar { get; init; }

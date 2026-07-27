@@ -69,7 +69,8 @@ internal static class TextBodyFlowDocumentConverter
             var wp = new WpfParagraph
             {
                 // Remove default paragraph margins so rendering stays tight.
-                Margin = new Thickness(0)
+                Margin = new Thickness(0),
+                FlowDirection = ResolveFlowDirection(body, mp)
             };
 
             // Paragraph alignment.
@@ -136,6 +137,8 @@ internal static class TextBodyFlowDocumentConverter
             InsetRightPt  = originalBody?.InsetRightPt,
             InsetTopPt    = originalBody?.InsetTopPt,
             InsetBottomPt = originalBody?.InsetBottomPt,
+            DefaultParaRightToLeft = originalBody?.DefaultParaRightToLeft,
+            LstStyle      = originalBody?.LstStyle,
         };
 
         var blocks = doc.Blocks.ToList();
@@ -175,6 +178,28 @@ internal static class TextBodyFlowDocumentConverter
                     TextAlignment.Justify => TextAlign.Justify,
                     _                     => TextAlign.Left
                 };
+                var sourceRightToLeft = sourceParaIndex >= 0
+                    ? originalBody!.Paragraphs[sourceParaIndex].RightToLeft
+                    : null;
+                if (sourceRightToLeft.HasValue || sourceParaIndex < 0)
+                {
+                    mp.RightToLeft = sourceRightToLeft
+                        ?? (wpPara.FlowDirection == FlowDirection.RightToLeft ? true : null);
+                }
+                else
+                {
+                    // A FlowDocument materializes inherited direction on every paragraph.
+                    // Keep an omitted model attribute omitted when the editor left the
+                    // inherited direction unchanged; author an override only on a change.
+                    var inheritedDirection = ResolveFlowDirection(
+                        originalBody!,
+                        originalBody!.Paragraphs[sourceParaIndex]);
+                    bool documentDirection = wpPara.FlowDirection == FlowDirection.RightToLeft;
+                    mp.RightToLeft = inheritedDirection ==
+                        (documentDirection ? FlowDirection.RightToLeft : FlowDirection.LeftToRight)
+                        ? null
+                        : documentDirection;
+                }
             }
 
             if (block is WpfParagraph wp2)
@@ -294,6 +319,14 @@ internal static class TextBodyFlowDocumentConverter
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
+
+    private static FlowDirection ResolveFlowDirection(TextBody body, ModelParagraph paragraph) =>
+        paragraph.RightToLeft
+            ?? body.LstStyle?.Resolve(paragraph.Level)?.RightToLeft
+            ?? body.DefaultParaRightToLeft
+            ?? false
+            ? FlowDirection.RightToLeft
+            : FlowDirection.LeftToRight;
 
     private static Inline ModelRunToWpfRun(ModelRun mr)
     {

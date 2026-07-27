@@ -358,6 +358,14 @@ public sealed class Paragraph
     /// <summary>Horizontal alignment. Null means inherit from layout/master defaults.</summary>
     public TextAlign? Align { get; set; }
 
+    /// <summary>
+    /// Explicit paragraph reading direction. True maps to <c>a:pPr rtl="1"</c>, false maps
+    /// to <c>rtl="0"</c>, and null means the source omitted the attribute so direction is
+    /// inherited from the text style chain. Keeping false distinct from null is required for
+    /// truthful PPTX round-trips.
+    /// </summary>
+    public bool? RightToLeft { get; set; }
+
     /// <summary>Indent level (0 = normal body, 1–8 = bulleted sub-levels).</summary>
     public int Level { get; set; }
 
@@ -496,6 +504,12 @@ public sealed class TextBody
     /// Stored here so the compositor can walk the inheritance chain without re-reading XML.
     /// </summary>
     public TextAlign? DefaultParaAlign { get; set; }
+
+    /// <summary>
+    /// Default paragraph reading direction from the body's <c>a:lstStyle/lvl1pPr rtl</c>.
+    /// Null means the body did not author a direction and inheritance continues.
+    /// </summary>
+    public bool? DefaultParaRightToLeft { get; set; }
 
     /// <summary>Left inset (internal padding) in points. Null = use default (≈7pt).</summary>
     public double? InsetLeftPt { get; set; }

@@ -2205,6 +2205,7 @@ public sealed class SlideCanvas : FrameworkElement
                 }
             },
             Align = paragraph.Align,
+            RightToLeft = paragraph.RightToLeft,
             Level = paragraph.Level,
             BulletKind = paragraph.BulletKind,
             BulletChar = paragraph.BulletChar,
@@ -2438,11 +2439,17 @@ public sealed class SlideCanvas : FrameworkElement
             para,
             startX,
             tabStops,
-            (run, text) => BuildSingleRunFormattedTextAt(run, text).Width);
+            (run, text) => BuildSingleRunFormattedTextAt(
+                run,
+                text,
+                flowDirection: para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight).Width);
 
         foreach (var segment in plan.Segments)
         {
-            var ft = BuildSingleRunFormattedTextAt(para.Runs[segment.RunIndex], segment.Text);
+            var ft = BuildSingleRunFormattedTextAt(
+                para.Runs[segment.RunIndex],
+                segment.Text,
+                flowDirection: para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight);
             dc.DrawText(ft, new Point(segment.X, startY));
         }
     }
@@ -2463,7 +2470,10 @@ public sealed class SlideCanvas : FrameworkElement
             .Select(run => BuildSingleRunFormattedTextAt(
                 run,
                 run.Text,
-                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0))
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
+                    para.RightToLeft,
+                    run.Text))))
             .ToArray();
         double lineAscent = formatted.Length == 0 ? 0 : formatted.Max(ft => ft.Baseline);
         double baselineY = ComputeBaselineY(startY, lineAscent);
@@ -2473,21 +2483,21 @@ public sealed class SlideCanvas : FrameworkElement
             RenderWrappedBaseline(dc, para, startX, startY, maxWidth);
             return;
         }
-        double alignWidth = maxWidth > 0 ? maxWidth : totalWidth;
-        double x = startX + (para.Align switch
+        var placements = TextLayoutPlanner.PlanRunPlacements(
+            para,
+            startX,
+            maxWidth,
+            (run, rightToLeft) => BuildSingleRunFormattedTextAt(
+                run,
+                run.Text,
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                ToFlowDirection(rightToLeft)).WidthIncludingTrailingWhitespace);
+        foreach (var placement in placements)
         {
-            TextAlign.Center => Math.Max(0, (alignWidth - totalWidth) / 2.0),
-            TextAlign.Right => Math.Max(0, alignWidth - totalWidth),
-            _ => 0
-        });
-
-        for (int i = 0; i < para.Runs.Count; i++)
-        {
-            var run = para.Runs[i];
-            var ft = formatted[i];
+            var run = para.Runs[placement.RunIndex];
+            var ft = formatted[placement.RunIndex];
             double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(run.BaselineOffset, run.FontSizePt);
-            dc.DrawText(ft, new Point(x, baselineY - ft.Baseline - offsetDip));
-            x += ft.WidthIncludingTrailingWhitespace;
+            dc.DrawText(ft, new Point(placement.X, baselineY - ft.Baseline - offsetDip));
         }
     }
 
@@ -2516,22 +2526,31 @@ public sealed class SlideCanvas : FrameworkElement
                 continue;
             }
 
-            double x = startX + (para.Align switch
-            {
-                TextAlign.Center => Math.Max(0, (maxWidth - line.Width) / 2.0),
-                TextAlign.Right => Math.Max(0, maxWidth - line.Width),
-                _ => 0
-            });
             double baselineY = ComputeBaselineY(lineY, line.Ascent);
-            foreach (var fragment in line.Fragments)
+            var lineParagraph = new ResolvedParagraph
             {
+                Runs = line.Fragments.Select(fragment => fragment.Run).ToArray(),
+                Align = para.Align,
+                RightToLeft = para.RightToLeft,
+            };
+            var placements = TextLayoutPlanner.PlanRunPlacements(
+                lineParagraph,
+                startX,
+                maxWidth,
+                (run, rightToLeft) => BuildSingleRunFormattedTextAt(
+                    run,
+                    run.Text,
+                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                    ToFlowDirection(rightToLeft)).WidthIncludingTrailingWhitespace);
+            foreach (var placement in placements)
+            {
+                var fragment = line.Fragments[placement.RunIndex];
                 double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(
                     fragment.Run.BaselineOffset,
                     fragment.Run.FontSizePt);
                 dc.DrawText(
                     fragment.Text,
-                    new Point(x, baselineY - fragment.Text.Baseline - offsetDip));
-                x += fragment.Width;
+                    new Point(placement.X, baselineY - fragment.Text.Baseline - offsetDip));
             }
             lineY += Math.Max(1, line.Height);
         }
@@ -2550,7 +2569,10 @@ public sealed class SlideCanvas : FrameworkElement
             var formatted = BuildSingleRunFormattedTextAt(
                 run,
                 text,
-                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0);
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
+                    para.RightToLeft,
+                    text)));
             double width = formatted.WidthIncludingTrailingWhitespace;
             var line = lines[^1];
             if (line.Fragments.Count > 0 && line.Width + width > maxWidth)
@@ -2587,9 +2609,12 @@ public sealed class SlideCanvas : FrameworkElement
                 string token = run.Text[index..end];
                 var line = lines[^1];
                 var tokenText = BuildSingleRunFormattedTextAt(
-                    run,
-                    token,
-                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0);
+                run,
+                token,
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
+                    para.RightToLeft,
+                    token)));
                 double tokenWidth = tokenText.WidthIncludingTrailingWhitespace;
                 if (whitespace && (line.Fragments.Count == 0 || line.Width + tokenWidth > maxWidth))
                 {
@@ -2646,7 +2671,12 @@ public sealed class SlideCanvas : FrameworkElement
             }
             else if (!string.IsNullOrEmpty(run.Text))
             {
-                var ft = BuildSingleRunFormattedTextAt(run, run.Text);
+                var ft = BuildSingleRunFormattedTextAt(
+                    run,
+                    run.Text,
+                    flowDirection: ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
+                        para.RightToLeft,
+                        run.Text)));
                 formatted[i] = ft;
                 lineAscent = Math.Max(lineAscent, ft.Baseline);
             }
@@ -2655,30 +2685,37 @@ public sealed class SlideCanvas : FrameworkElement
         double baselineY = ComputeBaselineY(startY, lineAscent);
 
         // Pass 2: draw each run with its top placed so its ascent lands on baselineY.
-        double x = startX;
-        for (int i = 0; i < para.Runs.Count; i++)
+        var placements = TextLayoutPlanner.PlanRunPlacements(
+            para,
+            startX,
+            0,
+            (run, rightToLeft) => run.IsMathRun && run.MathLayout is not null
+                ? run.MathLayout.Metrics.Width
+                : BuildSingleRunFormattedTextAt(
+                    run,
+                    run.Text,
+                    flowDirection: ToFlowDirection(rightToLeft)).Width);
+        foreach (var placement in placements)
         {
-            var run = para.Runs[i];
+            var run = para.Runs[placement.RunIndex];
             if (run.IsMathRun && run.MathLayout is not null)
             {
                 double runY = ComputeRunTopY(baselineY, run.MathLayout.Metrics.Ascent);
 
                 // Plan the math draw ops using the shared engine (renderer-neutral).
                 var mathOps = MathBoxRenderPlanner.Plan(
-                    run.MathLayout, x, runY, run.Color, run.FontFamily);
+                    run.MathLayout, placement.X, runY, run.Color, run.FontFamily);
 
                 foreach (var op in mathOps)
                     DrawMathOpWpf(dc, op);
 
-                x += run.MathLayout.Metrics.Width;
             }
             else if (!string.IsNullOrEmpty(run.Text))
             {
                 // Plain text run inline with math, baseline-aligned with it.
-                var ft = formatted[i]!;
+                var ft = formatted[placement.RunIndex]!;
                 double runY = ComputeRunTopY(baselineY, ft.Baseline);
-                dc.DrawText(ft, new Point(x, runY));
-                x += ft.Width;
+                dc.DrawText(ft, new Point(placement.X, runY));
             }
         }
     }
@@ -2804,7 +2841,8 @@ public sealed class SlideCanvas : FrameworkElement
     private static FormattedText BuildSingleRunFormattedTextAt(
         ResolvedRun run,
         string text,
-        double fontSizeScale = 1.0)
+        double fontSizeScale = 1.0,
+        FlowDirection flowDirection = FlowDirection.LeftToRight)
     {
         var typeface = new Typeface(new FontFamily(run.FontFamily),
             run.Italic ? FontStyles.Italic : FontStyles.Normal,
@@ -2816,7 +2854,7 @@ public sealed class SlideCanvas : FrameworkElement
         var ft = new FormattedText(
             text.Length > 0 ? text : " ",
             System.Globalization.CultureInfo.CurrentUICulture,
-            FlowDirection.LeftToRight,
+            flowDirection,
             typeface, emSizePx, brush,
             numberSubstitution: null,
             textFormattingMode: TextFormattingMode.Display,
@@ -2825,6 +2863,9 @@ public sealed class SlideCanvas : FrameworkElement
         if (run.Strikethrough) ft.SetTextDecorations(TextDecorations.Strikethrough, 0, ft.Text.Length);
         return ft;
     }
+
+    private static FlowDirection ToFlowDirection(bool rightToLeft) =>
+        rightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
 
     private static TextGlyphMeasure MeasureStackedGlyphWpf(ResolvedRun run, string text)
     {
@@ -2929,7 +2970,7 @@ public sealed class SlideCanvas : FrameworkElement
         var ft = new FormattedText(
             text,
             System.Globalization.CultureInfo.CurrentUICulture,
-            FlowDirection.LeftToRight,
+            para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight,
             typeface,
             emSizePx,
             brush,
@@ -3039,14 +3080,23 @@ public sealed class SlideCanvas : FrameworkElement
         ResolvedTextLayout text,
         LayoutRect shapeBounds)
     {
-        int pos = 0;
-        foreach (var run in para.Runs)
+        var placements = TextLayoutPlanner.PlanRunPlacements(
+            para,
+            x,
+            0,
+            (run, rightToLeft) => BuildSingleRunFormattedText(
+                run,
+                0,
+                ToFlowDirection(rightToLeft)).Width);
+        foreach (var placement in placements)
         {
-            int len = run.Text.Length;
+            var run = para.Runs[placement.RunIndex];
 
-            var runFt2 = BuildSingleRunFormattedText(run, wrap ? maxWidth : 0);
-            double runOffX = ComputeRunOffsetX(para, run, pos, maxWidth, wrap);
-            double drawX = x + runOffX;
+            var runFt2 = BuildSingleRunFormattedText(
+                run,
+                wrap ? maxWidth : 0,
+                ToFlowDirection(placement.RightToLeft));
+            double drawX = placement.X;
 
             var runFt = runFt2;   // already built above
 
@@ -3189,7 +3239,6 @@ public sealed class SlideCanvas : FrameworkElement
                 }
             }
 
-            pos += len;
         }
     }
 
@@ -3221,24 +3270,11 @@ public sealed class SlideCanvas : FrameworkElement
         return group;
     }
 
-    /// <summary>Compute the X offset of a run within a paragraph (sum of widths of preceding runs).</summary>
-    private static double ComputeRunOffsetX(ResolvedParagraph para, ResolvedRun targetRun, int targetPos, double maxWidth, bool wrap)
-    {
-        double accX = 0;
-        int p = 0;
-        foreach (var run in para.Runs)
-        {
-            if (p == targetPos) break;
-            // Measure run width by building single-run FormattedText
-            var prev = BuildSingleRunFormattedText(run, 0 /*no-wrap for width measurement*/);
-            accX += prev.Width;
-            p += run.Text.Length;
-        }
-        return accX;
-    }
-
     /// <summary>Builds a FormattedText for a single run (used for glyph geometry extraction).</summary>
-    private static FormattedText BuildSingleRunFormattedText(ResolvedRun run, double maxWidth)
+    private static FormattedText BuildSingleRunFormattedText(
+        ResolvedRun run,
+        double maxWidth,
+        FlowDirection flowDirection = FlowDirection.LeftToRight)
     {
         string txt = run.Text.Length == 0 ? " " : run.Text;
         var typeface = new Typeface(
@@ -3252,7 +3288,7 @@ public sealed class SlideCanvas : FrameworkElement
 
         var ft = new FormattedText(txt,
             System.Globalization.CultureInfo.CurrentUICulture,
-            FlowDirection.LeftToRight, typeface, emPx, brush,
+            flowDirection, typeface, emPx, brush,
             numberSubstitution: null, textFormattingMode: TextFormattingMode.Display, pixelsPerDip: 1.0);
         if (run.Underline)     ft.SetTextDecorations(TextDecorations.Underline, 0, txt.Length);
         if (run.Strikethrough) ft.SetTextDecorations(TextDecorations.Strikethrough, 0, txt.Length);

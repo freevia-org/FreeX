@@ -843,6 +843,8 @@ public static class PptxPackageReader
                 _      => (TextAlign?)null
             };
 
+        level.RightToLeft = ParseNullableBoolean(lvlEl.Attribute("rtl")?.Value);
+
         if (ParseLongNullable(lvlEl.Attribute("marL")?.Value) is { } ml)  level.MarginLeftEmu = ml;
         if (ParseLongNullable(lvlEl.Attribute("indent")?.Value) is { } ind) level.IndentEmu    = ind;
 
@@ -3969,6 +3971,8 @@ public static class PptxPackageReader
                 "l" => TextAlign.Left,
                 _ => (TextAlign?)null
             };
+            body.DefaultParaRightToLeft = ParseNullableBoolean(
+                lstStyle.Element(A + "lvl1pPr")?.Attribute("rtl")?.Value);
 
             // Full lstStyle — read all 9 levels if any are present
             bool hasAny = false;
@@ -4010,6 +4014,7 @@ public static class PptxPackageReader
                 "l" => TextAlign.Left,
                 _ => (TextAlign?)null
             };
+            para.RightToLeft = ParseNullableBoolean(pPr.Attribute("rtl")?.Value);
 
             if (int.TryParse(pPr.Attribute("lvl")?.Value, out var lvl)) para.Level = Math.Clamp(lvl, 0, 8); // BU3: clamp to valid array range [0,8]
 
@@ -5505,6 +5510,9 @@ public static class PptxPackageReader
     private static bool ParseBoolean(string? value)
         => value is "1"
             || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+
+    private static bool? ParseNullableBoolean(string? value) =>
+        value is null ? null : ParseBoolean(value);
 
     // Kept as the product-model adapter for non-theme DrawingML color helpers and source contracts.
     private static bool TryParseHex6(string? hex, out SrgbColor color)

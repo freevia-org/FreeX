@@ -77,6 +77,16 @@ public readonly record struct TextTabSegmentPlacement(
     string Text,
     double X);
 
+/// <summary>
+/// Renderer-neutral visual placement for one paragraph run.  <see cref="RunIndex"/>
+/// remains the logical model index while the returned sequence is in visual order.
+/// </summary>
+public readonly record struct TextRunPlacement(
+    int RunIndex,
+    double X,
+    double Width,
+    bool RightToLeft);
+
 public readonly record struct TextColumnLayout(
     TextLayoutArea Area,
     int ColumnCount,
@@ -735,6 +745,97 @@ public static class TextLayoutPlanner
 
         return new TextTabLayoutPlan(placements);
     }
+
+    /// <summary>
+    /// Places runs in visual order while preserving their logical indices.  A right-to-left
+    /// paragraph lays out its run boxes from the right edge toward the left; each run also gets
+    /// its own strong direction so an embedded Latin run is not painted with RTL glyph order.
+    /// WPF and Avalonia use this same geometry and only translate the direction flag to their
+    /// native text API.
+    /// </summary>
+    public static IReadOnlyList<TextRunPlacement> PlanRunPlacements(
+        ResolvedParagraph paragraph,
+        double startX,
+        double availableWidth,
+        Func<ResolvedRun, bool, double> measureRun)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(measureRun);
+
+        var runs = paragraph.Runs;
+        if (runs.Count == 0)
+            return Array.Empty<TextRunPlacement>();
+
+        var widths = new double[runs.Count];
+        var directions = new bool[runs.Count];
+        double totalWidth = 0;
+        for (int i = 0; i < runs.Count; i++)
+        {
+            directions[i] = ResolveRunRightToLeft(paragraph.RightToLeft, runs[i].Text);
+            widths[i] = Math.Max(0, measureRun(runs[i], directions[i]));
+            totalWidth += widths[i];
+        }
+
+        double alignWidth = availableWidth > 0 ? availableWidth : totalWidth;
+        double leadingOffset = paragraph.Align switch
+        {
+            TextAlign.Center => Math.Max(0, (alignWidth - totalWidth) / 2.0),
+            TextAlign.Right => Math.Max(0, alignWidth - totalWidth),
+            _ => 0,
+        };
+
+        var placements = new List<TextRunPlacement>(runs.Count);
+        if (!paragraph.RightToLeft)
+        {
+            double x = startX + leadingOffset;
+            for (int i = 0; i < runs.Count; i++)
+            {
+                placements.Add(new TextRunPlacement(i, x, widths[i], directions[i]));
+                x += widths[i];
+            }
+        }
+        else
+        {
+            // Logical run 0 is the rightmost visual box in an RTL paragraph.  Build
+            // those boxes from the right edge in logical order, then return them sorted
+            // by X so native renderers can draw in a stable left-to-right order.
+            double x = startX + leadingOffset + totalWidth;
+            for (int i = 0; i < runs.Count; i++)
+            {
+                x -= widths[i];
+                placements.Add(new TextRunPlacement(i, x, widths[i], directions[i]));
+            }
+
+            placements.Sort(static (left, right) => left.X.CompareTo(right.X));
+        }
+
+        return placements;
+    }
+
+    /// <summary>Returns the base direction for a run using its first strong character.</summary>
+    public static bool ResolveRunRightToLeft(bool paragraphRightToLeft, string? text)
+    {
+        if (!string.IsNullOrEmpty(text))
+        {
+            foreach (char c in text)
+            {
+                if (IsRtlStrongCharacter(c))
+                    return true;
+                if (IsLtrStrongCharacter(c))
+                    return false;
+            }
+        }
+
+        return paragraphRightToLeft;
+    }
+
+    private static bool IsRtlStrongCharacter(char c) =>
+        c is >= '\u0590' and <= '\u08ff'
+            or >= '\ufb1d' and <= '\ufdff'
+            or >= '\ufe70' and <= '\ufefc';
+
+    private static bool IsLtrStrongCharacter(char c) =>
+        !IsRtlStrongCharacter(c) && (char.IsLetter(c) || char.IsNumber(c));
 
     private static double ComputeStartY(
         TextLayoutArea area,

@@ -502,6 +502,7 @@ public sealed class InCanvasTextEditPlanner
         Paragraph b,
         bool compareAlignment) =>
         (!compareAlignment || a.Align == b.Align)
+        && a.RightToLeft == b.RightToLeft
         && a.Level == b.Level
         && a.BulletKind == b.BulletKind
         && a.BulletSuppressed == b.BulletSuppressed
@@ -960,6 +961,7 @@ internal static class TextBodyModelCloner
         {
             Anchor = source.Anchor,
             DefaultParaAlign = source.DefaultParaAlign,
+            DefaultParaRightToLeft = source.DefaultParaRightToLeft,
             InsetLeftPt = source.InsetLeftPt,
             InsetRightPt = source.InsetRightPt,
             InsetTopPt = source.InsetTopPt,
@@ -1001,6 +1003,7 @@ internal static class TextBodyModelCloner
         var copy = new Paragraph
         {
             Align = source.Align,
+            RightToLeft = source.RightToLeft,
             Level = source.Level,
             BulletKind = source.BulletKind,
             BulletSuppressed = source.BulletSuppressed,
@@ -1225,6 +1228,7 @@ internal static class TextBodyModelCloner
             : new TextStyleLevel
             {
                 Align = source.Align,
+                RightToLeft = source.RightToLeft,
                 MarginLeftEmu = source.MarginLeftEmu,
                 IndentEmu = source.IndentEmu,
                 FontSizePt = source.FontSizePt,
