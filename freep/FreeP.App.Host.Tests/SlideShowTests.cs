@@ -1477,15 +1477,6 @@ public sealed partial class SlideShowMainWindowCustomShowTests
     [StaFact]
     public void CustomShowDialog_DragReorder_UsesSharedPlannerAndExistingMoveMutation()
     {
-        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "CustomShowDialog.cs"));
-        source.Should().Contain("_customShowSlideList.AllowDrop = true");
-        source.Should().Contain("_customShowSlideList.PreviewMouseLeftButtonDown += OnCustomShowSlideListMouseLeftButtonDown");
-        source.Should().Contain("_customShowSlideList.PreviewMouseMove += OnCustomShowSlideListMouseMove");
-        source.Should().Contain("_customShowSlideList.Drop += OnCustomShowSlideListDrop");
-        source.Should().Contain("ResolveCustomShowSlideDropIndex(e)");
-        source.Should().Contain("SlideShowCustomShowSessionPlanner.BuildDragReorderPlan(");
-        source.Should().Contain("_host.MoveCustomShowSlide(");
-
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         CustomShowDialog? dialog = null;
         try

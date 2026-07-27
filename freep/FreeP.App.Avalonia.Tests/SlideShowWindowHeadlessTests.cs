@@ -1191,20 +1191,6 @@ public sealed class SlideShowWindowHeadlessTests
     [Fact]
     public async Task CustomShowDialog_drag_reorder_uses_shared_planner_and_existing_move_mutation()
     {
-        var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
-            "freep",
-            "FreeP.App.Avalonia",
-            "CustomShowDialog.cs"));
-        source.Should().Contain("DragDrop.SetAllowDrop(_customShowSlideList, true)");
-        source.Should().Contain("_customShowSlideList.PointerPressed += OnCustomShowSlideListPointerPressed");
-        source.Should().Contain("_customShowSlideList.PointerMoved += OnCustomShowSlideListPointerMoved");
-        source.Should().Contain("_customShowSlideList.PointerReleased += OnCustomShowSlideListPointerReleased");
-        source.Should().Contain("_customShowSlideList.AddHandler(DragDrop.DropEvent, OnCustomShowSlideListDrop)");
-        source.Should().Contain("ResolveCustomShowSlideDropIndex(e)");
-        source.Should().Contain("SlideShowCustomShowSessionPlanner.BuildDragReorderPlan(");
-        source.Should().Contain("_host.MoveCustomShowSlide(");
-
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
@@ -1229,6 +1215,12 @@ public sealed class SlideShowWindowHeadlessTests
 
                 dialog = new CustomShowDialog(window);
 
+                var capturedPointer = dialog.BeginCustomShowSlideDragForTests(sourceSlideIndex: 0);
+                dialog.IsCustomShowSlideDragActiveForTests.Should().BeTrue();
+                capturedPointer.Capture(null);
+                dialog.IsCustomShowSlideDragActiveForTests.Should().BeFalse(
+                    "losing pointer capture must cancel the pending drag");
+
                 var plan = dialog.DragReorderCustomShowSlideForTests(
                     sourceSlideIndex: 0,
                     targetDropIndex: 3);
@@ -1245,6 +1237,23 @@ public sealed class SlideShowWindowHeadlessTests
                 presentation.CustomShows[0].SlideIds.Should().Equal(plan.SlideIds);
                 dialog.SelectedCustomShowSlideIndex.Should().Be(2);
                 dialog.ValidationMessage.Should().BeEmpty();
+
+                var beforeCancelledDrop = presentation.CustomShows[0].SlideIds.ToArray();
+                dialog.CompleteCustomShowSlideDragForTests(
+                    sourceSlideIndex: 0,
+                    targetDropIndex: 3,
+                    isInsideList: false).Should().BeFalse();
+                presentation.CustomShows[0].SlideIds.Should().Equal(beforeCancelledDrop,
+                    "releasing outside the list must cancel like WPF DragDrop");
+
+                dialog.CompleteCustomShowSlideDragForTests(
+                    sourceSlideIndex: 0,
+                    targetDropIndex: 3,
+                    isInsideList: true).Should().BeTrue();
+                presentation.CustomShows[0].SlideIds.Should().Equal(
+                    presentation.Slides[0].Id,
+                    presentation.Slides[2].Id,
+                    presentation.Slides[2].Id);
             }
             finally
             {
