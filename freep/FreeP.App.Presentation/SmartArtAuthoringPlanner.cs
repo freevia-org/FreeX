@@ -56,6 +56,7 @@ public enum SmartArtLayoutPreset
     BasicMatrix,
     TitledMatrix,
     GridMatrix,
+    BasicRelationship,
     BasicVenn,
     RadialVenn,
     TargetList,
@@ -153,6 +154,7 @@ public static class SmartArtAuthoringPlanner
     public const string BasicMatrixLayoutCommandId = "freep.smartart.layout.basic-matrix";
     public const string TitledMatrixLayoutCommandId = "freep.smartart.layout.titled-matrix";
     public const string GridMatrixLayoutCommandId = "freep.smartart.layout.grid-matrix";
+    public const string BasicRelationshipLayoutCommandId = "freep.smartart.layout.basic-relationship";
     public const string BasicVennLayoutCommandId = "freep.smartart.layout.basic-venn";
     public const string RadialVennLayoutCommandId = "freep.smartart.layout.radial-venn";
     public const string TargetListLayoutCommandId = "freep.smartart.layout.target-list";
@@ -357,6 +359,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix", SmartArtFamily.Matrix),
             SmartArtLayoutPreset.GridMatrix =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix", SmartArtFamily.Matrix),
+            SmartArtLayoutPreset.BasicRelationship =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/relationship1", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.BasicVenn =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.RadialVenn =>

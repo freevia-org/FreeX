@@ -749,6 +749,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.RadialList, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicMatrix, SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.TitledMatrix, SmartArtFamily.Matrix)]
+    [InlineData(SmartArtLayoutPreset.BasicRelationship, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.BasicVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.RadialVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.TargetList, SmartArtFamily.Relationship)]
@@ -2308,7 +2309,7 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ParsesKnownRelationshipFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    public void Reader_ParsesBasicRelationshipAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/relationship1",
@@ -2321,8 +2322,8 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.Relationship,
             "unsupported relationship siblings still retain broad relationship-family metadata for future layout slices");
-        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
-            "relationship-family layouts outside the bounded allow-list should keep cached-drawing fallback");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "relationship1 now has bounded shared overlapping-ellipse geometry");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("A", "B", "C");
     }
 

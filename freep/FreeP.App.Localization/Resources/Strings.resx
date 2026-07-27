@@ -1096,6 +1096,12 @@
   <data name="Ribbon_Command_SmartArtGridMatrix_KeyTip" xml:space="preserve">
     <value>GM</value>
   </data>
+  <data name="Ribbon_Command_SmartArtBasicRelationship_Label" xml:space="preserve">
+    <value>Basic Relationship</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicRelationship_KeyTip" xml:space="preserve">
+    <value>BR</value>
+  </data>
   <data name="Ribbon_Command_SmartArtBasicVenn_Label" xml:space="preserve">
     <value>Basic Venn</value>
   </data>
