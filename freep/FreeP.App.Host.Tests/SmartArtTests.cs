@@ -2169,8 +2169,15 @@ public sealed class SmartArtTests : IDisposable
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy",
-            nodes: [("R", "Portfolio"), ("C1", "Owners"), ("C2", "Milestones")],
-            parOfConnections: [("R", "C1"), ("R", "C2")]);
+            nodes:
+            [
+                ("R", "Portfolio"),
+                ("C1", "Owners"),
+                ("C2", "Milestones"),
+                ("G1", "Delivery"),
+                ("G2", "Launch")
+            ],
+            parOfConnections: [("R", "C1"), ("R", "C2"), ("C1", "G1"), ("C2", "G2")]);
 
         var sa = PptxPackageReader.Read(pptxPath)
             .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
@@ -2183,6 +2190,8 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.Nodes.Should().ContainSingle();
         sa.Data.Nodes[0].Text.Should().Be("Portfolio");
         sa.Data.Nodes[0].Children.Select(n => n.Text).Should().BeEquivalentTo(new[] { "Owners", "Milestones" });
+        sa.Data.Nodes[0].Children[0].Children.Should().ContainSingle().Which.Text.Should().Be("Delivery");
+        sa.Data.Nodes[0].Children[1].Children.Should().ContainSingle().Which.Text.Should().Be("Launch");
     }
 
     [Fact]
@@ -3178,6 +3187,37 @@ public sealed class SmartArtTests : IDisposable
         renderedText.Should().Contain("Outcome");
         liveShapes.Where(op => op.Text is null)
             .Should().HaveCount(2, "labeledHierarchy uses the shared hierarchy connector DrawOps consumed by WPF and Avalonia");
+    }
+
+    [Fact]
+    public void Compositor_TableHierarchySmartArt_RendersSharedCellsWithoutCachedFallback()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy",
+            nodes:
+            [
+                ("R", "Portfolio"),
+                ("C1", "Owners"),
+                ("C2", "Milestones"),
+                ("G1", "Delivery"),
+                ("G2", "Launch")
+            ],
+            parOfConnections: [("R", "C1"), ("R", "C2"), ("C1", "G1"), ("C2", "G2")]);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(5,
+            "tableHierarchy should produce one root header and four aligned table cells");
+        liveShapes.All(op => op.Text is not null).Should().BeTrue(
+            "tableHierarchy's definition has no connecting lines");
+        liveShapes.Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().BeEquivalentTo("Portfolio", "Owners", "Milestones", "Delivery", "Launch");
     }
 
     [Fact]

@@ -50,6 +50,17 @@ public sealed partial class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void ParityCapture_TargetsOptionsSaveWithCurrentWpfClientFrame()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+
+        source.Should().Contain("string.Equals(targetSurfaceId, \"dialog.Options.Save\", StringComparison.Ordinal)");
+        source.Should().Contain("captureOnlySurfaceId: targetSurfaceId");
+        source.Should().Contain("captureSizeResolver: surfaceId =>");
+        source.Should().Contain("OptionsDialogPlanner.CaptureWidth, OptionsDialogPlanner.CaptureHeight");
+    }
+
+    [Fact]
     public void ParityCapture_OptionsAdvancedRendersActionFooterInsideCanonicalClientFrame()
     {
         StaTestRunner.Run(() =>

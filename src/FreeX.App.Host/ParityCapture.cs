@@ -581,9 +581,21 @@ internal static class ParityCapture
             {
                 CaptureConsolidateDialogDirect(results, outDir, sheet.Id, ResolveSheetId(workbook));
             }
+            else if (string.Equals(targetSurfaceId, "dialog.Options.Save", StringComparison.Ordinal))
+            {
+                CaptureDialogTabs(results, "dialog.Options", outDir,
+                    () => new OptionsDialog(FreeXOptions.Load()),
+                    ["General", "Formulas", "Proofing", "Save", "Language", "EaseOfAccess",
+                        "Advanced", "CustomizeRibbon", "QuickAccessToolbar", "AddIns", "TrustCenter", "View"],
+                    captureSizeResolver: surfaceId =>
+                        surfaceId.Equals("dialog.Options.Formulas", StringComparison.Ordinal)
+                            ? (OptionsDialogPlanner.CaptureWidth, OptionsDialogPlanner.FormulasCaptureHeight)
+                            : (OptionsDialogPlanner.CaptureWidth, OptionsDialogPlanner.CaptureHeight),
+                    captureOnlySurfaceId: targetSurfaceId);
+            }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, and dialog.Consolidate in this lane.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, and dialog.Options.Save in this lane.");
             }
 
             return;
@@ -1427,7 +1439,8 @@ internal static class ParityCapture
         string outDir,
         Func<Window> factory,
         string[] tabNames,
-        Func<string, (double Width, double Height)>? captureSizeResolver = null)
+        Func<string, (double Width, double Height)>? captureSizeResolver = null,
+        string? captureOnlySurfaceId = null)
     {
         Window? dialog = null;
         try
@@ -1446,14 +1459,17 @@ internal static class ParityCapture
             var liveDialog = dialog;
 
             // Default surface (whatever tab the dialog opened on).
-            CaptureSurface(results, surfaceId, "dialog", outDir, () =>
+            if (captureOnlySurfaceId is null || captureOnlySurfaceId.Equals(surfaceId, StringComparison.Ordinal))
             {
-                var captureSize = captureSizeResolver?.Invoke(surfaceId);
-                ApplyDialogClientCaptureSize(liveDialog, captureSize);
-                return captureSize is { } size
-                    ? RenderDialog(liveDialog, size.Width, size.Height)
-                    : RenderDialog(liveDialog);
-            });
+                CaptureSurface(results, surfaceId, "dialog", outDir, () =>
+                {
+                    var captureSize = captureSizeResolver?.Invoke(surfaceId);
+                    ApplyDialogClientCaptureSize(liveDialog, captureSize);
+                    return captureSize is { } size
+                        ? RenderDialog(liveDialog, size.Width, size.Height)
+                        : RenderDialog(liveDialog);
+                });
+            }
 
             // The first TabControl drives most dialogs; the Options dialog instead switches its content via a
             // left-rail ListBox (TabList), so fall back to the first ListBox when no TabControl is present.
@@ -1463,6 +1479,9 @@ internal static class ParityCapture
             for (var i = 0; i < tabNames.Length; i++)
             {
                 var tabSurfaceId = $"{surfaceId}.{tabNames[i]}";
+                if (captureOnlySurfaceId is not null && !captureOnlySurfaceId.Equals(tabSurfaceId, StringComparison.Ordinal))
+                    continue;
+
                 var index = i;
                 CaptureSurface(results, tabSurfaceId, "dialog", outDir, () =>
                 {

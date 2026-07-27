@@ -3575,7 +3575,7 @@ public sealed class SmartArtLayoutTests
         var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
 
         var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
-        shapeOps.Should().HaveCount(5, "tableHierarchy uses the bounded shared hierarchy approximation: three live boxes plus two connectors");
+        shapeOps.Should().HaveCount(3, "tableHierarchy uses one root header and two table-group cells");
         var renderedText = shapeOps
             .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .ToList();
@@ -3583,8 +3583,56 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().Contain("Owners");
         renderedText.Should().Contain("Milestones");
         renderedText.Should().NotContain("Cached table hierarchy fallback");
-        shapeOps.Where(op => op.Text is null)
-            .Should().HaveCount(2, "WPF and Avalonia hosts consume the same shared hierarchy connector DrawOps");
+        shapeOps.All(op => op.Text is not null).Should().BeTrue(
+            "tableHierarchy's authored definition has no connecting lines");
+    }
+
+    [Fact]
+    public void TableHierarchy_UsesAlignedGroupsWithoutConnectors()
+    {
+        var root = new SmartArtNode { ModelId = "root", Text = "Portfolio", Level = 0 };
+        var owners = new SmartArtNode { ModelId = "owners", Text = "Owners", Level = 1 };
+        owners.Children.Add(new SmartArtNode { ModelId = "owner-detail", Text = "Delivery", Level = 2 });
+        var milestones = new SmartArtNode { ModelId = "milestones", Text = "Milestones", Level = 1 };
+        milestones.Children.Add(new SmartArtNode { ModelId = "milestone-detail", Text = "Launch", Level = 2 });
+        root.Children.Add(owners);
+        root.Children.Add(milestones);
+
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy"
+        };
+        data.Nodes.Add(root);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("tableHierarchy has a bounded shared table-cell plan");
+        shapes!.Should().HaveCount(5, "root, two group headers, and two vertically stacked details");
+        shapes.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Rectangle,
+            "tableHierarchy uses renderer-neutral rectangular cells rather than generic hierarchy connectors");
+        shapes.Should().NotContain(shape => shape.AutoShapeKind == DrawingShapeKind.Line,
+            "the authored tableHierarchy definition does not contain connecting lines");
+
+        var cells = shapes.ToDictionary(
+            shape => shape.TextBody!.Paragraphs.First().Runs.First().Text,
+            StringComparer.Ordinal);
+        cells["Portfolio"].ExtentCxEmu.Should().BeGreaterThan(cells["Owners"].ExtentCxEmu,
+            "the root is a full-width table header");
+        cells["Owners"].OffsetXEmu.Should().Be(cells["Delivery"].OffsetXEmu,
+            "a group's hierarchy stays in one aligned column");
+        cells["Milestones"].OffsetXEmu.Should().Be(cells["Launch"].OffsetXEmu,
+            "each table group keeps its descendants aligned");
+        cells["Milestones"].OffsetXEmu.Should().BeGreaterThan(cells["Owners"].OffsetXEmu,
+            "sibling groups occupy separate columns");
+
+        foreach (var cell in cells.Values)
+        {
+            cell.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            cell.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (cell.OffsetXEmu + cell.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (cell.OffsetYEmu + cell.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
     }
 
     [Fact]

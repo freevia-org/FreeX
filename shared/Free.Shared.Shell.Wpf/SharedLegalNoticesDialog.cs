@@ -31,10 +31,10 @@ public partial class SharedLegalNoticesDialog : DialogWindow
         string helpText)
     {
         Title = windowTitle;
-        Width = 840;
-        Height = 620;
-        MinWidth = 620;
-        MinHeight = 420;
+        Width = LegalNoticesDialogMetrics.Width;
+        Height = LegalNoticesDialogMetrics.Height;
+        MinWidth = LegalNoticesDialogMetrics.MinWidth;
+        MinHeight = LegalNoticesDialogMetrics.MinHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = false;
@@ -53,13 +53,13 @@ public partial class SharedLegalNoticesDialog : DialogWindow
         string closeButtonContent,
         string helpText)
     {
-        var root = new DockPanel { Margin = new Thickness(16) };
+        var root = new DockPanel { Margin = new Thickness(LegalNoticesDialogMetrics.ContentMargin) };
 
         var intro = new TextBlock
         {
             Text = introText,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 10)
+            Margin = new Thickness(0, 0, 0, LegalNoticesDialogMetrics.IntroBottomMargin)
         };
         AutomationProperties.SetName(intro, "Legal Notices summary");
         AutomationProperties.SetAutomationId(intro, "LegalNoticesSummaryText");
@@ -69,7 +69,7 @@ public partial class SharedLegalNoticesDialog : DialogWindow
         var buttonRow = DialogButtonRowFactory.CreateOkOnly(
             Close,
             buttonWidth: 84,
-            rowMargin: new Thickness(0, 12, 0, 0),
+            rowMargin: new Thickness(0, LegalNoticesDialogMetrics.ActionRowTopMargin, 0, 0),
             acceptContent: closeButtonContent);
         if (buttonRow.Children[0] is Button closeButton)
         {
@@ -103,10 +103,10 @@ public partial class SharedLegalNoticesDialog : DialogWindow
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             FontFamily = new FontFamily("Consolas"),
-            FontSize = 12,
-            Padding = new Thickness(8),
+            FontSize = LegalNoticesDialogMetrics.TextFontSize,
+            Padding = new Thickness(LegalNoticesDialogMetrics.TextPadding),
             BorderThickness = new Thickness(1),
-            MinHeight = 280
+            MinHeight = LegalNoticesDialogMetrics.TextMinHeight
         };
         AutomationProperties.SetName(textBox, notice.Title);
         AutomationProperties.SetAutomationId(textBox, $"LegalNotices{automationIdSegment}Text");

@@ -932,6 +932,49 @@ public sealed class SmartArtEditingPlannerTests
         boxes["Operations"].OffsetXEmu.Should().Be(boxes["Product"].OffsetXEmu);
     }
 
+    [Fact]
+    public void RegenerateDrawingCache_TableHierarchyUsesSharedCellPlan()
+    {
+        var root = new SmartArtNode { ModelId = "root", Text = "Portfolio", Level = 0 };
+        var owners = new SmartArtNode { ModelId = "owners", Text = "Owners", Level = 1 };
+        owners.Children.Add(new SmartArtNode { ModelId = "owner-detail", Text = "Delivery", Level = 2 });
+        var milestones = new SmartArtNode { ModelId = "milestones", Text = "Milestones", Level = 1 };
+        milestones.Children.Add(new SmartArtNode { ModelId = "milestone-detail", Text = "Launch", Level = 2 });
+        root.Children.Add(owners);
+        root.Children.Add(milestones);
+
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy"
+        };
+        data.Nodes.Add(root);
+
+        var smartArt = new SmartArtShape { Data = data, DrawingPartPath = "ppt/diagrams/drawing1.xml" };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+
+        var result = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Applied.Should().BeTrue(result.Message);
+        result.NodeCount.Should().Be(5);
+        result.ShapeCount.Should().Be(5, "the cache must mirror the shared table cell plan");
+        smartArt.FallbackShapes.Should().OnlyContain(shape =>
+            shape.AutoShapeKind == Free.Shared.Drawing.DrawingShapeKind.Rectangle);
+        smartArt.FallbackShapes.Should().NotContain(shape =>
+            shape.AutoShapeKind == Free.Shared.Drawing.DrawingShapeKind.Line);
+
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var doc = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
+        doc.Descendants(dsp + "sp").Should().HaveCount(5,
+            "editing cache regeneration must persist the same five renderer-neutral cells");
+    }
+
     private static PresentationTheme DefaultTheme() =>
         Presentation.CreateEmpty().Theme!;
 

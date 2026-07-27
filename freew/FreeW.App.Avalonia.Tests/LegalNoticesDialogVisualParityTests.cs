@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -27,10 +28,10 @@ public sealed class LegalNoticesDialogVisualParityTests
                 ("Third-Party License Texts", "third-party license texts"),
             ]);
 
-            dialog.Width.Should().Be(840);
-            dialog.Height.Should().Be(620);
-            dialog.MinWidth.Should().Be(620);
-            dialog.MinHeight.Should().Be(420);
+            dialog.Width.Should().Be(LegalNoticesDialogMetrics.Width);
+            dialog.Height.Should().Be(LegalNoticesDialogMetrics.Height);
+            dialog.MinWidth.Should().Be(LegalNoticesDialogMetrics.MinWidth);
+            dialog.MinHeight.Should().Be(LegalNoticesDialogMetrics.MinHeight);
             dialog.FontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
             dialog.FontSize.Should().Be(12);
 
@@ -56,8 +57,13 @@ public sealed class LegalNoticesDialogVisualParityTests
                 text.Focusable.Should().BeTrue();
                 text.AcceptsReturn.Should().BeTrue();
                 text.AcceptsTab.Should().BeTrue();
-                text.Padding.Should().Be(new Thickness(8));
-                text.FontSize.Should().Be(12);
+                text.Padding.Should().Be(new Thickness(
+                    LegalNoticesDialogMetrics.AvaloniaTextPaddingLeft,
+                    LegalNoticesDialogMetrics.TextPadding,
+                    LegalNoticesDialogMetrics.AvaloniaTextPaddingRight,
+                    LegalNoticesDialogMetrics.TextPadding));
+                text.FontSize.Should().Be(LegalNoticesDialogMetrics.TextFontSize);
+                text.LineHeight.Should().Be(LegalNoticesDialogMetrics.TextLineHeight);
                 text.FontFamily.Should().Be(new FontFamily("Consolas"));
                 ((ISolidColorBrush)text.Foreground!).Color.Should().Be(Colors.Black);
                 AutomationProperties.GetAutomationId(text).Should().StartWith("LegalNotices");

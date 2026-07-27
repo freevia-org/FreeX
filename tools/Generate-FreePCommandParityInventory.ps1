@@ -1846,9 +1846,9 @@ internal static class FreePCommandInventory
         ,
         new(
             EvidenceId: "freep.smartart.table-hierarchy",
-            Area: "SmartArt tableHierarchy live layout",
+            Area: "SmartArt tableHierarchy shared cell layout",
             Status: "shared-render-planner-evidence",
-            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt hierarchy-family layout planner; no renderer-local SmartArt policy",
+            HostCoverage: "WPF/Avalonia consume the same shared tableHierarchy cell plan: full-width headers and aligned child-group cells with no connector ops; no renderer-local SmartArt policy",
             EvidenceDocs:
             [
                 "docs/parity/freep-smartart-table-hierarchy-2026-07-14.md"
@@ -1861,7 +1861,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "tableHierarchy now uses the bounded shared hierarchy-family live-layout path and has a shared undoable authoring command, while other unsupported hierarchy siblings remain on cached drawing fallback. This is a shared hierarchy approximation, not exact PowerPoint table grid geometry; exact cell/table styling, spacing/effects, and authoritative PNG baselines remain deferred.")
+            RemainingWork: "tableHierarchy now uses a bounded shared no-connector table-cell plan for imported and edited diagrams, while other unsupported hierarchy siblings remain on cached drawing fallback. Exact PowerPoint cell sizing, table styling, spacing/effects, multi-group semantics, and authoritative PNG baselines remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.org-chart",

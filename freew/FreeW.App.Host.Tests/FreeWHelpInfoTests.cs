@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using Free.Shared.Shell;
 
 namespace FreeW.App.Host.Tests;
 
@@ -81,13 +82,48 @@ public sealed class FreeWHelpInfoTests
             ("Privacy Notice", "privacy text")
         ]);
 
-        dialog.Width.Should().Be(840);
-        dialog.Height.Should().Be(620);
-        dialog.MinWidth.Should().Be(620);
-        dialog.MinHeight.Should().Be(420);
+        dialog.Width.Should().Be(LegalNoticesDialogMetrics.Width);
+        dialog.Height.Should().Be(LegalNoticesDialogMetrics.Height);
+        dialog.MinWidth.Should().Be(LegalNoticesDialogMetrics.MinWidth);
+        dialog.MinHeight.Should().Be(LegalNoticesDialogMetrics.MinHeight);
         LogicalDescendants<TabControl>(dialog)
             .Single(tab => AutomationProperties.GetAutomationId(tab) == "LegalNoticesSectionTabs")
             .Items.Count.Should().Be(2);
+    }
+
+    [StaFact]
+    public void LegalNoticesDialog_uses_shared_read_only_text_metrics_for_every_notice_tab()
+    {
+        var notices = new[]
+        {
+            ("Project License", "license text"),
+            ("Legal Notices", "legal text"),
+            ("Privacy Notice", "privacy text"),
+            ("Third-Party Notices", "third-party notices"),
+            ("Third-Party License Texts", "third-party license texts"),
+        };
+        var dialog = new LegalNoticesDialog(notices);
+
+        var tabs = LogicalDescendants<TabControl>(dialog).Single();
+        var textBoxes = tabs.Items
+            .OfType<TabItem>()
+            .Select(tab => tab.Content)
+            .OfType<TextBox>()
+            .ToArray();
+        textBoxes.Select(text => text.Text).Should().Equal(notices.Select(notice => notice.Item2));
+        textBoxes.Should().OnlyContain(text =>
+            text.IsReadOnly &&
+            text.AcceptsReturn &&
+            text.AcceptsTab &&
+            text.TextWrapping == TextWrapping.Wrap &&
+            text.VerticalScrollBarVisibility == ScrollBarVisibility.Auto &&
+            text.HorizontalScrollBarVisibility == ScrollBarVisibility.Disabled &&
+            text.FontSize == LegalNoticesDialogMetrics.TextFontSize &&
+            text.Padding == new Thickness(LegalNoticesDialogMetrics.TextPadding) &&
+            text.MinHeight == LegalNoticesDialogMetrics.TextMinHeight);
+        textBoxes.Select(text => text.FontFamily.Source)
+            .Should()
+            .OnlyContain(source => source == "Consolas");
     }
 
     private static IEnumerable<T> LogicalDescendants<T>(DependencyObject root) where T : DependencyObject

@@ -423,15 +423,32 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(defaultFormatBox, "OptionsDefaultFormatComboBox");
 
         var savePanel = OptionsCategoryPanel(
-            OptionsSectionHeader(OptionsText("Options_SaveWorkbooks")),
-            OptionsLabeled(OptionsText("Options_SaveFilesInThisFormat"), defaultFormatBox),
-            OptionsSectionHeader(OptionsText("Options_FileLocations")),
+            OptionsSectionHeader(
+                OptionsText("Options_SaveWorkbooks"),
+                topMargin: 0,
+                bottomMargin: OptionsDialogPlanner.GeneralSectionBottomMargin),
+            OptionsLabeled(
+                OptionsText("Options_SaveFilesInThisFormat"),
+                defaultFormatBox,
+                labelWidth: OptionsDialogPlanner.GeneralLabelWidth,
+                fieldWidth: OptionsDialogPlanner.GeneralFontFieldWidth,
+                spacing: OptionsDialogPlanner.GeneralFieldSpacing,
+                margin: new Thickness(0, 0, 0, OptionsDialogPlanner.GeneralFieldBottomMargin)),
+            OptionsSectionHeader(
+                OptionsText("Options_FileLocations"),
+                topMargin: OptionsDialogPlanner.GeneralSectionTopMargin,
+                bottomMargin: OptionsDialogPlanner.GeneralSectionBottomMargin),
             OptionsLabeled(OptionsText("Options_RecentFilesLocation"), OptionsReadOnlyTextBox(
                 System.IO.Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     "FreeX",
                     "recent.json"),
-                minWidth: 280), stretchField: true));
+                minWidth: 0),
+                labelWidth: OptionsDialogPlanner.GeneralLabelWidth,
+                stretchField: true,
+                margin: new Thickness(0, 0, 0, OptionsDialogPlanner.GeneralFieldBottomMargin)));
+
+        savePanel.Spacing = 0;
 
         var languagePanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_ChooseDisplayLanguage")),
