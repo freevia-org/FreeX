@@ -52,11 +52,17 @@ public static class SlideObjectInsertionPlanner
 {
     public const string TextBoxCommandId = "freep.text-box";
     public const string RectangleCommandId = "freep.shape-rectangle";
+    public const string RoundedRectangleCommandId = "freep.shape-rounded-rectangle";
     public const string EllipseCommandId = "freep.shape-ellipse";
     public const string TriangleCommandId = "freep.shape-triangle";
     public const string DiamondCommandId = "freep.shape-diamond";
     public const string HexagonCommandId = "freep.shape-hexagon";
+    public const string ParallelogramCommandId = "freep.shape-parallelogram";
+    public const string TrapezoidCommandId = "freep.shape-trapezoid";
+    public const string LeftArrowCommandId = "freep.shape-left-arrow";
     public const string RightArrowCommandId = "freep.shape-right-arrow";
+    public const string UpArrowCommandId = "freep.shape-up-arrow";
+    public const string DownArrowCommandId = "freep.shape-down-arrow";
     public const string Star5CommandId = "freep.shape-star5";
     public const string CrossCommandId = "freep.shape-cross";
     public const string PlusSignCommandId = "freep.shape-plus-sign";
@@ -102,11 +108,17 @@ public static class SlideObjectInsertionPlanner
     [
         new(TextBoxCommandId, SlideObjectInsertionKind.TextBox),
         new(RectangleCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Rectangle),
+        new(RoundedRectangleCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.RoundedRectangle),
         new(EllipseCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Ellipse),
         new(TriangleCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Triangle),
         new(DiamondCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Diamond),
         new(HexagonCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Hexagon),
+        new(ParallelogramCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Parallelogram),
+        new(TrapezoidCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Trapezoid),
+        new(LeftArrowCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.LeftArrow),
         new(RightArrowCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.RightArrow),
+        new(UpArrowCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.UpArrow),
+        new(DownArrowCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.DownArrow),
         new(Star5CommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Star5),
         new(CrossCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Cross),
         new(PlusSignCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.PlusSign),

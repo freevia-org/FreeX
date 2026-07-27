@@ -432,6 +432,8 @@ public static class FreePRibbon
                 FreePRibbonText.PictureEffectsResetCommand.Label, RibbonCommandIconKind.Delete,
                 FreePRibbonText.PictureEffectsResetCommand.KeyTip);
             group.Medium("freep.shape-rectangle", FreePRibbonText.ShapeRectangleLabel, RibbonCommandIconKind.Rectangle, FreePRibbonText.ShapeRectangleKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.RoundedRectangleCommandId, FreePRibbonText.ShapeRoundedRectangleLabel,
+                RibbonCommandIconKind.Rectangle, FreePRibbonText.ShapeRoundedRectangleKeyTip);
             group.Medium("freep.shape-ellipse", FreePRibbonText.ShapeEllipseLabel, RibbonCommandIconKind.Ellipse, FreePRibbonText.ShapeEllipseKeyTip);
             group.Medium(SlideObjectInsertionPlanner.TriangleCommandId, FreePRibbonText.ShapeTriangleLabel,
                 RibbonCommandIconKind.Triangle, FreePRibbonText.ShapeTriangleKeyTip);
@@ -439,8 +441,18 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Diamond, FreePRibbonText.ShapeDiamondKeyTip);
             group.Medium(SlideObjectInsertionPlanner.HexagonCommandId, FreePRibbonText.ShapeHexagonLabel,
                 RibbonCommandIconKind.Pentagon, FreePRibbonText.ShapeHexagonKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ParallelogramCommandId, FreePRibbonText.ShapeParallelogramLabel,
+                RibbonCommandIconKind.Diamond, FreePRibbonText.ShapeParallelogramKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.TrapezoidCommandId, FreePRibbonText.ShapeTrapezoidLabel,
+                RibbonCommandIconKind.Pentagon, FreePRibbonText.ShapeTrapezoidKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.LeftArrowCommandId, FreePRibbonText.ShapeLeftArrowLabel,
+                RibbonCommandIconKind.ArrowLeft, FreePRibbonText.ShapeLeftArrowKeyTip);
             group.Medium(SlideObjectInsertionPlanner.RightArrowCommandId, FreePRibbonText.ShapeRightArrowLabel,
                 RibbonCommandIconKind.ArrowRight, FreePRibbonText.ShapeRightArrowKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.UpArrowCommandId, FreePRibbonText.ShapeUpArrowLabel,
+                RibbonCommandIconKind.ArrowUp, FreePRibbonText.ShapeUpArrowKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.DownArrowCommandId, FreePRibbonText.ShapeDownArrowLabel,
+                RibbonCommandIconKind.ArrowDown, FreePRibbonText.ShapeDownArrowKeyTip);
             group.Medium(SlideObjectInsertionPlanner.Star5CommandId, FreePRibbonText.ShapeStar5Label,
                 RibbonCommandIconKind.Star, FreePRibbonText.ShapeStar5KeyTip);
             group.Medium(SlideObjectInsertionPlanner.CrossCommandId, FreePRibbonText.ShapeCrossLabel,
