@@ -25,6 +25,13 @@ public sealed class ParagraphDialog : FreeWDialogWindow
             ControlHeight = 20,
             ButtonHeight = 21,
             ButtonPadding = new Thickness(10, 1),
+            InputBorderBrush = new SolidColorBrush(Color.FromRgb(0xAB, 0xAD, 0xB3)),
+            ComboBoxBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xED, 0xED, 0xED)),
+            TextBoxBackgroundBrush = Brushes.White,
+            DisabledTextBoxBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD1, 0xD4)),
+            TextSelectionBrush = new SolidColorBrush(Color.FromRgb(0x56, 0x9D, 0xE5)),
+            DialogInactiveTabBorderBrush = new SolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC)),
+            DialogInactiveTabBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)),
         };
     private readonly TabControl _tabs;
     private readonly TextBox _left;

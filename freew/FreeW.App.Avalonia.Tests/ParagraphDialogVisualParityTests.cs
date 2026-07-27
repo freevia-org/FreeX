@@ -3,9 +3,11 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using FreeW.App.Localization;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -79,6 +81,27 @@ public sealed class ParagraphDialogVisualParityTests
             tabs.Height.Should().Be(235);
             tabs.SelectedItem.Should().BeOfType<TabItem>();
             ((TabItem)tabs.SelectedItem!).Header.Should().Be("Line and Page Breaks");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Paragraph_uses_Wpf_authority_control_chrome_without_changing_shared_defaults()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new ParagraphDialog(ParagraphFormatting.Default);
+            var left = Field<TextBox>(dialog, "_left");
+            var special = Field<ComboBox>(dialog, "_special");
+
+            ((ISolidColorBrush)left.BorderBrush!).Color.Should().Be(Color.FromRgb(0xAB, 0xAD, 0xB3));
+            ((ISolidColorBrush)left.SelectionBrush!).Color.Should().Be(Color.FromRgb(0x56, 0x9D, 0xE5));
+            ((ISolidColorBrush)special.Background!).Color.Should().Be(Color.FromRgb(0xED, 0xED, 0xED));
+
+            var sharedTextBox = new TextBox();
+            AvaloniaCompactDialogChrome.ApplyTextBox(
+                sharedTextBox,
+                AvaloniaCompactDialogChrome.WindowsStyle);
+            ((ISolidColorBrush)sharedTextBox.BorderBrush!).Color.Should().Be(Color.FromRgb(130, 130, 130));
         }, CancellationToken.None);
     }
 
