@@ -250,7 +250,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
                 slidePoint.X,
                 slidePoint.Y);
             var shape = oleHitId.HasValue
-                ? slide.Shapes.FirstOrDefault(candidate => candidate.Id == oleHitId.Value)
+                ? ShapeHitTester.FindShape(slide, oleHitId.Value)
                 : null;
             if (shape?.Kind == SlideShapeKind.Ole)
             {
@@ -315,11 +315,13 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
             bool hitAny = false;
             foreach (var sid in _editor.SelectedShapeIds)
             {
-                var s = slide.Shapes.FirstOrDefault(sh => sh.Id == sid);
-                if (s is null) continue;
-                var b = ShapeHitTester.GetShapeBoundsDip(s, _editor.Presentation);
-                if (slidePt.X >= b.Left && slidePt.X <= b.Right &&
-                    slidePt.Y >= b.Top  && slidePt.Y <= b.Bottom)
+                var b = ShapeHitTester.GetShapeBoundsDip(
+                    slide,
+                    _editor.Presentation,
+                    sid);
+                if (b is { } bounds &&
+                    slidePt.X >= bounds.Left && slidePt.X <= bounds.Right &&
+                    slidePt.Y >= bounds.Top  && slidePt.Y <= bounds.Bottom)
                 { hitAny = true; break; }
             }
             if (hitAny)
