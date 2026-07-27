@@ -42,7 +42,8 @@ internal static class AvaloniaImageAdjustHelper
         var height = size.Height;
         var stride = checked(width * 4);
         var pixels = new byte[checked(stride * height)];
-        var output = new WriteableBitmap(size, source.Dpi, PixelFormat.Bgra8888, AlphaFormat.Unpremul);
+        // Match WPF's Pbgra32 pipeline: BGRA channel bytes are premultiplied by alpha.
+        var output = new WriteableBitmap(size, source.Dpi, PixelFormat.Bgra8888, AlphaFormat.Premul);
 
         using (var framebuffer = output.Lock())
         {
@@ -178,12 +179,11 @@ internal static class AvaloniaImageAdjustHelper
 
             if (adjustAlpha && recolorMode != ImageRecolorMode.Washout && a > 0)
             {
-                var newAlpha = Clamp(a * opacity);
-                var ratio = newAlpha / a;
-                r *= ratio;
-                g *= ratio;
-                b *= ratio;
-                a = newAlpha;
+                ApplyPremultipliedTransparency(pixels, i, opacity);
+                r = pixels[i + 2] / 255.0;
+                g = pixels[i + 1] / 255.0;
+                b = pixels[i] / 255.0;
+                a = Clamp(a * opacity);
             }
 
             pixels[i] = ToByte(b);
@@ -196,4 +196,27 @@ internal static class AvaloniaImageAdjustHelper
     private static double Clamp(double value) => Math.Clamp(value, 0, 1);
 
     private static byte ToByte(double value) => (byte)Math.Clamp(value * 255 + 0.5, 0, 255);
+
+    internal static void ApplyTransparencyToPremultipliedPixel(byte[] pixel, double transparencyPct)
+    {
+        if (pixel.Length < 4)
+            throw new ArgumentException("A BGRA pixel requires four bytes.", nameof(pixel));
+
+        ApplyPremultipliedTransparency(pixel, 0, 1.0 - transparencyPct / 100.0);
+    }
+
+    private static void ApplyPremultipliedTransparency(byte[] pixels, int offset, double opacity)
+    {
+        var alpha = pixels[offset + 3] / 255.0;
+        if (alpha <= 0)
+            return;
+
+        var newAlpha = Clamp(alpha * opacity);
+        var ratio = newAlpha / alpha;
+        pixels[offset] = ToByte(pixels[offset] / 255.0 * ratio);
+        pixels[offset + 1] = ToByte(pixels[offset + 1] / 255.0 * ratio);
+        pixels[offset + 2] = ToByte(pixels[offset + 2] / 255.0 * ratio);
+        pixels[offset + 3] = ToByte(newAlpha);
+    }
+
 }

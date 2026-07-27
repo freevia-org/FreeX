@@ -5819,24 +5819,40 @@ public sealed class DocumentView : Control
         _layoutContentY += gap;
     }
 
-    private Bitmap? DecodeBitmap(InlineImage image)
+    // Internal for render-pipeline tests; the cache owns the returned bitmap.
+    internal Bitmap? DecodeBitmap(InlineImage image)
     {
         if (_bitmapCache.TryGetValue(image, out var cached))
             return cached;
 
         Bitmap? bitmap = null;
+        Bitmap? decoded = null;
         try
         {
             if (image.PngBytes.Length > 0)
             {
                 using var stream = new MemoryStream(image.PngBytes);
-                using var decoded = new Bitmap(stream);
+                decoded = new Bitmap(stream);
                 bitmap = AvaloniaImageAdjustHelper.Apply(decoded, image);
+                if (ReferenceEquals(bitmap, decoded))
+                {
+                    // The neutral fast path returns the decoded instance; transfer ownership to the cache.
+                    decoded = null;
+                }
+                else
+                {
+                    decoded.Dispose();
+                    decoded = null;
+                }
             }
         }
         catch (Exception)
         {
             bitmap = null; // undecodable -> placeholder rendered instead
+        }
+        finally
+        {
+            decoded?.Dispose();
         }
 
         _bitmapCache[image] = bitmap;

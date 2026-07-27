@@ -1,5 +1,6 @@
 using System.Threading;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia;
 using Avalonia.Headless;
 using Free.Shared.Ribbon;
@@ -201,6 +202,41 @@ public sealed class PictureCoreCommandParityTests
 
             adjusted.Should().NotBeSameAs(source);
             image.PngBytes.Should().Equal(originalBytes);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task DecodeBitmap_NeutralImageRemainsUsableAfterReturningToCache()
+    {
+        await Session.Dispatch(() =>
+        {
+            var image = new InlineImage(OnePixelPng(), 24, 24);
+            var view = new DocumentView();
+            view.LoadDocument(TextDocument.CreateEmpty());
+
+            var first = view.DecodeBitmap(image);
+            var second = view.DecodeBitmap(image);
+
+            first.Should().NotBeNull();
+            first!.PixelSize.Should().Be(new PixelSize(1, 1));
+            second.Should().BeSameAs(first);
+            second!.PixelSize.Should().Be(new PixelSize(1, 1));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaImageAdjustPipeline_TransparencyPreservesPremultipliedRgb()
+    {
+        await Session.Dispatch(() =>
+        {
+            var pixels = new byte[] { 0, 0, 100, 128 };
+
+            AvaloniaImageAdjustHelper.ApplyTransparencyToPremultipliedPixel(pixels, 50);
+
+            // WPF's Pbgra32 math halves premultiplied red (100 -> 50) and alpha (128 -> 64).
+            // Unpremultiplied output would retain roughly 100 in the red channel.
+            pixels[2].Should().BeInRange((byte)49, (byte)51);
+            pixels[3].Should().BeInRange((byte)63, (byte)65);
         }, CancellationToken.None);
     }
 
