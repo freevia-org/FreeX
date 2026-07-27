@@ -4379,7 +4379,6 @@ public sealed partial class MainWindow : Window
 
         _reviewCommentsPanePanel.Children.Clear();
         _reviewCommentsPanePanel.Children.Add(BuildReviewCommentsPaneHeader(plan));
-        _reviewCommentsPanePanel.Children.Add(BuildReviewCommentActions(plan.Actions));
         _reviewCommentsPanePanel.Children.Add(BuildAddCommentInput());
 
         if (plan.Comments.Count == 0)
@@ -4402,45 +4401,49 @@ public sealed partial class MainWindow : Window
 
     private Control BuildReviewCommentsPaneHeader(PresentationCommentPanePlan plan)
     {
-        var labels = new StackPanel
+        var summaryRow = new DockPanel
+        {
+            LastChildFill = true,
+        };
+        var close = new Button
+        {
+            Content  = "Close",
+            MinWidth = PresentationCommentPaneVisualMetrics.CloseMinimumWidth,
+            MinHeight = 0,
+            Height   = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+            FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+            Padding  = new Thickness(8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Tag      = "comments-pane-close",
+            Margin   = new Thickness(6, 0, 0, 6),
+        };
+        close.Click += (_, _) => HideReviewCommentsPane();
+        DockPanel.SetDock(close, Dock.Right);
+        summaryRow.Children.Add(close);
+        summaryRow.Children.Add(new TextBlock
+        {
+            Text              = $"{plan.CurrentSlideSummaryLabel} | {plan.DeckSummaryLabel}",
+            FontSize          = PresentationCommentPaneVisualMetrics.SummaryFontSize,
+            FontWeight        = FontWeight.SemiBold,
+            Foreground        = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(0, 0, 0, 6),
+        });
+
+        return new StackPanel
         {
             Orientation = Orientation.Vertical,
             Spacing     = 0,
-        };
-        labels.Children.Add(new TextBlock
-        {
-            Text       = $"{plan.CurrentSlideSummaryLabel} | {plan.DeckSummaryLabel}",
-            FontSize   = 11,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x2D)),
-            Margin     = new Thickness(0, 0, 0, 6),
-        });
-        labels.Children.Add(new TextBlock
-        {
-            Text       = string.Join(" | ", plan.Filters.Select(filter => filter.Summary)),
-            FontSize   = 10,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
-            Margin     = new Thickness(0, 0, 0, 6),
-        });
-
-        var close = new Button
-        {
-            Content = "Close",
-            MinWidth = 64,
-            Tag = "comments-pane-close",
-            Margin = new Thickness(6, 0, 0, 6),
-        };
-        close.Click += (_, _) => HideReviewCommentsPane();
-
-        DockPanel.SetDock(close, Dock.Right);
-        return new DockPanel
-        {
-            LastChildFill = true,
-            Margin = new Thickness(0),
             Children =
             {
-                close,
-                labels,
+                summaryRow,
+                new TextBlock
+                {
+                    Text       = string.Join(" | ", plan.Filters.Select(filter => filter.Summary)),
+                    FontSize   = PresentationCommentPaneVisualMetrics.FilterFontSize,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                    Margin     = new Thickness(0, 0, 0, 6),
+                },
             },
         };
     }
@@ -4558,14 +4561,23 @@ public sealed partial class MainWindow : Window
     {
         var input = new TextBox
         {
-            PlaceholderText = "Comment",
-            MinWidth = 220,
-            Margin = new Thickness(0, 0, 6, 0),
+            MinWidth = PresentationCommentPaneVisualMetrics.AddCommentInputMinimumWidth,
+            MinHeight = 0,
+            Height   = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+            FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+            Padding  = new Thickness(4, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Margin   = new Thickness(0, 0, 6, 0),
         };
         var button = new Button
         {
-            Content = "New Comment",
-            MinWidth = 96,
+            Content  = "New Comment",
+            MinWidth = PresentationCommentPaneVisualMetrics.AddCommentButtonMinimumWidth,
+            MinHeight = 0,
+            Height   = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+            FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+            Padding  = new Thickness(8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
         };
         button.Click += (_, _) => AddComment(input.Text);
 
@@ -4587,47 +4599,50 @@ public sealed partial class MainWindow : Window
         var header = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing     = 6,
+            Margin      = new Thickness(6, 4, 6, 0),
         };
         header.Children.Add(new Border
         {
             Background   = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
             CornerRadius = new CornerRadius(3),
-            Padding      = new Thickness(5, 1, 5, 1),
+            Padding      = new Thickness(4, 1, 4, 1),
+            Margin       = new Thickness(0, 0, 6, 0),
             Child        = new TextBlock
             {
                 Text       = comment.InitialsBadgeText,
-                FontSize   = 11,
+                FontSize   = PresentationCommentPaneVisualMetrics.StatusFontSize,
                 Foreground = Brushes.White,
             },
         });
         header.Children.Add(new TextBlock
         {
             Text              = comment.AuthorDisplayName,
-            FontSize          = 11,
+            FontSize          = PresentationCommentPaneVisualMetrics.AuthorFontSize,
             FontWeight        = FontWeight.SemiBold,
+            Foreground        = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
             VerticalAlignment = VerticalAlignment.Center,
         });
         header.Children.Add(new TextBlock
         {
             Text              = comment.ThreadStatusLabel,
-            FontSize          = 11,
+            FontSize          = PresentationCommentPaneVisualMetrics.StatusFontSize,
             Foreground        = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            Margin            = new Thickness(6, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
         });
 
         var card = new StackPanel
         {
             Orientation = Orientation.Vertical,
-            Spacing     = 4,
         };
         card.Children.Add(header);
         card.Children.Add(new TextBlock
         {
             Text         = comment.TextPreview,
-            FontSize     = 11,
+            FontSize     = PresentationCommentPaneVisualMetrics.BodyFontSize,
             TextWrapping = TextWrapping.Wrap,
             Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+            Margin       = new Thickness(16, 2, 6, 6),
         });
         AddMentionDetail(card, comment.MentionDetailSummary, new Thickness(0));
         if (comment.IsSelected && comment.CanEdit)
@@ -4637,7 +4652,13 @@ public sealed partial class MainWindow : Window
             {
                 Text = editText,
                 CaretIndex = editText.Length,
-                MinWidth = 180,
+                MinWidth = PresentationCommentPaneVisualMetrics.AddCommentInputMinimumWidth,
+                MinHeight = 0,
+                Margin   = new Thickness(16, 0, 6, 6),
+                Height   = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+                FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+                Padding  = new Thickness(4, 0),
+                VerticalContentAlignment = VerticalAlignment.Center,
             };
             var mentionButton = BuildCommentMentionButton(
                 "comment-mention:edit",
@@ -4648,12 +4669,17 @@ public sealed partial class MainWindow : Window
             {
                 Content = "Save",
                 MinWidth = 72,
+                MinHeight = 0,
+                Height   = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+                FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+                Padding  = new Thickness(8, 0),
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Margin   = new Thickness(0, 0, 6, 6),
             };
             editButton.Click += (_, _) => EditSelectedComment(editInput.Text);
             card.Children.Add(new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 6,
                 Children =
                 {
                     editInput,
@@ -4668,11 +4694,11 @@ public sealed partial class MainWindow : Window
             {
                 Text         = $"{reply.AuthorDisplayName}: {reply.TextPreview}",
                 TextWrapping = TextWrapping.Wrap,
-                FontSize     = 12,
-                Margin       = new Thickness(18, 0, 0, 0),
+                FontSize     = PresentationCommentPaneVisualMetrics.ReplyFontSize,
+                Margin       = new Thickness(26, 0, 6, 4),
                 Foreground   = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
             });
-            AddMentionDetail(card, reply.MentionDetailSummary, new Thickness(18, 0, 0, 0));
+            AddMentionDetail(card, reply.MentionDetailSummary, new Thickness(26, 0, 6, 4));
         }
         if (comment.IsSelected && comment.CanReply)
         {
@@ -4680,6 +4706,12 @@ public sealed partial class MainWindow : Window
             {
                 PlaceholderText = "Reply",
                 MinWidth        = 180,
+                MinHeight       = 0,
+                Height          = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+                FontSize        = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+                Padding         = new Thickness(4, 0),
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Margin          = new Thickness(0, 0, 6, 0),
             };
             var mentionButton = BuildCommentMentionButton(
                 "comment-mention:reply",
@@ -4689,13 +4721,18 @@ public sealed partial class MainWindow : Window
             var replyButton = new Button
             {
                 Content = "Reply",
-                MinWidth = 72,
+                MinWidth = 58,
+                MinHeight = 0,
+                Height   = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+                FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+                Padding  = new Thickness(8, 0),
+                VerticalContentAlignment = VerticalAlignment.Center,
             };
             replyButton.Click += (_, _) => ReplyToSelectedComment(replyInput.Text);
             card.Children.Add(new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing     = 6,
+                Margin      = new Thickness(16, 0, 6, 6),
                 Children    =
                 {
                     replyInput,
@@ -4711,8 +4748,7 @@ public sealed partial class MainWindow : Window
             BorderBrush     = new SolidColorBrush(comment.IsSelected ? Color.FromRgb(0xB7, 0x47, 0x2A) : Color.FromRgb(0xE0, 0xE0, 0xE0)),
             BorderThickness = new Thickness(comment.IsSelected ? 2 : 1),
             CornerRadius    = new CornerRadius(4),
-            Padding         = new Thickness(10),
-            Margin          = new Thickness(12, 0, 12, 10),
+            Margin          = new Thickness(0, 0, 0, PresentationCommentPaneVisualMetrics.CardBottomMargin),
             Child           = card,
         };
         border.Cursor = new Cursor(StandardCursorType.Hand);
