@@ -1,9 +1,13 @@
 using System.Reflection;
 using System.Threading;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using FluentAssertions;
 
@@ -38,12 +42,22 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
 
             var editor = FindByAutomationId<Border>(renderedGrid, "WorksheetThreadedCommentInlineEditor");
             editor.Should().NotBeNull();
-            var rootBox = FindByAutomationId<TextBox>(editor!, "ThreadedCommentRootBox");
+            var rootBox = FindByAutomationId<TextBox>(editor!, "GridThreadedCommentRootBox");
             rootBox.Should().NotBeNull();
             rootBox!.Text = "First comment";
 
-            var save = FindByAutomationId<Button>(editor, "GridThreadedCommentInlineSaveButton");
+            var save = FindByAutomationId<Button>(editor, "GridCommentInlineSaveButton");
             save.Should().NotBeNull();
+            save!.Content.Should().Be("Save");
+            save.Width.Should().Be(72);
+            save.MinHeight.Should().Be(24);
+            var cancel = FindByAutomationId<Button>(editor, "GridCommentInlineCancelButton");
+            cancel.Should().NotBeNull();
+            cancel!.Content.Should().Be("Cancel");
+            cancel.Width.Should().Be(72);
+            cancel.MinHeight.Should().Be(24);
+            editor!.GetVisualDescendants().OfType<Button>().ToList().IndexOf(save)
+                .Should().BeLessThan(editor.GetVisualDescendants().OfType<Button>().ToList().IndexOf(cancel));
             save!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
             sheet.ThreadedComments.Should().ContainKey(address);
@@ -71,15 +85,76 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             ((Task)InvokePrivate(window, "ShowNewThreadedCommentDialogAsync")!).GetAwaiter().GetResult();
             var renderedGrid = window.RebuildSheetGridForTest();
             var editor = FindByAutomationId<Border>(renderedGrid, "WorksheetThreadedCommentInlineEditor");
-            var rootBox = FindByAutomationId<TextBox>(editor!, "ThreadedCommentRootBox");
+            var rootBox = FindByAutomationId<TextBox>(editor!, "GridThreadedCommentRootBox");
             rootBox!.Text = "Cancelled comment";
 
-            var cancel = FindByAutomationId<Button>(editor, "GridThreadedCommentInlineCancelButton");
+            var cancel = FindByAutomationId<Button>(editor, "GridCommentInlineCancelButton");
             cancel.Should().NotBeNull();
             cancel!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
             sheet.ThreadedComments.Should().NotContainKey(address);
             window.Session.CanUndo.Should().BeFalse();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ExistingComment_SelectedReplyCtrlEnterUpdatesReplyNotRootOrNewReply()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("ReviewReplyFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var address = new CellAddress(sheet.Id, 1, 1);
+            sheet.ThreadedComments[address] = new ThreadedComment("Root text")
+            {
+                Replies = [new CommentReply("Original reply")],
+            };
+            window.Session.SelectCell(address);
+            window.Session.UpdateViewportSize(880, 1440);
+
+            ((Task)InvokePrivate(window, "ShowEditThreadedCommentDialogAsync")!).GetAwaiter().GetResult();
+            var renderedGrid = window.RebuildSheetGridForTest();
+            var editor = FindByAutomationId<Border>(renderedGrid, "WorksheetThreadedCommentInlineEditor");
+            editor.Should().NotBeNull();
+            editor!.Background.Should().BeOfType<SolidColorBrush>().Which.Color
+                .Should().Be(Color.FromRgb(255, 255, 225));
+            editor.Padding.Should().Be(new Thickness(8));
+
+            var rootBox = FindByAutomationId<TextBox>(editor, "GridThreadedCommentRootBox");
+            var replyBox = FindByAutomationId<TextBox>(editor, "GridThreadedCommentReplyBox");
+            var selectedReplyBox = FindByAutomationId<TextBox>(editor, "GridThreadedCommentSelectedReplyBox");
+            var conversation = editor.GetVisualDescendants().OfType<ScrollViewer>().Single();
+            rootBox.Should().NotBeNull();
+            replyBox.Should().NotBeNull();
+            selectedReplyBox.Should().NotBeNull();
+            conversation.MaxHeight.Should().Be(92);
+            var updateReply = FindByAutomationId<Button>(editor, "GridThreadedCommentUpdateReplyButton");
+            var deleteReply = FindByAutomationId<Button>(editor, "GridThreadedCommentDeleteReplyButton");
+            updateReply.Should().NotBeNull();
+            deleteReply.Should().NotBeNull();
+            updateReply!.Width.Should().Be(104);
+            deleteReply!.Width.Should().Be(104);
+            updateReply.Parent.Should().BeOfType<StackPanel>().Which.HorizontalAlignment
+                .Should().Be(global::Avalonia.Layout.HorizontalAlignment.Left);
+            var save = FindByAutomationId<Button>(editor, "GridCommentInlineSaveButton");
+            save.Should().NotBeNull();
+            save!.Content.Should().Be("Apply");
+
+            selectedReplyBox!.Text = "Updated reply";
+            var keyEvent = new KeyEventArgs
+            {
+                RoutedEvent = InputElement.KeyDownEvent,
+                Key = Key.Enter,
+                KeyModifiers = KeyModifiers.Control,
+            };
+            selectedReplyBox.RaiseEvent(keyEvent);
+
+            sheet.ThreadedComments[address].Text.Should().Be("Root text");
+            sheet.ThreadedComments[address].Replies.Should().ContainSingle();
+            sheet.ThreadedComments[address].Replies[0].Text.Should().Be("Updated reply");
+            window.Session.CanUndo.Should().BeTrue();
             window.Close();
         }, CancellationToken.None);
     }

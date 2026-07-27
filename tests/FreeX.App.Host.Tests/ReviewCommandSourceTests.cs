@@ -18,6 +18,24 @@ public sealed class ReviewCommandSourceTests
     }
 
     [Fact]
+    public void WpfInlineCommentEditor_ExposesSharedAutomationAndButtonContracts()
+    {
+        var source = DialogSourceTestSupport.ReadAppUiSources("GridView.CommentPreview.cs");
+
+        source.Should().Contain("GridThreadedCommentRootBox");
+        source.Should().Contain("GridThreadedCommentReplyBox");
+        source.Should().Contain("GridCommentInlineSaveButton");
+        source.Should().Contain("GridCommentInlineCancelButton");
+        source.Should().Contain("existing is null ? \"Save\" : \"Apply\"");
+        source.Should().Contain("Content = \"Cancel\"");
+        source.Should().Contain("row.Children.Add(saveButton);");
+        source.Should().Contain("row.Children.Add(cancelButton);");
+        source.Should().Contain("Width = 72");
+        source.Should().Contain("MinHeight = 24");
+        source.Should().Contain("SubmitThreadedCommentReplyEdit();");
+    }
+
+    [Fact]
     public void ReviewCommandHandlers_RouteThroughExpectedPlannersDialogsAndServices()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");

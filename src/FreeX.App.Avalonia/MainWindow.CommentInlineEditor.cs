@@ -77,10 +77,10 @@ public sealed partial class MainWindow
             Width = InlineCommentEditorWidth,
             MinHeight = editorHeight,
             MaxHeight = editorHeight,
-            Background = Brushes.White,
+            Background = new SolidColorBrush(Color.FromRgb(255, 255, 225)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(158, 151, 113)),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(8, 6),
+            Padding = new Thickness(8),
             Child = BuildInlineThreadedCommentPanel(),
         };
         AutomationProperties.SetAutomationId(editor, "WorksheetThreadedCommentInlineEditor");
@@ -116,7 +116,7 @@ public sealed partial class MainWindow
             panel.Children.Add(new ScrollViewer
             {
                 Content = conversation,
-                MaxHeight = 82,
+                MaxHeight = 92,
                 VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
                 Margin = new Thickness(0, 0, 0, 6),
             });
@@ -125,7 +125,7 @@ public sealed partial class MainWindow
         _inlineThreadedCommentRootBox = CreateInlineCommentTextBox(
             existing?.Text ?? string.Empty,
             existing is null ? "ThreadedComment_CommentAutomationName" : "ThreadedComment_EditCommentAutomationName",
-            "ThreadedCommentRootBox",
+            "GridThreadedCommentRootBox",
             minHeight: 54,
             maxHeight: 96);
         panel.Children.Add(CreateInlineCommentLabel(
@@ -141,7 +141,7 @@ public sealed partial class MainWindow
             _inlineThreadedCommentReplyBox = CreateInlineCommentTextBox(
                 string.Empty,
                 "ThreadedComment_ReplyAutomationName",
-                "ThreadedCommentReplyBox",
+                "GridThreadedCommentReplyBox",
                 minHeight: 42,
                 maxHeight: 74);
             panel.Children.Add(CreateInlineCommentLabel(UiText.Get("ThreadedComment_ReplyLabel"), _inlineThreadedCommentReplyBox, 6));
@@ -170,12 +170,17 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(_inlineThreadedCommentError, "GridThreadedCommentInlineError");
         panel.Children.Add(_inlineThreadedCommentError);
 
-        var cancel = CreateInlineCommentButton(UiText.Get("ThreadedComment_CancelButton"), "GridThreadedCommentInlineCancelButton", CancelThreadedCommentInlineEdit);
         var save = CreateInlineCommentButton(
-            existing is null ? UiText.Get("ThreadedComment_AddButton") : UiText.Get("ThreadedComment_ReplyButton"),
-            "GridThreadedCommentInlineSaveButton",
-            SubmitThreadedCommentInlineEdit);
-        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([cancel, save], new Thickness(0, 7, 0, 0)));
+            existing is null ? InlineCommentSaveText : InlineCommentApplyText,
+            "GridCommentInlineSaveButton",
+            SubmitThreadedCommentInlineEdit,
+            isDefault: true);
+        var cancel = CreateInlineCommentButton(
+            InlineCommentCancelText,
+            "GridCommentInlineCancelButton",
+            CancelThreadedCommentInlineEdit,
+            isCancel: true);
+        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([save, cancel], new Thickness(0, 7, 0, 0)));
         return panel;
     }
 
@@ -196,15 +201,18 @@ public sealed partial class MainWindow
             "ThreadedComment_SelectedReplyTextAutomationName",
             "GridThreadedCommentSelectedReplyBox",
             minHeight: 42,
-            maxHeight: 74);
+            maxHeight: 74,
+            selectedReply: true);
         _inlineThreadedCommentUpdateReplyButton = CreateInlineCommentButton(
             UiText.Get("ThreadedComment_UpdateReplyButton"),
             "GridThreadedCommentUpdateReplyButton",
-            SubmitThreadedCommentReplyEdit);
+            SubmitThreadedCommentReplyEdit,
+            width: 104);
         _inlineThreadedCommentDeleteReplyButton = CreateInlineCommentButton(
             UiText.Get("ThreadedComment_DeleteReplyButton"),
             "GridThreadedCommentDeleteReplyButton",
-            SubmitThreadedCommentReplyDelete);
+            SubmitThreadedCommentReplyDelete,
+            width: 104);
         _inlineThreadedCommentReplySelector.SelectionChanged += (_, _) => PopulateInlineSelectedReplyText(existing);
         _inlineThreadedCommentSelectedReplyBox.TextChanged += (_, _) => UpdateInlineSelectedReplyActionState(existing);
         _inlineThreadedCommentReplySelector.SelectedIndex = 0;
@@ -213,9 +221,16 @@ public sealed partial class MainWindow
         panel.Children.Add(_inlineThreadedCommentReplySelector);
         panel.Children.Add(CreateInlineCommentLabel(UiText.Get("ThreadedComment_SelectedReplyTextLabel"), _inlineThreadedCommentSelectedReplyBox, 5));
         panel.Children.Add(_inlineThreadedCommentSelectedReplyBox);
-        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
-            [_inlineThreadedCommentUpdateReplyButton, _inlineThreadedCommentDeleteReplyButton],
-            new Thickness(0, 5, 0, 0)));
+        var replyActionRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+            Spacing = 6,
+            Margin = new Thickness(0, 5, 0, 0),
+        };
+        replyActionRow.Children.Add(_inlineThreadedCommentUpdateReplyButton);
+        replyActionRow.Children.Add(_inlineThreadedCommentDeleteReplyButton);
+        panel.Children.Add(replyActionRow);
         PopulateInlineSelectedReplyText(existing);
         return panel;
     }
@@ -225,7 +240,8 @@ public sealed partial class MainWindow
         string nameResourceKey,
         string automationId,
         double minHeight,
-        double maxHeight)
+        double maxHeight,
+        bool selectedReply = false)
     {
         var box = new TextBox
         {
@@ -241,7 +257,10 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyTextBox(box, CommentDialogChromeStyle, fixedHeight: false);
         AutomationProperties.SetName(box, UiText.Get(nameResourceKey));
         AutomationProperties.SetAutomationId(box, automationId);
-        box.KeyDown += InlineThreadedCommentTextBoxKeyDown;
+        if (selectedReply)
+            box.KeyDown += InlineThreadedCommentSelectedReplyKeyDown;
+        else
+            box.KeyDown += InlineThreadedCommentTextBoxKeyDown;
         return box;
     }
 
@@ -255,18 +274,43 @@ public sealed partial class MainWindow
         FontSize = 11,
     };
 
-    private static Button CreateInlineCommentButton(string text, string automationId, Action action)
+    private static Button CreateInlineCommentButton(
+        string text,
+        string automationId,
+        Action action,
+        bool isDefault = false,
+        bool isCancel = false,
+        double width = 72)
     {
-        var button = new Button { Content = text, MinWidth = 84, IsDefault = text != UiText.Get("ThreadedComment_CancelButton") };
-        AvaloniaCompactDialogChrome.ApplyButton(button, CommentDialogChromeStyle, 84, button.IsDefault);
+        var button = new Button
+        {
+            Content = text,
+            Width = width,
+            MinWidth = width,
+            IsDefault = isDefault,
+            IsCancel = isCancel,
+        };
+        AvaloniaCompactDialogChrome.ApplyButton(button, CommentDialogChromeStyle, width, isDefault);
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
         AutomationProperties.SetAutomationId(button, automationId);
         button.Click += (_, _) => action();
         return button;
     }
 
+    private static string InlineCommentSaveText =>
+        UiText.CreateAutomationName(UiText.Get("MainWindow_AutomationName_Save"));
+
+    private static string InlineCommentApplyText =>
+        UiText.CreateAutomationName(UiText.Get("Common_Apply"));
+
+    private static string InlineCommentCancelText =>
+        UiText.CreateAutomationName(UiText.Get("Common_Cancel"));
+
     private static Border BuildInlineThreadMessage(string author, string text, DateTimeOffset? createdAtUtc, bool isRoot)
     {
-        var panel = new StackPanel();
+        var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 5) };
         panel.Children.Add(new TextBlock
         {
             Text = ThreadedCommentDialogPlanner.FormatMessageHeading(author, createdAtUtc),
@@ -281,7 +325,7 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
             FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(7, 2, 0, 0),
+            Margin = new Thickness(8, 2, 0, 0),
         });
         return new Border
         {
@@ -289,8 +333,9 @@ public sealed partial class MainWindow
             Background = new SolidColorBrush(isRoot ? Color.FromRgb(0xF0, 0xF4, 0xF8) : Colors.White),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(6, 4),
-            Margin = new Thickness(0, 0, 0, 3),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(7, 5, 7, 5),
+            Margin = new Thickness(0, 0, 0, 4),
         };
     }
 
@@ -308,17 +353,23 @@ public sealed partial class MainWindow
         }
     }
 
-    private void SubmitThreadedCommentInlineEdit()
+    private void InlineThreadedCommentSelectedReplyKeyDown(object? sender, KeyEventArgs e)
     {
-        if (_inlineThreadedCommentEditExisting is { } existing &&
-            _inlineThreadedCommentReplySelector?.SelectedIndex >= 0 &&
-            _inlineThreadedCommentReplyBox is null &&
-            _inlineThreadedCommentSelectedReplyBox?.IsFocused == true)
+        if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.Control &&
+            _inlineThreadedCommentUpdateReplyButton?.IsEnabled == true)
         {
             SubmitThreadedCommentReplyEdit();
-            return;
+            e.Handled = true;
         }
+        else if (e.Key == Key.Escape && e.KeyModifiers == KeyModifiers.None)
+        {
+            CancelThreadedCommentInlineEdit();
+            e.Handled = true;
+        }
+    }
 
+    private void SubmitThreadedCommentInlineEdit()
+    {
         if (!ThreadedCommentDialogPlanner.TryCreateResult(
                 _inlineThreadedCommentEditExisting,
                 _inlineThreadedCommentRootBox?.Text,
