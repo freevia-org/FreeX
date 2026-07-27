@@ -72,6 +72,24 @@ public sealed class FreeWHelpInfoTests
         tabs.Should().OnlyContain(tab => AutomationProperties.GetAutomationId(tab).StartsWith("LegalNotices", StringComparison.Ordinal));
     }
 
+    [StaFact]
+    public void LegalNoticesDialog_uses_the_Wpf_authority_chrome_metrics()
+    {
+        var dialog = new LegalNoticesDialog(
+        [
+            ("Project License", "license text"),
+            ("Privacy Notice", "privacy text")
+        ]);
+
+        dialog.Width.Should().Be(840);
+        dialog.Height.Should().Be(620);
+        dialog.MinWidth.Should().Be(620);
+        dialog.MinHeight.Should().Be(420);
+        LogicalDescendants<TabControl>(dialog)
+            .Single(tab => AutomationProperties.GetAutomationId(tab) == "LegalNoticesSectionTabs")
+            .Items.Count.Should().Be(2);
+    }
+
     private static IEnumerable<T> LogicalDescendants<T>(DependencyObject root) where T : DependencyObject
     {
         foreach (var child in LogicalTreeHelper.GetChildren(root))
@@ -84,4 +102,5 @@ public sealed class FreeWHelpInfoTests
                     yield return descendant;
             }
     }
+
 }

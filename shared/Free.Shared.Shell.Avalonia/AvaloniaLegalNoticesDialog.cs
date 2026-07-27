@@ -67,7 +67,9 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         {
             Text = introText,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 10),
+            // WPF's compact dialog typography leaves a three-pixel lead before the tab strip.
+            Margin = new Thickness(0, 0, 0, 13),
+            Foreground = Brushes.Black,
         };
         AutomationProperties.SetName(intro, "Legal Notices summary");
         AutomationProperties.SetAutomationId(intro, "LegalNoticesSummaryText");
@@ -97,12 +99,20 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         foreach (var notice in notices)
             _tabControl.Items.Add(CreateTabItem(notice));
         _tabControl.SelectedIndex = notices.Count > 0 ? 0 : -1;
+        // Avalonia's default TabControl template adds a 12px content inset. The WPF
+        // authority keeps the tab body aligned with the dialog content edge.
+        _tabControl.Padding = new Thickness(0);
+        _tabControl.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        _tabControl.VerticalContentAlignment = VerticalAlignment.Stretch;
         AutomationProperties.SetName(_tabControl, "Legal notice sections");
         AutomationProperties.SetAutomationId(_tabControl, "LegalNoticesSectionTabs");
         AutomationProperties.SetHelpText(
             _tabControl,
             "Choose a legal notice section to read and copy.");
-        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(_tabControl);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
+            _tabControl,
+            AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = 21 },
+            contentPaneMargin: new Thickness(-11, 0, -11, 0));
         root.Children.Add(_tabControl);
 
         return root;
@@ -122,6 +132,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             FontSize = 12,
             Padding = new Thickness(8),
             MinHeight = 280,
+            Foreground = Brushes.Black,
         };
         AutomationProperties.SetName(textBox, notice.Title);
         AutomationProperties.SetAutomationId(

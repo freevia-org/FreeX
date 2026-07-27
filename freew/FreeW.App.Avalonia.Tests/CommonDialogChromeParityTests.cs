@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -149,6 +150,28 @@ public sealed class CommonDialogChromeParityTests
         tabs.Classes.Should().Contain(AvaloniaCompactDialogChrome.ClassicTabClass);
         styleCount.Should().Be(4);
         tabs.Styles.Count.Should().Be(styleCount, "reapplying the window chrome must not duplicate tab styles");
+    }
+
+    [Fact]
+    public void Classic_tabs_accept_an_authority_specific_content_pane_metric()
+    {
+        var tabs = new TabControl();
+
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
+            tabs,
+            AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = 21 },
+            contentPaneMargin: new Thickness(-11, 0, -11, 0));
+
+        tabs.Classes.Should().Contain(AvaloniaCompactDialogChrome.ClassicTabClass);
+        tabs.Styles.Count.Should().Be(4);
+        var hasAuthorityPaneMargin = tabs.Styles
+            .OfType<Style>()
+            .SelectMany(style => style.Setters)
+            .OfType<Setter>()
+            .Any(setter => setter.Property == global::Avalonia.Layout.Layoutable.MarginProperty
+                && setter.Value is Thickness margin
+                && margin == new Thickness(-11, 0, -11, 0));
+        hasAuthorityPaneMargin.Should().BeTrue();
     }
 
     private sealed class TestDialog : AvaloniaDialogWindow

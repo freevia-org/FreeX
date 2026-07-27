@@ -522,7 +522,8 @@ public static class AvaloniaCompactDialogChrome
     /// </summary>
     public static void ApplyClassicTabChrome(
         TabControl tabControl,
-        AvaloniaCompactDialogChromeStyle? style = null)
+        AvaloniaCompactDialogChromeStyle? style = null,
+        Thickness? contentPaneMargin = null)
     {
         ArgumentNullException.ThrowIfNull(tabControl);
         style ??= WindowsStyle;
@@ -546,7 +547,12 @@ public static class AvaloniaCompactDialogChrome
             .Name("PART_SelectedContentHost"));
         contentPaneStyle.Setters.Add(new Setter(Border.BorderBrushProperty, DialogTabPaneBorderBrush));
         contentPaneStyle.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(1)));
-        contentPaneStyle.Setters.Add(new Setter(Layoutable.MarginProperty, new Thickness(0)));
+        // Avalonia's platform TabControl template reserves an 11px body inset. The
+        // WPF dialog pane is flush with the surrounding content, so cancel that
+        // template inset while retaining the shared one-pixel pane frame.
+        contentPaneStyle.Setters.Add(new Setter(
+            Layoutable.MarginProperty,
+            contentPaneMargin ?? new Thickness(0)));
         contentPaneStyle.Setters.Add(new Setter(ContentPresenter.PaddingProperty, new Thickness(0)));
         contentPaneStyle.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.White));
         tabControl.Styles.Add(contentPaneStyle);
