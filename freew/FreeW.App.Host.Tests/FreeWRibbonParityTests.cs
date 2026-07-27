@@ -2693,6 +2693,34 @@ public sealed class FreeWRibbonParityTests
         pageNumberCount.Should().Be(1, "inserting page number twice must not duplicate the field run");
     }
 
+    [StaFact]
+    public void InsertHeaderFooter_UsesWpfPromptSeedAndCancelContract()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        var prompts = new List<(bool Footer, string Seed)>();
+        var registry = FreeWRibbonCommands.Build(
+            editor,
+            new RibbonStateStore(),
+            askHeaderFooterText: (footer, seed) =>
+            {
+                prompts.Add((footer, seed));
+                return footer ? null : "Header from prompt";
+            });
+
+        registry.TryGet("freew.header", out var header).Should().BeTrue();
+        header!.Execute(RibbonCommandContext.Empty);
+
+        editor.Model.Header.Should().NotBeNull();
+        editor.Model.Header!.PlainText.Should().Be("Header from prompt");
+
+        registry.TryGet("freew.footer", out var footer).Should().BeTrue();
+        footer!.Execute(RibbonCommandContext.Empty);
+
+        editor.Model.Footer.Should().BeNull("Cancel must leave the footer untouched");
+        prompts.Should().Equal((false, string.Empty), (true, string.Empty));
+    }
+
     // ── Notes pane backing (Phase 1A) ───────────────────────────────────────────────────────────────
 
     /// <summary>

@@ -59,6 +59,26 @@ internal static class FreeWRibbonCommands
     public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore) =>
         Build(editor, stateStore, onPrintPreview: null);
 
+    /// <summary>Test seam for the WPF-authoritative Header/Footer prompt; production uses TextPrompt.</summary>
+    public static RibbonCommandRegistry Build(
+        DocumentView editor,
+        RibbonStateStore stateStore,
+        Func<bool, string, string?> askHeaderFooterText) =>
+        Build(
+            editor,
+            stateStore,
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: null,
+            askHeaderFooterText: askHeaderFooterText);
+
     public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore, Action? onPrintPreview) =>
         Build(editor, stateStore, onPrintPreview, onToggleNavPane: null, isNavPaneVisible: null);
 
@@ -169,7 +189,8 @@ internal static class FreeWRibbonCommands
         Action? onArrangeAll = null,
         // W25 — Local Thesaurus pane + Balloons review mode.
         Action? onToggleThesaurus = null,
-        Action? onToggleBalloons = null)
+        Action? onToggleBalloons = null,
+        Func<bool, string, string?>? askHeaderFooterText = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -1364,8 +1385,8 @@ internal static class FreeWRibbonCommands
 
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
-        registry.Register("freew.header", new HeaderFooterCommand(editor, isFooter: false));
-        registry.Register("freew.footer", new HeaderFooterCommand(editor, isFooter: true));
+        registry.Register("freew.header", new HeaderFooterCommand(editor, isFooter: false, askHeaderFooterText: askHeaderFooterText));
+        registry.Register("freew.footer", new HeaderFooterCommand(editor, isFooter: true, askHeaderFooterText: askHeaderFooterText));
         // Insert > Header & Footer > Page Number gallery: top/bottom/current position + format dialog.
         // The top-level id inserts into the footer (Word's default button-face action).
         registry.Register("freew.page-number", new InsertPageNumberCommand(editor, PageNumberPosition.Bottom));
@@ -7797,7 +7818,10 @@ internal static class FreeWRibbonCommands
 
     // Insert > Header & Footer: prompt for the header/footer text and store it on the model. An empty
     // entry clears the header/footer. A page-number field already present is preserved by re-appending.
-    private sealed class HeaderFooterCommand(DocumentView editor, bool isFooter) : IRibbonCommand
+    private sealed class HeaderFooterCommand(
+        DocumentView editor,
+        bool isFooter,
+        Func<bool, string, string?>? askHeaderFooterText) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
@@ -7806,7 +7830,9 @@ internal static class FreeWRibbonCommands
             var seed = existing?.PlainText ?? string.Empty;
             var label = isFooter ? "Footer" : "Header";
 
-            var text = TextPrompt.Ask(Window.GetWindow(editor), $"Edit {label}", $"{label} text:", seed);
+            var text = askHeaderFooterText is { } ask
+                ? ask(isFooter, seed)
+                : TextPrompt.Ask(Window.GetWindow(editor), $"Edit {label}", $"{label} text:", seed);
             if (text is null)
                 return; // cancelled — leave the model untouched
 

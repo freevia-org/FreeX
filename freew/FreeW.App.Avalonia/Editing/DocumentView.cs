@@ -12740,15 +12740,32 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Apply the Insert &gt; Header text prompt result while preserving an existing PAGE field. This
+    /// mirrors the WPF prompt route and intentionally uses direct model mutation, because the WPF
+    /// authority treats this top-level command as a non-undoable document-property edit.
+    /// </summary>
+    public void ApplyHeaderFooterText(bool footer, string text)
+    {
+        var current = footer ? _doc.Footer : _doc.Header;
+        var value = HeaderFooterDialogPlanner.BuildPlainTextHeaderFooter(text, current);
+        if (footer)
+            _doc.Footer = value;
+        else
+            _doc.Header = value;
+
+        InvalidateAfterExternalMutation();
+        Focus();
+    }
+
+    /// <summary>
     /// Enable (create) the document header region if missing/empty so it renders in the top page-margin
-    /// region (AV-INSERT). Undoable. Wired to the <c>freew.header</c> ribbon command. In-region caret
-    /// editing of the header is a separate UI surface (deferred); this readies the region.
+    /// region (AV-INSERT). Undoable. Used as the headless fallback for the prompt-backed command.
     /// </summary>
     public void EnsureHeader() => _bus.Execute(new EnsureHeaderFooterCommand(isFooter: false));
 
     /// <summary>
     /// Enable (create) the document footer region if missing/empty so it renders in the bottom
-    /// page-margin region (AV-INSERT). Undoable. Wired to the <c>freew.footer</c> ribbon command.
+    /// page-margin region (AV-INSERT). Undoable. Used as the headless fallback for the prompt-backed command.
     /// </summary>
     public void EnsureFooter() => _bus.Execute(new EnsureHeaderFooterCommand(isFooter: true));
 

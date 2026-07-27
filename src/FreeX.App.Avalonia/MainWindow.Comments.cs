@@ -16,9 +16,8 @@ public sealed partial class MainWindow
 {
     private static AvaloniaCompactDialogChromeStyle CommentDialogChromeStyle => new(FormulaBarFontFamily);
 
-    // New Note / New Comment on the active cell (parity gap: the shell could navigate/clear comments
-    // and notes but not create them). Routes through WorkbookSession.SetActiveCellNote /
-    // SetActiveCellThreadedComment (SetCommentCommand / SetThreadedCommentCommand) for full undo/redo.
+    // New Note remains a prompt; New Comment uses the worksheet inline editor below. Both routes
+    // apply through the shared review-session commands for full undo/redo.
 
     private async Task ShowNewNoteDialogAsync()
     {
@@ -31,7 +30,11 @@ public sealed partial class MainWindow
             : result.ErrorMessage ?? "Could not add note.");
     }
 
-    private async Task ShowNewThreadedCommentDialogAsync() => await ShowThreadedCommentDialogAsync();
+    private Task ShowNewThreadedCommentDialogAsync()
+    {
+        BeginThreadedCommentInlineEdit(existing: null);
+        return Task.CompletedTask;
+    }
 
     private async Task ShowEditNoteDialogAsync()
     {
@@ -51,7 +54,18 @@ public sealed partial class MainWindow
             : result.ErrorMessage ?? UiText.Get("Comment_NoteFailed"));
     }
 
-    private async Task ShowEditThreadedCommentDialogAsync() => await ShowThreadedCommentDialogAsync();
+    private Task ShowEditThreadedCommentDialogAsync()
+    {
+        var target = ReviewSessionController.GetSelectedThreadedCommentTarget();
+        if (target is null || target.ThreadedComment is null)
+        {
+            RefreshShell(UiText.Get("Comment_NoComment"));
+            return Task.CompletedTask;
+        }
+
+        BeginThreadedCommentInlineEdit(target.ThreadedComment);
+        return Task.CompletedTask;
+    }
 
     private void ResolveActiveCellThreadedComment(bool resolved)
     {

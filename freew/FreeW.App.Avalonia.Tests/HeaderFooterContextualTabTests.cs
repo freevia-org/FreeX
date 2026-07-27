@@ -1,7 +1,12 @@
+using System.IO;
 using System.Linq;
+using System.Threading;
+using Avalonia.Headless;
+using Free.Shared.AppServices;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -9,6 +14,9 @@ namespace FreeW.App.Avalonia.Tests;
 
 public sealed class HeaderFooterContextualTabTests
 {
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
     private static RibbonHostCallbacks NoopCallbacks() =>
         new(
             Open: () => { },
@@ -127,6 +135,42 @@ public sealed class HeaderFooterContextualTabTests
 
         view.Document.Page.HeaderDistancePt.Should().Be(54);
         view.Document.Page.FooterDistancePt.Should().Be(72);
+    }
+
+    [Fact]
+    public async Task Production_MainWindow_top_level_header_footer_uses_prompt_apply_and_cancel()
+    {
+        var settingsPath = Path.Combine(Path.GetTempPath(), $"freew-wave38-{Guid.NewGuid():N}.json");
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                var window = new MainWindow(
+                    [],
+                    new FreeWOptions(),
+                    ApplicationOptionsStore<FreeWOptions>.ForPath(settingsPath),
+                    askHeaderFooterText: (footer, seed) =>
+                        Task.FromResult<string?>(footer ? null : "Header from Avalonia prompt"));
+
+                window.RibbonRegistryForTests!.TryGet(new RibbonCommandId("freew.header"), out var header)
+                    .Should().BeTrue();
+                header!.Execute(RibbonCommandContext.Empty);
+
+                window.Editor.Document.Header.Should().NotBeNull();
+                window.Editor.Document.Header!.PlainText.Should().Be("Header from Avalonia prompt");
+
+                window.RibbonRegistryForTests.TryGet(new RibbonCommandId("freew.footer"), out var footer)
+                    .Should().BeTrue();
+                footer!.Execute(RibbonCommandContext.Empty);
+
+                window.Editor.Document.Footer.Should().BeNull("Cancel must leave the footer untouched");
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            try { File.Delete(settingsPath); }
+            catch { /* best-effort cleanup */ }
+        }
     }
 
     [Fact]

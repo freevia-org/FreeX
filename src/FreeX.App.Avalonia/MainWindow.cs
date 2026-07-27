@@ -5174,6 +5174,10 @@ public sealed partial class MainWindow : Window
         // Data ▸ Circle Invalid Data overlay is also app-side — paint before the early-out.
         AddValidationCircleOverlay(overlay, viewport);
 
+        // Review ▸ New/Edit Comment uses the same selected-cell inline editor as WPF. Keep it
+        // above the worksheet even when the sheet has no drawing objects.
+        AddThreadedCommentInlineEditorOverlay(overlay, viewport, showHeadings, zoomFactor);
+
         // Freeze Panes divider: the frozen rows/columns are already pinned at the head of
         // viewport.RowMetrics/ColMetrics (BuildFrozenAwareRowMetrics/ColMetrics), so only the
         // separating line itself needs to be drawn here — mirrors WPF's RenderFreezeDivider.
