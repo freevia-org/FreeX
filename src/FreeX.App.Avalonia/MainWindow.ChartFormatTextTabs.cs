@@ -8,12 +8,21 @@ namespace FreeX.App.Avalonia;
 /// The remaining Chart Format contextual-tab "quick" buttons that step a single value per click (no dialog):
 /// the Text group's chart-title / axis-title / legend / data-label color and font-size buttons, and the
 /// Shape Styles group's Series Dash, Series Marker (opens the full series dialog) and Marker Size, plus the
-/// Chart Design Type group's Combo Chart Series toggle. Each resolves the selected chart, computes the next
+/// Chart Design Type group's Combo Chart and Combo Chart Series quick mutations. Each resolves the selected chart, computes the next
 /// value through the shared <see cref="ChartQuickCommandPlanner"/>, and applies it through the shared
 /// <see cref="SetChartLayoutCommand"/> via <see cref="ApplyChartLayout"/>.
 /// </summary>
 public sealed partial class MainWindow
 {
+    // ---- Chart Design ▸ Type: Combo Chart (WPF's immediate toggle) -------------------------------
+
+    private void CycleChartCombo()
+    {
+        ExecuteChartQuickCommand(
+            ChartQuickCommandCatalog.ComboToggle,
+            ChartWorkflowUnsupportedStatus(ChartWorkflowCommandCatalog.ComboChart));
+    }
+
     // ---- Chart Design ▸ Type: Combo Chart Series (quick toggle) ---------------------------------------
 
     private void CycleChartComboSeries()

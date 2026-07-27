@@ -157,4 +157,13 @@ public sealed class ChartCommandSourceTests
         cyclerSource.Should().NotContain("GetNextComboLineSeries(");
     }
 
+    [Fact]
+    public void WpfComboChartButton_UsesTheImmediateSharedToggle()
+    {
+        var source = ReadHostSourceFile("MainWindow.ChartCommands.cs");
+
+        source.Should().Contain("private void ChartComboBtn_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("ExecuteChartQuickCommand(ChartQuickCommandCatalog.ComboToggle)");
+    }
+
 }

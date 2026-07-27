@@ -34,6 +34,18 @@ public sealed class AvaloniaChartQuickCommandSourceTests
         source.Should().NotContain("\"Series Dash\"");
     }
 
+    [Fact]
+    public void ComboChartRibbonRoute_MatchesWpfImmediateToggle()
+    {
+        var contextualSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ContextualTabs.cs"));
+        var quickSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatTextTabs.cs"));
+
+        contextualSource.Should().Contain("[\"chartDesign.comboChart\"] = CycleChartCombo");
+        contextualSource.Should().NotContain("[\"chartDesign.comboChart\"] = () => RunGuarded(ShowChartComboDialog)");
+        quickSource.Should().Contain("private void CycleChartCombo()");
+        quickSource.Should().Contain("ChartQuickCommandCatalog.ComboToggle");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

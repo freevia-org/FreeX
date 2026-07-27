@@ -46,12 +46,12 @@ public sealed partial class MainWindow
             ["chartDesign.chartStyles"] = CycleChartStyle,
             ["chartDesign.selectData"] = () => RunGuarded(ShowSelectChartDataDialog),
             ["chartDesign.changeType"] = () => RunGuarded(ShowChangeChartTypeDialog),
-            // The Combo Chart button opens the per-series line-overlay + secondary-axis grid
-            // (ChartComboPlanner); Move Chart opens the new-sheet / existing-sheet target dialog
-            // (ChartMovePlanner -> MoveChartCommand / MoveChartToNewSheetCommand).
-            ["chartDesign.comboChart"] = () => RunGuarded(ShowChartComboDialog),
-            // Combo Chart Series is the quick per-click toggle (mirrors the dialog's first-series step);
-            // Combo Chart opens the full per-series grid (ChartComboPlanner).
+            // WPF's Combo Chart button is an immediate shared ComboToggle mutation. Keep the full
+            // per-series planner dialog available to parity capture, but route the ribbon command
+            // through the same quick-command path as WPF so existing combo charts can be toggled off
+            // even when the dialog support gate cannot reopen them.
+            ["chartDesign.comboChart"] = CycleChartCombo,
+            // Combo Chart Series is the quick per-click per-series toggle, matching WPF.
             ["chartDesign.comboChartSeries"] = CycleChartComboSeries,
             ["chartDesign.moveChart"] = () => RunGuarded(ShowMoveChartDialog),
 
