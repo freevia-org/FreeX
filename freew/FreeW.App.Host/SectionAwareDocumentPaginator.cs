@@ -88,6 +88,14 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
             visual.Children.Add(bodyVisual);
         }
 
+        if (page.ColumnsLineBetween && page.ColumnCount > 1)
+            visual.Children.Add(DocumentView.BuildColumnRuleVisual(
+                page,
+                marginLeft,
+                marginTop,
+                contentWidth,
+                pageHeight - marginBottom));
+
         AddHeaderFooterVisual(
             visual,
             box.HeaderSubEditor,
@@ -125,7 +133,7 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         flow.PageWidth = Math.Max(1, width);
         flow.PageHeight = Math.Max(1, height);
         flow.PagePadding = new Thickness(0);
-        DocumentView.ApplyColumnLayout(flow, page);
+        DocumentView.ApplyColumnLayout(flow, page, useNativeColumnRule: false);
         if (double.IsInfinity(flow.ColumnWidth))
             flow.ColumnWidth = Math.Max(1, width);
 

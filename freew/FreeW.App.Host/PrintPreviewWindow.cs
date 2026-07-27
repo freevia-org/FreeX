@@ -73,7 +73,7 @@ internal static class PrintLayout
         };
 
         // Mirror the editor's multi-column layout so preview/print match the on-screen rendering.
-        DocumentView.ApplyColumnLayout(flow, page);
+        DocumentView.ApplyColumnLayout(flow, page, useNativeColumnRule: false);
 
         foreach (var block in CloneBlocks(editor.Document))
             flow.Blocks.Add(block);
@@ -269,6 +269,7 @@ internal sealed class HeaderFooterPaginator(
         var hasWatermark = !string.IsNullOrEmpty(page.Watermark);
         var hasBorder = page.PageBorder is not null;
         var hasLineNumbers = page.LineNumberMode != LineNumberMode.None && lineHeightDip > 0;
+        var hasColumnRule = page.ColumnsLineBetween && page.ColumnCount > 1;
         // Footnote bodies follow the page containing their reference. Markerless single-page models
         // retain the historical fallback that displays all stored notes on that page.
         var resolvedFootnoteIdsByPage = footnoteIdsByPage ?? BuildFootnoteIdsByPage(model, inner);
@@ -285,7 +286,7 @@ internal sealed class HeaderFooterPaginator(
         var hasEndnotesAtFoot = model.Endnotes.Count > 0 && pageNumber == inner.PageCount - 1;
         var hasNotesAtFoot = hasMappedNotesAtFoot || hasFallbackNotesAtFoot || hasEndnotesAtFoot;
         if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false }
-            && !hasWatermark && !hasBorder && !hasLineNumbers && !hasNotesAtFoot)
+            && !hasWatermark && !hasBorder && !hasLineNumbers && !hasColumnRule && !hasNotesAtFoot)
             return basePage;
 
         var size = basePage.Size;
@@ -296,6 +297,13 @@ internal sealed class HeaderFooterPaginator(
         visual.Children.Add(basePage.Visual);
         if (hasBorder)
             visual.Children.Add(BuildPageBorder(page.PageBorder!, size));
+        if (hasColumnRule)
+            visual.Children.Add(DocumentView.BuildColumnRuleVisual(
+                page,
+                PageLayout.PointsToDip(page.MarginLeftPt),
+                PageLayout.PointsToDip(page.MarginTopPt),
+                size.Width - PageLayout.PointsToDip(page.MarginLeftPt) - PageLayout.PointsToDip(page.MarginRightPt),
+                size.Height - PageLayout.PointsToDip(page.MarginBottomPt)));
         if (hasLineNumbers)
             visual.Children.Add(BuildLineNumbers(basePage, pageNumber));
 

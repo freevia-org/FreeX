@@ -231,6 +231,20 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void FidelityRender_UsesPixelAlignedColumnRuleVisualInsteadOfTheNativeFlowRule()
+    {
+        var renderSource = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+        var viewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
+        var previewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "PrintPreviewWindow.cs"));
+
+        renderSource.Should().Contain("ApplyColumnLayout(flow, page, useNativeColumnRule: false)");
+        renderSource.Should().Contain("bmp.Render(DocumentView.BuildColumnRuleVisual(");
+        viewSource.Should().Contain("bool useNativeColumnRule = true");
+        viewSource.Should().Contain("column * (plan.WidthDip + plan.GapDip) - plan.GapDip / 2 + 0.5");
+        previewSource.Should().Contain("DocumentView.BuildColumnRuleVisual(");
+    }
+
+    [Fact]
     public void FidelityRender_UsesArrangedAnchorOnlyForDrawingGroups()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));

@@ -7056,10 +7056,10 @@ public sealed class DocumentView : RichTextBox
     /// explicit unequal widths (<see cref="PageSettings.ColumnWidthsPt"/>) use the narrowest column as the
     /// flexible column width so WPF lays out the requested number of columns (it cannot render genuinely
     /// unequal columns in one FlowDocument — the narrowest-width approximation keeps the count correct and
-    /// the unequal split round-trips faithfully to docx/Word). Shared by the editor and the print/preview
-    /// path so on-screen and printed layouts match.
+    /// the unequal split round-trips faithfully to docx/Word). All WPF surfaces share this flow geometry;
+    /// paginated surfaces can replace the native rule raster with <see cref="BuildColumnRuleVisual"/>.
     /// </summary>
-    internal static void ApplyColumnLayout(FlowDocument flow, PageSettings page)
+    internal static void ApplyColumnLayout(FlowDocument flow, PageSettings page, bool useNativeColumnRule = true)
     {
         var columns = Math.Max(1, page.ColumnCount);
         if (columns <= 1)
@@ -7084,13 +7084,40 @@ public sealed class DocumentView : RichTextBox
         // "Line between" (w:cols/@w:sep) → a thin rule centred in the gap.
         if (columnPlan.LineBetween)
         {
-            flow.ColumnRuleWidth = 1;
+            flow.ColumnRuleWidth = useNativeColumnRule ? 1 : 0;
             flow.ColumnRuleBrush = System.Windows.Media.Brushes.Gray;
         }
         else
         {
             flow.ColumnRuleWidth = 0;
         }
+    }
+
+    /// <summary>
+    /// Draws Word-style inter-column rules at device-pixel-aligned page coordinates. WPF's native
+    /// <see cref="FlowDocument.ColumnRuleWidth"/> centers a one-DIP rule across two pixels; the
+    /// print/composite paths use this visual instead so the rule remains one opaque pixel.
+    /// </summary>
+    internal static DrawingVisual BuildColumnRuleVisual(
+        PageSettings page,
+        double contentLeftDip,
+        double contentTopDip,
+        double contentWidthDip,
+        double contentBottomDip)
+    {
+        var visual = new DrawingVisual();
+        if (!page.ColumnsLineBetween || page.ColumnCount <= 1 || contentWidthDip <= 0 || contentBottomDip <= contentTopDip)
+            return visual;
+
+        var plan = DocumentViewLayoutPlanner.BuildColumnPlan(page, contentWidthDip, usePageColumns: true);
+        using var dc = visual.RenderOpen();
+        var pen = new Pen(Brushes.Black, 1);
+        for (var column = 1; column < page.ColumnCount; column++)
+        {
+            var x = contentLeftDip + column * (plan.WidthDip + plan.GapDip) - plan.GapDip / 2 + 0.5;
+            dc.DrawLine(pen, new Point(x, contentTopDip + 0.5), new Point(x, contentBottomDip - 0.5));
+        }
+        return visual;
     }
 
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext

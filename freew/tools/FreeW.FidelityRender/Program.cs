@@ -307,7 +307,7 @@ static void RenderDocumentComposite(
 
     // Layer 2: call ApplyColumnLayout so multi-column sections render with the correct column count.
     // The old path hard-coded ColumnWidth=pageW (single column). This fixes that miss.
-    DocumentView.ApplyColumnLayout(flow, page);
+    DocumentView.ApplyColumnLayout(flow, page, useNativeColumnRule: false);
 
     if (page.ColumnCount > 1)
     {
@@ -615,6 +615,13 @@ static void RenderDocumentComposite(
             }
             bmp.Render(composite);
         }
+
+        bmp.Render(DocumentView.BuildColumnRuleVisual(
+            thisPageSettings,
+            thisMarginLeft,
+            thisMarginTop,
+            thisPageWDip - thisMarginLeft - thisMarginRight,
+            thisPixH - thisMarginBottom));
 
         // Word's All Markup capture adds black gutter bars beside contiguous revision spans. The
         // paginator exposes no public text-line rectangles once detached, so use the already-painted
