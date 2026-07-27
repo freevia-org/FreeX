@@ -173,6 +173,59 @@ public sealed class SetTableCellFillCommand : IPresentationCommand
 // 2. InsertTableRowCommand
 // ════════════════════════════════════════════════════════════════════════════════
 
+/// <summary>Sets or clears the explicit vertical alignment of one table cell.</summary>
+public sealed class SetTableCellAnchorCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _row;
+    private readonly int _col;
+    private readonly TableCellAnchor? _newAnchor;
+    private TableCellAnchor? _oldAnchor;
+
+    public SetTableCellAnchorCommand(int slideIndex, uint shapeId, int row, int col, TableCellAnchor? newAnchor)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _row = row;
+        _col = col;
+        _newAnchor = newAnchor;
+    }
+
+    public string Label => _newAnchor is null ? "Clear Cell Alignment" : "Set Cell Alignment";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        return cell is not null && cell.Anchor != _newAnchor;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        if (cell is null) return;
+        _oldAnchor = cell.Anchor;
+        cell.Anchor = _newAnchor;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        if (cell is not null)
+            cell.Anchor = _oldAnchor;
+    }
+
+    private TableCell? GetCell(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null || _row < 0 || _row >= table.Rows.Count)
+            return null;
+
+        var row = table.Rows[_row];
+        return _col >= 0 && _col < row.Cells.Count ? row.Cells[_col] : null;
+    }
+}
+
 /// <summary>
 /// Inserts a new blank row at <paramref name="atRow"/> (rows at and after shift down).
 /// The new row gets the same height as the adjacent row (or a default if the table is empty).

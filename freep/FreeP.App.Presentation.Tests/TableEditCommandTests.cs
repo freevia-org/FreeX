@@ -5,7 +5,7 @@ namespace FreeP.App.Compositor.Tests;
 
 /// <summary>
 /// Unit tests for table-edit commands (Wave 9A):
-///   SetTableCellTextCommand, SetTableCellFillCommand, InsertTableRowCommand, DeleteTableRowCommand,
+///   SetTableCellTextCommand, SetTableCellFillCommand, SetTableCellAnchorCommand, InsertTableRowCommand, DeleteTableRowCommand,
 ///   InsertTableColumnCommand, DeleteTableColumnCommand,
 ///   MergeTableCellsCommand, SplitTableCellCommand.
 ///
@@ -298,6 +298,20 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void SetTableCellAnchor_UndoRedo_Works()
+    {
+        var (p, bus, shape) = MakeTable();
+
+        bus.Execute(new SetTableCellAnchorCommand(0, shape.Id, 1, 1, TableCellAnchor.Bottom));
+
+        shape.Table!.Rows[1].Cells[1].Anchor.Should().Be(TableCellAnchor.Bottom);
+        bus.Undo();
+        shape.Table.Rows[1].Cells[1].Anchor.Should().BeNull();
+        bus.Redo();
+        shape.Table.Rows[1].Cells[1].Anchor.Should().Be(TableCellAnchor.Bottom);
+    }
+
+    [Fact]
     public void SetTableCellFill_RoundTripsThroughPptx()
     {
         var (presentation, bus, shape) = MakeTable(1, 1);
@@ -316,6 +330,21 @@ public sealed class TableEditCommandTests
         var cell = reopened.Slides[0].Shapes[0].Table!.Rows[0].Cells[0];
         var solid = cell.Fill.Should().BeOfType<ShapeFill.Solid>().Subject;
         solid.Color.Resolved.Should().Be(SrgbColor.FromRgb(0xE6B800));
+    }
+
+    [Fact]
+    public void SetTableCellAnchor_RoundTripsThroughPptx()
+    {
+        var (presentation, bus, shape) = MakeTable(1, 1);
+        bus.Execute(new SetTableCellAnchorCommand(0, shape.Id, 0, 0, TableCellAnchor.Middle));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+
+        var reopened = PptxPackageReader.Read(stream);
+        reopened.Slides[0].Shapes[0].Table!.Rows[0].Cells[0].Anchor
+            .Should().Be(TableCellAnchor.Middle);
     }
 
     [Fact]
@@ -785,6 +814,19 @@ public sealed class TableEditCommandTests
 
         sess.Undo();
         shape.Table.Rows[0].Cells[0].Fill.Should().BeNull();
+    }
+
+    [Fact]
+    public void EditingSession_SetActiveTableCellAnchor_IsUndoable()
+    {
+        var sess = MakeSession(out var shape);
+        sess.SetActiveTableCell(0, 0);
+
+        sess.TryApplyActiveTableCellAnchor(TableCellAnchor.Bottom).Should().BeTrue();
+        shape.Table!.Rows[0].Cells[0].Anchor.Should().Be(TableCellAnchor.Bottom);
+
+        sess.Undo();
+        shape.Table.Rows[0].Cells[0].Anchor.Should().BeNull();
     }
 
     [Fact]
