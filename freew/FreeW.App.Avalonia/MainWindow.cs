@@ -2678,7 +2678,7 @@ public sealed partial class MainWindow : Window
             case FreeWKeyboardCommand.OpenDocument: _ = OpenAsync(); break;
             case FreeWKeyboardCommand.SaveDocument: _ = SaveAsync(); break;
             case FreeWKeyboardCommand.SaveDocumentAs: _ = SaveAsAsync(); break;
-            case FreeWKeyboardCommand.PrintDocument: _ = OpenPrintPreviewAsync(); break;
+            case FreeWKeyboardCommand.PrintDocument: _ = PrintAsync(); break;
             case FreeWKeyboardCommand.Find: OpenFindReplaceDialog(FindReplaceDialogOpenMode.Find); break;
             case FreeWKeyboardCommand.Replace: OpenFindReplaceDialog(FindReplaceDialogOpenMode.Replace); break;
             case FreeWKeyboardCommand.Cut: _ = CutAsync(); break;

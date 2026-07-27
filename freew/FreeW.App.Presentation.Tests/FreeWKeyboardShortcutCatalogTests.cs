@@ -17,6 +17,15 @@ public sealed class FreeWKeyboardShortcutCatalogTests
     }
 
     [Fact]
+    public void PrintDocument_is_the_shared_ctrl_p_command()
+    {
+        FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
+            shortcut.Command == FreeWKeyboardCommand.PrintDocument &&
+            shortcut.Key == FreeWKeyboardKey.P &&
+            shortcut.Modifiers == FreeWKeyboardModifiers.Control);
+    }
+
+    [Fact]
     public void EveryCatalogGestureDispatchesItsDeclaredCommand()
     {
         foreach (var shortcut in FreeWKeyboardShortcutCatalog.All)

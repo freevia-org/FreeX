@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Input;
 using System.Windows;
 using FreeW.App.Presentation.Dialogs;
@@ -61,6 +62,16 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
         {
             dialog.Close();
         }
+    }
+
+    [Fact]
+    public void WpfPrintDocument_uses_the_shared_direct_print_command()
+    {
+        var source = File.ReadAllText(
+            Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+                "freew", "FreeW.App.Host", "MainWindow.cs"));
+
+        source.Should().Contain("case FreeWKeyboardCommand.PrintDocument: Print(); break;");
     }
 
     private static Key ToWpfKey(FreeWKeyboardKey key) =>

@@ -68,6 +68,33 @@ public sealed class PrintLifecycleTests
     }
 
     [Fact]
+    public async Task CtrlP_uses_direct_print_selection_instead_of_opening_preview()
+    {
+        var dialogCalls = 0;
+        await Session.Dispatch(() =>
+        {
+            var window = CreateWindow(
+                new FakePrintService(isSupported: true),
+                showPrintSelectionDialog: (_, _, _) =>
+                {
+                    dialogCalls++;
+                    return Task.FromResult<PrintSelection?>(null);
+                });
+
+            var args = new KeyEventArgs
+            {
+                Key = Key.P,
+                KeyModifiers = KeyModifiers.Control,
+            };
+            window.RaiseKeyDownForTest(args);
+            args.Handled.Should().BeTrue();
+        }, CancellationToken.None);
+
+        dialogCalls.Should().Be(1,
+            "Ctrl+P must enter the direct printer-selection workflow; Print Preview is a separate command");
+    }
+
+    [Fact]
     public async Task MainWindow_CupsAvailabilityDoesNotClaimNativeSystemPrintDialog()
     {
         await Session.Dispatch(async () =>
