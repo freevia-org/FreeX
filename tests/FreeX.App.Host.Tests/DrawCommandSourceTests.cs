@@ -119,6 +119,10 @@ public sealed class DrawCommandSourceTests
         drawingSource.Should().NotContain("new PictureCropDialog(picture)");
         drawingSource.Should().Contain("new SetPictureCropCommand(");
         drawingSource.Should().Contain("TryExecuteCommand(");
+        drawingSource.Should().Contain("SheetGrid.IsPictureCropMode = true;");
+        drawingSource.Should().Contain("SheetGrid.Focus();");
+        drawingSource.Should().Contain("SheetGrid.InvalidateVisual();");
+        drawingSource.Should().Contain("UpdateViewport();");
     }
 
 }

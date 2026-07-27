@@ -228,6 +228,8 @@ public sealed partial class MainWindow
     ];
 
     private DrawingObjectDragSession? _drawingObjectDragSession;
+    private PictureCropDragSession? _pictureCropDragSession;
+    private bool _isPictureCropMode;
 
     private sealed class DrawingObjectDragSession
     {
@@ -246,6 +248,20 @@ public sealed partial class MainWindow
         public double CurrentRotationDegrees { get; set; }
         public bool CurrentFlipHorizontal { get; set; }
         public bool CurrentFlipVertical { get; set; }
+        public bool Moved { get; set; }
+    }
+
+    private sealed class PictureCropDragSession
+    {
+        public required DrawingObjectRenderPlan RenderPlan { get; init; }
+        public required Control Container { get; init; }
+        public required AvaloniaGrid Surface { get; init; }
+        public required LayoutRect PictureRect { get; init; }
+        public required LayoutPoint StartPointerInCanvas { get; init; }
+        public required PictureCropHandle Handle { get; init; }
+        public required PictureCropRatios StartCrop { get; init; }
+        public PictureCropRatios CurrentCrop { get; set; }
+        public AvaloniaCanvas? Adorner { get; set; }
         public bool Moved { get; set; }
     }
 
@@ -296,6 +312,92 @@ public sealed partial class MainWindow
         }
 
         LayoutDrawingObjectSelectionAdorner(layer, width, height, rotationDegrees);
+        return layer;
+    }
+
+    private AvaloniaCanvas CreatePictureCropSelectionAdorner(
+        double width,
+        double height,
+        PictureCropRatios crop)
+    {
+        var layer = new AvaloniaCanvas
+        {
+            Background = Brushes.Transparent,
+            IsHitTestVisible = false,
+        };
+
+        var objectRect = new LayoutRect(
+            DrawingObjectSelectionHorizontalPadding,
+            DrawingObjectSelectionTopPadding,
+            Math.Max(1, width),
+            Math.Max(1, height));
+        var visibleRect = PictureCropPlanner.CalculateVisibleCropRect(objectRect, crop);
+        var shade = new SolidColorBrush(Color.FromArgb(76, 0, 0, 0));
+
+        void AddShade(double left, double top, double shadeWidth, double shadeHeight)
+        {
+            if (shadeWidth <= 0 || shadeHeight <= 0)
+                return;
+
+            var border = new AvaloniaBorder
+            {
+                Width = shadeWidth,
+                Height = shadeHeight,
+                Background = shade,
+                IsHitTestVisible = false,
+            };
+            AvaloniaCanvas.SetLeft(border, left);
+            AvaloniaCanvas.SetTop(border, top);
+            layer.Children.Add(border);
+        }
+
+        AddShade(objectRect.Left, objectRect.Top, objectRect.Width, visibleRect.Top - objectRect.Top);
+        AddShade(
+            objectRect.Left,
+            visibleRect.Bottom,
+            objectRect.Width,
+            objectRect.Bottom - visibleRect.Bottom);
+        AddShade(
+            objectRect.Left,
+            visibleRect.Top,
+            visibleRect.Left - objectRect.Left,
+            visibleRect.Height);
+        AddShade(
+            visibleRect.Right,
+            visibleRect.Top,
+            objectRect.Right - visibleRect.Right,
+            visibleRect.Height);
+
+        var cropBorder = new AvaloniaBorder
+        {
+            Width = Math.Max(1, visibleRect.Width),
+            Height = Math.Max(1, visibleRect.Height),
+            BorderBrush = SelectionBorder,
+            BorderThickness = new Thickness(1.5),
+            IsHitTestVisible = false,
+        };
+        AvaloniaCanvas.SetLeft(cropBorder, visibleRect.Left);
+        AvaloniaCanvas.SetTop(cropBorder, visibleRect.Top);
+        layer.Children.Add(cropBorder);
+
+        foreach (var (_, center) in PictureCropPlanner.GetHandleCenters(objectRect))
+        {
+            var handle = new AvaloniaBorder
+            {
+                Width = PictureCropPlanner.DefaultHandleSize,
+                Height = PictureCropPlanner.DefaultHandleSize,
+                Background = Brushes.White,
+                BorderBrush = SelectionBorder,
+                BorderThickness = new Thickness(1),
+                IsHitTestVisible = false,
+            };
+            AvaloniaCanvas.SetLeft(handle, center.X - PictureCropPlanner.DefaultHandleSize / 2);
+            AvaloniaCanvas.SetTop(handle, center.Y - PictureCropPlanner.DefaultHandleSize / 2);
+            layer.Children.Add(handle);
+        }
+
+        layer.Width = objectRect.Width + DrawingObjectSelectionHorizontalPadding * 2;
+        layer.Height = objectRect.Height + DrawingObjectSelectionTopPadding + DrawingObjectSelectionBottomPadding;
         return layer;
     }
 
@@ -360,6 +462,215 @@ public sealed partial class MainWindow
             AvaloniaCanvas.SetLeft(handle, center.X - (DrawingObjectHandleSize / 2));
             AvaloniaCanvas.SetTop(handle, center.Y - (DrawingObjectHandleSize / 2));
         }
+    }
+
+    private bool TryBeginPictureCropDrag(
+        DrawingObjectRenderPlan renderPlan,
+        Control container,
+        AvaloniaGrid surface,
+        AvaloniaCanvas adorner,
+        PointerPressedEventArgs args)
+    {
+        if (!_isPictureCropMode || renderPlan.Bounds.Kind != SelectionPaneObjectKind.Picture ||
+            renderPlan.Bounds.PictureKind != PictureKind.Image ||
+            container.Parent is not AvaloniaCanvas canvas)
+        {
+            return false;
+        }
+
+        var localPoint = args.GetCurrentPoint(container).Position;
+        var pictureRect = DrawingObjectObjectRect(surface);
+        var handle = PictureCropPlanner.HitTestHandle(new LayoutPoint(localPoint.X, localPoint.Y), pictureRect);
+        if (handle == PictureCropHandle.None)
+            return false;
+
+        var pointInCanvas = args.GetCurrentPoint(canvas).Position;
+        var startCrop = new PictureCropRatios(
+            renderPlan.Bounds.CropLeft,
+            renderPlan.Bounds.CropTop,
+            renderPlan.Bounds.CropRight,
+            renderPlan.Bounds.CropBottom);
+        _pictureCropDragSession = new PictureCropDragSession
+        {
+            RenderPlan = renderPlan,
+            Container = container,
+            Surface = surface,
+            Adorner = adorner,
+            PictureRect = pictureRect,
+            StartPointerInCanvas = new LayoutPoint(pointInCanvas.X, pointInCanvas.Y),
+            Handle = handle,
+            StartCrop = startCrop,
+            CurrentCrop = startCrop,
+        };
+        args.Pointer.Capture(container);
+        container.Focus();
+        container.Cursor = PictureCropCursor(handle);
+        args.Handled = true;
+        return true;
+    }
+
+    private void WirePictureCropDragMoveRelease(
+        DrawingObjectRenderPlan renderPlan,
+        Control container,
+        AvaloniaGrid surface)
+    {
+        container.PointerMoved += (_, args) =>
+        {
+            if (_pictureCropDragSession is { } session && ReferenceEquals(session.Container, container))
+            {
+                if (container.Parent is AvaloniaCanvas canvas)
+                {
+                    var point = args.GetCurrentPoint(canvas).Position;
+                    var crop = PictureCropPlanner.CalculateCrop(
+                        session.Handle,
+                        session.StartCrop,
+                        session.PictureRect,
+                        session.StartPointerInCanvas,
+                        new LayoutPoint(point.X, point.Y));
+                    session.CurrentCrop = crop;
+                    session.Moved = true;
+                    UpdatePictureCropPreview(session);
+                    container.Cursor = PictureCropCursor(session.Handle);
+                }
+
+                args.Handled = true;
+                return;
+            }
+
+            var localPoint = args.GetCurrentPoint(container).Position;
+            var handle = PictureCropPlanner.HitTestHandle(
+                new LayoutPoint(localPoint.X, localPoint.Y),
+                DrawingObjectObjectRect(surface));
+            container.Cursor = PictureCropCursor(handle);
+        };
+        container.PointerExited += (_, _) =>
+        {
+            if (_pictureCropDragSession is null)
+                container.Cursor = Cursor.Default;
+        };
+        container.PointerReleased += (_, args) => EndPictureCropDrag(container, args);
+        container.PointerCaptureLost += (_, _) => CancelPictureCropDrag(container);
+    }
+
+    private void UpdatePictureCropPreview(PictureCropDragSession session)
+    {
+        var crop = session.CurrentCrop;
+        var previewPlan = session.RenderPlan with
+        {
+            PrimitiveKind = DrawingObjectRenderPrimitiveKind.CroppedImage,
+            Crop = new DrawingPictureCrop(crop.Left, crop.Top, crop.Right, crop.Bottom),
+        };
+        session.Surface.Children.Clear();
+        session.Surface.Children.Add(CreateDrawingObjectVisual(
+            previewPlan,
+            session.PictureRect.Width,
+            session.PictureRect.Height,
+            _session.Workbook.Theme));
+
+        if (session.Adorner is { } previousAdorner && session.Container is AvaloniaGrid container)
+        {
+            var replacement = CreatePictureCropSelectionAdorner(
+                session.PictureRect.Width,
+                session.PictureRect.Height,
+                crop);
+            var index = container.Children.IndexOf(previousAdorner);
+            if (index >= 0)
+            {
+                container.Children.RemoveAt(index);
+                container.Children.Insert(index, replacement);
+            }
+
+            session.Adorner = replacement;
+        }
+    }
+
+    private void EndPictureCropDrag(Control container, PointerReleasedEventArgs args)
+    {
+        if (_pictureCropDragSession is not { } session || !ReferenceEquals(session.Container, container))
+            return;
+
+        _pictureCropDragSession = null;
+        args.Pointer.Capture(null);
+        container.Cursor = Cursor.Default;
+        if (!session.Moved)
+        {
+            args.Handled = true;
+            return;
+        }
+
+        ApplyPictureCrop(session.RenderPlan.Bounds.Id, session.CurrentCrop);
+        args.Handled = true;
+    }
+
+    private bool ApplyPictureCrop(Guid pictureId, PictureCropRatios crop)
+    {
+        var result = _session.ExecuteReviewCommand(new SetPictureCropCommand(
+            _session.ActiveSheet.Id,
+            pictureId,
+            crop.Left,
+            crop.Top,
+            crop.Right,
+            crop.Bottom));
+        RefreshShell(result.Success
+            ? UiText.Get("PictureCrop_Applied")
+            : result.ErrorMessage ?? UiText.Get("PictureCrop_Applied"));
+        return result.Success;
+    }
+
+    private void CancelPictureCropDrag(Control container)
+    {
+        if (_pictureCropDragSession is not { } session || !ReferenceEquals(session.Container, container))
+            return;
+
+        _pictureCropDragSession = null;
+        container.Cursor = Cursor.Default;
+        RefreshShell(string.Empty);
+    }
+
+    private static Cursor PictureCropCursor(PictureCropHandle handle) =>
+        new(handle switch
+        {
+            PictureCropHandle.CropNW => StandardCursorType.TopLeftCorner,
+            PictureCropHandle.CropSE => StandardCursorType.BottomRightCorner,
+            PictureCropHandle.CropNE => StandardCursorType.TopRightCorner,
+            PictureCropHandle.CropSW => StandardCursorType.BottomLeftCorner,
+            PictureCropHandle.CropN or PictureCropHandle.CropS => StandardCursorType.SizeNorthSouth,
+            PictureCropHandle.CropE or PictureCropHandle.CropW => StandardCursorType.SizeWestEast,
+            _ => StandardCursorType.Arrow,
+        });
+
+    private void EnterPictureCropMode(PictureModel picture)
+    {
+        if (picture.Kind != PictureKind.Image)
+        {
+            ShowEditIssue(PictureCropDialogPlanner.NotImageMessage);
+            return;
+        }
+
+        _isPictureCropMode = true;
+        _selectedDrawingObjectKind = SelectionPaneObjectKind.Picture;
+        _selectedDrawingObjectId = picture.Id;
+        _ribbonContextSource.OnDrawingObjectSelected(SelectionPaneObjectKind.Picture);
+        RefreshShell(UiText.Get("PictureCrop_Title"));
+    }
+
+    private void BeginSelectedPictureCropMode()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (ResolveSelectedPicture() is { } picture)
+            EnterPictureCropMode(picture);
+    }
+
+    private void ExitPictureCropMode()
+    {
+        if (!_isPictureCropMode && _pictureCropDragSession is null)
+            return;
+
+        _pictureCropDragSession = null;
+        _isPictureCropMode = false;
+        RefreshShell(string.Empty);
     }
 
     private bool TryBeginDrawingObjectDrag(

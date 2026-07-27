@@ -92,6 +92,22 @@ public sealed class PictureCropPlannerTests
     }
 
     [Fact]
+    public void CalculateCrop_CornerDragClampsBothAxesAndKeepsVisibleArea()
+    {
+        var result = PictureCropPlanner.CalculateCrop(
+            PictureCropHandle.CropNW,
+            new PictureCropRatios(0.45, 0.45, 0.45, 0.45),
+            Picture,
+            new LayoutPoint(110, 60),
+            new LayoutPoint(500, 500));
+
+        (result.Left + result.Right).Should().BeLessThanOrEqualTo(0.99);
+        (result.Top + result.Bottom).Should().BeLessThanOrEqualTo(0.99);
+        result.Left.Should().BeGreaterThanOrEqualTo(0);
+        result.Top.Should().BeGreaterThanOrEqualTo(0);
+    }
+
+    [Fact]
     public void CalculateCrop_NoneHandleReturnsStartCrop()
     {
         var start = new PictureCropRatios(0.10, 0.05, 0.20, 0.15);

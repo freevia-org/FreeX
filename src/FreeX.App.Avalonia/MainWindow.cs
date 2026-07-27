@@ -27,6 +27,7 @@ using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.DataTools;
 using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.GridInteraction;
@@ -5435,6 +5436,9 @@ public sealed partial class MainWindow : Window
     {
         var drawingObject = renderPlan.Bounds;
         var selected = IsSelectedDrawingObject(drawingObject);
+        var cropMode = selected && _isPictureCropMode &&
+            drawingObject.Kind == SelectionPaneObjectKind.Picture &&
+            drawingObject.PictureKind == PictureKind.Image;
         var horizontalPadding = selected ? DrawingObjectSelectionHorizontalPadding : 0;
         var topPadding = selected ? DrawingObjectSelectionTopPadding : 0;
         var bottomPadding = selected ? DrawingObjectSelectionBottomPadding : 0;
@@ -5457,9 +5461,18 @@ public sealed partial class MainWindow : Window
             Cursor = selected ? Cursor.Default : new Cursor(StandardCursorType.Hand),
             Focusable = true,
         };
-        var adorner = selected
-            ? CreateDrawingObjectSelectionAdorner(width, height, drawingObject.RotationDegrees)
-            : null;
+        var adorner = cropMode
+            ? CreatePictureCropSelectionAdorner(
+                width,
+                height,
+                new PictureCropRatios(
+                    drawingObject.CropLeft,
+                    drawingObject.CropTop,
+                    drawingObject.CropRight,
+                    drawingObject.CropBottom))
+            : selected
+                ? CreateDrawingObjectSelectionAdorner(width, height, drawingObject.RotationDegrees)
+                : null;
 
         AutomationProperties.SetAutomationId(container, $"DrawingObject{drawingObject.Kind}{drawingObject.Id:N}");
         AutomationProperties.SetName(container, $"{FormatDrawingObjectKind(drawingObject.Kind)} {drawingObject.DisplayName}");
@@ -5477,7 +5490,10 @@ public sealed partial class MainWindow : Window
 
             if (args.GetCurrentPoint(container).Properties.IsLeftButtonPressed)
             {
-                if (adorner is not null && TryBeginDrawingObjectDrag(renderPlan, container, surface, adorner, args))
+                if (cropMode && adorner is not null && TryBeginPictureCropDrag(renderPlan, container, surface, adorner, args))
+                    return;
+
+                if (!cropMode && adorner is not null && TryBeginDrawingObjectDrag(renderPlan, container, surface, adorner, args))
                     return;
 
                 SelectDrawingObject(drawingObject);
@@ -5486,6 +5502,13 @@ public sealed partial class MainWindow : Window
         };
         container.KeyDown += (_, args) =>
         {
+            if (cropMode && args.Key == Key.Escape)
+            {
+                ExitPictureCropMode();
+                args.Handled = true;
+                return;
+            }
+
             if (args.Key is Key.Enter or Key.Space)
             {
                 SelectDrawingObject(drawingObject);
@@ -5497,7 +5520,10 @@ public sealed partial class MainWindow : Window
         if (adorner is not null)
         {
             container.Children.Add(adorner);
-            WireDrawingObjectDragMoveRelease(renderPlan, container, surface);
+            if (cropMode)
+                WirePictureCropDragMoveRelease(renderPlan, container, surface);
+            else
+                WireDrawingObjectDragMoveRelease(renderPlan, container, surface);
         }
 
         return container;
@@ -5507,6 +5533,13 @@ public sealed partial class MainWindow : Window
     {
         if (!TryCommitPendingFormulaEdit())
             return;
+
+        if (_isPictureCropMode &&
+            (drawingObject.Kind != SelectionPaneObjectKind.Picture || drawingObject.Id != _selectedDrawingObjectId))
+        {
+            _isPictureCropMode = false;
+            _pictureCropDragSession = null;
+        }
 
         _selectedDrawingObjectKind = drawingObject.Kind;
         _selectedDrawingObjectId = drawingObject.Id;
@@ -5522,6 +5555,8 @@ public sealed partial class MainWindow : Window
 
     private void ClearSelectedDrawingObject()
     {
+        _isPictureCropMode = false;
+        _pictureCropDragSession = null;
         _selectedDrawingObjectKind = null;
         _selectedDrawingObjectId = null;
         _ribbonContextSource.OnSelectionCleared();

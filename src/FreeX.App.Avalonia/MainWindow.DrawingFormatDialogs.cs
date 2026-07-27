@@ -341,6 +341,7 @@ public sealed partial class MainWindow
             return;
         }
 
+        _isPictureCropMode = true;
         RunDrawingObjectCommand(
             new SetPictureCropCommand(_session.ActiveSheet.Id, picture.Id, 0, 0, 0, 0),
             UiText.Get("PictureCrop_Applied"),

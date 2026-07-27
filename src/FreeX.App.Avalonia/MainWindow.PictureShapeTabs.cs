@@ -47,7 +47,7 @@ public sealed partial class MainWindow
         spec.Action switch
         {
             DrawingObjectContextualCommandAction.FormatPicture => () => RunGuarded(OpenFormatPictureDialogAsync),
-            DrawingObjectContextualCommandAction.PictureCropMenuHint => () => RefreshShell(UiText.Get("PictureCrop_Title")),
+            DrawingObjectContextualCommandAction.PictureCropMenuHint => BeginSelectedPictureCropMode,
             DrawingObjectContextualCommandAction.CropPicture => () => RunGuarded(OpenPictureCropDialogAsync),
             DrawingObjectContextualCommandAction.ResetPictureCrop => ResetSelectedPictureCrop,
             DrawingObjectContextualCommandAction.BringPictureForward => BringSelectedPictureForward,
