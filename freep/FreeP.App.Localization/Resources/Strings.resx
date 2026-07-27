@@ -178,6 +178,12 @@
   <data name="Ribbon_Command_TableCellBorder_KeyTip" xml:space="preserve">
     <value>TB</value>
   </data>
+  <data name="Ribbon_Command_TableCellInset_Label" xml:space="preserve">
+    <value>Cell Insets</value>
+  </data>
+  <data name="Ribbon_Command_TableCellInset_KeyTip" xml:space="preserve">
+    <value>TI</value>
+  </data>
   <data name="Ribbon_Command_Bullets_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>

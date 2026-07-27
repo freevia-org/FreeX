@@ -19,6 +19,16 @@ public enum TableCellBorderSide
     Bottom = 3
 }
 
+/// <summary>One of the four editable cell inset sides.</summary>
+public enum TableCellInsetSide
+{
+    All = 4,
+    Left = 0,
+    Right = 1,
+    Top = 2,
+    Bottom = 3,
+}
+
 /// <summary>
 /// Per-cell borders for a table cell. Each side may be null (use table-style default) or a
 /// concrete outline (None = no border, Visible = drawn border).
