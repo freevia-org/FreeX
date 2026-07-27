@@ -414,6 +414,12 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtInsertStyleCommand { get; } = new("Ribbon_Command_SmartArtInsertStyle_Label", "Ribbon_Command_SmartArtInsertStyle_KeyTip");
     public static RibbonText SmartArtCartoonStyleCommand { get; } = new("Ribbon_Command_SmartArtCartoonStyle_Label", "Ribbon_Command_SmartArtCartoonStyle_KeyTip");
     public static RibbonText SmartArtPowderStyleCommand { get; } = new("Ribbon_Command_SmartArtPowderStyle_Label", "Ribbon_Command_SmartArtPowderStyle_KeyTip");
+    public static RibbonText SmartArtPolishedStyleCommand { get; } = new("Ribbon_Command_SmartArtPolishedStyle_Label", "Ribbon_Command_SmartArtPolishedStyle_KeyTip");
+    public static RibbonText SmartArtBrickSceneStyleCommand { get; } = new("Ribbon_Command_SmartArtBrickSceneStyle_Label", "Ribbon_Command_SmartArtBrickSceneStyle_KeyTip");
+    public static RibbonText SmartArtFlatSceneStyleCommand { get; } = new("Ribbon_Command_SmartArtFlatSceneStyle_Label", "Ribbon_Command_SmartArtFlatSceneStyle_KeyTip");
+    public static RibbonText SmartArtMetallicSceneStyleCommand { get; } = new("Ribbon_Command_SmartArtMetallicSceneStyle_Label", "Ribbon_Command_SmartArtMetallicSceneStyle_KeyTip");
+    public static RibbonText SmartArtSunsetSceneStyleCommand { get; } = new("Ribbon_Command_SmartArtSunsetSceneStyle_Label", "Ribbon_Command_SmartArtSunsetSceneStyle_KeyTip");
+    public static RibbonText SmartArtBirdsEyeSceneStyleCommand { get; } = new("Ribbon_Command_SmartArtBirdsEyeSceneStyle_Label", "Ribbon_Command_SmartArtBirdsEyeSceneStyle_KeyTip");
     public static RibbonText SmartArtConvertToShapesCommand { get; } = new("Ribbon_Command_SmartArtConvertToShapes_Label", "Ribbon_Command_SmartArtConvertToShapes_KeyTip");
     public static RibbonText SlideSizeWidescreenCommand { get; } = new("Ribbon_Command_SlideSizeWidescreen_Label", "Ribbon_Command_SlideSizeWidescreen_KeyTip");
     public static RibbonText SlideSizeStandardCommand { get; } = new("Ribbon_Command_SlideSizeStandard_Label", "Ribbon_Command_SlideSizeStandard_KeyTip");

@@ -144,14 +144,20 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Theory]
-    [InlineData(SmartArtQuickStylePreset.Simple, "simple1", "Simple")]
-    [InlineData(SmartArtQuickStylePreset.Moderate, "moderate1", "Moderate")]
-    [InlineData(SmartArtQuickStylePreset.Intense, "intense1", "Intense")]
-    [InlineData(SmartArtQuickStylePreset.Subtle, "subtle1", "Subtle")]
-    [InlineData(SmartArtQuickStylePreset.SoftEdge, "subtle2", "Soft Edge")]
-    [InlineData(SmartArtQuickStylePreset.Insert, "intense2", "Insert")]
-    [InlineData(SmartArtQuickStylePreset.Cartoon, "3d1", "Cartoon")]
-    [InlineData(SmartArtQuickStylePreset.Powder, "3d2", "Powder")]
+    [InlineData(SmartArtQuickStylePreset.SimpleFill, "simple1", "Simple Fill")]
+    [InlineData(SmartArtQuickStylePreset.WhiteOutline, "simple2", "White Outline")]
+    [InlineData(SmartArtQuickStylePreset.SubtleEffect, "simple3", "Subtle Effect")]
+    [InlineData(SmartArtQuickStylePreset.ModerateEffect, "simple4", "Moderate Effect")]
+    [InlineData(SmartArtQuickStylePreset.IntenseEffect, "simple5", "Intense Effect")]
+    [InlineData(SmartArtQuickStylePreset.Polished, "3d1", "Polished")]
+    [InlineData(SmartArtQuickStylePreset.Inset, "3d2", "Inset")]
+    [InlineData(SmartArtQuickStylePreset.Cartoon, "3d3", "Cartoon")]
+    [InlineData(SmartArtQuickStylePreset.Powder, "3d4", "Powder")]
+    [InlineData(SmartArtQuickStylePreset.BrickScene, "3d5", "Brick Scene")]
+    [InlineData(SmartArtQuickStylePreset.FlatScene, "3d6", "Flat Scene")]
+    [InlineData(SmartArtQuickStylePreset.MetallicScene, "3d7", "Metallic Scene")]
+    [InlineData(SmartArtQuickStylePreset.SunsetScene, "3d8", "Sunset Scene")]
+    [InlineData(SmartArtQuickStylePreset.BirdsEyeScene, "3d9", "Bird's Eye Scene")]
     public void ApplyQuickStylePreset_UpdatesMetadataAndNativeStylePart(
         SmartArtQuickStylePreset preset,
         string expectedId,

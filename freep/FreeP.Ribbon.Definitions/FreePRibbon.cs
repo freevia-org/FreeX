@@ -838,6 +838,24 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.PowderQuickStyleCommandId,
                 FreePRibbonText.SmartArtPowderStyleCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.SmartArtPowderStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.PolishedQuickStyleCommandId,
+                FreePRibbonText.SmartArtPolishedStyleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtPolishedStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BrickSceneQuickStyleCommandId,
+                FreePRibbonText.SmartArtBrickSceneStyleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtBrickSceneStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.FlatSceneQuickStyleCommandId,
+                FreePRibbonText.SmartArtFlatSceneStyleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtFlatSceneStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.MetallicSceneQuickStyleCommandId,
+                FreePRibbonText.SmartArtMetallicSceneStyleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtMetallicSceneStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.SunsetSceneQuickStyleCommandId,
+                FreePRibbonText.SmartArtSunsetSceneStyleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtSunsetSceneStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BirdsEyeSceneQuickStyleCommandId,
+                FreePRibbonText.SmartArtBirdsEyeSceneStyleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtBirdsEyeSceneStyleCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.ConvertToShapesCommandId,
                 FreePRibbonText.SmartArtConvertToShapesCommand.Label, RibbonCommandIconKind.Group,
                 FreePRibbonText.SmartArtConvertToShapesCommand.KeyTip);

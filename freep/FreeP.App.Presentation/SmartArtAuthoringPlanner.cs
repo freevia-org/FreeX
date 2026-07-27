@@ -74,17 +74,31 @@ public enum SmartArtLayoutPreset
     PictureGrid,
 }
 
-/// <summary>Bounded PowerPoint SmartArt Quick Style choices.</summary>
+/// <summary>PowerPoint SmartArt Quick Style choices exposed by the native gallery.</summary>
 public enum SmartArtQuickStylePreset
 {
-    Simple,
-    Moderate,
-    Intense,
-    Subtle,
-    SoftEdge,
-    Insert,
+    SimpleFill,
+    WhiteOutline,
+    SubtleEffect,
+    ModerateEffect,
+    IntenseEffect,
+    Polished,
+    Inset,
     Cartoon,
     Powder,
+    BrickScene,
+    FlatScene,
+    MetallicScene,
+    SunsetScene,
+    BirdsEyeScene,
+
+    // Compatibility aliases for the original FreeP command vocabulary.
+    Simple = SimpleFill,
+    Moderate = ModerateEffect,
+    Intense = IntenseEffect,
+    Subtle = SubtleEffect,
+    SoftEdge = WhiteOutline,
+    Insert = Inset,
 }
 
 public sealed record SmartArtColorApplyResult(
@@ -181,6 +195,12 @@ public static class SmartArtAuthoringPlanner
     public const string InsertQuickStyleCommandId = "freep.smartart.style.insert";
     public const string CartoonQuickStyleCommandId = "freep.smartart.style.cartoon";
     public const string PowderQuickStyleCommandId = "freep.smartart.style.powder";
+    public const string PolishedQuickStyleCommandId = "freep.smartart.style.polished";
+    public const string BrickSceneQuickStyleCommandId = "freep.smartart.style.brick-scene";
+    public const string FlatSceneQuickStyleCommandId = "freep.smartart.style.flat-scene";
+    public const string MetallicSceneQuickStyleCommandId = "freep.smartart.style.metallic-scene";
+    public const string SunsetSceneQuickStyleCommandId = "freep.smartart.style.sunset-scene";
+    public const string BirdsEyeSceneQuickStyleCommandId = "freep.smartart.style.birds-eye-scene";
     public const string ConvertToShapesCommandId = "freep.smartart.convert-to-shapes";
 
     public static SmartArtQuickStyleApplyResult ApplyQuickStylePreset(
@@ -192,22 +212,34 @@ public static class SmartArtAuthoringPlanner
 
         var styleId = preset switch
         {
-            SmartArtQuickStylePreset.Simple =>
+            SmartArtQuickStylePreset.SimpleFill =>
                 "urn:microsoft.com/office/officeart/2005/8/quickstyle/simple1",
-            SmartArtQuickStylePreset.Moderate =>
-                "urn:microsoft.com/office/officeart/2005/8/quickstyle/moderate1",
-            SmartArtQuickStylePreset.Intense =>
-                "urn:microsoft.com/office/officeart/2005/8/quickstyle/intense1",
-            SmartArtQuickStylePreset.Subtle =>
-                "urn:microsoft.com/office/officeart/2005/8/quickstyle/subtle1",
-            SmartArtQuickStylePreset.SoftEdge =>
-                "urn:microsoft.com/office/officeart/2005/8/quickstyle/subtle2",
-            SmartArtQuickStylePreset.Insert =>
-                "urn:microsoft.com/office/officeart/2005/8/quickstyle/intense2",
-            SmartArtQuickStylePreset.Cartoon =>
+            SmartArtQuickStylePreset.WhiteOutline =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/simple2",
+            SmartArtQuickStylePreset.SubtleEffect =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/simple3",
+            SmartArtQuickStylePreset.ModerateEffect =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/simple4",
+            SmartArtQuickStylePreset.IntenseEffect =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/simple5",
+            SmartArtQuickStylePreset.Polished =>
                 "urn:microsoft.com/office/officeart/2005/8/quickstyle/3d1",
-            SmartArtQuickStylePreset.Powder =>
+            SmartArtQuickStylePreset.Inset =>
                 "urn:microsoft.com/office/officeart/2005/8/quickstyle/3d2",
+            SmartArtQuickStylePreset.Cartoon =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/3d3",
+            SmartArtQuickStylePreset.Powder =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/3d4",
+            SmartArtQuickStylePreset.BrickScene =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/3d5",
+            SmartArtQuickStylePreset.FlatScene =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/3d6",
+            SmartArtQuickStylePreset.MetallicScene =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/3d7",
+            SmartArtQuickStylePreset.SunsetScene =>
+                "urn:microsoft.com/office/officeart/2009/2/quickstyle/3d8",
+            SmartArtQuickStylePreset.BirdsEyeScene =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/3d9",
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
         };
 
@@ -248,14 +280,20 @@ public static class SmartArtAuthoringPlanner
         styleDefinition.SetAttributeValue("uniqueId", styleId);
         var title = preset switch
         {
-            SmartArtQuickStylePreset.Simple => "Simple",
-            SmartArtQuickStylePreset.Moderate => "Moderate",
-            SmartArtQuickStylePreset.Intense => "Intense",
-            SmartArtQuickStylePreset.Subtle => "Subtle",
-            SmartArtQuickStylePreset.SoftEdge => "Soft Edge",
-            SmartArtQuickStylePreset.Insert => "Insert",
+            SmartArtQuickStylePreset.SimpleFill => "Simple Fill",
+            SmartArtQuickStylePreset.WhiteOutline => "White Outline",
+            SmartArtQuickStylePreset.SubtleEffect => "Subtle Effect",
+            SmartArtQuickStylePreset.ModerateEffect => "Moderate Effect",
+            SmartArtQuickStylePreset.IntenseEffect => "Intense Effect",
+            SmartArtQuickStylePreset.Polished => "Polished",
+            SmartArtQuickStylePreset.Inset => "Inset",
             SmartArtQuickStylePreset.Cartoon => "Cartoon",
             SmartArtQuickStylePreset.Powder => "Powder",
+            SmartArtQuickStylePreset.BrickScene => "Brick Scene",
+            SmartArtQuickStylePreset.FlatScene => "Flat Scene",
+            SmartArtQuickStylePreset.MetallicScene => "Metallic Scene",
+            SmartArtQuickStylePreset.SunsetScene => "Sunset Scene",
+            SmartArtQuickStylePreset.BirdsEyeScene => "Bird's Eye Scene",
             _ => preset.ToString(),
         };
         var titleElement = styleDefinition.Elements(Diagram + "title").FirstOrDefault();

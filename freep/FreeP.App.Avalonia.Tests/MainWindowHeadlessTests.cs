@@ -5626,18 +5626,49 @@ public sealed class MainWindowHeadlessTests
             registry.TryGet(SmartArtAuthoringPlanner.IntenseQuickStyleCommandId, out var command)
                 .Should().BeTrue();
             command!.Execute(RibbonCommandContext.Empty);
-            smartArt.QuickStyle!.UniqueId.Should().EndWith("/quickstyle/intense1");
-            smartArt.QuickStyle.Title.Should().Be("Intense");
+            smartArt.QuickStyle!.UniqueId.Should().EndWith("/quickstyle/simple5");
+            smartArt.QuickStyle.Title.Should().Be("Intense Effect");
 
             window.Editor.Undo();
             smartArt.QuickStyle.Should().BeNull();
             window.Editor.Redo();
-            smartArt.QuickStyle!.UniqueId.Should().EndWith("/quickstyle/intense1");
+            smartArt.QuickStyle!.UniqueId.Should().EndWith("/quickstyle/simple5");
         });
 
         if (!ran) return;
         smartArt.Should().NotBeNull();
-        smartArt!.QuickStyle!.Title.Should().Be("Intense");
+        smartArt!.QuickStyle!.Title.Should().Be("Intense Effect");
+    }
+
+    [Fact]
+    public async Task SmartArt_all_quick_style_gallery_commands_are_registered()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var registry = new MainWindow(Array.Empty<string>()).BuildCommandRegistry();
+            foreach (var commandId in new[]
+            {
+                SmartArtAuthoringPlanner.SimpleQuickStyleCommandId,
+                SmartArtAuthoringPlanner.SoftEdgeQuickStyleCommandId,
+                SmartArtAuthoringPlanner.SubtleQuickStyleCommandId,
+                SmartArtAuthoringPlanner.ModerateQuickStyleCommandId,
+                SmartArtAuthoringPlanner.IntenseQuickStyleCommandId,
+                SmartArtAuthoringPlanner.PolishedQuickStyleCommandId,
+                SmartArtAuthoringPlanner.InsertQuickStyleCommandId,
+                SmartArtAuthoringPlanner.CartoonQuickStyleCommandId,
+                SmartArtAuthoringPlanner.PowderQuickStyleCommandId,
+                SmartArtAuthoringPlanner.BrickSceneQuickStyleCommandId,
+                SmartArtAuthoringPlanner.FlatSceneQuickStyleCommandId,
+                SmartArtAuthoringPlanner.MetallicSceneQuickStyleCommandId,
+                SmartArtAuthoringPlanner.SunsetSceneQuickStyleCommandId,
+                SmartArtAuthoringPlanner.BirdsEyeSceneQuickStyleCommandId,
+            })
+            {
+                registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be registered");
+            }
+        });
+
+        if (!ran) return;
     }
 
     [Fact]
@@ -5656,13 +5687,13 @@ public sealed class MainWindowHeadlessTests
             registry.TryGet(SmartArtAuthoringPlanner.CartoonQuickStyleCommandId, out var command)
                 .Should().BeTrue();
             command!.Execute(RibbonCommandContext.Empty);
-            smartArt.QuickStyle!.UniqueId.Should().EndWith("/quickstyle/3d1");
+            smartArt.QuickStyle!.UniqueId.Should().EndWith("/quickstyle/3d3");
             smartArt.QuickStyle.Title.Should().Be("Cartoon");
 
             window.Editor.Undo();
             smartArt.QuickStyle.Should().BeNull();
             window.Editor.Redo();
-            smartArt.QuickStyle!.UniqueId.Should().EndWith("/quickstyle/3d1");
+            smartArt.QuickStyle!.UniqueId.Should().EndWith("/quickstyle/3d3");
         });
 
         if (!ran) return;
