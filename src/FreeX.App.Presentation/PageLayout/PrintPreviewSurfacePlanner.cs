@@ -87,6 +87,15 @@ public sealed record PrintPreviewSettingsRailPlan(
 public static class PrintPreviewSurfacePlanner
 {
     public const string ParityPrinterName = "FreeX Parity Printer";
+    // The WPF capture is a 1120x700 outer window whose content surface is 1106x663 after the
+    // desktop frame is accounted for. Keep the Avalonia parity surface on the same client geometry
+    // so the evidence compares the dialog rather than a different decoration model.
+    public const double ParityClientWidth = 1106;
+    public const double ParityClientHeight = 663;
+    public const double SettingsRailWidth = 220;
+    public const double TopToolbarHeight = 38;
+    public const double TopToolbarPrintButtonWidth = 68;
+    public const double PreviewPageLeftPadding = 86;
     public const double PrinterComboWidth = 190;
     public const double ToolbarCopiesBoxWidth = 44;
     public const double ToolbarSidesComboWidth = 178;

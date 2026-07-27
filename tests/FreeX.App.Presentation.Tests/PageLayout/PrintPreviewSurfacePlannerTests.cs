@@ -68,6 +68,12 @@ public sealed class PrintPreviewSurfacePlannerTests
     {
         var chrome = PrintPreviewSurfacePlanner.DocumentToolbarChrome;
 
+        PrintPreviewSurfacePlanner.ParityClientWidth.Should().Be(1106);
+        PrintPreviewSurfacePlanner.ParityClientHeight.Should().Be(663);
+        PrintPreviewSurfacePlanner.SettingsRailWidth.Should().Be(220);
+        PrintPreviewSurfacePlanner.TopToolbarHeight.Should().Be(38);
+        PrintPreviewSurfacePlanner.TopToolbarPrintButtonWidth.Should().Be(68);
+        PrintPreviewSurfacePlanner.PreviewPageLeftPadding.Should().Be(86);
         chrome.Height.Should().Be(34);
         chrome.ButtonWidth.Should().Be(28);
         chrome.ButtonHeight.Should().Be(26);

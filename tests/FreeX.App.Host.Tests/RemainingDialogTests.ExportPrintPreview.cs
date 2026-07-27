@@ -42,5 +42,9 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("\"PrintPreview_CloseButton\"");
         source.Should().Contain("isCancel: true");
         source.Should().Contain("closeButton.Click += (_, _) => Close();");
+        source.Should().Contain("PrintPreviewSurfacePlanner.SettingsRailWidth");
+        source.Should().Contain("PrintPreviewSurfacePlanner.PrinterComboWidth");
+        source.Should().Contain("PrintPreviewSurfacePlanner.ToolbarCopiesBoxWidth");
+        source.Should().Contain("PrintPreviewSurfacePlanner.ToolbarSidesComboWidth");
     }
 }
