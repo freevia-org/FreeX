@@ -6559,7 +6559,7 @@ public sealed class MainWindowHeadlessTests
                 true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
             "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, errorBars: true,
             trendline: true, trendlineType: ChartTrendlineType.Polynomial, trendlineOrder: 3,
-            trendlineEquation: true, trendlineRSquared: true);
+            trendlineEquation: true, trendlineRSquared: true, overrideChartType: ChartType.LineMarkers);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6569,6 +6569,7 @@ public sealed class MainWindowHeadlessTests
         options!.SeriesIndex.Should().Be(0);
         options.SmoothLine.Should().BeTrue();
         options.OnSecondaryAxis.Should().BeTrue();
+        options.OverrideChartType.Should().Be(ChartType.LineMarkers);
         options.LineWidthPt.Should().Be(2.25);
         options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
         options.MarkerSizePt.Should().Be(8);

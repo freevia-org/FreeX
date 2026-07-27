@@ -3,6 +3,7 @@ using FreeP.Core.Model;
 namespace FreeP.App.Compositor;
 
 public sealed record ChartSeriesOption(int Index, string Label);
+public sealed record ChartSeriesChartTypeOption(ChartType? Value, string Label);
 
 public sealed record ChartMarkerSymbolOption(ChartMarkerSymbol Value, string Label);
 
@@ -17,6 +18,7 @@ public sealed record ChartSeriesOptionsSurfacePlan(
     string CommandId,
     string Title,
     string SeriesLabel,
+    string SeriesChartTypeLabel,
     string SmoothLineLabel,
     string SecondaryAxisLabel,
     string LineWidthLabel,
@@ -54,6 +56,7 @@ public sealed class ChartSeriesOptionsPlanner
     public const string CommandId = "freep.chart.series-options";
     public const string DialogTitle = "Chart Series Options";
     public const string SeriesLabel = "Series";
+    public const string SeriesChartTypeLabel = "Series chart type";
     public const string SmoothLineLabel = "Smooth line";
     public const string SecondaryAxisLabel = "Plot on secondary axis";
     public const string LineWidthLabel = "Line width (pt)";
@@ -109,6 +112,13 @@ public sealed class ChartSeriesOptionsPlanner
         new(ChartMarkerSymbol.None, "None"),
     ];
 
+    public static IReadOnlyList<ChartSeriesChartTypeOption> SeriesChartTypeOptions { get; } =
+    [
+        new(null, "Same as chart"),
+        new(ChartType.Line, "Line"),
+        new(ChartType.LineMarkers, "Line with markers"),
+    ];
+
     public static IReadOnlyList<ChartDashOption> DashOptions { get; } =
     [
         new(OutlineDash.Solid, "Solid"),
@@ -156,6 +166,7 @@ public sealed class ChartSeriesOptionsPlanner
     private int _seriesIndex;
     private bool _smoothLine;
     private bool _onSecondaryAxis;
+    private ChartType? _overrideChartType;
     private double? _lineWidthPt;
     private ThemeAwareColor? _lineColor;
     private OutlineDash _lineDash;
@@ -203,6 +214,7 @@ public sealed class ChartSeriesOptionsPlanner
             CommandId,
             DialogTitle,
             SeriesLabel,
+            SeriesChartTypeLabel,
             SmoothLineLabel,
             SecondaryAxisLabel,
             LineWidthLabel,
@@ -246,6 +258,7 @@ public sealed class ChartSeriesOptionsPlanner
         : string.Empty;
     public bool SmoothLine => _smoothLine;
     public bool OnSecondaryAxis => _onSecondaryAxis;
+    public ChartType? OverrideChartType => _overrideChartType;
     public double? LineWidthPt => _lineWidthPt;
     public string LineColorText => FormatColor(_lineColor);
     public OutlineDash LineDash => _lineDash;
@@ -288,6 +301,7 @@ public sealed class ChartSeriesOptionsPlanner
             _seriesIndex = 0;
             _smoothLine = false;
             _onSecondaryAxis = false;
+            _overrideChartType = null;
             _lineWidthPt = null;
             _lineColor = null;
             _lineDash = OutlineDash.Solid;
@@ -330,6 +344,7 @@ public sealed class ChartSeriesOptionsPlanner
         var series = _chart.Series[_seriesIndex];
         _smoothLine = series.SmoothLine ?? false;
         _onSecondaryAxis = series.OnSecondaryAxis;
+        _overrideChartType = series.OverrideChartType;
         _lineWidthPt = series.LineStyle?.WidthPt;
         _lineColor = series.LineStyle?.Color;
         _lineDash = series.LineStyle?.Dash ?? OutlineDash.Solid;
@@ -372,6 +387,11 @@ public sealed class ChartSeriesOptionsPlanner
 
     public void SetSmoothLine(bool value) => _smoothLine = value;
     public void SetOnSecondaryAxis(bool value) => _onSecondaryAxis = value;
+    public void SetOverrideChartType(ChartType? value) => _overrideChartType = value switch
+    {
+        null or ChartType.Line or ChartType.LineMarkers => value,
+        _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Only line combo overrides are supported."),
+    };
     public void SetLineWidth(double? value) => _lineWidthPt = value;
     public void SetLineColor(string? text) => _lineColor = string.IsNullOrWhiteSpace(text)
         ? null
@@ -467,7 +487,8 @@ public sealed class ChartSeriesOptionsPlanner
                 DisplayEquation = _trendlineEquation,
                 DisplayRSquared = _trendlineRSquared,
             }
-            : null);
+            : null,
+        OverrideChartType: _overrideChartType);
 
     private static string FormatColor(ThemeAwareColor? color) =>
         color is null ? string.Empty : color.Resolved.ToString();

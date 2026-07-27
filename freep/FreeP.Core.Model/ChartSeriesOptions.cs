@@ -16,4 +16,5 @@ public sealed record ChartSeriesOptions(
     ChartDataLabels? DataLabels = null,
     bool ShowBubbleSize = false,
     ChartErrorBars? ErrorBars = null,
-    ChartTrendline? Trendline = null);
+    ChartTrendline? Trendline = null,
+    ChartType? OverrideChartType = null);

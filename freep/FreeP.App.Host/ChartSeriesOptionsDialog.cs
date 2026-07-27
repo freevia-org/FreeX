@@ -12,6 +12,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly EditingSession _editor;
     private readonly ChartSeriesOptionsPlanner _planner;
     private readonly ComboBox _seriesCombo;
+    private readonly ComboBox _seriesChartTypeCombo;
     private readonly CheckBox _smoothLineCheck;
     private readonly CheckBox _secondaryAxisCheck;
     private readonly TextBox _lineWidthBox;
@@ -80,6 +81,12 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         };
         _smoothLineCheck = new CheckBox { Content = surface.SmoothLineLabel };
         _secondaryAxisCheck = new CheckBox { Content = surface.SecondaryAxisLabel };
+        _seriesChartTypeCombo = new ComboBox
+        {
+            ItemsSource = ChartSeriesOptionsPlanner.SeriesChartTypeOptions,
+            DisplayMemberPath = nameof(ChartSeriesChartTypeOption.Label),
+            MinWidth = 200,
+        };
         _lineWidthBox = new TextBox { MinWidth = 120 };
         _lineColorBox = new TextBox { MinWidth = 140 };
         _lineDashCombo = new ComboBox
@@ -146,6 +153,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         var content = new StackPanel { Margin = new Thickness(14) };
         content.Children.Add(MakeRow(surface.SeriesLabel, _seriesCombo));
+        content.Children.Add(MakeRow(surface.SeriesChartTypeLabel, _seriesChartTypeCombo));
         content.Children.Add(_smoothLineCheck);
         content.Children.Add(_secondaryAxisCheck);
         content.Children.Add(MakeRow(surface.LineWidthLabel, _lineWidthBox));
@@ -225,11 +233,13 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         int? trendlineOrder = null,
         int? trendlinePeriod = null,
         bool trendlineEquation = false,
-        bool trendlineRSquared = false)
+        bool trendlineRSquared = false,
+        ChartType? overrideChartType = null)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         _smoothLineCheck.IsChecked = smoothLine;
         _secondaryAxisCheck.IsChecked = onSecondaryAxis;
+        _seriesChartTypeCombo.SelectedIndex = FindSeriesChartTypeIndex(overrideChartType);
         _lineWidthBox.Text = Format(lineWidthPt);
         _lineColorBox.Text = lineColor ?? string.Empty;
         _lineDashCombo.SelectedIndex = FindDashIndex(lineDash);
@@ -278,6 +288,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     {
         _smoothLineCheck.IsChecked = _planner.SmoothLine;
         _secondaryAxisCheck.IsChecked = _planner.OnSecondaryAxis;
+        _seriesChartTypeCombo.SelectedIndex = FindSeriesChartTypeIndex(_planner.OverrideChartType);
         _lineWidthBox.Text = Format(_planner.LineWidthPt);
         _lineColorBox.Text = _planner.LineColorText;
         _lineDashCombo.SelectedIndex = FindDashIndex(_planner.LineDash);
@@ -318,6 +329,9 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     {
         _planner.SetSmoothLine(_smoothLineCheck.IsChecked == true);
         _planner.SetOnSecondaryAxis(_secondaryAxisCheck.IsChecked == true);
+        if (_seriesChartTypeCombo.SelectedIndex >= 0 &&
+            _seriesChartTypeCombo.SelectedIndex < ChartSeriesOptionsPlanner.SeriesChartTypeOptions.Count)
+            _planner.SetOverrideChartType(ChartSeriesOptionsPlanner.SeriesChartTypeOptions[_seriesChartTypeCombo.SelectedIndex].Value);
         _planner.SetLineWidth(ParseOptional(_lineWidthBox.Text, "Line width"));
         _planner.SetLineColor(_lineColorBox.Text);
         if (_lineDashCombo.SelectedItem is ChartDashOption dash)
@@ -390,6 +404,11 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         Math.Max(0, ChartSeriesOptionsPlanner.MarkerOptions
             .Select((option, index) => (option, index))
             .FirstOrDefault(item => item.option.Value == symbol).index);
+
+    private static int FindSeriesChartTypeIndex(ChartType? value) =>
+        Math.Max(0, ChartSeriesOptionsPlanner.SeriesChartTypeOptions
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == value).index);
 
     private static int FindDashIndex(OutlineDash dash) =>
         Math.Max(0, ChartSeriesOptionsPlanner.DashOptions
