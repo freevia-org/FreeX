@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -129,6 +130,108 @@ public sealed class AvaloniaRichTextEditorTests
                 run.TextReflection.Should().NotBeNull();
                 run.TextGlow.Should().NotBeNull();
                 run.TextSoftEdge!.RadiusPt.Should().BeApproximately(2.0, 0.0001);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ClipboardPaste_UsesRtfBeforePlainTextAndUsesCustomPayloadBeforeRtf()
+    {
+        await Session.Dispatch(async () =>
+        {
+            AvaloniaRichTextEditor.ExternalRtfWindowsFormat.Identifier
+                .Should().Be(PresentationClipboardFormats.WindowsRtf);
+            AvaloniaRichTextEditor.ExternalRtfLinuxFormat.Identifier
+                .Should().Be(PresentationClipboardFormats.LinuxRtf);
+
+            var editor = new AvaloniaRichTextEditor(
+                InCanvasRichClipboardPayload.FromPlainText("target").Body,
+                backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.SelectionStart = 0;
+                editor.SelectionEnd = editor.Text.Length;
+                using var rtfTransfer = new DataTransfer();
+                var rtfItem = new DataTransferItem();
+                rtfItem.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.ExternalRtfWindowsFormat
+                        : AvaloniaRichTextEditor.ExternalRtfLinuxFormat,
+                    Encoding.ASCII.GetBytes(@"{\rtf1\ansi\b Rich\b0\par text}"));
+                rtfItem.SetText("plain");
+                rtfTransfer.Add(rtfItem);
+
+                (await editor.PasteDataTransferAsync(rtfTransfer)).Should().BeTrue();
+                editor.Text.Should().Be("Rich\ntext");
+                editor.EditedBody.Paragraphs[0].Runs.Single().Bold.Should().BeTrue();
+
+                editor.Text = "target";
+                editor.SelectionStart = 0;
+                editor.SelectionEnd = editor.Text.Length;
+                using var customTransfer = new DataTransfer();
+                var customItem = new DataTransferItem();
+                var customPayload = InCanvasRichClipboardPayload.FromPlainText("custom");
+                customItem.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.RichTextPlatformFormat
+                        : AvaloniaRichTextEditor.RichTextFormat,
+                    InCanvasRichClipboardPlanner.Serialize(customPayload));
+                customItem.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.ExternalRtfWindowsFormat
+                        : AvaloniaRichTextEditor.ExternalRtfLinuxFormat,
+                    Encoding.ASCII.GetBytes(@"{\rtf1\ansi\b ignored\b0}"));
+                customItem.SetText("plain");
+                customTransfer.Add(customItem);
+
+                (await editor.PasteDataTransferAsync(customTransfer)).Should().BeTrue();
+                editor.Text.Should().Be("custom");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ClipboardPaste_MalformedRtfFallsBackToPlainText()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var editor = new AvaloniaRichTextEditor(
+                InCanvasRichClipboardPayload.FromPlainText("target").Body,
+                backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.SelectionStart = 0;
+                editor.SelectionEnd = editor.Text.Length;
+                using var transfer = new DataTransfer();
+                var item = new DataTransferItem();
+                item.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.ExternalRtfWindowsFormat
+                        : AvaloniaRichTextEditor.ExternalRtfLinuxFormat,
+                    Encoding.ASCII.GetBytes("not an rtf payload"));
+                item.SetText("plain fallback");
+                transfer.Add(item);
+
+                (await editor.PasteDataTransferAsync(transfer)).Should().BeTrue();
+                editor.Text.Should().Be("plain fallback");
             }
             finally
             {

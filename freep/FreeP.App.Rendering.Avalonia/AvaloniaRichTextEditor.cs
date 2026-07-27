@@ -16,10 +16,14 @@ namespace FreeP.App.Rendering.Avalonia;
 /// </summary>
 internal sealed class AvaloniaRichTextEditor : Grid
 {
-    private static readonly DataFormat<byte[]> RichTextFormat =
+    internal static readonly DataFormat<byte[]> RichTextFormat =
         DataFormat.CreateBytesApplicationFormat(PresentationClipboardFormats.RichText);
-    private static readonly DataFormat<byte[]> RichTextPlatformFormat =
+    internal static readonly DataFormat<byte[]> RichTextPlatformFormat =
         DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.RichText);
+    internal static readonly DataFormat<byte[]> ExternalRtfWindowsFormat =
+        DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.WindowsRtf);
+    internal static readonly DataFormat<byte[]> ExternalRtfLinuxFormat =
+        DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.LinuxRtf);
 
     private readonly InCanvasRichTextEditBuffer _buffer;
     private readonly AvaloniaRichTextEditingSurface _richTextView;
@@ -168,6 +172,13 @@ internal sealed class AvaloniaRichTextEditor : Grid
         if (transfer is null)
             return false;
 
+        return await PasteDataTransferAsync(transfer);
+    }
+
+    internal async Task<bool> PasteDataTransferAsync(IAsyncDataTransfer transfer)
+    {
+        ArgumentNullException.ThrowIfNull(transfer);
+
         byte[]? richBytes = await TryGetValueAsync(
             transfer,
             OperatingSystem.IsWindows() ? RichTextPlatformFormat : RichTextFormat);
@@ -179,6 +190,20 @@ internal sealed class AvaloniaRichTextEditor : Grid
         {
             _buffer.ApplyClipboardPayload(payload, Selection, out var caret);
             ApplyBufferText(caret);
+            return true;
+        }
+
+        byte[]? rtfBytes = await TryGetValueAsync(
+            transfer,
+            OperatingSystem.IsWindows() ? ExternalRtfWindowsFormat : ExternalRtfLinuxFormat);
+        rtfBytes ??= await TryGetValueAsync(
+            transfer,
+            OperatingSystem.IsWindows() ? ExternalRtfLinuxFormat : ExternalRtfWindowsFormat);
+        var externalPayload = ExternalRichTextClipboardPlanner.TryParseRtf(rtfBytes);
+        if (externalPayload is not null)
+        {
+            _buffer.ApplyClipboardPayload(externalPayload, Selection, out var rtfCaret);
+            ApplyBufferText(rtfCaret);
             return true;
         }
 
