@@ -483,24 +483,26 @@ public sealed class SlideShowWindow : Window
     {
         if (OperatingSystem.IsLinux())
         {
-            return new LinuxNarrationCaptureBackend(
-                new LinuxRecordingHostMetadata(
-                    "Avalonia slideshow",
-                    "Avalonia Linux narration capture adapter",
-                    "ppt/media/freep-recordings/avalonia"));
+            var metadata = new LinuxRecordingHostMetadata(
+                "Avalonia slideshow",
+                "Avalonia Linux recording capture adapter",
+                "ppt/media/freep-recordings/avalonia");
+            return new LinuxRecordingCaptureBackend(
+                new LinuxNarrationCaptureBackend(metadata),
+                new LinuxCameraCaptureBackend(metadata));
         }
 
-        var metadata = new WindowsRecordingHostMetadata(
+        var windowsMetadata = new WindowsRecordingHostMetadata(
             "Avalonia slideshow",
             "Avalonia Windows recording capture adapter",
             "ppt/media/freep-recordings/avalonia");
 #if FREEP_WINDOWS_CAPTURE
         return new WindowsRecordingCaptureBackend(
-            metadata,
+            windowsMetadata,
             new WindowsRecordingDeviceCatalog(),
             new WindowsNativeRecordingCaptureEngine(metadata.AdapterName));
 #else
-        return new WindowsRecordingCaptureBackend(metadata);
+        return new WindowsRecordingCaptureBackend(windowsMetadata);
 #endif
     }
 
