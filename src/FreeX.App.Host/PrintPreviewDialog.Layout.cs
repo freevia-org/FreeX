@@ -145,7 +145,7 @@ public sealed partial class PrintPreviewDialog : Window
         var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(PrintPreviewSurfacePlanner.SettingsRailWidth) });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         return root;
@@ -197,7 +197,7 @@ public sealed partial class PrintPreviewDialog : Window
     {
         var printerBox = new ComboBox
         {
-            Width = 190,
+            Width = PrintPreviewSurfacePlanner.PrinterComboWidth,
             Margin = new Thickness(0, 0, 8, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
             ToolTip = UiText.Get("PrintPreview_PrinterToolTip")
@@ -212,7 +212,7 @@ public sealed partial class PrintPreviewDialog : Window
 
         var copiesBox = new TextBox
         {
-            Width = 44,
+            Width = PrintPreviewSurfacePlanner.ToolbarCopiesBoxWidth,
             Text = "1",
             Margin = new Thickness(0, 0, 8, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
@@ -234,7 +234,7 @@ public sealed partial class PrintPreviewDialog : Window
 
         var sidesBox = new ComboBox
         {
-            Width = 178,
+            Width = PrintPreviewSurfacePlanner.ToolbarSidesComboWidth,
             Margin = new Thickness(0, 0, 8, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
             ToolTip = UiText.Get("PrintPreview_SidesToolTip")

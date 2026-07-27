@@ -48,6 +48,7 @@ public sealed partial class MainWindow
     private static readonly ITextMeasurer PrintPreviewTextMeasurer = new AvaloniaTextMeasurer();
     // WPF DocumentViewer uses its light neutral control surface around the white paper.
     private static readonly IBrush PrintPreviewSurfaceBackground = Brush(240, 240, 240);
+    private static readonly IBrush PrintPreviewChromeBackground = Brush(238, 245, 253);
     private static AvaloniaCompactDialogChromeStyle PrintPreviewChromeStyle =>
         new(FormulaBarFontFamily) { ButtonPadding = new Thickness(6, 1) };
     private static readonly PrintSettingsTextResolver PrintPreviewSettingsTextResolver = new(
@@ -232,25 +233,6 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(exportButton, PrintPreviewDialogPlanner.ExportPdfButtonAutomationId);
         exportButton.IsEnabled = StorageProvider.CanSave;
 
-        var closeButton = new Button
-        {
-            Content = topToolbarPlan.CloseButtonText,
-            MinWidth = 60,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(10, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
-            IsCancel = true,
-        };
-        AutomationProperties.SetAutomationId(closeButton, PrintPreviewDialogPlanner.CloseButtonAutomationId);
-
         void Render()
         {
             pageHost.Child = BuildPreviewDocumentViewerSurface(context, navigator.CurrentIndex, parityPages);
@@ -300,8 +282,6 @@ public sealed partial class MainWindow
             dialog.Close();
             await ExportActiveSheetPdfAsync();
         };
-        closeButton.Click += (_, _) => dialog.Close();
-
         dialog.KeyDown += (_, e) =>
         {
             switch (e.Key)
@@ -350,12 +330,19 @@ public sealed partial class MainWindow
         var topToolbar = CreatePrintPreviewTopToolbar(
             topToolbarPlan,
             exportButton,
-            closeButton);
+            () => dialog.Close());
 
         var layout = new Grid
         {
+            // Match the WPF capture's client rectangle inside the same 1120x700 outer window. The
+            // explicit top-left alignment is intentional: WPF leaves the outer right/bottom bands
+            // unoccupied when its native frame is included in the evidence PNG.
+            Width = PrintPreviewSurfacePlanner.ParityClientWidth,
+            Height = PrintPreviewSurfacePlanner.ParityClientHeight,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
             RowDefinitions = new RowDefinitions("Auto,*"),
-            ColumnDefinitions = new ColumnDefinitions("220,*"),
+            ColumnDefinitions = new ColumnDefinitions($"{PrintPreviewSurfacePlanner.SettingsRailWidth},*"),
         };
         Grid.SetRow(topToolbar, 0);
         Grid.SetColumnSpan(topToolbar, 2);
@@ -380,13 +367,13 @@ public sealed partial class MainWindow
     private static Border CreatePrintPreviewTopToolbar(
         PrintPreviewTopToolbarPlan plan,
         Button printButton,
-        Button closeButton)
+        Action close)
     {
         var toolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 4,
-            Margin = new Thickness(10, 6, 4, 4),
+            Margin = new Thickness(1, 6, 0, 4),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Children =
             {
@@ -431,19 +418,60 @@ public sealed partial class MainWindow
                     VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 },
                 CreatePreviewComboBox(plan.PageRangeComboWidth, plan.PageRangeText),
-                closeButton,
             },
         };
 
+        printButton.Width = PrintPreviewSurfacePlanner.TopToolbarPrintButtonWidth;
+        printButton.MinWidth = PrintPreviewSurfacePlanner.TopToolbarPrintButtonWidth;
+        var overflowItem = new MenuItem { Header = plan.CloseButtonText };
+        overflowItem.Click += (_, _) => close();
+        var overflowButton = new Button
+        {
+            Width = 18,
+            MinWidth = 18,
+            Height = 18,
+            MinHeight = 18,
+            MaxHeight = 18,
+            Padding = new Thickness(0),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Content = new global::Avalonia.Controls.Shapes.Path
+            {
+                Data = Geometry.Parse("M 2 3 L 7 8 L 12 3"),
+                Stroke = Brush(92, 92, 92),
+                StrokeThickness = 1,
+                Width = 14,
+                Height = 10,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            },
+            Flyout = new MenuFlyout { Items = { overflowItem } },
+        };
+        var topControls = new Border
+        {
+            Background = PrintPreviewChromeBackground,
+            Margin = new Thickness(3, 0, 0, 0),
+            Child = toolbar,
+        };
+        AutomationProperties.SetAutomationId(overflowButton, PrintPreviewDialogPlanner.CloseButtonAutomationId);
+        AutomationProperties.SetName(overflowButton, plan.CloseButtonText);
+        var topLayout = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,18"),
+            Children = { topControls, overflowButton },
+        };
+        Grid.SetColumn(overflowButton, 1);
+
         return new Border
         {
-            Height = 38,
-            MinHeight = 38,
-            MaxHeight = 38,
-            Background = Brush(235, 244, 253),
+            Height = PrintPreviewSurfacePlanner.TopToolbarHeight,
+            MinHeight = PrintPreviewSurfacePlanner.TopToolbarHeight,
+            MaxHeight = PrintPreviewSurfacePlanner.TopToolbarHeight,
+            Background = Brushes.White,
             BorderBrush = Brush(190, 204, 220),
             BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = toolbar,
+            Child = topLayout,
         };
     }
 
@@ -582,14 +610,14 @@ public sealed partial class MainWindow
     {
         var findBar = new Grid
         {
-            Background = Brush(235, 244, 253),
+            Background = PrintPreviewChromeBackground,
             ColumnDefinitions = new ColumnDefinitions("240,Auto,Auto,*"),
             MinHeight = 26,
         };
         var findBox = new TextBox
         {
             PlaceholderText = plan.PlaceholderText,
-            Margin = new Thickness(4, 2),
+            Margin = new Thickness(6, 2),
             Height = 22,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
@@ -597,8 +625,8 @@ public sealed partial class MainWindow
             BorderBrush = Brush(130, 130, 130),
             BorderThickness = new Thickness(1),
         };
-        var previous = CreatePreviewToolbarButton(plan.PreviousButtonText);
-        var next = CreatePreviewToolbarButton(plan.NextButtonText);
+        var previous = CreateFindNavigationButton(plan.PreviousButtonText, isPrevious: true);
+        var next = CreateFindNavigationButton(plan.NextButtonText, isPrevious: false);
         Grid.SetColumn(findBox, 0);
         Grid.SetColumn(previous, 1);
         Grid.SetColumn(next, 2);
@@ -618,6 +646,34 @@ public sealed partial class MainWindow
             Background = Brushes.White,
             Child = pane,
         };
+    }
+
+    private static Button CreateFindNavigationButton(string toolTip, bool isPrevious)
+    {
+        var button = new Button
+        {
+            Width = 18,
+            MinWidth = 18,
+            Height = 18,
+            MinHeight = 18,
+            MaxHeight = 18,
+            Padding = new Thickness(0),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            Content = new global::Avalonia.Controls.Shapes.Path
+            {
+                Data = Geometry.Parse(isPrevious ? "M 10 2 L 5 7 L 10 12" : "M 4 2 L 9 7 L 4 12"),
+                Stroke = Brush(0, 102, 204),
+                StrokeThickness = 1.5,
+                Width = 12,
+                Height = 14,
+            },
+        };
+        ToolTip.SetTip(button, toolTip);
+        return button;
     }
 
     private static Border CreatePreviewDocumentToolbar(
@@ -844,13 +900,19 @@ public sealed partial class MainWindow
         var surface = new Border
         {
             Background = PrintPreviewSurfaceBackground,
-            Padding = new Thickness(84, 5, 84, 8),
+            Padding = new Thickness(PrintPreviewSurfacePlanner.PreviewPageLeftPadding, 5, 84, 8),
             Child = parityPages is null
                 ? BuildPreviewPageView(context, pageIndex)
                 : BuildPreviewParityPageView(parityPages[pageIndex]),
         };
 
-        return surface;
+        return new ScrollViewer
+        {
+            Background = PrintPreviewSurfaceBackground,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = surface,
+        };
     }
 
     private static Control BuildPreviewParityPageView(PrintPreviewParityPage page)
@@ -888,7 +950,7 @@ public sealed partial class MainWindow
                 canvas,
                 new Border
                 {
-                    BorderBrush = Brush(128, 128, 128),
+                    BorderBrush = Brushes.Black,
                     BorderThickness = new Thickness(1),
                     IsHitTestVisible = false,
                 },

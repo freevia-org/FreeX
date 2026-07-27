@@ -17,7 +17,8 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("PrintPreviewSurfacePlanner.CreateSettingsRailPlan(");
         source.Should().Contain("PrintPreviewSettingsTextResolver");
         source.Should().Contain("Content = topToolbarPlan.PrintButtonText");
-        source.Should().Contain("Content = topToolbarPlan.CloseButtonText");
+        source.Should().Contain("Header = plan.CloseButtonText");
+        source.Should().Contain("AutomationProperties.SetAutomationId(overflowButton, PrintPreviewDialogPlanner.CloseButtonAutomationId)");
         source.Should().Contain("CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[0])");
         source.Should().Contain("AutomationProperties.SetAutomationId(button, plan.AutomationId)");
         source.Should().Contain("CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.PrintWhatOptions, plan.Settings.PrintWhatSelectedIndex)");
@@ -38,6 +39,13 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("AvaloniaRibbonIcons.BuildMonochrome");
         source.Should().Contain("PrintPreviewSurfacePlanner.DocumentToolbarChrome");
         source.Should().Contain("CreateDocumentToolbarIcon(RibbonCommandIconKind.Print");
+        source.Should().Contain("PrintPreviewSurfacePlanner.ParityClientWidth");
+        source.Should().Contain("PrintPreviewSurfacePlanner.ParityClientHeight");
+        source.Should().Contain("HorizontalAlignment = AvaloniaHorizontalAlignment.Left");
+        source.Should().Contain("PrintPreviewSurfacePlanner.PreviewPageLeftPadding");
+        source.Should().Contain("ScrollBarVisibility.Auto");
+        source.Should().Contain("CreateFindNavigationButton");
+        source.Should().Contain("new MenuFlyout { Items = { overflowItem } }");
         source.Should().Contain("IsVisible = false");
 
         source.Should().NotContain("PrintPreviewText(\"PrintPreview_PrintWhatActiveSheets\"");
@@ -64,7 +72,7 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().NotContain("PrintPreviewSurfaceBackground = Brush(82, 86, 92)");
         source.Should().Contain("Foreground = Brush(92, 92, 92)");
         source.Should().Contain("Background = Brushes.White");
-        source.Should().Contain("BorderBrush = Brush(128, 128, 128)");
+        source.Should().Contain("BorderBrush = Brushes.Black");
         source.Should().Contain("OffsetX = 4");
         source.Should().Contain("OffsetY = 4");
         source.Should().Contain("Color = Color.FromArgb(89, 0, 0, 0)");
