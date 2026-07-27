@@ -807,7 +807,10 @@ internal static class ParityCapture
             [
                 "General", "Formulas", "Proofing", "Save", "Language", "EaseOfAccess",
                 "Advanced", "CustomizeRibbon", "QuickAccessToolbar", "AddIns", "TrustCenter", "View",
-            ]);
+            ],
+            captureSizeResolver: surfaceId => surfaceId.Equals("dialog.Options.Formulas", StringComparison.Ordinal)
+                ? (OptionsDialogPlanner.CaptureWidth, OptionsDialogPlanner.FormulasCaptureHeight)
+                : (OptionsDialogPlanner.CaptureWidth, OptionsDialogPlanner.CaptureHeight));
     }
 
     private static Func<string, SheetId?> ResolveSheetId(Workbook workbook) =>
@@ -1186,14 +1189,7 @@ internal static class ParityCapture
 
                 if (TryGetFixedDialogCaptureSize(surfaceId, out var fixedWidth, out var fixedHeight))
                 {
-                    dialog.SizeToContent = SizeToContent.Manual;
-                    dialog.Width = fixedWidth;
-                    dialog.Height = fixedHeight;
-                    dialog.MinWidth = fixedWidth;
-                    dialog.MinHeight = fixedHeight;
-                    PumpDispatcher();
-                    dialog.UpdateLayout();
-                    PumpDispatcher();
+                    ApplyDialogCaptureSize(dialog, (fixedWidth, fixedHeight));
                 }
 
                 var width = fixedWidth > 0 ? fixedWidth : dialog.ActualWidth > 0 ? dialog.ActualWidth : dialog.Width;
@@ -1426,7 +1422,12 @@ internal static class ParityCapture
     /// Mirrors the Avalonia <c>CaptureModalTabsAsync</c> so the comparison runner pairs the per-tab surfaces.
     /// </summary>
     private static void CaptureDialogTabs(
-        List<SurfaceResult> results, string surfaceId, string outDir, Func<Window> factory, string[] tabNames)
+        List<SurfaceResult> results,
+        string surfaceId,
+        string outDir,
+        Func<Window> factory,
+        string[] tabNames,
+        Func<string, (double Width, double Height)>? captureSizeResolver = null)
     {
         Window? dialog = null;
         try
@@ -1445,7 +1446,14 @@ internal static class ParityCapture
             var liveDialog = dialog;
 
             // Default surface (whatever tab the dialog opened on).
-            CaptureSurface(results, surfaceId, "dialog", outDir, () => RenderDialog(liveDialog));
+            CaptureSurface(results, surfaceId, "dialog", outDir, () =>
+            {
+                var captureSize = captureSizeResolver?.Invoke(surfaceId);
+                ApplyDialogCaptureSize(liveDialog, captureSize);
+                return captureSize is { } size
+                    ? RenderDialog(liveDialog, size.Width, size.Height)
+                    : RenderDialog(liveDialog);
+            });
 
             // The first TabControl drives most dialogs; the Options dialog instead switches its content via a
             // left-rail ListBox (TabList), so fall back to the first ListBox when no TabControl is present.
@@ -1477,7 +1485,11 @@ internal static class ParityCapture
 
                     liveDialog.UpdateLayout();
                     PumpDispatcher();
-                    return RenderDialog(liveDialog);
+                    var captureSize = captureSizeResolver?.Invoke(tabSurfaceId);
+                    ApplyDialogCaptureSize(liveDialog, captureSize);
+                    return captureSize is { } size
+                        ? RenderDialog(liveDialog, size.Width, size.Height)
+                        : RenderDialog(liveDialog);
                 });
             }
         }
@@ -1492,6 +1504,21 @@ internal static class ParityCapture
             try { dialog?.Close(); } catch { /* best-effort teardown */ }
             PumpDispatcher();
         }
+    }
+
+    private static void ApplyDialogCaptureSize(Window dialog, (double Width, double Height)? captureSize)
+    {
+        if (captureSize is not { } size || size.Width <= 0 || size.Height <= 0)
+            return;
+
+        dialog.SizeToContent = SizeToContent.Manual;
+        dialog.Width = size.Width;
+        dialog.Height = size.Height;
+        dialog.MinWidth = size.Width;
+        dialog.MinHeight = size.Height;
+        PumpDispatcher();
+        dialog.UpdateLayout();
+        PumpDispatcher();
     }
 
     private static BitmapSource RenderDialog(Window dialog)

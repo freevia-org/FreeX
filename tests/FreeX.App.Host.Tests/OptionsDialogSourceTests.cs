@@ -31,6 +31,20 @@ public sealed partial class OptionsDialogSourceTests
         });
     }
 
+    [Fact]
+    public void ParityCapture_OptionsTabsUsePlannerCaptureFrameForDefaultAndCategories()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+
+        source.Should().Contain("Func<string, (double Width, double Height)>? captureSizeResolver = null");
+        source.Should().Contain("var captureSize = captureSizeResolver?.Invoke(surfaceId);");
+        source.Should().Contain("var captureSize = captureSizeResolver?.Invoke(tabSurfaceId);");
+        source.Should().Contain("ApplyDialogCaptureSize(liveDialog, captureSize);");
+        source.Should().Contain("captureSizeResolver: surfaceId => surfaceId.Equals(\"dialog.Options.Formulas\", StringComparison.Ordinal)");
+        source.Should().Contain("(OptionsDialogPlanner.CaptureWidth, OptionsDialogPlanner.FormulasCaptureHeight)");
+        source.Should().Contain("(OptionsDialogPlanner.CaptureWidth, OptionsDialogPlanner.CaptureHeight)");
+    }
+
     private static T GetControl<T>(OptionsDialog dialog, string name)
 
         where T : class
