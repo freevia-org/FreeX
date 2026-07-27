@@ -438,8 +438,9 @@ public sealed class SmartArtEditingPlannerTests
         data.Nodes[0].Children[0].IsAssistant.Should().BeTrue();
         data.Nodes[0].Children[1].Children.Should().ContainSingle().Which.Text.Should().Be("QA");
 
-        var liveTexts = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!
-            .Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+        var laidOut = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!;
+        var liveTexts = laidOut
+            .Where(shape => shape.TextBody is not null)
             .Select(shape => shape.TextBody!.Paragraphs[0].Runs[0].Text);
 
         liveTexts.Should().Contain(["Executive", "Assistant", "Platform", "QA", "Operations"]);
