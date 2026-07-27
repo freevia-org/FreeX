@@ -242,7 +242,7 @@ public static class OptionsDialogPlanner
             AfterEnterDirection = input.AfterEnterDirection,
             ObjectsDisplay = input.ObjectsDisplay ?? existing.ObjectsDisplay,
 
-            // Carried over verbatim — not surfaced by this dialog.
+            // Remaining values are carried over because this dialog does not surface them.
             CollapseRibbonAutomatically = input.CollapseRibbonAutomatically ?? existing.CollapseRibbonAutomatically,
             AppLanguage = existing.AppLanguage,
             SpellCheckCustomDictionaryWords = existing.SpellCheckCustomDictionaryWords,

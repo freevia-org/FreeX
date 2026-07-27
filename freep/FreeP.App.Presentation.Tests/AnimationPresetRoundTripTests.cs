@@ -279,6 +279,31 @@ public sealed class AnimationPresetRoundTripTests
         AnimationAmountSemantics.ResolveScale(animation.Preset, animation.ScaleBehavior).Should().Be(1.35);
     }
 
+    [Theory]
+    [InlineData("100000", "150000", null, 1.5)] // from_to
+    [InlineData("80000", null, "30000", 1.1)]   // from_by
+    [InlineData(null, "50000", null, 0.5)]      // to_only
+    [InlineData(null, null, "35000", 1.35)]     // by_only
+    public void GrowShrinkScaleResolution_CoversOfficeValidValueCombinations(
+        string? from,
+        string? to,
+        string? by,
+        double expected)
+    {
+        var behavior = new AnimationScaleBehavior
+        {
+            FromX = from,
+            FromY = from,
+            ToX = to,
+            ToY = to,
+            ByX = by,
+            ByY = by,
+        };
+
+        AnimationAmountSemantics.ResolveScaleAxes(AnimationPreset.Grow, behavior)
+            .Should().Be((expected, expected));
+    }
+
     [Fact]
     public void GrowShrinkUnknownScaleTokensAreRetainedAsOpaqueAnimScaleValues()
     {
