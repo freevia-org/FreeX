@@ -98,6 +98,7 @@ public sealed class PptxPackageReaderSourceTests
             .And.Contain("pyramidlist")
             .And.Contain("relationship1")
             .And.Contain("opposingideas")
+            .And.Contain("convergingradial")
             .And.Contain("verticalprocess")
             .And.Contain("horizontalhierarchy")
             .And.Contain("hierarchy3");

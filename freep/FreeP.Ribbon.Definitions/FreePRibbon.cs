@@ -602,6 +602,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.OpposingIdeasLayoutCommandId,
                 FreePRibbonText.SmartArtOpposingIdeasCommand.Label, RibbonCommandIconKind.ArrowRight,
                 FreePRibbonText.SmartArtOpposingIdeasCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId,
+                FreePRibbonText.SmartArtConvergingRadialCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtConvergingRadialCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
                 FreePRibbonText.SmartArtBasicVennCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.SmartArtBasicVennCommand.KeyTip);
