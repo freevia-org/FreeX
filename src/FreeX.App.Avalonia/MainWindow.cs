@@ -117,11 +117,7 @@ public sealed partial class MainWindow : Window
 
     private sealed record ScenarioManagerDialogScenarioItem(ScenarioManagerScenarioChoice Choice)
     {
-        public override string ToString()
-        {
-            var cellLabel = Choice.ChangingCellCount == 1 ? "cell" : "cells";
-            return $"{Choice.Name} ({Choice.ChangingCellCount} {cellLabel})";
-        }
+        public override string ToString() => Choice.Name;
     }
 
     private sealed record FindDialogResult(
@@ -20934,7 +20930,7 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
+            Margin = new Thickness(0, ScenarioManagerDialogLayout.CloseRowTopMargin, 0, 0),
             Children =
             {
                 closeButton,
@@ -20959,7 +20955,7 @@ public sealed partial class MainWindow : Window
         var scenariosHeader = new TextBlock
         {
             Text = StripDisplayMnemonic(UiText.Get("ScenarioManager_Scenarios")),
-            Margin = new Thickness(0, 0, 0, 4),
+            Margin = new Thickness(0, 0, 0, ScenarioManagerDialogLayout.FieldBottomMargin),
         };
 
         var fields = new AvaloniaGrid
@@ -20978,7 +20974,7 @@ public sealed partial class MainWindow : Window
         var addEditGroup = new GroupBox
         {
             Header = StripDisplayMnemonic(UiText.Get("ScenarioManager_AddEditScenario")),
-            Margin = new Thickness(0, 12, 0, 0),
+            Margin = new Thickness(0, ScenarioManagerDialogLayout.GroupTopMargin, 0, 0),
             Padding = new Thickness(8),
             Content = fields,
         };
@@ -21083,7 +21079,7 @@ public sealed partial class MainWindow : Window
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 8),
+            Margin = new Thickness(0, 0, 8, ScenarioManagerDialogLayout.FieldBottomMargin),
         };
         Grid.SetRow(labelText, row);
         Grid.SetColumn(labelText, 0);
@@ -21091,7 +21087,7 @@ public sealed partial class MainWindow : Window
 
         control.MinWidth = 0;
         control.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
-        control.Margin = new Thickness(0, 0, 0, 8);
+        control.Margin = new Thickness(0, 0, 0, ScenarioManagerDialogLayout.FieldBottomMargin);
         Grid.SetRow(control, row);
         Grid.SetColumn(control, 1);
         grid.Children.Add(control);

@@ -12,6 +12,9 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, dialogChrome);");
         source.Should().Contain("scenarioList.ItemTemplate = new FuncDataTemplate<ScenarioManagerDialogScenarioItem>");
         source.Should().Contain("Text = item.Choice.Name,");
+        source.Should().Contain("public override string ToString() => Choice.Name;");
+        source.Should().Contain("ScenarioManagerDialogLayout.FieldBottomMargin");
+        source.Should().Contain("ScenarioManagerDialogLayout.CloseRowTopMargin");
         source.Should().Contain("RowDefinitions = new RowDefinitions(\"Auto,Auto,Auto,Auto,Auto,Auto\")");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions($\"{ScenarioManagerDialogLayout.FieldLabelColumnWidth},*\")");
         source.Should().Contain("control.MinWidth = 0;");
