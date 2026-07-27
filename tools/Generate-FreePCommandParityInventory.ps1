@@ -1867,18 +1867,24 @@ internal static class FreePCommandInventory
             EvidenceId: "freep.smartart.org-chart",
             Area: "SmartArt orgChart live layout",
             Status: "shared-render-planner-evidence",
-            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt hierarchy-family layout planner; no renderer-local SmartArt policy",
+            HostCoverage: "WPF/Avalonia consume the same dedicated shared orgChart assistant-aware box and connector plan; no renderer-local SmartArt policy",
             EvidenceDocs:
             [
                 "docs/parity/freep-smartart-org-chart-2026-07-07.md",
-                "docs/parity/freep-smartart-org-chart-assistant-geometry-2026-07-13.md"
+                "docs/parity/freep-smartart-org-chart-assistant-geometry-2026-07-13.md",
+                "docs/parity/freep-smartart-org-chart-specialized-wave27-20260727.md"
             ],
             Verification:
             [
+                "tools/FreeP.RenderCompare/CorpusGenerator.cs",
+                "freep/FreeP.Core.IO/PptxPackageReader.cs",
+                "freep/FreeP.App.Presentation/SmartArtLayoutEngine.cs",
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
-                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+                "freep/FreeP.App.Presentation.Tests/SmartArtEditingPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "orgChart now uses the bounded shared hierarchy-family live-layout path for parsed root/child nodes plus assistant side-slot geometry when imported nodes carry dgm:pt type=\"asst\". Unsupported hierarchy siblings remain on cached drawing fallback. Exact PowerPoint assistant connector routing, special org-chart branch styling, PowerPoint-authoritative visual baselines, and deeper SmartArt authoring/editing remain deferred."),
+            RemainingWork: "orgChart now uses a dedicated bounded shared hierarchy-family plan: regular nodes use rounded boxes, assistants use rectangular boxes, and both use shared parent-child connector operations. Unsupported hierarchy siblings remain on cached drawing fallback. Exact PowerPoint assistant connector routing, box metrics, style/effect fidelity, native layout/style/color authoring regeneration, and PowerPoint-authoritative visual baselines remain deferred."),
         new(
             EvidenceId: "freep.smartart.outline-editing",
             Area: "SmartArt outline reorder, promote, and demote editing",

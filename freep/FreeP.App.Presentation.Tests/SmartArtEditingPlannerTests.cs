@@ -960,6 +960,55 @@ public sealed class SmartArtEditingPlannerTests
             "editing cache regeneration must persist the same five renderer-neutral cells");
     }
 
+    [Fact]
+    public void RegenerateDrawingCache_OrgChartUsesDedicatedAssistantBoxPlan()
+    {
+        var root = new SmartArtNode { ModelId = "root", Text = "CEO", Level = 0 };
+        root.Children.Add(new SmartArtNode
+        {
+            ModelId = "assistant",
+            Text = "Assistant",
+            Level = 1,
+            IsAssistant = true,
+        });
+        root.Children.Add(new SmartArtNode { ModelId = "director", Text = "Director", Level = 1 });
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart",
+        };
+        data.Nodes.Add(root);
+
+        var smartArt = new SmartArtShape { Data = data, DrawingPartPath = "ppt/diagrams/drawing1.xml" };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+
+        var result = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Applied.Should().BeTrue(result.Message);
+        result.NodeCount.Should().Be(3);
+        result.ShapeCount.Should().Be(5, "three org-chart boxes plus two shared connectors are cached");
+        smartArt.FallbackShapes
+            .Where(shape => shape.TextBody is not null)
+            .Should().OnlyContain(shape => shape.Name.StartsWith("SmartArt_OrgChartBox_", StringComparison.Ordinal));
+        smartArt.FallbackShapes.Single(shape => shape.PlainText == "Assistant")
+            .AutoShapeKind.Should().Be(Free.Shared.Drawing.DrawingShapeKind.Rectangle);
+        smartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Contain(["CEO", "Assistant", "Director"]);
+
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var doc = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
+        doc.Descendants(dsp + "sp").Should().HaveCount(5);
+        doc.Descendants(a + "t").Select(t => t.Value)
+            .Should().Contain(["CEO", "Assistant", "Director"]);
+    }
+
     private static PresentationTheme DefaultTheme() =>
         Presentation.CreateEmpty().Theme!;
 

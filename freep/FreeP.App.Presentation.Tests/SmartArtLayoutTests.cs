@@ -584,13 +584,13 @@ public sealed class SmartArtLayoutTests
         var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
         shapes.Should().NotBeNull("orgChart assistant nodes are a bounded shared geometry nuance");
-        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+        shapes!.Where(s => s.TextBody is not null)
             .Should().HaveCount(4, "manager, assistant, and two regular reports should all render live");
         shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
             .Should().HaveCount(3, "assistant and report relationships still use shared connector ops");
 
         var boxesByText = shapes
-            .Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Where(s => s.TextBody is not null)
             .ToDictionary(
                 s => s.TextBody!.Paragraphs.First().Runs.First().Text,
                 StringComparer.Ordinal);
@@ -610,6 +610,40 @@ public sealed class SmartArtLayoutTests
             "assistant placement uses the side slot rather than the ordinary report row");
         assistantBox.ExtentCxEmu.Should().BeLessThan(salesBox.ExtentCxEmu,
             "assistant boxes use a smaller bounded side-slot width");
+    }
+
+    [Fact]
+    public void OrgChart_UsesDedicatedAssistantAwareBoxPlan()
+    {
+        var root = new SmartArtNode { Text = "CEO", Level = 0 };
+        root.Children.Add(new SmartArtNode
+        {
+            Text = "Assistant",
+            Level = 1,
+            IsAssistant = true,
+        });
+        root.Children.Add(new SmartArtNode { Text = "Director", Level = 1 });
+
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart",
+        };
+        data.Nodes.Add(root);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("orgChart uses the dedicated bounded shared hierarchy plan");
+        var boxes = shapes!.Where(s => s.TextBody is not null).ToList();
+        boxes.Should().HaveCount(3, "the root, assistant, and regular report all render as live boxes");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(2, "each report relationship uses the shared connector plan");
+        boxes.Should().OnlyContain(box => box.Name.StartsWith("SmartArt_OrgChartBox_", StringComparison.Ordinal));
+        boxes.Single(box => box.TextBody!.Paragraphs[0].Runs[0].Text == "Assistant")
+            .AutoShapeKind.Should().Be(DrawingShapeKind.Rectangle,
+                "assistant nodes use the dedicated rectangular org-chart box plan");
+        boxes.Single(box => box.TextBody!.Paragraphs[0].Runs[0].Text == "Director")
+            .AutoShapeKind.Should().Be(DrawingShapeKind.RoundedRectangle);
     }
 
     [Fact]
