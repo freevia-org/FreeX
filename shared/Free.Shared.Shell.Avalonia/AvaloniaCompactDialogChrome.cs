@@ -168,6 +168,15 @@ public static class AvaloniaCompactDialogChrome
         textBox.VerticalContentAlignment = VerticalAlignment.Center;
     }
 
+    public static void FocusAndSelect(TextBox textBox)
+    {
+        ArgumentNullException.ThrowIfNull(textBox);
+
+        textBox.Focus();
+        textBox.SelectionStart = 0;
+        textBox.SelectionEnd = textBox.Text?.Length ?? 0;
+    }
+
     public static void ApplyComboBox(ComboBox comboBox, AvaloniaCompactDialogChromeStyle style)
     {
         ArgumentNullException.ThrowIfNull(comboBox);

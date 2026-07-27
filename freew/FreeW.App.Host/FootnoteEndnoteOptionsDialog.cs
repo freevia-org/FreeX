@@ -30,11 +30,11 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
     private readonly ComboBox _endnoteRestartBox;
     private Result? _result;
 
-    private FootnoteEndnoteOptionsDialog(Window? owner, NoteNumberingOptions footnote, NoteNumberingOptions endnote)
+    internal FootnoteEndnoteOptionsDialog(Window? owner, NoteNumberingOptions footnote, NoteNumberingOptions endnote)
     {
         Owner = owner;
         Title = FootnoteEndnoteOptionsDialogPlanner.Title;
-        Width = 380;
+        Width = FootnoteEndnoteOptionsDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -60,17 +60,30 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
             FootnoteEndnoteOptionsDialogPlanner.EndnoteRestartItems,
             state.EndnoteRestartIndex);
 
-        var outerStack = new StackPanel { Margin = new Thickness(14) };
+        var outerStack = new StackPanel
+        {
+            Margin = new Thickness(FootnoteEndnoteOptionsDialogPlanner.OuterMargin)
+        };
 
         outerStack.Children.Add(SectionHeader(FootnoteEndnoteOptionsDialogPlanner.FootnotesSectionLabel));
         outerStack.Children.Add(OptionsGrid(_footnoteFormatBox, _footnoteStartBox, _footnoteRestartBox));
 
-        outerStack.Children.Add(new Separator { Margin = new Thickness(0, 10, 0, 8) });
+        outerStack.Children.Add(new Separator
+        {
+            Margin = new Thickness(
+                0,
+                FootnoteEndnoteOptionsDialogPlanner.SeparatorTopMargin,
+                0,
+                FootnoteEndnoteOptionsDialogPlanner.SeparatorBottomMargin)
+        });
 
         outerStack.Children.Add(SectionHeader(FootnoteEndnoteOptionsDialogPlanner.EndnotesSectionLabel));
         outerStack.Children.Add(OptionsGrid(_endnoteFormatBox, _endnoteStartBox, _endnoteRestartBox));
 
-        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 14, 0, 0));
+        var buttons = DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: FootnoteEndnoteOptionsDialogPlanner.ButtonWidth,
+            rowMargin: new Thickness(0, FootnoteEndnoteOptionsDialogPlanner.ActionTopMargin, 0, 0));
         outerStack.Children.Add(buttons);
 
         Content = outerStack;
@@ -78,7 +91,12 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
     }
 
     private static TextBlock SectionHeader(string text) =>
-        new() { Text = text, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) };
+        new()
+        {
+            Text = text,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, FootnoteEndnoteOptionsDialogPlanner.SectionHeaderBottomMargin)
+        };
 
     private static Grid OptionsGrid(ComboBox formatBox, TextBox startBox, ComboBox restartBox)
     {
@@ -102,7 +120,11 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
         {
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 4, 8, 4)
+            Margin = new Thickness(
+                0,
+                FootnoteEndnoteOptionsDialogPlanner.FieldVerticalMargin,
+                FootnoteEndnoteOptionsDialogPlanner.LabelFieldGap,
+                FootnoteEndnoteOptionsDialogPlanner.FieldVerticalMargin)
         };
         Grid.SetRow(block, row);
         Grid.SetColumn(block, 0);
@@ -127,23 +149,11 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
     }
 
     private static TextBox StartBox(string text) =>
-        new() { Text = text, MinWidth = 60 };
+        new() { Text = text, MinWidth = FootnoteEndnoteOptionsDialogPlanner.StartAtMinWidth };
 
     private void Accept()
     {
-        var input = new FootnoteEndnoteOptionsDialogInput(
-            _footnoteFormatBox.SelectedIndex,
-            _footnoteStartBox.Text,
-            _footnoteRestartBox.SelectedIndex,
-            _endnoteFormatBox.SelectedIndex,
-            _endnoteStartBox.Text,
-            _endnoteRestartBox.SelectedIndex);
-
-        if (!FootnoteEndnoteOptionsDialogPlanner.TryBuildResult(
-                input,
-                CultureInfo.CurrentCulture,
-                out var result,
-                out var validation))
+        if (!TryBuildInput(out var result, out var validation))
         {
             DialogMessageHelper.ShowWarning(
                 this,
@@ -160,6 +170,33 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
             result.EndnoteStartAt,
             result.EndnoteRestart);
         Close();
+    }
+
+    // The visual harness uses this non-modal seam to exercise the same planner and focus policy as an
+    // attempted OK click without opening a second warning window during a static capture.
+    internal void ValidateForTest()
+    {
+        _ = TryBuildInput(out _, out var validation);
+        FocusFailure(validation?.Field);
+    }
+
+    private bool TryBuildInput(
+        out FootnoteEndnoteOptionsDialogResult? result,
+        out FootnoteEndnoteOptionsValidation? validation)
+    {
+        var input = new FootnoteEndnoteOptionsDialogInput(
+            _footnoteFormatBox.SelectedIndex,
+            _footnoteStartBox.Text,
+            _footnoteRestartBox.SelectedIndex,
+            _endnoteFormatBox.SelectedIndex,
+            _endnoteStartBox.Text,
+            _endnoteRestartBox.SelectedIndex);
+
+        return FootnoteEndnoteOptionsDialogPlanner.TryBuildResult(
+            input,
+            CultureInfo.CurrentCulture,
+            out result,
+            out validation);
     }
 
     private void FocusFailure(FootnoteEndnoteOptionsDialogField? field)
