@@ -14,12 +14,16 @@ namespace FreeW.App.Avalonia.Editing;
 internal static partial class AvaloniaImageAdjustHelper
 {
     public static Bitmap Apply(Bitmap source, InlineImage image)
+        => ApplyWithBounds(source, image).Bitmap;
+
+    internal static AvaloniaImageApplyResult ApplyWithBounds(Bitmap source, InlineImage image)
     {
         if (!image.HasAdjustments && !image.HasRecolor && !image.HasArtisticEffect && !HasRasterEffects(image))
-            return source;
+            return new(source, new PixelRect(0, 0, source.PixelSize.Width, source.PixelSize.Height));
 
         var current = source;
         Bitmap? owned = null;
+        var sourcePixelRect = new PixelRect(0, 0, source.PixelSize.Width, source.PixelSize.Height);
         try
         {
             if (image.HasAdjustments || image.HasRecolor)
@@ -49,14 +53,15 @@ internal static partial class AvaloniaImageAdjustHelper
                 var next = ApplyPictureEffects(current, image);
                 if (owned is not null)
                     owned.Dispose();
-                current = next;
+                current = next.Bitmap;
+                sourcePixelRect = next.SourcePixelRect;
                 owned = current;
             }
 
             // Ownership transfers to DocumentView's bitmap cache. The local variable is retained only
             // to make the transfer explicit; disposing it here would invalidate the cached result.
             owned = null;
-            return current;
+            return new(current, sourcePixelRect);
         }
         catch
         {

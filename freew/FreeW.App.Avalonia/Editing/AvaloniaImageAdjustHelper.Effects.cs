@@ -7,6 +7,40 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Editing;
 
+internal readonly record struct AvaloniaImageApplyResult(Bitmap Bitmap, PixelRect SourcePixelRect);
+
+internal readonly record struct AvaloniaPictureEffectRaster(
+    byte[] Pixels,
+    int Width,
+    int Height,
+    int Stride,
+    PixelRect SourcePixelRect);
+
+internal sealed class AvaloniaRenderedImage : IDisposable
+{
+    public AvaloniaRenderedImage(Bitmap bitmap, PixelRect sourcePixelRect)
+    {
+        Bitmap = bitmap;
+        SourcePixelRect = sourcePixelRect;
+    }
+
+    public Bitmap Bitmap { get; }
+    public PixelRect SourcePixelRect { get; }
+
+    public Rect VisualRect(Rect sourceRect)
+    {
+        var scaleX = sourceRect.Width / Math.Max(1, SourcePixelRect.Width);
+        var scaleY = sourceRect.Height / Math.Max(1, SourcePixelRect.Height);
+        return new Rect(
+            sourceRect.X - SourcePixelRect.X * scaleX,
+            sourceRect.Y - SourcePixelRect.Y * scaleY,
+            Bitmap.PixelSize.Width * scaleX,
+            Bitmap.PixelSize.Height * scaleY);
+    }
+
+    public void Dispose() => Bitmap.Dispose();
+}
+
 internal static partial class AvaloniaImageAdjustHelper
 {
     private static bool HasRasterEffects(InlineImage image) =>
@@ -17,12 +51,14 @@ internal static partial class AvaloniaImageAdjustHelper
     /// slot on the image root, so shadow wins over glow, then soft edge, then bevel. Reflection is kept
     /// out of this bitmap because it changes the visual bounds and is composed by DocumentView.
     /// </summary>
-    private static Bitmap ApplyPictureEffects(Bitmap source, InlineImage image)
+    private static AvaloniaImageApplyResult ApplyPictureEffects(Bitmap source, InlineImage image)
     {
         ReadPixels(source, out var pixels, out var width, out var height, out var stride);
-        var result = ApplyPictureEffectPixels(pixels, width, height, stride, image);
+        var result = ApplyPictureEffectRaster(pixels, width, height, stride, image);
 
-        return CreateBitmap(new PixelSize(width, height), source.Dpi, result, stride);
+        return new(
+            CreateBitmap(new PixelSize(result.Width, result.Height), source.Dpi, result.Pixels, result.Stride),
+            result.SourcePixelRect);
     }
 
     internal static byte[] ApplyPictureEffectPixels(byte[] pixels, int width, int height, int stride, InlineImage image)
@@ -57,6 +93,39 @@ internal static partial class AvaloniaImageAdjustHelper
         }
 
         return result;
+    }
+
+    internal static AvaloniaPictureEffectRaster ApplyPictureEffectRaster(
+        byte[] pixels,
+        int width,
+        int height,
+        int stride,
+        InlineImage image)
+    {
+        if (image.ShadowPreset > 0)
+        {
+            var preset = image.ShadowPreset switch
+            {
+                1 => (Blur: 4.0, Distance: 3.0, Opacity: 0.50),
+                2 => (Blur: 6.0, Distance: 5.0, Opacity: 0.55),
+                3 => (Blur: 8.0, Distance: 7.0, Opacity: 0.60),
+                4 => (Blur: 4.0, Distance: 4.0, Opacity: 0.50),
+                _ => (Blur: 10.0, Distance: 10.0, Opacity: 0.65),
+            };
+            return CompositeHaloExpanded(
+                pixels, width, height, stride, preset.Blur, preset.Distance, preset.Opacity,
+                Color.FromRgb(0, 0, 0), image);
+        }
+
+        if (image.GlowSizePt > 0)
+        {
+            return CompositeHaloExpanded(
+                pixels, width, height, stride, image.GlowSizePt, 0, 0.60,
+                ParseColor(image.GlowColorHex, Color.FromRgb(0x44, 0x72, 0xC4)), image);
+        }
+
+        var result = ApplyPictureEffectPixels(pixels, width, height, stride, image);
+        return new(result, width, height, stride, new PixelRect(0, 0, width, height));
     }
 
     /// <summary>Port of the WPF ImageAdjustHelper artistic pipeline to Avalonia's premultiplied BGRA buffer.</summary>
@@ -105,7 +174,7 @@ internal static partial class AvaloniaImageAdjustHelper
                 break;
 
             case ImageArtisticEffect.PencilSketch:
-                result = EdgePaper(pixels, width, height, stride, color: true);
+                result = PencilSketch(pixels, width, height, stride);
                 break;
 
             case ImageArtisticEffect.LineDrawing:
@@ -233,6 +302,74 @@ internal static partial class AvaloniaImageAdjustHelper
         return result;
     }
 
+    private static AvaloniaPictureEffectRaster CompositeHaloExpanded(
+        byte[] pixels,
+        int width,
+        int height,
+        int stride,
+        double blurPoints,
+        double distancePoints,
+        double opacity,
+        Color color,
+        InlineImage image)
+    {
+        var blurRadius = EffectPixels(blurPoints, image, width, height);
+        var distance = EffectPixels(distancePoints, image, width, height);
+        var sourceX = blurRadius + Math.Max(0, -distance) + 1;
+        var sourceY = blurRadius + Math.Max(0, -distance) + 1;
+        var rightInset = blurRadius + Math.Max(0, distance) + 1;
+        var bottomInset = blurRadius + Math.Max(0, distance) + 1;
+        var expandedWidth = width + sourceX + rightInset;
+        var expandedHeight = height + sourceY + bottomInset;
+        var expandedStride = checked(expandedWidth * 4);
+        var expanded = new byte[checked(expandedStride * expandedHeight)];
+
+        for (var y = 0; y < height; y++)
+            Buffer.BlockCopy(pixels, y * stride, expanded, (y + sourceY) * expandedStride + sourceX * 4, stride);
+
+        var blurred = BlurAlpha(expanded, expandedWidth, expandedHeight, expandedStride, blurRadius);
+        var result = new byte[expanded.Length];
+        for (var y = 0; y < expandedHeight; y++)
+        for (var x = 0; x < expandedWidth; x++)
+        {
+            var offset = y * expandedStride + x * 4;
+            var sourceOffsetX = x - sourceX;
+            var sourceOffsetY = y - sourceY;
+            var hasSource = sourceOffsetX >= 0 && sourceOffsetX < width &&
+                            sourceOffsetY >= 0 && sourceOffsetY < height;
+            var sourceAlpha = hasSource
+                ? pixels[sourceOffsetY * stride + sourceOffsetX * 4 + 3] / 255.0
+                : 0;
+            var haloX = Math.Clamp(x - distance, 0, expandedWidth - 1);
+            var haloY = Math.Clamp(y - distance, 0, expandedHeight - 1);
+            var haloAlpha = blurred[haloY * expandedWidth + haloX] / 255.0 * opacity;
+            var haloPremul = haloAlpha * (1 - sourceAlpha);
+
+            if (hasSource)
+            {
+                var sourceOffset = sourceOffsetY * stride + sourceOffsetX * 4;
+                result[offset] = ToByte(pixels[sourceOffset] / 255.0 + haloPremul * color.B / 255.0);
+                result[offset + 1] = ToByte(pixels[sourceOffset + 1] / 255.0 + haloPremul * color.G / 255.0);
+                result[offset + 2] = ToByte(pixels[sourceOffset + 2] / 255.0 + haloPremul * color.R / 255.0);
+            }
+            else
+            {
+                result[offset] = ToByte(haloPremul * color.B / 255.0);
+                result[offset + 1] = ToByte(haloPremul * color.G / 255.0);
+                result[offset + 2] = ToByte(haloPremul * color.R / 255.0);
+            }
+
+            result[offset + 3] = ToByte(sourceAlpha + haloPremul);
+        }
+
+        return new(
+            result,
+            expandedWidth,
+            expandedHeight,
+            expandedStride,
+            new PixelRect(sourceX, sourceY, width, height));
+    }
+
     private static byte[] ApplyBevel(byte[] pixels, int width, int height, int stride, int preset)
     {
         var result = (byte[])pixels.Clone();
@@ -275,7 +412,9 @@ internal static partial class AvaloniaImageAdjustHelper
         var pointScale = Math.Max(
             width / Math.Max(1.0, image.WidthPt),
             height / Math.Max(1.0, image.HeightPt));
-        return Math.Clamp((int)Math.Round(points * pointScale), 0, 32);
+        return points > 0
+            ? Math.Clamp(Math.Max(1, (int)Math.Round(points * pointScale)), 1, 32)
+            : 0;
     }
 
     private static Color ParseColor(string? hex, Color fallback)
@@ -363,31 +502,49 @@ internal static partial class AvaloniaImageAdjustHelper
         for (var x = 0; x < width; x++)
         {
             var count = 0;
-            var sums = new long[4];
+            long sumB = 0;
+            long sumG = 0;
+            long sumR = 0;
+            long sumA = 0;
             for (var dx = -radius; dx <= radius; dx++)
             {
                 var sx = Math.Clamp(x + dx, 0, width - 1);
                 var si = y * stride + sx * 4;
-                for (var c = 0; c < 4; c++) sums[c] += pixels[si + c];
+                sumB += pixels[si];
+                sumG += pixels[si + 1];
+                sumR += pixels[si + 2];
+                sumA += pixels[si + 3];
                 count++;
             }
             var di = y * stride + x * 4;
-            for (var c = 0; c < 4; c++) temp[di + c] = (byte)(sums[c] / count);
+            temp[di] = (byte)(sumB / count);
+            temp[di + 1] = (byte)(sumG / count);
+            temp[di + 2] = (byte)(sumR / count);
+            temp[di + 3] = (byte)(sumA / count);
         }
         for (var y = 0; y < height; y++)
         for (var x = 0; x < width; x++)
         {
             var count = 0;
-            var sums = new long[4];
+            long sumB = 0;
+            long sumG = 0;
+            long sumR = 0;
+            long sumA = 0;
             for (var dy = -radius; dy <= radius; dy++)
             {
                 var sy = Math.Clamp(y + dy, 0, height - 1);
                 var si = sy * stride + x * 4;
-                for (var c = 0; c < 4; c++) sums[c] += temp[si + c];
+                sumB += temp[si];
+                sumG += temp[si + 1];
+                sumR += temp[si + 2];
+                sumA += temp[si + 3];
                 count++;
             }
             var di = y * stride + x * 4;
-            for (var c = 0; c < 4; c++) result[di + c] = (byte)(sums[c] / count);
+            result[di] = (byte)(sumB / count);
+            result[di + 1] = (byte)(sumG / count);
+            result[di + 2] = (byte)(sumR / count);
+            result[di + 3] = (byte)(sumA / count);
         }
         return result;
     }
@@ -439,6 +596,28 @@ internal static partial class AvaloniaImageAdjustHelper
                     result[i + 2] = ToByte(t + r * (1 - t));
                 }
             }
+            result[i + 3] = pixels[i + 3];
+        }
+        return result;
+    }
+
+    private static byte[] PencilSketch(byte[] pixels, int width, int height, int stride)
+    {
+        var edges = Sobel(pixels, width, height, stride);
+        var result = new byte[pixels.Length];
+        for (var i = 0; i < result.Length; i += 4)
+        {
+            var t = 1 - edges[i / 4] / 255.0;
+            var b = pixels[i] / 255.0;
+            var g = pixels[i + 1] / 255.0;
+            var r = pixels[i + 2] / 255.0;
+            var br = Math.Clamp(t + b * (1 - t), 0, 1);
+            var gr = Math.Clamp(t + g * (1 - t), 0, 1);
+            var rr = Math.Clamp(t + r * (1 - t), 0, 1);
+            var luminance = 0.2126 * rr + 0.7152 * gr + 0.0722 * br;
+            result[i] = ToByte(luminance + (br - luminance) * 1.6);
+            result[i + 1] = ToByte(luminance + (gr - luminance) * 1.6);
+            result[i + 2] = ToByte(luminance + (rr - luminance) * 1.6);
             result[i + 3] = pixels[i + 3];
         }
         return result;
