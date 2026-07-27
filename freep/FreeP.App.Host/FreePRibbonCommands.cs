@@ -489,6 +489,17 @@ internal static class FreePRibbonCommands
                 editor.SetColorOnSelection(color);
             }));
 
+        registry.Register("freep.text-autofit",
+            new ContextRibbonCommand(ctx =>
+            {
+                if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                    value is not string selection ||
+                    !TextAutoFitOptionParser.TryParse(selection, out var kind))
+                    return;
+
+                editor.SetTextAutoFitOnSelection(kind);
+            }));
+
         registry.Register("freep.table-cell-fill",
             new ContextRibbonCommand(ctx =>
             {

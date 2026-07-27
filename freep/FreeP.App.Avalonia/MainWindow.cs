@@ -2138,6 +2138,15 @@ public sealed partial class MainWindow : Window
             if (Editor.TryApplyActiveTableCellColor(color)) return;
             Editor.SetColorOnSelection(color);
         }));
+        r.Register("freep.text-autofit", new ContextRibbonCommand(ctx =>
+        {
+            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                value is not string selection ||
+                !TextAutoFitOptionParser.TryParse(selection, out var kind))
+                return;
+
+            Editor.SetTextAutoFitOnSelection(kind);
+        }));
         r.Register("freep.table-cell-fill", new ContextRibbonCommand(ctx =>
         {
             if (!TryGetRibbonFontColor(ctx, out var color))

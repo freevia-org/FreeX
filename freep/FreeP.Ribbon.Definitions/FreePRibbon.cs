@@ -198,6 +198,13 @@ public static class FreePRibbon
             KeyTip = FreePRibbonText.FontColorKeyTip,
             Width = 96
         });
+        group.ComboBox("freep.text-autofit", FreePRibbonText.TextAutoFitLabel, control => control with
+        {
+            Items = FreePRibbonDefinitionData.TextAutoFitOptions,
+            Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextBox),
+            KeyTip = FreePRibbonText.TextAutoFitKeyTip,
+            Width = 160
+        });
         group.ComboBox("freep.table-cell-fill", FreePRibbonText.TableCellFillLabel, control => control with
         {
             Items = FreePRibbonDefinitionData.TableCellFillColors,

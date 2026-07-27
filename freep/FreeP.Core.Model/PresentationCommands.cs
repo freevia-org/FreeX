@@ -1824,6 +1824,52 @@ public sealed class SetShapeTextCommand : IPresentationCommand
 }
 
 /// <summary>
+/// Changes the DrawingML text-frame autofit mode of one shape while preserving the authored
+/// distinction between no autofit, shrink text on overflow, and grow shape to fit text.
+/// </summary>
+public sealed class SetShapeTextAutoFitCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly TextAutoFitKind _newKind;
+    private TextAutoFitKind _oldKind;
+
+    public SetShapeTextAutoFitCommand(int slideIndex, uint shapeId, TextAutoFitKind newKind)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _newKind = newKind;
+    }
+
+    public string Label => "Set Text Autofit";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        return shape?.TextBody is { } body && body.AutoFitKind != _newKind;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.TextBody is not { } body)
+            return;
+
+        _oldKind = body.AutoFitKind;
+        body.AutoFitKind = _newKind;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.TextBody is not { } body)
+            return;
+
+        body.AutoFitKind = _oldKind;
+    }
+}
+
+/// <summary>
 /// Base for run-format toggle commands that operate over a single run identified by
 /// (slideIndex, shapeId, paragraphIndex, runIndex).
 /// Apply/Revert are symmetric (toggle). Captures old value for non-toggle set commands.

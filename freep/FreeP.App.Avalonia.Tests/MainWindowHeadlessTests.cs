@@ -1800,6 +1800,33 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_text_autofit_command_routes_selected_value_to_editor()
+    {
+        var found = false;
+        TextAutoFitKind? autoFit = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet("freep.text-autofit", out var command);
+            found.Should().BeTrue("Text Autofit must be registered");
+
+            var shape = window.Editor.InsertTextBox("Text");
+            window.Editor.Select(shape.Id);
+            command!.Execute(RibbonCommandContext.ForSelectedValue("Resize shape to fit text"));
+
+            autoFit = window.Editor.CurrentSlide!.Shapes
+                .Single(s => s.Id == shape.Id)
+                .TextBody!.AutoFitKind;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("Text Autofit must be registered");
+        autoFit.Should().Be(TextAutoFitKind.Shape);
+    }
+
+    [Fact]
     public async Task Ribbon_table_cell_inset_command_routes_selected_value_to_editor()
     {
         var found = false;
