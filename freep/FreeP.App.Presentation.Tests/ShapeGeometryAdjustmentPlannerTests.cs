@@ -723,6 +723,52 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     }
 
     [Fact]
+    public void Build_Cylinder_ExposesAuthoredCapHeightGuide()
+    {
+        var shape = new SlideShape
+        {
+            Id = 27,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Cylinder,
+        };
+        shape.PresetGeometryAdjustments["adj"] = 38485;
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.CanEdit.Should().BeTrue();
+        plan.Handles.Should().ContainSingle();
+        plan.Handles[0].Name.Should().Be("adj");
+        plan.Handles[0].Label.Should().Be("Cylinder cap height");
+        plan.Handles[0].PositionDip.Should().Be(
+            new LayoutPoint(Bounds.Left + Bounds.Width / 2, Bounds.Top + Bounds.Height * .38485));
+        plan.Handles[0].Value.Should().Be(38485);
+        plan.Handles[0].Minimum.Should().Be(0);
+        plan.Handles[0].Maximum.Should().Be(50000);
+    }
+
+    [Fact]
+    public void BuildMutationPlan_Cylinder_MapsCapHeightPointer()
+    {
+        var shape = new SlideShape
+        {
+            Id = 28,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Cylinder,
+        };
+
+        var plan = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape,
+            Bounds,
+            "adj",
+            new LayoutPoint(Bounds.Left + Bounds.Width / 2, Bounds.Top + Bounds.Height * .4));
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.Name.Should().Be("adj");
+        plan.Value.Should().BeApproximately(40000, .001);
+        plan.DisabledReason.Should().BeNull();
+    }
+
+    [Fact]
     public void Build_CompoundArrows_ExposeShaftAndSymmetricHeadGuides()
     {
         var horizontal = new SlideShape

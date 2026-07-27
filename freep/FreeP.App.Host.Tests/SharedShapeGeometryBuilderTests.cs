@@ -71,6 +71,19 @@ public sealed class SharedShapeGeometryBuilderTests
     }
 
     [Fact]
+    public void Cylinder_UsesAuthoredCapHeightAdjustment()
+    {
+        var geometry = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Cylinder,
+            Bounds,
+            new Dictionary<string, double> { ["adj"] = 40000 });
+
+        var cap = geometry.Contours[1];
+        cap.Start.Y.Should().Be(Bounds.Top + Bounds.Height * .2);
+        cap.Segments[0].End.Y.Should().Be(Bounds.Top + Bounds.Height * .2);
+    }
+
+    [Fact]
     public void Cylinder_IsRenderable()
     {
         DrawingShapeKindSupport.IsRenderable(DrawingShapeKind.Cylinder).Should().BeTrue();
