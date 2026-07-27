@@ -33,6 +33,7 @@ internal sealed class ChartAxisOptionsDialog : Window
     private readonly TextBox _labelOffsetBox;
     private readonly ComboBox _multiLevelLabelsCombo;
     private readonly ComboBox _autoCrossingCombo;
+    private readonly CheckBox _reverseOrderCheck;
 
     internal ChartAxisOptionsDialog(EditingSession editor)
     {
@@ -82,6 +83,7 @@ internal sealed class ChartAxisOptionsDialog : Window
         _labelOffsetBox = new TextBox { MinWidth = 130 };
         _multiLevelLabelsCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.MultiLevelLabelsOptions.Select(x => x.Label));
         _autoCrossingCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.AutoCrossingOptions.Select(x => x.Label));
+        _reverseOrderCheck = new CheckBox { Content = surface.ReverseOrderLabel };
         LoadControls();
 
         var buttons = new StackPanel
@@ -123,6 +125,7 @@ internal sealed class ChartAxisOptionsDialog : Window
                 MakeRow(surface.LabelOffsetLabel, _labelOffsetBox),
                 MakeRow(surface.MultiLevelLabelsLabel, _multiLevelLabelsCombo),
                 MakeRow(surface.AutoCrossingLabel, _autoCrossingCombo),
+                _reverseOrderCheck,
                 buttons,
             },
         };
@@ -153,7 +156,8 @@ internal sealed class ChartAxisOptionsDialog : Window
         ChartLabelAlignment? labelAlignment = null,
         int? labelOffsetPercent = null,
         bool? noMultiLevelLabels = null,
-        bool? autoCrossing = null)
+        bool? autoCrossing = null,
+        bool reverseOrder = false)
     {
         _axisCombo.SelectedIndex = (int)axis;
         _titleBox.Text = title;
@@ -174,6 +178,7 @@ internal sealed class ChartAxisOptionsDialog : Window
         _labelOffsetBox.Text = Format(labelOffsetPercent);
         _multiLevelLabelsCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.MultiLevelLabelsOptions, noMultiLevelLabels);
         _autoCrossingCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.AutoCrossingOptions, autoCrossing);
+        _reverseOrderCheck.IsChecked = reverseOrder;
     }
 
     private void OnOk()
@@ -209,6 +214,7 @@ internal sealed class ChartAxisOptionsDialog : Window
         _labelOffsetBox.Text = Format(_planner.LabelOffsetPercent);
         _multiLevelLabelsCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.MultiLevelLabelsOptions, _planner.NoMultiLevelLabels);
         _autoCrossingCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.AutoCrossingOptions, _planner.AutoCrossing);
+        _reverseOrderCheck.IsChecked = _planner.ReverseOrder;
     }
 
     private void UpdatePlannerFromControls()
@@ -231,6 +237,7 @@ internal sealed class ChartAxisOptionsDialog : Window
         _planner.SetLabelOffsetPercent(ParseOptionalInt(_labelOffsetBox.Text, "Label offset"));
         _planner.SetNoMultiLevelLabels(ChartAxisOptionsPlanner.MultiLevelLabelsOptions[_multiLevelLabelsCombo.SelectedIndex].Value);
         _planner.SetAutoCrossing(ChartAxisOptionsPlanner.AutoCrossingOptions[_autoCrossingCombo.SelectedIndex].Value);
+        _planner.SetReverseOrder(_reverseOrderCheck.IsChecked == true);
     }
 
     private static double? ParseOptional(string? text, string label)

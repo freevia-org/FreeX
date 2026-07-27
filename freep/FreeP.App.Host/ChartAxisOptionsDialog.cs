@@ -30,6 +30,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _labelOffsetBox;
     private readonly ComboBox _multiLevelLabelsCombo;
     private readonly ComboBox _autoCrossingCombo;
+    private readonly CheckBox _reverseOrderCheck;
 
     public ChartAxisOptionsDialog(EditingSession editor)
     {
@@ -78,6 +79,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _labelOffsetBox = new TextBox { MinWidth = 120 };
         _multiLevelLabelsCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.MultiLevelLabelsOptions);
         _autoCrossingCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.AutoCrossingOptions);
+        _reverseOrderCheck = new CheckBox { Content = surface.ReverseOrderLabel };
         LoadControls();
 
         var buttons = new StackPanel
@@ -114,6 +116,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         content.Children.Add(MakeRow(surface.LabelOffsetLabel, _labelOffsetBox));
         content.Children.Add(MakeRow(surface.MultiLevelLabelsLabel, _multiLevelLabelsCombo));
         content.Children.Add(MakeRow(surface.AutoCrossingLabel, _autoCrossingCombo));
+        content.Children.Add(_reverseOrderCheck);
         content.Children.Add(buttons);
         Content = content;
     }
@@ -157,6 +160,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _labelOffsetBox.Text = Format(_planner.LabelOffsetPercent);
         _multiLevelLabelsCombo.SelectedItem = ChartAxisOptionsPlanner.MultiLevelLabelsOptions.FirstOrDefault(x => x.Value == _planner.NoMultiLevelLabels);
         _autoCrossingCombo.SelectedItem = ChartAxisOptionsPlanner.AutoCrossingOptions.FirstOrDefault(x => x.Value == _planner.AutoCrossing);
+        _reverseOrderCheck.IsChecked = _planner.ReverseOrder;
     }
 
     private void UpdatePlannerFromControls()
@@ -179,6 +183,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _planner.SetLabelOffsetPercent(ParseOptionalInt(_labelOffsetBox.Text, surfaceLabel: "Label offset"));
         _planner.SetNoMultiLevelLabels(((ChartAxisBooleanOption)_multiLevelLabelsCombo.SelectedItem).Value);
         _planner.SetAutoCrossing(((ChartAxisBooleanOption)_autoCrossingCombo.SelectedItem).Value);
+        _planner.SetReverseOrder(_reverseOrderCheck.IsChecked == true);
     }
 
     private static double? ParseOptional(string text, string label)

@@ -906,6 +906,25 @@ public class RibbonEditorCompleteness5BTests
         Assert.Null(shape.Table.Rows[0].Cells[0].Borders);
     }
 
+    [Fact]
+    public void Cmd_TableCellInset_WithActiveTableCell_UsesSharedCommand()
+    {
+        var (ed, pres) = MakeSession();
+        var shape = AddSingleCellTable(pres, 804, MakeTextBody("Cell"));
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.table-cell-inset", RibbonCommandContext.ForSelectedValue("All:4pt"));
+
+        var cell = shape.Table!.Rows[0].Cells[0];
+        Assert.Equal(4, cell.InsetLeftPt);
+        Assert.Equal(4, cell.InsetBottomPt);
+        ed.Undo();
+        Assert.Null(cell.InsetLeftPt);
+        Assert.Null(cell.InsetBottomPt);
+    }
+
     [Theory]
     [InlineData("freep.bold", TableCellTextFormatKind.Bold)]
     [InlineData("freep.italic", TableCellTextFormatKind.Italic)]
@@ -1159,6 +1178,7 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.table-cell-fill")]
     [InlineData("freep.table-cell-anchor")]
     [InlineData("freep.table-cell-border")]
+    [InlineData("freep.table-cell-inset")]
     [InlineData("freep.format-painter")]
     [InlineData("freep.theme.office")]
     [InlineData("freep.theme.berlin")]

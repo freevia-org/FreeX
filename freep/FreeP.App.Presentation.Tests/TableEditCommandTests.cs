@@ -328,6 +328,26 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void SetTableCellInset_UndoRedo_Works()
+    {
+        var (p, bus, shape) = MakeTable();
+
+        bus.Execute(new SetTableCellInsetCommand(
+            0, shape.Id, 1, 1, TableCellInsetSide.All, 4.0));
+
+        var cell = shape.Table!.Rows[1].Cells[1];
+        cell.InsetLeftPt.Should().Be(4.0);
+        cell.InsetRightPt.Should().Be(4.0);
+        cell.InsetTopPt.Should().Be(4.0);
+        cell.InsetBottomPt.Should().Be(4.0);
+        bus.Undo();
+        cell.InsetLeftPt.Should().BeNull();
+        cell.InsetRightPt.Should().BeNull();
+        bus.Redo();
+        cell.InsetBottomPt.Should().Be(4.0);
+    }
+
+    [Fact]
     public void SetTableCellFill_RoundTripsThroughPptx()
     {
         var (presentation, bus, shape) = MakeTable(1, 1);
@@ -384,6 +404,24 @@ public sealed class TableEditCommandTests
             .Should().BeOfType<ShapeOutline.Visible>().Subject;
         outline.WidthPt.Should().BeApproximately(0.5, 0.001);
         outline.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+    }
+
+    [Fact]
+    public void SetTableCellInset_RoundTripsThroughPptx()
+    {
+        var (presentation, bus, shape) = MakeTable(1, 1);
+        bus.Execute(new SetTableCellInsetCommand(
+            0, shape.Id, 0, 0, TableCellInsetSide.All, 5.5));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+
+        var cell = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Table!.Rows[0].Cells[0];
+        cell.InsetLeftPt.Should().BeApproximately(5.5, 0.001);
+        cell.InsetRightPt.Should().BeApproximately(5.5, 0.001);
+        cell.InsetTopPt.Should().BeApproximately(5.5, 0.001);
+        cell.InsetBottomPt.Should().BeApproximately(5.5, 0.001);
     }
 
     [Fact]
@@ -881,6 +919,35 @@ public sealed class TableEditCommandTests
 
         sess.Undo();
         shape.Table.Rows[0].Cells[0].Borders.Should().BeNull();
+    }
+
+    [Fact]
+    public void EditingSession_SetActiveTableCellInset_IsUndoable()
+    {
+        var sess = MakeSession(out var shape);
+        sess.SetActiveTableCell(0, 0);
+
+        sess.TryApplyActiveTableCellInset(TableCellInsetSide.All, 3.0).Should().BeTrue();
+        shape.Table!.Rows[0].Cells[0].InsetLeftPt.Should().Be(3.0);
+        shape.Table.Rows[0].Cells[0].InsetBottomPt.Should().Be(3.0);
+
+        sess.Undo();
+        shape.Table.Rows[0].Cells[0].InsetLeftPt.Should().BeNull();
+        shape.Table.Rows[0].Cells[0].InsetBottomPt.Should().BeNull();
+    }
+
+    [Fact]
+    public void TableCellInsetOptionParser_ParsesAutomaticAndPointValues()
+    {
+        TableCellInsetOptionParser.TryParse("All:Automatic", out var side, out var automatic)
+            .Should().BeTrue();
+        side.Should().Be(TableCellInsetSide.All);
+        automatic.Should().BeNull();
+
+        TableCellInsetOptionParser.TryParse("Bottom:5.5pt", out side, out var inset)
+            .Should().BeTrue();
+        side.Should().Be(TableCellInsetSide.Bottom);
+        inset.Should().BeApproximately(5.5, 0.001);
     }
 
     [Fact]

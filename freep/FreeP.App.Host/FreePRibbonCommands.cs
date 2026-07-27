@@ -514,6 +514,17 @@ internal static class FreePRibbonCommands
                 editor.TryApplyActiveTableCellBorder(side, outline);
             }));
 
+        registry.Register("freep.table-cell-inset",
+            new ContextRibbonCommand(ctx =>
+            {
+                if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                    value is not string selection ||
+                    !TableCellInsetOptionParser.TryParse(selection, out var side, out var insetPt))
+                    return;
+
+                editor.TryApplyActiveTableCellInset(side, insetPt);
+            }));
+
         // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
 
         RegisterTransitionCommands(registry, stateStore, editor, onTransitionSound);

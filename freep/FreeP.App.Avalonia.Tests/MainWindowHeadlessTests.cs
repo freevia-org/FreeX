@@ -1790,6 +1790,40 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_table_cell_inset_command_routes_selected_value_to_editor()
+    {
+        var found = false;
+        double? insetLeft = null;
+        double? insetBottom = null;
+        double? undoneInset = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet("freep.table-cell-inset", out var command);
+            found.Should().BeTrue("Cell Insets must be registered");
+
+            var shape = window.Editor.InsertTable(1, 1);
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+
+            command!.Execute(RibbonCommandContext.ForSelectedValue("All:4pt"));
+            var cell = shape.Table!.Rows[0].Cells[0];
+            insetLeft = cell.InsetLeftPt;
+            insetBottom = cell.InsetBottomPt;
+            window.Editor.Undo();
+            undoneInset = cell.InsetLeftPt;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("Cell Insets must be registered");
+        insetLeft.Should().Be(4);
+        insetBottom.Should().Be(4);
+        undoneInset.Should().BeNull("the host route should use the shared undoable command");
+    }
+
+    [Fact]
     public async Task Ribbon_font_size_and_color_commands_route_to_editor()
     {
         var foundSize = false;
@@ -6661,7 +6695,8 @@ public sealed class MainWindowHeadlessTests
                 ChartLabelAlignment.Right,
                 35,
                 true,
-                false);
+                false,
+                reverseOrder: true);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6671,7 +6706,7 @@ public sealed class MainWindowHeadlessTests
             ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false,
             ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
             null, 10, false, ChartCrossBetween.MidCat, ChartLabelAlignment.Right,
-            35, true, false));
+            35, true, false, true));
     }
 
     [Fact]

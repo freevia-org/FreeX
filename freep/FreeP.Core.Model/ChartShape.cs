@@ -528,6 +528,9 @@ public sealed class ChartAxis
     /// <summary>Authored numeric axis crossing value from <c>c:crossesAt/@val</c>.</summary>
     public double? CrossesAt { get; set; }
 
+    /// <summary>Whether the axis orientation is authored as <c>maxMin</c> instead of <c>minMax</c>.</summary>
+    public bool ReverseOrder { get; set; }
+
     /// <summary>True if the axis is deleted (hidden) in the chart XML.</summary>
     public bool Delete { get; set; }
 }

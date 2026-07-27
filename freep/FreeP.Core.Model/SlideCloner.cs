@@ -340,6 +340,7 @@ public static class SlideCloner
         LabelAlignment    = a.LabelAlignment,
         Crosses           = a.Crosses,
         CrossesAt         = a.CrossesAt,
+        ReverseOrder      = a.ReverseOrder,
         Delete            = a.Delete,
     };
 

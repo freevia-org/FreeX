@@ -1344,7 +1344,7 @@ internal static class PptxChartWriter
         new XElement(C + "catAx",
             new XElement(C + "axId", new XAttribute("val", axId)),
             new XElement(C + "scaling",
-                new XElement(C + "orientation", new XAttribute("val", "minMax"))),
+                new XElement(C + "orientation", new XAttribute("val", axis.ReverseOrder ? "maxMin" : "minMax"))),
             new XElement(C + "delete",
                 new XAttribute("val", axis.Delete ? "1" : "0")),
             new XElement(C + "axPos", new XAttribute("val", "b")),
@@ -1363,7 +1363,7 @@ internal static class PptxChartWriter
         string axPos = "l", string? crosses = null)
     {
         var scalingEl = new XElement(C + "scaling",
-            new XElement(C + "orientation", new XAttribute("val", "minMax")));
+            new XElement(C + "orientation", new XAttribute("val", axis.ReverseOrder ? "maxMin" : "minMax")));
         if (axis.Min.HasValue)
             scalingEl.Add(new XElement(C + "min",
                 new XAttribute("val", axis.Min.Value.ToString("G", CultureInfo.InvariantCulture))));

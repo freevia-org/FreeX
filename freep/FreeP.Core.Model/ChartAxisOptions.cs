@@ -27,4 +27,5 @@ public sealed record ChartAxisOptions(
     ChartLabelAlignment? LabelAlignment = null,
     int? LabelOffsetPercent = null,
     bool? NoMultiLevelLabels = null,
-    bool? AutoCrossing = null);
+    bool? AutoCrossing = null,
+    bool ReverseOrder = false);

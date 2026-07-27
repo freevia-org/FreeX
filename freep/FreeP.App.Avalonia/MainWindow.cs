@@ -2140,6 +2140,15 @@ public sealed partial class MainWindow : Window
 
             Editor.TryApplyActiveTableCellBorder(side, outline);
         }));
+        r.Register("freep.table-cell-inset", new ContextRibbonCommand(ctx =>
+        {
+            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                value is not string selection ||
+                !TableCellInsetOptionParser.TryParse(selection, out var side, out var insetPt))
+                return;
+
+            Editor.TryApplyActiveTableCellInset(side, insetPt);
+        }));
         r.Register("freep.bold", new ActionRibbonCommand(() =>
         {
             if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold) == true) return;

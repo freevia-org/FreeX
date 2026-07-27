@@ -24,6 +24,15 @@ public static class FreePRibbonDefinitionData
         "Bottom:Automatic", "Bottom:None", "Bottom:Black 0.5pt", "Bottom:Black 1pt",
     ];
 
+    public static readonly string[] TableCellInsetOptions =
+    [
+        "All:Automatic", "All:0pt", "All:2pt", "All:4pt", "All:6pt", "All:8pt",
+        "Left:Automatic", "Left:0pt", "Left:2pt", "Left:4pt", "Left:6pt", "Left:8pt",
+        "Right:Automatic", "Right:0pt", "Right:2pt", "Right:4pt", "Right:6pt", "Right:8pt",
+        "Top:Automatic", "Top:0pt", "Top:2pt", "Top:4pt", "Top:6pt", "Top:8pt",
+        "Bottom:Automatic", "Bottom:0pt", "Bottom:2pt", "Bottom:4pt", "Bottom:6pt", "Bottom:8pt",
+    ];
+
     public static readonly string[] TransitionDurations =
         ["0.50s", "0.75s", "1.00s", "1.50s", "2.00s"];
 

@@ -34,6 +34,7 @@ public sealed record ChartAxisOptionsSurfacePlan(
     string LabelOffsetLabel,
     string MultiLevelLabelsLabel,
     string AutoCrossingLabel,
+    string ReverseOrderLabel,
     string AutoHint,
     string OkLabel,
     string CancelLabel);
@@ -67,6 +68,7 @@ public sealed class ChartAxisOptionsPlanner
     public const string LabelOffsetLabel = "Label offset (%)";
     public const string MultiLevelLabelsLabel = "Multi-level labels";
     public const string AutoCrossingLabel = "Automatic crossing";
+    public const string ReverseOrderLabel = "Reverse order";
     public const string AutoHint = "Blank values use automatic chart scaling.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
@@ -154,6 +156,7 @@ public sealed class ChartAxisOptionsPlanner
     private int? _labelOffsetPercent;
     private bool? _noMultiLevelLabels;
     private bool? _autoCrossing;
+    private bool _reverseOrder;
 
     private ChartAxisOptionsPlanner(ChartShape chart)
     {
@@ -186,6 +189,7 @@ public sealed class ChartAxisOptionsPlanner
             LabelOffsetLabel,
             MultiLevelLabelsLabel,
             AutoCrossingLabel,
+            ReverseOrderLabel,
             AutoHint,
             OkLabel,
             CancelLabel);
@@ -215,6 +219,7 @@ public sealed class ChartAxisOptionsPlanner
     public int? LabelOffsetPercent => _labelOffsetPercent;
     public bool? NoMultiLevelLabels => _noMultiLevelLabels;
     public bool? AutoCrossing => _autoCrossing;
+    public bool ReverseOrder => _reverseOrder;
 
     public void SetAxis(ChartAxisKind axisKind)
     {
@@ -238,6 +243,7 @@ public sealed class ChartAxisOptionsPlanner
         _labelOffsetPercent = axis.LabelOffsetPercent;
         _noMultiLevelLabels = axis.NoMultiLevelLabels;
         _autoCrossing = axis.AutoCrossing;
+        _reverseOrder = axis.ReverseOrder;
     }
 
     public void SetTitle(string? title) => _title = title ?? string.Empty;
@@ -258,6 +264,7 @@ public sealed class ChartAxisOptionsPlanner
     public void SetLabelOffsetPercent(int? value) => _labelOffsetPercent = value;
     public void SetNoMultiLevelLabels(bool? value) => _noMultiLevelLabels = value;
     public void SetAutoCrossing(bool? value) => _autoCrossing = value;
+    public void SetReverseOrder(bool value) => _reverseOrder = value;
 
     public ChartAxisOptions BuildCommitPlan() => new(
         _axisKind,
@@ -278,7 +285,8 @@ public sealed class ChartAxisOptionsPlanner
         _labelAlignment,
         _labelOffsetPercent,
         _noMultiLevelLabels,
-        _autoCrossing);
+        _autoCrossing,
+        _reverseOrder);
 
     private ChartAxis ResolveAxis() =>
         _axisKind == ChartAxisKind.Category ? _chart.CategoryAxis : _chart.ValueAxis;
