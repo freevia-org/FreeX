@@ -85,6 +85,19 @@ public sealed partial class MainWindow : Window
             PresentationFileTextResources.AudioFileTypeName,
             PresentationMediaFileTypeCatalog.AudioFilePatterns,
             PresentationMediaFileTypeCatalog.AudioMimeTypes);
+    private static readonly FilePickerFileType EmbeddedObjectFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            OleInsertionPlanner.PickerTitle,
+            ["*.xlsx", "*.xlsm", "*.xls", "*.docx", "*.doc", "*.pptx", "*.ppt"],
+            [
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/vnd.ms-excel.sheet.macroEnabled.12",
+                "application/vnd.ms-excel",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "application/vnd.ms-powerpoint",
+            ]);
 
     private static readonly (string CommandId, Action<EditingSession> Execute)[] ArrangeCommandRoutes =
     [
@@ -2313,6 +2326,8 @@ public sealed partial class MainWindow : Window
                 if (Editor.SelectedOleObject is { } ole)
                     OleActivationService.TryActivate(ole);
             }));
+        r.Register(OleInsertionPlanner.InsertEmbeddedObjectCommandId,
+            new ActionRibbonCommand(() => _ = InsertEmbeddedObjectFromFileAsync()));
         r.Register("freep.arrange.edit-points", new EditPointsToggleCommand(_slideCanvas));
 
         // Insert objects/text
@@ -3198,6 +3213,40 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(command, ex.Message);
+        }
+    }
+
+    private async Task InsertEmbeddedObjectFromFileAsync()
+    {
+        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
+                OleInsertionPlanner.PickerTitle);
+            return;
+        }
+
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                OleInsertionPlanner.PickerTitle,
+                [EmbeddedObjectFileType]));
+
+        if (file is null)
+            return;
+
+        try
+        {
+            await using var source = await file.OpenReadAsync();
+            using var memory = new MemoryStream();
+            await source.CopyToAsync(memory);
+            Editor.InsertEmbeddedObject(memory.ToArray(), file.Name);
+            _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                OleInsertionPlanner.PickerTitle,
+                ex.Message);
         }
     }
 

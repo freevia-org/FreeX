@@ -322,6 +322,7 @@ internal static class FreePRibbonText
     public static RibbonText ArrangeChangeShapeCrossCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeCross_Label", "Ribbon_Command_ArrangeChangeShapeCross_KeyTip");
     public static RibbonText ArrangeChangeShapePlusSignCommand { get; } = new("Ribbon_Command_ArrangeChangeShapePlusSign_Label", "Ribbon_Command_ArrangeChangeShapePlusSign_KeyTip");
     public static RibbonText OpenEmbeddedObjectCommand { get; } = new("Ribbon_Command_OpenEmbeddedObject_Label", "Ribbon_Command_OpenEmbeddedObject_KeyTip");
+    public static RibbonText InsertEmbeddedObjectCommand { get; } = new("Ribbon_Command_InsertEmbeddedObject_Label", "Ribbon_Command_InsertEmbeddedObject_KeyTip");
     public static RibbonText ArrangeEditPointsCommand { get; } = new("Ribbon_Command_ArrangeEditPoints_Label", "Ribbon_Command_ArrangeEditPoints_KeyTip");
     public static RibbonText ArrangeBringToFrontCommand { get; } = new("Ribbon_Command_ArrangeBringToFront_Label", "Ribbon_Command_ArrangeBringToFront_KeyTip");
     public static RibbonText ArrangeBringForwardCommand { get; } = new("Ribbon_Command_ArrangeBringForward_Label", "Ribbon_Command_ArrangeBringForward_KeyTip");

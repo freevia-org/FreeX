@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -443,6 +444,7 @@ public sealed partial class MainWindow : Window
             onEditChart3DViewOptions: () => OpenChart3DViewOptionsDialog(),
             onEditChartTextOptions: () => OpenChartTextOptionsDialog(),
             onEditChartAreaOptions: () => OpenChartAreaOptionsDialog(),
+            onInsertEmbeddedObject: () => InsertEmbeddedObjectFromFile(),
             getSlideCanvas:     () => SlideCanvas,
             onEditPoints:       () => SlideCanvas.SetEditPointsMode(!SlideCanvas.EditPointsEnabled),
             // Wave 10B: open custom slide-size dialog from Design tab ribbon button.
@@ -4193,6 +4195,30 @@ public sealed partial class MainWindow : Window
         catch
         {
             // Match the existing ribbon media-pick behavior: a cancelled or unreadable file is a no-op.
+        }
+    }
+
+    private void InsertEmbeddedObjectFromFile()
+    {
+        var result = WpfFileDialogService.ShowOpenDialog(
+            owner: this,
+            filter: "Office files|*.xlsx;*.xlsm;*.xls;*.docx;*.doc;*.pptx;*.ppt|All files|*.*",
+            title: OleInsertionPlanner.PickerTitle);
+
+        if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
+            return;
+
+        try
+        {
+            Editor.InsertEmbeddedObject(
+                File.ReadAllBytes(result.FileName),
+                result.FileName);
+            RefreshCanvas();
+            UpdateSlideCount();
+        }
+        catch
+        {
+            // Cancelled or unreadable files are a no-op, matching the other insert pickers.
         }
     }
 

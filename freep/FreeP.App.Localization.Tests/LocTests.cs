@@ -368,6 +368,8 @@ public sealed class LocTests
             "Ribbon_Command_ArrangeChangeShapePlusSign_KeyTip",
             "Ribbon_Command_OpenEmbeddedObject_Label",
             "Ribbon_Command_OpenEmbeddedObject_KeyTip",
+            "Ribbon_Command_InsertEmbeddedObject_Label",
+            "Ribbon_Command_InsertEmbeddedObject_KeyTip",
             "Ribbon_Command_ArrangeEditPoints_Label",
             "Ribbon_Command_ArrangeEditPoints_KeyTip",
             "Ribbon_Command_ArrangeBringToFront_Label",
