@@ -49,8 +49,7 @@ public sealed record ShapeGeometryAdjustmentMutationPlan(
 /// Rounded Rectangle (one explicit corner-radius guide), Triangle (one apex guide), Star5,
 /// Star8, and Explosion (one point-depth guide each), directional
 /// arrows (shaft and head guides), compound arrows (shaft and symmetric head guides), Chevron,
-/// and Home Plate (one point-depth guide each). The compositor already consumes these geometry
-/// representations.
+/// Home Plate, Ribbon, and Wave. The compositor already consumes these geometry representations.
 /// </summary>
 public static class ShapeGeometryAdjustmentPlanner
 {
@@ -71,6 +70,16 @@ public static class ShapeGeometryAdjustmentPlanner
     private const double DefaultSlantAdjustment = 20000;
     private const double MaxCrossAdjustment = 50000;
     private const double MaxStarAdjustment = 100000;
+    private const double DefaultRibbonFoldAdjustment = 16667;
+    private const double DefaultRibbonWidthAdjustment = 50000;
+    private const double MaxRibbonFoldAdjustment = 33333;
+    private const double MinRibbonWidthAdjustment = 25000;
+    private const double MaxRibbonWidthAdjustment = 75000;
+    private const double DefaultWaveAmplitudeAdjustment = 12500;
+    private const double DefaultWavePhaseAdjustment = 0;
+    private const double MaxWaveAmplitudeAdjustment = 20000;
+    private const double MinWavePhaseAdjustment = -10000;
+    private const double MaxWavePhaseAdjustment = 10000;
 
     public const string UnsupportedShapeMessage =
         "This preset shape does not expose shared edit points yet.";
@@ -89,7 +98,8 @@ public static class ShapeGeometryAdjustmentPlanner
                 DrawingShapeKind.LeftRightArrow or DrawingShapeKind.UpDownArrow or
                 DrawingShapeKind.Chevron or DrawingShapeKind.HomePlate or
                 DrawingShapeKind.Parallelogram or DrawingShapeKind.Trapezoid or
-                DrawingShapeKind.Cross or DrawingShapeKind.PlusSign))
+                DrawingShapeKind.Cross or DrawingShapeKind.PlusSign or
+                DrawingShapeKind.Ribbon or DrawingShapeKind.Wave))
         {
             return new ShapeGeometryAdjustmentPlan(
                 shape.Id,
@@ -344,6 +354,68 @@ public static class ShapeGeometryAdjustmentPlanner
                     MaxCrossAdjustment)]);
         }
 
+        if (shape.AutoShapeKind == DrawingShapeKind.Ribbon)
+        {
+            var fold = ReadAdjustment(shape, "adj1", DefaultRibbonFoldAdjustment, MaxRibbonFoldAdjustment);
+            var width = ReadAdjustment(
+                shape,
+                "adj2",
+                DefaultRibbonWidthAdjustment,
+                MaxRibbonWidthAdjustment,
+                MinRibbonWidthAdjustment);
+            return new ShapeGeometryAdjustmentPlan(
+                shape.Id,
+                CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
+                boundsDip.Width > 0 && boundsDip.Height > 0 ? null : UnsupportedShapeMessage,
+                [
+                    new ShapeGeometryAdjustmentHandlePlan(
+                        "adj1",
+                        "Ribbon fold depth",
+                        new LayoutPoint(boundsDip.Left + boundsDip.Width / 2, boundsDip.Top + boundsDip.Height * fold / 100000.0),
+                        fold,
+                        0,
+                        MaxRibbonFoldAdjustment),
+                    new ShapeGeometryAdjustmentHandlePlan(
+                        "adj2",
+                        "Ribbon fold width",
+                        new LayoutPoint(boundsDip.Left + boundsDip.Width * (0.5 - width / 200000.0), boundsDip.Top),
+                        width,
+                        MinRibbonWidthAdjustment,
+                        MaxRibbonWidthAdjustment),
+                ]);
+        }
+
+        if (shape.AutoShapeKind == DrawingShapeKind.Wave)
+        {
+            var amplitude = ReadAdjustment(shape, "adj1", DefaultWaveAmplitudeAdjustment, MaxWaveAmplitudeAdjustment);
+            var phase = ReadAdjustment(
+                shape,
+                "adj2",
+                DefaultWavePhaseAdjustment,
+                MaxWavePhaseAdjustment,
+                MinWavePhaseAdjustment);
+            return new ShapeGeometryAdjustmentPlan(
+                shape.Id,
+                CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
+                boundsDip.Width > 0 && boundsDip.Height > 0 ? null : UnsupportedShapeMessage,
+                [
+                    new ShapeGeometryAdjustmentHandlePlan(
+                        "adj1",
+                        "Wave amplitude",
+                        new LayoutPoint(boundsDip.Left, boundsDip.Top + boundsDip.Height * amplitude / 100000.0),
+                        amplitude,
+                        0,
+                        MaxWaveAmplitudeAdjustment),
+                    new ShapeGeometryAdjustmentHandlePlan(
+                        "adj2",
+                        "Wave phase",
+                        new LayoutPoint(boundsDip.Left + boundsDip.Width * (0.5 - phase / 200000.0), boundsDip.Bottom),
+                        phase,
+                        MinWavePhaseAdjustment,
+                        MaxWavePhaseAdjustment),
+                ]);
+        }
+
         var start = ReadAngle(shape, "adj1", DefaultStartAngle);
         var end = ReadAngle(shape, "adj2", DefaultEndAngle);
         return new ShapeGeometryAdjustmentPlan(
@@ -545,6 +617,50 @@ public static class ShapeGeometryAdjustmentPlanner
             return new(true, "adj", Math.Clamp(adjustment, 0, MaxCrossAdjustment), null);
         }
 
+        if (shape.AutoShapeKind == DrawingShapeKind.Ribbon)
+        {
+            if (handleName == "adj1")
+            {
+                var adjustment = (pointerDip.Y - boundsDip.Top) / boundsDip.Height * 100000.0;
+                return new(true, "adj1", Math.Clamp(adjustment, 0, MaxRibbonFoldAdjustment), null);
+            }
+
+            if (handleName == "adj2")
+            {
+                var ribbonCenterX = boundsDip.Left + boundsDip.Width / 2;
+                var adjustment = (ribbonCenterX - pointerDip.X) / boundsDip.Width * 200000.0;
+                return new(
+                    true,
+                    "adj2",
+                    Math.Clamp(adjustment, MinRibbonWidthAdjustment, MaxRibbonWidthAdjustment),
+                    null);
+            }
+
+            return new(false, null, null, InvalidHandleMessage);
+        }
+
+        if (shape.AutoShapeKind == DrawingShapeKind.Wave)
+        {
+            if (handleName == "adj1")
+            {
+                var adjustment = (pointerDip.Y - boundsDip.Top) / boundsDip.Height * 100000.0;
+                return new(true, "adj1", Math.Clamp(adjustment, 0, MaxWaveAmplitudeAdjustment), null);
+            }
+
+            if (handleName == "adj2")
+            {
+                var waveCenterX = boundsDip.Left + boundsDip.Width / 2;
+                var adjustment = (waveCenterX - pointerDip.X) / boundsDip.Width * 200000.0;
+                return new(
+                    true,
+                    "adj2",
+                    Math.Clamp(adjustment, MinWavePhaseAdjustment, MaxWavePhaseAdjustment),
+                    null);
+            }
+
+            return new(false, null, null, InvalidHandleMessage);
+        }
+
         if (handleName is not ("adj1" or "adj2"))
             return new(false, null, null, InvalidHandleMessage);
 
@@ -672,9 +788,10 @@ public static class ShapeGeometryAdjustmentPlanner
         SlideShape shape,
         string name,
         double fallback,
-        double maximum) =>
+        double maximum,
+        double minimum = 0) =>
         shape.PresetGeometryAdjustments.TryGetValue(name, out var value)
-            ? Math.Clamp(value, 0, maximum)
+            ? Math.Clamp(value, minimum, maximum)
             : fallback;
 
     private static bool IsDirectionalArrow(DrawingShapeKind kind) =>
