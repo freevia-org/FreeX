@@ -1216,6 +1216,7 @@ function Test-SourceWiring {
         @{
             Path = "src\FreeX.App.Avalonia\MainWindow.cs"
             AdditionalPathPattern = "MainWindow*.cs"
+            AdditionalPaths = @("FormatCellsFillEditor.cs")
             Markers = @(
                 "private const string NativeWorkbookExtension = `".fxl`";",
                 "using FreeX.Core.Calc;",
@@ -1365,10 +1366,10 @@ function Test-SourceWiring {
                 "FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox)",
                 "FontColor: normalFont ? normalStyle.FontColor : (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color",
                 "SelectFormatCellsColor(fontColorBox, normal.FontColor)",
-                "FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)",
-                "FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color",
-                "CreateFormatCellsField(UiText.Get(`"FormatCells_PatternStyle`"), fillPatternStyleBox)",
-                "CreateFormatCellsField(UiText.Get(`"FormatCells_PatternColor`"), fillPatternColorBox)",
+                "FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox)",
+                "FillPatternColor: clearFill ? null : fillEditor.PatternColor",
+                "getText(`"FormatCells_PatternStyle`"),",
+                "getText(`"FormatCells_PatternColor2`"),",
                 "private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices()",
                 "CellFillPatternStyle.DarkTrellis",
                 "_autoSumButton.Content = `"AutoSum`";",
@@ -1725,7 +1726,7 @@ function Test-SourceWiring {
                 "_session.FlashFillSelectedRange()",
                 "case WorkbookShortcutRoute.FlashFill:",
                 "private async Task ShowSubtotalDialogAsync()",
-                "private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()",
+                "private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(",
                 "_session.ExecuteSubtotalOptions(selection.Options!)",
                 "_session.RemoveSelectedRangeSubtotals()",
                 "SubtotalDialogPlanner.TryCreateResult(",
@@ -1733,7 +1734,7 @@ function Test-SourceWiring {
                 "AutomationProperties.SetAutomationId(dialog, `"SubtotalCompactDialog`");",
                 "AutomationProperties.SetAutomationId(groupColumnBox, `"SubtotalGroupColumnBox`");",
                 "AutomationProperties.SetAutomationId(functionBox, `"SubtotalFunctionBox`");",
-                "AutomationProperties.SetAutomationId(columnsPanel, `"SubtotalColumnsPanel`");",
+                "AutomationProperties.SetAutomationId(columnsList, `"SubtotalColumnsPanel`");",
                 "AutomationProperties.SetAutomationId(removeAllButton, `"SubtotalRemoveAllButton`");",
                 "private NativeMenu CreateNativeWhatIfAnalysisMenu()",
                 "=> CreateNativeMenu(NativeMenuCatalog.WhatIfAnalysisMenuEntries);",
@@ -1946,7 +1947,8 @@ function Test-SourceWiring {
                 "Focusable = true,",
                 "Tag = tab.Id,",
                 "button.ContextMenu = CreateSheetTabContextMenu(tab);",
-                "button.DoubleTapped += async (_, args) => await RenameSheetFromTabAsync(tab.Id, args);",
+                "(_, args) => BeginSheetTabPointer(tab.Id, args),",
+                "if (args.ClickCount >= 2)",
                 "button.KeyDown += (_, args) => HandleSheetTabKeyDown(tab.Id, button, args);",
                 "AutomationProperties.SetName(button, tab.Name);",
                 "AutomationProperties.SetHelpText(button, SheetTabContextHelpText);",
@@ -1965,8 +1967,8 @@ function Test-SourceWiring {
                 "CreateSheetTabContextMenuItem(tab, `"Move Left`", MoveActiveSheetLeft, isIdle && sheetTabIndex > 0)",
                 "CreateSheetTabContextMenuItem(",
                 "internal bool SelectSheetForContextCommand(SheetId sheetId)",
-                "private async Task RenameSheetFromTabAsync(SheetId sheetId, TappedEventArgs args)",
-                "await RenameActiveSheetAsync();",
+                "if (SelectSheetForContextCommand(sheetId))",
+                "_ = RenameActiveSheetAsync();",
                 "private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)",
                 "NavigateSheetTabFromKeyboard(sheetId, args);",
                 "private void OpenSheetTabContextMenuFromKeyboard(SheetId sheetId, Button button, KeyEventArgs args)",
@@ -2058,9 +2060,10 @@ function Test-SourceWiring {
                 "private async Task<string?> ShowRenameSheetDialogAsync(string currentName)",
                 "AutomationProperties.SetAutomationId(nameBox, `"RenameSheetNameBox`");",
                 "var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);",
-                "button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);",
-                "private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args)",
-                "if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed)",
+                "InputElement.PointerPressedEvent,",
+                "(_, args) => BeginSheetTabPointer(tab.Id, args),",
+                "private void BeginSheetTabPointer(SheetId sheetId, PointerPressedEventArgs args)",
+                "if (!point.Properties.IsLeftButtonPressed)",
                 "var selectRange = modifiers.HasFlag(KeyModifiers.Shift);",
                 "var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);",
                 "args.Handled = true;",
@@ -2121,7 +2124,7 @@ function Test-SourceWiring {
                 "HasNativeBringAllToFrontMenuItem: HasNativeMenuItem(_bringAllToFrontMenuItem, NativeMenuItemId.BringAllToFront)",
                 "ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length",
                 "ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length)",
-                "var showHeadings = _session.ActiveSheet.ShowHeadings;",
+                "var showHeadings = _session.IsShowingHeadings;",
                 "var zoomFactor = GetActiveZoomFactor();",
                 "CellSurfaceGridlinePlanner.HasVisibleFill(",
                 "BorderBrush = showGridlines ? defaultBorderBrush : Brushes.Transparent",
@@ -2767,12 +2770,12 @@ function Test-SourceWiring {
                 "new SetSheetHiddenCommand(sheetId, hidden: true)",
                 "public WorkbookCellEditResult UnhideSheet(SheetId sheetId)",
                 "new SetSheetHiddenCommand(sheetId, hidden: false)",
-                "public bool IsShowingFormulas => ActiveSheet.ShowFormulas;",
-                "public int ZoomPercent => ActiveSheet.ZoomPercent;",
+                "public bool IsShowingFormulas",
+                "public int ZoomPercent",
                 "public WorkbookCellEditResult SetShowFormulas(bool showFormulas)",
                 "new SetWorksheetShowFormulasCommand(ActiveSheet.Id, showFormulas)",
-                "public bool IsShowingGridlines => ActiveSheet.ShowGridlines;",
-                "public bool IsShowingHeadings => ActiveSheet.ShowHeadings;",
+                "public bool IsShowingGridlines",
+                "public bool IsShowingHeadings",
                 "public WorkbookCellEditResult SetShowGridlines(bool showGridlines)",
                 "public WorkbookCellEditResult SetShowHeadings(bool showHeadings)",
                 "new SetWorksheetViewOptionsCommand(ActiveSheet.Id, showGridlines, showHeadings, showRulers)",
@@ -3190,6 +3193,11 @@ function Test-SourceWiring {
             $sourceFiles += @(Get-ChildItem -LiteralPath (Split-Path -Parent $sourcePath) `
                 -Filter ([string]$contract.AdditionalPathPattern) -File |
                 Select-Object -ExpandProperty FullName)
+        }
+        if ($null -ne $contract.AdditionalPaths) {
+            foreach ($additionalPath in @($contract.AdditionalPaths)) {
+                $sourceFiles += Join-Path (Split-Path -Parent $sourcePath) $additionalPath
+            }
         }
         $sourceText = @($sourceFiles | Select-Object -Unique | ForEach-Object {
             Get-Content -LiteralPath $_ -Raw
