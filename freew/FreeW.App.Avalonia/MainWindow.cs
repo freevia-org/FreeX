@@ -392,6 +392,20 @@ public sealed partial class MainWindow : Window
         return _reviewingPane.StepRevision(direction, refresh: false);
     }
 
+    // Review > Changes uses the selected Reviewing Pane row in WPF. Keep the Avalonia ribbon on
+    // that same selected-entry route; an empty or hidden pane is a deliberate no-op.
+    private void AcceptSelectedRevision()
+    {
+        if (_reviewingPane.SelectedRevision is { } entry)
+            _reviewingPane.AcceptEntry(entry);
+    }
+
+    private void RejectSelectedRevision()
+    {
+        if (_reviewingPane.SelectedRevision is { } entry)
+            _reviewingPane.RejectEntry(entry);
+    }
+
     internal ReviewBalloonsPane ReviewBalloonsPane => _reviewBalloonsPane;
     internal bool RibbonKeyTipsVisibleForTest => _ribbonKeyTipsVisible;
     internal Control? RibbonControlForTest => _ribbonControl;
@@ -1600,6 +1614,8 @@ public sealed partial class MainWindow : Window
             NewDocument: NewDocument,
             ToggleNavigationPane: ToggleNavigationPane,
             ToggleReviewingPane: ToggleReviewingPane,
+            AcceptThisChange: AcceptSelectedRevision,
+            RejectThisChange: RejectSelectedRevision,
             PreviousChange: () => StepRevision(-1),
             NextChange: () => StepRevision(1),
             ToggleRevealFormatting: ToggleRevealFormatting,

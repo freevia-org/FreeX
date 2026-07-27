@@ -192,7 +192,8 @@ public sealed class ReviewingPane : SidePaneBase
     /// <summary>Number of revision rows currently shown in the list (for headless testing).</summary>
     internal int RevisionItemCount => (_revisionList.ItemsSource as RevisionItemView[])?.Length ?? 0;
     internal int SelectedRevisionIndexForTest => _revisionList.SelectedIndex;
-    internal RevisionEntry? SelectedRevisionForTest => (_revisionList.SelectedItem as RevisionItemView)?.Entry;
+    internal RevisionEntry? SelectedRevision => (_revisionList.SelectedItem as RevisionItemView)?.Entry;
+    internal RevisionEntry? SelectedRevisionForTest => SelectedRevision;
 
     /// <summary>
     /// Enumerates the tracked-change entries for <paramref name="doc"/> via the model tier — the same

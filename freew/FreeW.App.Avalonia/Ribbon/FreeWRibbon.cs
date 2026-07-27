@@ -220,6 +220,10 @@ internal sealed record RibbonHostCallbacks(
     Action? PreviousChange = null,
     /// <summary>AV-REVIEW: Review &gt; Changes &gt; Next. Optional; registry no-ops when null.</summary>
     Action? NextChange = null,
+    /// <summary>AV-REVIEW: Accept the revision selected in the Reviewing Pane. Optional; registry falls back to the caret.</summary>
+    Action? AcceptThisChange = null,
+    /// <summary>AV-REVIEW: Reject the revision selected in the Reviewing Pane. Optional; registry falls back to the caret.</summary>
+    Action? RejectThisChange = null,
     /// <summary>AV-REVIEW: Review &gt; Compare &gt; Compare. Optional; registry no-ops when null.</summary>
     Action? CompareDocuments = null,
     /// <summary>AV-REVIEW: Review &gt; Compare &gt; Combine. Optional; registry no-ops when null.</summary>

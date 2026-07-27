@@ -3,6 +3,7 @@ using System.Threading;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
+using Free.Shared.Ribbon;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -141,6 +142,76 @@ public sealed class ReviewChangeNavigationTests
             window.ReviewingPane.SelectedRevisionIndexForTest.Should().Be(1,
                 "opening the hidden pane selects index 0 before Next advances once");
             window.Editor.CaretPositionForTest.Should().Be((1, 0));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Production_Ribbon_accept_this_resolves_the_selected_pane_revision_when_caret_is_elsewhere()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.LoadDocument(BuildDocument());
+
+            // Opening and stepping selects the second revision, then deliberately move the caret
+            // to the first paragraph. WPF resolves the pane selection, not this caret location.
+            window.StepRevision(1).Should().BeTrue();
+            window.ReviewingPane.SelectedRevisionForTest!.Text.Should().Be("change 1");
+            window.Editor.MoveCaretToBlock(0, 0);
+
+            window.RibbonRegistryForTests!.TryGet(new RibbonCommandId("freew.accept-this"), out var command)
+                .Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+
+            RevisionList.Enumerate(window.Editor.Document)
+                .Select(entry => entry.Text)
+                .Should().Equal("change 0", "change 2");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Production_Ribbon_reject_this_resolves_the_selected_pane_revision_when_caret_is_elsewhere()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.LoadDocument(BuildDocument());
+
+            window.StepRevision(1).Should().BeTrue();
+            window.ReviewingPane.SelectedRevision.Should().NotBeNull();
+            window.ReviewingPane.SelectedRevision!.Text.Should().Be("change 1");
+            window.Editor.MoveCaretToBlock(0, 0);
+
+            window.RibbonRegistryForTests!.TryGet(new RibbonCommandId("freew.reject-this"), out var command)
+                .Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+
+            RevisionList.Enumerate(window.Editor.Document)
+                .Select(entry => entry.Text)
+                .Should().Equal("change 0", "change 2");
+            window.Editor.Document.PlainText.Should().NotContain("change 1");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Production_Ribbon_single_change_commands_are_noops_without_a_selected_pane_revision()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.LoadDocument(BuildDocument());
+            var before = window.Editor.Document.PlainText;
+
+            window.RibbonRegistryForTests!.TryGet(new RibbonCommandId("freew.accept-this"), out var accept)
+                .Should().BeTrue();
+            window.RibbonRegistryForTests.TryGet(new RibbonCommandId("freew.reject-this"), out var reject)
+                .Should().BeTrue();
+
+            accept!.Execute(RibbonCommandContext.Empty);
+            reject!.Execute(RibbonCommandContext.Empty);
+
+            RevisionList.Enumerate(window.Editor.Document).Should().HaveCount(3);
+            window.Editor.Document.PlainText.Should().Be(before);
         }, CancellationToken.None);
     }
 }

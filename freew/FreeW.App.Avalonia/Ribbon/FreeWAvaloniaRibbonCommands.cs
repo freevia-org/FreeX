@@ -542,9 +542,12 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.show-markup-comments", new ShowMarkupCommentsCommand(editor));
         r.Register("freew.show-markup-formatting", new ShowMarkupFormattingCommand(editor));
         r.Register("freew.show-markup-balloons", new ShowMarkupBalloonsCommand(editor, callbacks));
-        // Accept / reject — current revision (at/after caret) and all, undoable + re-render.
-        var acceptCurrentRevisionCommand = new ActionRibbonCommand(() => editor.AcceptCurrentRevision());
-        var rejectCurrentRevisionCommand = new ActionRibbonCommand(() => editor.RejectCurrentRevision());
+        // Accept / reject the revision selected in the Reviewing Pane, matching WPF's selected-row
+        // authority. Test-only or detached registries retain the caret-relative fallback.
+        var acceptCurrentRevisionCommand = new ActionRibbonCommand(
+            callbacks.AcceptThisChange ?? (() => editor.AcceptCurrentRevision()));
+        var rejectCurrentRevisionCommand = new ActionRibbonCommand(
+            callbacks.RejectThisChange ?? (() => editor.RejectCurrentRevision()));
         r.Register("freew.accept-this", acceptCurrentRevisionCommand);
         r.Register("freew.accept-change", acceptCurrentRevisionCommand);
         r.Register("freew.reject-this", rejectCurrentRevisionCommand);

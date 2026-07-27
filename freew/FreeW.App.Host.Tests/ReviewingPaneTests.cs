@@ -81,6 +81,30 @@ public sealed class ReviewingPaneTests
     }
 
     [StaFact]
+    public void AcceptRevision_ResolvesTheReviewingPaneSelectedEntry_NotTheCaretRelativeEntry()
+    {
+        var view = ViewWithRevisions();
+        var selectedEntry = view.ListRevisions()[1];
+
+        view.AcceptRevision(selectedEntry).Should().BeTrue();
+
+        view.ListRevisions().Select(entry => entry.Author).Should().Equal("Alice", "Carol");
+        view.Model.Paragraphs.First().PlainText.Should().NotContain("removed");
+    }
+
+    [StaFact]
+    public void RejectRevision_ResolvesTheReviewingPaneSelectedEntry_NotTheCaretRelativeEntry()
+    {
+        var view = ViewWithRevisions();
+        var selectedEntry = view.ListRevisions()[1];
+
+        view.RejectRevision(selectedEntry).Should().BeTrue();
+
+        view.ListRevisions().Select(entry => entry.Author).Should().Equal("Alice", "Carol");
+        view.Model.Paragraphs.First().PlainText.Should().Contain("removed");
+    }
+
+    [StaFact]
     public void ResolvingEveryRevisionOneAtATime_LeavesNoTrackedChanges()
     {
         // The Previous/Next + Accept loop the pane drives: re-list after each single accept until empty.
