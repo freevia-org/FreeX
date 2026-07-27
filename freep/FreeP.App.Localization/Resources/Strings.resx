@@ -166,6 +166,12 @@
   <data name="Ribbon_Command_TableCellFill_KeyTip" xml:space="preserve">
     <value>TF</value>
   </data>
+  <data name="Ribbon_Command_TableCellAnchor_Label" xml:space="preserve">
+    <value>Table Cell Alignment</value>
+  </data>
+  <data name="Ribbon_Command_TableCellAnchor_KeyTip" xml:space="preserve">
+    <value>TA</value>
+  </data>
   <data name="Ribbon_Command_Bullets_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>

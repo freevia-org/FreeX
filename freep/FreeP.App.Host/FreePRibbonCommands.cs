@@ -488,6 +488,13 @@ internal static class FreePRibbonCommands
                 editor.TryApplyActiveTableCellFill(color);
             }));
 
+        registry.Register("freep.table-cell-anchor",
+            new ContextRibbonCommand(ctx =>
+            {
+                if (!TryGetRibbonTableCellAnchor(ctx, out var anchor)) return;
+                editor.TryApplyActiveTableCellAnchor(anchor);
+            }));
+
         // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
 
         RegisterTransitionCommands(registry, stateStore, editor);
@@ -1167,6 +1174,52 @@ internal static class FreePRibbonCommands
                 return true;
             case string s:
                 return TryParseRibbonFontColor(s, out color);
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryGetRibbonTableCellAnchor(RibbonCommandContext ctx, out TableCellAnchor? anchor)
+    {
+        anchor = null;
+        if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value))
+            return false;
+
+        switch (value)
+        {
+            case TableCellAnchor cellAnchor:
+                anchor = cellAnchor;
+                return true;
+            case string s:
+                return TryParseRibbonTableCellAnchor(s, out anchor);
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryParseRibbonTableCellAnchor(string? value, out TableCellAnchor? anchor)
+    {
+        anchor = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "automatic":
+            case "auto":
+            case "default":
+                return true;
+            case "top":
+                anchor = TableCellAnchor.Top;
+                return true;
+            case "middle":
+            case "center":
+            case "centre":
+                anchor = TableCellAnchor.Middle;
+                return true;
+            case "bottom":
+                anchor = TableCellAnchor.Bottom;
+                return true;
             default:
                 return false;
         }

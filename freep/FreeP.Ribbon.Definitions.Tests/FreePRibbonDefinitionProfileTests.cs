@@ -169,6 +169,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(wpf, "freep.font-color").KeyTip!,
                 RequiredControl(wpf, "freep.table-cell-fill").Label,
                 RequiredControl(wpf, "freep.table-cell-fill").KeyTip!,
+                RequiredControl(wpf, "freep.table-cell-anchor").Label,
+                RequiredControl(wpf, "freep.table-cell-anchor").KeyTip!,
                 RequiredControl(wpf, "freep.bold").Label,
                 RequiredControl(wpf, "freep.bold").KeyTip!,
                 RequiredControl(wpf, "freep.italic").Label,
@@ -211,6 +213,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(avalonia, "freep.font-color").KeyTip!,
                 RequiredControl(avalonia, "freep.table-cell-fill").Label,
                 RequiredControl(avalonia, "freep.table-cell-fill").KeyTip!,
+                RequiredControl(avalonia, "freep.table-cell-anchor").Label,
+                RequiredControl(avalonia, "freep.table-cell-anchor").KeyTip!,
                 RequiredControl(avalonia, "freep.bold").Label,
                 RequiredControl(avalonia, "freep.bold").KeyTip!,
                 RequiredControl(avalonia, "freep.italic").Label,
@@ -543,15 +547,18 @@ public sealed class FreePRibbonDefinitionProfileTests
         var wpfSize = RequiredCombo(wpf, "freep.font-size");
         var wpfColor = RequiredCombo(wpf, "freep.font-color");
         var wpfFill = RequiredCombo(wpf, "freep.table-cell-fill");
+        var wpfAnchor = RequiredCombo(wpf, "freep.table-cell-anchor");
         var size = RequiredCombo(avalonia, "freep.font-size");
         var color = RequiredCombo(avalonia, "freep.font-color");
         var fill = RequiredCombo(avalonia, "freep.table-cell-fill");
+        var anchor = RequiredCombo(avalonia, "freep.table-cell-anchor");
 
         wpfCommandIds.Should().ContainInOrder(
             "freep.font-family",
             "freep.font-size",
             "freep.font-color",
             "freep.table-cell-fill",
+            "freep.table-cell-anchor",
             "freep.bold",
             "freep.italic",
             "freep.underline",
@@ -562,6 +569,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.font-size",
             "freep.font-color",
             "freep.table-cell-fill",
+            "freep.table-cell-anchor",
             "freep.bold",
             "freep.italic",
             "freep.underline",
@@ -570,9 +578,11 @@ public sealed class FreePRibbonDefinitionProfileTests
         wpfSize.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
         wpfColor.Items.Should().Equal(FreePRibbonDefinitionData.FontColors);
         wpfFill.Items.Should().Equal(FreePRibbonDefinitionData.TableCellFillColors);
+        wpfAnchor.Items.Should().Equal(FreePRibbonDefinitionData.TableCellAnchorOptions);
         size.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
         color.Items.Should().Equal(FreePRibbonDefinitionData.FontColors);
         fill.Items.Should().Equal(FreePRibbonDefinitionData.TableCellFillColors);
+        anchor.Items.Should().Equal(FreePRibbonDefinitionData.TableCellAnchorOptions);
     }
 
     [Fact]
@@ -1013,6 +1023,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.picture-caption-list",
             "freep.smartart.basic-cycle",
             "freep.smartart.radial-cycle",
+            "freep.smartart.radial-list",
             "freep.smartart.gear-cycle",
             "freep.smartart.text-cycle",
             "freep.smartart.block-cycle",
@@ -1025,6 +1036,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.stacked-venn",
             "freep.smartart.vertical-bullet-list",
             "freep.smartart.basic-hierarchy",
+            "freep.smartart.hierarchy3",
             "freep.smartart.horizontal-hierarchy",
             "freep.smartart.labeled-hierarchy",
             "freep.smartart.table-hierarchy",

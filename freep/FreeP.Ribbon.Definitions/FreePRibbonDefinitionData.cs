@@ -13,6 +13,9 @@ public static class FreePRibbonDefinitionData
 
     public static readonly string[] TableCellFillColors = FontColors;
 
+    public static readonly string[] TableCellAnchorOptions =
+        ["Automatic", "Top", "Middle", "Bottom"];
+
     public static readonly string[] TransitionDurations =
         ["0.50s", "0.75s", "1.00s", "1.50s", "2.00s"];
 
