@@ -5586,6 +5586,43 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_table_hierarchy_shape_composes_shared_cells_without_connectors()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Hierarchy,
+                "urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy",
+                ["Portfolio", "Owners", "Milestones"]);
+            var root = shape.SmartArt!.Data!.Nodes[0];
+            var owners = shape.SmartArt.Data.Nodes[1];
+            var milestones = shape.SmartArt.Data.Nodes[2];
+            shape.SmartArt.Data.Nodes.RemoveRange(1, 2);
+            owners.Level = 1;
+            milestones.Level = 1;
+            root.Children.Add(owners);
+            root.Children.Add(milestones);
+
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.ShapeId is >= 520 and < 530)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(3,
+            "Avalonia consumes the shared table hierarchy root header and two group cells");
+        liveShapes.All(op => op.Text is not null).Should().BeTrue(
+            "Avalonia consumes the table hierarchy no-connector plan");
+        liveShapes.Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Portfolio", "Owners", "Milestones");
+    }
+
+    [Fact]
     public async Task SmartArt_circle_process_shape_composes_shared_live_draw_ops()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];

@@ -120,6 +120,9 @@ public static class SmartArtLayoutEngine
         if (data.Family == SmartArtFamily.Hierarchy && IsHorizontalHierarchyLayout(data.LayoutUniqueId))
             return LayoutHorizontalHierarchy(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (data.Family == SmartArtFamily.Hierarchy && IsTableHierarchyLayout(data.LayoutUniqueId))
+            return LayoutTableHierarchy(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         return data.Family switch
         {
             SmartArtFamily.Process   => LayoutProcess  (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
@@ -1464,6 +1467,107 @@ public static class SmartArtLayoutEngine
         return shapes;
     }
 
+    /// <summary>
+    /// Table hierarchy layout: each root is a full-width section heading, followed by
+    /// aligned child-group columns. Descendants stay in their group's column and are
+    /// stacked top-to-bottom. The native tableHierarchy definition has no connecting
+    /// lines, so this plan intentionally emits cells only.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutTableHierarchy(
+        SmartArtData data,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var visibleRoots = data.Nodes
+            .Select(CloneVisibleHierarchyNode)
+            .Where(node => node is not null)
+            .Cast<SmartArtNode>()
+            .ToList();
+        if (visibleRoots.Count == 0)
+            return [];
+
+        long padX = (long)(fcx * OuterPaddingFrac);
+        long padY = (long)(fcy * OuterPaddingFrac);
+        long availW = Math.Max(fcx - 2 * padX, 1L);
+        long availH = Math.Max(fcy - 2 * padY, 1L);
+        long gapX = (long)(fcx * GapFrac);
+        long gapY = (long)(fcy * GapFrac);
+
+        var sections = visibleRoots
+            .Select(root => new TableHierarchySection(root, root.Children
+                .Select(FlattenGroupNodes)
+                .Where(group => group.Count > 0)
+                .ToList()))
+            .ToList();
+        int totalRows = sections.Sum(section =>
+            1 + (section.Groups.Count == 0 ? 0 : section.Groups.Max(group => group.Count)));
+        totalRows = Math.Max(totalRows, 1);
+        long rowH = Math.Max((availH - Math.Max(totalRows - 1, 0) * gapY) / totalRows, 1L);
+
+        var shapes = new List<SlideShape>();
+        uint idCounter = 520;
+        long currentY = fy + padY;
+
+        for (int sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
+        {
+            var section = sections[sectionIndex];
+            var rootStyle = stylePlan.GetNodeStyle(0, section.Root.Level, SmartArtFamily.Hierarchy);
+            shapes.Add(MakeBox(
+                idCounter++, section.Root.Text, rootStyle,
+                fx + padX, currentY, availW, rowH,
+                NodeFontSizeLargePt, DrawingShapeKind.Rectangle));
+            currentY += rowH;
+
+            if (section.Groups.Count == 0)
+            {
+                if (sectionIndex < sections.Count - 1)
+                    currentY += gapY;
+                continue;
+            }
+
+            currentY += gapY;
+            long groupW = Math.Max(
+                (availW - (section.Groups.Count - 1) * gapX) / section.Groups.Count,
+                1L);
+            int groupRows = section.Groups.Max(group => group.Count);
+
+            for (int groupIndex = 0; groupIndex < section.Groups.Count; groupIndex++)
+            {
+                var group = section.Groups[groupIndex];
+                long groupX = fx + padX + groupIndex * (groupW + gapX);
+                for (int rowIndex = 0; rowIndex < group.Count; rowIndex++)
+                {
+                    var node = group[rowIndex];
+                    var nodeStyle = stylePlan.GetNodeStyle(
+                        groupIndex, node.Level, SmartArtFamily.Hierarchy);
+                    long cellY = currentY + rowIndex * (rowH + gapY);
+                    shapes.Add(MakeBox(
+                        idCounter++, node.Text, nodeStyle,
+                        groupX, cellY, groupW, rowH,
+                        node.Level == 0 ? NodeFontSizeLargePt : NodeFontSizePt,
+                        DrawingShapeKind.Rectangle));
+                }
+            }
+
+            currentY += groupRows * rowH + Math.Max(groupRows - 1, 0) * gapY;
+            if (sectionIndex < sections.Count - 1)
+                currentY += gapY;
+        }
+
+        return shapes;
+    }
+
+    private static List<SmartArtNode> FlattenGroupNodes(SmartArtNode root)
+    {
+        var nodes = new List<SmartArtNode>();
+        CollectPreOrder(root, nodes);
+        return nodes;
+    }
+
+    private sealed record TableHierarchySection(
+        SmartArtNode Root,
+        List<List<SmartArtNode>> Groups);
+
     private static void RenderHorizontalNode(
         SmartArtNode node,
         int levelIndex,
@@ -1754,6 +1858,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "horizontalhierarchy", StringComparison.Ordinal);
+    }
+
+    private static bool IsTableHierarchyLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "tablehierarchy", StringComparison.Ordinal);
     }
 
     private static bool IsHierarchy3Layout(string uniqueId)
