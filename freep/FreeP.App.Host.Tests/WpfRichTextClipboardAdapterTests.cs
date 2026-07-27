@@ -9,6 +9,60 @@ namespace FreeP.App.Host.Tests;
 public sealed class WpfRichTextClipboardAdapterTests
 {
     [StaFact]
+    public void ExternalRtfTable_UsesNativeWpfTableBlockAndTabRowTextProjection()
+    {
+        const string rtf = @"{\rtf1\ansi\trowd\cellx1440\cellx2880 A\cell B\cell\row\trowd\cellx1440\cellx2880 C\cell D\cell\row}";
+        var document = new System.Windows.Documents.FlowDocument();
+        using var stream = new System.IO.MemoryStream(System.Text.Encoding.ASCII.GetBytes(rtf));
+        new System.Windows.Documents.TextRange(document.ContentStart, document.ContentEnd)
+            .Load(stream, DataFormats.Rtf);
+
+        document.Blocks.Should().ContainSingle()
+            .Which.Should().BeOfType<System.Windows.Documents.Table>();
+        new System.Windows.Documents.TextRange(document.ContentStart, document.ContentEnd)
+            .Text.Should().Be("A\tB\r\nC\tD\r\n");
+    }
+
+    [StaFact]
+    public void TryPasteDataObject_UsesSharedRtfTableProjectionWhenCustomPayloadIsAbsent()
+    {
+        const string rtf = @"{\rtf1\ansi\trowd\cellx1440\cellx2880\b A\b0\cell\i B\i0\cell\row\trowd\cellx1440\cellx2880 C\cell D\cell\row}";
+        var target = InCanvasRichClipboardPayload.FromPlainText("replace me").Body;
+        var targetBox = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(target, 12));
+        targetBox.SelectAll();
+        var data = new DataObject();
+        data.SetData(DataFormats.Rtf,
+            new System.IO.MemoryStream(System.Text.Encoding.ASCII.GetBytes(rtf)),
+            autoConvert: false);
+        data.SetText("plain fallback", TextDataFormat.UnicodeText);
+
+        WpfRichTextClipboardAdapter.TryPasteDataObject(targetBox, target, data, out var updated)
+            .Should().BeTrue();
+
+        updated.Should().NotBeNull();
+        InCanvasTextEditPlanner.ExtractPlainText(updated!)
+            .Should().Be("A\tB\nC\tD");
+        updated!.Paragraphs[0].Runs.Should().Contain(run => run.Text == "A" && run.Bold);
+        updated.Paragraphs[0].Runs.Should().Contain(run => run.Text == "B" && run.Italic);
+    }
+
+    [StaFact]
+    public void TryPasteDataObject_UsesPlainTextAfterMalformedRtf()
+    {
+        var target = InCanvasRichClipboardPayload.FromPlainText("replace me").Body;
+        var targetBox = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(target, 12));
+        targetBox.SelectAll();
+        var data = new DataObject();
+        data.SetData(DataFormats.Rtf, "not an rtf payload", autoConvert: false);
+        data.SetText("plain fallback", TextDataFormat.UnicodeText);
+
+        WpfRichTextClipboardAdapter.TryPasteDataObject(targetBox, target, data, out var updated)
+            .Should().BeTrue();
+
+        InCanvasTextEditPlanner.ExtractPlainText(updated!).Should().Be("plain fallback");
+    }
+
+    [StaFact]
     public void BuildDataObject_PublishesFreePAndNativeRichFormats()
     {
         var source = Body();

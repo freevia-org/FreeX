@@ -14,6 +14,7 @@ public static class ExternalRichTextClipboardPlanner
     public const int MaxRtfBytes = 8 * 1024 * 1024;
     public const int MaxOutputCharacters = 1_000_000;
     public const int MaxGroupDepth = 256;
+    public const int MaxTableCellsPerRow = 4096;
 
     public static InCanvasRichClipboardPayload? TryParseRtf(byte[]? bytes)
     {
@@ -88,6 +89,7 @@ public static class ExternalRichTextClipboardPlanner
             public bool Italic;
             public bool ItalicSet;
             public bool Underline;
+            public bool Strikethrough;
             public int ColorIndex;
             public int UnicodeSkip = 1;
             public int UnicodeFallbackRemaining;
@@ -106,6 +108,8 @@ public static class ExternalRichTextClipboardPlanner
             public int? SpaceAfterTwips;
             public FieldContext? Field;
             public Hyperlink? Hyperlink;
+            public bool InTable;
+            public int TableNesting;
 
             public State Clone() => (State)MemberwiseClone();
         }
@@ -116,6 +120,7 @@ public static class ExternalRichTextClipboardPlanner
             bool Bold,
             bool Italic,
             bool Underline,
+            bool Strikethrough,
             SrgbColor? Color,
             bool BoldSet,
             bool ItalicSet,
@@ -133,6 +138,8 @@ public static class ExternalRichTextClipboardPlanner
         private int _depth;
         private int _processed;
         private int _outputCharacters;
+        private bool _tableRowActive;
+        private int _tableCellCount;
         private bool _sawRtfHeader;
         private bool _lastWasParagraphBreak;
         private Paragraph? _activeParagraph;
@@ -400,6 +407,24 @@ public static class ExternalRichTextClipboardPlanner
                     _state.SkipOutput = false;
                     _state.Hyperlink = TryReadExternalHyperlink(_state.Field?.Instruction.ToString());
                     break;
+                case "trowd":
+                case "nesttableprops":
+                    BeginTableRow();
+                    break;
+                case "intbl":
+                    _state.InTable = value != 0;
+                    break;
+                case "itap":
+                    _state.TableNesting = Math.Clamp(value, 0, 8);
+                    break;
+                case "cell":
+                case "nestcell":
+                    AppendTableCellBoundary();
+                    break;
+                case "row":
+                case "nestrow":
+                    AppendTableRowBoundary();
+                    break;
                 case "stylesheet":
                 case "info":
                 case "pict":
@@ -432,6 +457,9 @@ public static class ExternalRichTextClipboardPlanner
                 case "ul": _state.Underline = value != 0; break;
                 case "ulnone":
                 case "ul0": _state.Underline = false; break;
+                case "strike":
+                case "striked": _state.Strikethrough = value != 0; break;
+                case "strike0": _state.Strikethrough = false; break;
                 case "cf": _state.ColorIndex = Math.Max(0, value); break;
                 case "plain": ResetCharacterFormatting(); break;
                 case "pard": ResetParagraphFormatting(); break;
@@ -518,6 +546,19 @@ public static class ExternalRichTextClipboardPlanner
                 case "tx":
                 case "pnf":
                 case "pnfs":
+                case "cellx":
+                case "trleft":
+                case "trgaph":
+                case "trrh":
+                case "trqc":
+                case "trql":
+                case "trqr":
+                case "clvertalt":
+                case "clvertalc":
+                case "clvertalb":
+                case "cltxlrtb":
+                case "cltxtbrl":
+                case "clshdrawnil":
                     break;
             }
         }
@@ -608,6 +649,70 @@ public static class ExternalRichTextClipboardPlanner
             _lastWasParagraphBreak = true;
         }
 
+        private void BeginTableRow()
+        {
+            if (_state.SkipOutput || _state.Destination != Destination.Body)
+                return;
+
+            FlushActiveRun();
+            _tableRowActive = true;
+            _tableCellCount = 0;
+            _state.InTable = true;
+        }
+
+        private void AppendTableCellBoundary()
+        {
+            if (_state.SkipOutput || _state.Destination != Destination.Body)
+                return;
+
+            if (!_tableRowActive)
+            {
+                if (!_state.InTable)
+                    return;
+                BeginTableRow();
+            }
+
+            if (++_tableCellCount > MaxTableCellsPerRow)
+                throw new InvalidDataException("RTF table cell limit exceeded.");
+
+            // WPF's FlowDocument text projection places a tab at every cell boundary;
+            // AppendTableRowBoundary removes the final delimiter for the completed row.
+            AppendText("\t");
+        }
+
+        private void AppendTableRowBoundary()
+        {
+            if (_state.SkipOutput || _state.Destination != Destination.Body || !_tableRowActive)
+                return;
+
+            FlushActiveRun();
+            RemoveTrailingTableDelimiter();
+
+            // A \par inside the final cell already created the row's terminating
+            // paragraph. Avoid introducing an extra blank line in that case.
+            if (!_lastWasParagraphBreak)
+                AppendParagraphBreak();
+
+            _tableRowActive = false;
+            _tableCellCount = 0;
+        }
+
+        private void RemoveTrailingTableDelimiter()
+        {
+            if (_body.Paragraphs.Count == 0)
+                return;
+
+            var paragraph = _body.Paragraphs[^1];
+            var run = paragraph.Runs.LastOrDefault();
+            if (run is null || !run.Text.EndsWith('\t'))
+                return;
+
+            run.Text = run.Text[..^1];
+            _outputCharacters = Math.Max(0, _outputCharacters - 1);
+            if (run.Text.Length == 0)
+                paragraph.Runs.Remove(run);
+        }
+
         private CharacterStyle CurrentStyle()
         {
             string? fontFamily = null;
@@ -625,6 +730,7 @@ public static class ExternalRichTextClipboardPlanner
                 _state.Bold,
                 _state.Italic,
                 _state.Underline,
+                _state.Strikethrough,
                 color,
                 _state.BoldSet,
                 _state.ItalicSet,
@@ -651,6 +757,7 @@ public static class ExternalRichTextClipboardPlanner
                 Italic = _activeStyle.Italic,
                 ItalicSet = _activeStyle.ItalicSet,
                 Underline = _activeStyle.Underline,
+                Strikethrough = _activeStyle.Strikethrough,
                 Color = _activeStyle.Color is { } color ? new ThemeAwareColor(color) : null,
                 Hyperlink = _activeStyle.Hyperlink,
             });
@@ -665,6 +772,7 @@ public static class ExternalRichTextClipboardPlanner
             && left.Bold == right.Bold
             && left.Italic == right.Italic
             && left.Underline == right.Underline
+            && left.Strikethrough == right.Strikethrough
             && Nullable.Equals(left.Color, right.Color)
             && left.BoldSet == right.BoldSet
             && left.ItalicSet == right.ItalicSet
@@ -679,6 +787,7 @@ public static class ExternalRichTextClipboardPlanner
             _state.Italic = false;
             _state.ItalicSet = true;
             _state.Underline = false;
+            _state.Strikethrough = false;
             _state.ColorIndex = 0;
         }
 
@@ -691,6 +800,8 @@ public static class ExternalRichTextClipboardPlanner
             _state.FirstLineIndentTwips = null;
             _state.SpaceBeforeTwips = null;
             _state.SpaceAfterTwips = null;
+            _state.InTable = false;
+            _state.TableNesting = 0;
         }
 
         private void ApplyParagraphState(Paragraph paragraph)

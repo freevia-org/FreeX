@@ -420,15 +420,18 @@ internal static class FreePCommandInventory
             HostCoverage: "WPF/Avalonia renderer-neutral rich-text model and paste adapters consume the same bounded external RTF planner; WPF remains authoritative and no platform-specific semantic fork was added",
             EvidenceDocs:
             [
-                "docs/parity/freep-external-rtf-paste-wave18-20260727.md"
+                "docs/parity/freep-external-rtf-paste-wave18-20260727.md",
+                "docs/parity/freep-external-rtf-tables-wave19-20260727.md"
             ],
             Verification:
             [
                 "freep/FreeP.App.Presentation/ExternalRichTextClipboardPlanner.cs",
                 "freep/FreeP.App.Presentation.Tests/ExternalRichTextClipboardTests.cs",
-                "freep/FreeP.App.Rendering.Avalonia.Tests/AvaloniaRichTextEditorTests.cs"
+                "freep/FreeP.App.Rendering.Avalonia.Tests/AvaloniaRichTextEditorTests.cs",
+                "freep/FreeP.App.Rendering.Wpf/WpfRichTextClipboardAdapter.cs",
+                "freep/FreeP.App.Host.Tests/WpfRichTextClipboardAdapterTests.cs"
             ],
-            RemainingWork: "The bounded subset now preserves common Word/LibreOffice list markers, nested levels, continuation/restart intent where the existing model can represent it, paragraph alignment/indent/spacing, and safe http/https/mailto HYPERLINK field results while retaining custom-v2 > RTF > plain-text precedence. XamlPackage, objects/pictures, arbitrary fields, rich RTF table semantics, RTL/IME nuances, and PowerPoint-authoritative external RTF visual baselines remain deferred."),
+            RemainingWork: "The bounded subset now preserves common Word/LibreOffice list markers, nested levels, continuation/restart intent where the existing model can represent it, paragraph alignment/indent/spacing, safe http/https/mailto HYPERLINK field results, and common trowd/cellx/cell/row plus nestcell/nestrow table boundaries as WPF-compatible tab-delimited cells and paragraph-delimited rows while retaining custom-v2 > RTF > plain-text precedence. Because TextBody has no inline table node, cell widths, borders, fills, vertical alignment, merges, nested-table structure, and table geometry are flattened rather than persisted. XamlPackage, objects/pictures, arbitrary fields, RTL/IME nuances, complete Word list-template numbering, and PowerPoint-authoritative external RTF visual baselines remain deferred."),
         new(
             EvidenceId: "freep.header-footer.placeholder-creation",
             Area: "Header/Footer date, footer, and slide-number placeholder creation",
