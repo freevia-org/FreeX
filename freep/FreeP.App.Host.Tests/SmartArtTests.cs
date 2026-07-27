@@ -40,6 +40,7 @@ public sealed class SmartArtTests : IDisposable
     private string MakeSmartArtPptx(
         string[] nodeTexts,
         bool pictureCaptionList = false,
+        bool pictureGrid = false,
         bool includeNodeImage = false,
         bool includeColors = true)
     {
@@ -71,7 +72,7 @@ public sealed class SmartArtTests : IDisposable
         foreach (var text in nodeTexts)
         {
             int idx = shapeIdx++;
-            if (pictureCaptionList && includeNodeImage)
+            if ((pictureCaptionList || pictureGrid) && includeNodeImage)
             {
                 fallbackEls.Add(new XElement(dspNs + "pic",
                     new XElement(dspNs + "nvPicPr",
@@ -120,7 +121,7 @@ public sealed class SmartArtTests : IDisposable
                 new XElement(dspNs + "spTree", fallbackEls)));
 
         // Build minimal diagram data XML (just a root element)
-        var dataXml = pictureCaptionList
+        var dataXml = pictureCaptionList || pictureGrid
             ? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
                 new XElement(dgmNs + "dataModel",
                     new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
@@ -141,8 +142,10 @@ public sealed class SmartArtTests : IDisposable
         var layoutXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(dgmNs + "layoutDef",
                 new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
-                pictureCaptionList
-                    ? new XAttribute("uniqueId", "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList")
+                pictureCaptionList || pictureGrid
+                    ? new XAttribute("uniqueId", pictureGrid
+                        ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid"
+                        : "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList")
                     : null));
         var qsXml      = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "styleDef",   new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
         var colorsXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "colorsDef", new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
@@ -576,6 +579,27 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_SmartArt_PictureGrid_ImportsNodePictures()
+    {
+        var nodeTexts = new[] { "Alpha caption", "Beta caption" };
+        var pptxPath = MakeSmartArtPptx(nodeTexts, pictureGrid: true, includeNodeImage: true);
+        var pres = PptxPackageReader.Read(pptxPath);
+
+        var smart = pres.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smart.Data.Should().NotBeNull();
+        smart.Data!.LayoutUniqueId.Should().EndWith("/pictureGrid");
+        smart.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "Picture Grid is a supported live layout when every node has a deterministic image relationship");
+        smart.Data.Nodes.Should().HaveCount(nodeTexts.Length);
+        smart.Data.Nodes.Select(n => n.Text).Should().Equal(nodeTexts);
+        smart.Data.Nodes.Select(n => n.Picture?.ContentType).Should().OnlyContain(contentType => contentType == "image/png");
+        smart.Data.Nodes.Select(n => n.Picture?.Bytes.Length ?? 0).Should().OnlyContain(length => length > 0);
+    }
+
+    [Fact]
     public void Reader_SmartArt_StoresDiagramPartBytes()
     {
         var pptxPath = MakeSmartArtPptx(["A"]);
@@ -734,6 +758,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.HorizontalHierarchy, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.OrgChart, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.PictureCaptionList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.PictureGrid, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.LabeledHierarchy, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.TableHierarchy, SmartArtFamily.Hierarchy)]
     public void SmartArtLayoutPreset_PersistsNativeLayoutAndRereads(
@@ -743,7 +768,8 @@ public sealed class SmartArtTests : IDisposable
         var sourcePath = MakeSmartArtPptx(
             ["One", "Two"],
             pictureCaptionList: preset == SmartArtLayoutPreset.PictureCaptionList,
-            includeNodeImage: preset == SmartArtLayoutPreset.PictureCaptionList);
+            pictureGrid: preset == SmartArtLayoutPreset.PictureGrid,
+            includeNodeImage: preset is SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureGrid);
         var savedPath = Path.Combine(_tempDir, $"smartart-layout-{preset}.pptx");
         var presentation = PptxPackageReader.Read(sourcePath);
         var smartArt = presentation.Slides[0].Shapes
