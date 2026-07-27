@@ -159,7 +159,7 @@ public sealed class CanvasGestureHandler
                 slidePoint.X,
                 slidePoint.Y);
             var shape = oleHitId.HasValue
-                ? slide.Shapes.FirstOrDefault(candidate => candidate.Id == oleHitId.Value)
+                ? ShapeHitTester.FindShape(slide, oleHitId.Value)
                 : null;
             if (shape?.Kind == SlideShapeKind.Ole)
             {
@@ -231,10 +231,12 @@ public sealed class CanvasGestureHandler
                 foreach (var sid in _editor.SelectedShapeIds)
                 {
                     var b = ShapeHitTester.GetShapeBoundsDip(
-                        slide.Shapes.First(s => s.Id == sid),
-                        _editor.Presentation);
-                    if (slidePt.X >= b.Left && slidePt.X <= b.Right &&
-                        slidePt.Y >= b.Top  && slidePt.Y <= b.Bottom)
+                        slide,
+                        _editor.Presentation,
+                        sid);
+                    if (b is { } bounds &&
+                        slidePt.X >= bounds.Left && slidePt.X <= bounds.Right &&
+                        slidePt.Y >= bounds.Top  && slidePt.Y <= bounds.Bottom)
                     {
                         hitAny = true;
                         break;
