@@ -634,6 +634,16 @@ public static class FreePRibbon
         });
         tab.Group("smartart-colors", FreePRibbonText.SmartArtColorsGroup.Label, FreePRibbonText.SmartArtColorsGroup.KeyTip, 80, group =>
         {
+            group.Dropdown(
+                SmartArtAuthoringPlanner.SmartArtColorsGalleryCommandId,
+                "Change Colors",
+                BuildSmartArtColorGalleryMenu(),
+                dropdown => dropdown with
+                {
+                    PreferredLayout = RibbonCommandLayoutKind.Medium,
+                    Icon = new RibbonCommandIcon(RibbonCommandIconKind.Color),
+                    KeyTip = "CC"
+                });
             group.Medium(SmartArtAuthoringPlanner.ThemeAccentsCommandId,
                 FreePRibbonText.SmartArtThemeAccentsCommand.Label, RibbonCommandIconKind.Color,
                 FreePRibbonText.SmartArtThemeAccentsCommand.KeyTip);
@@ -1056,6 +1066,12 @@ public static class FreePRibbon
         {
             IsEnabled = item.IsEnabled
         }).ToArray());
+
+    internal static RibbonMenu BuildSmartArtColorGalleryMenu() =>
+        new(SmartArtAuthoringPlanner.ColorGallery.Select((entry, index) => new RibbonMenuItem(
+            entry.Title,
+            new RibbonCommandId(entry.CommandId),
+            KeyTip: (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))).ToArray());
 
     private static void BuildAdvancedEntranceAnimationMenu(RibbonMenuBuilder menu)
     {

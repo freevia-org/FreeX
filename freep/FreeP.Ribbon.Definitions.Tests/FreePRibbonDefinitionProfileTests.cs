@@ -128,6 +128,29 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void SmartArt_colors_menu_exposes_the_complete_powerpoint_gallery()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            var control = RequiredControl(definition, SmartArtAuthoringPlanner.SmartArtColorsGalleryCommandId)
+                .Should()
+                .BeOfType<RibbonDropdown>()
+                .Subject;
+
+            control.Menu.Items.Select(item => item.CommandId?.Value)
+                .Should()
+                .Equal(SmartArtAuthoringPlanner.ColorGallery.Select(entry => entry.CommandId));
+            control.Menu.Items.Select(item => item.Header)
+                .Should()
+                .Equal(SmartArtAuthoringPlanner.ColorGallery.Select(entry => entry.Title));
+        }
+    }
+
+    [Fact]
     public void Home_shell_ribbon_text_resolves_from_freep_localization_resources()
     {
         var text = WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
