@@ -648,7 +648,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("GoalSeekStatusDialog(new GoalSeekResult(true, 125d, 5000d, 7), 5000d)");
         source.Should().Contain("ScenarioManagerDialog(_workbook, context.Sheet.Id, ResolveSheetIdByName)");
         source.Should().Contain("DataTableDialog(context.Sheet.Id, context.DataTableRange");
-        source.Should().Contain("ConsolidateDialog(context.Sheet.Id, context.ConsolidateSourceRange.ToString(), \"H2\"");
+        source.Should().Contain("ConsolidateDialog(");
+        source.Should().Contain("ConsolidateParityFixture.SourceReference");
+        source.Should().Contain("ConsolidateParityFixture.DestinationReference");
         source.Should().Contain("ForecastSheetDialog(6)");
         source.Should().Contain("freex_data_tools_advanced_filter_dialog");
         source.Should().Contain("freex_data_tools_text_to_columns_step1_original_data_type");
