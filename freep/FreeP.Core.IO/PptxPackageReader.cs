@@ -82,7 +82,31 @@ public static class PptxPackageReader
         var snapshot = CapturePackageSnapshot(archive);
         var presentation = ReadArchive(archive);
         presentation.PackageSnapshot = snapshot;
+        presentation.PackageKind = DetectPackageKind(snapshot);
         return presentation;
+    }
+
+    private static PresentationPackageKind DetectPackageKind(PptxPackageSnapshot snapshot)
+    {
+        if (!snapshot.TryGetEntry("[Content_Types].xml", out var bytes))
+            return PresentationPackageKind.Presentation;
+
+        var contentTypes = OpcXml.TryLoadXml(bytes);
+        var contentType = contentTypes?.Root?
+            .Elements(OpcMediaTypes.ContentTypesNamespace + "Override")
+            .FirstOrDefault(overrideElement =>
+                string.Equals(overrideElement.Attribute("PartName")?.Value, "/ppt/presentation.xml", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("ContentType")?.Value;
+
+        return contentType switch
+        {
+            "application/vnd.ms-powerpoint.presentation.macroEnabled.main+xml" => PresentationPackageKind.MacroEnabledPresentation,
+            "application/vnd.openxmlformats-officedocument.presentationml.template.main+xml" => PresentationPackageKind.Template,
+            "application/vnd.ms-powerpoint.template.macroEnabled.main+xml" => PresentationPackageKind.MacroEnabledTemplate,
+            "application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml" => PresentationPackageKind.SlideShow,
+            "application/vnd.ms-powerpoint.slideshow.macroEnabled.main+xml" => PresentationPackageKind.MacroEnabledSlideShow,
+            _ => PresentationPackageKind.Presentation,
+        };
     }
 
     // ── Core archive reading ──────────────────────────────────────────────────────
