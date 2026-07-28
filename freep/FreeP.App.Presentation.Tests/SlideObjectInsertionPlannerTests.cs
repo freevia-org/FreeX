@@ -286,7 +286,7 @@ public sealed class SlideObjectInsertionPlannerTests
             var added = SlideObjectInsertionPlanner.ApplyCommand(
                 editor,
                 commandId,
-                smartArtPicturePayload: preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureGrid)
+                smartArtPicturePayload: preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureGrid)
                     ? SlideObjectInsertionPlanner.CreateSmartArtPicturePayload(
                         [SlideObjectInsertionPlanner.CreatePicturePayload([1, 2, 3], "sample.png")])
                     : null);
@@ -376,6 +376,25 @@ public sealed class SlideObjectInsertionPlannerTests
     }
 
     [Fact]
+    public void ApplyCommand_InsertsPictureLineupWithOneImagePerNode()
+    {
+        var editor = MakeSession();
+        var payload = SlideObjectInsertionPlanner.CreateSmartArtPicturePayload(
+            [SlideObjectInsertionPlanner.CreatePicturePayload([1, 2, 3], "sample.png")]);
+
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.SmartArtLayoutCommandId(SmartArtLayoutPreset.PictureLineup),
+            smartArtPicturePayload: payload);
+
+        added.Should().NotBeNull();
+        added!.SmartArt!.Data!.LayoutUniqueId.Should().Contain("pictureLineup");
+        added.SmartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
+        added.SmartArt.Data.Nodes.Select(node => node.Picture).Should()
+            .AllSatisfy(picture => picture.Should().NotBeNull());
+    }
+
+    [Fact]
     public void ApplyCommand_PictureCaptionListWithoutPayload_IsNoOp()
     {
         var editor = MakeSession();
@@ -418,7 +437,7 @@ public sealed class SlideObjectInsertionPlannerTests
             SlideObjectInsertionPlanner.ApplyCommand(
                 editor,
                 commandId,
-                smartArtPicturePayload: preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureGrid)
+                smartArtPicturePayload: preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureGrid)
                     ? SlideObjectInsertionPlanner.CreateSmartArtPicturePayload(
                         [SlideObjectInsertionPlanner.CreatePicturePayload([1, 2, 3], "sample.png")])
                     : null).Should().NotBeNull(preset.ToString());
