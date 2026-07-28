@@ -301,6 +301,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.PictureStack)));
         registry.Register(SmartArtAuthoringPlanner.PictureLineupLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.PictureLineup)));
+        registry.Register(SmartArtAuthoringPlanner.ContinuousPictureListLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.ContinuousPictureList)));
         registry.Register(SmartArtAuthoringPlanner.PictureGridLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.PictureGrid)));
         registry.Register(SmartArtAuthoringPlanner.LabeledHierarchyLayoutCommandId,

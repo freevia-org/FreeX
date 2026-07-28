@@ -68,6 +68,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.PictureAccentList, "pictureAccentList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureStack, "pictureStack", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureLineup, "pictureLineup", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.ContinuousPictureList, "continuousPictureList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureGrid, "pictureGrid", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.LabeledHierarchy, "labeledHierarchy", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.TableHierarchy, "tableHierarchy", SmartArtFamily.Hierarchy)]
@@ -80,7 +81,7 @@ public sealed class SmartArtEditingPlannerTests
         {
             Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan"), ("n2", "Build")),
         };
-        if (preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureGrid))
+        if (preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid))
         {
             foreach (var node in smartArt.Data!.Nodes)
                 node.Picture = new ImagePart { Bytes = [0x89, 0x50, 0x4E, 0x47], ContentType = "image/png" };
@@ -212,6 +213,20 @@ public sealed class SmartArtEditingPlannerTests
         };
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureLineup);
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Contain("require image content for every SmartArt node");
+    }
+
+    [Fact]
+    public void ApplyContinuousPictureList_RequiresPicturePayloadOnEveryNode()
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
+        };
+
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.ContinuousPictureList);
 
         result.Applied.Should().BeFalse();
         result.Message.Should().Contain("require image content for every SmartArt node");
@@ -813,7 +828,7 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
-    public void SetPicture_UpdatesNodePayloadAndCachedMediaWithoutChangingRelationshipIds()
+    public void SetPictureAndClearPicture_UpdatesPayloadAndCachedMedia()
     {
         var data = new SmartArtData
         {
@@ -895,6 +910,45 @@ public sealed class SmartArtEditingPlannerTests
         drawing.Descendants().Where(element => element.Name.LocalName == "blip")
             .Select(element => (string?)element.Attribute(r + "embed"))
             .Should().Equal("rIdPic1", "rIdPic2");
+
+        var clearOne = SmartArtEditingPlanner.Apply(
+            data,
+            SmartArtNodeEditIntent.ClearPicture("two"));
+        clearOne.Applied.Should().BeTrue(clearOne.Message);
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme()).Applied.Should().BeTrue();
+        data.Nodes[1].Picture.Should().BeNull();
+        smartArt.Parts.Should().NotContainKey("ppt/media/two.png");
+        drawing = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
+        drawing.Descendants().Where(element => element.Name.LocalName == "blip")
+            .Select(element => (string?)element.Attribute(r + "embed"))
+            .Should().Equal("rIdPic1");
+
+        var clearLast = SmartArtEditingPlanner.Apply(
+            data,
+            SmartArtNodeEditIntent.ClearPicture("one"));
+        clearLast.Applied.Should().BeTrue(clearLast.Message);
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme()).Applied.Should().BeTrue();
+        data.Nodes[0].Picture.Should().BeNull();
+        smartArt.Parts.Should().NotContainKey("ppt/media/one.png");
+        Encoding.UTF8.GetString(smartArt.PartRels["ppt/diagrams/drawing1.xml"])
+            .Should().NotContain("/image");
+        drawing = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
+        drawing.Descendants().Where(element => element.Name.LocalName == "blip")
+            .Should().BeEmpty();
     }
 
     [Fact]

@@ -12,6 +12,7 @@ public enum SmartArtNodeEditKind
 {
     ChangeText,
     SetPicture,
+    ClearPicture,
     AddSiblingAfter,
     AddChild,
     Remove,
@@ -51,6 +52,9 @@ public sealed record SmartArtNodeEditIntent(
 
     public static SmartArtNodeEditIntent SetPicture(string targetModelId, ImagePart picture) =>
         new(SmartArtNodeEditKind.SetPicture, targetModelId, Picture: picture);
+
+    public static SmartArtNodeEditIntent ClearPicture(string targetModelId) =>
+        new(SmartArtNodeEditKind.ClearPicture, targetModelId);
 
     public static SmartArtNodeEditIntent AddSiblingAfter(string targetModelId, string? text = null) =>
         new(SmartArtNodeEditKind.AddSiblingAfter, targetModelId, text);
@@ -238,6 +242,7 @@ public static class SmartArtEditingPlanner
         {
             SmartArtNodeEditKind.ChangeText => ChangeText(data, location.Node, targetId, intent.Text),
             SmartArtNodeEditKind.SetPicture => SetPicture(data, location.Node, targetId, intent.Picture),
+            SmartArtNodeEditKind.ClearPicture => ClearPicture(data, location.Node, targetId),
             SmartArtNodeEditKind.AddSiblingAfter => AddSiblingAfter(data, location, targetId, intent.Text),
             SmartArtNodeEditKind.AddChild => AddChild(data, location.Node, targetId, intent.Text),
             SmartArtNodeEditKind.Remove => Remove(data, location, targetId),
@@ -492,7 +497,9 @@ public static class SmartArtEditingPlanner
         }
 
         var pictureCount = shapes.Count(shape => shape.Kind == SlideShapeKind.Picture);
-        if (pictureCount > 0 && !SyncPictureMediaParts(smartArt, drawingPart.PartPath))
+        var existingPictureRelationships = GetPictureRelationships(smartArt, drawingPart.PartPath);
+        if ((pictureCount > 0 || existingPictureRelationships.Count > 0) &&
+            !SyncPictureMediaParts(smartArt, drawingPart.PartPath))
         {
             return new SmartArtDrawingCacheRegenerationResult(
                 false,
@@ -577,6 +584,29 @@ public static class SmartArtEditingPlanner
             targetId,
             target.ModelId,
             "SmartArt node picture updated.");
+    }
+
+    private static SmartArtNodeEditResult ClearPicture(
+        SmartArtData data,
+        SmartArtNode target,
+        string targetId)
+    {
+        if (target.Picture is null)
+        {
+            return SmartArtNodeEditResult.NotApplied(
+                SmartArtNodeEditKind.ClearPicture,
+                targetId,
+                "The selected SmartArt node has no picture to remove.",
+                BuildOutline(data));
+        }
+
+        target.Picture = null;
+        return Applied(
+            data,
+            SmartArtNodeEditKind.ClearPicture,
+            targetId,
+            target.ModelId,
+            "SmartArt node picture removed.");
     }
 
     private static SmartArtNodeEditResult AddSiblingAfter(
@@ -1123,9 +1153,6 @@ public static class SmartArtEditingPlanner
             .Where(node => node.Picture?.Bytes is { Length: > 0 })
             .ToList();
         var relationships = GetPictureRelationships(smartArt, drawingPartPath);
-        if (pictureNodes.Count == 0 || relationships.Count == 0)
-            return false;
-
         if (!smartArt.PartRels.TryGetValue(drawingPartPath, out var relationshipBytes))
             return false;
 
@@ -1143,6 +1170,11 @@ public static class SmartArtEditingPlanner
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Select(id => id!)
             .ToHashSet(StringComparer.Ordinal);
+        var oldMediaPaths = imageElements
+            .Select(element => element.Attribute("Target")?.Value)
+            .Where(target => !string.IsNullOrWhiteSpace(target))
+            .Select(target => ResolveRelativeZipPath(GetDirectoryName(drawingPartPath), target!))
+            .ToArray();
         var usedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var replacements = new List<XElement>();
 
@@ -1193,6 +1225,20 @@ public static class SmartArtEditingPlanner
             lastRelationship = replacement;
         }
         smartArt.PartRels[drawingPartPath] = SerializeXml(document);
+
+        foreach (var oldMediaPath in oldMediaPaths)
+        {
+            if (!replacements.Any(replacement =>
+                    string.Equals(
+                        ResolveRelativeZipPath(
+                            GetDirectoryName(drawingPartPath),
+                            replacement.Attribute("Target")?.Value ?? string.Empty),
+                        oldMediaPath,
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                smartArt.Parts.Remove(oldMediaPath);
+            }
+        }
 
         return true;
     }
