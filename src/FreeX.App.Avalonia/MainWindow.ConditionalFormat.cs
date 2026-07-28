@@ -264,11 +264,12 @@ public sealed partial class MainWindow
         ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null, launchSmokeProbe);
 
     private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
-        QuickAnalysisConditionalFormatDialogSeed seed) =>
+        QuickAnalysisConditionalFormatDialogSeed seed,
+        Action<ConditionalFormatRuleDialogSmokeProbe>? launchSmokeProbe = null) =>
         ShowConditionalFormatRuleEditorAsync(
             existingRule: null,
             startRuleType: seed.RuleType,
-            launchSmokeProbe: null,
+            launchSmokeProbe,
             initialSeed: seed);
 
     /// <summary>

@@ -312,6 +312,12 @@ internal static class InteractionValidationCoordinator
         File.WriteAllText(Path.Combine(outputDirectory, "interaction-validation.json"), json);
     }
 
+    internal static void WriteManifestForTest(
+        string outputDirectory,
+        InteractionValidationOptions options,
+        IReadOnlyList<InteractionValidationResult> results) =>
+        WriteManifest(outputDirectory, options, results);
+
     private static void WriteFailureManifest(string outputDirectory, Exception ex)
     {
         Directory.CreateDirectory(outputDirectory);

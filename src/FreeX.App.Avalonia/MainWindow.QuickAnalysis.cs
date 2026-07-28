@@ -18,6 +18,7 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     private Flyout? _quickAnalysisFlyout;
+    private Action<ConditionalFormatRuleDialogSmokeProbe>? _interactionValidationConditionalFormatRuleProbe;
 
     /// <summary>
     /// Opens the Quick Analysis popup for the current multi-cell selection. The UI-free
@@ -236,7 +237,9 @@ public sealed partial class MainWindow
         QuickAnalysisConditionalFormatCommand command)
     {
         var seed = QuickAnalysisConditionalFormatDialogPlanner.Plan(command);
-        var built = await ShowConditionalFormatRuleEditorAsync(seed);
+        var built = await ShowConditionalFormatRuleEditorAsync(
+            seed,
+            _interactionValidationConditionalFormatRuleProbe);
         if (built is null)
             return;
 

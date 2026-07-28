@@ -1,7 +1,9 @@
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Model;
@@ -24,74 +26,95 @@ public sealed partial class MainWindow
     private async Task AddQuickAnalysisDrawingInteractionResultsAsync(
         List<InteractionValidationResult> results)
     {
-        await AddValidationResult(results, "quick-analysis.conditional-format", "quick-analysis", async () =>
+        var previousConditionalFormatRuleProbe = _interactionValidationConditionalFormatRuleProbe;
+        _interactionValidationConditionalFormatRuleProbe = AcceptInteractionValidationConditionalFormatRule;
+        try
         {
-            var sheet = _session.ActiveSheet;
-            var range = SeedQuickAnalysisFixture(sheet);
-            _session.SelectRange(range);
-            var request = QuickAnalysisShellRequestPlanner.Build(
-                sheet,
-                range,
-                QuickAnalysisShellCapabilities.DialogBacked);
-            var item = request.ShellPlan.AllItems().Single(candidate => candidate.Id == "format.databars");
-            var beforeRules = sheet.ConditionalFormats.Count;
-            var beforeUndo = _session.GetUndoHistory(100).Count;
-            await ApplyQuickAnalysisItemAsync(item);
-            var afterRules = sheet.ConditionalFormats.Count;
-            var afterUndo = _session.GetUndoHistory(100).Count;
-            var rule = sheet.ConditionalFormats.LastOrDefault();
-            var appliedToSelection = rule?.AppliesTo == range;
-            var passed = request.CanOpen && afterRules == beforeRules + 1 &&
-                afterUndo == beforeUndo + 1 && appliedToSelection;
-            return ValidationEvidence(
-                passed,
-                $"selection={FormatRangeReference(range)}; rules={beforeRules}->{afterRules}; " +
-                $"undo={beforeUndo}->{afterUndo}; ruleType={rule?.RuleType.ToString() ?? "none"}; " +
-                $"appliesToSelection={appliedToSelection}",
-                "Quick Analysis format.databars was dispatched through the production host operation and conditional-format command path.");
-        });
+            await AddValidationResult(results, "quick-analysis.conditional-format", "quick-analysis", async () =>
+            {
+                var sheet = _session.ActiveSheet;
+                var range = SeedQuickAnalysisFixture(sheet);
+                _session.SelectRange(range);
+                var request = QuickAnalysisShellRequestPlanner.Build(
+                    sheet,
+                    range,
+                    QuickAnalysisShellCapabilities.DialogBacked);
+                var item = request.ShellPlan.AllItems().Single(candidate => candidate.Id == "format.databars");
+                var beforeRules = sheet.ConditionalFormats.Count;
+                var beforeUndo = _session.GetUndoHistory(100).Count;
+                await ApplyQuickAnalysisItemAsync(item);
+                var afterRules = sheet.ConditionalFormats.Count;
+                var afterUndo = _session.GetUndoHistory(100).Count;
+                var rule = sheet.ConditionalFormats.LastOrDefault();
+                var appliedToSelection = rule?.AppliesTo == range;
+                var passed = request.CanOpen && afterRules == beforeRules + 1 &&
+                    afterUndo == beforeUndo + 1 && appliedToSelection;
+                return ValidationEvidence(
+                    passed,
+                    $"selection={FormatRangeReference(range)}; rules={beforeRules}->{afterRules}; " +
+                    $"undo={beforeUndo}->{afterUndo}; ruleType={rule?.RuleType.ToString() ?? "none"}; " +
+                    $"appliesToSelection={appliedToSelection}",
+                    "Quick Analysis format.databars was dispatched through the production host operation and conditional-format command path.");
+            });
 
-        await AddValidationResult(results, "quick-analysis.total", "quick-analysis", async () =>
+            await AddValidationResult(results, "quick-analysis.total", "quick-analysis", async () =>
+            {
+                var sheet = _session.ActiveSheet;
+                var range = SeedQuickAnalysisFixture(sheet);
+                _session.SelectRange(range);
+                var targetColumn = range.End.Col + 1;
+                var beforeFormulas = CountFormulas(sheet, range.Start.Row, range.End.Row, targetColumn);
+                var beforeUndo = _session.GetUndoHistory(100).Count;
+                var request = QuickAnalysisShellRequestPlanner.Build(
+                    sheet,
+                    range,
+                    QuickAnalysisShellCapabilities.DialogBacked);
+                var item = request.ShellPlan.AllItems().Single(candidate => candidate.Id == "total.sum");
+                var operation = QuickAnalysisHostOperationPlanner.Plan(item);
+                var expectedEdits = QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(
+                    operation,
+                    range,
+                    out var plannedEdits)
+                    ? plannedEdits
+                    : [];
+                await ApplyQuickAnalysisItemAsync(item);
+                var afterFormulas = CountFormulas(sheet, range.Start.Row, range.End.Row, targetColumn);
+                var afterUndo = _session.GetUndoHistory(100).Count;
+                var exactFormulas = expectedEdits.Count > 0 && expectedEdits.All(edit =>
+                    sheet.GetCell(edit.Address)?.FormulaText == edit.NewCell.FormulaText);
+                var passed = request.CanOpen && afterFormulas == expectedEdits.Count && exactFormulas &&
+                    afterUndo == beforeUndo + 1;
+                return ValidationEvidence(
+                    passed,
+                    $"selection={FormatRangeReference(range)}; formulaCells={beforeFormulas}->{afterFormulas}; " +
+                    $"formulasAfter={FormulaSummary(sheet, range.Start.Row, range.End.Row, targetColumn)}; " +
+                    $"expectedEdits={expectedEdits.Count}; exactFormulas={exactFormulas}; " +
+                    $"undo={beforeUndo}->{afterUndo}; targetColumn={targetColumn}",
+                    "Quick Analysis total.sum was dispatched through the production host operation and EditCells command path.");
+            });
+
+            var shape = SeedInteractionValidationShape();
+            await AddShapePointerValidation(results, "drawing.shape.move", ObjectDragKind.Move, shape);
+            await AddShapePointerValidation(results, "drawing.shape.resize", ObjectDragKind.ResizeSE, shape);
+            await AddShapePointerValidation(results, "drawing.shape.rotate", ObjectDragKind.Rotate, shape);
+            await AddShapeCaptureLossValidation(results, shape);
+        }
+        finally
         {
-            var sheet = _session.ActiveSheet;
-            var range = SeedQuickAnalysisFixture(sheet);
-            _session.SelectRange(range);
-            var targetColumn = range.End.Col + 1;
-            var beforeFormulas = CountFormulas(sheet, range.Start.Row, range.End.Row, targetColumn);
-            var beforeUndo = _session.GetUndoHistory(100).Count;
-            var request = QuickAnalysisShellRequestPlanner.Build(
-                sheet,
-                range,
-                QuickAnalysisShellCapabilities.DialogBacked);
-            var item = request.ShellPlan.AllItems().Single(candidate => candidate.Id == "total.sum");
-            var operation = QuickAnalysisHostOperationPlanner.Plan(item);
-            var expectedEdits = QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(
-                operation,
-                range,
-                out var plannedEdits)
-                ? plannedEdits
-                : [];
-            await ApplyQuickAnalysisItemAsync(item);
-            var afterFormulas = CountFormulas(sheet, range.Start.Row, range.End.Row, targetColumn);
-            var afterUndo = _session.GetUndoHistory(100).Count;
-            var exactFormulas = expectedEdits.Count > 0 && expectedEdits.All(edit =>
-                sheet.GetCell(edit.Address)?.FormulaText == edit.NewCell.FormulaText);
-            var passed = request.CanOpen && afterFormulas == expectedEdits.Count && exactFormulas &&
-                afterUndo == beforeUndo + 1;
-            return ValidationEvidence(
-                passed,
-                $"selection={FormatRangeReference(range)}; formulaCells={beforeFormulas}->{afterFormulas}; " +
-                $"formulasAfter={FormulaSummary(sheet, range.Start.Row, range.End.Row, targetColumn)}; " +
-                $"expectedEdits={expectedEdits.Count}; exactFormulas={exactFormulas}; " +
-                $"undo={beforeUndo}->{afterUndo}; targetColumn={targetColumn}",
-                "Quick Analysis total.sum was dispatched through the production host operation and EditCells command path.");
-        });
+            _interactionValidationConditionalFormatRuleProbe = previousConditionalFormatRuleProbe;
+        }
+    }
 
-        var shape = SeedInteractionValidationShape();
-        await AddShapePointerValidation(results, "drawing.shape.move", ObjectDragKind.Move, shape);
-        await AddShapePointerValidation(results, "drawing.shape.resize", ObjectDragKind.ResizeSE, shape);
-        await AddShapePointerValidation(results, "drawing.shape.rotate", ObjectDragKind.Rotate, shape);
-        await AddShapeCaptureLossValidation(results, shape);
+    private static void AcceptInteractionValidationConditionalFormatRule(
+        ConditionalFormatRuleDialogSmokeProbe probe)
+    {
+        var dataBarPresetIndex = ConditionalFormatPresetChoices
+            .ToList()
+            .FindIndex(choice => choice.Preset == ConditionalFormatPreset.DataBar);
+        if (dataBarPresetIndex >= 0)
+            probe.PresetBox.SelectedIndex = dataBarPresetIndex;
+
+        probe.OkButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, probe.OkButton));
     }
 
     private async Task AddShapePointerValidation(
