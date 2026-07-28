@@ -3751,6 +3751,37 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_RadialListSmartArt_RendersAllItemsBeyondOriginalEightItemCutoff()
+    {
+        var nodes = Enumerable.Range(1, 9)
+            .Select(i => ($"n{i}", $"Item {i}"))
+            .ToArray();
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/radialList",
+            nodes: nodes,
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var liveShapes = SlideCompositor.Compose(pres, pres.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+
+        liveShapes.Should().HaveCount(18,
+            "the shared WPF/Avalonia compositor should emit nine item boxes and nine center spokes");
+        liveShapes.Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(nodes.Select(node => node.Item2));
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(9);
+    }
+
+    [Fact]
     public void Compositor_BasicListSmartArt_RendersSharedLiveShapes()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(

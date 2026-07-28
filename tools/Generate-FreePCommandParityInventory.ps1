@@ -1610,7 +1610,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "radialList now uses a bounded shared radial-spoke plan for up to eight parsed nodes; larger diagrams intentionally retain cached-drawing fallback. Exact PowerPoint sizing, connector attachment/routing, effects, native layout-part regeneration, and PowerPoint-authoritative visual baselines remain deferred.")
+            RemainingWork: "radialList now uses the shared radial-spoke plan for every parsed node, so larger diagrams no longer fall back solely because of item count. Exact PowerPoint sizing, connector attachment/routing, effects, native layout-part regeneration, and PowerPoint-authoritative visual baselines remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.gear-cycle",

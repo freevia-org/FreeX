@@ -565,16 +565,26 @@ public sealed class SmartArtLayoutTests
                 "radialList uses four spokes from an implicit center rather than a closed adjacent-item loop");
     }
 
-    [Fact]
-    public void RadialList_UsesCachedFallbackBeyondBoundedItemCount()
+    [Theory]
+    [InlineData(9)]
+    [InlineData(16)]
+    public void RadialList_PreservesAllItemsBeyondOriginalEightItemCutoff(int itemCount)
     {
         var data = MakeData(
             SmartArtFamily.Cycle,
-            Enumerable.Range(1, 9).Select(index => $"Item {index}").ToArray());
+            Enumerable.Range(1, itemCount).Select(index => $"Item {index}").ToArray());
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radialList";
 
-        SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
-            .Should().BeNull("radialList live geometry is intentionally bounded to eight readable items");
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("radialList should remain live for every parsed item");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(itemCount);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(itemCount);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, itemCount).Select(index => $"Item {index}"));
     }
 
     [Fact]
