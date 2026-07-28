@@ -1,4 +1,6 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Controls;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
@@ -217,6 +219,29 @@ public sealed class ChartDataDialogTests : IDisposable
         options.DataLabels.TextStyle.Bold.Should().BeTrue();
         options.DataLabels.TextStyle.Italic.Should().BeFalse();
         options.DataLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
+    }
+
+    [StaFact]
+    public void ChartSeriesOptionsDialog_UsesScrollableBodyAndFixedActionRow()
+    {
+        var (sess, _) = MakeSession();
+        var dialog = new ChartSeriesOptionsDialog(sess);
+
+        var root = dialog.Content.Should().BeOfType<Grid>().Subject;
+        root.RowDefinitions.Should().HaveCount(2);
+        root.RowDefinitions[0].Height.IsStar.Should().BeTrue();
+        root.RowDefinitions[1].Height.IsAuto.Should().BeTrue();
+
+        var scrollViewer = root.Children.OfType<ScrollViewer>().Single();
+        Grid.GetRow(scrollViewer).Should().Be(0);
+        scrollViewer.VerticalScrollBarVisibility.Should().Be(ScrollBarVisibility.Auto);
+        scrollViewer.HorizontalScrollBarVisibility.Should().Be(ScrollBarVisibility.Disabled);
+        var optionsBody = scrollViewer.Content.Should().BeOfType<StackPanel>().Subject;
+        optionsBody.Children.Count.Should().BeGreaterThan(30);
+
+        var actionRow = root.Children.OfType<StackPanel>().Single();
+        Grid.GetRow(actionRow).Should().Be(1);
+        actionRow.Children.OfType<Button>().Should().HaveCount(2);
     }
 
     [StaFact]

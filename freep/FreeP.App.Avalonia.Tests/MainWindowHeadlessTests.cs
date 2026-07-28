@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
@@ -6902,6 +6903,59 @@ public sealed class MainWindowHeadlessTests
         options.DataLabels.TextStyle.Bold.Should().BeTrue();
         options.DataLabels.TextStyle.Italic.Should().BeFalse();
         options.DataLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
+    }
+
+    [Fact]
+    public async Task ChartSeriesOptionsDialog_uses_scrollable_body_and_fixed_action_row()
+    {
+        var rootIsGrid = false;
+        var rowCount = 0;
+        var bodyRowIsStar = false;
+        var actionRowIsAuto = false;
+        var verticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+        var horizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+        var optionsBodyChildCount = 0;
+        var actionButtonCount = 0;
+        var bodyRow = -1;
+        var actionRow = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.LineMarkers);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartSeriesOptionsDialog(window.Editor);
+            var root = dialog.Content as Grid;
+            rootIsGrid = root is not null;
+            if (root is null)
+                return;
+
+            rowCount = root.RowDefinitions.Count;
+            bodyRowIsStar = root.RowDefinitions[0].Height.IsStar;
+            actionRowIsAuto = root.RowDefinitions[1].Height.IsAuto;
+            var scrollViewer = root.Children.OfType<ScrollViewer>().Single();
+            verticalScrollBarVisibility = scrollViewer.VerticalScrollBarVisibility;
+            horizontalScrollBarVisibility = scrollViewer.HorizontalScrollBarVisibility;
+            optionsBodyChildCount = (scrollViewer.Content as StackPanel)?.Children.Count ?? 0;
+            bodyRow = Grid.GetRow(scrollViewer);
+            var buttons = root.Children.OfType<StackPanel>().Single();
+            actionRow = Grid.GetRow(buttons);
+            actionButtonCount = buttons.Children.OfType<Button>().Count();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        rootIsGrid.Should().BeTrue();
+        rowCount.Should().Be(2);
+        bodyRowIsStar.Should().BeTrue();
+        actionRowIsAuto.Should().BeTrue();
+        verticalScrollBarVisibility.Should().Be(ScrollBarVisibility.Auto);
+        horizontalScrollBarVisibility.Should().Be(ScrollBarVisibility.Disabled);
+        optionsBodyChildCount.Should().BeGreaterThan(30);
+        bodyRow.Should().Be(0);
+        actionRow.Should().Be(1);
+        actionButtonCount.Should().Be(2);
     }
 
     [Fact]

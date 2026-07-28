@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
@@ -155,7 +156,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
             },
         };
 
-        Content = new StackPanel
+        var content = new StackPanel
         {
             Margin = new Thickness(14),
             Spacing = 8,
@@ -202,9 +203,23 @@ internal sealed class ChartSeriesOptionsDialog : Window
                 MakeRow(surface.MarkerLabel, _markerCombo),
                 MakeRow(surface.MarkerSizeLabel, _markerSizeBox),
                 new TextBlock { Text = surface.AutoHint, Opacity = 0.7 },
-                buttons,
             },
         };
+
+        var scrollViewer = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = content,
+        };
+        var layout = new Grid();
+        layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(scrollViewer, 0);
+        Grid.SetRow(buttons, 1);
+        layout.Children.Add(scrollViewer);
+        layout.Children.Add(buttons);
+        Content = layout;
     }
 
     internal ChartSeriesOptions BuildCommitPlanForTests()
