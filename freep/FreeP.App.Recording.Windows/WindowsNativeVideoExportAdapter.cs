@@ -11,8 +11,8 @@ namespace FreeP.App.Recording.Windows;
 /// <summary>
 /// Encodes the shared PNG frame package with the Windows media stack.
 ///
-/// This supports the common single-narration-track case through MediaComposition. Camera/PIP
-/// overlays and offset or multi-track narration remain explicitly deferred to the ffmpeg path.
+/// This supports narration and captured camera PIP through MediaComposition. Offset or
+/// multi-track narration remains explicitly deferred to the ffmpeg path.
 /// </summary>
 public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
 {
@@ -55,6 +55,7 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
             Path.GetTempPath(),
             $"freep-windows-video-{Guid.NewGuid():N}");
         var fullOutputPath = Path.GetFullPath(outputPath);
+        var stage = "initializing MediaComposition";
         try
         {
             Directory.CreateDirectory(temporaryDirectory);
@@ -63,13 +64,6 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
                 package,
                 mediaArtifacts,
                 temporaryDirectory);
-            if (mediaPlan.CameraTracks.Count > 0)
-            {
-                return LinuxVideoExportResult.Failed(
-                    "Windows MediaComposition does not yet support camera/PIP track composition; use the ffmpeg video export path.",
-                    outputPath);
-            }
-
             if (mediaPlan.NarrationTracks.Count > 1 ||
                 mediaPlan.NarrationTracks.Any(track => track.StartTime != TimeSpan.Zero))
             {
@@ -86,6 +80,7 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
             foreach (var frame in package.Frames)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                stage = $"creating slide clip {frame.FileName}";
                 var framePath = ExtractFrame(archive, frame.FileName, frame.SegmentIndex, temporaryDirectory);
                 var frameFile = await StorageFile.GetFileFromPathAsync(framePath)
                     .AsTask(cancellationToken)
@@ -98,6 +93,7 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
 
             if (mediaPlan.NarrationTracks is [{ } narration])
             {
+                stage = "creating narration track";
                 var narrationFile = await StorageFile.GetFileFromPathAsync(narration.Path)
                     .AsTask(cancellationToken)
                     .ConfigureAwait(false);
@@ -105,6 +101,46 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
                     .AsTask(cancellationToken)
                     .ConfigureAwait(false);
                 composition.BackgroundAudioTracks.Add(audioTrack);
+            }
+
+            if (mediaPlan.CameraTracks.Count > 0)
+            {
+                var overlayLayer = new MediaOverlayLayer();
+                var frame = package.Frames[0];
+                foreach (var camera in mediaPlan.CameraTracks)
+                {
+                    stage = $"creating camera overlay {camera.Path}";
+                    var cameraFile = await StorageFile.GetFileFromPathAsync(camera.Path)
+                        .AsTask(cancellationToken)
+                        .ConfigureAwait(false);
+                    var cameraClip = await MediaClip.CreateFromFileAsync(cameraFile)
+                        .AsTask(cancellationToken)
+                        .ConfigureAwait(false);
+                    var cameraProperties = cameraClip.GetVideoEncodingProperties();
+                    if (cameraProperties.Width == 0 || cameraProperties.Height == 0)
+                        throw new InvalidDataException("Windows MediaComposition could not determine the camera video dimensions.");
+
+                    var overlayWidth = Math.Max(2, frame.WidthPx * 0.25);
+                    var overlayHeight = overlayWidth * cameraProperties.Height / cameraProperties.Width;
+                    var overlay = new MediaOverlay(
+                        cameraClip,
+                        new global::Windows.Foundation.Rect(
+                            Math.Max(0, frame.WidthPx - overlayWidth - 32),
+                            Math.Max(0, frame.HeightPx - overlayHeight - 32),
+                            overlayWidth,
+                            overlayHeight),
+                        opacity: 1.0)
+                    {
+                        AudioEnabled = false,
+                        Delay = camera.StartTime,
+                    };
+                    if (camera.Duration > TimeSpan.Zero && cameraClip.OriginalDuration > camera.Duration)
+                        cameraClip.TrimTimeFromEnd = cameraClip.OriginalDuration - camera.Duration;
+
+                    overlayLayer.Overlays.Add(overlay);
+                }
+
+                composition.OverlayLayers.Add(overlayLayer);
             }
 
             var outputDirectory = Path.GetDirectoryName(fullOutputPath)!;
@@ -115,12 +151,16 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
             var outputFile = await outputFolder.CreateFileAsync(
                     Path.GetFileName(fullOutputPath),
                     CreationCollisionOption.ReplaceExisting)
-                .AsTask(cancellationToken)
-                .ConfigureAwait(false);
+                    .AsTask(cancellationToken)
+                    .ConfigureAwait(false);
+            stage = "rendering MediaComposition to MP4";
+            var encodingQuality = package.Frames[0].HeightPx >= 1080
+                ? VideoEncodingQuality.HD1080p
+                : VideoEncodingQuality.HD720p;
             await composition.RenderToFileAsync(
                     outputFile,
                     MediaTrimmingPreference.Precise,
-                    MediaEncodingProfile.CreateMp4(VideoEncodingQuality.Auto))
+                    MediaEncodingProfile.CreateMp4(encodingQuality))
                 .AsTask(cancellationToken)
                 .ConfigureAwait(false);
 
@@ -147,7 +187,9 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             TryDelete(fullOutputPath);
-            return LinuxVideoExportResult.Failed(ex.Message, outputPath);
+            return LinuxVideoExportResult.Failed(
+                $"Windows MediaComposition failed while {stage} with {ex.GetType().Name} (0x{ex.HResult:X8}): {ex.Message}",
+                outputPath);
         }
         finally
         {

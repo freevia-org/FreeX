@@ -27,7 +27,7 @@ public static class WindowsNativePrintOutput
                 ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
                 EncoderName: "Windows MediaComposition",
                 CanCaptureNarration: true,
-                Reason: "Windows video export can encode the shared frame package and one zero-offset narration track through MediaComposition; camera/PIP and complex multi-track muxing remain deferred."));
+                Reason: "Windows video export can encode the shared frame package, narration, and captured camera PIP through MediaComposition; complex multi-track narration remains deferred."));
     }
 
     public static LinuxNativePrintCapability DetectPrint()
