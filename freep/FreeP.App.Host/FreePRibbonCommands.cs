@@ -522,6 +522,19 @@ internal static class FreePRibbonCommands
                 editor.SetTextAutoFitOnSelection(kind);
             }));
 
+        registry.Register("freep.text-direction",
+            new ContextRibbonCommand(ctx =>
+            {
+                if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                    value is not string selection ||
+                    !TextVerticalTypeOptionParser.TryParse(selection, out var verticalType))
+                    return;
+
+                if (editor.TryApplyActiveTableCellTextVerticalType(verticalType))
+                    return;
+                editor.SetTextVerticalTypeOnSelection(verticalType);
+            }));
+
         registry.Register("freep.table-cell-fill",
             new ContextRibbonCommand(ctx =>
             {

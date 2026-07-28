@@ -14,6 +14,9 @@ public static class FreePRibbonDefinitionData
     public static readonly string[] TextAutoFitOptions =
         ["Do not autofit", "Shrink text on overflow", "Resize shape to fit text"];
 
+    public static readonly string[] TextVerticalTypeOptions =
+        ["Horizontal", "Rotate 90 degrees", "Rotate 270 degrees", "East Asian vertical", "WordArt vertical", "WordArt vertical RTL"];
+
     public static readonly string[] TableCellFillColors = FontColors;
 
     public static readonly string[] TableCellAnchorOptions =

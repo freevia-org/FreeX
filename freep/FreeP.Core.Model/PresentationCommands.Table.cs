@@ -116,6 +116,68 @@ public sealed class SetTableCellTextCommand : IPresentationCommand
     }
 }
 
+/// <summary>Changes the DrawingML text direction of one table cell.</summary>
+public sealed class SetTableCellTextVerticalTypeCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _row;
+    private readonly int _col;
+    private readonly TextVerticalType _newType;
+    private TextVerticalType _oldType;
+
+    public SetTableCellTextVerticalTypeCommand(
+        int slideIndex,
+        uint shapeId,
+        int row,
+        int col,
+        TextVerticalType newType)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _row = row;
+        _col = col;
+        _newType = newType;
+    }
+
+    public string Label => "Set Cell Text Direction";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        return cell?.TextBody is { } body && body.VerticalType != _newType;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        if (cell?.TextBody is not { } body)
+            return;
+
+        _oldType = body.VerticalType;
+        body.VerticalType = _newType;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var cell = GetCell(presentation);
+        if (cell?.TextBody is not { } body)
+            return;
+
+        body.VerticalType = _oldType;
+    }
+
+    private TableCell? GetCell(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null || _row < 0 || _row >= table.Rows.Count)
+            return null;
+
+        var row = table.Rows[_row];
+        return _col < 0 || _col >= row.Cells.Count ? null : row.Cells[_col];
+    }
+}
+
 /// <summary>Sets or clears the explicit fill of one table cell.</summary>
 public sealed class SetTableCellFillCommand : IPresentationCommand
 {

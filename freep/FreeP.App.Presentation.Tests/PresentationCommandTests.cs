@@ -727,6 +727,53 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SetShapeTextVerticalTypeCommand_ApplyUndoAndRedo_PreservesOrientation()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape();
+        shape.TextBody = new TextBody { VerticalType = TextVerticalType.Horizontal };
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new SetShapeTextVerticalTypeCommand(0, shape.Id, TextVerticalType.Vertical270));
+        shape.TextBody!.VerticalType.Should().Be(TextVerticalType.Vertical270);
+
+        bus.Undo();
+        shape.TextBody.VerticalType.Should().Be(TextVerticalType.Horizontal);
+
+        bus.Redo();
+        shape.TextBody.VerticalType.Should().Be(TextVerticalType.Vertical270);
+    }
+
+    [Fact]
+    public void SetTableCellTextVerticalTypeCommand_ApplyUndoAndRedo_PreservesOrientation()
+    {
+        var (p, bus) = Make();
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerInch);
+        table.Rows.Add(new TableRow
+        {
+            HeightEmu = DrawingMlCoordinateUnits.EmuPerInch / 2,
+            Cells = { new TableCell { TextBody = new TextBody() } }
+        });
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.Table,
+            Table = table
+        });
+
+        var cellBody = table.Rows[0].Cells[0].TextBody!;
+        bus.Execute(new SetTableCellTextVerticalTypeCommand(0, 7, 0, 0, TextVerticalType.EastAsianVertical));
+        cellBody.VerticalType.Should().Be(TextVerticalType.EastAsianVertical);
+
+        bus.Undo();
+        cellBody.VerticalType.Should().Be(TextVerticalType.Horizontal);
+
+        bus.Redo();
+        cellBody.VerticalType.Should().Be(TextVerticalType.EastAsianVertical);
+    }
+
+    [Fact]
     public void ToggleRunBoldCommand_Apply_TogglesBold()
     {
         var (p, bus, _, run) = MakeShapeWithRun();
