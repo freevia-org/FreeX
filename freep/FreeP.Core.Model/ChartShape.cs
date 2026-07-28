@@ -225,6 +225,9 @@ public sealed class ChartDataLabels
     /// <summary>Show the bubble-size value for bubble-chart points.</summary>
     public bool ShowBubbleSize { get; set; }
 
+    /// <summary>Whether pie/doughnut data labels use leader lines.</summary>
+    public bool? ShowLeaderLines { get; set; }
+
     /// <summary>Label placement relative to the data point. Null means use the default for the chart type.</summary>
     public DataLabelPosition? Position { get; set; }
 
@@ -246,6 +249,7 @@ public sealed class ChartDataLabels
         ShowSeriesName ||
         ShowLegendKey ||
         ShowBubbleSize ||
+        ShowLeaderLines.HasValue ||
         Position.HasValue ||
         NumberFormat is not null ||
         Separator is not null ||

@@ -20,6 +20,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly CheckBox _seriesLabelsCheck;
     private readonly CheckBox _legendKeysCheck;
     private readonly CheckBox _bubbleSizeLabelsCheck;
+    private readonly CheckBox _showLeaderLinesCheck;
     private readonly TextBox _numberFormatBox;
     private readonly TextBox _separatorBox;
     private readonly TextBox _labelFontFamilyBox;
@@ -97,6 +98,13 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         {
             Content = surface.BubbleSizeLabelsLabel,
             IsChecked = _planner.ShowBubbleSize,
+        };
+        _showLeaderLinesCheck = new CheckBox
+        {
+            Content = surface.LeaderLinesLabel,
+            IsThreeState = true,
+            IsChecked = _planner.ShowLeaderLines,
+            IsEnabled = chart.ChartType is ChartType.Pie or ChartType.Doughnut,
         };
         _numberFormatBox = new TextBox { Text = _planner.LabelNumberFormat, MinWidth = 160 };
         _separatorBox = new TextBox { Text = _planner.LabelSeparator, MinWidth = 160 };
@@ -180,6 +188,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         content.Children.Add(_seriesLabelsCheck);
         content.Children.Add(_legendKeysCheck);
         content.Children.Add(_bubbleSizeLabelsCheck);
+        content.Children.Add(_showLeaderLinesCheck);
         content.Children.Add(MakeRow(surface.NumberFormatLabel, _numberFormatBox));
         content.Children.Add(MakeRow(surface.SeparatorLabel, _separatorBox));
         content.Children.Add(MakeRow(surface.FontFamilyLabel, _labelFontFamilyBox));
@@ -226,6 +235,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     internal void SetBubbleSizeLabelsForTests(bool value) => _bubbleSizeLabelsCheck.IsChecked = value;
 
+    internal void SetLeaderLinesForTests(bool? value) => _showLeaderLinesCheck.IsChecked = value;
+
     private void OnOk()
     {
         _editor.ApplyChartDisplayOptions(BuildCommitPlanForTests());
@@ -244,6 +255,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _planner.SetShowSeriesLabels(_seriesLabelsCheck.IsChecked == true);
         _planner.SetShowLegendKeys(_legendKeysCheck.IsChecked == true);
         _planner.SetShowBubbleSize(_bubbleSizeLabelsCheck.IsChecked == true);
+        _planner.SetShowLeaderLines(_showLeaderLinesCheck.IsChecked);
         if (_labelPositionCombo.SelectedItem is ChartDisplayLabelPositionOption position)
             _planner.SetLabelPosition(position.Value);
         _planner.SetLabelNumberFormat(_numberFormatBox.Text);

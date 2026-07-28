@@ -26,4 +26,5 @@ public sealed record ChartDisplayOptions(
     bool? HighLowLines = null,
     ChartTextStyle? LabelTextStyle = null,
     bool ShowBubbleSize = false,
-    int? StyleId = null);
+    int? StyleId = null,
+    bool? ShowLeaderLines = null);

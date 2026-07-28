@@ -87,6 +87,7 @@ public sealed class ChartPointOptionsPlanner
     private bool _showSeriesLabels;
     private bool _showLegendKeys;
     private bool _showBubbleSize;
+    private bool? _showLeaderLines;
     private DataLabelPosition _labelPosition = DataLabelPosition.OutsideEnd;
     private string _labelNumberFormat = string.Empty;
     private string _labelSeparator = string.Empty;
@@ -241,6 +242,7 @@ public sealed class ChartPointOptionsPlanner
                 ShowSeriesName = _showSeriesLabels,
                 ShowLegendKey = _showLegendKeys,
                 ShowBubbleSize = _showBubbleSize,
+                ShowLeaderLines = _showLeaderLines,
                 Position = _labelPosition,
                 NumberFormat = string.IsNullOrWhiteSpace(_labelNumberFormat) ? null : _labelNumberFormat,
                 Separator = string.IsNullOrEmpty(_labelSeparator) ? null : _labelSeparator,
@@ -306,6 +308,7 @@ public sealed class ChartPointOptionsPlanner
         _showSeriesLabels = labels?.ShowSeriesName == true;
         _showLegendKeys = labels?.ShowLegendKey == true;
         _showBubbleSize = labels?.ShowBubbleSize == true;
+        _showLeaderLines = labels?.ShowLeaderLines;
         _labelPosition = labels?.Position ?? DataLabelPosition.OutsideEnd;
         _labelNumberFormat = labels?.NumberFormat ?? string.Empty;
         _labelSeparator = labels?.Separator ?? string.Empty;
