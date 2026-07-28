@@ -2389,6 +2389,9 @@ public sealed class ReviewWorkflowAdapterTests
         selectionPaneSource.Should().Contain("_editor.SetShapeName(");
         selectionPaneSource.Should().Contain("Key.Enter");
         selectionPaneSource.Should().Contain("rename.LostFocus");
+        selectionPaneSource.Should().Contain("_editor.MoveSelectedShapeInReadingOrder(");
+        selectionPaneSource.Should().Contain("item.CanMoveUp");
+        selectionPaneSource.Should().Contain("item.CanMoveDown");
         source.Should().Contain("BuildLayoutChoiceTile(choice)");
         source.Should().Contain("BuildLayoutThumbnail(choice)");
         source.Should().NotContain("Modern resolved-thread state is not modeled yet.\";");

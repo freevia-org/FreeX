@@ -698,6 +698,9 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("_editor.SetShapeName(");
         source.Should().Contain("Key.Enter");
         source.Should().Contain("rename.LostFocus");
+        source.Should().Contain("_editor.MoveSelectedShapeInReadingOrder(");
+        source.Should().Contain("item.CanMoveUp");
+        source.Should().Contain("item.CanMoveDown");
     }
 
     [Fact]

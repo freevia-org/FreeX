@@ -32,7 +32,9 @@ public static class PresentationSelectionPanePlanner
                 DescribeKind(entry.Shape.Kind, entry.Shape.Id),
                 entry.Shape.IsHidden,
                 selected.Contains(entry.Shape.Id),
-                entry.Depth))
+                entry.Depth,
+                CanMoveUp: entry.SiblingIndex < entry.SiblingCount - 1,
+                CanMoveDown: entry.SiblingIndex > 0))
             .ToArray();
 
         return new(
@@ -57,13 +59,15 @@ public static class PresentationSelectionPanePlanner
             _ => $"Object {id}",
         };
 
-    private static IEnumerable<(SlideShape Shape, int Depth)> EnumerateShapesFrontToBack(
+    private static IEnumerable<(SlideShape Shape, int Depth, int SiblingIndex, int SiblingCount)> EnumerateShapesFrontToBack(
         IEnumerable<SlideShape> shapes,
         int depth = 0)
     {
-        foreach (var shape in shapes.Reverse())
+        var siblingList = shapes.ToList();
+        for (var siblingIndex = siblingList.Count - 1; siblingIndex >= 0; siblingIndex--)
         {
-            yield return (shape, depth);
+            var shape = siblingList[siblingIndex];
+            yield return (shape, depth, siblingIndex, siblingList.Count);
             if (shape.Children.Count > 0)
             {
                 foreach (var child in EnumerateShapesFrontToBack(shape.Children, depth + 1))
@@ -81,7 +85,9 @@ public sealed record PresentationSelectionPaneItemPlan(
     string ShapeTypeLabel,
     bool IsHidden,
     bool IsSelected,
-    int NestingDepth = 0);
+    int NestingDepth = 0,
+    bool CanMoveUp = false,
+    bool CanMoveDown = false);
 
 public sealed record PresentationSelectionPanePlan(
     int SlideIndex,

@@ -120,14 +120,51 @@ internal sealed class SelectionPane : Border
             Margin = new Thickness(0, 1, 8, 1),
             ToolTip = item.IsHidden ? "Show object" : "Hide object",
         };
-        visibility.Click += (_, _) => _editor.ToggleShapeHidden(item.ShapeId);
+        visibility.Click += (_, _) =>
+        {
+            if (_editor.ToggleShapeHidden(item.ShapeId))
+                Refresh();
+        };
+
+        var moveUp = new Button
+        {
+            Content = "▲",
+            Width = 22,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 1, 2, 1),
+            IsEnabled = item.CanMoveUp,
+            ToolTip = "Move toward front",
+        };
+        moveUp.Click += (_, _) => MoveItem(item, offset: 1);
+
+        var moveDown = new Button
+        {
+            Content = "▼",
+            Width = 22,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 1, 2, 1),
+            IsEnabled = item.CanMoveDown,
+            ToolTip = "Move toward back",
+        };
+        moveDown.Click += (_, _) => MoveItem(item, offset: -1);
 
         var row = new DockPanel();
         DockPanel.SetDock(visibility, Dock.Right);
+        DockPanel.SetDock(moveDown, Dock.Right);
+        DockPanel.SetDock(moveUp, Dock.Right);
         DockPanel.SetDock(rename, Dock.Right);
         row.Children.Add(visibility);
+        row.Children.Add(moveDown);
+        row.Children.Add(moveUp);
         row.Children.Add(rename);
         row.Children.Add(select);
         return row;
+    }
+
+    private void MoveItem(PresentationSelectionPaneItemPlan item, int offset)
+    {
+        _editor.Select(item.ShapeId);
+        if (_editor.MoveSelectedShapeInReadingOrder(offset))
+            Refresh();
     }
 }

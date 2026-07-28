@@ -23,6 +23,12 @@ public sealed class SelectionPaneTests
         plan.Items[0].IsSelected.Should().BeTrue();
         plan.Items[1].IsHidden.Should().BeTrue();
         plan.Items[1].SelectionIndex.Should().Be(1);
+        plan.Items[0].CanMoveUp.Should().BeFalse();
+        plan.Items[0].CanMoveDown.Should().BeTrue();
+        plan.Items[1].CanMoveUp.Should().BeTrue();
+        plan.Items[1].CanMoveDown.Should().BeTrue();
+        plan.Items[2].CanMoveUp.Should().BeTrue();
+        plan.Items[2].CanMoveDown.Should().BeFalse();
     }
 
     [Fact]
@@ -62,6 +68,34 @@ public sealed class SelectionPaneTests
         plan.Items.Select(item => item.ShapeName).Should().Equal("Group", "Front child", "Back child", "Behind group");
         plan.Items.Select(item => item.NestingDepth).Should().Equal(0, 1, 1, 0);
         plan.Items[1].IsSelected.Should().BeTrue();
+        plan.Items[1].CanMoveUp.Should().BeFalse();
+        plan.Items[1].CanMoveDown.Should().BeTrue();
+        plan.Items[2].CanMoveUp.Should().BeTrue();
+        plan.Items[2].CanMoveDown.Should().BeFalse();
+    }
+
+    [Fact]
+    public void EditingSession_SelectionPaneMovePreservesGroupAndIsUndoable()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide { Title = "Selection order" };
+        slide.Shapes.Clear();
+        var group = MakeShape(10, "Group");
+        group.Kind = SlideShapeKind.Group;
+        group.Children.Add(MakeShape(11, "Back child"));
+        group.Children.Add(MakeShape(12, "Front child"));
+        slide.Shapes.Add(group);
+        presentation.Slides.Add(slide);
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        session.Select(12);
+        session.MoveSelectedShapeInReadingOrder(-1).Should().BeTrue();
+        group.Children.Select(child => child.Id).Should().Equal(12u, 11u);
+
+        session.Undo();
+        group.Children.Select(child => child.Id).Should().Equal(11u, 12u);
+        session.Redo();
+        group.Children.Select(child => child.Id).Should().Equal(12u, 11u);
     }
 
     [Fact]
