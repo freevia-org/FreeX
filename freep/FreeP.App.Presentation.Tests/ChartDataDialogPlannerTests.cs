@@ -524,6 +524,37 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void ChartAxisOptionsPlanner_RoundTripsIndependentTitleStyle()
+    {
+        var chart = MakeChart();
+        chart.ValueAxis.Title = "Amount";
+        chart.ValueAxis.TitleStyle = new ChartTextStyle
+        {
+            FontFamily = "Aptos",
+            FontSizePt = 14,
+            Bold = true,
+            Italic = false,
+            Color = new ThemeAwareColor(SrgbColor.FromRgb(0x2F5597)),
+        };
+
+        var planner = ChartAxisOptionsPlanner.FromChart(chart);
+        planner.SetTitleFontFamily("Aptos Display");
+        planner.SetTitleFontSizePt(16);
+        planner.SetTitleBold(false);
+        planner.SetTitleItalic(true);
+        planner.SetTitleColor("#C00000");
+
+        var style = planner.BuildCommitPlan().TitleStyle;
+        style.Should().NotBeNull();
+        style!.FontFamily.Should().Be("Aptos Display");
+        style.FontSizePt.Should().Be(16);
+        style.Bold.Should().BeFalse();
+        style.Italic.Should().BeTrue();
+        style.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+        chart.ValueAxis.TitleStyle!.FontFamily.Should().Be("Aptos");
+    }
+
+    [Fact]
     public void ChartSeriesOptionsPlanner_UsesWorkingCopyAndBuildsFormattingOptions()
     {
         var chart = MakeChart();

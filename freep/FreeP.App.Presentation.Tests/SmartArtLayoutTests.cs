@@ -762,6 +762,23 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void NameAndTitleOrgChart_ReturnsLiveTreeBoxesAndConnectors()
+    {
+        var data = MakeHierarchyData("CEO", "Sales", "Engineering");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/nameAndTitleOrgChart";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("nameAndTitleOrgChart is a supported organization-chart layout variant");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(3, "the name-and-title variant reuses the shared organization-chart tree boxes");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(2, "the name-and-title variant preserves parent-child connectors");
+        shapes.Should().OnlyContain(
+            s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle || s.AutoShapeKind == DrawingShapeKind.Line);
+    }
+
+    [Fact]
     public void OrgChart_AssistantNode_UsesSideSlotBeforeRegularReports()
     {
         var root = new SmartArtNode { Text = "CEO", Level = 0 };

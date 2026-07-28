@@ -82,8 +82,18 @@ public static class DocxWriter
         var smartArts = CollectSmartArts(document, drawingIdSeed: images.Count + charts.Count);
         // Assign an external relationship id to every distinct hyperlink target the same way.
         var hyperlinks = CollectHyperlinks(document);
-        // Emit a numbering part only when at least one paragraph is decorated as a list.
+        // Chapter-prefixed PAGE fields require Word's linked heading-list metadata even when the
+        // heading paragraph did not otherwise carry a list instance.
+        var chapterPageNumberingLevels = document.Sections
+            .Select(section => section.Page.PageNumberChapterStyleLevel)
+            .Where(level => level is >= 1 and <= 9)
+            .Select(level => level!.Value)
+            .ToHashSet();
+
+        // Emit a numbering part when a paragraph is decorated as a list or a chapter-numbered
+        // section needs the linked heading-list definition.
         var hasLists = EnumerateStoryParagraphs(document).Any(p => p.Formatting.ListKind != ListKind.None);
+        var includeFreeWNumbering = hasLists || chapterPageNumberingLevels.Count > 0;
 
         // Preserved numbering FreeW does not model: when the source carried a numbering.xml AND at least one
         // paragraph (or paragraph STYLE) kept its original w:numPr (because FreeW did not map it to a ListKind),
@@ -102,7 +112,7 @@ public static class DocxWriter
         var restartOverrides = BuildRestartOverrides(document, preservedNumbering);
 
         // A numbering part is emitted when FreeW authored a list OR preserved numbering must be re-emitted.
-        var emitNumbering = hasLists || preservedNumbering is not null;
+        var emitNumbering = includeFreeWNumbering || preservedNumbering is not null;
 
         // Header/footer parts are now modelled per-section: one part per (section × header/footer × type)
         // slot that carries visible content, each with its OWN image relationships. The final/body-level
@@ -256,10 +266,11 @@ public static class DocxWriter
         }
         if (emitNumbering)
             WritePart(archive, "word/numbering.xml", BuildNumbering(
-                hasLists,
+                includeFreeWNumbering,
                 preservedNumbering,
                 document.MultiLevelList.NumberFormats,
-                restartOverrides));
+                restartOverrides,
+                chapterPageNumberingLevels.Count > 0));
         // One part per (section × header/footer × type) slot with content. Each part XML carries its inline
         // images via PART-LOCAL r:embed ids resolved against its own word/_rels/<part>.xml.rels, and its
         // image media bytes go under word/media/.
@@ -1631,7 +1642,7 @@ public static class DocxWriter
                 new XAttribute(R + "id", watermarkImage.RelationshipId),
                 new XAttribute("type", "frame"),
                 new XAttribute("color2", "FFFFFF"),
-                new XAttribute("recolor", "t"),
+                new XAttribute("recolor", options.NativeVmlPictureRecolor is false ? "f" : "t"),
                 new XAttribute("opacity", opacity));
 
         var shape = new XElement(V + "shape",
@@ -7502,11 +7513,13 @@ public static class DocxWriter
         bool includeFreeWNumbering,
         PreservedNumberingPlan? preserved,
         IReadOnlyList<ListNumberFormat> multiLevelNumberFormats,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null,
+        bool linkMultiLevelHeadingStyles = false)
     {
-        XElement Lvl(int level, string numFmt, string lvlText) =>
+        XElement Lvl(int level, string numFmt, string lvlText, string? paragraphStyleId = null) =>
             new(W + "lvl",
                 new XAttribute(W + "ilvl", level),
+                paragraphStyleId is null ? null : new XElement(W + "pStyle", new XAttribute(W + "val", paragraphStyleId)),
                 new XElement(W + "start", new XAttribute(W + "val", 1)),
                 new XElement(W + "numFmt", new XAttribute(W + "val", numFmt)),
                 new XElement(W + "lvlText", new XAttribute(W + "val", lvlText)),
@@ -7528,7 +7541,8 @@ public static class DocxWriter
                 new XAttribute(W + "multiLevelType", "multilevel"),
                 Enumerable.Range(0, ListLevelCount).Select(level => Lvl(level,
                     MultiLevelListMarkerFormatter.ToOoxmlToken(GetMultiLevelNumberFormat(level)),
-                    string.Concat(Enumerable.Range(1, level + 1).Select(n => $"%{n}.")))));
+                    string.Concat(Enumerable.Range(1, level + 1).Select(n => $"%{n}.")),
+                    linkMultiLevelHeadingStyles ? $"Heading{level + 1}" : null)));
 
         ListNumberFormat GetMultiLevelNumberFormat(int level) =>
             level < multiLevelNumberFormats.Count ? multiLevelNumberFormats[level] : ListNumberFormat.Decimal;
@@ -8278,6 +8292,11 @@ public static class DocxWriter
     private static XDocument BuildStyles(TextDocument document, PreservedNumberingPlan? preservedNumbering = null)
     {
         var styles = new XElement(W + "styles", new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
+        var chapterPageNumberingStyleIds = document.Sections
+            .Select(section => section.Page.PageNumberChapterStyleLevel)
+            .Where(level => level is >= 1 and <= 9)
+            .Select(level => $"Heading{level!.Value}")
+            .ToHashSet(StringComparer.Ordinal);
 
         // w:docDefaults is the FIRST child of w:styles (schema order mandated by CT_Styles). It carries the
         // document-level default run and paragraph properties — in particular the body font (e.g. Calibri
@@ -8323,12 +8342,28 @@ public static class DocxWriter
             if (style.Type != StyleType.Character)
             {
                 var pPr = BuildStyleParagraphProperties(style.Paragraph);
+                if (chapterPageNumberingStyleIds.Contains(style.Id))
+                {
+                    pPr ??= new XElement(W + "pPr");
+                    // A PAGE field with w:pgNumType/@chapStyle is resolved by Word only when the
+                    // requested Heading style is associated with the same linked multilevel num.
+                    pPr.AddFirst(new XElement(W + "numPr",
+                        new XElement(W + "ilvl", new XAttribute(W + "val", style.OutlineLevel ?? 0)),
+                        new XElement(W + "numId", new XAttribute(W + "val", MultiLevelNumId))));
+                }
+                if (style.OutlineLevel is { } outlineLevel)
+                {
+                    pPr ??= new XElement(W + "pPr");
+                    pPr.Add(new XElement(W + "outlineLvl",
+                        new XAttribute(W + "val", Math.Clamp(outlineLevel, 0, 8))));
+                }
                 // Style-level numbering FreeW does not model: when the style carried an original w:numPr and
                 // the merge plan remapped that numId (a definition exists in the preserved numbering.xml),
                 // re-emit a numPr pointing at the REMAPPED numId (disjoint from FreeW's fixed ids), keeping
                 // the original ilvl. A numPr whose numId the plan did not remap (no matching w:num) is
                 // dropped, exactly like a paragraph's preserved numPr.
-                if (preservedNumbering is not null
+                if (!chapterPageNumberingStyleIds.Contains(style.Id)
+                    && preservedNumbering is not null
                     && style.PreservedNumbering is { } sn
                     && preservedNumbering.NumIdRemap.TryGetValue(sn.NumId, out var mappedNumId))
                 {

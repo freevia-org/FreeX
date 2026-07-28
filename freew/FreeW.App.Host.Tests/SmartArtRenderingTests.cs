@@ -458,6 +458,27 @@ public sealed class SmartArtRenderingTests
     }
 
     [StaFact]
+    public void WordSerializedColorfulSubtleProcess_UsesSolidNativeNodeGeometry()
+    {
+        var sa = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
+        sa.LayoutId = "process1";
+        sa.ColorSchemeId = "colorful1";
+        sa.StyleId = "subtle1";
+        sa.WidthPt = 216;
+        sa.HeightPt = 90;
+        var view = ViewWithSmartArt(sa);
+
+        var nodes = new[] { "Plan", "Build", "Verify" }
+            .Select(text => NodeBorder(view, text))
+            .ToList();
+
+        nodes.Should().OnlyContain(node =>
+            Assert.IsType<SolidColorBrush>(node.Background).Color == Color.FromRgb(0x4E, 0x81, 0xBD));
+        nodes.Select(Canvas.GetLeft).Should().Equal(0, 106, 212);
+        nodes.Select(Canvas.GetTop).Should().OnlyContain(top => Math.Abs(top - 22.4) < 0.01);
+    }
+
+    [StaFact]
     public void ContinuousBlockProcessLayout_RendersSharedProcessGeometry()
     {
         var sa = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);

@@ -16,6 +16,11 @@ internal sealed class ChartAxisOptionsDialog : Window
     private readonly ChartAxisOptionsPlanner _planner;
     private readonly ComboBox _axisCombo;
     private readonly TextBox _titleBox;
+    private readonly TextBox _titleFontFamilyBox;
+    private readonly TextBox _titleFontSizeBox;
+    private readonly TextBox _titleColorBox;
+    private readonly CheckBox _titleBoldCheck;
+    private readonly CheckBox _titleItalicCheck;
     private readonly CheckBox _showAxisCheck;
     private readonly TextBox _minimumBox;
     private readonly TextBox _maximumBox;
@@ -46,7 +51,7 @@ internal sealed class ChartAxisOptionsDialog : Window
 
         Title = surface.Title;
         Width = ChartAxisOptionsPlanner.DefaultDialogWidth;
-        Height = ChartAxisOptionsPlanner.DefaultDialogHeight + 28;
+        Height = ChartAxisOptionsPlanner.DefaultDialogHeight + 150;
         MinWidth = 400;
         MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -68,6 +73,11 @@ internal sealed class ChartAxisOptionsDialog : Window
             }
         };
         _titleBox = new TextBox { MinWidth = 230 };
+        _titleFontFamilyBox = new TextBox { MinWidth = 180 };
+        _titleFontSizeBox = new TextBox { MinWidth = 130 };
+        _titleColorBox = new TextBox { MinWidth = 180 };
+        _titleBoldCheck = new CheckBox { Content = surface.AxisTitleBoldLabel, IsThreeState = true };
+        _titleItalicCheck = new CheckBox { Content = surface.AxisTitleItalicLabel, IsThreeState = true };
         _showAxisCheck = new CheckBox { Content = surface.ShowAxisLabel };
         _minimumBox = new TextBox { MinWidth = 130 };
         _maximumBox = new TextBox { MinWidth = 130 };
@@ -110,6 +120,11 @@ internal sealed class ChartAxisOptionsDialog : Window
             {
                 MakeRow(surface.AxisLabel, _axisCombo),
                 MakeRow(surface.AxisTitleLabel, _titleBox),
+                MakeRow(surface.AxisTitleFontFamilyLabel, _titleFontFamilyBox),
+                MakeRow(surface.AxisTitleFontSizeLabel, _titleFontSizeBox),
+                MakeRow(surface.AxisTitleColorLabel, _titleColorBox),
+                _titleBoldCheck,
+                _titleItalicCheck,
                 _showAxisCheck,
                 MakeRow(surface.MinimumLabel, _minimumBox),
                 MakeRow(surface.MaximumLabel, _maximumBox),
@@ -203,6 +218,11 @@ internal sealed class ChartAxisOptionsDialog : Window
     private void LoadControls()
     {
         _titleBox.Text = _planner.Title;
+        _titleFontFamilyBox.Text = _planner.TitleFontFamily ?? string.Empty;
+        _titleFontSizeBox.Text = Format(_planner.TitleFontSizePt);
+        _titleColorBox.Text = _planner.TitleColorText;
+        _titleBoldCheck.IsChecked = _planner.TitleBold;
+        _titleItalicCheck.IsChecked = _planner.TitleItalic;
         _showAxisCheck.IsChecked = _planner.ShowAxis;
         _minimumBox.Text = Format(_planner.Minimum);
         _maximumBox.Text = Format(_planner.Maximum);
@@ -227,6 +247,11 @@ internal sealed class ChartAxisOptionsDialog : Window
     private void UpdatePlannerFromControls()
     {
         _planner.SetTitle(_titleBox.Text);
+        _planner.SetTitleFontFamily(_titleFontFamilyBox.Text);
+        _planner.SetTitleFontSizePt(ParseOptional(_titleFontSizeBox.Text, "Axis title size"));
+        _planner.SetTitleColor(_titleColorBox.Text);
+        _planner.SetTitleBold(_titleBoldCheck.IsChecked);
+        _planner.SetTitleItalic(_titleItalicCheck.IsChecked);
         _planner.SetShowAxis(_showAxisCheck.IsChecked == true);
         _planner.SetMinimum(ParseOptional(_minimumBox.Text, "Minimum"));
         _planner.SetMaximum(ParseOptional(_maximumBox.Text, "Maximum"));

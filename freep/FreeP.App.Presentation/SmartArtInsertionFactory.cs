@@ -279,6 +279,7 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.Hierarchy3 => ("urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.HorizontalHierarchy => ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.OrgChart => ("urn:microsoft.com/office/officeart/2005/8/layout/orgChart", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.NameAndTitleOrgChart => ("urn:microsoft.com/office/officeart/2005/8/layout/nameAndTitleOrgChart", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.PictureCaptionList => ("urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList", SmartArtFamily.List),
             SmartArtLayoutPreset.PictureAccentList => ("urn:microsoft.com/office/officeart/2005/8/layout/pictureAccentList", SmartArtFamily.List),
             SmartArtLayoutPreset.PictureStack => ("urn:microsoft.com/office/officeart/2005/8/layout/pictureStack", SmartArtFamily.List),

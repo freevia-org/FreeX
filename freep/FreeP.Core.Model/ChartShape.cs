@@ -481,6 +481,9 @@ public sealed class ChartAxis
     /// <summary>Axis title text. Null if no title is set.</summary>
     public string? Title { get; set; }
 
+    /// <summary>Optional independent formatting for the axis title text.</summary>
+    public ChartTextStyle? TitleStyle { get; set; }
+
     /// <summary>Authored axis label number/date format code from <c>c:numFmt/@formatCode</c>.</summary>
     public string? NumberFormatCode { get; set; }
 

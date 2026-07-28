@@ -257,6 +257,7 @@ public readonly record struct ChartTextPlan(
 {
     public string? FontFamily { get; init; }
     public SrgbColor? TextColor { get; init; }
+    public bool IsItalic { get; init; }
     public double HorizontalScale { get; init; } = 1.0;
     public int MaxLineCount { get; init; } = 1;
 }
@@ -3136,36 +3137,39 @@ public static partial class ChartRenderPlanner
         var plans = new List<ChartAxisTitlePlan>(2);
         var plot = frame.Plot;
 
+        static ChartTextPlan StyledTitle(string text, ChartPlanRect bounds, ChartTextStyle? style) =>
+            new(text, bounds, style?.Bold ?? false, style?.FontSizePt ?? AxisTitleFontSize,
+                ChartPlanTextAlignment.Center)
+            {
+                FontFamily = style?.FontFamily,
+                TextColor = style?.Color?.Resolved,
+                IsItalic = style?.Italic ?? false,
+            };
+
         if (!chart.ValueAxis.Delete && !string.IsNullOrWhiteSpace(chart.ValueAxis.Title))
         {
             if (frame.IsBar)
             {
                 plans.Add(new ChartAxisTitlePlan(
-                    new ChartTextPlan(
+                    StyledTitle(
                         chart.ValueAxis.Title!,
                         new ChartPlanRect(
                             plot.X,
                             plot.Bottom + CategoryLabelHeight + 2,
                             plot.Width,
-                            AxisTitleBand),
-                        IsBold: false,
-                        FontSize: AxisTitleFontSize,
-                        Alignment: ChartPlanTextAlignment.Center),
+                            AxisTitleBand), chart.ValueAxis.TitleStyle),
                     ChartAxisTitleOrientation.Horizontal));
             }
             else
             {
                 plans.Add(new ChartAxisTitlePlan(
-                    new ChartTextPlan(
+                    StyledTitle(
                         chart.ValueAxis.Title!,
                         new ChartPlanRect(
                             frame.Bounds.X + Margin,
                             plot.Y,
                             AxisTitleBand,
-                            plot.Height),
-                        IsBold: false,
-                        FontSize: AxisTitleFontSize,
-                        Alignment: ChartPlanTextAlignment.Center),
+                            plot.Height), chart.ValueAxis.TitleStyle),
                     ChartAxisTitleOrientation.VerticalCounterclockwise));
             }
         }
@@ -3175,16 +3179,13 @@ public static partial class ChartRenderPlanner
             if (frame.IsBar)
             {
                 plans.Add(new ChartAxisTitlePlan(
-                    new ChartTextPlan(
+                    StyledTitle(
                         chart.CategoryAxis.Title!,
                         new ChartPlanRect(
                             frame.Bounds.X + Margin,
                             plot.Y,
                             AxisTitleBand,
-                            plot.Height),
-                        IsBold: false,
-                        FontSize: AxisTitleFontSize,
-                        Alignment: ChartPlanTextAlignment.Center),
+                            plot.Height), chart.CategoryAxis.TitleStyle),
                     ChartAxisTitleOrientation.VerticalCounterclockwise));
             }
             else
@@ -3193,16 +3194,13 @@ public static partial class ChartRenderPlanner
                     ? ComputeDataTableReservedHeight(chart) + 2
                     : CategoryLabelHeight + 2;
                 plans.Add(new ChartAxisTitlePlan(
-                    new ChartTextPlan(
+                    StyledTitle(
                         chart.CategoryAxis.Title!,
                         new ChartPlanRect(
                             plot.X,
                             plot.Bottom + categoryTitleOffset,
                             plot.Width,
-                            AxisTitleBand),
-                        IsBold: false,
-                        FontSize: AxisTitleFontSize,
-                        Alignment: ChartPlanTextAlignment.Center),
+                            AxisTitleBand), chart.CategoryAxis.TitleStyle),
                     ChartAxisTitleOrientation.Horizontal));
             }
         }

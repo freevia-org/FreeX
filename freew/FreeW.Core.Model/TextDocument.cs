@@ -2471,6 +2471,12 @@ public sealed record WatermarkOptions(string Text)
     public double? NativeVmlPictureHeightPt { get; init; }
 
     /// <summary>
+    /// The optional <c>v:fill/@recolor</c> token recovered from a native VML picture watermark.
+    /// Word's recolored VML picture paint is distinct from FreeW's editable raw image payload.
+    /// </summary>
+    public bool? NativeVmlPictureRecolor { get; init; }
+
+    /// <summary>
     /// Optional width recovered from Word's native VML text-watermark shape. Together with
     /// <see cref="NativeVmlTextHeightPt"/>, this keeps an imported text-path footprint distinct
     /// from FreeW's canonical 468 by 117 point watermark shape.
@@ -3280,6 +3286,7 @@ public sealed class TextDocument
             Id = "Heading1",
             Name = "Heading 1",
             BasedOnStyleId = "Normal",
+            OutlineLevel = 0,
             Run = new RunFormatting { Bold = true, FontSizePt = 16, ColorHex = "#2F5496" },
             Paragraph = new ParagraphFormatting { SpaceBeforePt = 12, SpaceAfterPt = 4 }
         };
@@ -3288,6 +3295,7 @@ public sealed class TextDocument
             Id = "Heading2",
             Name = "Heading 2",
             BasedOnStyleId = "Normal",
+            OutlineLevel = 1,
             Run = new RunFormatting { Bold = true, FontSizePt = 13, ColorHex = "#2F5496" },
             Paragraph = new ParagraphFormatting { SpaceBeforePt = 10, SpaceAfterPt = 4 }
         };
@@ -3296,6 +3304,7 @@ public sealed class TextDocument
             Id = "Heading3",
             Name = "Heading 3",
             BasedOnStyleId = "Normal",
+            OutlineLevel = 2,
             Run = new RunFormatting { Bold = true, FontSizePt = 12, ColorHex = "#1F3864" },
             Paragraph = new ParagraphFormatting { SpaceBeforePt = 8, SpaceAfterPt = 4 }
         };

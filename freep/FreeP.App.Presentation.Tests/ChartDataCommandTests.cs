@@ -1272,6 +1272,12 @@ public sealed class ChartDataCommandTests
         var (p, bus, id) = MakeChartPresentation();
         var chart = p.Slides[0].Shapes[0].Chart!;
         chart.ValueAxis.Title = "Old axis";
+        chart.ValueAxis.TitleStyle = new ChartTextStyle
+        {
+            FontFamily = "Calibri",
+            FontSizePt = 11,
+            Bold = false,
+        };
         chart.ValueAxis.Delete = true;
         chart.ValueAxis.Min = 0;
         chart.ValueAxis.Max = 200;
@@ -1298,7 +1304,15 @@ public sealed class ChartDataCommandTests
                 ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
                 ChartAxisCrossing.Min, 10, false,
                 ChartCrossBetween.MidCat, ChartLabelAlignment.Right,
-                35, true, false, true, true)));
+                35, true, false, true, true,
+                new ChartTextStyle
+                {
+                    FontFamily = "Aptos Display",
+                    FontSizePt = 15,
+                    Bold = true,
+                    Italic = true,
+                    Color = new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79)),
+                })));
 
         chart.ValueAxis.Title.Should().Be("Revenue");
         chart.ValueAxis.Delete.Should().BeTrue();
@@ -1321,6 +1335,9 @@ public sealed class ChartDataCommandTests
         chart.ValueAxis.NoMultiLevelLabels.Should().BeTrue();
         chart.ValueAxis.AutoCrossing.Should().BeFalse();
         chart.ValueAxis.ReverseOrder.Should().BeTrue();
+        chart.ValueAxis.TitleStyle!.FontFamily.Should().Be("Aptos Display");
+        chart.ValueAxis.TitleStyle.FontSizePt.Should().Be(15);
+        chart.ValueAxis.TitleStyle.Bold.Should().BeTrue();
 
         using var stream = new MemoryStream();
         PptxPackageWriter.Write(p, stream);
@@ -1332,6 +1349,11 @@ public sealed class ChartDataCommandTests
         roundTripped.ValueAxis.Max.Should().Be(90);
         roundTripped.ValueAxis.MajorUnit.Should().Be(10);
         roundTripped.ValueAxis.MinorUnit.Should().Be(5);
+        roundTripped.ValueAxis.TitleStyle!.FontFamily.Should().Be("Aptos Display");
+        roundTripped.ValueAxis.TitleStyle.FontSizePt.Should().Be(15);
+        roundTripped.ValueAxis.TitleStyle.Bold.Should().BeTrue();
+        roundTripped.ValueAxis.TitleStyle.Italic.Should().BeTrue();
+        roundTripped.ValueAxis.TitleStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
         roundTripped.ValueAxis.NumberFormatCode.Should().Be("$#,##0");
         roundTripped.ValueAxis.HasMajorGridlines.Should().BeFalse();
         roundTripped.ValueAxis.HasMinorGridlines.Should().BeTrue();
@@ -1349,6 +1371,9 @@ public sealed class ChartDataCommandTests
 
         bus.Undo();
         chart.ValueAxis.Title.Should().Be("Old axis");
+        chart.ValueAxis.TitleStyle!.FontFamily.Should().Be("Calibri");
+        chart.ValueAxis.TitleStyle.FontSizePt.Should().Be(11);
+        chart.ValueAxis.TitleStyle.Bold.Should().BeFalse();
         chart.ValueAxis.Delete.Should().BeTrue();
         chart.ValueAxis.Min.Should().Be(0);
         chart.ValueAxis.Max.Should().Be(200);

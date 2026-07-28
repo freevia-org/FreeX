@@ -88,18 +88,18 @@ internal static class PptxChartReader
         foreach (var axEl in plotArea.Elements())
         {
             if (axEl.Name == C + "catAx" || axEl.Name == C + "dateAx")
-                ReadAxis(axEl, shape.CategoryAxis);
+                ReadAxis(axEl, shape.CategoryAxis, scheme);
             else if (axEl.Name == C + "valAx")
             {
                 if (!primaryValAxRead)
                 {
-                    ReadAxis(axEl, shape.ValueAxis);
+                    ReadAxis(axEl, shape.ValueAxis, scheme);
                     primaryValAxRead = true;
                 }
                 else
                 {
                     shape.SecondaryValueAxis = new ChartAxis();
-                    ReadAxis(axEl, shape.SecondaryValueAxis);
+                    ReadAxis(axEl, shape.SecondaryValueAxis, scheme);
                 }
             }
         }
@@ -1170,7 +1170,7 @@ internal static class PptxChartReader
 
     // ── Axis parsing ──────────────────────────────────────────────────────────
 
-    private static void ReadAxis(XElement axEl, ChartAxis axis)
+    private static void ReadAxis(XElement axEl, ChartAxis axis, PresentationColorScheme scheme)
     {
         axis.Delete = axEl.Element(C + "delete")?.Attribute("val")?.Value is "1" or "true";
         axis.HasMajorGridlines = axEl.Element(C + "majorGridlines") is not null;
@@ -1185,7 +1185,9 @@ internal static class PptxChartReader
         axis.LabelAlignment = ParseLabelAlignment(axEl.Element(C + "lblAlgn"));
         axis.Crosses = ParseAxisCrossing(axEl.Element(C + "crosses"));
         axis.CrossesAt = ParseDouble(axEl.Element(C + "crossesAt")?.Attribute("val")?.Value);
-        axis.Title = ReadTitle(axEl.Element(C + "title"));
+        var title = axEl.Element(C + "title");
+        axis.Title = ReadTitle(title);
+        axis.TitleStyle = ReadTitleStyle(title, scheme);
 
         var numFmt = axEl.Element(C + "numFmt");
         if (numFmt is not null)
@@ -1527,6 +1529,31 @@ internal static class PptxChartReader
                 Color      = color,
                 FontFamily = fontFamily,
             }
+            : null;
+    }
+
+    private static ChartTextStyle? ReadTitleStyle(XElement? titleEl, PresentationColorScheme scheme)
+    {
+        var rich = titleEl?.Element(C + "tx")?.Element(C + "rich");
+        if (rich is null)
+            return null;
+
+        var style = ReadChartTextStyle(rich, scheme);
+        if (style is not null)
+            return style;
+
+        var runPr = rich.Descendants(A + "rPr").FirstOrDefault();
+        if (runPr is null)
+            return null;
+
+        var color = PptxColorReader.TryReadColor(runPr.Element(A + "solidFill"), scheme);
+        var family = runPr.Element(A + "latin")?.Attribute("typeface")?.Value;
+        double? size = int.TryParse(runPr.Attribute("sz")?.Value, NumberStyles.Integer,
+            CultureInfo.InvariantCulture, out var sz) && sz > 0 ? sz / 100.0 : null;
+        var bold = ParseNullableBoolAttr(runPr.Attribute("b")?.Value);
+        var italic = ParseNullableBoolAttr(runPr.Attribute("i")?.Value);
+        return size.HasValue || bold.HasValue || italic.HasValue || color is not null || family is not null
+            ? new ChartTextStyle { FontSizePt = size, Bold = bold, Italic = italic, Color = color, FontFamily = family }
             : null;
     }
 

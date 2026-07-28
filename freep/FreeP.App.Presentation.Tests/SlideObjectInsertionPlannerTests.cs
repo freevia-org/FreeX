@@ -63,6 +63,7 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.LineCalloutCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.CylinderCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.ChordCommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.HeartCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.ConnectorCommandId, SlideObjectInsertionKind.Connector)]
     [InlineData(SlideObjectInsertionPlanner.ElbowConnectorCommandId, SlideObjectInsertionKind.Connector)]
     [InlineData(SlideObjectInsertionPlanner.CurvedConnectorCommandId, SlideObjectInsertionKind.Connector)]
@@ -131,6 +132,7 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.LineCalloutCommandId, DrawingShapeKind.LineCallout, false)]
     [InlineData(SlideObjectInsertionPlanner.CylinderCommandId, DrawingShapeKind.Cylinder, false)]
     [InlineData(SlideObjectInsertionPlanner.ChordCommandId, DrawingShapeKind.Chord, false)]
+    [InlineData(SlideObjectInsertionPlanner.HeartCommandId, DrawingShapeKind.Heart, false)]
     public void ApplyCommand_InsertsExpectedAutoShape(
         string commandId,
         DrawingShapeKind expectedShape,

@@ -111,6 +111,7 @@ public enum SmartArtLayoutPreset
     Hierarchy3,
     HorizontalHierarchy,
     OrgChart,
+    NameAndTitleOrgChart,
     PictureCaptionList,
     PictureAccentList,
     PictureStack,
@@ -241,6 +242,7 @@ public static class SmartArtAuthoringPlanner
     public const string Hierarchy3LayoutCommandId = "freep.smartart.layout.hierarchy-3";
     public const string HorizontalHierarchyLayoutCommandId = "freep.smartart.layout.horizontal-hierarchy";
     public const string OrgChartLayoutCommandId = "freep.smartart.layout.org-chart";
+    public const string NameAndTitleOrgChartLayoutCommandId = "freep.smartart.layout.name-and-title-org-chart";
     public const string PictureCaptionListLayoutCommandId = "freep.smartart.layout.picture-caption-list";
     public const string PictureAccentListLayoutCommandId = "freep.smartart.layout.picture-accent-list";
     public const string PictureStackLayoutCommandId = "freep.smartart.layout.picture-stack";
@@ -437,11 +439,17 @@ public static class SmartArtAuthoringPlanner
         SmartArtShape? smartArt,
         SmartArtLayoutPreset preset)
     {
-        if (smartArt?.Data is null)
-            return NotAppliedLayout("No SmartArt data model is available.");
+        if (smartArt is null)
+            return NotAppliedLayout("No SmartArt graphic is available.");
 
-        if (preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureGrid) &&
-            smartArt.Data.Nodes.Any(node => node.Picture?.Bytes is not { Length: > 0 }))
+        var pictureLayout = preset is (
+            SmartArtLayoutPreset.PictureCaptionList or
+            SmartArtLayoutPreset.PictureAccentList or
+            SmartArtLayoutPreset.PictureStack or
+            SmartArtLayoutPreset.PictureLineup or
+            SmartArtLayoutPreset.PictureGrid);
+        if (pictureLayout && (smartArt.Data is null ||
+            smartArt.Data.Nodes.Any(node => node.Picture?.Bytes is not { Length: > 0 })))
         {
             return NotAppliedLayout("Picture-based SmartArt layouts require image content for every SmartArt node.");
         }
@@ -554,6 +562,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.OrgChart =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/orgChart", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.NameAndTitleOrgChart =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/nameAndTitleOrgChart", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.PictureCaptionList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList", SmartArtFamily.List),
             SmartArtLayoutPreset.PictureAccentList =>
@@ -589,10 +599,13 @@ public static class SmartArtAuthoringPlanner
 
         layoutDefinition.SetAttributeValue("uniqueId", layoutId);
         layoutPart.Bytes = Serialize(document);
-        smartArt.Data.LayoutUniqueId = layoutId;
-        smartArt.Data.Family = family;
-        smartArt.Data.IsLiveLayoutSupported = true;
-        smartArt.FallbackShapes.Clear();
+        if (smartArt.Data is { } data)
+        {
+            data.LayoutUniqueId = layoutId;
+            data.Family = family;
+            data.IsLiveLayoutSupported = true;
+            smartArt.FallbackShapes.Clear();
+        }
 
         return new SmartArtLayoutApplyResult(
             true,

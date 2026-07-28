@@ -63,10 +63,23 @@ public sealed class VisualEvidenceRunnerScriptTests
             "FreeW.PdfRasterize",
             "Program.cs"));
 
-        source.Should().Contain("PdfRenderOptionsDpi = 120.0");
-        source.Should().Contain("TargetDpi = 96.0");
-        source.Should().Contain("DestinationWidth = destinationWidth");
-        source.Should().Contain("DestinationHeight = destinationHeight");
+        source.Should().Contain("Windows.Data.Pdf reports each page in its native 96-DPI geometry");
+        source.Should().Contain("MaximumEvidenceWidth = 816.0");
+        source.Should().Contain("MaximumEvidenceHeight = 1056.0");
+        source.Should().Contain("DestinationWidth = outputWidth");
+        source.Should().Contain("DestinationHeight = outputHeight");
+    }
+
+    [Fact]
+    public void WordBaselineEvidenceRunner_RasterizesEveryPdfPageAtItsOwnGeometry()
+    {
+        var source = File.ReadAllText(RepositoryFile(
+            "tools",
+            "Run-FreeWWordBaselineEvidence.ps1"));
+
+        source.Should().Contain("$rasterArgs = @($pdf.FullName, $wordBaselineDir)");
+        source.Should().NotContain("Find-EvidencePage");
+        source.Should().NotContain("Get-PngDimensions");
     }
 
     [Fact]

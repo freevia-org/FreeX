@@ -22,6 +22,12 @@ public sealed class DocumentStyle
     /// dropped on read/create to avoid a dangling reference.
     /// </summary>
     public string? NextStyleId { get; init; }
+
+    /// <summary>
+    /// The Word outline level carried by <c>w:pPr/w:outlineLvl</c> for a paragraph style.
+    /// Heading styles use levels 0 through 8; null preserves an ordinary, non-outline style.
+    /// </summary>
+    public int? OutlineLevel { get; init; }
     public RunFormatting Run { get; set; } = RunFormatting.Default;
     public ParagraphFormatting Paragraph { get; set; } = ParagraphFormatting.Default;
 

@@ -863,6 +863,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.Hierarchy3, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.HorizontalHierarchy, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.OrgChart, SmartArtFamily.Hierarchy)]
+    [InlineData(SmartArtLayoutPreset.NameAndTitleOrgChart, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.PictureCaptionList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureAccentList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureStack, SmartArtFamily.List)]
@@ -900,6 +901,35 @@ public sealed class SmartArtTests : IDisposable
         reread.Data.Should().NotBeNull();
         reread.Data!.Family.Should().Be(expectedFamily);
         reread.Data.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
+    }
+
+    [Fact]
+    public void SmartArtLayoutPreset_PersistsNativeLayoutWhenLiveDataIsUnavailable()
+    {
+        var sourcePath = MakeSmartArtPptx(["One", "Two"]);
+        var savedPath = Path.Combine(_tempDir, "smartart-layout-cached-only.pptx");
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        smartArt.Data = null;
+        var originalFallbackCount = smartArt.FallbackShapes.Count;
+
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(
+            smartArt,
+            SmartArtLayoutPreset.BasicProcess);
+
+        result.Applied.Should().BeTrue(result.Message);
+        smartArt.Data.Should().BeNull();
+        smartArt.FallbackShapes.Should().HaveCount(originalFallbackCount);
+        PptxPackageWriter.Write(presentation, savedPath);
+
+        var reread = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        reread.Data.Should().NotBeNull();
+        reread.Data!.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
+        reread.FallbackShapes.Should().HaveCount(originalFallbackCount);
     }
 
     [Theory]

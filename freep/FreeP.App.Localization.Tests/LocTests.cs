@@ -331,6 +331,8 @@ public sealed class LocTests
             "Ribbon_Command_ShapeCylinder_KeyTip",
             "Ribbon_Command_ShapeChord_Label",
             "Ribbon_Command_ShapeChord_KeyTip",
+            "Ribbon_Command_ShapeHeart_Label",
+            "Ribbon_Command_ShapeHeart_KeyTip",
             "Ribbon_Command_Connector_Label",
             "Ribbon_Command_Connector_KeyTip",
             "Ribbon_Command_ElbowConnector_Label",

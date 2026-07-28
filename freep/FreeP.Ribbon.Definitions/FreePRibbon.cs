@@ -401,6 +401,7 @@ public static class FreePRibbon
         menu.Item(ShapeChangePlanner.LineCalloutCommandId, FreePRibbonText.ShapeLineCalloutLabel, FreePRibbonText.ShapeLineCalloutKeyTip);
         menu.Item(ShapeChangePlanner.CylinderCommandId, FreePRibbonText.ShapeCylinderLabel, FreePRibbonText.ShapeCylinderKeyTip);
         menu.Item(ShapeChangePlanner.ChordCommandId, FreePRibbonText.ShapeChordLabel, FreePRibbonText.ShapeChordKeyTip);
+        menu.Item(ShapeChangePlanner.HeartCommandId, FreePRibbonText.ShapeHeartLabel, FreePRibbonText.ShapeHeartKeyTip);
     }
 
     private static void AddInsertGroups(RibbonTabBuilder tab)
@@ -615,6 +616,8 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Rectangle, FreePRibbonText.ShapeCylinderKeyTip);
             group.Medium(SlideObjectInsertionPlanner.ChordCommandId, FreePRibbonText.ShapeChordLabel,
                 RibbonCommandIconKind.Diamond, FreePRibbonText.ShapeChordKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.HeartCommandId, FreePRibbonText.ShapeHeartLabel,
+                RibbonCommandIconKind.RibbonShape, FreePRibbonText.ShapeHeartKeyTip);
             group.Medium(SlideObjectInsertionPlanner.ConnectorCommandId, FreePRibbonText.ConnectorLabel,
                 RibbonCommandIconKind.Line, FreePRibbonText.ConnectorKeyTip);
             group.Medium(SlideObjectInsertionPlanner.ElbowConnectorCommandId, FreePRibbonText.ElbowConnectorLabel,
@@ -844,6 +847,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.OrgChartLayoutCommandId,
                 FreePRibbonText.SmartArtOrgChartCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtOrgChartCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.NameAndTitleOrgChartLayoutCommandId,
+                FreePRibbonText.SmartArtNameAndTitleOrgChartCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtNameAndTitleOrgChartCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.PictureCaptionListLayoutCommandId,
                 FreePRibbonText.SmartArtPictureCaptionListCommand.Label, RibbonCommandIconKind.Picture,
                 FreePRibbonText.SmartArtPictureCaptionListCommand.KeyTip);

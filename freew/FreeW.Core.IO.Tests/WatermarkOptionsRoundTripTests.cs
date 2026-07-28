@@ -807,6 +807,30 @@ public class WatermarkOptionsRoundTripTests
         loaded!.ImageBytes.Should().Equal(image);
         loaded.NativeVmlPictureWidthPt.Should().BeApproximately(512.5, 0.001);
         loaded.NativeVmlPictureHeightPt.Should().BeApproximately(240.25, 0.001);
+        loaded.NativeVmlPictureRecolor.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PictureWatermark_NativeVmlRecolorFalse_RoundTripsThroughTheHeaderPayload()
+    {
+        var image = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = image,
+            NativeVmlPictureRecolor = false
+        };
+
+        var xml = ReadHeaderXml(doc);
+        var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+        var fill = xml.Descendants(vml + "shape")
+            .Single(shape => shape.Attribute("id")?.Value == "PowerPlusPictureWaterMarkObject")
+            .Element(vml + "fill");
+
+        fill.Should().NotBeNull();
+        fill!.Attribute("recolor")!.Value.Should().Be("f");
+        RoundTrip(doc).Page.WatermarkOptions!.NativeVmlPictureRecolor.Should().BeFalse();
     }
 
     [Fact]

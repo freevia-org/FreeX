@@ -1909,7 +1909,7 @@ public sealed class SlideCanvas : FrameworkElement
         var rect = ToRect(label.Bounds);
         if (title.Orientation == ChartAxisTitleOrientation.Horizontal)
         {
-            DrawChartLabel(dc, label.Text, rect, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+            DrawChartLabel(dc, label.Text, rect, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment), isItalic: label.IsItalic, textColor: label.TextColor, fontFamily: label.FontFamily);
             return;
         }
 
@@ -1927,7 +1927,10 @@ public sealed class SlideCanvas : FrameworkElement
                 rect.Width),
             label.IsBold,
             label.FontSize,
-            ToTextAlignment(label.Alignment));
+            ToTextAlignment(label.Alignment),
+            isItalic: label.IsItalic,
+            textColor: label.TextColor,
+            fontFamily: label.FontFamily);
         dc.Pop();
     }
 

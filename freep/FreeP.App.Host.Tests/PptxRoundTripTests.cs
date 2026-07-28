@@ -372,7 +372,8 @@ public sealed class PptxRoundTripTests : IDisposable
             DrawingShapeKind.FlowchartTerminator,
             DrawingShapeKind.LineCallout,
             DrawingShapeKind.Cylinder,
-            DrawingShapeKind.Chord
+            DrawingShapeKind.Chord,
+            DrawingShapeKind.Heart
         };
 
         var pres = new Presentation();

@@ -11,6 +11,18 @@ public sealed class SharedShapeGeometryBuilderTests
 {
     private static readonly LayoutRect Bounds = new(100, 200, 80, 60);
 
+    [Fact]
+    public void Heart_UsesClosedFilledBezierContour()
+    {
+        var geometry = ShapeGeometryBuilder.Build(DrawingShapeKind.Heart, Bounds);
+
+        geometry.Contours.Should().ContainSingle();
+        geometry.Contours[0].Closed.Should().BeTrue();
+        geometry.Contours[0].Filled.Should().BeTrue();
+        geometry.Contours[0].Segments.Should().OnlyContain(segment =>
+          segment.Kind == ShapeSegmentKind.CubicBezier);
+    }
+
     private static IEnumerable<LayoutPoint> AllPoints(ShapeContour contour)
     {
         yield return contour.Start;

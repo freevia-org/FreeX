@@ -8,6 +8,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
     private readonly ChartAxisOptions _newOptions;
 
     private string? _oldTitle;
+    private ChartTextStyle? _oldTitleStyle;
     private bool _oldDelete;
     private double? _oldMinimum;
     private double? _oldMaximum;
@@ -50,6 +51,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
             ?? throw new InvalidOperationException("The chart axis could not be resolved.");
         Capture(axis);
         axis.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title.Trim();
+        axis.TitleStyle = CloneTextStyle(_newOptions.TitleStyle);
         axis.Delete = !_newOptions.ShowAxis;
         axis.Min = _newOptions.Minimum;
         axis.Max = _newOptions.Maximum;
@@ -87,6 +89,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         if (axis is null)
             return;
         axis.Title = _oldTitle;
+        axis.TitleStyle = CloneTextStyle(_oldTitleStyle);
         axis.Delete = _oldDelete;
         axis.Min = _oldMinimum;
         axis.Max = _oldMaximum;
@@ -115,6 +118,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
     private void Capture(ChartAxis axis)
     {
         _oldTitle = axis.Title;
+        _oldTitleStyle = CloneTextStyle(axis.TitleStyle);
         _oldDelete = axis.Delete;
         _oldMinimum = axis.Min;
         _oldMaximum = axis.Max;
@@ -146,5 +150,17 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
                 ? chart.SecondaryValueAxis ??= new ChartAxis()
                 : chart.SecondaryValueAxis,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        };
+
+    private static ChartTextStyle? CloneTextStyle(ChartTextStyle? source) => source is null
+        ? null
+        : new ChartTextStyle
+        {
+            IsImplicitDefault = source.IsImplicitDefault,
+            FontSizePt = source.FontSizePt,
+            Bold = source.Bold,
+            Italic = source.Italic,
+            Color = source.Color,
+            FontFamily = source.FontFamily,
         };
 }

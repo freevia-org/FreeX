@@ -157,6 +157,7 @@ public static class StyleManager
             Type = existing.Type,
             BasedOnStyleId = newBasedOn,
             NextStyleId = newNext,
+            OutlineLevel = existing.OutlineLevel,
             Run = run ?? existing.Run,
             Paragraph = para ?? existing.Paragraph,
             // Preserve read-only structural data the modify dialog does not edit, so modifying a style read

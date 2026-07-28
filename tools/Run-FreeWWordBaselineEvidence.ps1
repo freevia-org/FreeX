@@ -22,26 +22,6 @@ function Test-ComProgIdAvailable([string]$ProgId) {
     return $null -ne $type
 }
 
-function Get-PngDimensions([string]$Path) {
-    $bytes = [IO.File]::ReadAllBytes($Path)
-    if ($bytes.Length -lt 24 -or $bytes[0] -ne 0x89 -or $bytes[1] -ne 0x50 -or $bytes[2] -ne 0x4E -or $bytes[3] -ne 0x47) {
-        throw "Expected a PNG evidence image: $Path"
-    }
-
-    [pscustomobject]@{
-        Width = ([uint32]$bytes[16] -shl 24) -bor ([uint32]$bytes[17] -shl 16) -bor ([uint32]$bytes[18] -shl 8) -bor [uint32]$bytes[19]
-        Height = ([uint32]$bytes[20] -shl 24) -bor ([uint32]$bytes[21] -shl 16) -bor ([uint32]$bytes[22] -shl 8) -bor [uint32]$bytes[23]
-    }
-}
-
-function Find-EvidencePage([string]$Stem) {
-    $candidates = @(
-        (Join-Path $wpfDir ($Stem + "_p1.png")),
-        (Join-Path $wpfDir (($Stem -replace "-fidelity$", "") + "_p1.png"))
-    )
-    return $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-}
-
 function Get-JsonArray($Value) {
     if ($null -eq $Value) {
         return @()
@@ -249,16 +229,6 @@ try {
 
     foreach ($pdf in Get-ChildItem -Path $wordPdfDir -Filter *.pdf | Sort-Object Name) {
         $rasterArgs = @($pdf.FullName, $wordBaselineDir)
-        $evidencePage = Find-EvidencePage ([IO.Path]::GetFileNameWithoutExtension($pdf.Name))
-        if ($evidencePage) {
-            $dimensions = Get-PngDimensions $evidencePage
-            # FreeW.PdfRasterize applies a 120-to-96 DPI conversion internally, so
-            # pass the pre-conversion surface that yields the evidence dimensions.
-            $rasterArgs += @(
-                ([int]($dimensions.Width * 1.25)),
-                ([int]($dimensions.Height * 1.25)))
-        }
-
         Invoke-DotNetRun $pdfRasterizeProject $rasterArgs -Configuration $Configuration
     }
 
