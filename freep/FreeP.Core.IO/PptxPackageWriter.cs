@@ -2132,11 +2132,12 @@ public static class PptxPackageWriter
     private static XElement? BuildTimingEl(Slide slide)
     {
         var animations = slide.Animations;
-        var automaticMedia = slide.Shapes
+        var timedMedia = slide.Shapes
             .Where(shape => shape.Kind == SlideShapeKind.Media
-                && shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically)
+                && (shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically
+                    || shape.Media?.Loop == true))
             .ToList();
-        if (animations.Count == 0 && automaticMedia.Count == 0) return null;
+        if (animations.Count == 0 && timedMedia.Count == 0) return null;
 
         // Split animations into main-sequence and trigger groups.
         var mainAnims    = animations.Where(a => a.TriggerShapeId is null).ToList();
@@ -2204,8 +2205,8 @@ public static class PptxPackageWriter
         foreach (var triggerPar in triggerPars)
             rootChildTnLst.Add(triggerPar);
 
-        foreach (var shape in automaticMedia)
-            rootChildTnLst.Add(BuildAutomaticMediaTimingEl(shape, ref nodeId));
+        foreach (var shape in timedMedia)
+            rootChildTnLst.Add(BuildMediaTimingEl(shape, ref nodeId));
 
         var outerPar = new XElement(P + "par",
             new XElement(P + "cTn",
@@ -2222,21 +2223,36 @@ public static class PptxPackageWriter
             new XElement(P + "tnLst", outerPar));
     }
 
-    private static XElement BuildAutomaticMediaTimingEl(SlideShape shape, ref uint nodeId)
+    private static XElement BuildMediaTimingEl(SlideShape shape, ref uint nodeId)
     {
         var mediaElementName = shape.Media?.IsVideo == true ? P + "video" : P + "audio";
+        bool automatic = shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically;
+        var condition = automatic
+            ? new XElement(P + "cond",
+                new XAttribute("evt", "onBegin"),
+                new XAttribute("delay", "0"))
+            : new XElement(P + "cond",
+                new XAttribute("evt", "onClick"),
+                new XAttribute("delay", "0"),
+                new XElement(P + "tgtEl",
+                    new XElement(P + "spTgt",
+                        new XAttribute("spid", shape.Id.ToString(CultureInfo.InvariantCulture)))));
+        var cTnAttributes = new List<object>
+        {
+            new XAttribute("id", nodeId++),
+            new XAttribute("dur", "indefinite"),
+            new XAttribute("fill", "hold"),
+            new XAttribute("display", "0"),
+        };
+        if (shape.Media?.Loop == true)
+            cTnAttributes.Add(new XAttribute("repeatCount", "indefinite"));
+
         return new XElement(mediaElementName,
             new XElement(P + "cMediaNode",
                 new XAttribute("vol", "80000"),
                 new XElement(P + "cTn",
-                    new XAttribute("id", nodeId++),
-                    new XAttribute("dur", "indefinite"),
-                    new XAttribute("fill", "hold"),
-                    new XAttribute("display", "0"),
-                    new XElement(P + "stCondLst",
-                        new XElement(P + "cond",
-                            new XAttribute("evt", "onBegin"),
-                            new XAttribute("delay", "0")))),
+                    cTnAttributes.Cast<object>().ToArray(),
+                    new XElement(P + "stCondLst", condition)),
                 new XElement(P + "tgtEl",
                     new XElement(P + "spTgt",
                         new XAttribute("spid", shape.Id.ToString(CultureInfo.InvariantCulture))))));

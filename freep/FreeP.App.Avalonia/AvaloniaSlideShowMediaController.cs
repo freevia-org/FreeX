@@ -144,7 +144,8 @@ internal sealed class AvaloniaSlideShowMediaController
                     shape.Media.LinkUrl,
                     shape.Media.ContentType,
                     shape.Media.IsVideo,
-                    out var source))
+                    out var source,
+                    loop: shape.Media.Loop))
                 continue;
 
             try

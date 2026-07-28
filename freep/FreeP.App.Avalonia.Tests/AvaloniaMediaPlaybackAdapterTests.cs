@@ -51,6 +51,7 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
             {
                 IsVideo = false,
                 PlaybackStartMode = MediaPlaybackStartMode.Automatically,
+                Loop = true,
                 Bytes = new byte[] { 1, 2, 3 },
                 ContentType = "audio/wav",
             },
@@ -66,6 +67,7 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
         var mediaSession = factory.Backend.Sessions[0];
         mediaSession.OpenCount.Should().Be(1);
         mediaSession.PlayCount.Should().Be(1);
+        mediaSession.LastSource!.Loop.Should().BeTrue();
         controller.Availability!.IsAvailable.Should().BeTrue();
 
         controller.TryHandleClick(slide, 960, 720, 960, 720, 480, 360).Should().BeTrue();
@@ -110,6 +112,7 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
             Media = new MediaInfo
             {
                 IsVideo = true,
+                Loop = true,
                 Bytes = [1, 2, 3],
                 ContentType = "video/mp4",
             },
@@ -121,6 +124,7 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
 
         controller.TryHandleClick(slide, 960, 720, 960, 720, 480, 360).Should().BeTrue();
         mediaSession.PlayCount.Should().Be(1);
+        mediaSession.LastSource!.Loop.Should().BeTrue();
     }
 
     [Fact]

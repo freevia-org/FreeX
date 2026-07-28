@@ -8,8 +8,8 @@ namespace FreeW.Core.IO.Tests;
 
 /// <summary>
 /// Round-trip coverage for Mark Citation (TA) fields — the hidden marks that record legal citations for a
-/// Table of Authorities (Word's References &gt; Mark Citation). The mark serialises as a textless
-/// <c>w:fldSimple</c> whose <c>w:instr</c> carries the TA instruction
+/// Table of Authorities (Word's References &gt; Mark Citation). The mark serialises as an instruction-only
+/// complex field whose <c>w:instrText</c> carries the TA instruction
 /// (<c> TA \l "long" \s "short" \c N </c>); the reader recovers the <see cref="Citation"/>.
 /// </summary>
 public class TableOfAuthoritiesRoundTripTests
@@ -71,7 +71,7 @@ public class TableOfAuthoritiesRoundTripTests
     }
 
     [Fact]
-    public void CitationMark_EmitsTaFldSimpleWithSwitches()
+    public void CitationMark_EmitsWordCompatibleComplexTaFieldWithSwitches()
     {
         using var stream = new MemoryStream();
         DocxWriter.Write(CitationDocument(), stream);
@@ -79,7 +79,11 @@ public class TableOfAuthoritiesRoundTripTests
         using var entry = zip.GetEntry("word/document.xml")!.Open();
         var xml = XDocument.Load(entry);
 
-        var instr = xml.Descendants(W + "fldSimple").Single().Attribute(W + "instr")!.Value;
+        var instr = xml.Descendants(W + "instrText").Single().Value;
+        xml.Descendants(W + "fldSimple").Should().BeEmpty();
+        xml.Descendants(W + "fldChar")
+            .Select(fieldChar => fieldChar.Attribute(W + "fldCharType")?.Value)
+            .Should().Equal("begin", "end");
         instr.Should().Contain("TA");
         instr.Should().Contain("\\l \"Brown v. Board of Education, 347 U.S. 483 (1954)\"");
         instr.Should().Contain("\\s \"Brown\"");
@@ -99,7 +103,7 @@ public class TableOfAuthoritiesRoundTripTests
         DocxWriter.Write(doc, stream);
         using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
         using var entry = zip.GetEntry("word/document.xml")!.Open();
-        var instr = XDocument.Load(entry).Descendants(W + "fldSimple").Single().Attribute(W + "instr")!.Value;
+        var instr = XDocument.Load(entry).Descendants(W + "instrText").Single().Value;
 
         instr.Should().NotContain("\\s");
         instr.Should().Contain("\\c 2");
@@ -211,8 +215,8 @@ public class TableOfAuthoritiesRoundTripTests
                 .Should().BeTrue();
         }
 
-        var taInstructions = documentXml.Descendants(W + "fldSimple")
-            .Select(field => field.Attribute(W + "instr")?.Value ?? string.Empty)
+        var taInstructions = documentXml.Descendants(W + "instrText")
+            .Select(field => field.Value)
             .Where(instruction => instruction.Contains("TA"))
             .ToList();
         taInstructions.Should().Contain(instruction =>
@@ -354,7 +358,7 @@ public class TableOfAuthoritiesRoundTripTests
         doc.Blocks.AddRange(Citations.BuildBibliography(doc, CitationStyle.Ieee));
         doc.Blocks.Add(new Paragraph
         {
-            Runs = { Run.ComplexFieldRun(" TOA \\c 1 \\p ", "Cases\t1, 2") }
+            Runs = { Run.ComplexFieldRun(" TOA \\h \\c \"1\" ", "Cases\t1, 2") }
         });
         doc.Blocks.AddRange(TableOfAuthorities.Build(doc, new ToaOptions { TabLeader = ToaTabLeader.Dots }));
 

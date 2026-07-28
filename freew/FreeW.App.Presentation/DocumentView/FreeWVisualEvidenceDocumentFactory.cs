@@ -250,7 +250,7 @@ public static class FreeWVisualEvidenceDocumentFactory
 
         doc.Blocks.Add(FieldParagraph(
             "TOA field cache with page-reference sentinel: ",
-            Run.ComplexFieldRun(" TOA \\c 1 \\p ", "Cases\t1, 2")));
+            Run.ComplexFieldRun(" TOA \\h \\c \"1\" ", "Cases\t1, 2")));
         doc.Blocks.AddRange(TableOfAuthoritiesRegionPlanner
             .BuildInsertPlan(doc, doc.Blocks.Count, new ToaOptions { TabLeader = ToaTabLeader.Dots })
             .Paragraphs);
@@ -317,7 +317,7 @@ public static class FreeWVisualEvidenceDocumentFactory
 
         doc.Blocks.Add(FieldParagraph(
             "TOA field cache with section-formatted page-reference sentinel: ",
-            Run.ComplexFieldRun(" TOA \\c 1 \\p ", "Cases\ti, 1")));
+            Run.ComplexFieldRun(" TOA \\h \\c \"1\" ", "Cases\ti, 1")));
         doc.Blocks.AddRange(TableOfAuthoritiesRegionPlanner
             .BuildInsertPlan(
                 doc,

@@ -1473,10 +1473,20 @@ public static class DocxReader
                         var instruction = fieldInstr.ToString();
                         var result = fieldResult.ToString();
                         var formatting = ReadRunFormatting(fieldFormattingSource?.Element(W + "rPr"));
-                        var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
-                        complexField.CommentId = activeCommentId;
-                        complexField.Control = inheritedControl;
-                        paragraph.Runs.Add(complexField);
+                        if (CitationFor(instruction) is { } citation)
+                        {
+                            var citationRun = Run.CitationMark(citation);
+                            citationRun.CommentId = activeCommentId;
+                            citationRun.Control = inheritedControl;
+                            paragraph.Runs.Add(citationRun);
+                        }
+                        else
+                        {
+                            var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
+                            complexField.CommentId = activeCommentId;
+                            complexField.Control = inheritedControl;
+                            paragraph.Runs.Add(complexField);
+                        }
                         fieldInstr.Clear();
                         fieldResult.Clear();
                         fieldPastSeparate = false;
@@ -1524,10 +1534,20 @@ public static class DocxReader
                             var instruction = fieldInstr.ToString();
                             var result = fieldResult.ToString();
                             var formatting = ReadRunFormatting(fieldFormattingSource?.Element(W + "rPr"));
-                            var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
-                            complexField.CommentId = activeCommentId;
-                            complexField.Control = inheritedControl;
-                            paragraph.Runs.Add(complexField);
+                            if (CitationFor(instruction) is { } citation)
+                            {
+                                var citationRun = Run.CitationMark(citation);
+                                citationRun.CommentId = activeCommentId;
+                                citationRun.Control = inheritedControl;
+                                paragraph.Runs.Add(citationRun);
+                            }
+                            else
+                            {
+                                var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
+                                complexField.CommentId = activeCommentId;
+                                complexField.Control = inheritedControl;
+                                paragraph.Runs.Add(complexField);
+                            }
                             fieldInstr.Clear();
                             fieldResult.Clear();
                             fieldPastSeparate = false;
@@ -2092,6 +2112,26 @@ public static class DocxReader
         string? hyperlinkAnchor,
         string? hyperlinkTooltip)
     {
+        if (CitationFor(instruction) is { } citation)
+        {
+            var citationRun = Run.CitationMark(citation);
+            citationRun.CommentId = commentId;
+            citationRun.Control = control;
+            citationRun.HyperlinkUrl = hyperlinkUrl;
+            citationRun.HyperlinkAnchor = hyperlinkAnchor;
+            citationRun.HyperlinkTooltip = hyperlinkTooltip;
+            if (revision.Kind != RevisionKind.None)
+            {
+                citationRun.Revision = revision.Kind;
+                citationRun.RevisionAuthor = revision.Author;
+                citationRun.RevisionDateXml = revision.DateXml;
+                citationRun.MoveRevisionId = revision.MoveId;
+            }
+
+            paragraph.Runs.Add(citationRun);
+            return;
+        }
+
         var run = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
         run.CommentId = commentId;
         run.Control = control;
