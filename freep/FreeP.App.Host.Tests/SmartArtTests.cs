@@ -3205,6 +3205,33 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_ChevronProcessSmartArt_RendersAllStagesBeyondOriginalTwelveItemCutoff()
+    {
+        var nodes = Enumerable.Range(1, 13)
+            .Select(index => ($"n{index}", $"Stage {index}"))
+            .ToArray();
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/chevronProcess",
+            nodes: nodes,
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(13, "all 13 chevron stages should remain live");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, 13).Select(index => $"Stage {index}"));
+        liveShapes.Select(op => op.BoundsDip.X)
+            .Should().BeInAscendingOrder("the shared interlocking stages preserve authored order");
+    }
+
+    [Fact]
     public void Compositor_BasicChevronProcessSmartArt_RendersSharedLiveShapes()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
