@@ -54,12 +54,13 @@ internal sealed class ChartAxisOptionsDialog : Window
         _axisCombo = new ComboBox
         {
             ItemsSource = ChartAxisOptionsPlanner.AxisOptions.Select(option => option.Label).ToArray(),
-            SelectedIndex = 1,
+            SelectedIndex = (int)ChartAxisKind.Value,
             MinWidth = 180,
         };
         _axisCombo.SelectionChanged += (_, _) =>
         {
-            if (_axisCombo.SelectedIndex is >= 0 and < 2)
+            if (_axisCombo.SelectedIndex >= 0 &&
+                _axisCombo.SelectedIndex < ChartAxisOptionsPlanner.AxisOptions.Count)
             {
                 _planner.SetAxis((ChartAxisKind)_axisCombo.SelectedIndex);
                 LoadControls();

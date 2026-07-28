@@ -16,6 +16,7 @@ public sealed record ChartAxisOptionsSurfacePlan(
     string AxisLabel,
     string CategoryAxisLabel,
     string ValueAxisLabel,
+    string SecondaryValueAxisLabel,
     string ShowAxisLabel,
     string AxisTitleLabel,
     string MinimumLabel,
@@ -50,6 +51,7 @@ public sealed class ChartAxisOptionsPlanner
     public const string AxisLabel = "Axis";
     public const string CategoryAxisLabel = "Category axis";
     public const string ValueAxisLabel = "Value axis";
+    public const string SecondaryValueAxisLabel = "Secondary value axis";
     public const string ShowAxisLabel = "Show axis";
     public const string AxisTitleLabel = "Axis title";
     public const string MinimumLabel = "Minimum";
@@ -79,6 +81,7 @@ public sealed class ChartAxisOptionsPlanner
     [
         new(ChartAxisKind.Category, CategoryAxisLabel),
         new(ChartAxisKind.Value, ValueAxisLabel),
+        new(ChartAxisKind.SecondaryValue, SecondaryValueAxisLabel),
     ];
 
     public static IReadOnlyList<ChartTickMarkOption> TickMarkOptions { get; } =
@@ -171,6 +174,7 @@ public sealed class ChartAxisOptionsPlanner
             AxisLabel,
             CategoryAxisLabel,
             ValueAxisLabel,
+            SecondaryValueAxisLabel,
             ShowAxisLabel,
             AxisTitleLabel,
             MinimumLabel,
@@ -289,5 +293,11 @@ public sealed class ChartAxisOptionsPlanner
         _reverseOrder);
 
     private ChartAxis ResolveAxis() =>
-        _axisKind == ChartAxisKind.Category ? _chart.CategoryAxis : _chart.ValueAxis;
+        _axisKind switch
+        {
+            ChartAxisKind.Category => _chart.CategoryAxis,
+            ChartAxisKind.Value => _chart.ValueAxis,
+            ChartAxisKind.SecondaryValue => _chart.SecondaryValueAxis ?? new ChartAxis(),
+            _ => throw new ArgumentOutOfRangeException(),
+        };
 }

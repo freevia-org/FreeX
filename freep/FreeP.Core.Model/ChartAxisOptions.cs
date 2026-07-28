@@ -5,6 +5,7 @@ public enum ChartAxisKind
 {
     Category,
     Value,
+    SecondaryValue,
 }
 
 /// <summary>Working values for a PowerPoint-style chart axis options edit.</summary>

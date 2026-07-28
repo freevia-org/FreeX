@@ -6811,6 +6811,38 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartAxisOptionsDialog_supports_secondary_value_axis()
+    {
+        ChartAxisOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartAxisOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(
+                ChartAxisKind.SecondaryValue,
+                "Margin",
+                0,
+                100,
+                25,
+                null,
+                "0%",
+                false);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().NotBeNull();
+        options!.Axis.Should().Be(ChartAxisKind.SecondaryValue);
+        options.Title.Should().Be("Margin");
+        options.Maximum.Should().Be(100);
+        options.NumberFormatCode.Should().Be("0%");
+    }
+
+    [Fact]
     public async Task ChartSeriesOptionsDialog_constructs_and_commits_shared_options()
     {
         ChartSeriesOptions? options = null;

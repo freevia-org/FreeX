@@ -384,6 +384,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartAxisOptionsDialog.cs");
 
         source.Should().Contain("ChartAxisOptionsPlanner.FromChart(chart)");
+        source.Should().Contain("ChartAxisOptionsPlanner.AxisOptions");
         source.Should().Contain("_planner.BuildCommitPlan()");
         source.Should().Contain("_editor.ApplyChartAxisOptions");
         source.Should().NotContain("new SetChartAxisOptionsCommand");
