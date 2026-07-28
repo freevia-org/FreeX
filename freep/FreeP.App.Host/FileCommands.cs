@@ -505,10 +505,10 @@ internal sealed class FileCommands
                 : "WPF video export host",
             capability.CanEncodeMp4,
             CanCaptureNarration: string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal),
-            CanCaptureCameraAndMedia: false,
+            CanCaptureCameraAndMedia: string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal),
             capability.CanEncodeMp4
                 ? string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal)
-                    ? "Windows MediaComposition video export and one zero-offset narration track are available; camera/PIP and complex multi-track muxing remain deferred."
+                    ? "Windows MediaComposition video export, narration, and captured camera PIP are available; complex multi-track narration remains deferred."
                     : "FFmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available."
                 : capability.Reason);
 
