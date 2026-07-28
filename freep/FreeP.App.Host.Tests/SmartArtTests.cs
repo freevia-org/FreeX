@@ -509,7 +509,7 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ImportedSmartArtHierarchy3_UsesSharedLiveHorizontalLayout()
+    public void Reader_ImportedSmartArtHierarchy3_PreservesNativeCache()
     {
         var corpusPath = FindRenderCompareCorpusFile("14-smartart-live.pptx");
         var presentation = PptxPackageReader.Read(corpusPath);
@@ -520,30 +520,17 @@ public sealed class SmartArtTests : IDisposable
         smartArt.Data.Should().NotBeNull();
         smartArt.Data!.LayoutUniqueId.Should().EndWith("/hierarchy3");
         smartArt.Data.Family.Should().Be(SmartArtFamily.Hierarchy);
-        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
-            "hierarchy3 is now admitted by the shared reader allow-list");
+        smartArt.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "an imported hierarchy3 with a native dsp:drawing must use PowerPoint's cached drawing");
+        smartArt.FallbackShapes.Should().NotBeEmpty();
 
-        var liveShapes = SmartArtLayoutEngine.Layout(
-            smartArt.Data,
-            smartArtShape.OffsetXEmu,
-            smartArtShape.OffsetYEmu,
-            smartArtShape.ExtentCxEmu,
-            smartArtShape.ExtentCyEmu,
-            presentation.Theme!)!;
-
-        liveShapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
-            .Should().HaveCount(4, "the imported hierarchy3 data has four visible node boxes");
-        liveShapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Line)
-            .Should().HaveCount(2, "the imported hierarchy3 data has two parent-child connectors");
-
-        var boxes = liveShapes
-            .Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+        var boxes = smartArt.FallbackShapes
+            .Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle
+                && !string.IsNullOrWhiteSpace(shape.PlainText))
             .ToDictionary(shape => shape.PlainText, StringComparer.Ordinal);
         boxes.Keys.Should().Contain(["CEO", "VP Sales", "VP Engineering", "VP Marketing"]);
-        boxes["VP Sales"].OffsetXEmu.Should().BeGreaterThan(boxes["CEO"].OffsetXEmu);
-        boxes["VP Engineering"].OffsetXEmu.Should().Be(boxes["VP Sales"].OffsetXEmu);
-        boxes["VP Marketing"].OffsetXEmu.Should().Be(boxes["CEO"].OffsetXEmu,
-            "the corpus preserves its second document-level root in the shared hierarchy plan");
+        boxes["VP Sales"].OffsetXEmu.Should().BeGreaterThan(boxes["CEO"].OffsetXEmu,
+            "the imported PowerPoint cache owns the visible hierarchy geometry");
     }
 
     [Fact]

@@ -209,6 +209,8 @@ static void RenderDocumentComposite(
         ShowMarkupComments = reviewMarkup,
     };
     bodyView.LoadModel(doc);
+    if (!reviewMarkup && TrackChanges.HasRevisions(doc))
+        bodyView.ApplyDisplayForReview(ReviewDisplayMode.NoMarkup);
 
     // Review balloons belong to the physical page containing their model anchor. Capture the
     // same block-to-page map that the paged editor uses before the live FlowDocument is detached.
