@@ -736,6 +736,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.VerticalBoxListLayoutCommandId,
                 FreePRibbonText.SmartArtVerticalBoxListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtVerticalBoxListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.VerticalChevronListLayoutCommandId,
+                FreePRibbonText.SmartArtVerticalChevronListCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtVerticalChevronListCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
                 FreePRibbonText.SmartArtVerticalBulletListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtVerticalBulletListCommand.KeyTip);
