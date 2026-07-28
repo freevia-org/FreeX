@@ -381,6 +381,7 @@ public static class SlideCloner
     private static ChartAxis CloneChartAxis(ChartAxis a) => new()
     {
         Title             = a.Title,
+        TitleStyle        = CloneChartTextStyle(a.TitleStyle),
         NumberFormatCode  = a.NumberFormatCode,
         NumberFormatSourceLinked = a.NumberFormatSourceLinked,
         Min               = a.Min,

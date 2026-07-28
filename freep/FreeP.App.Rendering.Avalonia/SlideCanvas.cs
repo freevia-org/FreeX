@@ -1988,7 +1988,7 @@ public sealed class SlideCanvas : Control
         var rect = ToRect(label.Bounds);
         if (title.Orientation == ChartAxisTitleOrientation.Horizontal)
         {
-            DrawChartLabel(dc, label.Text, rect, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+            DrawChartLabel(dc, label.Text, rect, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment), isItalic: label.IsItalic, textColor: label.TextColor, fontFamily: label.FontFamily);
             return;
         }
 
@@ -2011,7 +2011,10 @@ public sealed class SlideCanvas : Control
                 rect.Width),
             label.IsBold,
             label.FontSize,
-            ToTextAlignment(label.Alignment));
+            ToTextAlignment(label.Alignment),
+            isItalic: label.IsItalic,
+            textColor: label.TextColor,
+            fontFamily: label.FontFamily);
     }
 
     private static void RenderText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)

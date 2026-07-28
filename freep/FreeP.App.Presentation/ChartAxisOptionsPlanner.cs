@@ -26,6 +26,11 @@ public sealed record ChartAxisOptionsSurfacePlan(
     string NumberFormatLabel,
     string MajorGridlinesLabel,
     string MinorGridlinesLabel,
+    string AxisTitleFontFamilyLabel,
+    string AxisTitleFontSizeLabel,
+    string AxisTitleBoldLabel,
+    string AxisTitleItalicLabel,
+    string AxisTitleColorLabel,
     string MajorTickMarkLabel,
     string MinorTickMarkLabel,
     string TickLabelPositionLabel,
@@ -62,6 +67,11 @@ public sealed class ChartAxisOptionsPlanner
     public const string NumberFormatLabel = "Number format";
     public const string MajorGridlinesLabel = "Major gridlines";
     public const string MinorGridlinesLabel = "Minor gridlines";
+    public const string AxisTitleFontFamilyLabel = "Axis title font family";
+    public const string AxisTitleFontSizeLabel = "Axis title size (pt)";
+    public const string AxisTitleBoldLabel = "Axis title bold";
+    public const string AxisTitleItalicLabel = "Axis title italic";
+    public const string AxisTitleColorLabel = "Axis title color (#RRGGBB)";
     public const string MajorTickMarkLabel = "Major tick marks";
     public const string MinorTickMarkLabel = "Minor tick marks";
     public const string TickLabelPositionLabel = "Tick labels";
@@ -163,6 +173,11 @@ public sealed class ChartAxisOptionsPlanner
     private bool? _noMultiLevelLabels;
     private bool? _autoCrossing;
     private bool _reverseOrder;
+    private string? _titleFontFamily;
+    private double? _titleFontSizePt;
+    private bool? _titleBold;
+    private bool? _titleItalic;
+    private ThemeAwareColor? _titleColor;
 
     private ChartAxisOptionsPlanner(ChartShape chart)
     {
@@ -187,6 +202,11 @@ public sealed class ChartAxisOptionsPlanner
             NumberFormatLabel,
             MajorGridlinesLabel,
             MinorGridlinesLabel,
+            AxisTitleFontFamilyLabel,
+            AxisTitleFontSizeLabel,
+            AxisTitleBoldLabel,
+            AxisTitleItalicLabel,
+            AxisTitleColorLabel,
             MajorTickMarkLabel,
             MinorTickMarkLabel,
             TickLabelPositionLabel,
@@ -229,6 +249,11 @@ public sealed class ChartAxisOptionsPlanner
     public bool? NoMultiLevelLabels => _noMultiLevelLabels;
     public bool? AutoCrossing => _autoCrossing;
     public bool ReverseOrder => _reverseOrder;
+    public string? TitleFontFamily => _titleFontFamily;
+    public double? TitleFontSizePt => _titleFontSizePt;
+    public bool? TitleBold => _titleBold;
+    public bool? TitleItalic => _titleItalic;
+    public string TitleColorText => _titleColor is null ? string.Empty : _titleColor.Resolved.ToString();
 
     public void SetAxis(ChartAxisKind axisKind)
     {
@@ -254,6 +279,11 @@ public sealed class ChartAxisOptionsPlanner
         _noMultiLevelLabels = axis.NoMultiLevelLabels;
         _autoCrossing = axis.AutoCrossing;
         _reverseOrder = axis.ReverseOrder;
+        _titleFontFamily = axis.TitleStyle?.FontFamily;
+        _titleFontSizePt = axis.TitleStyle?.FontSizePt;
+        _titleBold = axis.TitleStyle?.Bold;
+        _titleItalic = axis.TitleStyle?.Italic;
+        _titleColor = axis.TitleStyle?.Color;
     }
 
     public void SetTitle(string? title) => _title = title ?? string.Empty;
@@ -276,6 +306,13 @@ public sealed class ChartAxisOptionsPlanner
     public void SetNoMultiLevelLabels(bool? value) => _noMultiLevelLabels = value;
     public void SetAutoCrossing(bool? value) => _autoCrossing = value;
     public void SetReverseOrder(bool value) => _reverseOrder = value;
+    public void SetTitleFontFamily(string? value) => _titleFontFamily =
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    public void SetTitleFontSizePt(double? value) => _titleFontSizePt =
+        value is null ? null : Math.Clamp(value.Value, 1, 400);
+    public void SetTitleBold(bool? value) => _titleBold = value;
+    public void SetTitleItalic(bool? value) => _titleItalic = value;
+    public void SetTitleColor(string? value) => _titleColor = ChartPointOptionsPlanner.ParseColor(value, AxisTitleColorLabel);
 
     public ChartAxisOptions BuildCommitPlan() => new(
         _axisKind,
@@ -298,7 +335,21 @@ public sealed class ChartAxisOptionsPlanner
         _noMultiLevelLabels,
         _autoCrossing,
         _reverseOrder,
-        _minorGridlines);
+        _minorGridlines,
+        BuildTitleStyle());
+
+    private ChartTextStyle? BuildTitleStyle() =>
+        _titleFontFamily is null && _titleFontSizePt is null && _titleBold is null &&
+        _titleItalic is null && _titleColor is null
+            ? null
+            : new ChartTextStyle
+            {
+                FontFamily = _titleFontFamily,
+                FontSizePt = _titleFontSizePt,
+                Bold = _titleBold,
+                Italic = _titleItalic,
+                Color = _titleColor,
+            };
 
     private ChartAxis ResolveAxis() =>
         _axisKind switch

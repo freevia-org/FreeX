@@ -1315,6 +1315,30 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildAxisTitlePlans_UsesIndependentAuthoredTitleStyle()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.ValueAxis.Title = "Revenue";
+        chart.ValueAxis.TitleStyle = new ChartTextStyle
+        {
+            FontFamily = "Aptos Display",
+            FontSizePt = 15,
+            Bold = true,
+            Italic = true,
+            Color = new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79)),
+        };
+
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+        var title = ChartRenderPlanner.BuildAxisTitlePlans(chart, frame).Single();
+
+        title.Label.FontFamily.Should().Be("Aptos Display");
+        title.Label.FontSize.Should().Be(15);
+        title.Label.IsBold.Should().BeTrue();
+        title.Label.IsItalic.Should().BeTrue();
+        title.Label.TextColor.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+    }
+
+    [Fact]
     public void BuildAxisTitlePlans_BarChart_SwapsTitleOrientationsWithAxes()
     {
         var chart = new ChartShape { ChartType = ChartType.BarClustered };

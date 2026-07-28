@@ -30,4 +30,5 @@ public sealed record ChartAxisOptions(
     bool? NoMultiLevelLabels = null,
     bool? AutoCrossing = null,
     bool ReverseOrder = false,
-    bool MinorGridlines = false);
+    bool MinorGridlines = false,
+    ChartTextStyle? TitleStyle = null);

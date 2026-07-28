@@ -151,13 +151,14 @@ internal static class PptxChartWriter
     private static XElement? OptionalBoolElement(string name, bool? value) =>
         value is { } v ? new XElement(C + name, new XAttribute("val", BoolValue(v))) : null;
 
-    private static XElement BuildTitleEl(string title) =>
+    private static XElement BuildTitleEl(string title, ChartTextStyle? style = null) =>
         new XElement(C + "title",
             new XElement(C + "tx",
                 new XElement(C + "rich",
                     new XElement(A + "bodyPr"),
                     new XElement(A + "lstStyle"),
                     new XElement(A + "p",
+                        style is null ? null : new XElement(A + "pPr", BuildChartDefaultRunPropertiesEl(style)),
                         new XElement(A + "r",
                             new XElement(A + "t", title))))),
             new XElement(C + "overlay", new XAttribute("val", "0")));
@@ -1380,7 +1381,7 @@ internal static class PptxChartWriter
             axis.HasMinorGridlines
                 ? new XElement(C + "minorGridlines")
                 : null,
-            axis.Title is not null ? BuildTitleEl(axis.Title) : null,
+            axis.Title is not null ? BuildTitleEl(axis.Title, axis.TitleStyle) : null,
             BuildAxisNumFmtEl(axis),
             BuildAxisCrossingElement(axis, null),
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
@@ -1412,7 +1413,7 @@ internal static class PptxChartWriter
             axis.HasMinorGridlines
                 ? new XElement(C + "minorGridlines")
                 : null,
-            axis.Title is not null ? BuildTitleEl(axis.Title) : null,
+            axis.Title is not null ? BuildTitleEl(axis.Title, axis.TitleStyle) : null,
             BuildAxisNumFmtEl(axis),
             BuildAxisCrossingElement(axis, crosses),
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)),
