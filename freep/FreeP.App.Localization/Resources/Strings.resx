@@ -1186,6 +1186,12 @@
   <data name="Ribbon_Command_SmartArtBasicTimeline_KeyTip" xml:space="preserve">
     <value>T</value>
   </data>
+  <data name="Ribbon_Command_SmartArtPhasedProcess_Label" xml:space="preserve">
+    <value>Phased Process</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPhasedProcess_KeyTip" xml:space="preserve">
+    <value>H</value>
+  </data>
   <data name="Ribbon_Command_SmartArtStepDownProcess_Label" xml:space="preserve">
     <value>Step Down Process</value>
   </data>
