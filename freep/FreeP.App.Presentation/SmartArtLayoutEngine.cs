@@ -123,6 +123,9 @@ public static class SmartArtLayoutEngine
         if (IsVerticalProcessLayout(data.LayoutUniqueId))
             return LayoutVerticalProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsHorizontalBulletListLayout(data.LayoutUniqueId))
+            return LayoutHorizontalBulletList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsDescendingBlockListLayout(data.LayoutUniqueId))
             return LayoutDescendingBlockList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1005,6 +1008,50 @@ public static class SmartArtLayoutEngine
             var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
             shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, leftX, curY, boxW, boxH));
             curY += boxH + gapY;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Horizontal Bullet List geometry: lays the visible bullets into a compact
+    /// row-major grid instead of falling back to the cached diagram drawing.
+    /// This keeps the layout deterministic for authoring and save/reopen while
+    /// retaining the normal list-family node styling.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutHorizontalBulletList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int count = nodes.Count;
+        int columns = Math.Min(Math.Max(count, 1), 2);
+        int rows = (count + columns - 1) / columns;
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapX = Math.Max((long)(fcx * GapFrac), 1L);
+        long gapY = Math.Max((long)(fcy * GapFrac), 1L);
+        long innerWidth = Math.Max(fcx - 2 * outerPadX - (columns - 1) * gapX, 1L);
+        long innerHeight = Math.Max(fcy - 2 * outerPadY - (rows - 1) * gapY, 1L);
+        long boxWidth = Math.Max(innerWidth / columns, 1L);
+        long boxHeight = Math.Max(innerHeight / rows, 1L);
+        long startX = fx + outerPadX;
+        long startY = fy + outerPadY;
+        var shapes = new List<SlideShape>(count);
+
+        for (int index = 0; index < count; index++)
+        {
+            int column = index % columns;
+            int row = index / columns;
+            var nodeStyle = stylePlan.GetNodeStyle(index, nodes[index].Level, SmartArtFamily.List);
+            shapes.Add(MakeBox(
+                (uint)(260 + index),
+                nodes[index].Text,
+                nodeStyle,
+                startX + column * (boxWidth + gapX),
+                startY + row * (boxHeight + gapY),
+                boxWidth,
+                boxHeight));
         }
 
         return shapes;
@@ -2804,6 +2851,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "verticalprocess", StringComparison.Ordinal);
+    }
+
+    private static bool IsHorizontalBulletListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "horizontalbulletlist", StringComparison.Ordinal);
     }
 
     private static bool IsBasicPyramidLayout(string uniqueId)

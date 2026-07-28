@@ -1270,6 +1270,12 @@
   <data name="Ribbon_Command_SmartArtVerticalBulletList_KeyTip" xml:space="preserve">
     <value>VB</value>
   </data>
+  <data name="Ribbon_Command_SmartArtHorizontalBulletList_Label" xml:space="preserve">
+    <value>Horizontal Bullet List</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtHorizontalBulletList_KeyTip" xml:space="preserve">
+    <value>HB</value>
+  </data>
   <data name="Ribbon_Command_SmartArtBasicCycle_Label" xml:space="preserve">
     <value>Basic Cycle</value>
   </data>

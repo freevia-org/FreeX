@@ -104,6 +104,24 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void HorizontalBulletList_UsesLiveRowMajorGridAndPreservesNodeOrder()
+    {
+        var data = MakeData(SmartArtFamily.List, "One", "Two", "Three", "Four");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/horizontalBulletList";
+        data.IsLiveLayoutSupported = true;
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        var boxes = shapes!.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Should().HaveCount(4);
+        boxes.Select(shape => shape.PlainText).Should().Equal("One", "Two", "Three", "Four");
+        boxes[0].OffsetXEmu.Should().BeLessThan(boxes[1].OffsetXEmu);
+        boxes[2].OffsetYEmu.Should().BeGreaterThan(boxes[0].OffsetYEmu);
+        boxes[3].OffsetYEmu.Should().BeGreaterThan(boxes[1].OffsetYEmu);
+    }
+
+    [Fact]
     public void Process_BoxesAreLeftToRight_Increasing_X()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C");
