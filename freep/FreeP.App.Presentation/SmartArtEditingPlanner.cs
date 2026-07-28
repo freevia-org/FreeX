@@ -400,7 +400,23 @@ public static class SmartArtEditingPlanner
         var nodeIds = new Dictionary<SmartArtNode, string>();
         var nodeCount = 0;
         var connectionCount = 0;
-        var document = BuildDataPartDocument(smartArt.Data, nodeIds, ref nodeCount, ref connectionCount);
+        XDocument? sourceDocument = null;
+        try
+        {
+            if (dataPart.Bytes.Length > 0)
+                sourceDocument = ParseXml(dataPart.Bytes);
+        }
+        catch (Exception ex) when (ex is FormatException or XmlException)
+        {
+            // A malformed source part is replaced by the canonical generated form below.
+        }
+
+        var document = BuildDataPartDocument(
+            smartArt.Data,
+            nodeIds,
+            ref nodeCount,
+            ref connectionCount,
+            sourceDocument);
         dataPart.Bytes = SerializeXml(document);
 
         return new SmartArtDataPartRewriteResult(
@@ -1295,7 +1311,8 @@ public static class SmartArtEditingPlanner
         SmartArtData data,
         Dictionary<SmartArtNode, string> nodeIds,
         ref int nodeCount,
-        ref int connectionCount)
+        ref int connectionCount,
+        XDocument? sourceDocument = null)
     {
         var points = new List<XElement>();
         var connections = new List<XElement>();
@@ -1304,6 +1321,23 @@ public static class SmartArtEditingPlanner
         foreach (var root in data.Nodes)
             CollectDataPartElements(root, null, 0, points, connections, nodeIds,
                 ref generatedIdIndex, ref nodeCount, ref connectionCount);
+
+        if (sourceDocument?.Root is { } sourceRoot && sourceRoot.Name == Dgm + "dataModel")
+        {
+            var pointList = sourceRoot.Element(Dgm + "ptLst");
+            if (pointList is null)
+                sourceRoot.Add(new XElement(Dgm + "ptLst", points));
+            else
+                pointList.ReplaceNodes(points);
+
+            var connectionList = sourceRoot.Element(Dgm + "cxnLst");
+            if (connectionList is null)
+                sourceRoot.Add(new XElement(Dgm + "cxnLst", connections));
+            else
+                connectionList.ReplaceNodes(connections);
+
+            return sourceDocument;
+        }
 
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -1385,6 +1419,12 @@ public static class SmartArtEditingPlanner
         using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), bufferSize: 1024, leaveOpen: true))
             document.Save(writer);
         return stream.ToArray();
+    }
+
+    private static XDocument ParseXml(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes, writable: false);
+        return XDocument.Load(stream, LoadOptions.PreserveWhitespace);
     }
 
     private readonly record struct SmartArtNodeLocation(SmartArtNode? Node, SmartArtNode? Parent, int Index)
