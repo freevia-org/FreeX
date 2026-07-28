@@ -35,7 +35,7 @@ public sealed class R54_ClipboardMarqueeAndCutMoveTests
     [Fact]
     public void CrossSheetCutThenPaste_MovesCellAndUpdatesReferencingFormula()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             using var harness = new MainWindowHarness();
             var sheet1 = harness.Workbook.GetSheetAt(0);
@@ -71,7 +71,7 @@ public sealed class R54_ClipboardMarqueeAndCutMoveTests
     {
         // Sibling no-regression check: relaxing the cross-sheet guard in TryCreateCutMoveCommand
         // must not disturb the pre-existing, already-covered same-sheet Cut+Paste move behavior.
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             using var harness = new MainWindowHarness();
             var sheet1 = harness.Workbook.GetSheetAt(0);
@@ -95,7 +95,7 @@ public sealed class R54_ClipboardMarqueeAndCutMoveTests
     [Fact]
     public void CommittingCellEdit_CancelsActiveCutMarquee()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             using var harness = new MainWindowHarness();
             var sheet1 = harness.Workbook.GetSheetAt(0);
@@ -128,7 +128,7 @@ public sealed class R54_ClipboardMarqueeAndCutMoveTests
     public void ClearContentsCommit_CancelsActiveCutMarquee()
     {
         // Sibling coverage for the same finding's twin scenario ("... or Delete/Clear Contents").
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             using var harness = new MainWindowHarness();
             var sheet1 = harness.Workbook.GetSheetAt(0);

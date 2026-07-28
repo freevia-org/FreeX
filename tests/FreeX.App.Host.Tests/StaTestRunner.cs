@@ -87,7 +87,7 @@ internal static class StaTestRunner
             if (!ownsMutex)
                 throw new TimeoutException("Timed out waiting for the shared Windows clipboard test lock.");
 
-            Run(() =>
+            RunOnDedicatedSta(() =>
             {
                 ResetClipboard();
                 try
@@ -105,6 +105,36 @@ internal static class StaTestRunner
             if (ownsMutex)
                 ClipboardRunMutex.ReleaseMutex();
         }
+    }
+
+    private static void RunOnDedicatedSta(Action action)
+    {
+        Exception? exception = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                ReleaseModifierKeys();
+                action();
+            }
+            catch (Exception ex)
+            {
+                exception = ex;
+            }
+            finally
+            {
+                ReleaseModifierKeys();
+                Dispatcher.CurrentDispatcher.InvokeShutdown();
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true;
+        thread.Start();
+        thread.Join();
+
+        if (exception is not null)
+            ExceptionDispatchInfo.Capture(exception).Throw();
     }
 
     private static Dispatcher CreateDispatcher()
