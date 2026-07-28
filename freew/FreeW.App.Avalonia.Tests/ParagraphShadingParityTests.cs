@@ -89,6 +89,47 @@ public sealed class ParagraphShadingParityTests
         source.Should().Contain("#FFF2CC");
     }
 
+    [Fact]
+    public void Avalonia_character_border_route_exposes_Wpf_palette_and_applies_explicit_choices()
+    {
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+        var border = definition.Tabs
+            .SelectMany(tab => tab.Groups)
+            .SelectMany(group => group.Controls)
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.char-border");
+
+        border.Menu.Items.Select(item => item.CommandId?.Value)
+            .Should().Contain(new[] { "freew.char-border.blue", "freew.char-border.none" });
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Bordered"));
+        var editor = new DocumentView();
+        editor.LoadDocument(document);
+        editor.SelectAll();
+        var registry = FreeWAvaloniaRibbonCommands.Build(editor, CreateCallbacks());
+
+        Execute(registry, "freew.char-border.blue");
+        ((Paragraph)document.Blocks[0]).Runs.All(run => run.Formatting.CharacterBorder is { ColorHex: "#0070C0", WidthPt: 0.5, LineStyle: BorderLineStyle.Single })
+            .Should().BeTrue();
+        Execute(registry, "freew.char-border.none");
+        ((Paragraph)document.Blocks[0]).Runs.All(run => run.Formatting.CharacterBorder is null)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void Wpf_character_border_remains_the_authority_for_palette_behavior()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
+
+        source.Should().Contain("private sealed class CharacterBorderCommand");
+        source.Should().Contain("editor.SetCharacterBorder(border)");
+        source.Should().Contain("Content = \"No Border\"");
+        source.Should().Contain("#0070C0");
+    }
+
     private static void Execute(RibbonCommandRegistry registry, string id)
     {
         registry.TryGet(new RibbonCommandId(id), out var command)

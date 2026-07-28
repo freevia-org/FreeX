@@ -607,8 +607,8 @@ public sealed class CommandRegistryTests
         view.SelectAll();
 
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
-        registry.TryGet(new RibbonCommandId("freew.char-border"), out var borderCommand)
-            .Should().BeTrue("freew.char-border must be registered");
+        registry.TryGet(new RibbonCommandId("freew.char-border.black"), out var borderCommand)
+            .Should().BeTrue("the Character Border palette must register its WPF-authority default swatch");
         registry.TryGet(new RibbonCommandId("freew.char-shading.light-yellow"), out var shadingCommand)
             .Should().BeTrue("the Character Shading palette must register its WPF-authority default swatch");
 

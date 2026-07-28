@@ -76,6 +76,25 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("No Color", new RibbonCommandId("freew.char-shading.none")),
         });
 
+    private static RibbonMenu BuildCharacterBorderMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Black", new RibbonCommandId("freew.char-border.black")),
+            new("Red", new RibbonCommandId("freew.char-border.red")),
+            new("Blue", new RibbonCommandId("freew.char-border.blue")),
+            new("Green", new RibbonCommandId("freew.char-border.green")),
+            new("Gold", new RibbonCommandId("freew.char-border.gold")),
+            new("Purple", new RibbonCommandId("freew.char-border.purple")),
+            new("Gray", new RibbonCommandId("freew.char-border.gray")),
+            new("Dark Red", new RibbonCommandId("freew.char-border.dark-red")),
+            new("Dark Blue", new RibbonCommandId("freew.char-border.dark-blue")),
+            new("Dark Green", new RibbonCommandId("freew.char-border.dark-green")),
+            new("Brown", new RibbonCommandId("freew.char-border.brown")),
+            new("Dark Gray", new RibbonCommandId("freew.char-border.dark-gray")),
+            RibbonMenuItem.Separator(),
+            new("No Border", new RibbonCommandId("freew.char-border.none")),
+        });
+
     private static RibbonMenu BuildDisplayForReviewMenu() =>
         new(new RibbonMenuItem[]
         {
@@ -541,7 +560,11 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Toggle("freew.smallcaps",       FreeWRibbonText.SmallCapsCommand.Label);
                     g.Toggle("freew.allcaps",         FreeWRibbonText.AllCapsCommand.Label);
                     g.Button("freew.highlight",       FreeWRibbonText.HighlightCompactCommand.Label);
-                    g.Button("freew.char-border",     FreeWRibbonText.CharacterBorderCommand.Label);
+                    g.Dropdown("freew.char-border",   FreeWRibbonText.CharacterBorderCommand.Label, BuildCharacterBorderMenu(), d => d with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border)
+                    });
                     g.Dropdown("freew.char-shading",  FreeWRibbonText.CharacterShadingCommand.Label, BuildCharacterShadingMenu(), d => d with
                     {
                         PreferredLayout = RibbonCommandLayoutKind.Small,

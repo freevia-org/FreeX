@@ -136,7 +136,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.superscript",      new ActionRibbonCommand(editor.ToggleSuperscript));
         r.Register("freew.subscript",        new ActionRibbonCommand(editor.ToggleSubscript));
         r.Register("freew.highlight",        new ValueRibbonCommand(value => editor.SetHighlightColor(value)));
-        r.Register("freew.char-border",      new ActionRibbonCommand(() => editor.SetCharacterBorder(new ParagraphBorder("#000000", 0.5))));
+        r.Register("freew.char-border",      new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        RegisterCharacterBorderPalette(r, editor);
         r.Register("freew.char-shading",     new ActionRibbonCommand(() => { /* dropdown opener */ }));
         RegisterCharacterShadingPalette(r, editor);
         r.Register("freew.grow-font",        new ActionRibbonCommand(editor.GrowFont));
@@ -949,6 +950,31 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.char-shading.light-peach", "#FCE4D6");
         Add(r, editor, "freew.char-shading.very-light-gray", "#EDEDED");
         Add(r, editor, "freew.char-shading.none", null);
+    }
+
+    /// <summary>
+    /// Registers the WPF-authority character border palette. The top-level command only opens
+    /// the ribbon menu; formatting changes happen only after an explicit color or No Border choice.
+    /// </summary>
+    private static void RegisterCharacterBorderPalette(RibbonCommandRegistry r, DocumentView editor)
+    {
+        static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
+            reg.Register(id, new ActionRibbonCommand(() => ed.SetCharacterBorder(
+                hex is null ? null : new ParagraphBorder(hex, 0.5) { LineStyle = BorderLineStyle.Single })));
+
+        Add(r, editor, "freew.char-border.black", "#000000");
+        Add(r, editor, "freew.char-border.red", "#FF0000");
+        Add(r, editor, "freew.char-border.blue", "#0070C0");
+        Add(r, editor, "freew.char-border.green", "#00B050");
+        Add(r, editor, "freew.char-border.gold", "#FFC000");
+        Add(r, editor, "freew.char-border.purple", "#7030A0");
+        Add(r, editor, "freew.char-border.gray", "#808080");
+        Add(r, editor, "freew.char-border.dark-red", "#C00000");
+        Add(r, editor, "freew.char-border.dark-blue", "#002060");
+        Add(r, editor, "freew.char-border.dark-green", "#375623");
+        Add(r, editor, "freew.char-border.brown", "#974706");
+        Add(r, editor, "freew.char-border.dark-gray", "#3F3F3F");
+        Add(r, editor, "freew.char-border.none", null);
     }
 
     /// <summary>
