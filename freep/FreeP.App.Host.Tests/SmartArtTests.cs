@@ -3590,6 +3590,36 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_TargetListSmartArt_RendersAllNodesBeyondOriginalFiveNodeCutoff()
+    {
+        var nodes = Enumerable.Range(1, 6)
+            .Select(i => ($"n{i}", $"Node {i}"))
+            .ToArray();
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/targetList",
+            nodes: nodes,
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var liveShapes = SlideCompositor.Compose(pres, pres.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+
+        liveShapes.Should().HaveCount(6,
+            "the shared WPF/Avalonia compositor should emit one live ellipse per node");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(nodes.Select(node => node.Item2));
+        liveShapes.Select(op => op.BoundsDip.Width)
+            .Should().BeInDescendingOrder();
+    }
+
+    [Fact]
     public void Compositor_StackedVennSmartArt_RendersSharedLiveEllipses()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
