@@ -81,18 +81,22 @@ int exitCode = await Task.Run(async () =>
     for (uint i = 0; i < pageCount; i++)
     {
         using PdfPage page = pdf.GetPage(i);
-        // PdfPageRenderOptions applies dimensions at a 120-DPI scale. Convert the native
-        // page geometry so the emitted PNG remains at the 96-DPI Word comparison surface.
-        const double PdfRenderOptionsDpi = 120.0;
-        const double TargetDpi = 96.0;
-        var outputWidth = width ?? Math.Max(1u, (uint)Math.Round(page.Size.Width));
-        var outputHeight = height ?? Math.Max(1u, (uint)Math.Round(page.Size.Height));
-        var destinationWidth = Math.Max(1u, (uint)Math.Round(outputWidth * TargetDpi / PdfRenderOptionsDpi));
-        var destinationHeight = Math.Max(1u, (uint)Math.Round(outputHeight * TargetDpi / PdfRenderOptionsDpi));
+        // Windows.Data.Pdf reports each page in its native 96-DPI geometry. Preserve that
+        // geometry per page, then bound it to the shared Word evidence surface. In particular,
+        // a landscape section must not inherit the first portrait page's output dimensions.
+        const double MaximumEvidenceWidth = 816.0;
+        const double MaximumEvidenceHeight = 1056.0;
+        var nativeWidth = Math.Max(1.0, page.Size.Width);
+        var nativeHeight = Math.Max(1.0, page.Size.Height);
+        var nativeScale = Math.Min(1.0, Math.Min(
+            MaximumEvidenceWidth / nativeWidth,
+            MaximumEvidenceHeight / nativeHeight));
+        var outputWidth = width ?? Math.Max(1u, (uint)Math.Floor(nativeWidth * nativeScale));
+        var outputHeight = height ?? Math.Max(1u, (uint)Math.Floor(nativeHeight * nativeScale));
         var opts = new PdfPageRenderOptions
         {
-            DestinationWidth = destinationWidth,
-            DestinationHeight = destinationHeight
+            DestinationWidth = outputWidth,
+            DestinationHeight = outputHeight
         };
         using var stream   = new InMemoryRandomAccessStream();
 
