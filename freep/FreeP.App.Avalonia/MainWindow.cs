@@ -2538,6 +2538,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureCaptionList)));
         r.Register(SmartArtAuthoringPlanner.PictureAccentListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureAccentList)));
+        r.Register(SmartArtAuthoringPlanner.PictureStackLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureStack)));
         r.Register(SmartArtAuthoringPlanner.PictureGridLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureGrid)));
         r.Register(SmartArtAuthoringPlanner.LabeledHierarchyLayoutCommandId,

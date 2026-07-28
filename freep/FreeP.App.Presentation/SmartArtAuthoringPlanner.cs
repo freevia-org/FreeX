@@ -109,6 +109,7 @@ public enum SmartArtLayoutPreset
     OrgChart,
     PictureCaptionList,
     PictureAccentList,
+    PictureStack,
     LabeledHierarchy,
     TableHierarchy,
     PictureGrid,
@@ -234,6 +235,7 @@ public static class SmartArtAuthoringPlanner
     public const string OrgChartLayoutCommandId = "freep.smartart.layout.org-chart";
     public const string PictureCaptionListLayoutCommandId = "freep.smartart.layout.picture-caption-list";
     public const string PictureAccentListLayoutCommandId = "freep.smartart.layout.picture-accent-list";
+    public const string PictureStackLayoutCommandId = "freep.smartart.layout.picture-stack";
     public const string LabeledHierarchyLayoutCommandId = "freep.smartart.layout.labeled-hierarchy";
     public const string TableHierarchyLayoutCommandId = "freep.smartart.layout.table-hierarchy";
     public const string PictureGridLayoutCommandId = "freep.smartart.layout.picture-grid";
@@ -429,7 +431,7 @@ public static class SmartArtAuthoringPlanner
         if (smartArt?.Data is null)
             return NotAppliedLayout("No SmartArt data model is available.");
 
-        if (preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureGrid) &&
+        if (preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureGrid) &&
             smartArt.Data.Nodes.Any(node => node.Picture?.Bytes is not { Length: > 0 }))
         {
             return NotAppliedLayout("Picture-based SmartArt layouts require image content for every SmartArt node.");
@@ -539,6 +541,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList", SmartArtFamily.List),
             SmartArtLayoutPreset.PictureAccentList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/pictureAccentList", SmartArtFamily.List),
+            SmartArtLayoutPreset.PictureStack =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/pictureStack", SmartArtFamily.List),
             SmartArtLayoutPreset.LabeledHierarchy =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/labeledHierarchy", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.TableHierarchy =>

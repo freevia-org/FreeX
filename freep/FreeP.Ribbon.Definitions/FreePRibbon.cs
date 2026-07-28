@@ -832,6 +832,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.PictureAccentListLayoutCommandId,
                 FreePRibbonText.SmartArtPictureAccentListCommand.Label, RibbonCommandIconKind.Picture,
                 FreePRibbonText.SmartArtPictureAccentListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.PictureStackLayoutCommandId,
+                FreePRibbonText.SmartArtPictureStackCommand.Label, RibbonCommandIconKind.Picture,
+                FreePRibbonText.SmartArtPictureStackCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.PictureGridLayoutCommandId,
                 FreePRibbonText.SmartArtPictureGridCommand.Label, RibbonCommandIconKind.Picture,
                 FreePRibbonText.SmartArtPictureGridCommand.KeyTip);
