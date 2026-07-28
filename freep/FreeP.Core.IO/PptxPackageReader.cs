@@ -2674,7 +2674,7 @@ public static class PptxPackageReader
         if (uid.Contains("cycle") || uid.Contains("gear") || uid.Contains("radial"))
             return SmartArtFamily.Cycle;
 
-        if (uid.Contains("horizontalbulletlist"))
+        if (uid.Contains("horizontalbulletlist") || uid.Contains("verticalchevronlist"))
             return SmartArtFamily.List;
 
         if (uid.Contains("process") || uid.Contains("timeline") || uid.Contains("arrow") || uid.Contains("chevron")
@@ -2704,7 +2704,7 @@ public static class PptxPackageReader
         return family switch
         {
             SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "basictimeline" or "phasedprocess" or "circleaccenttimeline" or "stepdownprocess" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess" or "basicchevronprocess" or "closedchevronprocess" or "bendingprocess" or "alternatingprocess" or "arrowribbon" or "circleprocess" or "funnelprocess" or "verticalprocess",
-            SmartArtFamily.List => layoutId is "list1" or "basicblocklist" or "verticalboxlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "horizontalbulletlist" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "picturegrid",
+            SmartArtFamily.List => layoutId is "list1" or "basicblocklist" or "verticalboxlist" or "verticalchevronlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "horizontalbulletlist" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "picturegrid",
             SmartArtFamily.Cycle => layoutId is "cycle1" or "radial1" or "basiccycle" or "radialcycle" or "radiallist" or "gearcycle" or "textcycle" or "blockcycle" or "nondirectionalcycle" or "continuouscycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "hierarchy3" or "basichierarchy" or "horizontalhierarchy" or "labeledhierarchy" or "tablehierarchy" or "verticalbulletlist" or "orgchart",
             SmartArtFamily.Matrix => layoutId is "matrix1" or "basicmatrix" or "titledmatrix" or "gridmatrix",

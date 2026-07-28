@@ -126,6 +126,9 @@ public static class SmartArtLayoutEngine
         if (IsVerticalProcessLayout(data.LayoutUniqueId))
             return LayoutVerticalProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsVerticalChevronListLayout(data.LayoutUniqueId))
+            return LayoutVerticalChevronList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsHorizontalBulletListLayout(data.LayoutUniqueId))
             return LayoutHorizontalBulletList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1063,6 +1066,46 @@ public static class SmartArtLayoutEngine
                 startY + row * (boxHeight + gapY),
                 boxWidth,
                 boxHeight));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Vertical Chevron List geometry. PowerPoint uses this list layout to emphasize
+    /// progression while giving each node a distinct chevron body. The shared route
+    /// keeps one ordered chevron per node and uses the same bounds/style contract in
+    /// WPF and Avalonia; native cached drawing remains available for malformed input.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutVerticalChevronList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Count is < 1 or > 12 || fcx <= 0 || fcy <= 0)
+            return null;
+        if (nodes.Any(node => node.Text is null || node.Text.Length > 512))
+            return null;
+
+        long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long padY = Math.Max((long)(fcy * 0.08), 1L);
+        long gap = Math.Max((long)(fcy * GapFrac), 1L);
+        long innerWidth = Math.Max(fcx - 2 * padX, 1L);
+        long innerHeight = Math.Max(fcy - 2 * padY - (nodes.Count - 1) * gap, 1L);
+        long boxHeight = Math.Max(innerHeight / nodes.Count, 1L);
+        if (boxHeight < 6_000L)
+            return null;
+
+        var shapes = new List<SlideShape>(nodes.Count);
+        long y = fy + padY;
+        for (var index = 0; index < nodes.Count; index++)
+        {
+            var nodeStyle = stylePlan.GetNodeStyle(index, nodes[index].Level, SmartArtFamily.List);
+            shapes.Add(MakeBox(
+                (uint)(280 + index), nodes[index].Text, nodeStyle,
+                fx + padX, y, innerWidth, boxHeight,
+                NodeFontSizePt, DrawingShapeKind.Chevron, 24000));
+            y += boxHeight + gap;
         }
 
         return shapes;
@@ -2871,6 +2914,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "verticalprocess", StringComparison.Ordinal);
+    }
+
+    private static bool IsVerticalChevronListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "verticalchevronlist", StringComparison.Ordinal);
     }
 
     private static bool IsHorizontalBulletListLayout(string uniqueId)
