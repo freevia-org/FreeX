@@ -156,19 +156,33 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatDialogs.cs")),
             File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartRemainingDialogs.cs")),
             File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTypeFormatDialogs.cs")));
+        var chartQuickSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatTextTabs.cs"));
+        var chartQuickPlannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "Charts",
+            "Editing",
+            "ChartQuickCommandPlanner.cs"));
 
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextDataLabelPosition(");
         chartTabsSource.Should().Contain("ChartAxisWorkflowCommandCatalog.Gridlines(useXAxis: true)");
         chartTabsSource.Should().Contain("ChartAxisPlanner.PlanQuickCommand(chart, command.UseXAxis, quickCommand)");
-        chartTabsSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart).FillColor");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
         chartTabsSource.Should().Contain("ChartWorkflowTargetPlanner.FindSelectedChart(_session.ActiveSheet, _selectedDrawingObjectId)");
         chartTabsSource.Should().Contain("RunGuarded(ShowChartStyleDialogAsync)");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextPlotAreaBorderThickness(chart.PlotAreaBorderThickness)");
-        chartTabsSource.Should().Contain("ChartQuickFormatCycler.MergeFirstSeriesFillColor(chart, chosen)");
+        chartQuickSource.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command.Command)");
+        chartQuickSource.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
+        chartQuickPlannerSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart)");
+        chartQuickPlannerSource.Should().Contain("ChartQuickFormatCycler.MergeFirstSeriesFormat(chart, updated)");
         chartDialogSources.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
 
-        var combined = chartTabsSource + Environment.NewLine + chartDialogSources;
+        var combined = string.Join(
+            Environment.NewLine,
+            chartTabsSource,
+            chartQuickSource,
+            chartQuickPlannerSource,
+            chartDialogSources);
         combined.Should().NotContain("ChartCycleBlue");
         combined.Should().NotContain("ResolveFirstSeriesFillColor");
         combined.Should().NotContain("candidate.Id == id && candidate.IsVisible && !candidate.IsPivotChart");
@@ -891,6 +905,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void HeaderFooterEditorRoute_PreservesSixPictureScopesAndUsesNamedDocking()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("ShowHeaderFooterEditorDialogAsync(");
         source.Should().Contain("customHeaderButton.Click += async");
@@ -921,11 +936,11 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().NotContain("DockPanel.SetDock(root.Children[");
         source.Should().NotContain("DockPanel.SetDock(tokenToolbar");
 
-        var editorStart = source.IndexOf("private async Task<HeaderFooterEditorState?> ShowHeaderFooterEditorDialogAsync", StringComparison.Ordinal);
+        var editorStart = normalizedSource.IndexOf("private async Task<HeaderFooterEditorState?> ShowHeaderFooterEditorDialogAsync", StringComparison.Ordinal);
         editorStart.Should().BeGreaterThanOrEqualTo(0);
-        var editorEnd = source.IndexOf("\n    }\n}", editorStart, StringComparison.Ordinal);
+        var editorEnd = normalizedSource.IndexOf("\n    }\n}", editorStart, StringComparison.Ordinal);
         editorEnd.Should().BeGreaterThan(editorStart);
-        source[editorStart..editorEnd].Should().NotContain(".Children[");
+        normalizedSource[editorStart..editorEnd].Should().NotContain(".Children[");
         source.Should().Contain("var headerPresetLabel = PageSetupLabel");
         source.Should().Contain("var headerPresetRow = new Grid");
         source.Should().Contain("var headerScroll = new ScrollViewer");

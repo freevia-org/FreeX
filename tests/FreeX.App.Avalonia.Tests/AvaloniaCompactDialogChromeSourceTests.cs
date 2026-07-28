@@ -10,11 +10,14 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotOptions.cs"));
 
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
-        source.Should().Contain("private static AvaloniaCompactDialogChromeStyle PivotDialogChromeStyle => new(FormulaBarFontFamily);");
+        source.Should().Contain("private static AvaloniaCompactDialogChromeStyle PivotDialogChromeStyle => new(FormulaBarFontFamily)");
+        source.Should().Contain("ControlHeight = 22,");
+        source.Should().Contain("ButtonHeight = 20,");
+        source.Should().Contain("ButtonPadding = new Thickness(12, 1),");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, PivotDialogChromeStyle, minWidth, isDefault);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, PivotDialogChromeStyle, fixedHeight);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, PivotDialogChromeStyle);");
-        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 0, 0, 37));");
         source.Should().Contain("Width = PivotOptionsPlanner.DialogWidth,");
         source.Should().Contain("MinHeight = PivotOptionsPlanner.DialogMinHeight,");
         source.Should().Contain("new Border { Height = PivotOptionsPlanner.LayoutAndFormatAvaloniaSpacerHeight }");
@@ -120,7 +123,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("public double ListBoxItemMinHeight { get; init; } = 24;");
         source.Should().Contain("Color.FromRgb(0, 120, 215)");
         source.Should().Contain("Color.FromRgb(112, 112, 112)");
-        source.Should().Contain("Color.FromRgb(130, 130, 130)");
+        source.Should().Contain("Color.FromRgb(171, 173, 179)");
         source.Should().Contain("button.Height = style.ButtonHeight;");
         source.Should().Contain("button.MinHeight = style.ButtonHeight;");
         source.Should().Contain("button.MaxHeight = style.ButtonHeight;");
@@ -157,8 +160,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         };
         var source = string.Join(Environment.NewLine, paths.Select(path => File.ReadAllText(RepoFile(path))));
 
-        CountOccurrences(source, "new TabControl").Should().Be(10);
-        CountOccurrences(source, "AvaloniaCompactDialogChrome.ApplyClassicTabChrome(").Should().Be(10);
+        CountOccurrences(source, "new TabControl").Should().Be(11);
+        CountOccurrences(source, "AvaloniaCompactDialogChrome.ApplyClassicTabChrome(").Should().Be(11);
         source.Should().NotContain("private static void ApplyClassicTabChrome");
     }
 
@@ -198,7 +201,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, DataOpsDialogChromeStyle);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DataOpsDialogChromeStyle);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, DataOpsDialogChromeStyle);");
-        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([applyButton, cancelButton], new Thickness(0, 10, 0, 0));");
+        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([applyButton, cancelButton], new Thickness(0, 12, 0, 0));");
 
         AssertNoLocalButtonChrome(source);
         AssertNoLocalTextBoxChrome(source, "textBox");
