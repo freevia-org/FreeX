@@ -15,11 +15,19 @@ public static class WindowsNativePrintOutput
 {
     public static LinuxNativeOutputCapabilities Detect()
     {
+        if (!OperatingSystem.IsWindows())
+            return LinuxNativeOutputCapabilities.Unavailable(
+                "Windows native output is available only on Windows.");
+
         var print = DetectPrint();
         return new LinuxNativeOutputCapabilities(
             print,
-            LinuxVideoEncoderCapability.Unavailable(
-                "Windows video capture uses the native recording host."));
+            new LinuxVideoEncoderCapability(
+                CanEncodeMp4: true,
+                ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
+                EncoderName: "Windows MediaComposition",
+                CanCaptureNarration: false,
+                Reason: "Windows video export can encode the shared frame package through MediaComposition; narration and camera muxing remain unavailable on this path."));
     }
 
     public static LinuxNativePrintCapability DetectPrint()
@@ -120,6 +128,12 @@ public static class WindowsNativePrintOutput
     public static ILinuxNativePrintHandoffAdapter CreateAdapter(
         LinuxNativePrintCapability capability) =>
         new WindowsNativePrintHandoffAdapter(capability);
+
+    public static ILinuxVideoExportAdapter CreateVideoAdapter(
+        LinuxVideoEncoderCapability capability) =>
+        string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal)
+            ? new WindowsNativeVideoExportAdapter(capability)
+            : new LinuxVideoExportAdapter(capability);
 
     private static string? TryGetDefaultPrinter()
     {
