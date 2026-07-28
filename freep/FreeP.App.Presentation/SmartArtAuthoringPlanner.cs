@@ -451,10 +451,9 @@ public static class SmartArtAuthoringPlanner
             SmartArtLayoutPreset.PictureLineup or
             SmartArtLayoutPreset.ContinuousPictureList or
             SmartArtLayoutPreset.PictureGrid);
-        if (pictureLayout && (smartArt.Data is null ||
-            smartArt.Data.Nodes.Any(node => node.Picture?.Bytes is not { Length: > 0 })))
+        if (pictureLayout && (smartArt.Data is null || smartArt.Data.Nodes.Count == 0))
         {
-            return NotAppliedLayout("Picture-based SmartArt layouts require image content for every SmartArt node.");
+            return NotAppliedLayout("Picture-based SmartArt layouts require a SmartArt data model with at least one node.");
         }
 
         var layoutPart = smartArt.Parts.Values.FirstOrDefault(candidate =>

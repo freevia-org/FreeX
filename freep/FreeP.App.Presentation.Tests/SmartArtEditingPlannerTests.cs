@@ -240,89 +240,101 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
-    public void ApplyPictureCaptionList_RequiresPicturePayloadOnEveryNode()
+    public void ApplyPictureCaptionList_AllowsMissingPicturePayloadForPlaceholders()
     {
         var smartArt = new SmartArtShape
         {
             Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
         };
+        AddLayoutPart(smartArt);
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(
             smartArt,
             SmartArtLayoutPreset.PictureCaptionList);
 
-        result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("require image content for every SmartArt node");
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/pictureCaptionList");
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
     }
 
     [Fact]
-    public void ApplyPictureGrid_RequiresPicturePayloadOnEveryNode()
+    public void ApplyPictureGrid_AllowsMissingPicturePayloadForPlaceholders()
     {
         var smartArt = new SmartArtShape
         {
             Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
         };
+        AddLayoutPart(smartArt);
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureGrid);
 
-        result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("require image content for every SmartArt node");
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/pictureGrid");
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
     }
 
     [Fact]
-    public void ApplyPictureAccentList_RequiresPicturePayloadOnEveryNode()
+    public void ApplyPictureAccentList_AllowsMissingPicturePayloadForPlaceholders()
     {
         var smartArt = new SmartArtShape
         {
             Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
         };
+        AddLayoutPart(smartArt);
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureAccentList);
 
-        result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("require image content for every SmartArt node");
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/pictureAccentList");
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
     }
 
     [Fact]
-    public void ApplyPictureStack_RequiresPicturePayloadOnEveryNode()
+    public void ApplyPictureStack_AllowsMissingPicturePayloadForPlaceholders()
     {
         var smartArt = new SmartArtShape
         {
             Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
         };
+        AddLayoutPart(smartArt);
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureStack);
 
-        result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("require image content for every SmartArt node");
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/pictureStack");
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
     }
 
     [Fact]
-    public void ApplyPictureLineup_RequiresPicturePayloadOnEveryNode()
+    public void ApplyPictureLineup_AllowsMissingPicturePayloadForPlaceholders()
     {
         var smartArt = new SmartArtShape
         {
             Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
         };
+        AddLayoutPart(smartArt);
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureLineup);
 
-        result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("require image content for every SmartArt node");
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/pictureLineup");
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
     }
 
     [Fact]
-    public void ApplyContinuousPictureList_RequiresPicturePayloadOnEveryNode()
+    public void ApplyContinuousPictureList_AllowsMissingPicturePayloadForPlaceholders()
     {
         var smartArt = new SmartArtShape
         {
             Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
         };
+        AddLayoutPart(smartArt);
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.ContinuousPictureList);
 
-        result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("require image content for every SmartArt node");
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/continuousPictureList");
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
     }
 
     [Theory]
@@ -1430,4 +1442,13 @@ public sealed class SmartArtEditingPlannerTests
             data.Nodes.Add(new SmartArtNode { ModelId = id, Text = text, Level = 0 });
         return data;
     }
+
+    private static void AddLayoutPart(SmartArtShape smartArt) =>
+        smartArt.Parts["ppt/diagrams/layout1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/layout1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dgm:root xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\"><dgm:layoutDef uniqueId=\"old\" /></dgm:root>"),
+        };
 }

@@ -144,6 +144,28 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void ApplySmartArtPictureLayout_RefreshesPlaceholdersAndRemainsUndoableWithoutImages()
+    {
+        var (session, _) = MakeSmartArtSession();
+
+        session.ApplySmartArtLayout(7, SmartArtLayoutPreset.PictureCaptionList).Should().BeTrue();
+
+        var saved = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        saved.Data!.LayoutUniqueId.Should().EndWith("/layout/pictureCaptionList");
+        saved.FallbackShapes.Should().Contain(shape => shape.PlainText == "Add picture");
+        saved.FallbackShapes.Should().Contain(shape => shape.PlainText == "Plan");
+        saved.FallbackShapes.Should().Contain(shape => shape.PlainText == "Build");
+        session.Bus.CanUndo.Should().BeTrue();
+
+        session.Undo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.Data!.LayoutUniqueId
+            .Should().EndWith("/layout/basicProcess");
+        session.Redo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.Data!.LayoutUniqueId
+            .Should().EndWith("/layout/pictureCaptionList");
+    }
+
+    [Fact]
     public void ApplySmartArtLayout_WhenCacheRefreshFails_DoesNotCommitPartialEdit()
     {
         var (session, _) = MakeSmartArtSession();
