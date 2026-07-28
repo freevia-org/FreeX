@@ -5,6 +5,23 @@ namespace FreeP.App.Avalonia.Tests;
 public sealed class SlideShowHostPolicySourceTests
 {
     [Fact]
+    public void Avalonia_named_custom_show_preserves_wpf_owner_handoff()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Avalonia",
+            "MainWindow.cs"));
+
+        var launchStart = source.IndexOf("internal bool TryStartCustomSlideShow", StringComparison.Ordinal);
+        launchStart.Should().BeGreaterThanOrEqualTo(0);
+        var launchSource = source[launchStart..];
+        launchSource.Should().Contain("if (IsVisible)");
+        launchSource.Should().Contain("slideShow.Show(this);");
+        launchSource.Should().Contain("slideShow.Show();");
+    }
+
+    [Fact]
     public void AvaloniaSlideShowWindow_DelegatesHostPolicyToPresentationPlanner()
     {
         var source = File.ReadAllText(Path.Combine(

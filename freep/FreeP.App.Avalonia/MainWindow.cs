@@ -9073,7 +9073,10 @@ public sealed partial class MainWindow : Window
                 Editor.SelectSlide(sourceIdx);
         };
 
-        slideShow.Show();
+        if (IsVisible)
+            slideShow.Show(this);
+        else
+            slideShow.Show();
         return true;
     }
 
