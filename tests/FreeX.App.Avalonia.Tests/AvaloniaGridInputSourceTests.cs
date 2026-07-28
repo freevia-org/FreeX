@@ -139,6 +139,37 @@ public sealed class AvaloniaGridInputSourceTests
     // ── R83-render-selection-fillhandle-5-2: fill-handle hover must use the crosshair, not Hand ──
 
     [Fact]
+    public void WorksheetCapturedDrags_RequestSharedEdgeAutoScrollAndRefreshViewport()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var dragStart = source.IndexOf("private void ContinueCellSelectionDrag(", StringComparison.Ordinal);
+        var dragEnd = source.IndexOf("private async Task EndCellSelectionDragAsync(", dragStart, StringComparison.Ordinal);
+
+        dragStart.Should().BeGreaterThanOrEqualTo(0);
+        dragEnd.Should().BeGreaterThan(dragStart);
+
+        var drag = source[dragStart..dragEnd];
+        drag.Should().Contain("RequestCellDragAutoScroll(args);");
+        drag.IndexOf("RequestCellDragAutoScroll(args);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(drag.IndexOf("TryResolveCellPointerAddress(args, out var pointerAddress)", StringComparison.Ordinal));
+
+        var autoScrollStart = source.IndexOf("private void RequestCellDragAutoScroll(", StringComparison.Ordinal);
+        var autoScrollEnd = source.IndexOf("private async Task EndCellSelectionDragAsync(", autoScrollStart, StringComparison.Ordinal);
+        var autoScroll = source[autoScrollStart..autoScrollEnd];
+        autoScroll.Should().Contain("GridAutofillPlanner.CalculateEdgeScrollIntent(");
+        autoScroll.Should().Contain("WorkbookViewportScrollPlanner.CalculateDragAutoScroll(");
+        autoScroll.Should().Contain("WorkbookViewportScrollPlanner.CalculateViewportOrigin(");
+        autoScroll.Should().Contain("RefreshShellForViewportPan(\"Ready\");");
+        autoScroll.Should().Contain("BroadcastScrollOffsetToSideBySidePartner();");
+        drag.Should().Contain("if (_selectionMoveDragging)");
+        drag.Should().Contain("ContinueSelectionMoveDrag(args, target);");
+        drag.Should().Contain("if (_autofillDragging)");
+        drag.Should().Contain("ContinueAutofillDrag(args, target);");
+        drag.Should().Contain("SelectRangeFromAnchor(anchor, target);");
+    }
+
+    [Fact]
     public void SheetGridHostPointerMoved_FillHandleHover_UsesCrosshairNotHandCursor()
     {
         // Failure scenario: hovering the fill-handle grip previously set _sheetGridHost.Cursor to

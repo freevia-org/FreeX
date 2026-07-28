@@ -7220,6 +7220,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        RequestCellDragAutoScroll(args);
+
         var target = TryResolveCellPointerAddress(args, out var pointerAddress)
             ? pointerAddress
             : address;
@@ -7250,6 +7252,104 @@ public sealed partial class MainWindow : Window
         SelectRangeFromAnchor(anchor, target);
         args.Handled = true;
     }
+
+    // WPF's GridView requests one viewport step whenever a captured worksheet drag reaches an
+    // edge. Keep this on the persistent grid host so it also applies while the per-cell controls
+    // are rebuilt after each scroll step.
+    private void RequestCellDragAutoScroll(PointerEventArgs args)
+    {
+        var bounds = _sheetGridHost.Bounds;
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            return;
+
+        var zoomFactor = GetActiveZoomFactor();
+        var rowHeaderWidth = _session.IsShowingHeadings
+            ? GetRowHeaderWidth(_session.Viewport, zoomFactor)
+            : 0;
+        var columnHeaderHeight = _session.IsShowingHeadings
+            ? GetColumnHeaderHeight(_session.Viewport, zoomFactor)
+            : 0;
+        var pointer = args.GetPosition(_sheetGridHost);
+        var request = GridAutofillPlanner.CalculateEdgeScrollIntent(
+            pointer.X,
+            pointer.Y,
+            bounds.Width,
+            bounds.Height,
+            rowHeaderWidth,
+            columnHeaderHeight);
+        if (request.HasAnyDirection)
+            ApplyCellDragAutoScroll(request);
+    }
+
+    private void ApplyCellDragAutoScroll(GridAutoScrollRequest request)
+    {
+        var sheet = _session.ActiveSheet;
+        var oldHorizontalMaximum = _horizontalWorksheetScrollBar.Maximum;
+        var oldHorizontalValue = _horizontalWorksheetScrollBar.Value;
+        var oldVerticalMaximum = _verticalWorksheetScrollBar.Maximum;
+        var oldVerticalValue = _verticalWorksheetScrollBar.Value;
+
+        _isUpdatingWorksheetScrollBars = true;
+        try
+        {
+            if (request.HorizontalDirection != 0)
+            {
+                var (maximum, value) = WorkbookViewportScrollPlanner.CalculateDragAutoScroll(
+                    _horizontalWorksheetScrollBar.Value,
+                    _horizontalWorksheetScrollBar.Maximum,
+                    request.HorizontalDirection,
+                    step: 1,
+                    _horizontalWorksheetScrollBar.ViewportSize,
+                    WorkbookViewportScrollPlanner.GetScrollableColumnLimit(sheet));
+                _horizontalWorksheetScrollBar.Maximum = maximum;
+                _horizontalWorksheetScrollBar.Value = value;
+            }
+
+            if (request.VerticalDirection != 0)
+            {
+                var (maximum, value) = WorkbookViewportScrollPlanner.CalculateDragAutoScroll(
+                    _verticalWorksheetScrollBar.Value,
+                    _verticalWorksheetScrollBar.Maximum,
+                    request.VerticalDirection,
+                    step: 1,
+                    _verticalWorksheetScrollBar.ViewportSize,
+                    WorkbookViewportScrollPlanner.GetScrollableRowLimit(sheet));
+                _verticalWorksheetScrollBar.Maximum = maximum;
+                _verticalWorksheetScrollBar.Value = value;
+            }
+        }
+        finally
+        {
+            _isUpdatingWorksheetScrollBars = false;
+        }
+
+        var changed =
+            Math.Abs(_horizontalWorksheetScrollBar.Maximum - oldHorizontalMaximum) > 0.001 ||
+            Math.Abs(_horizontalWorksheetScrollBar.Value - oldHorizontalValue) > 0.001 ||
+            Math.Abs(_verticalWorksheetScrollBar.Maximum - oldVerticalMaximum) > 0.001 ||
+            Math.Abs(_verticalWorksheetScrollBar.Value - oldVerticalValue) > 0.001;
+        if (!changed)
+            return;
+
+        var (topRow, leftCol) = WorkbookViewportScrollPlanner.CalculateViewportOrigin(
+            sheet,
+            _verticalWorksheetScrollBar.Value,
+            _horizontalWorksheetScrollBar.Value);
+        if (_session.SetViewportOrigin(topRow, leftCol))
+        {
+            RefreshShellForViewportPan("Ready");
+            BroadcastScrollOffsetToSideBySidePartner();
+        }
+    }
+
+    /// <summary>
+    /// Test-only seam for the production drag auto-scroll application path. The pointer lifecycle
+    /// calls <see cref="RequestCellDragAutoScroll"/>; this seam lets headless tests exercise the
+    /// same scrollbar, viewport-origin, and render-refresh behavior without fabricating native
+    /// pointer-capture state.
+    /// </summary>
+    internal void RaiseCellDragAutoScrollForTest(GridAutoScrollRequest request) =>
+        ApplyCellDragAutoScroll(request);
 
     private async Task EndCellSelectionDragAsync(PointerReleasedEventArgs args)
     {
