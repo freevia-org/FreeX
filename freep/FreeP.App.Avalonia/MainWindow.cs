@@ -4600,7 +4600,7 @@ public sealed partial class MainWindow : Window
             CanCaptureCameraAndMedia: isWindowsNative,
             capability.CanEncodeMp4
                 ? isWindowsNative
-                    ? "Windows MediaComposition video export, narration, and captured camera PIP are available; complex multi-track narration remains deferred."
+                    ? "Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available."
                     : capability.CanCaptureNarration
                         ? "ffmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available."
                         : "Video-only ffmpeg export is available; narration and captured camera picture-in-picture are unavailable."

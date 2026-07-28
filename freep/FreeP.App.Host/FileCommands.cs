@@ -508,7 +508,7 @@ internal sealed class FileCommands
             CanCaptureCameraAndMedia: string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal),
             capability.CanEncodeMp4
                 ? string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal)
-                    ? "Windows MediaComposition video export, narration, and captured camera PIP are available; complex multi-track narration remains deferred."
+                    ? "Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available."
                     : "FFmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available."
                 : capability.Reason);
 
