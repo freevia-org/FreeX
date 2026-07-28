@@ -8708,11 +8708,7 @@ public sealed partial class MainWindow : Window
             var directControls = tab.Groups
                 .SelectMany(group => group.Controls)
                 .ToArray();
-            var directResolution = RibbonKeyTipResolutionPlanner.Resolve(
-                directControls,
-                _ribbonKeyTipSequence,
-                control => control.KeyTip,
-                control => IsRibbonCommandEnabled(control.CommandId));
+            var directResolution = ResolveRibbonControlKeyTip(directControls, _ribbonKeyTipSequence);
             return directResolution.Kind == RibbonKeyTipResolutionKind.Exact &&
                    TryExecuteRibbonKeyTipCommand(directControls[directResolution.ExactIndex]);
         }
@@ -8721,11 +8717,7 @@ public sealed partial class MainWindow : Window
         if (group is null)
             return false;
 
-        var resolution = RibbonKeyTipResolutionPlanner.Resolve(
-            group.Controls,
-            _ribbonKeyTipSequence,
-            control => control.KeyTip,
-            control => IsRibbonCommandEnabled(control.CommandId));
+        var resolution = ResolveRibbonControlKeyTip(group.Controls, _ribbonKeyTipSequence);
         return resolution.Kind switch
         {
             RibbonKeyTipResolutionKind.Exact =>
@@ -8733,6 +8725,21 @@ public sealed partial class MainWindow : Window
             RibbonKeyTipResolutionKind.Prefix => true,
             _ => false,
         };
+    }
+
+    private RibbonKeyTipResolution ResolveRibbonControlKeyTip(
+        IReadOnlyList<RibbonControl> controls,
+        string sequence)
+    {
+        // Office keeps an exact leaf pending only when the longer candidate opens a
+        // nested scope. A longer leaf by itself must not make a short access key
+        // ambiguous; a dropdown or split button must remain reachable by its prefix.
+        return RibbonKeyTipResolutionPlanner.Resolve(
+            controls,
+            sequence,
+            control => control.KeyTip,
+            control => IsRibbonCommandEnabled(control.CommandId),
+            control => control is RibbonDropdown or RibbonSplitButton);
     }
 
     private bool TryHandleRibbonMenuKeyTip(string token)
