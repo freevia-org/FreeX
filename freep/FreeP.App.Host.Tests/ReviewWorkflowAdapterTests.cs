@@ -879,8 +879,8 @@ public sealed class ReviewWorkflowAdapterTests
                     row.Category == "Media" &&
                     row.ShapeId == missingCaptions.Id &&
                     row.ShapeName == "Demo video" &&
-                    row.ActionLabel == "Select Media" &&
-                    row.CommandHint == null &&
+                    row.ActionLabel == "Open Captions" &&
+                    row.CommandHint == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneOpenCommandId &&
                     row.ShouldNavigateToSlide &&
                     row.ShouldSelectShape);
             window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>

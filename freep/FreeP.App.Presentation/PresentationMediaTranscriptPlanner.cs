@@ -144,6 +144,7 @@ public sealed record PresentationMediaCaptionAuthoringMutationPlan(
 
 public static class PresentationMediaTranscriptPlanner
 {
+    public const string CaptionAuthoringPaneOpenCommandId = "freep.media-captions.open";
     public const string CaptionAuthoringPaneCreateCommandId = "freep.media-captions.create";
     public const string CaptionAuthoringPaneReplaceCommandId = "freep.media-captions.replace";
     public const string CaptionAuthoringPaneDeleteCommandId = "freep.media-captions.delete";

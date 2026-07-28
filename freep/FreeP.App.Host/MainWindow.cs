@@ -2244,7 +2244,8 @@ public sealed partial class MainWindow : Window
         {
             OpenChartDisplayOptionsDialog();
         }
-        else if (row?.Category == "Media")
+        else if (row?.CommandHint == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneOpenCommandId
+            || row?.Category == "Media")
         {
             ShowMediaCaptionPane();
         }

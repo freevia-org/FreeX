@@ -2592,7 +2592,8 @@ public static class PresentationReviewWorkflowPlanner
             return "Chart";
         }
 
-        if (issue.Title == "Video captions missing")
+        if (issue.Action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneOpenCommandId
+            || issue.Title == "Video captions missing")
         {
             return "Media";
         }
@@ -2617,8 +2618,9 @@ public static class PresentationReviewWorkflowPlanner
             ChartTitleCommandId => "Add Chart Title",
             SetTableHeaderRowCommandId => "Set Header Row",
             ReviewTableStructureCommandId => "Review Table Structure",
+            PresentationMediaTranscriptPlanner.CaptionAuthoringPaneOpenCommandId => "Open Captions",
             _ when issue.Title == "Chart title missing" => "Add Chart Title",
-            _ when issue.Title == "Video captions missing" => "Select Media",
+            _ when issue.Title == "Video captions missing" => "Open Captions",
             _ when issue.ShapeId is null => "Go to Slide",
             _ => "Select Object"
         };
@@ -4738,7 +4740,7 @@ public static class PresentationReviewWorkflowPlanner
             $"{DescribeShape(shape)} does not expose closed captions or subtitles.",
             new PresentationAccessibilityIssueActionSummary(
                 MissingVideoCaptionsActionSummary,
-                null,
+                PresentationMediaTranscriptPlanner.CaptionAuthoringPaneOpenCommandId,
                 true)));
     }
 

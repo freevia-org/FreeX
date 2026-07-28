@@ -1486,7 +1486,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
             "Product demo video does not expose closed captions or subtitles.",
             new PresentationAccessibilityIssueActionSummary(
                 PresentationReviewWorkflowPlanner.MissingVideoCaptionsActionSummary,
-                null,
+                PresentationMediaTranscriptPlanner.CaptionAuthoringPaneOpenCommandId,
                 true)));
         pane.Rows.Should().ContainSingle().Which.Should().Be(new PresentationAccessibilityCheckerRowPlan(
             0,
@@ -1499,8 +1499,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
             "Video captions missing",
             "Product demo video does not expose closed captions or subtitles.",
             true,
-            "Select Media",
-            null,
+            "Open Captions",
+            PresentationMediaTranscriptPlanner.CaptionAuthoringPaneOpenCommandId,
             true,
             true));
     }
