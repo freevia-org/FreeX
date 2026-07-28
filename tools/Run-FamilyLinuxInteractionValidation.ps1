@@ -130,6 +130,7 @@ function Assert-ManifestContract {
     if ($App -eq "FreeW") {
         $requiredIds += @(
             "editor-sentinel-copy",
+            "editor-autocorrect-typing",
             "editor-undo-restores-clipboard",
             "editor-redo-restores-clipboard",
             "editor-cut-undo-restores",
@@ -152,8 +153,8 @@ function Assert-ManifestContract {
             "file-save-shortcut-dialog-dismissal",
             "file-save-as-shortcut-dialog-open",
             "file-save-as-shortcut-dialog-dismissal",
-            "file-print-shortcut-preview-open",
-            "file-print-shortcut-preview-dismissal",
+            "file-print-shortcut-dialog-open",
+            "file-print-shortcut-dialog-dismissal",
             "file-new-shortcut-dirty-prompt-open",
             "file-new-shortcut-cancel-preserves",
             "file-new-shortcut-discard-creates-clean"
@@ -181,7 +182,7 @@ function Assert-ManifestContract {
     if ($ids.Count -ne ($ids | Select-Object -Unique).Count) {
         throw "Manifest contains duplicate result IDs."
     }
-    $expectedResultCount = if ($App -eq "FreeP") { 22 } else { 36 }
+    $expectedResultCount = if ($App -eq "FreeP") { 22 } else { 37 }
     if ($results.Count -ne $expectedResultCount) {
         throw "$App family baseline must contain exactly $expectedResultCount result rows."
     }
@@ -255,6 +256,7 @@ try {
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
+    if ($App -eq "FreeW") { $startArguments += "-CupsDryRun" }
 
     Invoke-External -FilePath "powershell.exe" -Arguments $startArguments
     $started = $true
@@ -321,6 +323,7 @@ try {
         if ($App -eq "FreeW") {
             $failureIds += @(
                 "editor-sentinel-copy",
+                "editor-autocorrect-typing",
                 "editor-undo-restores-clipboard",
                 "editor-redo-restores-clipboard",
                 "editor-cut-undo-restores",
@@ -343,8 +346,8 @@ try {
                 "file-save-shortcut-dialog-dismissal",
                 "file-save-as-shortcut-dialog-open",
                 "file-save-as-shortcut-dialog-dismissal",
-                "file-print-shortcut-preview-open",
-                "file-print-shortcut-preview-dismissal",
+                "file-print-shortcut-dialog-open",
+                "file-print-shortcut-dialog-dismissal",
                 "file-new-shortcut-dirty-prompt-open",
                 "file-new-shortcut-cancel-preserves",
                 "file-new-shortcut-discard-creates-clean"

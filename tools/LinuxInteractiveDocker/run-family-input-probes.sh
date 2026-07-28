@@ -33,6 +33,7 @@ required_ids=(
 if [[ "$app" == "FreeW" ]]; then
     required_ids+=(
         "editor-sentinel-copy"
+        "editor-autocorrect-typing"
         "editor-undo-restores-clipboard"
         "editor-redo-restores-clipboard"
         "editor-cut-undo-restores"
@@ -55,8 +56,8 @@ if [[ "$app" == "FreeW" ]]; then
         "file-save-shortcut-dialog-dismissal"
         "file-save-as-shortcut-dialog-open"
         "file-save-as-shortcut-dialog-dismissal"
-        "file-print-shortcut-preview-open"
-        "file-print-shortcut-preview-dismissal"
+        "file-print-shortcut-dialog-open"
+        "file-print-shortcut-dialog-dismissal"
         "file-new-shortcut-dirty-prompt-open"
         "file-new-shortcut-cancel-preserves"
         "file-new-shortcut-discard-creates-clean"
@@ -1053,7 +1054,7 @@ else
 fi
 
 # FreeW-only clean-document file shortcut lifecycle evidence. Run this before
-# the sentinel edit below so the picker and preview rows observe a clean,
+# the sentinel edit below so the picker and direct-print rows observe a clean,
 # untitled document and Ctrl+S is proven to delegate to Save As.
 if [[ "$app" == "FreeW" ]]; then
     run_file_shortcut_window_lifecycle \
@@ -1063,7 +1064,7 @@ if [[ "$app" == "FreeW" ]]; then
     run_file_shortcut_window_lifecycle \
         "file-save-as-shortcut-dialog" ctrl+shift+s "Ctrl+Shift+S Save As"
     run_file_shortcut_window_lifecycle \
-        "file-print-shortcut-preview" ctrl+p "Ctrl+P Print Preview"
+        "file-print-shortcut-dialog" ctrl+p "Ctrl+P Print"
 fi
 
 # FreeW-only physical editing evidence. FreeP deliberately retains its exact
@@ -1586,6 +1587,54 @@ if [[ "$app" == "FreeW" ]]; then
     run_editor_context_probe "editor-pointer-context" pointer \
         "editor-pointer-context-before.png" "editor-pointer-context-open.png" "editor-pointer-context-dismissed.png"
     run_dirty_new_prompt_probe
+
+    autocorrect_input="$output/editor-autocorrect-input.txt"
+    autocorrect_expected="$output/editor-autocorrect-expected.txt"
+    autocorrect_observed="$output/editor-autocorrect-observed.txt"
+    autocorrect_error="$output/editor-autocorrect-error.txt"
+    autocorrect_proof="$output/editor-autocorrect-proof.txt"
+    printf '%s' 'I teh ' > "$autocorrect_input"
+    printf '%s' 'I the ' > "$autocorrect_expected"
+    click_pointer 1 "$editor_x" "$editor_y"
+    send_editor_key ctrl+a
+    send_editor_key Delete
+    autocorrect_typed=false
+    if send_active_text 'I teh '; then
+        autocorrect_typed=true
+    fi
+    capture "editor-autocorrect-typed.png"
+    send_editor_key ctrl+a
+    send_editor_key ctrl+c
+    if read_clipboard_bounded "$autocorrect_observed" "$autocorrect_error"; then
+        autocorrect_clipboard_ready=true
+    else
+        autocorrect_clipboard_ready=false
+    fi
+    {
+        printf 'input='; cat "$autocorrect_input"; printf '\n'
+        printf 'expected='; cat "$autocorrect_expected"; printf '\n'
+        printf 'observed='; if $autocorrect_clipboard_ready; then cat "$autocorrect_observed"; fi; printf '\n'
+        printf 'typed=%s\n' "$autocorrect_typed"
+        if $autocorrect_clipboard_ready && cmp -s "$autocorrect_expected" "$autocorrect_observed"; then
+            printf 'exact-match=true\n'
+        else
+            printf 'exact-match=false\n'
+        fi
+    } > "$autocorrect_proof"
+    if $autocorrect_typed && $autocorrect_clipboard_ready &&
+       cmp -s "$autocorrect_expected" "$autocorrect_observed"; then
+        record_evidence_set "editor-autocorrect-typing" "passed" \
+            "Physical X11 typing applied the shared AutoCorrect replacement and produced exact clipboard text." \
+            "editor-autocorrect-proof.txt" "editor-autocorrect-input.txt" \
+            "editor-autocorrect-expected.txt" "editor-autocorrect-observed.txt" \
+            "editor-autocorrect-typed.png"
+    else
+        record_evidence_set "editor-autocorrect-typing" "failed" \
+            "Physical X11 typing did not produce the WPF-authoritative AutoCorrect text." \
+            "editor-autocorrect-proof.txt" "editor-autocorrect-input.txt" \
+            "editor-autocorrect-expected.txt" "editor-autocorrect-observed.txt" \
+            "editor-autocorrect-error.txt" "editor-autocorrect-typed.png"
+    fi
 else
     # FreeP-only physical slide-pane evidence. Geometry is derived from the real
     # window bounds and the baseline screenshot, then retained in a calibration
