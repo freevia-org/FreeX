@@ -47,6 +47,10 @@ public static class WatermarkVisualPlanner
 
         if (options.IsPicture
             || options.NativeVmlTextPathEnabled == false
+            // Word's serialized legacy VML text-path payload is retained for editing and
+            // round-trip, but it is not a paint contract for the modern Word PDF/live surface.
+            // Keep programmatic text watermarks on the normal path; suppress only imported VML.
+            || !string.IsNullOrWhiteSpace(options.NativeVmlTextPathXml)
             || string.IsNullOrWhiteSpace(options.Text)
             || pageWidthDip <= 0
             || pageHeightDip <= 0)
