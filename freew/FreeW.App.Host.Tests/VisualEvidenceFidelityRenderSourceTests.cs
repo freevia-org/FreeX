@@ -163,6 +163,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("thisPixH - thisMarginBottom - fnH - FootnoteTrailingReserveDip");
         source.Should().Contain("PageLayout.PointsToDip(24)");
         source.Should().Contain("DrawPageBorderFrame(dc, pen, edgeInset, thisPixW, thisPixH);");
+        source.Should().Contain("edgeInset + borderWidth * 2.0");
         source.Should().Contain("width - 2 * inset");
         source.Should().Contain("if (panel is not null && i < panel.PageBoxes.Count)");
         source.Should().Contain("var box = panel.PageBoxes[i];");

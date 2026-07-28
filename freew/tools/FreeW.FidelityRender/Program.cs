@@ -648,7 +648,9 @@ static void RenderDocumentComposite(
                     var strokeWidth = borderWidth * 0.75;
                     var pen = new Pen(new SolidColorBrush(borderColor), strokeWidth);
                     DrawPageBorderFrame(dc, pen, edgeInset, thisPixW, thisPixH);
-                    DrawPageBorderFrame(dc, pen, edgeInset + borderWidth * (4.0 / 3.0), thisPixW, thisPixH);
+                    // Word's imported double frame starts the second stroke two authored widths
+                    // inward. A 4/3-width offset collapses its raster into the first stroke.
+                    DrawPageBorderFrame(dc, pen, edgeInset + borderWidth * 2.0, thisPixW, thisPixH);
                 }
                 else
                 {

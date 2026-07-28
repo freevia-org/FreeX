@@ -161,7 +161,7 @@ public sealed class FidelityRenderCompositeTests
                 {
                     var pen = new Pen(new SolidColorBrush(bc), borderWidth * 0.75);
                     DrawPageBorderFrame(dc, pen, edgeInset, pixW, pixH);
-                    DrawPageBorderFrame(dc, pen, edgeInset + borderWidth * (4.0 / 3.0), pixW, pixH);
+                    DrawPageBorderFrame(dc, pen, edgeInset + borderWidth * 2.0, pixW, pixH);
                 }
                 else
                 {
