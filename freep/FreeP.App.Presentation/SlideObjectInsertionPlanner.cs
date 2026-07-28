@@ -45,7 +45,7 @@ public sealed record SlideObjectInsertionPlan(
 
     public bool RequiresSmartArtPicturePayload =>
         Kind == SlideObjectInsertionKind.SmartArt &&
-        SmartArtLayout is SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureGrid;
+        SmartArtLayout is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureGrid);
 }
 
 public static class SlideObjectInsertionPlanner

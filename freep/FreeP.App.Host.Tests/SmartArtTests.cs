@@ -40,6 +40,7 @@ public sealed class SmartArtTests : IDisposable
     private string MakeSmartArtPptx(
         string[] nodeTexts,
         bool pictureCaptionList = false,
+        bool pictureAccentList = false,
         bool pictureGrid = false,
         bool includeNodeImage = false,
         bool includeColors = true)
@@ -72,7 +73,7 @@ public sealed class SmartArtTests : IDisposable
         foreach (var text in nodeTexts)
         {
             int idx = shapeIdx++;
-            if ((pictureCaptionList || pictureGrid) && includeNodeImage)
+            if ((pictureCaptionList || pictureAccentList || pictureGrid) && includeNodeImage)
             {
                 fallbackEls.Add(new XElement(dspNs + "pic",
                     new XElement(dspNs + "nvPicPr",
@@ -121,7 +122,7 @@ public sealed class SmartArtTests : IDisposable
                 new XElement(dspNs + "spTree", fallbackEls)));
 
         // Build minimal diagram data XML (just a root element)
-        var dataXml = pictureCaptionList || pictureGrid
+        var dataXml = pictureCaptionList || pictureAccentList || pictureGrid
             ? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
                 new XElement(dgmNs + "dataModel",
                     new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
@@ -142,10 +143,12 @@ public sealed class SmartArtTests : IDisposable
         var layoutXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(dgmNs + "layoutDef",
                 new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
-                pictureCaptionList || pictureGrid
+                pictureCaptionList || pictureAccentList || pictureGrid
                     ? new XAttribute("uniqueId", pictureGrid
                         ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid"
-                        : "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList")
+                        : pictureAccentList
+                            ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureAccentList"
+                            : "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList")
                     : null));
         var qsXml      = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "styleDef",   new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
         var colorsXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "colorsDef", new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
@@ -853,6 +856,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.HorizontalHierarchy, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.OrgChart, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.PictureCaptionList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.PictureAccentList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureGrid, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.LabeledHierarchy, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.TableHierarchy, SmartArtFamily.Hierarchy)]
@@ -863,8 +867,9 @@ public sealed class SmartArtTests : IDisposable
         var sourcePath = MakeSmartArtPptx(
             ["One", "Two"],
             pictureCaptionList: preset == SmartArtLayoutPreset.PictureCaptionList,
+            pictureAccentList: preset == SmartArtLayoutPreset.PictureAccentList,
             pictureGrid: preset == SmartArtLayoutPreset.PictureGrid,
-            includeNodeImage: preset is SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureGrid);
+            includeNodeImage: preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureGrid));
         var savedPath = Path.Combine(_tempDir, $"smartart-layout-{preset}.pptx");
         var presentation = PptxPackageReader.Read(sourcePath);
         var smartArt = presentation.Slides[0].Shapes
