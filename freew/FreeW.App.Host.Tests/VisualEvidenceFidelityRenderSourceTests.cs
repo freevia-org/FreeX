@@ -150,6 +150,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("ReviewBalloonLayoutPlanner.BuildSources(document, ReviewDisplayPolicy.Default)");
         source.Should().Contain("else if (a == \"--review-markup\") reviewMarkup = true;");
         source.Should().Contain("ShowMarkupComments = reviewMarkup");
+        source.Should().Contain("if (!reviewMarkup && TrackChanges.HasRevisions(doc))");
+        source.Should().Contain("bodyView.ApplyDisplayForReview(ReviewDisplayMode.NoMarkup)");
         source.Should().Contain("if (reviewMarkup && doc.Comments.Count > 0");
         source.Should().Contain("PaginationEngine.ComputeBlockPageAssignment(bodyView)");
         source.Should().Contain("anchorPageAssignment[source.BlockIndex] == pageIndex");
