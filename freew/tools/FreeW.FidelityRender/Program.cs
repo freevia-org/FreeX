@@ -924,7 +924,11 @@ static void RenderDocumentComposite(
                 name,
                 renderPath: "composite",
                 captureSource: "wpf-composite-renderer",
-                pageIndex: i.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                pageIndex: i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                extra: new Dictionary<string, string>
+                {
+                    ["reviewMarkup"] = reviewMarkup ? "true" : "false"
+                }),
             document: doc);
         FreeWVisualEvidencePlanner.EnsureTrusted(row);
         evidence.Add(row);
@@ -1273,6 +1277,7 @@ static void RenderDocumentSoftwareFallback(
                 pageIndex: i.ToString(CultureInfo.InvariantCulture),
                 extra: new Dictionary<string, string>
                 {
+                    ["reviewMarkup"] = "false",
                     ["wpfRenderTargetBitmap"] = "unavailable",
                     ["wpfRenderTargetBitmapReason"] = wpfRenderTargetFailure
                 }),
