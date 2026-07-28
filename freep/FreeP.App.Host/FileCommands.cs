@@ -504,8 +504,8 @@ internal sealed class FileCommands
                 ? "WPF Windows video export host"
                 : "WPF video export host",
             capability.CanEncodeMp4,
-            CanCaptureNarration: string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal),
-            CanCaptureCameraAndMedia: string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal),
+            capability.CanCaptureNarration,
+            capability.CanCaptureCameraAndMedia,
             capability.CanEncodeMp4
                 ? string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal)
                     ? "Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available."

@@ -14,7 +14,9 @@ internal sealed record WpfVideoEncoderCapability(
     bool CanEncodeMp4,
     string? ExecutablePath,
     string? EncoderName,
-    string Reason)
+    string Reason,
+    bool CanCaptureNarration = false,
+    bool CanCaptureCameraAndMedia = false)
 {
     public static WpfVideoEncoderCapability Unavailable(string reason) =>
         new(false, null, null, string.IsNullOrWhiteSpace(reason)
@@ -88,7 +90,9 @@ internal static class WpfVideoEncoderCapabilityDetector
                 true,
                 WindowsNativeVideoExportAdapter.ExecutablePath,
                 "Windows MediaComposition",
-                "Windows video export can encode the shared frame package through MediaComposition; narration and camera muxing remain unavailable on this path.");
+                "Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available.",
+                CanCaptureNarration: true,
+                CanCaptureCameraAndMedia: true);
         }
 
         var executable = FindExecutable("ffmpeg");
@@ -217,7 +221,7 @@ internal sealed class WpfVideoExportAdapter : IWpfVideoProcessRunner
                         CanEncodeMp4: true,
                         ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
                         EncoderName: _capability.EncoderName,
-                        CanCaptureNarration: false,
+                        CanCaptureNarration: _capability.CanCaptureNarration,
                         Reason: _capability.Reason))
                 .ExportAsync(package, outputPath, cancellationToken, mediaArtifacts)
                 .ConfigureAwait(false);

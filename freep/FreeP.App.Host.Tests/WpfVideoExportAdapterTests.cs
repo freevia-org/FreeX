@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
+using FreeP.App.Recording.Windows;
 
 namespace FreeP.App.Host.Tests;
 
@@ -24,6 +25,21 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
                 " V....D libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\n" +
                 " V..... mpeg4 MPEG-4 part 2")
             .Should().Be("libx264");
+    }
+
+    [Fact]
+    public void WindowsNativeCapability_AdvertisesItsPersistedMediaTracks()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var capability = WpfVideoEncoderCapabilityDetector.Detect();
+
+        capability.ExecutablePath.Should().Be(WindowsNativeVideoExportAdapter.ExecutablePath);
+        capability.CanCaptureNarration.Should().BeTrue();
+        capability.CanCaptureCameraAndMedia.Should().BeTrue();
+        capability.Reason.Should().Contain("narration");
+        capability.Reason.Should().Contain("camera");
     }
 
     [Fact]
