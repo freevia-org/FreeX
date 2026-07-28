@@ -1159,6 +1159,66 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void SmartArtDrawingCacheRegeneration_PreservesAuthoredShellMetadataAndExtensions()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
+            nodes: [("root", "Leader"), ("manager", "Manager")],
+            parOfConnections: []);
+        var savedPath = Path.Combine(_tempDir, "smartart-drawing-shell-roundtrip.pptx");
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArtShape = presentation.Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var smartArt = smartArtShape.SmartArt!;
+        var drawingPart = smartArt.Parts.Values.Single(part =>
+            part.ContentType.Contains("diagramDrawing", StringComparison.OrdinalIgnoreCase));
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var extension = XNamespace.Get("urn:freep:smartart-drawing-test");
+
+        using (var sourceStream = new MemoryStream(drawingPart.Bytes, writable: false))
+        {
+            var source = XDocument.Load(sourceStream);
+            source.Root!.SetAttributeValue("cacheId", "authored-cache-id");
+            source.Root.Add(new XElement(dsp + "extLst",
+                new XElement(dsp + "ext",
+                    new XAttribute("uri", "urn:freep:preserve-drawing-me"),
+                    new XElement(extension + "cacheHint", new XAttribute("value", "keep")))));
+
+            using var rewrittenStream = new MemoryStream();
+            source.Save(rewrittenStream);
+            drawingPart.Bytes = rewrittenStream.ToArray();
+        }
+
+        SmartArtEditingPlanner.Apply(smartArt.Data, SmartArtNodeEditIntent.ChangeText("manager", "Delivery Lead"))
+            .Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            smartArtShape.OffsetXEmu,
+            smartArtShape.OffsetYEmu,
+            smartArtShape.ExtentCxEmu,
+            smartArtShape.ExtentCyEmu,
+            presentation.Theme!).Applied.Should().BeTrue();
+
+        PptxPackageWriter.Write(presentation, savedPath);
+
+        var reread = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        var rereadDrawing = reread.Parts.Values.Single(part =>
+            part.ContentType.Contains("diagramDrawing", StringComparison.OrdinalIgnoreCase));
+        using var rereadStream = new MemoryStream(rereadDrawing.Bytes, writable: false);
+        var rereadDocument = XDocument.Load(rereadStream);
+        rereadDocument.Root!.Attribute("cacheId")?.Value.Should().Be("authored-cache-id");
+        rereadDocument.Descendants(extension + "cacheHint")
+            .Single().Attribute("value")?.Value.Should().Be("keep");
+        rereadDocument.Descendants(XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram") + "sp")
+            .SelectMany(shape => shape.Descendants(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "t"))
+            .Select(text => text.Value)
+            .Should().Contain("Delivery Lead")
+            .And.NotContain("Manager");
+    }
+
+    [Fact]
     public void RoundTrip_SmartArt_TextPaneOutlineRegeneratesDataPartAndDrawingCache()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(

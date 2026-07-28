@@ -515,7 +515,19 @@ public static class SmartArtEditingPlanner
                 shapes.Count);
         }
 
-        drawingPart.Bytes = SerializeXml(BuildDrawingCacheDocument(shapes, pictureRelIds));
+        XDocument? sourceDocument = null;
+        try
+        {
+            if (drawingPart.Bytes.Length > 0)
+                sourceDocument = ParseXml(drawingPart.Bytes);
+        }
+        catch (Exception ex) when (ex is FormatException or XmlException)
+        {
+            // A malformed source cache is replaced by the canonical generated form below.
+        }
+
+        drawingPart.Bytes = SerializeXml(
+            BuildDrawingCacheDocument(shapes, pictureRelIds, sourceDocument));
         smartArt.DrawingPartPath = drawingPart.PartPath;
         smartArt.FallbackShapes.Clear();
         foreach (var shape in shapes)
@@ -935,7 +947,8 @@ public static class SmartArtEditingPlanner
 
     private static XDocument BuildDrawingCacheDocument(
         IReadOnlyList<SlideShape> shapes,
-        IReadOnlyList<string> pictureRelIds)
+        IReadOnlyList<string> pictureRelIds,
+        XDocument? sourceDocument = null)
     {
         var shapeElements = new List<XElement>();
         var pictureIndex = 0;
@@ -946,7 +959,7 @@ public static class SmartArtEditingPlanner
                 : BuildDrawingCacheShape(shape));
         }
 
-        return new XDocument(
+        var generated = new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(Dsp + "drawing",
                 new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
@@ -965,7 +978,58 @@ public static class SmartArtEditingPlanner
                             new XElement(A + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")),
                             new XElement(A + "chExt", new XAttribute("cx", "1"), new XAttribute("cy", "1")))),
                     shapeElements)));
+
+        if (sourceDocument?.Root is not { } sourceRoot || sourceRoot.Name != Dsp + "drawing")
+            return generated;
+
+        var generatedRoot = generated.Root!;
+        var generatedSpTree = generatedRoot.Element(Dsp + "spTree")!;
+        var sourceSpTree = sourceRoot.Element(Dsp + "spTree");
+        if (sourceSpTree is null)
+        {
+            sourceRoot.Add(new XElement(generatedSpTree));
+            return sourceDocument;
+        }
+
+        var generatedEnvelope = generatedSpTree.Elements()
+            .Where(element => !IsDrawingShapeElement(element))
+            .Select(element => new XElement(element))
+            .ToArray();
+        if (sourceSpTree.Element(Dsp + "nvGrpSpPr") is null)
+            sourceSpTree.AddFirst(new XElement(generatedEnvelope.First(element => element.Name == Dsp + "nvGrpSpPr")));
+        if (sourceSpTree.Element(Dsp + "grpSpPr") is null)
+        {
+            var groupProperties = new XElement(generatedEnvelope.First(element => element.Name == Dsp + "grpSpPr"));
+            var firstShape = sourceSpTree.Elements().FirstOrDefault(IsDrawingShapeElement);
+            if (firstShape is null)
+                sourceSpTree.Add(groupProperties);
+            else
+                firstShape.AddBeforeSelf(groupProperties);
+        }
+
+        foreach (var staleShape in sourceSpTree.Elements().Where(IsDrawingShapeElement).ToList())
+            staleShape.Remove();
+
+        var generatedShapes = generatedSpTree.Elements()
+            .Where(IsDrawingShapeElement)
+            .Select(element => new XElement(element))
+            .ToArray();
+        var extensionList = sourceSpTree.Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "extLst");
+        if (extensionList is null)
+            sourceSpTree.Add(generatedShapes);
+        else
+            extensionList.AddBeforeSelf(generatedShapes);
+
+        return sourceDocument;
     }
+
+    private static bool IsDrawingShapeElement(XElement element) =>
+        element.Name == Dsp + "sp" ||
+        element.Name == Dsp + "pic" ||
+        element.Name == Dsp + "cxnSp" ||
+        element.Name == Dsp + "grpSp" ||
+        element.Name == Dsp + "graphicFrame";
 
     private static XElement BuildDrawingCacheShape(SlideShape shape)
     {
