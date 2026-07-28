@@ -12,12 +12,12 @@ public sealed class FreeWBehaviorSourceGuardTests
         var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
 
-        wpf.Should().Contain("ChartValueAxisPlan ValueAxis");
-        wpf.Should().Contain("settings.ValueAxis");
-        wpf.Should().Contain("axis.ValueFraction");
-        avalonia.Should().Contain("ChartValueAxisPlan ValueAxis");
-        avalonia.Should().Contain("cd.ValueAxis");
-        avalonia.Should().Contain("axis.ValueFraction");
+        wpf.Should().Contain("ChartSmartArtVisualPlanner.BuildChartScene(chart");
+        wpf.Should().Contain("RenderChartScene(canvas, scene)");
+        wpf.Should().Contain("scene.GridLines.Concat(scene.AxisLines)");
+        avalonia.Should().Contain("ChartSmartArtVisualPlanner.BuildChartScene(chart");
+        avalonia.Should().Contain("RenderChartScene(context, cd.Scene)");
+        avalonia.Should().Contain("scene.GridLines.Concat(scene.AxisLines)");
         wpf.Should().NotContain("ChartMax");
         avalonia.Should().NotContain("ComputeAxisRange");
     }

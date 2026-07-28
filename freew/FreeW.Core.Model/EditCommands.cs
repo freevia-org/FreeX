@@ -210,7 +210,7 @@ public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Parag
     public void Apply(IDocumentCommandContext context)
     {
         var paragraph = (Paragraph)context.Document.Blocks[paragraphIndex];
-        _previous = [.. paragraph.Runs];
+        _previous = CloneRuns(paragraph.Runs);
         _previousDropCap = paragraph.DropCap;
         rebuild(paragraph);
     }
@@ -222,9 +222,12 @@ public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Parag
         var paragraph = (Paragraph)context.Document.Blocks[paragraphIndex];
         var runs = paragraph.Runs;
         runs.Clear();
-        runs.AddRange(_previous);
+        runs.AddRange(CloneRuns(_previous));
         paragraph.DropCap = _previousDropCap;
     }
+
+    private static List<Run> CloneRuns(IEnumerable<Run> runs) =>
+        runs.Select(run => RevisionEditPlanner.CloneRunWithText(run, run.Text)).ToList();
 }
 
 /// <summary>

@@ -227,6 +227,7 @@ public static class RevisionEditPlanner
         Equation = source.Equation,
         Shape = source.Shape,
         WordArt = source.WordArt,
+        Ruby = source.Ruby,
         Chart = source.Chart,
         EmbeddedObject = source.EmbeddedObject,
         SmartArt = source.SmartArt,
@@ -249,6 +250,7 @@ public static class RevisionEditPlanner
         Control = source.Control,
         RevisionAuthor = source.RevisionAuthor,
         RevisionDateXml = source.RevisionDateXml,
+        MoveRevisionId = source.MoveRevisionId,
         FormatRevision = source.FormatRevision
     };
 

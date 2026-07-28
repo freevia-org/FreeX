@@ -136,7 +136,9 @@ public sealed class MainWindowShellFrameTests
         mainWindow.Should().Contain("workArea: workArea,");
         mainWindow.Should().Contain("statusBar: statusBar,");
         mainWindow.Should().Contain("bottomPanelsAboveStatus: [findBar]");
-        mainWindow.Should().Contain("RightItems: [BuildViewSwitchControl(white), BuildZoomControl(white)]");
+        mainWindow.Should().Contain("var viewSwitch = BuildViewSwitchControl(white);");
+        mainWindow.Should().Contain("var zoom = BuildZoomControl(white);");
+        mainWindow.Should().Contain("RightItems: [viewSwitch, zoom]");
         mainWindow.Should().Contain("Content = windowFrame.Root;");
         AssertBefore(mainWindow, "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(", "SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
         AssertBefore(mainWindow, "SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(", "Content = windowFrame.Root;");

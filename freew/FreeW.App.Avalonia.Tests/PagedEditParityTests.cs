@@ -112,17 +112,21 @@ public sealed class PagedEditParityTests
             editor.CaretPageIndex.Should().BeGreaterThan(0);
 
             var before = editor.PlainText;
-            editor.InsertText(new string('x', 5000));
+            var lastParagraph = (Paragraph)document.Blocks[^1];
+            var beforeLastParagraph = lastParagraph.PlainText;
+            var insertedText = new string('x', 5000);
+            editor.InsertText(insertedText);
             editor.Measure(new Size(816, double.PositiveInfinity));
             editor.PageCount.Should().BeGreaterThanOrEqualTo(initialPages,
                 "editing in Page Edit must reflow the live page surfaces");
             editor.PlainText.Should().Contain(before);
+            lastParagraph.PlainText.Should().Be(beforeLastParagraph + insertedText);
             editor.CanUndo.Should().BeTrue();
 
             editor.Undo();
             editor.PlainText.Should().Be(before);
             editor.Redo();
-            editor.PlainText.Should().Be(before + new string('x', 5000));
+            lastParagraph.PlainText.Should().Be(beforeLastParagraph + insertedText);
         });
     }
 

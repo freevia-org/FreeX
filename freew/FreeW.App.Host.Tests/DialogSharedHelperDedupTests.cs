@@ -71,7 +71,7 @@ public sealed class DialogSharedHelperDedupTests
     public void MainWindowExportMessages_RouteThroughDialogMessageHelper()
     {
         var source = ReadDialogSource("MainWindow.cs");
-        var exportBlock = ExtractBlock(source, "private void ExportToPdf()", "private void OpenFindReplace()");
+        var exportBlock = ExtractBlock(source, "private void ExportToPdf()", "private void OpenFindReplace(");
 
         exportBlock.Should().Contain("DialogMessageHelper.ShowInfo(");
         exportBlock.Should().Contain("DialogMessageHelper.ShowError(");
