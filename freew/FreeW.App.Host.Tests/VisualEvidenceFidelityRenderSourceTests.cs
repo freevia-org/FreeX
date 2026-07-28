@@ -14,6 +14,19 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void FidelityRender_ReservesTheAuthoredHeaderFrameForMultiPageTableBodies()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Should().Contain("var reserveTableHeaderFrame = hasMultiPageTable");
+        source.Should().Contain("doc.FinalSectionHeadersFooters.Header is { IsEmpty: false }");
+        source.Should().Contain("var tableHeaderReserveDip = reserveTableHeaderFrame");
+        source.Should().Contain("marginTop + tableHeaderReserveDip");
+        source.Should().Contain("headerTop = reserveTableHeaderFrame");
+        source.Should().Contain("? thisMarginTop");
+    }
+
+    [Fact]
     public void FidelityRender_CalibratesTheExactImportedGlowBlueWaveRasterFrame()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));

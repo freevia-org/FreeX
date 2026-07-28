@@ -299,9 +299,15 @@ static void RenderDocumentComposite(
             .BuildTableLayoutPlan(table, page: doc.Page, firstPageLeadingContentHeightDip: 0)
             .Pagination.Pages.Count > 1);
     var bodyFootnoteReserveDip = hasMultiPageTable ? 0 : footnoteReserveDip;
+    var reserveTableHeaderFrame = hasMultiPageTable
+        && doc.FinalSectionHeadersFooters.Header is { IsEmpty: false }
+        && page.HeaderDistancePt > 0;
+    var tableHeaderReserveDip = reserveTableHeaderFrame
+        ? PageLayout.PointsToDip(page.HeaderDistancePt)
+        : 0;
     flow.PagePadding = new Thickness(
         marginLeft,
-        marginTop,
+        marginTop + tableHeaderReserveDip,
         marginRight,
         marginBottom + bodyFootnoteReserveDip);
 
@@ -693,7 +699,9 @@ static void RenderDocumentComposite(
             var footerDistance = thisPageSettings.FooterDistancePt > 0
                 ? PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)
                 : DefaultHeaderFooterDistanceDip;
-            var headerTop = Math.Max(0, headerDistance - 1);
+            var headerTop = reserveTableHeaderFrame
+                ? thisMarginTop
+                : Math.Max(0, headerDistance - 1);
             var footerTop = thisPixH - footerDistance - footerH + 7;
 
             if (box.HeaderSubEditor is not null && box.HeaderSlotName is { } hSlotName)
@@ -795,7 +803,9 @@ static void RenderDocumentComposite(
             var footerDistance = thisPageSettings.FooterDistancePt > 0
                 ? PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)
                 : DefaultHeaderFooterDistanceDip;
-            var headerTop = Math.Max(0, headerDistance - 1);
+            var headerTop = reserveTableHeaderFrame
+                ? thisMarginTop
+                : Math.Max(0, headerDistance - 1);
             var footerTop = thisPixH - footerDistance - footerH + 7;
 
             if (slots.Header is { IsEmpty: false } headerSlot)
