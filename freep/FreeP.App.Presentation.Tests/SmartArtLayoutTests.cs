@@ -565,16 +565,26 @@ public sealed class SmartArtLayoutTests
                 "radialList uses four spokes from an implicit center rather than a closed adjacent-item loop");
     }
 
-    [Fact]
-    public void RadialList_UsesCachedFallbackBeyondBoundedItemCount()
+    [Theory]
+    [InlineData(9)]
+    [InlineData(16)]
+    public void RadialList_PreservesAllItemsBeyondOriginalEightItemCutoff(int itemCount)
     {
         var data = MakeData(
             SmartArtFamily.Cycle,
-            Enumerable.Range(1, 9).Select(index => $"Item {index}").ToArray());
+            Enumerable.Range(1, itemCount).Select(index => $"Item {index}").ToArray());
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radialList";
 
-        SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
-            .Should().BeNull("radialList live geometry is intentionally bounded to eight readable items");
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("radialList should remain live for every parsed item");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(itemCount);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(itemCount);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, itemCount).Select(index => $"Item {index}"));
     }
 
     [Fact]
@@ -1165,16 +1175,29 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void ChevronProcess_MalformedOrOverlargeInput_UsesCachedFallback()
+    public void ChevronProcess_MalformedInput_UsesCachedFallback()
     {
-        var data = MakeChevronData("chevronProcess", Enumerable.Repeat("x", 13).ToArray());
-
-        SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
-            .Should().BeNull("unsupported node counts must keep the cached drawing authoritative");
-
-        data = MakeChevronData("basicChevronProcess", new string('x', 513));
+        var data = MakeChevronData("basicChevronProcess", new string('x', 513));
         SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
             .Should().BeNull("pathological node text must keep the cached drawing authoritative");
+    }
+
+    [Theory]
+    [InlineData(13)]
+    [InlineData(20)]
+    public void ChevronProcess_PreservesAllStagesBeyondOriginalTwelveItemCutoff(int nodeCount)
+    {
+        var data = MakeChevronData(
+            "chevronProcess",
+            Enumerable.Range(1, nodeCount).Select(index => $"Stage {index}").ToArray());
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("Chevron stage geometry scales its interlocking step by node count");
+        shapes!.Should().HaveCount(nodeCount);
+        shapes.Should().AllSatisfy(shape => shape.AutoShapeKind.Should().Be(DrawingShapeKind.Chevron));
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(index => $"Stage {index}"));
     }
 
     [Fact]
@@ -1200,6 +1223,27 @@ public sealed class SmartArtLayoutTests
             .Distinct()
             .Should().HaveCountGreaterThan(1, "bendingProcess uses its two-track zig-zag geometry");
         boxes[1].OffsetYEmu.Should().BeGreaterThan(boxes[0].OffsetYEmu);
+    }
+
+    [Theory]
+    [InlineData(13)]
+    [InlineData(20)]
+    public void BendingProcess_PreservesAllNodesBeyondOriginalTwelveItemCutoff(int nodeCount)
+    {
+        var data = MakeData(SmartArtFamily.Process,
+            Enumerable.Range(1, nodeCount).Select(index => $"Node {index}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/bendingProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("bendingProcess scales its shared two-track geometry by node count");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(nodeCount);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(nodeCount - 1);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(index => $"Node {index}"));
     }
 
     [Fact]
@@ -1557,18 +1601,36 @@ public sealed class SmartArtLayoutTests
             "the third body cell should start the lower row");
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(10)]
-    public void TitledMatrix_MalformedBodyFallsBackToCachedDrawing(int nodeCount)
+    [Fact]
+    public void TitledMatrix_MissingTitleFallsBackToCachedDrawing()
     {
         var data = MakeData(
             SmartArtFamily.Matrix,
-            Enumerable.Range(0, nodeCount).Select(i => $"Node{i}").ToArray());
+            "", "North", "East");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix";
 
         SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
-            .Should().BeNull("malformed or overlarge titled matrices must keep the imported cache authoritative");
+            .Should().BeNull("a titled matrix without title text must keep the imported cache authoritative");
+    }
+
+    [Theory]
+    [InlineData(10)]
+    [InlineData(16)]
+    public void TitledMatrix_PreservesAllBodyNodesBeyondOriginalNineItemCutoff(int nodeCount)
+    {
+        var data = MakeData(
+            SmartArtFamily.Matrix,
+            Enumerable.Range(0, nodeCount).Select(i => i == 0 ? "Title" : $"Node{i}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("titledMatrix should remain live for every parsed body node");
+        shapes!.Should().HaveCount(nodeCount);
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(0, nodeCount).Select(i => i == 0 ? "Title" : $"Node{i}"));
+        shapes.Skip(1).Select(shape => shape.OffsetXEmu).Distinct().Should().HaveCount(2,
+            "larger titled matrices continue in two aligned body columns");
     }
 
     [Fact]
@@ -1737,15 +1799,25 @@ public sealed class SmartArtLayoutTests
         }
     }
 
-    [Fact]
-    public void TargetList_MoreThanFiveNodes_ReturnsNullForCachedFallback()
+    [Theory]
+    [InlineData(6)]
+    [InlineData(12)]
+    public void TargetList_PreservesEveryNodeBeyondOriginalFiveNodeCutoff(int nodeCount)
     {
-        var data = MakeData(SmartArtFamily.Relationship, "A", "B", "C", "D", "E", "F");
+        var data = MakeData(
+            SmartArtFamily.Relationship,
+            Enumerable.Range(1, nodeCount).Select(i => $"Node {i}").ToArray());
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/targetList";
 
-        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        result.Should().BeNull("the bounded targetList planner owns only readable one-to-five node target diagrams");
+        shapes.Should().NotBeNull("targetList should remain live for every parsed node");
+        shapes!.Should().HaveCount(nodeCount,
+            "a larger targetList must not silently fall back to its cached drawing");
+        shapes.Should().OnlyContain(s => s.AutoShapeKind == DrawingShapeKind.Ellipse);
+        shapes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(i => $"Node {i}"));
+        shapes.Select(s => s.ExtentCxEmu).Should().BeInDescendingOrder();
     }
 
     [Fact]

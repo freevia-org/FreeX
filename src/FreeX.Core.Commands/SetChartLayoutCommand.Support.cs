@@ -52,11 +52,32 @@ public sealed partial class SetChartLayoutCommand
     private static void ClearXAxis(ChartModel chart)
     {
         ClearXAxisValueBounds(chart);
+        ClearXAxisVisualStyle(chart);
+    }
+
+    private static void ClearYAxis(ChartModel chart)
+    {
+        ClearYAxisValueBounds(chart);
+        ClearYAxisVisualStyle(chart);
+    }
+
+    private static void EnforceAxisVisualSupport(ChartModel chart)
+    {
+        if (ChartTypeSupport.SupportsAxes(chart.Type))
+            return;
+
+        ClearXAxisVisualStyle(chart);
+        ClearYAxisVisualStyle(chart);
+    }
+
+    private static void ClearXAxisVisualStyle(ChartModel chart)
+    {
         chart.XAxisNumberFormat = ChartDataLabelNumberFormat.General;
         chart.XAxisNumberFormatCode = null;
         chart.XAxisNumberFormatSourceLinked = null;
         chart.ShowXAxisMajorGridlines = false;
         chart.ShowXAxisMinorGridlines = false;
+        chart.XAxisIsDateAxis = false;
         chart.XAxisMajorGridlineColor = null;
         chart.XAxisMinorGridlineColor = null;
         chart.XAxisGridlineThickness = 1;
@@ -67,13 +88,15 @@ public sealed partial class SetChartLayoutCommand
         chart.XAxisLabelTextThemeColor = null;
         chart.XAxisLabelFontSize = 11;
         chart.XAxisLabelAngle = 0;
+        chart.XAxisLabelSkip = 0;
+        chart.XAxisTickMarkSkip = 0;
+        chart.XAxisLabelOffset = 0;
         chart.XAxisLineColor = null;
         chart.XAxisLineThickness = 1;
     }
 
-    private static void ClearYAxis(ChartModel chart)
+    private static void ClearYAxisVisualStyle(ChartModel chart)
     {
-        ClearYAxisValueBounds(chart);
         chart.YAxisNumberFormat = ChartDataLabelNumberFormat.General;
         chart.YAxisNumberFormatCode = null;
         chart.YAxisNumberFormatSourceLinked = null;

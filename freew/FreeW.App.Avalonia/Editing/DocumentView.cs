@@ -9092,11 +9092,12 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// Aligns/distributes the selected floating objects through the shared model command.
+    /// Aligns/distributes floating objects through the shared model command. As in WPF, an
+    /// explicit multi-selection is honored; otherwise the command applies document-wide.
     /// </summary>
     public bool ArrangeSelectedFloatingObjects(FloatingObjectArrangeKind kind)
     {
-        var members = SelectedFloatingArrangeLocations();
+        var members = FloatingArrangeLocations();
         if (ArrangeFloatingObjectsCommand.CountApplicableObjects(_doc, members) < RequiredArrangeObjectCount(kind))
             return false;
 
@@ -9113,8 +9114,17 @@ public sealed class DocumentView : Control
     }
 
     public bool CanArrangeSelectedFloatingObjects(FloatingObjectArrangeKind kind) =>
-        ArrangeFloatingObjectsCommand.CountApplicableObjects(_doc, SelectedFloatingArrangeLocations())
+        ArrangeFloatingObjectsCommand.CountApplicableObjects(_doc, FloatingArrangeLocations())
             >= RequiredArrangeObjectCount(kind);
+
+    private IReadOnlyList<(int BlockIndex, int RunIndex)> FloatingArrangeLocations()
+    {
+        var selected = SelectedFloatingArrangeLocations();
+        if (selected.Count >= 2)
+            return selected;
+
+        return ArrangeFloatingObjectsCommand.CollectFloatingObjectLocations(_doc);
+    }
 
     private List<(int BlockIndex, int RunIndex)> SelectedFloatingArrangeLocations()
     {

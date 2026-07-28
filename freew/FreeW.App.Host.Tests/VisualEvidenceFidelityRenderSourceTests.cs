@@ -162,6 +162,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidencePlanner.ExpectedOutputName(scenarioId, pageNumber)");
         source.Should().Contain("hostId: \"wpf-fidelity-render\"");
         source.Should().Contain("captureSource: \"wpf-composite-renderer\"");
+        source.Should().Contain("[\"reviewMarkup\"] = reviewMarkup ? \"true\" : \"false\"");
         source.Should().Contain("metadata[\"backstageArtifactKind\"] = BackstageArtifactKindForScenario(documentName);");
         source.Should().Contain("metadata[\"backstagePipeline\"] = BackstagePipelineForScenario(documentName);");
         source.Should().Contain("metadata[\"backstageCaptureRoute\"] = BackstageCaptureRouteForScenario(documentName);");
@@ -176,6 +177,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("Software evidence renderer requested by --software-fallback");
         source.Should().Contain("renderPath: \"software-fallback\"");
         source.Should().Contain("captureSource: \"software-renderer\"");
+        source.Should().Contain("[\"reviewMarkup\"] = \"false\"");
         source.Should().Contain("[\"wpfRenderTargetBitmapReason\"] = wpfRenderTargetFailure");
         source.Should().Contain("const double FootnoteTrailingReserveDip = 15.0;");
         source.Should().Contain("thisPixH - thisMarginBottom - fnH - FootnoteTrailingReserveDip");

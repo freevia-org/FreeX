@@ -186,8 +186,7 @@ internal static class PivotHeaderMenuCommandFactory
             .Where(filter => filter.SourceFieldIndex != target.SourceFieldIndex)
             .ToList();
         var valueFilters = pivotTable.ValueFilters
-            .Where(filter =>
-                filter.SourceFieldIndex is not null && filter.SourceFieldIndex != target.SourceFieldIndex)
+            .Where(filter => !PivotValueFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex))
             .ToList();
 
         if (labelFilters.Count == pivotTable.LabelFilters.Count &&

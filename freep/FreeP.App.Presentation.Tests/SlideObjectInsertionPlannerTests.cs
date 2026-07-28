@@ -397,14 +397,38 @@ public sealed class SlideObjectInsertionPlannerTests
     }
 
     [Fact]
-    public void ApplyCommand_PictureCaptionListWithoutPayload_IsNoOp()
+    public void ApplyCommand_InsertsPictureCaptionListWithPlaceholdersWithoutPayload()
     {
         var editor = MakeSession();
 
-        SlideObjectInsertionPlanner.ApplyCommand(
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
             editor,
-            SlideObjectInsertionPlanner.SmartArtLayoutCommandId(SmartArtLayoutPreset.PictureCaptionList))
-            .Should().BeNull();
+            SlideObjectInsertionPlanner.SmartArtLayoutCommandId(SmartArtLayoutPreset.PictureCaptionList));
+
+        added.Should().NotBeNull();
+        added!.SmartArt!.Data!.Nodes.SelectMany(node => new[] { node }.Concat(node.Children))
+            .Should().HaveCount(3);
+        added.SmartArt.Data.Nodes.SelectMany(node => new[] { node }.Concat(node.Children))
+            .Select(node => node.Picture)
+            .Should().OnlyContain(picture => picture == null);
+        added.SmartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Contain("Add picture");
+        editor.Bus.CanUndo.Should().BeTrue();
+        editor.Undo();
+        editor.CurrentSlide!.Shapes.Should().NotContain(shape => shape.Kind == SlideShapeKind.SmartArt);
+        editor.Redo();
+        editor.CurrentSlide.Shapes.Should().ContainSingle(shape => shape.Kind == SlideShapeKind.SmartArt);
+
+        using var package = new MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(editor.Presentation, package);
+        package.Position = 0;
+        var reopened = FreeP.Core.IO.PptxPackageReader.Read(package);
+        var reopenedSmartArt = reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        reopenedSmartArt.Data!.Nodes.SelectMany(node => new[] { node }.Concat(node.Children))
+            .Select(node => node.Picture)
+            .Should().OnlyContain(picture => picture == null);
+        reopenedSmartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Contain("Add picture");
     }
 
     [Fact]

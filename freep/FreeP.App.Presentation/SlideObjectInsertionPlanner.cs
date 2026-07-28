@@ -43,7 +43,7 @@ public sealed record SlideObjectInsertionPlan(
 
     public bool RequiresMediaPayload => Kind == SlideObjectInsertionKind.Media;
 
-    public bool RequiresSmartArtPicturePayload =>
+    public bool IsPictureSmartArt =>
         Kind == SlideObjectInsertionKind.SmartArt &&
         SmartArtLayout is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid);
 }
@@ -279,11 +279,9 @@ public static class SlideObjectInsertionPlanner
                     mediaPayload.ContentType),
             SlideObjectInsertionKind.Table => editor.InsertTable(plan.TableRows, plan.TableColumns),
             SlideObjectInsertionKind.Chart => editor.InsertChart(plan.ChartKind),
-            SlideObjectInsertionKind.SmartArt => plan.RequiresSmartArtPicturePayload
-                ? smartArtPicturePayload is null || !smartArtPicturePayload.HasPictures
-                    ? null
-                    : editor.InsertSmartArt(plan.SmartArtLayout, smartArtPicturePayload.Pictures)
-                : editor.InsertSmartArt(plan.SmartArtLayout),
+            SlideObjectInsertionKind.SmartArt => editor.InsertSmartArt(
+                plan.SmartArtLayout,
+                smartArtPicturePayload?.Pictures),
             _ => null,
         };
     }

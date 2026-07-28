@@ -451,17 +451,28 @@ public static class SmartArtAuthoringPlanner
             SmartArtLayoutPreset.PictureLineup or
             SmartArtLayoutPreset.ContinuousPictureList or
             SmartArtLayoutPreset.PictureGrid);
-        if (pictureLayout && (smartArt.Data is null ||
-            smartArt.Data.Nodes.Any(node => node.Picture?.Bytes is not { Length: > 0 })))
+        if (pictureLayout && (smartArt.Data is null || smartArt.Data.Nodes.Count == 0))
         {
-            return NotAppliedLayout("Picture-based SmartArt layouts require image content for every SmartArt node.");
+            return NotAppliedLayout("Picture-based SmartArt layouts require a SmartArt data model with at least one node.");
         }
 
         var layoutPart = smartArt.Parts.Values.FirstOrDefault(candidate =>
             candidate.ContentType.Contains("diagramLayout", StringComparison.OrdinalIgnoreCase) ||
             candidate.PartPath.Contains("layout", StringComparison.OrdinalIgnoreCase));
-        if (layoutPart is null || layoutPart.Bytes.Length == 0)
-            return NotAppliedLayout("The SmartArt graphic has no native layout definition.");
+        if (layoutPart is null)
+        {
+            var dataPart = smartArt.Parts.Values.FirstOrDefault(candidate =>
+                candidate.ContentType.Contains("diagramData", StringComparison.OrdinalIgnoreCase) ||
+                candidate.PartPath.Contains("data", StringComparison.OrdinalIgnoreCase));
+            if (dataPart is null || dataPart.Bytes.Length == 0)
+                return NotAppliedLayout("The SmartArt graphic has no native diagram data part from which to create a layout definition.");
+
+            layoutPart = CreateNativeLayoutPart(smartArt, dataPart.PartPath);
+            smartArt.DiagramRelIds["lo"] = "rIdFreePLayout";
+        }
+
+        if (layoutPart.Bytes.Length == 0)
+            return NotAppliedLayout("The native SmartArt layout part is empty.");
 
         var (layoutId, family) = preset switch
         {
@@ -756,6 +767,60 @@ public static class SmartArtAuthoringPlanner
         smartArt.DiagramRelIds["qs"] = "rIdFreePQuickStyle";
         return part;
     }
+
+    private static DiagramPart CreateNativeLayoutPart(SmartArtShape smartArt, string dataPartPath)
+    {
+        var directory = dataPartPath[..(dataPartPath.LastIndexOf('/') + 1)];
+        var dataFileName = dataPartPath[(dataPartPath.LastIndexOf('/') + 1)..];
+        var layoutFileName = dataFileName.StartsWith("data", StringComparison.OrdinalIgnoreCase)
+            ? "layout" + dataFileName[4..]
+            : "layout-freep.xml";
+        var partPath = directory + layoutFileName;
+        var suffix = 2;
+        while (smartArt.Parts.ContainsKey(partPath))
+            partPath = directory + $"layout-freep-{suffix++}.xml";
+
+        var part = new DiagramPart
+        {
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
+            PartPath = partPath,
+            Bytes = Serialize(CreateNativeLayoutDefinition()),
+        };
+        smartArt.Parts[part.PartPath] = part;
+        return part;
+    }
+
+    private static XDocument CreateNativeLayoutDefinition() =>
+        new(new XElement(
+            Diagram + "layoutDef",
+            new XAttribute(XNamespace.Xmlns + "dgm", Diagram.NamespaceName),
+            new XAttribute("uniqueId", "urn:freep:smartart:layout:pending"),
+            new XElement(Diagram + "title", new XAttribute("val", "")),
+            new XElement(Diagram + "desc", new XAttribute("val", "")),
+            new XElement(Diagram + "catLst",
+                new XElement(Diagram + "cat", new XAttribute("type", "list"), new XAttribute("pri", "1000"))),
+            new XElement(Diagram + "sampData",
+                new XElement(Diagram + "dataModel",
+                    new XElement(Diagram + "ptLst"),
+                    new XElement(Diagram + "bg"),
+                    new XElement(Diagram + "whole"))),
+            new XElement(Diagram + "styleData",
+                new XElement(Diagram + "dataModel",
+                    new XElement(Diagram + "ptLst"),
+                    new XElement(Diagram + "bg"),
+                    new XElement(Diagram + "whole"))),
+            new XElement(Diagram + "clrData",
+                new XElement(Diagram + "dataModel",
+                    new XElement(Diagram + "ptLst"),
+                    new XElement(Diagram + "bg"),
+                    new XElement(Diagram + "whole"))),
+            new XElement(Diagram + "layoutNode",
+                new XAttribute("name", "root"),
+                new XElement(Diagram + "alg", new XAttribute("type", "lin")),
+                new XElement(Diagram + "shape", new XElement(Diagram + "adjLst")),
+                new XElement(Diagram + "presOf"),
+                new XElement(Diagram + "constrLst"),
+                new XElement(Diagram + "ruleLst"))));
 
     private static XDocument CreateEmptyQuickStyleDefinition() =>
         new(new XElement(

@@ -33,6 +33,13 @@ public sealed class SmartArtTests : IDisposable
         return path;
     }
 
+    private static void RemoveZipEntries(string path, params string[] entryPaths)
+    {
+        using var archive = ZipFile.Open(path, ZipArchiveMode.Update);
+        foreach (var entryPath in entryPaths)
+            archive.GetEntry(entryPath)?.Delete();
+    }
+
     /// <summary>
     /// Builds a minimal but self-consistent in-memory .pptx archive with one SmartArt shape.
     /// Writes it to disk and returns the path.
@@ -676,6 +683,61 @@ public sealed class SmartArtTests : IDisposable
         reopenedSmartArt.Data!.Nodes.Select(node => node.Picture)
             .Should().OnlyContain(picture => picture == null);
         reopenedSmartArt.FallbackShapes.Select(shape => shape.PlainText).Should().Contain("Add picture");
+    }
+
+    [Fact]
+    public void EditingSession_SmartArtEdit_RecreatesMissingDrawingCacheAndRoundTrips()
+    {
+        var sourcePath = MakeSmartArtPptxWithNodeTree(
+            "urn:microsoft.com/office/officeart/2005/8/layout/basicProcess",
+            [("n1", "Alpha"), ("n2", "Beta")],
+            [("n1", "n2")]);
+        RemoveZipEntries(sourcePath, "ppt/diagrams/drawing1.xml", "ppt/diagrams/_rels/drawing1.xml.rels");
+
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var shape = presentation.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt);
+        var smartArt = shape.SmartArt!;
+        smartArt.DrawingPartPath.Should().Be("ppt/diagrams/drawing1.xml");
+        smartArt.Parts.Should().NotContainKey(smartArt.DrawingPartPath);
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        session.EditSmartArt(shape.Id, candidate =>
+        {
+            var edit = SmartArtEditingPlanner.Apply(
+                candidate.Data,
+                SmartArtNodeEditIntent.ChangeText(candidate.Data!.Nodes[0].ModelId, "Alpha revised"));
+            edit.Applied.Should().BeTrue(edit.Message);
+            var dataRewrite = SmartArtEditingPlanner.RewriteDataPart(candidate);
+            dataRewrite.Applied.Should().BeTrue(dataRewrite.Message);
+            var cacheRefresh = SmartArtEditingPlanner.RegenerateDrawingCache(
+                candidate,
+                shape.OffsetXEmu,
+                shape.OffsetYEmu,
+                shape.ExtentCxEmu,
+                shape.ExtentCyEmu,
+                presentation.Theme);
+            cacheRefresh.Applied.Should().BeTrue(cacheRefresh.Message);
+            return true;
+        }).Should().BeTrue();
+
+        var updated = presentation.Slides[0].Shapes.First(s => s.Id == shape.Id).SmartArt!;
+        updated.Parts.Should().ContainKey("ppt/diagrams/drawing1.xml");
+        updated.FallbackShapes.Should().NotBeEmpty();
+
+        session.Bus.Undo();
+        presentation.Slides[0].Shapes.First(s => s.Id == shape.Id).SmartArt!
+            .Parts.Should().NotContainKey("ppt/diagrams/drawing1.xml");
+        session.Bus.Redo();
+        presentation.Slides[0].Shapes.First(s => s.Id == shape.Id).SmartArt!
+            .Parts.Should().ContainKey("ppt/diagrams/drawing1.xml");
+
+        var roundTripPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(roundTripPath);
+        var reopenedSmartArt = reopened.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        reopenedSmartArt.DrawingPartPath.Should().Be("ppt/diagrams/drawing1.xml");
+        reopenedSmartArt.FallbackShapes.Should().NotBeEmpty();
     }
 
     [Fact]
@@ -2569,6 +2631,36 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_TitledMatrix_RendersAllBodyNodesBeyondOriginalNineItemCutoff()
+    {
+        var nodes = Enumerable.Range(0, 10)
+            .Select(index => ($"id{index}", index == 0 ? "Title" : $"Node{index}"))
+            .ToArray();
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix",
+            nodes: nodes,
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var liveShapes = SlideCompositor.Compose(pres, pres.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+
+        liveShapes.Should().HaveCount(10,
+            "the shared WPF/Avalonia compositor should emit one title and nine body cells");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(nodes.Select(node => node.Item2));
+        liveShapes[0].BoundsDip.Width.Should().BeGreaterThan(liveShapes[1].BoundsDip.Width,
+            "the title band should continue to span the complete matrix width");
+    }
+
+    [Fact]
     public void Reader_ParsesKnownListFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -3113,6 +3205,33 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_ChevronProcessSmartArt_RendersAllStagesBeyondOriginalTwelveItemCutoff()
+    {
+        var nodes = Enumerable.Range(1, 13)
+            .Select(index => ($"n{index}", $"Stage {index}"))
+            .ToArray();
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/chevronProcess",
+            nodes: nodes,
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(13, "all 13 chevron stages should remain live");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, 13).Select(index => $"Stage {index}"));
+        liveShapes.Select(op => op.BoundsDip.X)
+            .Should().BeInAscendingOrder("the shared interlocking stages preserve authored order");
+    }
+
+    [Fact]
     public void Compositor_BasicChevronProcessSmartArt_RendersSharedLiveShapes()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -3199,6 +3318,34 @@ public sealed class SmartArtTests : IDisposable
             .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared bending-process DrawOps");
         liveShapes.Where(op => op.Text is null)
             .Should().HaveCount(2, "WPF and Avalonia hosts consume shared bending-process connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_BendingProcessSmartArt_RendersAllNodesBeyondOriginalTwelveItemCutoff()
+    {
+        var nodes = Enumerable.Range(1, 13)
+            .Select(index => ($"n{index}", $"Node {index}"))
+            .ToArray();
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/bendingProcess",
+            nodes: nodes,
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(25, "13 bending-process boxes plus 12 connectors should remain live");
+        liveShapes.Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal(Enumerable.Range(1, 13).Select(index => $"Node {index}"));
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(12, "the shared two-track plan emits one connector between each adjacent pair");
     }
 
     [Fact]
@@ -3528,6 +3675,36 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_TargetListSmartArt_RendersAllNodesBeyondOriginalFiveNodeCutoff()
+    {
+        var nodes = Enumerable.Range(1, 6)
+            .Select(i => ($"n{i}", $"Node {i}"))
+            .ToArray();
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/targetList",
+            nodes: nodes,
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var liveShapes = SlideCompositor.Compose(pres, pres.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+
+        liveShapes.Should().HaveCount(6,
+            "the shared WPF/Avalonia compositor should emit one live ellipse per node");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(nodes.Select(node => node.Item2));
+        liveShapes.Select(op => op.BoundsDip.Width)
+            .Should().BeInDescendingOrder();
+    }
+
+    [Fact]
     public void Compositor_StackedVennSmartArt_RendersSharedLiveEllipses()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -3656,6 +3833,37 @@ public sealed class SmartArtTests : IDisposable
                     Math.Sqrt(Math.Pow(op.BoundsDip.X + op.BoundsDip.Width - radialCenterX, 2) + Math.Pow(op.BoundsDip.Y + op.BoundsDip.Height - radialCenterY, 2))
                 }.Min() < 0.25,
                 "the WPF compositor must receive four spokes with a shared radial center endpoint");
+    }
+
+    [Fact]
+    public void Compositor_RadialListSmartArt_RendersAllItemsBeyondOriginalEightItemCutoff()
+    {
+        var nodes = Enumerable.Range(1, 9)
+            .Select(i => ($"n{i}", $"Item {i}"))
+            .ToArray();
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/radialList",
+            nodes: nodes,
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var liveShapes = SlideCompositor.Compose(pres, pres.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+
+        liveShapes.Should().HaveCount(18,
+            "the shared WPF/Avalonia compositor should emit nine item boxes and nine center spokes");
+        liveShapes.Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(nodes.Select(node => node.Item2));
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(9);
     }
 
     [Fact]

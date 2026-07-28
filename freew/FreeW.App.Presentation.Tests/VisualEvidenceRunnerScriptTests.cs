@@ -398,6 +398,19 @@ public sealed class VisualEvidenceRunnerScriptTests
     }
 
     [Fact]
+    public void LegacyFloatingObjectCorpus_DoesNotOverwriteTheCanonicalWordBaselineFixture()
+    {
+        var source = File.ReadAllText(RepositoryFile(
+            "freew",
+            "tools",
+            "_corpus_f2_objects",
+            "Program.cs"));
+
+        source.Should().Contain("f2-objects-01-float-wrap.docx");
+        source.Should().NotContain("Path.Combine(outDir, \"f2-01-float-wrap.docx\")");
+    }
+
+    [Fact]
     public void VisualEvidenceSummaryTool_SupportsScenarioFilter()
     {
         var source = File.ReadAllText(RepositoryFile(

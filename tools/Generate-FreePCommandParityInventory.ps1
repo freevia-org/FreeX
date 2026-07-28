@@ -1371,7 +1371,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "chevronProcess, basicChevronProcess, and closedChevronProcess now share the bounded Chevron preset planner for parsed ordered-stage nodes, using the evidence-backed 24% notch and 76% interlocking step. The checked-in corpus does not justify distinct basic/closed geometry, so no separate closed behavior is claimed. Malformed or out-of-bound input remains on cached drawing fallback. Exact PowerPoint chevron metrics, effects, authoring regeneration, and PowerPoint-authoritative pixel baselines remain deferred."),
+            RemainingWork: "chevronProcess, basicChevronProcess, and closedChevronProcess now share the Chevron preset planner for parsed ordered-stage nodes, and larger inputs no longer fall back solely because of item count. The checked-in corpus does not justify distinct basic/closed geometry, so no separate closed behavior is claimed. Malformed or out-of-bound input remains on cached drawing fallback. Exact PowerPoint chevron metrics, effects, authoring regeneration, and PowerPoint-authoritative pixel baselines remain deferred."),
         new(
             EvidenceId: "freep.smartart.bending-process",
             Area: "SmartArt bendingProcess live layout",
@@ -1387,7 +1387,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "bendingProcess now uses the bounded shared process live-layout path for parsed ordered-stage nodes as renderer-neutral left-to-right stage boxes with shared connector ops. Exact PowerPoint bending/turning geometry, polygon contours, overlap, spacing, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+            RemainingWork: "bendingProcess now keeps every parsed ordered-stage node on the shared two-track live-layout path; larger inputs no longer fall back solely because of item count. Exact PowerPoint bending/turning geometry, polygon contours, overlap, spacing, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
         new(
             EvidenceId: "freep.smartart.alternating-process",
             Area: "SmartArt alternatingProcess live layout",
@@ -1610,7 +1610,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "radialList now uses a bounded shared radial-spoke plan for up to eight parsed nodes; larger diagrams intentionally retain cached-drawing fallback. Exact PowerPoint sizing, connector attachment/routing, effects, native layout-part regeneration, and PowerPoint-authoritative visual baselines remain deferred.")
+            RemainingWork: "radialList now uses the shared radial-spoke plan for every parsed node, so larger diagrams no longer fall back solely because of item count. Exact PowerPoint sizing, connector attachment/routing, effects, native layout-part regeneration, and PowerPoint-authoritative visual baselines remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.gear-cycle",
@@ -1706,7 +1706,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "titledMatrix now uses the bounded shared matrix-family live-layout path for up to four parsed nodes as renderer-neutral quadrant rectangles. Unsupported matrix siblings and matrix diagrams with more than four parsed nodes remain on cached drawing fallback. PowerPoint-authoritative titled-matrix visual baselines, exact title-band geometry, richer variant styling, and SmartArt authoring/editing remain deferred.")
+            RemainingWork: "titledMatrix now uses the shared two-column title-band/body plan for every parsed body node, so larger matrices no longer fall back solely because of item count. Unsupported matrix siblings, exact PowerPoint title-band geometry, richer variant styling, and SmartArt authoring/editing remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.basic-venn",
@@ -1755,7 +1755,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "targetList now uses the bounded shared relationship-family live-layout path for one to five parsed nodes as concentric translucent ellipse shapes. Unsupported relationship siblings and targetList diagrams with more than five parsed nodes remain on cached drawing fallback. Exact PowerPoint ring clipping, label offsets, effects, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
+            RemainingWork: "targetList now uses the shared relationship-family live-layout path for every parsed node as concentric translucent ellipse shapes, so larger diagrams no longer fall back solely because of node count. Unsupported relationship siblings, exact PowerPoint ring clipping, label offsets, effects, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.stacked-venn",

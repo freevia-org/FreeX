@@ -434,7 +434,7 @@ public static class SmartArtLayoutEngine
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan)
     {
-        if (nodes.Count is < 1 or > 12 || fcx <= 0 || fcy <= 0)
+        if (nodes.Count < 1 || fcx <= 0 || fcy <= 0)
             return null;
 
         if (nodes.Any(node => node.Text is null || node.Text.Length > 512))
@@ -501,7 +501,7 @@ public static class SmartArtLayoutEngine
     {
         // Negative offsets are valid for objects that intentionally extend beyond the slide;
         // only the frame extents and the generated geometry are bounded here.
-        if (nodes.Count is < 1 or > 12 || fcx <= 0 || fcy <= 0)
+        if (nodes.Count < 1 || fcx <= 0 || fcy <= 0)
             return null;
 
         // Keep malformed imported text on the cached drawing path rather than allowing a
@@ -547,16 +547,16 @@ public static class SmartArtLayoutEngine
     }
 
     /// <summary>
-    /// Titled matrix: a full-width title band followed by a bounded two-column body.
-    /// The first node is semantic title content rather than a quadrant. Returning null
-    /// for malformed or overlarge input keeps the imported PowerPoint cache authoritative.
+    /// Titled matrix: a full-width title band followed by a two-column body.
+    /// The first node is semantic title content rather than a quadrant. Body rows are
+    /// derived from the parsed node count so larger authored matrices remain editable.
     /// </summary>
     private static IReadOnlyList<SlideShape>? LayoutTitledMatrix(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan)
     {
-        if (nodes.Count is < 2 or > 9 || string.IsNullOrWhiteSpace(nodes[0].Text))
+        if (nodes.Count < 2 || string.IsNullOrWhiteSpace(nodes[0].Text))
             return null;
 
         var bodyNodes = nodes.Skip(1).ToList();
@@ -1865,8 +1865,9 @@ public static class SmartArtLayoutEngine
 
     /// <summary>
     /// Basic target/list geometry: concentric ellipses centered in the frame.
-    /// This is a bounded relationship-family approximation; exact PowerPoint
-    /// ring clipping, label offsets, and effects remain on cached fallback.
+    /// The shared plan keeps one live ellipse per parsed node; exact PowerPoint
+    /// ring clipping, label offsets, and effects remain outside this renderer-
+    /// neutral geometry contract.
     /// </summary>
     private static IReadOnlyList<SlideShape>? LayoutTargetList(
         List<SmartArtNode> nodes,
@@ -1874,7 +1875,7 @@ public static class SmartArtLayoutEngine
         SmartArtStylePlan stylePlan)
     {
         int n = nodes.Count;
-        if (n is 0 or > 5)
+        if (n == 0)
             return null;
 
         var shapes = new List<SlideShape>();
@@ -2111,7 +2112,7 @@ public static class SmartArtLayoutEngine
         SmartArtStylePlan stylePlan)
     {
         var shapes = new List<SlideShape>();
-        if (nodes.Count == 0 || nodes.Count > 8) return null;
+        if (nodes.Count == 0) return null;
 
         long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
         long padY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);

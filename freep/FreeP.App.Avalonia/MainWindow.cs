@@ -583,7 +583,9 @@ public sealed partial class MainWindow : Window
     internal bool IsAnimationPaneVisible => _animationPaneHost?.IsVisible == true;
     internal int AnimationPaneItemCount => LastAnimationPaneTimelinePlan?.Items.Count ?? 0;
     internal int AnimationPaneRenderedItemCount => _animationPaneItemsPanel?.Children.Count ?? 0;
-    internal string AnimationPaneHeading => _animationPaneHeading?.Text ?? string.Empty;
+    internal string AnimationPaneHeading => LastAnimationPaneWorkflowEvidencePlan?.View.Heading
+        ?? _animationPaneHeading?.Text
+        ?? string.Empty;
     internal string AnimationPaneMessage => _animationPaneMessage?.Text ?? string.Empty;
     internal bool IsAnimationPanePreviewEnabled => _animationPanePreviewButton?.IsEnabled == true;
     internal IReadOnlyList<string> AnimationPanePlaybackControls => _animationPaneRenderedPlaybackControls;
@@ -1816,7 +1818,9 @@ public sealed partial class MainWindow : Window
             Text = "Animation Pane",
             FontSize = 12,
             FontWeight = FontWeight.SemiBold,
-            IsVisible = false,
+            Foreground = Brushes.White,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0),
         };
         _animationPaneMessage = new TextBlock
         {
@@ -1848,8 +1852,17 @@ public sealed partial class MainWindow : Window
         {
             Background = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
             Padding = new Thickness(0, 4, 4, 4),
-            Child = _animationPanePlaybackControlsPanel,
+            Child = new DockPanel
+            {
+                LastChildFill = true,
+                Children =
+                {
+                    _animationPanePlaybackControlsPanel,
+                    _animationPaneHeading,
+                },
+            },
         };
+        DockPanel.SetDock(_animationPanePlaybackControlsPanel, Dock.Right);
         DockPanel.SetDock(header, Dock.Top);
 
         var panel = new DockPanel();
@@ -2371,12 +2384,6 @@ public sealed partial class MainWindow : Window
             if (plan.RequiresPicturePayload)
             {
                 r.Register(plan.CommandId, new ActionRibbonCommand(() => _ = InsertPictureFromFileAsync()));
-                continue;
-            }
-
-            if (plan.RequiresSmartArtPicturePayload)
-            {
-                r.Register(plan.CommandId, new ActionRibbonCommand(() => _ = InsertPictureSmartArtFromFileAsync(plan)));
                 continue;
             }
 
@@ -3206,45 +3213,6 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.InsertPictureCommand, ex.Message);
-        }
-    }
-
-    private async Task InsertPictureSmartArtFromFileAsync(SlideObjectInsertionPlan plan)
-    {
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable("Picture Caption List");
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                "Picture Caption List",
-                [PictureFileType]));
-
-        if (file is null)
-            return;
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-
-            var picture = SlideObjectInsertionPlanner.CreatePicturePayload(memory.ToArray(), file.Name);
-            var payload = SlideObjectInsertionPlanner.CreateSmartArtPicturePayload([picture]);
-            var added = SlideObjectInsertionPlanner.Apply(
-                Editor,
-                plan,
-                smartArtPicturePayload: payload);
-
-            if (added is not null)
-                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed("Picture Caption List", ex.Message);
         }
     }
 
@@ -5389,7 +5357,7 @@ public sealed partial class MainWindow : Window
         LastAnimationPaneWorkflowEvidencePlan =
             AnimationPanePlanner.BuildWorkflowEvidencePlan(plan, Editor.CurrentSlideIndex);
         var viewPlan = LastAnimationPaneWorkflowEvidencePlan.View;
-        _animationPaneHeading.Text = viewPlan.Heading;
+        _animationPaneHeading.Text = "Animation Pane";
         _animationPaneMessage.Text = viewPlan.Message;
         RenderAnimationPanePlaybackControls(plan, viewPlan);
 
@@ -5404,8 +5372,9 @@ public sealed partial class MainWindow : Window
             _animationPaneItemsPanel.Children.Add(new TextBlock
             {
                 Text = viewPlan.EmptyMessage,
+                FontSize = 11,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
-                Margin = new Thickness(12, 0, 12, 10),
+                Margin = new Thickness(10, 12, 10, 12),
                 TextWrapping = TextWrapping.Wrap,
             });
             return;
@@ -5509,6 +5478,7 @@ public sealed partial class MainWindow : Window
             Height = 24,
             FontSize = 10,
             Margin = new Thickness(2),
+            VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
             IsEnabled = item.EffectOptions.CanApply,
             IsVisible = item.EffectOptions.Options.Count > 0,
@@ -5546,6 +5516,7 @@ public sealed partial class MainWindow : Window
             Height = 24,
             FontSize = 10,
             Margin = new Thickness(2),
+            VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
             IsEnabled = item.EffectOptions.CanApply,
             IsVisible = item.EffectOptions.WheelSpokeOptions.Count > 0,
@@ -5574,6 +5545,7 @@ public sealed partial class MainWindow : Window
             Height = 24,
             FontSize = 10,
             Margin = new Thickness(2),
+            VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
         ToolTip.SetTip(triggerCombo, "Trigger");
@@ -5589,6 +5561,7 @@ public sealed partial class MainWindow : Window
             FontSize = 10,
             Padding = new Thickness(2, 1),
             Margin = new Thickness(2),
+            VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
         ToolTip.SetTip(durationBox, "Duration (seconds)");
@@ -5608,6 +5581,7 @@ public sealed partial class MainWindow : Window
             FontSize = 10,
             Padding = new Thickness(2, 1),
             Margin = new Thickness(2),
+            VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
         ToolTip.SetTip(delayBox, "Delay (seconds)");
@@ -5627,6 +5601,7 @@ public sealed partial class MainWindow : Window
             Height = 24,
             FontSize = 10,
             Margin = new Thickness(2),
+            VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
         ToolTip.SetTip(repeatCombo, "Repeat count");
@@ -5706,6 +5681,7 @@ public sealed partial class MainWindow : Window
             Text = item.OrderText,
             FontSize = 11,
             FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22)),
             Width = 20,
             TextAlignment = TextAlignment.Center,
             Margin = new Thickness(4, 0),
@@ -5715,6 +5691,7 @@ public sealed partial class MainWindow : Window
         {
             Text = item.ShapeName,
             FontSize = 11,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22)),
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxWidth = 80,
             VerticalAlignment = VerticalAlignment.Center,
@@ -5725,6 +5702,7 @@ public sealed partial class MainWindow : Window
             FontSize = 10,
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
             TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 70,
             Margin = new Thickness(4, 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -5776,6 +5754,9 @@ public sealed partial class MainWindow : Window
             Height = 18,
             Padding = new Thickness(0),
             Margin = new Thickness(1),
+            Background = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1),
             IsEnabled = isEnabled,
             VerticalAlignment = VerticalAlignment.Center,
         };
