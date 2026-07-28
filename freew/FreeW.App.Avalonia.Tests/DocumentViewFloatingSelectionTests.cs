@@ -818,4 +818,47 @@ public sealed class DocumentViewFloatingSelectionTests
         Assert.Equal(120, wRev);
         Assert.Equal(80,  hRev);
     }
+
+    // FLSEL-18: arrangement falls back to all document floating objects like WPF.
+
+    [Fact]
+    public async Task ArrangeFloatingObjects_without_multi_selection_uses_document_objects_and_is_undoable()
+    {
+        bool canArrange = false, arranged = false;
+        double imageOffset = 0, shapeOffset = 0, imageReverted = 0, shapeReverted = 0;
+        HorizontalAnchor imageAnchor = default, shapeAnchor = default;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = MakeDocWithFloatingImageAndShape();
+            doc.Page.MarginLeftPt = 90;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+
+            canArrange = view.CanArrangeSelectedFloatingObjects(FloatingObjectArrangeKind.AlignToMargin);
+            arranged = view.ArrangeSelectedFloatingObjects(FloatingObjectArrangeKind.AlignToMargin);
+
+            var paragraph = (Paragraph)doc.Blocks[0];
+            var image = paragraph.Runs[1].Image!;
+            var shape = paragraph.Runs[2].Shape!;
+            imageOffset = image.HorizontalOffsetPt;
+            imageAnchor = image.HorizontalAnchor;
+            shapeOffset = shape.Placement!.HorizontalOffsetPt;
+            shapeAnchor = shape.Placement.HorizontalAnchor;
+
+            view.Undo();
+            imageReverted = image.HorizontalOffsetPt;
+            shapeReverted = shape.Placement.HorizontalOffsetPt;
+        });
+        if (!ran) return;
+
+        Assert.True(canArrange, "the ribbon command should be enabled for document-wide arrangement");
+        Assert.True(arranged);
+        Assert.Equal(90, imageOffset);
+        Assert.Equal(HorizontalAnchor.Margin, imageAnchor);
+        Assert.Equal(90, shapeOffset);
+        Assert.Equal(HorizontalAnchor.Margin, shapeAnchor);
+        Assert.Equal(36, imageReverted);
+        Assert.Equal(108, shapeReverted);
+    }
 }

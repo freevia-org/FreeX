@@ -190,6 +190,29 @@ public sealed class PivotFieldPaneGlueTests
     }
 
     [Fact]
+    public void HeaderAction_ClearFilter_RemovesUnboundValueFilterLikeWpf()
+    {
+        var (workbook, sheet, pivot) = BuildPivotWorkbook();
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.ValueFilters.Add(new PivotValueFilterModel(
+            DataFieldIndex: 0,
+            Kind: PivotValueFilterKind.GreaterThan,
+            ComparisonValue: 100,
+            SourceFieldIndex: null));
+        var headers = PivotSourceContext.ReadHeaders(workbook, pivot);
+        var validator = NumericAwareValidator(workbook, pivot);
+        var target = RowTarget(pivot, headers, sourceFieldIndex: 0);
+
+        var result = PivotHeaderMenuCommandFactory.Create(
+            sheet.Id, pivot, headers, target, PivotHeaderMenuAction.ClearFilter, validator);
+
+        result.Kind.Should().Be(PivotHeaderCommandKind.View);
+        result.ValueFilters.Should().BeEmpty();
+        result.Command.Should().BeOfType<ConfigurePivotTableViewCommand>();
+    }
+
+    [Fact]
     public void HeaderAction_MoveToColumns_RoutesThroughLayoutCommand()
     {
         var (workbook, sheet, pivot) = BuildPivotWorkbook();

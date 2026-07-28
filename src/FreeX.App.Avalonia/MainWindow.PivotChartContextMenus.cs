@@ -197,7 +197,8 @@ public sealed partial class MainWindow
         var hasItemFilter = field?.SelectedItems is { Count: > 0 } || !string.IsNullOrWhiteSpace(field?.SelectedItem);
         var hasFilter = hasItemFilter ||
             pivot.LabelFilters.Any(filter => filter.SourceFieldIndex == sourceIndex) ||
-            pivot.ValueFilters.Any(filter => filter.SourceFieldIndex == sourceIndex);
+            pivot.ValueFilters.Any(filter =>
+                PivotValueFilterOwnership.BelongsToSourceField(filter, sourceIndex));
         var summary = hasFilter ? $"{target.FieldCaption}: Filtered" : $"{target.FieldCaption}: (All)";
 
         return new PivotChartFieldContextMenuState(

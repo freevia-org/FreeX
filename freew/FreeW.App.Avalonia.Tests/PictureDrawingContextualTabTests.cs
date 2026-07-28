@@ -572,9 +572,9 @@ public sealed class PictureDrawingContextualTabTests
     }
 
     [Fact]
-    public async Task ObjectArrangeCommands_enable_for_selected_floating_objects()
+    public async Task ObjectArrangeCommands_use_document_fallback_without_multi_selection()
     {
-        bool? noneAlign = null, singleAlign = null, singleDistribute = null, multiDistribute = null;
+        bool? noneAlign = null, noneDistribute = null, singleAlign = null, singleDistribute = null, multiDistribute = null;
         var ran = await OnUi(() =>
         {
             var doc = DocWithFloatingImageAndShape();
@@ -584,6 +584,7 @@ public sealed class PictureDrawingContextualTabTests
             var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
             noneAlign = CommandIsEnabled(registry, "freew.image-align-to-page");
+            noneDistribute = CommandIsEnabled(registry, "freew.image-distribute-h");
             view.SelectFloating(0, 1);
             singleAlign = CommandIsEnabled(registry, "freew.image-align-to-page");
             singleDistribute = CommandIsEnabled(registry, "freew.image-distribute-h");
@@ -592,9 +593,10 @@ public sealed class PictureDrawingContextualTabTests
         });
         if (!ran) return;
 
-        noneAlign.Should().BeFalse("arrange commands need a selected floating object");
-        singleAlign.Should().BeTrue("align commands work for one selected floating object");
-        singleDistribute.Should().BeFalse("distribute commands need at least two selected floating objects");
+        noneAlign.Should().BeTrue("WPF falls back to arranging all floating objects without an explicit multi-selection");
+        noneDistribute.Should().BeTrue("the document fallback contains two distributable floating objects");
+        singleAlign.Should().BeTrue("a single selection still uses the document-wide WPF fallback");
+        singleDistribute.Should().BeTrue("a single selection still distributes the document-wide fallback");
         multiDistribute.Should().BeTrue("image + shape multi-selection can be distributed by the shared model command");
     }
 
