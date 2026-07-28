@@ -65,6 +65,7 @@ public sealed class SlideShowPresenterToolPlannerTests
         plan.MediaCapture.IsAvailable.Should().BeTrue();
         plan.MediaCapture.IsDeferred.Should().BeFalse();
         plan.NarrationCapture.Reason.Should().BeEmpty();
+        plan.StatusText.Should().Be("Record timings with narration and camera capture");
     }
 
     [Fact]

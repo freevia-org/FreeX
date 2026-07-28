@@ -150,6 +150,16 @@ public static class SlideShowPresenterToolPlanner
             or SlideShowRecordingMediaIntent.NarrationAndMedia;
         var requestedMedia = mediaIntent is SlideShowRecordingMediaIntent.NarrationAndMedia;
         var tracksTimings = timingIntent != SlideShowTimingIntent.None;
+        var narrationCapture = PlanCaptureCapability(
+            "Narration capture",
+            requestedNarration,
+            captureReadiness?.CanCaptureNarration,
+            captureReadiness);
+        var mediaCapture = PlanCaptureCapability(
+            "Camera and media capture",
+            requestedMedia,
+            captureReadiness?.CanCaptureCamera,
+            captureReadiness);
 
         return new SlideShowRecordingTimingPlan(
             timingIntent,
@@ -159,17 +169,13 @@ public static class SlideShowPresenterToolPlanner
             ShouldPersistTimings: timingIntent == SlideShowTimingIntent.RecordTimings,
             IsNarrationRequested: requestedNarration,
             IsMediaCaptureRequested: requestedMedia,
-            NarrationCapture: PlanCaptureCapability(
-                "Narration capture",
-                requestedNarration,
-                captureReadiness?.CanCaptureNarration,
-                captureReadiness),
-            MediaCapture: PlanCaptureCapability(
-                "Camera and media capture",
-                requestedMedia,
-                captureReadiness?.CanCaptureCamera,
-                captureReadiness),
-            StatusText: FormatRecordingStatus(timingIntent, mediaIntent));
+            NarrationCapture: narrationCapture,
+            MediaCapture: mediaCapture,
+            StatusText: FormatRecordingStatus(
+                timingIntent,
+                mediaIntent,
+                narrationCapture,
+                mediaCapture));
     }
 
     private static SlideShowDeferredCapability PlanCaptureCapability(
@@ -452,19 +458,47 @@ public static class SlideShowPresenterToolPlanner
 
     private static string FormatRecordingStatus(
         SlideShowTimingIntent timingIntent,
-        SlideShowRecordingMediaIntent mediaIntent) =>
-        (timingIntent, mediaIntent) switch
+        SlideShowRecordingMediaIntent mediaIntent,
+        SlideShowDeferredCapability narrationCapture,
+        SlideShowDeferredCapability mediaCapture)
+    {
+        if (timingIntent == SlideShowTimingIntent.RehearseTimings &&
+            mediaIntent == SlideShowRecordingMediaIntent.None)
         {
-            (SlideShowTimingIntent.RehearseTimings, SlideShowRecordingMediaIntent.None) =>
-                "Rehearse timings",
-            (SlideShowTimingIntent.RecordTimings, SlideShowRecordingMediaIntent.None) =>
-                "Record timings",
-            (SlideShowTimingIntent.RecordTimings, SlideShowRecordingMediaIntent.Narration) =>
-                "Record timings with deferred narration capture",
-            (SlideShowTimingIntent.RecordTimings, SlideShowRecordingMediaIntent.NarrationAndMedia) =>
-                "Record timings with deferred narration and media capture",
-            _ => "Presenter tools"
-        };
+            return "Rehearse timings";
+        }
+
+        if (timingIntent != SlideShowTimingIntent.RecordTimings)
+        {
+            return "Presenter tools";
+        }
+
+        if (mediaIntent == SlideShowRecordingMediaIntent.None)
+        {
+            return "Record timings";
+        }
+
+        if (mediaIntent == SlideShowRecordingMediaIntent.Narration)
+        {
+            return narrationCapture.IsDeferred
+                ? "Record timings with deferred narration capture"
+                : "Record timings with narration capture";
+        }
+
+        if (narrationCapture.IsDeferred && mediaCapture.IsDeferred)
+        {
+            return "Record timings with deferred narration and media capture";
+        }
+
+        if (!narrationCapture.IsDeferred && !mediaCapture.IsDeferred)
+        {
+            return "Record timings with narration and camera capture";
+        }
+
+        return narrationCapture.IsDeferred
+            ? "Record timings with deferred narration capture and camera capture"
+            : "Record timings with narration capture and deferred camera/media capture";
+    }
 
     private static string FormatPointerStatus(
         SlideShowPresenterPointerMode pointerMode,
