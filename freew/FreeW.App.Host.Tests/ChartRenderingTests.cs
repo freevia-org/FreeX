@@ -116,6 +116,20 @@ public sealed class ChartRenderingTests
     }
 
     [StaFact]
+    public void ChartSceneText_UsesCalibriInsteadOfTheWpfUiFallback()
+    {
+        var chart = new Chart { Kind = ChartKind.Column, Title = "Revenue by quarter" };
+        chart.Categories.AddRange(new[] { "Q1", "Q2" });
+        chart.Series.Add(new ChartSeries("Revenue", new double[] { 1, 2 }));
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 400, 224);
+        var canvas = DocumentView.BuildChartSceneCanvas(scene);
+
+        var title = Assert.Single(canvas.Children.OfType<TextBlock>(), text => text.Text == chart.Title);
+        Assert.Equal("Calibri", title.FontFamily.Source);
+    }
+
+    [StaFact]
     public void Style1_NoPlotAreaFill_CanvasBackgroundIsTransparent()
     {
         // Style 1 (default) has PlotAreaFill=false → Canvas background should be Transparent.
