@@ -138,6 +138,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.highlight",        new ValueRibbonCommand(value => editor.SetHighlightColor(value)));
         r.Register("freew.char-border",      new ActionRibbonCommand(callbacks.OpenCharacterBorderDialog ?? (() => { })));
         r.Register("freew.char-shading",     new ActionRibbonCommand(callbacks.OpenCharacterShadingDialog ?? (() => { })));
+        RegisterHighlightPalette(r, editor);
+        RegisterCharacterBorderPalette(r, editor);
+        RegisterCharacterShadingPalette(r, editor);
         r.Register("freew.grow-font",        new ActionRibbonCommand(editor.GrowFont));
         r.Register("freew.shrink-font",      new ActionRibbonCommand(editor.ShrinkFont));
         r.Register("freew.clear-formatting", new ActionRibbonCommand(editor.ClearFormatting));
@@ -924,6 +927,81 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.para-shading.light-peach", "#FCE4D6");
         Add(r, editor, "freew.para-shading.very-light-gray", "#EDEDED");
         Add(r, editor, "freew.para-shading.none", null);
+    }
+
+    /// <summary>
+    /// Registers the WPF-authority character shading palette. The top-level command only opens
+    /// the ribbon menu; formatting changes happen only after an explicit swatch or No Color choice.
+    /// </summary>
+    private static void RegisterCharacterShadingPalette(RibbonCommandRegistry r, DocumentView editor)
+    {
+        static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
+            reg.Register(id, new ActionRibbonCommand(() => ed.SetCharacterShading(hex)));
+
+        Add(r, editor, "freew.char-shading.yellow", "#FFFF00");
+        Add(r, editor, "freew.char-shading.green", "#92D050");
+        Add(r, editor, "freew.char-shading.cyan", "#00B0F0");
+        Add(r, editor, "freew.char-shading.gold", "#FFC000");
+        Add(r, editor, "freew.char-shading.red", "#FF0000");
+        Add(r, editor, "freew.char-shading.gray", "#D9D9D9");
+        Add(r, editor, "freew.char-shading.light-gray", "#A6A6A6");
+        Add(r, editor, "freew.char-shading.light-yellow", "#FFF2CC");
+        Add(r, editor, "freew.char-shading.light-blue", "#DEEBF7");
+        Add(r, editor, "freew.char-shading.light-green", "#E2EFDA");
+        Add(r, editor, "freew.char-shading.light-peach", "#FCE4D6");
+        Add(r, editor, "freew.char-shading.very-light-gray", "#EDEDED");
+        Add(r, editor, "freew.char-shading.none", null);
+    }
+
+    /// <summary>
+    /// Registers the WPF-authority character border palette. The top-level command only opens
+    /// the ribbon menu; formatting changes happen only after an explicit color or No Border choice.
+    /// </summary>
+    private static void RegisterCharacterBorderPalette(RibbonCommandRegistry r, DocumentView editor)
+    {
+        static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
+            reg.Register(id, new ActionRibbonCommand(() => ed.SetCharacterBorder(
+                hex is null ? null : new ParagraphBorder(hex, 0.5) { LineStyle = BorderLineStyle.Single })));
+
+        Add(r, editor, "freew.char-border.black", "#000000");
+        Add(r, editor, "freew.char-border.red", "#FF0000");
+        Add(r, editor, "freew.char-border.blue", "#0070C0");
+        Add(r, editor, "freew.char-border.green", "#00B050");
+        Add(r, editor, "freew.char-border.gold", "#FFC000");
+        Add(r, editor, "freew.char-border.purple", "#7030A0");
+        Add(r, editor, "freew.char-border.gray", "#808080");
+        Add(r, editor, "freew.char-border.dark-red", "#C00000");
+        Add(r, editor, "freew.char-border.dark-blue", "#002060");
+        Add(r, editor, "freew.char-border.dark-green", "#375623");
+        Add(r, editor, "freew.char-border.brown", "#974706");
+        Add(r, editor, "freew.char-border.dark-gray", "#3F3F3F");
+        Add(r, editor, "freew.char-border.none", null);
+    }
+
+    /// <summary>
+    /// Registers the WPF-authority text-highlight palette. The top-level command only opens
+    /// the ribbon menu; formatting changes happen only after an explicit swatch or No Color choice.
+    /// </summary>
+    private static void RegisterHighlightPalette(RibbonCommandRegistry r, DocumentView editor)
+    {
+        static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
+            reg.Register(id, new ActionRibbonCommand(() => ed.SetHighlightColor(hex)));
+
+        Add(r, editor, "freew.highlight.black", "#000000");
+        Add(r, editor, "freew.highlight.dark-gray", "#404040");
+        Add(r, editor, "freew.highlight.gray", "#7F7F7F");
+        Add(r, editor, "freew.highlight.dark-red", "#C00000");
+        Add(r, editor, "freew.highlight.red", "#FF0000");
+        Add(r, editor, "freew.highlight.gold", "#FFC000");
+        Add(r, editor, "freew.highlight.yellow", "#FFFF00");
+        Add(r, editor, "freew.highlight.light-green", "#92D050");
+        Add(r, editor, "freew.highlight.green", "#00B050");
+        Add(r, editor, "freew.highlight.cyan", "#00B0F0");
+        Add(r, editor, "freew.highlight.blue", "#0070C0");
+        Add(r, editor, "freew.highlight.dark-blue", "#2F5496");
+        Add(r, editor, "freew.highlight.purple", "#7030A0");
+        Add(r, editor, "freew.highlight.white", "#FFFFFF");
+        Add(r, editor, "freew.highlight.none", null);
     }
 
     /// <summary>

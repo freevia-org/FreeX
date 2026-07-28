@@ -606,15 +606,11 @@ public sealed class CommandRegistryTests
         view.LoadDocument(doc);
         view.SelectAll();
 
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
-        {
-            OpenCharacterBorderDialog = () => view.SetCharacterBorder(new ParagraphBorder("#000000", 0.5)),
-            OpenCharacterShadingDialog = () => view.SetCharacterShading("#FFF2CC"),
-        });
-        registry.TryGet(new RibbonCommandId("freew.char-border"), out var borderCommand)
-            .Should().BeTrue("freew.char-border must be registered");
-        registry.TryGet(new RibbonCommandId("freew.char-shading"), out var shadingCommand)
-            .Should().BeTrue("freew.char-shading must be registered");
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        registry.TryGet(new RibbonCommandId("freew.char-border.black"), out var borderCommand)
+            .Should().BeTrue("the Character Border palette must register its WPF-authority default swatch");
+        registry.TryGet(new RibbonCommandId("freew.char-shading.light-yellow"), out var shadingCommand)
+            .Should().BeTrue("the Character Shading palette must register its WPF-authority default swatch");
 
         borderCommand!.Execute(RibbonCommandContext.Empty);
         shadingCommand!.Execute(RibbonCommandContext.Empty);

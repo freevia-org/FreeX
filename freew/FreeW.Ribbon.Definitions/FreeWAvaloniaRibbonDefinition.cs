@@ -57,6 +57,65 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("No Color", new RibbonCommandId("freew.para-shading.none")),
         });
 
+    private static RibbonMenu BuildCharacterShadingMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Yellow", new RibbonCommandId("freew.char-shading.yellow")),
+            new("Green", new RibbonCommandId("freew.char-shading.green")),
+            new("Cyan", new RibbonCommandId("freew.char-shading.cyan")),
+            new("Gold", new RibbonCommandId("freew.char-shading.gold")),
+            new("Red", new RibbonCommandId("freew.char-shading.red")),
+            new("Gray", new RibbonCommandId("freew.char-shading.gray")),
+            new("Light Gray", new RibbonCommandId("freew.char-shading.light-gray")),
+            new("Light Yellow", new RibbonCommandId("freew.char-shading.light-yellow")),
+            new("Light Blue", new RibbonCommandId("freew.char-shading.light-blue")),
+            new("Light Green", new RibbonCommandId("freew.char-shading.light-green")),
+            new("Light Peach", new RibbonCommandId("freew.char-shading.light-peach")),
+            new("Very Light Gray", new RibbonCommandId("freew.char-shading.very-light-gray")),
+            RibbonMenuItem.Separator(),
+            new("No Color", new RibbonCommandId("freew.char-shading.none")),
+        });
+
+    private static RibbonMenu BuildCharacterBorderMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Black", new RibbonCommandId("freew.char-border.black")),
+            new("Red", new RibbonCommandId("freew.char-border.red")),
+            new("Blue", new RibbonCommandId("freew.char-border.blue")),
+            new("Green", new RibbonCommandId("freew.char-border.green")),
+            new("Gold", new RibbonCommandId("freew.char-border.gold")),
+            new("Purple", new RibbonCommandId("freew.char-border.purple")),
+            new("Gray", new RibbonCommandId("freew.char-border.gray")),
+            new("Dark Red", new RibbonCommandId("freew.char-border.dark-red")),
+            new("Dark Blue", new RibbonCommandId("freew.char-border.dark-blue")),
+            new("Dark Green", new RibbonCommandId("freew.char-border.dark-green")),
+            new("Brown", new RibbonCommandId("freew.char-border.brown")),
+            new("Dark Gray", new RibbonCommandId("freew.char-border.dark-gray")),
+            RibbonMenuItem.Separator(),
+            new("No Border", new RibbonCommandId("freew.char-border.none")),
+        });
+
+    private static RibbonMenu BuildHighlightMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Black", new RibbonCommandId("freew.highlight.black")),
+            new("Dark Gray", new RibbonCommandId("freew.highlight.dark-gray")),
+            new("Gray", new RibbonCommandId("freew.highlight.gray")),
+            new("Dark Red", new RibbonCommandId("freew.highlight.dark-red")),
+            new("Red", new RibbonCommandId("freew.highlight.red")),
+            new("Gold", new RibbonCommandId("freew.highlight.gold")),
+            new("Yellow", new RibbonCommandId("freew.highlight.yellow")),
+            new("Light Green", new RibbonCommandId("freew.highlight.light-green")),
+            new("Green", new RibbonCommandId("freew.highlight.green")),
+            new("Cyan", new RibbonCommandId("freew.highlight.cyan")),
+            new("Blue", new RibbonCommandId("freew.highlight.blue")),
+            new("Dark Blue", new RibbonCommandId("freew.highlight.dark-blue")),
+            new("Purple", new RibbonCommandId("freew.highlight.purple")),
+            new("White", new RibbonCommandId("freew.highlight.white")),
+            RibbonMenuItem.Separator(),
+            new("No Color", new RibbonCommandId("freew.highlight.none")),
+        });
+
     private static RibbonMenu BuildDisplayForReviewMenu() =>
         new(new RibbonMenuItem[]
         {
@@ -521,9 +580,21 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Toggle("freew.subscript",       FreeWRibbonText.SubscriptCompactCommand.Label);
                     g.Toggle("freew.smallcaps",       FreeWRibbonText.SmallCapsCommand.Label);
                     g.Toggle("freew.allcaps",         FreeWRibbonText.AllCapsCommand.Label);
-                    g.Button("freew.highlight",       FreeWRibbonText.HighlightCompactCommand.Label);
-                    g.Button("freew.char-border",     FreeWRibbonText.CharacterBorderCommand.Label);
-                    g.Button("freew.char-shading",    FreeWRibbonText.CharacterShadingCommand.Label);
+                    g.Dropdown("freew.highlight",     FreeWRibbonText.HighlightCompactCommand.Label, BuildHighlightMenu(), d => d with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Highlight)
+                    });
+                    g.Dropdown("freew.char-border",   FreeWRibbonText.CharacterBorderCommand.Label, BuildCharacterBorderMenu(), d => d with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border)
+                    });
+                    g.Dropdown("freew.char-shading",  FreeWRibbonText.CharacterShadingCommand.Label, BuildCharacterShadingMenu(), d => d with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill)
+                    });
                     g.Button("freew.grow-font",       FreeWRibbonText.GrowFontCompactCommand.Label);
                     g.Button("freew.shrink-font",     FreeWRibbonText.ShrinkFontCompactCommand.Label);
                     g.Button("freew.clear-formatting", FreeWRibbonText.ClearFormattingCompactCommand.Label);

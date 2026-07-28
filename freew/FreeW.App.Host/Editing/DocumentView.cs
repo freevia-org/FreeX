@@ -6163,13 +6163,20 @@ public sealed class DocumentView : RichTextBox
             Warp: WordArtWarp.ArchUp,
             FontSizeDip: > 34 and < 35
         };
+        var isSecondaryFillGoldStress = wordArt is
+        {
+            Text: "Review Copy",
+            Style: WordArtStyle.FillGold,
+            Warp: WordArtWarp.ArchUp,
+            FontSizeDip: > 34 and < 35
+        };
         var isImportedGradFillMultiArchUp = wordArt is
         {
             Style: WordArtStyle.GradFillMulti,
             Warp: WordArtWarp.ArchUp,
             FontSizeDip: > 45 and < 46
         };
-        var targetWidth = canvas.ActualWidth * (isImportedGoldArchUp ? 0.6 : isImportedGradFillMultiArchUp ? 0.7 : 0.8);
+        var targetWidth = canvas.ActualWidth * (isSecondaryFillGoldStress ? 0.615 : isImportedGoldArchUp ? 0.6 : isImportedGradFillMultiArchUp ? 0.7 : 0.8);
         if (fitTextToBounds && wordArt.Warp != WordArtWarp.Wave1 && totalWidth > targetWidth && totalWidth > 0)
         {
             fontSize = Math.Max(8, fontSize * targetWidth / totalWidth);
