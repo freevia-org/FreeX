@@ -93,6 +93,13 @@ public sealed class Presentation
     /// <summary>The presentation theme (color + font schemes).</summary>
     public PresentationTheme Theme { get; set; } = PresentationTheme.CreateDefault();
 
+    /// <summary>
+    /// The native Office package family. This is kept separate from the editable
+    /// presentation model so open/save can preserve macro-enabled, template, and
+    /// slide-show package identity without executing or interpreting VBA.
+    /// </summary>
+    public PresentationPackageKind PackageKind { get; set; } = PresentationPackageKind.Presentation;
+
     /// <summary>Core document properties (title, author, subject, …).</summary>
     public DocumentProperties Properties { get; } = new();
 

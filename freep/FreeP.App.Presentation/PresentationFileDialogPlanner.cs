@@ -10,13 +10,19 @@ public static class PresentationFileDialogPlanner
     public const string DefaultPresentationExtension = PresentationFilePersistenceWorkflow.DefaultPresentationExtension;
     public const string LegacyFxpExtension = PresentationFilePersistenceWorkflow.LegacyFxpExtension;
     public const string PdfExportExtension = PresentationExportPlanner.PdfExportExtension;
-    public const string UnsupportedSavePathMessage = "Choose a .pptx or .fxp presentation file.";
+    public const string UnsupportedSavePathMessage =
+        "Choose a PowerPoint presentation, template, slide show, or .fxp file.";
 
     private const string FallbackPresentationName = "Presentation";
 
     private static readonly IReadOnlyList<FileDialogFormatDescriptor> PresentationFormats =
     [
         new FileDialogFormatDescriptor(DefaultPresentationExtension, "PowerPoint presentations"),
+        new FileDialogFormatDescriptor(PresentationFilePersistenceWorkflow.MacroEnabledPresentationExtension, "PowerPoint macro-enabled presentations"),
+        new FileDialogFormatDescriptor(PresentationFilePersistenceWorkflow.TemplateExtension, "PowerPoint templates"),
+        new FileDialogFormatDescriptor(PresentationFilePersistenceWorkflow.MacroEnabledTemplateExtension, "PowerPoint macro-enabled templates"),
+        new FileDialogFormatDescriptor(PresentationFilePersistenceWorkflow.SlideShowExtension, "PowerPoint slide shows"),
+        new FileDialogFormatDescriptor(PresentationFilePersistenceWorkflow.MacroEnabledSlideShowExtension, "PowerPoint macro-enabled slide shows"),
         new FileDialogFormatDescriptor(LegacyFxpExtension, "FreeP legacy presentations"),
     ];
 
@@ -28,7 +34,7 @@ public static class PresentationFileDialogPlanner
             PresentationFormats,
             sourceName,
             FallbackPresentationName,
-            DefaultPresentationExtension);
+            GetSaveAsDefaultExtension(sourceName));
 
     public static FileSaveDialogPlan BuildPdfExportDialogPlan(string? sourceName) =>
         PresentationExportPlanner.BuildPdfExportDialogPlan(sourceName);
@@ -43,8 +49,8 @@ public static class PresentationFileDialogPlanner
             PresentationFormats,
             sourceName,
             FallbackPresentationName,
-            DefaultPresentationExtension,
-            preferredFirstExtension: DefaultPresentationExtension);
+            GetSaveAsDefaultExtension(sourceName),
+            preferredFirstExtension: GetSaveAsDefaultExtension(sourceName));
 
     public static bool TryResolveSavePickerPath(string path, out string resolvedPath)
     {
@@ -71,4 +77,12 @@ public static class PresentationFileDialogPlanner
 
     public static bool IsLegacyPresentationPath(string path) =>
         PresentationFilePersistenceWorkflow.IsLegacyPresentationPath(path);
+
+    private static string GetSaveAsDefaultExtension(string? sourceName)
+    {
+        var sourceExtension = Path.GetExtension(sourceName ?? string.Empty);
+        return PresentationFilePersistenceWorkflow.IsPowerPointPackagePath(sourceName ?? string.Empty)
+            ? sourceExtension.ToLowerInvariant()
+            : DefaultPresentationExtension;
+    }
 }

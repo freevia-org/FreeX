@@ -146,6 +146,11 @@ public static class PptxPackageWriter
 
     // ── Content types ─────────────────────────────────────────────────────────────
     private const string PresentationCT  = "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml";
+    private const string MacroEnabledPresentationCT = "application/vnd.ms-powerpoint.presentation.macroEnabled.main+xml";
+    private const string TemplateCT       = "application/vnd.openxmlformats-officedocument.presentationml.template.main+xml";
+    private const string MacroEnabledTemplateCT = "application/vnd.ms-powerpoint.template.macroEnabled.main+xml";
+    private const string SlideShowCT      = "application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml";
+    private const string MacroEnabledSlideShowCT = "application/vnd.ms-powerpoint.slideshow.macroEnabled.main+xml";
     private const string SlideCT         = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
     private const string SlideMasterCT   = "application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml";
     private const string SlideLayoutCT   = "application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml";
@@ -195,21 +200,36 @@ public static class PptxPackageWriter
     public static void Write(Presentation presentation, string path)
     {
         using var stream = File.Create(path);
-        Write(presentation, stream);
+        Write(presentation, stream, ResolvePackageKind(Path.GetExtension(path), presentation.PackageKind));
     }
 
     /// <summary>Writes a <see cref="Presentation"/> to any writable stream as a .pptx.</summary>
     public static void Write(Presentation presentation, Stream stream)
+        => Write(presentation, stream, packageKindOverride: null);
+
+    /// <summary>
+    /// Writes a presentation while optionally selecting the native Office package family.
+    /// Unknown package parts, including <c>ppt/vbaProject.bin</c>, continue through the
+    /// existing preservation snapshot path.
+    /// </summary>
+    public static void Write(
+        Presentation presentation,
+        Stream stream,
+        PresentationPackageKind? packageKindOverride)
     {
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
-        WriteArchive(archive, presentation);
+        WriteArchive(archive, presentation, packageKindOverride);
     }
 
     // ── Core archive writing ──────────────────────────────────────────────────────
 
-    private static void WriteArchive(ZipArchive archive, Presentation presentation)
+    private static void WriteArchive(
+        ZipArchive archive,
+        Presentation presentation,
+        PresentationPackageKind? packageKindOverride)
     {
         var packageSnapshot = presentation.PackageSnapshot;
+        var packageKind = packageKindOverride ?? presentation.PackageKind;
 
         // Ensure there is at least one master and one layout.
         var masters = presentation.Masters.Count > 0
@@ -389,7 +409,8 @@ public static class PptxPackageWriter
             mediaExtensions,
             prvPartCtRemaps,
             packageSnapshot,
-            preservedContentTypeWriterOwnedPaths);
+            preservedContentTypeWriterOwnedPaths,
+            packageKind);
         WriteEntry(archive, "[Content_Types].xml", ctXml);
 
         // --- 2. Root rels ---
@@ -846,7 +867,8 @@ public static class PptxPackageWriter
         HashSet<string> mediaExtensions,
         Dictionary<(int slideIdx, uint shapeId, string origPath), string>? prvPartPathRemaps = null,
         PptxPackageSnapshot? packageSnapshot = null,
-        IReadOnlySet<string>? preservedWriterOwnedPaths = null)
+        IReadOnlySet<string>? preservedWriterOwnedPaths = null,
+        PresentationPackageKind packageKind = PresentationPackageKind.Presentation)
     {
         var CT = OpcMediaTypes.ContentTypesNamespace;
 
@@ -867,7 +889,7 @@ public static class PptxPackageWriter
 
         var overrides = new List<XElement>
         {
-            Override(CT, "/ppt/presentation.xml", PresentationCT),
+            Override(CT, "/ppt/presentation.xml", GetPresentationContentType(packageKind)),
             Override(CT, "/ppt/presProps.xml", PresPropsCT),
             Override(CT, "/ppt/viewProps.xml", ViewPropsCT),
             Override(CT, "/ppt/tableStyles.xml", TableStylesCT),
@@ -1041,6 +1063,31 @@ public static class PptxPackageWriter
         new XElement(ct + "Override",
             new XAttribute("PartName", partName),
             new XAttribute("ContentType", contentType));
+
+    private static string GetPresentationContentType(PresentationPackageKind packageKind) =>
+        packageKind switch
+        {
+            PresentationPackageKind.MacroEnabledPresentation => MacroEnabledPresentationCT,
+            PresentationPackageKind.Template => TemplateCT,
+            PresentationPackageKind.MacroEnabledTemplate => MacroEnabledTemplateCT,
+            PresentationPackageKind.SlideShow => SlideShowCT,
+            PresentationPackageKind.MacroEnabledSlideShow => MacroEnabledSlideShowCT,
+            _ => PresentationCT,
+        };
+
+    private static PresentationPackageKind ResolvePackageKind(
+        string extension,
+        PresentationPackageKind fallback) =>
+        extension.ToLowerInvariant() switch
+        {
+            ".pptm" => PresentationPackageKind.MacroEnabledPresentation,
+            ".potx" => PresentationPackageKind.Template,
+            ".potm" => PresentationPackageKind.MacroEnabledTemplate,
+            ".ppsx" => PresentationPackageKind.SlideShow,
+            ".ppsm" => PresentationPackageKind.MacroEnabledSlideShow,
+            ".pptx" => PresentationPackageKind.Presentation,
+            _ => fallback,
+        };
 
     // ── presentation.xml ─────────────────────────────────────────────────────────
 

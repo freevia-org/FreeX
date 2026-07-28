@@ -109,7 +109,7 @@ public sealed class FileLifecycleTests : IDisposable
     {
         var openPlan = PresentationFileDialogPlanner.BuildOpenDialogPlan();
         openPlan.Filter.Should().Be(
-            "PowerPoint presentations (*.pptx)|*.pptx|FreeP legacy presentations (*.fxp)|*.fxp|All files (*.*)|*.*");
+            "PowerPoint presentations (*.pptx)|*.pptx|PowerPoint macro-enabled presentations (*.pptm)|*.pptm|PowerPoint templates (*.potx)|*.potx|PowerPoint macro-enabled templates (*.potm)|*.potm|PowerPoint slide shows (*.ppsx)|*.ppsx|PowerPoint macro-enabled slide shows (*.ppsm)|*.ppsm|FreeP legacy presentations (*.fxp)|*.fxp|All files (*.*)|*.*");
         openPlan.DefaultExtensionWithDot.Should().Be(".pptx");
 
         var savePlan = PresentationFileDialogPlanner.BuildSaveAsDialogPlan(null);
