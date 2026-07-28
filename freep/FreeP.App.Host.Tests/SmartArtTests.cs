@@ -2282,6 +2282,33 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_VerticalChevronListSmartArt_RendersAllNodesBeyondOriginalTwelveItemCutoff()
+    {
+        var nodes = Enumerable.Range(1, 13)
+            .Select(index => ($"id{index}", $"Step {index}"))
+            .ToArray();
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalChevronList",
+            nodes: nodes,
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(13, "all 13 vertical chevron nodes should remain live");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, 13).Select(index => $"Step {index}"));
+        liveShapes.Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("the shared vertical list plan preserves authored order");
+    }
+
+    [Fact]
     public void Reader_ParsesDescendingBlockListAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(

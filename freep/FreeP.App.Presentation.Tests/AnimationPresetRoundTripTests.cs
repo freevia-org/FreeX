@@ -207,6 +207,41 @@ public sealed class AnimationPresetRoundTripTests
         cTn.Attribute("presetSubtype")!.Value.Should().Be("twoSpins");
     }
 
+    [Fact]
+    public void KnownNonDirectionalEffectSubtypeSurvivesReadCloneAndWrite()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Pulse,
+            EffectSubtype = "authoredPulseVariant",
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+        animation.EffectSubtype.Should().Be("authoredPulseVariant");
+
+        var clonedSlide = SlideCloner.CloneSlide(reloaded.Slides[0]);
+        clonedSlide.Animations.Single().EffectSubtype.Should().Be("authoredPulseVariant");
+
+        using var second = new MemoryStream();
+        reloaded.Slides[0] = clonedSlide;
+        PptxPackageWriter.Write(reloaded, second);
+        using var archive = new ZipArchive(new MemoryStream(second.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetClass")?.Value == "emph"
+                && element.Attribute("presetID")?.Value == "14");
+        cTn.Attribute("presetSubtype")!.Value.Should().Be("authoredPulseVariant");
+    }
+
     [Theory]
     [InlineData(AnimationPreset.Shrink, 0.25)]
     [InlineData(AnimationPreset.Shrink, 0.5)]
