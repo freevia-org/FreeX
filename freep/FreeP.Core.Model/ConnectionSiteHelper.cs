@@ -223,6 +223,67 @@ public static class ConnectionSiteHelper
                 };
             }
 
+            // Directional arrows use the same guide contract as ShapeGeometryBuilder:
+            // adj1 controls shaft thickness and adj2 controls head length.  Site 2/0
+            // is the visible tip for right/left arrows, while site 1/3 follow the
+            // midpoint of the authored top/bottom shaft edge rather than the bbox.
+            case DrawingShapeKind.RightArrow:
+            case DrawingShapeKind.LeftArrow:
+            {
+                var headBase = ResolveArrowHeadBase(shape);
+                var topBottomX = shape.AutoShapeKind == DrawingShapeKind.RightArrow
+                    ? left + (long)Math.Round(shape.ExtentCxEmu * headBase)
+                    : right - (long)Math.Round(shape.ExtentCxEmu * headBase);
+                return siteIndex switch
+                {
+                    0 => (left, midY),
+                    1 => (topBottomX, top),
+                    2 => (right, midY),
+                    3 => (topBottomX, bottom),
+                    _ => (midX, midY)
+                };
+            }
+
+            case DrawingShapeKind.UpArrow:
+            case DrawingShapeKind.DownArrow:
+            {
+                var headBase = ResolveArrowHeadBase(shape);
+                var topBottomY = shape.AutoShapeKind == DrawingShapeKind.UpArrow
+                    ? top + (long)Math.Round(shape.ExtentCyEmu * (1 - headBase))
+                    : top + (long)Math.Round(shape.ExtentCyEmu * headBase);
+                return siteIndex switch
+                {
+                    0 => (left, topBottomY),
+                    1 => (midX, top),
+                    2 => (right, topBottomY),
+                    3 => (midX, bottom),
+                    _ => (midX, midY)
+                };
+            }
+
+            // Compound arrows have real tips at both ends.  Keep the other two
+            // sites on the shaft edges so attached connectors never land in the
+            // transparent corner of the bounding rectangle.
+            case DrawingShapeKind.LeftRightArrow:
+                return siteIndex switch
+                {
+                    0 => (left, midY),
+                    1 => (midX, top),
+                    2 => (right, midY),
+                    3 => (midX, bottom),
+                    _ => (midX, midY)
+                };
+
+            case DrawingShapeKind.UpDownArrow:
+                return siteIndex switch
+                {
+                    0 => (left, midY),
+                    1 => (midX, top),
+                    2 => (right, midY),
+                    3 => (midX, bottom),
+                    _ => (midX, midY)
+                };
+
             case DrawingShapeKind.Star8:
             {
                 var topStar8 = StarPoint(midX, midY, shape.ExtentCxEmu / 2.0, shape.ExtentCyEmu / 2.0, -90);
@@ -317,6 +378,20 @@ public static class ConnectionSiteHelper
         var maximum = 100000.0 * shape.ExtentCxEmu / Math.Max(1, Math.Min(shape.ExtentCxEmu, shape.ExtentCyEmu));
         var depth = Math.Clamp(adjustment, 0, maximum) / 100000.0;
         return Math.Clamp(depth, 0, 1);
+    }
+
+    private static double ResolveArrowHeadBase(SlideShape shape)
+    {
+        if (!shape.PresetGeometryAdjustments.ContainsKey("adj1") &&
+            !shape.PresetGeometryAdjustments.ContainsKey("adj2"))
+        {
+            return shape.AutoShapeKind == DrawingShapeKind.LeftArrow ? 0.38 : 0.62;
+        }
+
+        var adjustment = shape.PresetGeometryAdjustments.TryGetValue("adj2", out var value)
+            ? value
+            : 50000;
+        return 1 - Math.Clamp(adjustment, 0, 100000) / 100000.0;
     }
 
     private static (long X, long Y) StarPoint(

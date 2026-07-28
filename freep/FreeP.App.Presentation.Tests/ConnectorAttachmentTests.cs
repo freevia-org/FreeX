@@ -199,6 +199,78 @@ public sealed class ConnectorAttachmentTests
     }
 
     [Fact]
+    public void ConnectionSiteHelper_DirectionalArrowSitesFollowVisibleTipAndGuides()
+    {
+        var arrow = MakeRect(1, 0, 0, 100, 100);
+        arrow.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.RightArrow;
+
+        ConnectionSiteHelper.Resolve(arrow, 0).Should().Be((0L, 50L));
+        ConnectionSiteHelper.Resolve(arrow, 2).Should().Be((100L, 50L));
+        ConnectionSiteHelper.Resolve(arrow, 1).Should().Be((62L, 0L));
+        ConnectionSiteHelper.Resolve(arrow, 3).Should().Be((62L, 100L));
+
+        arrow.PresetGeometryAdjustments["adj1"] = 25000;
+        arrow.PresetGeometryAdjustments["adj2"] = 75000;
+        ConnectionSiteHelper.Resolve(arrow, 1).Should().Be((25L, 0L));
+        ConnectionSiteHelper.Resolve(arrow, 3).Should().Be((25L, 100L));
+    }
+
+    [Theory]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.LeftArrow, 0, 0, 50)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.UpArrow, 1, 50, 0)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.DownArrow, 3, 50, 100)]
+    public void ConnectionSiteHelper_DirectionalArrowTipSitesStayOnVisiblePoint(
+        Free.Shared.Drawing.DrawingShapeKind kind,
+        int siteIndex,
+        int expectedX,
+        int expectedY)
+    {
+        var arrow = MakeRect(1, 0, 0, 100, 100);
+        arrow.AutoShapeKind = kind;
+
+        ConnectionSiteHelper.Resolve(arrow, siteIndex).Should().Be((expectedX, expectedY));
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_CompoundArrowSitesCoverBothVisibleTips()
+    {
+        var horizontal = MakeRect(1, 0, 0, 100, 100);
+        horizontal.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.LeftRightArrow;
+        ConnectionSiteHelper.Resolve(horizontal, 0).Should().Be((0L, 50L));
+        ConnectionSiteHelper.Resolve(horizontal, 2).Should().Be((100L, 50L));
+
+        var vertical = MakeRect(2, 0, 0, 100, 100);
+        vertical.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.UpDownArrow;
+        ConnectionSiteHelper.Resolve(vertical, 1).Should().Be((50L, 0L));
+        ConnectionSiteHelper.Resolve(vertical, 3).Should().Be((50L, 100L));
+    }
+
+    [Fact]
+    public void MoveShape_ReroutesAttachedArrowConnectorToVisibleTip()
+    {
+        var (_, bus, slide) = MakePresentation();
+        var arrow = MakeRect(1, 1000, 1000, 2000, 1000);
+        arrow.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.RightArrow;
+        var target = MakeRect(2, 6000, 1000, 2000, 1000);
+        var connector = MakeConnector(3,
+            start: new ConnectorAttachment { ShapeId = 1, SiteIndex = 2 },
+            end: new ConnectorAttachment { ShapeId = 2, SiteIndex = 0 });
+
+        slide.Shapes.Add(arrow);
+        slide.Shapes.Add(target);
+        slide.Shapes.Add(connector);
+
+        bus.Execute(new MoveShapeCommand(0, 1, 500, 200));
+
+        // Right-arrow site 2 is its point, not the old bbox midpoint.
+        var movedConnector = slide.Shapes.First(shape => shape.Id == 3);
+        movedConnector.OffsetXEmu.Should().Be(3500);
+        movedConnector.OffsetYEmu.Should().Be(1500);
+        movedConnector.ExtentCxEmu.Should().Be(2500);
+        movedConnector.ExtentCyEmu.Should().Be(200);
+    }
+
+    [Fact]
     public void ConnectionSiteHelper_Star8SitesFollowCardinalOuterVertices()
     {
         var shape = MakeRect(1, 0, 0, 100, 100);
