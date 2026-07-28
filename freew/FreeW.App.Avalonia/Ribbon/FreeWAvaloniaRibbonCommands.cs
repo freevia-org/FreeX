@@ -1444,6 +1444,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.image-distribute-h", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
         r.Register("freew.image-distribute-v", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
         RegisterFloatingPositionCommands(r, editor, "shape", "Shape");
+        r.Register("freew.shape-edit-shape", new ActionRibbonCommand(() => editor.Focus()));
+        r.Register("freew.shape-convert-freeform", new ActionRibbonCommand(editor.ConvertSelectedShapeToFreeform));
+        r.Register("freew.shape-edit-points", new ActionRibbonCommand(editor.BeginShapeEditPoints));
         r.Register("freew.shape-align-left", new FloatingObjectParagraphAlignCommand(editor, "Shape", TextAlignment.Left));
         r.Register("freew.shape-align-center", new FloatingObjectParagraphAlignCommand(editor, "Shape", TextAlignment.Center));
         r.Register("freew.shape-align-right", new FloatingObjectParagraphAlignCommand(editor, "Shape", TextAlignment.Right));

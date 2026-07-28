@@ -214,6 +214,11 @@ public sealed class DocumentView : Control
     // FloatRect   : the float's page-space Rect at drag start (used to revert on Esc + as the resize base).
     // Handle      : which manipulation is active (Body = move; any edge/corner = resize from that handle).
     private (Point PointerDown, Rect FloatRect, FloatHandle Handle)? _floatDragState;
+    // AV-SHAPEPOINTS: transient edit-points mode for a selected freeform shape.
+    private (int BlockIndex, int RunIndex)? _shapeEditPointsTarget;
+    private (int SegmentIndex, IPointer? Pointer)? _shapeEditPointDragState;
+    private bool _shapeEditPointDragChanged;
+    private bool _shapeEditPointDragOwnsUndoGroup;
 
     private TextDocument _doc = TextDocument.CreateEmpty();
     private DocumentCommandBus _bus;
@@ -500,6 +505,8 @@ public sealed class DocumentView : Control
         _shapeCaret = null;
         _selectedFloatingObjects.Clear();
         _floatDragState   = null;
+        _shapeEditPointsTarget = null;
+        _shapeEditPointDragState = null;
         if (RestrictEditingPolicy.ShouldForceTrackChanges)
             TrackChangesEnabled = true;
         RaiseFloatingSelectionChangedIfIdentityChanged();
@@ -1200,6 +1207,8 @@ public sealed class DocumentView : Control
         _selectionAnchor = null;
         _selectedFloating = null;
         _selectedFloatingObjects.Clear();
+        _shapeEditPointsTarget = null;
+        _shapeEditPointDragState = null;
         InvalidateVisual();
         CaretMoved?.Invoke();
     }
@@ -7633,7 +7642,253 @@ public sealed class DocumentView : Control
             context.FillRectangle(FloatHandleFill, hRect);
             context.DrawRectangle(null, FloatHandlePen, hRect);
         }
+
+        DrawShapeEditPointHandles(context, rect, blockIndex, runIndex);
     }
+
+    private static readonly IBrush ShapeEditPointFill =
+        new SolidColorBrush(Color.FromRgb(0xFF, 0xF2, 0xB2));
+    private static readonly Pen ShapeEditPointPen =
+        new Pen(new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)), 1.0);
+    private const double ShapeEditPointSize = 9;
+
+    private bool IsCurrentShapeEditPointsTarget(int blockIndex, int runIndex) =>
+        _shapeEditPointsTarget is { } target
+        && target.BlockIndex == blockIndex
+        && target.RunIndex == runIndex
+        && TryGetRun(blockIndex, runIndex, out var run)
+        && run.Shape is { HasCustomGeometry: true };
+
+    private static Point ShapePointToPage(Rect rect, CustomGeometry geometry, CustomPoint point,
+        double rotationAngle, bool flipH, bool flipV)
+    {
+        var x = rect.X + point.X / (double)geometry.Width * rect.Width;
+        var y = rect.Y + point.Y / (double)geometry.Height * rect.Height;
+        var cx = rect.X + rect.Width / 2;
+        var cy = rect.Y + rect.Height / 2;
+        var dx = x - cx;
+        var dy = y - cy;
+        if (flipH) dx = -dx;
+        if (flipV) dy = -dy;
+        var radians = rotationAngle * Math.PI / 180.0;
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        return new Point(cx + dx * cos - dy * sin, cy + dx * sin + dy * cos);
+    }
+
+    private IEnumerable<(int SegmentIndex, Rect Rect)> ShapeEditPointRects(
+        int blockIndex, int runIndex, Rect rect)
+    {
+        if (!IsCurrentShapeEditPointsTarget(blockIndex, runIndex)
+            || !TryGetRun(blockIndex, runIndex, out var run)
+            || run.Shape?.CustomGeometry is not { } geometry)
+            yield break;
+
+        var (angle, flipH, flipV) = GetFloatRotation(blockIndex, runIndex, "Shape");
+        var half = ShapeEditPointSize / 2;
+        for (var index = 0; index < geometry.Segments.Count; index++)
+        {
+            if (geometry.Segments[index].Point is not { } point)
+                continue;
+            var center = ShapePointToPage(rect, geometry, point, angle, flipH, flipV);
+            yield return (index, new Rect(center.X - half, center.Y - half, ShapeEditPointSize, ShapeEditPointSize));
+        }
+    }
+
+    private void DrawShapeEditPointHandles(DrawingContext context, Rect rect, int blockIndex, int runIndex)
+    {
+        if (!IsCurrentShapeEditPointsTarget(blockIndex, runIndex))
+            return;
+        foreach (var (_, handleRect) in ShapeEditPointRects(blockIndex, runIndex, rect))
+        {
+            context.FillRectangle(ShapeEditPointFill, handleRect);
+            context.DrawRectangle(null, ShapeEditPointPen, handleRect);
+        }
+    }
+
+    /// <summary>Returns the active freeform vertex handles for headless tests and host automation.</summary>
+    public IReadOnlyDictionary<int, Rect> ShapeEditPointRectsForSelection()
+    {
+        var result = new Dictionary<int, Rect>();
+        if (_selectedFloating is not { Kind: "Shape" } selected)
+            return result;
+        foreach (var (index, rect) in ShapeEditPointRects(selected.BlockIndex, selected.RunIndex, selected.Rect))
+            result[index] = rect;
+        return result;
+    }
+
+    public int ActiveShapeEditPointHandleCount => ShapeEditPointRectsForSelection().Count;
+
+    private int HitTestShapeEditPoint(Point point)
+    {
+        if (_selectedFloating is not { Kind: "Shape" } selected)
+            return -1;
+        foreach (var (index, rect) in ShapeEditPointRects(selected.BlockIndex, selected.RunIndex, selected.Rect))
+        {
+            if (rect.Inflate(3).Contains(point))
+                return index;
+        }
+        return -1;
+    }
+
+    private bool TryPointToCustomCoordinate(Point pagePoint, out long x, out long y)
+    {
+        x = y = 0;
+        if (_selectedFloating is not { Kind: "Shape" } selected
+            || !IsCurrentShapeEditPointsTarget(selected.BlockIndex, selected.RunIndex)
+            || !TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            || run.Shape?.CustomGeometry is not { } geometry)
+            return false;
+
+        var rect = selected.Rect;
+        var cx = rect.X + rect.Width / 2;
+        var cy = rect.Y + rect.Height / 2;
+        var dx = pagePoint.X - cx;
+        var dy = pagePoint.Y - cy;
+        var (angle, flipH, flipV) = GetFloatRotation(selected.BlockIndex, selected.RunIndex, "Shape");
+        var radians = -angle * Math.PI / 180.0;
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        var unrotatedX = dx * cos - dy * sin;
+        var unrotatedY = dx * sin + dy * cos;
+        if (flipH) unrotatedX = -unrotatedX;
+        if (flipV) unrotatedY = -unrotatedY;
+
+        x = Math.Clamp((long)Math.Round((unrotatedX + rect.Width / 2) / rect.Width * geometry.Width), 0, geometry.Width);
+        y = Math.Clamp((long)Math.Round((unrotatedY + rect.Height / 2) / rect.Height * geometry.Height), 0, geometry.Height);
+        return true;
+    }
+
+    /// <summary>Converts the selected shape to editable freeform geometry through the shared undo bus.</summary>
+    public void ConvertSelectedShapeToFreeform()
+    {
+        if (SelectedFloatingShapeLocation() is not { } selected || selected.Shape.HasCustomGeometry)
+            return;
+        var geometry = selected.Shape.Kind switch
+        {
+            ShapeKind.Ellipse => CustomGeometry.EllipsePoly(),
+            ShapeKind.RoundedRectangle => CustomGeometry.RoundedRectPoly(),
+            _ => CustomGeometry.RectanglePoly()
+        };
+        _bus.Execute(new SetShapeCustomGeometryCommand(selected.BlockIndex, selected.RunIndex, geometry));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+    }
+
+    /// <summary>Enters WPF-compatible vertex editing for the selected shape.</summary>
+    public void BeginShapeEditPoints()
+    {
+        if (SelectedFloatingShapeLocation() is not { } selected)
+            return;
+        if (!selected.Shape.HasCustomGeometry)
+            ConvertSelectedShapeToFreeform();
+        if (selected.Shape.HasCustomGeometry)
+        {
+            _shapeEditPointsTarget = (selected.BlockIndex, selected.RunIndex);
+            InvalidateVisual();
+        }
+    }
+
+    /// <summary>Moves one active vertex through the shared undoable model command.</summary>
+    public bool MoveActiveShapeEditPoint(int segmentIndex, long x, long y)
+    {
+        if (_selectedFloating is not { Kind: "Shape" } selected
+            || !IsCurrentShapeEditPointsTarget(selected.BlockIndex, selected.RunIndex)
+            || !TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            || run.Shape?.CustomGeometry is not { } geometry
+            || segmentIndex < 0 || segmentIndex >= geometry.Segments.Count
+            || geometry.Segments[segmentIndex].Point is null)
+            return false;
+
+        _bus.Execute(new MoveShapeEditPointCommand(selected.BlockIndex, selected.RunIndex, segmentIndex, x, y));
+        if (_shapeEditPointDragState is not null)
+            _shapeEditPointDragChanged = true;
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        return true;
+    }
+
+    private void BeginShapeEditPointDrag(int segmentIndex, IPointer? pointer)
+    {
+        _shapeEditPointDragState = (segmentIndex, pointer);
+        _shapeEditPointDragChanged = false;
+        _shapeEditPointDragOwnsUndoGroup = !_bus.IsUndoGroupOpen;
+        if (_shapeEditPointDragOwnsUndoGroup)
+            _bus.BeginUndoGroup();
+        pointer?.Capture(this);
+    }
+
+    private void FinishShapeEditPointDrag(bool releasePointerCapture)
+    {
+        if (_shapeEditPointDragState is null)
+            return;
+
+        var pointer = _shapeEditPointDragState.Value.Pointer;
+        _shapeEditPointDragState = null;
+        var changed = _shapeEditPointDragChanged;
+        _shapeEditPointDragChanged = false;
+        var ownsUndoGroup = _shapeEditPointDragOwnsUndoGroup;
+        _shapeEditPointDragOwnsUndoGroup = false;
+        if (ownsUndoGroup && _bus.IsUndoGroupOpen)
+        {
+            if (changed)
+                _bus.CommitUndoGroup("Move Shape Edit Point");
+            else
+                _bus.AbortUndoGroup();
+        }
+
+        // Clear state before releasing capture. Avalonia may synchronously raise capture-lost,
+        // and that callback must not commit or undo this drag a second time.
+        if (releasePointerCapture)
+            pointer?.Capture(null);
+    }
+
+    private void CancelShapeEditPointDrag()
+    {
+        if (_shapeEditPointDragState is null)
+            return;
+
+        var pointer = _shapeEditPointDragState.Value.Pointer;
+        _shapeEditPointDragState = null;
+        var changed = _shapeEditPointDragChanged;
+        _shapeEditPointDragChanged = false;
+        var ownsUndoGroup = _shapeEditPointDragOwnsUndoGroup;
+        _shapeEditPointDragOwnsUndoGroup = false;
+        if (ownsUndoGroup && _bus.IsUndoGroupOpen)
+        {
+            if (changed)
+            {
+                _bus.CommitUndoGroup("Move Shape Edit Point");
+                Undo();
+            }
+            else
+                _bus.AbortUndoGroup();
+        }
+
+        InvalidateLayoutAndVisual();
+        if (_selectedFloating is { } selected)
+            RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        // State is already cleared, so capture loss cannot re-enter this cancellation path.
+        pointer?.Capture(null);
+    }
+
+    /// <summary>Test seam for exercising the real point-drag undo lifecycle without synthesizing a pointer.</summary>
+    internal bool BeginShapeEditPointDragForTest(int segmentIndex, IPointer? pointer = null)
+    {
+        if (_shapeEditPointsTarget is null || !ShapeEditPointRectsForSelection().ContainsKey(segmentIndex))
+            return false;
+        BeginShapeEditPointDrag(segmentIndex, pointer);
+        return true;
+    }
+
+    /// <summary>Test seam for exercising the real page-to-custom-coordinate conversion path.</summary>
+    internal bool MoveActiveShapeEditPointFromPageForTest(int segmentIndex, Point pagePoint)
+    {
+        return TryPointToCustomCoordinate(pagePoint, out var x, out var y)
+            && MoveActiveShapeEditPoint(segmentIndex, x, y);
+    }
+
+    internal bool IsShapeEditPointUndoGroupOpenForTest => _bus.IsUndoGroupOpen;
 
     // ── AV-HANDLES: handle geometry, hit-test, cursors, resize-drag commit ──────────────────────────
 
@@ -8177,6 +8432,8 @@ public sealed class DocumentView : Control
         _selectedFloating = null;
         _selectedFloatingObjects.Clear();
         _floatDragState   = null;
+        _shapeEditPointsTarget = null;
+        _shapeEditPointDragState = null;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateVisual();
     }
@@ -8208,6 +8465,8 @@ public sealed class DocumentView : Control
     private void SelectFloatingCore(int blockIndex, int runIndex, string kind, bool addToMultiSelect)
     {
         _shapeCaret = null;
+        _shapeEditPointsTarget = null;
+        _shapeEditPointDragState = null;
         var item = (blockIndex, runIndex, kind);
         if (addToMultiSelect && IsGroupableFloatingKind(kind))
         {
@@ -8220,6 +8479,8 @@ public sealed class DocumentView : Control
                 {
                     _selectedFloating = null;
                     _floatDragState = null;
+                    _shapeEditPointsTarget = null;
+                    _shapeEditPointDragState = null;
                     RaiseFloatingSelectionChangedIfIdentityChanged();
                     InvalidateVisual();
                     return;
@@ -8806,6 +9067,8 @@ public sealed class DocumentView : Control
         _selectedFloating = null;
         _selectedFloatingObjects.Clear();
         _floatDragState = null;
+        _shapeEditPointsTarget = null;
+        _shapeEditPointDragState = null;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
     }
@@ -9146,6 +9409,8 @@ public sealed class DocumentView : Control
         _selectedFloating = null;
         _selectedFloatingObjects.Clear();
         _floatDragState   = null;
+        _shapeEditPointsTarget = null;
+        _shapeEditPointDragState = null;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
     }
@@ -9539,6 +9804,15 @@ public sealed class DocumentView : Control
 
         if (!extendFloatingSelection && _selectedFloating is { } curSel)
         {
+            var editPoint = HitTestShapeEditPoint(point);
+            if (editPoint >= 0)
+            {
+                BeginShapeEditPointDrag(editPoint, e.Pointer);
+                Cursor = new Cursor(StandardCursorType.Hand);
+                e.Handled = true;
+                return;
+            }
+
             var handle = HitTestHandle(point);
             if (handle is not FloatHandle.None and not FloatHandle.Body)
             {
@@ -9580,6 +9854,8 @@ public sealed class DocumentView : Control
             _selectedFloating = null;
             _selectedFloatingObjects.Clear();
             _floatDragState   = null;
+            _shapeEditPointsTarget = null;
+            _shapeEditPointDragState = null;
             Cursor = Cursor.Default;
             RaiseFloatingSelectionChangedIfIdentityChanged();
             InvalidateVisual();
@@ -9638,8 +9914,19 @@ public sealed class DocumentView : Control
             if (_selectedFloating is not null && _floatDragState is null)
             {
                 var hover = HitTestHandle(point);
-                Cursor = hover == FloatHandle.None ? Cursor.Default : CursorForHandle(hover);
+                if (_shapeEditPointsTarget is not null && HitTestShapeEditPoint(point) >= 0)
+                    Cursor = new Cursor(StandardCursorType.Hand);
+                else
+                    Cursor = hover == FloatHandle.None ? Cursor.Default : CursorForHandle(hover);
             }
+            return;
+        }
+
+        if (_shapeEditPointDragState is { } editDrag)
+        {
+            if (TryPointToCustomCoordinate(point, out var x, out var y))
+                MoveActiveShapeEditPoint(editDrag.SegmentIndex, x, y);
+            e.Handled = true;
             return;
         }
 
@@ -9693,9 +9980,30 @@ public sealed class DocumentView : Control
         InvalidateVisual();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        if (_shapeEditPointDragState is null)
+            return;
+
+        // Pointer capture keeps an outside-control release on the same drag, but a platform or
+        // window teardown can still revoke capture without a matching PointerReleased event.
+        // Commit the already-applied point moves so the undo group never remains open.
+        FinishShapeEditPointDrag(releasePointerCapture: false);
+        Cursor = _selectedFloating is null ? Cursor.Default : CursorForHandle(FloatHandle.None);
+    }
+
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (_shapeEditPointDragState is not null)
+        {
+            FinishShapeEditPointDrag(releasePointerCapture: true);
+            Cursor = _selectedFloating is null ? Cursor.Default : CursorForHandle(HitTestHandle(e.GetPosition(this)));
+            e.Handled = true;
+            return;
+        }
+
         // AV-HANDLES: commit the in-flight drag (move or resize) when the left button is released.
         // _selectedFloating is refreshed via the commit path's relayout; the cursor is reset to the
         // hover cursor for wherever the pointer ended up.
@@ -9924,6 +10232,19 @@ public sealed class DocumentView : Control
             return;
         }
 
+        if (e.Key == Key.Escape && _shapeEditPointsTarget is not null)
+        {
+            if (_shapeEditPointDragState is not null)
+                CancelShapeEditPointDrag();
+            else
+            {
+                _shapeEditPointsTarget = null;
+                InvalidateVisual();
+            }
+            e.Handled = true;
+            return;
+        }
+
         // AV-FLSEL: when a float is selected, intercept navigation/delete keys before body text.
         if (_selectedFloating is { } selFloat)
         {
@@ -9951,6 +10272,8 @@ public sealed class DocumentView : Control
                     _selectedFloating = null;
                     _selectedFloatingObjects.Clear();
                     _floatDragState   = null;
+                    _shapeEditPointsTarget = null;
+                    _shapeEditPointDragState = null;
                     Cursor = Cursor.Default;
                     RaiseFloatingSelectionChangedIfIdentityChanged();
                     InvalidateVisual();
