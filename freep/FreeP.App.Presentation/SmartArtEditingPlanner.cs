@@ -1388,9 +1388,15 @@ public static class SmartArtEditingPlanner
         var connections = new List<XElement>();
         var generatedIdIndex = 1;
 
+        var authoredPoints = sourceDocument?.Root?.Element(Dgm + "ptLst")?.Elements(Dgm + "pt")
+            .Select(point => (Id: point.Attribute("modelId")?.Value?.Trim(), Point: point))
+            .Where(item => !string.IsNullOrWhiteSpace(item.Id))
+            .GroupBy(item => item.Id!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().Point, StringComparer.Ordinal);
+
         foreach (var root in data.Nodes)
             CollectDataPartElements(root, null, 0, points, connections, nodeIds,
-                ref generatedIdIndex, ref nodeCount, ref connectionCount);
+                ref generatedIdIndex, ref nodeCount, ref connectionCount, authoredPoints);
 
         if (sourceDocument?.Root is { } sourceRoot && sourceRoot.Name == Dgm + "dataModel")
         {
@@ -1427,10 +1433,13 @@ public static class SmartArtEditingPlanner
         Dictionary<SmartArtNode, string> nodeIds,
         ref int generatedIdIndex,
         ref int nodeCount,
-        ref int connectionCount)
+        ref int connectionCount,
+        IReadOnlyDictionary<string, XElement>? authoredPoints = null)
     {
         var id = GetNodeId(node, nodeIds, ref generatedIdIndex);
-        points.Add(BuildPointElement(node, id));
+        XElement? authoredPoint = null;
+        authoredPoints?.TryGetValue(id, out authoredPoint);
+        points.Add(BuildPointElement(node, id, authoredPoint));
         nodeCount++;
 
         if (parent is not null)
@@ -1449,24 +1458,35 @@ public static class SmartArtEditingPlanner
         for (var index = 0; index < node.Children.Count; index++)
         {
             CollectDataPartElements(node.Children[index], node, index, points, connections, nodeIds,
-                ref generatedIdIndex, ref nodeCount, ref connectionCount);
+                ref generatedIdIndex, ref nodeCount, ref connectionCount, authoredPoints);
         }
     }
 
-    private static XElement BuildPointElement(SmartArtNode node, string id)
+    private static XElement BuildPointElement(SmartArtNode node, string id, XElement? authoredPoint)
     {
-        return new XElement(Dgm + "pt",
-            new XAttribute("modelId", id),
-            new XAttribute("type", node.IsAssistant ? "asst" : "node"),
-            new XElement(Dgm + "t",
-                new XElement(A + "bodyPr"),
-                new XElement(A + "lstStyle"),
-                NormalizeText(node.Text)
-                    .Split('\n')
-                    .Select(paragraph => new XElement(A + "p",
-                        new XElement(A + "r",
-                            new XElement(A + "t", paragraph))))));
+        var point = authoredPoint is null
+            ? new XElement(Dgm + "pt")
+            : new XElement(authoredPoint);
+
+        point.SetAttributeValue("modelId", id);
+        point.SetAttributeValue("type", node.IsAssistant ? "asst" : "node");
+        var textElement = BuildPointTextElement(node);
+        if (point.Element(Dgm + "t") is { } existingText)
+            existingText.ReplaceWith(textElement);
+        else
+            point.Add(textElement);
+        return point;
     }
+
+    private static XElement BuildPointTextElement(SmartArtNode node) =>
+        new(Dgm + "t",
+            new XElement(A + "bodyPr"),
+            new XElement(A + "lstStyle"),
+            NormalizeText(node.Text)
+                .Split('\n')
+                .Select(paragraph => new XElement(A + "p",
+                    new XElement(A + "r",
+                        new XElement(A + "t", paragraph)))));
 
     private static string GetNodeId(
         SmartArtNode node,

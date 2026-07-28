@@ -1159,6 +1159,64 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void SmartArtDataRewrite_PreservesAuthoredNodePayloadWhenTextChanges()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
+            nodes: [("root", "Leader"), ("manager", "Manager")],
+            parOfConnections: []);
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        var dataPart = smartArt.Parts.Values.Single(part =>
+            part.ContentType.Contains("diagramData", StringComparison.OrdinalIgnoreCase));
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var extension = XNamespace.Get("urn:freep:smartart-node-test");
+
+        using var sourceStream = new MemoryStream(dataPart.Bytes, writable: false);
+        var source = XDocument.Load(sourceStream);
+        var managerPoint = source.Descendants(dgm + "pt")
+            .Single(point => (string?)point.Attribute("modelId") == "manager");
+        managerPoint.SetAttributeValue("phldr", "1");
+        managerPoint.Add(new XElement(dgm + "prSet",
+            new XAttribute("phldr", "1"),
+            new XElement(dgm + "extLst",
+                new XElement(dgm + "ext",
+                    new XAttribute("uri", "urn:freep:node-payload"),
+                    new XElement(extension + "nodeState", new XAttribute("value", "keep"))))));
+        dataPart.Bytes = Encoding.UTF8.GetBytes(source.ToString(SaveOptions.DisableFormatting));
+
+        SmartArtEditingPlanner.Apply(
+            smartArt.Data,
+            SmartArtNodeEditIntent.ChangeText("manager", "Delivery Lead"))
+            .Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+
+        var rewritten = XDocument.Parse(Encoding.UTF8.GetString(dataPart.Bytes));
+        var rewrittenManager = rewritten.Descendants(dgm + "pt")
+            .Single(point => (string?)point.Attribute("modelId") == "manager");
+        rewrittenManager.Attribute("phldr")?.Value.Should().Be("1");
+        rewrittenManager.Element(dgm + "prSet")
+            ?.Element(dgm + "extLst")
+            ?.Descendants(extension + "nodeState")
+            .Single().Attribute("value")?.Value.Should().Be("keep");
+        rewrittenManager.Descendants(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "t")
+            .Single().Value.Should().Be("Delivery Lead");
+
+        var savedPath = Path.Combine(_tempDir, "smartart-node-payload-roundtrip.pptx");
+        PptxPackageWriter.Write(presentation, savedPath);
+        var rereadPart = PptxPackageReader.Read(savedPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!.Parts.Values
+            .Single(part => part.ContentType.Contains("diagramData", StringComparison.OrdinalIgnoreCase));
+        var reread = XDocument.Parse(Encoding.UTF8.GetString(rereadPart.Bytes));
+        var rereadManager = reread.Descendants(dgm + "pt")
+            .Single(point => (string?)point.Attribute("modelId") == "manager");
+        rereadManager.Attribute("phldr")?.Value.Should().Be("1");
+        rereadManager.Descendants(extension + "nodeState")
+            .Single().Attribute("value")?.Value.Should().Be("keep");
+    }
+
+    [Fact]
     public void SmartArtDrawingCacheRegeneration_PreservesAuthoredShellMetadataAndExtensions()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
