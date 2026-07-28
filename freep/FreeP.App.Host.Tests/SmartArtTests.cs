@@ -1232,6 +1232,62 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void SmartArtDataRewrite_PreservesAuthoredNodeTextBodyPropertiesWhenTextChanges()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
+            nodes: [("root", "Leader"), ("manager", "Manager")],
+            parOfConnections: [("root", "manager")]);
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        var dataPart = smartArt.Parts.Values.Single(part =>
+            part.ContentType.Contains("diagramData", StringComparison.OrdinalIgnoreCase));
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        using var sourceStream = new MemoryStream(dataPart.Bytes, writable: false);
+        var source = XDocument.Load(sourceStream);
+        var managerPoint = source.Descendants(dgm + "pt")
+            .Single(point => (string?)point.Attribute("modelId") == "manager");
+        var text = managerPoint.Element(dgm + "t")!;
+        var bodyPr = text.Element(a + "bodyPr");
+        if (bodyPr is null)
+        {
+            bodyPr = new XElement(a + "bodyPr");
+            text.AddFirst(bodyPr);
+        }
+        bodyPr.SetAttributeValue("wrap", "square");
+        text.Element(a + "p")!.AddFirst(new XElement(a + "pPr", new XAttribute("lvl", "2")));
+        text.Element(a + "p")!.Element(a + "r")!.AddFirst(
+            new XElement(a + "rPr", new XAttribute("lang", "fr-FR"), new XAttribute("sz", "2400")));
+        using (var rewrittenSourceStream = new MemoryStream())
+        {
+            source.Save(rewrittenSourceStream, SaveOptions.DisableFormatting);
+            dataPart.Bytes = rewrittenSourceStream.ToArray();
+        }
+
+        SmartArtEditingPlanner.Apply(
+            smartArt.Data,
+            SmartArtNodeEditIntent.ChangeText("manager", "Delivery Lead"))
+            .Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+
+        using var rewrittenStream = new MemoryStream(dataPart.Bytes, writable: false);
+        var rewritten = XDocument.Load(rewrittenStream);
+        var rewrittenText = rewritten.Descendants(dgm + "pt")
+            .Single(point => (string?)point.Attribute("modelId") == "manager")
+            .Element(dgm + "t")!;
+        rewrittenText.Element(a + "bodyPr")!.Attribute("wrap")?.Value.Should().Be("square");
+        rewrittenText.Element(a + "p")!.Element(a + "pPr")!.Attribute("lvl")?.Value.Should().Be("2");
+        rewrittenText.Element(a + "p")!.Element(a + "r")!.Element(a + "rPr")!
+            .Attribute("lang")?.Value.Should().Be("fr-FR");
+        rewrittenText.Element(a + "p")!.Element(a + "r")!.Element(a + "rPr")!
+            .Attribute("sz")?.Value.Should().Be("2400");
+        rewrittenText.Descendants(a + "t").Single().Value.Should().Be("Delivery Lead");
+    }
+
+    [Fact]
     public void SmartArtDrawingCacheRegeneration_PreservesAuthoredShellMetadataAndExtensions()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(

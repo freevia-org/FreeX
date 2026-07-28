@@ -1520,7 +1520,7 @@ public static class SmartArtEditingPlanner
 
         point.SetAttributeValue("modelId", id);
         point.SetAttributeValue("type", node.IsAssistant ? "asst" : "node");
-        var textElement = BuildPointTextElement(node);
+        var textElement = BuildPointTextElement(node, point.Element(Dgm + "t"));
         if (point.Element(Dgm + "t") is { } existingText)
             existingText.ReplaceWith(textElement);
         else
@@ -1528,15 +1528,42 @@ public static class SmartArtEditingPlanner
         return point;
     }
 
-    private static XElement BuildPointTextElement(SmartArtNode node) =>
-        new(Dgm + "t",
-            new XElement(A + "bodyPr"),
-            new XElement(A + "lstStyle"),
-            NormalizeText(node.Text)
-                .Split('\n')
-                .Select(paragraph => new XElement(A + "p",
-                    new XElement(A + "r",
-                        new XElement(A + "t", paragraph)))));
+    private static XElement BuildPointTextElement(SmartArtNode node, XElement? authoredText)
+    {
+        var authoredParagraphs = authoredText?.Elements(A + "p").ToArray() ?? [];
+        var fallbackParagraph = authoredParagraphs.FirstOrDefault();
+        var result = new XElement(
+            Dgm + "t",
+            authoredText?.Attributes().Select(attribute => new XAttribute(attribute)) ?? [],
+            authoredText?.Element(A + "bodyPr") is { } bodyPr
+                ? new XElement(bodyPr)
+                : new XElement(A + "bodyPr"),
+            authoredText?.Element(A + "lstStyle") is { } listStyle
+                ? new XElement(listStyle)
+                : new XElement(A + "lstStyle"));
+
+        foreach (var (paragraphText, index) in NormalizeText(node.Text).Split('\n').Select((text, index) => (text, index)))
+        {
+            var authoredParagraph = index < authoredParagraphs.Length
+                ? authoredParagraphs[index]
+                : fallbackParagraph;
+            var paragraph = new XElement(A + "p");
+            if (authoredParagraph?.Element(A + "pPr") is { } paragraphProperties)
+                paragraph.Add(new XElement(paragraphProperties));
+
+            var run = new XElement(A + "r");
+            if (authoredParagraph?.Element(A + "r")?.Element(A + "rPr") is { } runProperties)
+                run.Add(new XElement(runProperties));
+            run.Add(new XElement(A + "t", paragraphText));
+            paragraph.Add(run);
+
+            if (authoredParagraph?.Element(A + "endParaRPr") is { } endParagraphRunProperties)
+                paragraph.Add(new XElement(endParagraphRunProperties));
+            result.Add(paragraph);
+        }
+
+        return result;
+    }
 
     private static string GetNodeId(
         SmartArtNode node,
