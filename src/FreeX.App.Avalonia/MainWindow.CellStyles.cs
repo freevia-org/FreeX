@@ -59,17 +59,12 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Applies a built-in cell-style preset to the selection (undo/redo) and reports the outcome. Shared by
-    /// the Cell Styles gallery and the individual ribbon Cell Styles gallery menu items, which are wired by
-    /// their canonical id (the preset's display name).
+    /// Applies a built-in cell-style preset from the modal gallery. Keep this entry point on the same
+    /// guarded path as the ribbon/native-menu commands: WPF refuses edits while opening/saving and
+    /// commits a pending formula edit before applying a style.
     /// </summary>
     private void ApplyCellStylePreset(CellStylePreset preset)
-    {
-        var result = _session.SetSelectedRangeCellStylePreset(preset);
-        RefreshShell(result.Success
-            ? $"Applied {PrettyStyleName(preset)} style"
-            : result.ErrorMessage ?? "Could not apply cell style.");
-    }
+        => ApplySelectedRangeCellStylePreset(preset);
 
     private static string PrettyStyleName(CellStylePreset preset)
     {
