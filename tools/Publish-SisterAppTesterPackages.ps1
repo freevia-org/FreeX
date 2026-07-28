@@ -110,6 +110,9 @@ foreach ($runtime in $Runtimes) {
             "-p:InformationalVersion=$Version+$shortSha",
             "--output", $publishDir
         )
+        if ($App -eq "FreeP") {
+            $publishArgs += "-p:FreePWindowsBuild=false"
+        }
     }
 
     Write-Host ""

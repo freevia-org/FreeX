@@ -1,4 +1,3 @@
-using System.IO;
 using Free.Shared.AppServices;
 
 namespace Free.Shared.Shell;
@@ -10,6 +9,8 @@ public sealed record BackstageRecentActionRowText(string PinnedDescriptionSuffix
 /// </summary>
 public static class BackstageRecentActionRowsPlanner
 {
+    private static readonly char[] DirectorySeparators = ['/', '\\'];
+
     public static IReadOnlyList<BackstageActionRow> BuildDocumentRows(
         IEnumerable<RecentFileEntry> entries,
         int maxRows,
@@ -67,7 +68,7 @@ public static class BackstageRecentActionRowsPlanner
             if (!Matches(documentLabel, entry.Path, filter))
                 continue;
 
-            var path = Path.GetDirectoryName(entry.Path);
+            var path = DirectoryNameOrNull(entry.Path);
             if (string.IsNullOrWhiteSpace(path) || !seen.Add(path))
                 continue;
 
@@ -82,16 +83,38 @@ public static class BackstageRecentActionRowsPlanner
 
     public static string FileNameOrPath(string path)
     {
-        var fileName = Path.GetFileName(path);
+        var trimmed = TrimTrailingDirectorySeparators(path);
+        var separatorIndex = trimmed.LastIndexOfAny(DirectorySeparators);
+        var fileName = separatorIndex >= 0 ? trimmed[(separatorIndex + 1)..] : trimmed;
         return string.IsNullOrWhiteSpace(fileName) ? path : fileName;
     }
 
     public static string FolderNameOrPath(string path)
     {
-        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var name = Path.GetFileName(trimmed);
+        var trimmed = TrimTrailingDirectorySeparators(path);
+        var separatorIndex = trimmed.LastIndexOfAny(DirectorySeparators);
+        var name = separatorIndex >= 0 ? trimmed[(separatorIndex + 1)..] : trimmed;
         return string.IsNullOrWhiteSpace(name) ? path : name;
     }
+
+    private static string? DirectoryNameOrNull(string path)
+    {
+        var trimmed = TrimTrailingDirectorySeparators(path);
+        var separatorIndex = trimmed.LastIndexOfAny(DirectorySeparators);
+        if (separatorIndex < 0)
+            return null;
+
+        if (separatorIndex == 0)
+            return trimmed[..1];
+
+        if (separatorIndex == 2 && trimmed.Length > 2 && trimmed[1] == ':')
+            return trimmed[..(separatorIndex + 1)];
+
+        return trimmed[..separatorIndex];
+    }
+
+    private static string TrimTrailingDirectorySeparators(string path) =>
+        path.TrimEnd(DirectorySeparators);
 
     private static bool Matches(string label, string description, string? filter)
     {

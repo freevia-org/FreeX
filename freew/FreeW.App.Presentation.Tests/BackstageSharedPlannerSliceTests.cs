@@ -50,7 +50,26 @@ public sealed class BackstageSharedPlannerSliceTests
 
         rows[1].Invoke();
 
-        openedFolder.Should().Be(Path.GetDirectoryName("C:/Reports/Budget Review.docx"));
+        openedFolder.Should().Be("C:/Reports");
+    }
+
+    [Fact]
+    public void RecentActionRows_NormalizesWindowsStylePathsOnPortableRuntimes()
+    {
+        var rows = BackstageRecentActionRowsPlanner.BuildFolderRows(
+            [
+                new RecentFileEntry { Path = @"C:\Docs\Budget.docx" },
+                new RecentFileEntry { Path = @"C:\Docs\Plan.rtf" },
+                new RecentFileEntry { Path = @"C:\Reports\Budget Review.docx" },
+            ],
+            maxRows: 8,
+            static _ => { },
+            filter: "budget");
+
+        BackstageRecentActionRowsPlanner.FileNameOrPath(@"C:\Docs\Budget.docx")
+            .Should().Be("Budget.docx");
+        rows.Select(row => row.Label).Should().Equal("Docs", "Reports");
+        rows.Select(row => row.Description).Should().Equal(@"C:\Docs", @"C:\Reports");
     }
 
     [Fact]
