@@ -101,7 +101,8 @@ public sealed class InsertDepth2Tests
             "freew.drop-cap", "freew.drop-cap.dropped", "freew.drop-cap.in-margin", "freew.drop-cap.none",
             "freew.drop-cap-dropped", "freew.drop-cap-in-margin", "freew.drop-cap-none",
             "freew.quick-parts", "freew.quick-parts.title", "freew.quick-parts.author",
-            "freew.quick-parts.subject", "freew.quick-parts.date", "freew.quick-parts.snippet",
+            "freew.quick-parts.subject", "freew.quick-parts.keywords", "freew.quick-parts.comments",
+            "freew.quick-parts.date", "freew.quick-parts.snippet",
             "freew.equation", "freew.equation.default", "freew.equation.fraction", "freew.equation.script",
             "freew.equation.radical", "freew.equation.nthroot", "freew.equation.integral", "freew.equation.summation",
             "freew.equation.product", "freew.equation.accent", "freew.equation.bar", "freew.equation.bracket",
@@ -463,6 +464,22 @@ public sealed class InsertDepth2Tests
             .SelectMany(p => p.Runs)
             .Any(run => run.FieldKind == RunFieldKind.Title);
         hasTitleField.Should().BeTrue("a Title document-property field run must be inserted");
+    }
+
+    [Theory]
+    [InlineData("freew.quick-parts.keywords", RunFieldKind.Keywords)]
+    [InlineData("freew.quick-parts.comments", RunFieldKind.DocComments)]
+    public void Quick_part_extended_document_property_inserts_live_field(string commandId, RunFieldKind expectedKind)
+    {
+        var view = MakeView("");
+        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+
+        Exec(registry, commandId);
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.FieldKind == expectedKind)
+            .FieldKind.Should().Be(expectedKind);
     }
 
     [Fact]

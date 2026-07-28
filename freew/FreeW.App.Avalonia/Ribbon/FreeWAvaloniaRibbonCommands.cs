@@ -1093,6 +1093,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.quick-parts.title",   new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Title)));
         r.Register("freew.quick-parts.author",  new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Author)));
         r.Register("freew.quick-parts.subject", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Subject)));
+        r.Register("freew.quick-parts.keywords", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Keywords)));
+        r.Register("freew.quick-parts.comments", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.DocComments)));
         r.Register("freew.quick-parts.date",    new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Date)));
         r.Register("freew.quick-parts.snippet", new ActionRibbonCommand(callbacks.OpenQuickPartDialog ?? (() => { })));
 
