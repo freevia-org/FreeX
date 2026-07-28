@@ -2436,15 +2436,6 @@ public static class PptxPackageReader
             dataDoc = OpcXml.LoadXml(ms2);
 
         var isLiveLayoutSupported = IsLiveSmartArtLayoutSupported(layoutUniqueId, family);
-        // hierarchy3 has not yet been reproduced by the live planner. When an
-        // imported package carries PowerPoint's dsp:drawing cache, keep that
-        // native render authoritative; authoring paths explicitly re-enable the
-        // live route after they regenerate the cache.
-        if (layoutUniqueId.EndsWith("/hierarchy3", StringComparison.OrdinalIgnoreCase)
-            && smart.FallbackShapes.Count > 0)
-        {
-            isLiveLayoutSupported = false;
-        }
         if (IsPictureNodeLayout(layoutUniqueId))
         {
             // Final admission for this picture layout depends on deterministic

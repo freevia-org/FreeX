@@ -103,7 +103,7 @@ public sealed class PptxRepairCorpusValidityTests
     }
 
     [Fact]
-    public void SmartArtLiveCorpus_UsesCachedDrawingForImportedHierarchy3()
+    public void SmartArtLiveCorpus_PreservesCachedDrawingAlongsideLiveHierarchy3()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
         var presentation = PptxPackageReader.Read(deckPath);
@@ -117,8 +117,9 @@ public sealed class PptxRepairCorpusValidityTests
             .ToArray();
 
         hierarchy3.Should().NotBeEmpty();
-        hierarchy3.Should().OnlyContain(smartArt => !smartArt.Data!.IsLiveLayoutSupported);
-        hierarchy3.Should().OnlyContain(smartArt => smartArt.FallbackShapes.Count > 0);
+        hierarchy3.Should().OnlyContain(smartArt => smartArt.Data!.IsLiveLayoutSupported);
+        hierarchy3.Should().OnlyContain(smartArt => smartArt.FallbackShapes.Count > 0,
+            "the imported dsp:drawing remains available as the native-cache fallback");
     }
 
     [Fact]
