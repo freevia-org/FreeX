@@ -211,15 +211,69 @@ public sealed class ShapeEffectLst
     // Reflection (a:reflection)
     public bool HasReflection { get; set; }
     public int ReflectionBlurRad { get; set; } = 6350;
-    public int ReflectionAlpha { get; set; } = 50000;
+    public int ReflectionStartAlpha { get; set; } = 50000;
+    public int ReflectionStartPosition { get; set; }
+    public int ReflectionEndAlpha { get; set; }
+    public int ReflectionEndPosition { get; set; } = 100000;
     public int ReflectionDir    { get; set; } = 5400000; // 90° = flip below
+    public int ReflectionFadeDir { get; set; } = 5400000;
+    public int ReflectionScaleX { get; set; } = 100000;
+    public int ReflectionScaleY { get; set; } = -100000;
+    public int ReflectionSkewX { get; set; }
+    public int ReflectionSkewY { get; set; }
+    public string ReflectionAlignment { get; set; } = "bl";
+    public bool ReflectionRotWithShape { get; set; }
     public int ReflectionDist   { get; set; } = 23000;
+
+    /// <summary>Compatibility alias for the reflection start alpha.</summary>
+    public int ReflectionAlpha
+    {
+        get => ReflectionStartAlpha;
+        set => ReflectionStartAlpha = value;
+    }
 
     // Bevel / 3-D (a:sp3d — best-effort; carried through round-trip, rendered as border highlight)
     public bool HasBevel { get; set; }
     public int BevelW { get; set; } = 63500;              // EMU (5 pt)
     public int BevelH { get; set; } = 63500;
     public string BevelPresetType { get; set; } = "circle"; // circle / relaxedInset / angle / cross / divot
+
+    public bool HasAny => HasShadow || HasGlow || HasSoftEdge || HasReflection || HasBevel;
+
+    public ShapeEffectLst Clone() => new()
+    {
+        HasShadow = HasShadow,
+        ShadowBlurRad = ShadowBlurRad,
+        ShadowDist = ShadowDist,
+        ShadowDir = ShadowDir,
+        ShadowColorHex = ShadowColorHex,
+        ShadowAlpha = ShadowAlpha,
+        HasGlow = HasGlow,
+        GlowRad = GlowRad,
+        GlowColorHex = GlowColorHex,
+        GlowAlpha = GlowAlpha,
+        HasSoftEdge = HasSoftEdge,
+        SoftEdgeRad = SoftEdgeRad,
+        HasReflection = HasReflection,
+        ReflectionBlurRad = ReflectionBlurRad,
+        ReflectionStartAlpha = ReflectionStartAlpha,
+        ReflectionStartPosition = ReflectionStartPosition,
+        ReflectionEndAlpha = ReflectionEndAlpha,
+        ReflectionEndPosition = ReflectionEndPosition,
+        ReflectionDir = ReflectionDir,
+        ReflectionFadeDir = ReflectionFadeDir,
+        ReflectionScaleX = ReflectionScaleX,
+        ReflectionScaleY = ReflectionScaleY,
+        ReflectionSkewX = ReflectionSkewX,
+        ReflectionSkewY = ReflectionSkewY,
+        ReflectionAlignment = ReflectionAlignment,
+        ReflectionRotWithShape = ReflectionRotWithShape,
+        ReflectionDist = ReflectionDist,
+        HasBevel = HasBevel,
+        BevelW = BevelW,
+        BevelH = BevelH,
+        BevelPresetType = BevelPresetType
+    };
 }
 
 // ── Shape Style Preset ────────────────────────────────────────────────────────────────────────────

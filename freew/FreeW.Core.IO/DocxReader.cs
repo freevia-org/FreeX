@@ -3982,6 +3982,51 @@ public static class DocxReader
             var innerShdw = effectLst.Element(A + "innerShdw");
             if (innerShdw is not null && long.TryParse(innerShdw.Attribute("dir")?.Value, out var bevelDir))
                 image.BevelPreset = (int)(bevelDir / (90 * 60000)) + 1;
+
+            var importedEffects = new ShapeEffectLst();
+            if (outerShdw is not null)
+            {
+                importedEffects.HasShadow = true;
+                if (int.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurRad)) importedEffects.ShadowBlurRad = blurRad;
+                if (int.TryParse(outerShdw.Attribute("dist")?.Value, out var distance)) importedEffects.ShadowDist = distance;
+                if (int.TryParse(outerShdw.Attribute("dir")?.Value, out var direction)) importedEffects.ShadowDir = direction;
+                var color = outerShdw.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
+                if (!string.IsNullOrWhiteSpace(color)) importedEffects.ShadowColorHex = color;
+                if (int.TryParse(outerShdw.Descendants(A + "alpha").FirstOrDefault()?.Attribute("val")?.Value, out var alpha)) importedEffects.ShadowAlpha = alpha;
+            }
+            if (glow is not null)
+            {
+                importedEffects.HasGlow = true;
+                if (int.TryParse(glow.Attribute("rad")?.Value, out var radius)) importedEffects.GlowRad = radius;
+                var color = glow.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
+                if (!string.IsNullOrWhiteSpace(color)) importedEffects.GlowColorHex = color;
+                if (int.TryParse(glow.Descendants(A + "alpha").FirstOrDefault()?.Attribute("val")?.Value, out var alpha)) importedEffects.GlowAlpha = alpha;
+            }
+            if (reflection is not null)
+            {
+                importedEffects.HasReflection = true;
+                if (int.TryParse(reflection.Attribute("blurRad")?.Value, out var blurRad)) importedEffects.ReflectionBlurRad = blurRad;
+                if (int.TryParse(reflection.Attribute("stA")?.Value ?? reflection.Attribute("alpha")?.Value, out var startAlpha)) importedEffects.ReflectionStartAlpha = startAlpha;
+                if (int.TryParse(reflection.Attribute("stPos")?.Value, out var startPosition)) importedEffects.ReflectionStartPosition = startPosition;
+                if (int.TryParse(reflection.Attribute("endA")?.Value, out var endAlpha)) importedEffects.ReflectionEndAlpha = endAlpha;
+                if (int.TryParse(reflection.Attribute("endPos")?.Value, out var endPosition)) importedEffects.ReflectionEndPosition = endPosition;
+                if (int.TryParse(reflection.Attribute("dist")?.Value, out var distance)) importedEffects.ReflectionDist = distance;
+                if (int.TryParse(reflection.Attribute("dir")?.Value, out var direction)) importedEffects.ReflectionDir = direction;
+                if (int.TryParse(reflection.Attribute("fadeDir")?.Value, out var fadeDirection)) importedEffects.ReflectionFadeDir = fadeDirection;
+                if (int.TryParse(reflection.Attribute("sx")?.Value, out var scaleX)) importedEffects.ReflectionScaleX = scaleX;
+                if (int.TryParse(reflection.Attribute("sy")?.Value, out var scaleY)) importedEffects.ReflectionScaleY = scaleY;
+                if (int.TryParse(reflection.Attribute("kx")?.Value, out var skewX)) importedEffects.ReflectionSkewX = skewX;
+                if (int.TryParse(reflection.Attribute("ky")?.Value, out var skewY)) importedEffects.ReflectionSkewY = skewY;
+                importedEffects.ReflectionAlignment = reflection.Attribute("algn")?.Value ?? importedEffects.ReflectionAlignment;
+                if (int.TryParse(reflection.Attribute("rotWithShape")?.Value, out var rotateWithShape)) importedEffects.ReflectionRotWithShape = rotateWithShape != 0;
+            }
+            if (softEdge is not null && int.TryParse(softEdge.Attribute("rad")?.Value, out var softEdgeRadius))
+            {
+                importedEffects.HasSoftEdge = true;
+                importedEffects.SoftEdgeRad = softEdgeRadius;
+            }
+            if (importedEffects.HasAny)
+                image.ImportedEffects = importedEffects;
         }
 
         // a:ln (inside pic:spPr): border width, solid-fill color, dash.
@@ -4441,8 +4486,18 @@ public static class DocxReader
             {
                 fx.HasReflection = true;
                 if (int.TryParse(refl.Attribute("blurRad")?.Value, out var rbr)) fx.ReflectionBlurRad = rbr;
-                if (int.TryParse(refl.Attribute("alpha")?.Value, out var ra)) fx.ReflectionAlpha = ra;
+                if (int.TryParse(refl.Attribute("stA")?.Value ?? refl.Attribute("alpha")?.Value, out var ra)) fx.ReflectionStartAlpha = ra;
+                if (int.TryParse(refl.Attribute("stPos")?.Value, out var rsp)) fx.ReflectionStartPosition = rsp;
+                if (int.TryParse(refl.Attribute("endA")?.Value, out var rea)) fx.ReflectionEndAlpha = rea;
+                if (int.TryParse(refl.Attribute("endPos")?.Value, out var rep)) fx.ReflectionEndPosition = rep;
                 if (int.TryParse(refl.Attribute("dir")?.Value, out var rd)) fx.ReflectionDir = rd;
+                if (int.TryParse(refl.Attribute("fadeDir")?.Value, out var rfd)) fx.ReflectionFadeDir = rfd;
+                if (int.TryParse(refl.Attribute("sx")?.Value, out var rsx)) fx.ReflectionScaleX = rsx;
+                if (int.TryParse(refl.Attribute("sy")?.Value, out var rsy)) fx.ReflectionScaleY = rsy;
+                if (int.TryParse(refl.Attribute("kx")?.Value, out var rkx)) fx.ReflectionSkewX = rkx;
+                if (int.TryParse(refl.Attribute("ky")?.Value, out var rky)) fx.ReflectionSkewY = rky;
+                fx.ReflectionAlignment = refl.Attribute("algn")?.Value ?? fx.ReflectionAlignment;
+                if (int.TryParse(refl.Attribute("rotWithShape")?.Value, out var rrws)) fx.ReflectionRotWithShape = rrws != 0;
                 if (int.TryParse(refl.Attribute("dist")?.Value, out var rdist)) fx.ReflectionDist = rdist;
             }
             if (sp3dEl?.Element(A + "bevelT") is { } bevel)

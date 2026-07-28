@@ -3844,7 +3844,11 @@ public static class DocxWriter
 
         // a:effectLst: shadow / glow / reflection / softEdge / bevel (innerShdw approximation).
         // Emitted as direct child of pic:spPr per DrawingML spec (CT_ShapeProperties).
-        if (image.HasEffects)
+        if (image.ImportedEffects is { HasAny: true } importedEffects)
+        {
+            spPr.Add(BuildShapeEffects(importedEffects));
+        }
+        else if (image.HasEffects)
         {
             var effectLst = new XElement(A + "effectLst");
 
@@ -4209,10 +4213,19 @@ public static class DocxWriter
         if (fx.HasReflection)
             effectLst.Add(new XElement(A + "reflection",
                 new XAttribute("blurRad", fx.ReflectionBlurRad),
-                new XAttribute("alpha", fx.ReflectionAlpha),
+                new XAttribute("stA", fx.ReflectionStartAlpha),
+                new XAttribute("stPos", fx.ReflectionStartPosition),
+                new XAttribute("endA", fx.ReflectionEndAlpha),
+                new XAttribute("endPos", fx.ReflectionEndPosition),
                 new XAttribute("dir", fx.ReflectionDir),
+                new XAttribute("fadeDir", fx.ReflectionFadeDir),
+                new XAttribute("sx", fx.ReflectionScaleX),
+                new XAttribute("sy", fx.ReflectionScaleY),
+                new XAttribute("kx", fx.ReflectionSkewX),
+                new XAttribute("ky", fx.ReflectionSkewY),
+                new XAttribute("algn", fx.ReflectionAlignment),
                 new XAttribute("dist", fx.ReflectionDist),
-                new XAttribute("rotWithShape", 0)));
+                new XAttribute("rotWithShape", fx.ReflectionRotWithShape ? 1 : 0)));
 
         if (fx.HasSoftEdge)
             effectLst.Add(new XElement(A + "softEdge", new XAttribute("rad", fx.SoftEdgeRad)));

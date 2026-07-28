@@ -134,6 +134,56 @@ public class ImageEffectsRoundTripTests
         read.ReflectionPreset.Should().Be(4);
     }
 
+    [Fact]
+    public void ImportedEffects_PreserveExactDrawingMlPayload()
+    {
+        var image = new InlineImage(MinimalPng(), 100, 80)
+        {
+            ImportedEffects = new ShapeEffectLst
+            {
+                HasShadow = true,
+                ShadowBlurRad = 76200,
+                ShadowDist = 63500,
+                ShadowDir = 18900000,
+                ShadowColorHex = "102030",
+                ShadowAlpha = 55000,
+                HasGlow = true,
+                GlowRad = 63500,
+                GlowColorHex = "5B9BD5",
+                GlowAlpha = 60000,
+                HasReflection = true,
+                ReflectionBlurRad = 6350,
+                ReflectionStartAlpha = 50000,
+                ReflectionStartPosition = 0,
+                ReflectionEndAlpha = 0,
+                ReflectionEndPosition = 100000,
+                ReflectionDist = 0,
+                ReflectionDir = 5400000,
+                ReflectionFadeDir = 5400000,
+                ReflectionScaleX = 100000,
+                ReflectionScaleY = -100000,
+                ReflectionAlignment = "bl"
+            }
+        };
+
+        var xml = WriteDocumentXml(DocumentWith(image));
+        var effectLst = xml.Descendants(A + "effectLst").Single();
+        effectLst.Element(A + "outerShdw")!.Attribute("blurRad")!.Value.Should().Be("76200");
+        effectLst.Element(A + "outerShdw")!.Attribute("dir")!.Value.Should().Be("18900000");
+        effectLst.Element(A + "glow")!.Attribute("rad")!.Value.Should().Be("63500");
+        var reflection = effectLst.Element(A + "reflection")!;
+        reflection.Attribute("stA")!.Value.Should().Be("50000");
+        reflection.Attribute("endPos")!.Value.Should().Be("100000");
+        reflection.Attribute("sy")!.Value.Should().Be("-100000");
+
+        var read = ReadBackImage(DocumentWith(image));
+        read.ImportedEffects.Should().NotBeNull();
+        read.ImportedEffects!.ShadowBlurRad.Should().Be(76200);
+        read.ImportedEffects.GlowRad.Should().Be(63500);
+        read.ImportedEffects.ReflectionStartAlpha.Should().Be(50000);
+        read.ImportedEffects.ReflectionScaleY.Should().Be(-100000);
+    }
+
     // ── Soft Edge ─────────────────────────────────────────────────────────────────────────────────────
 
     [Fact]
