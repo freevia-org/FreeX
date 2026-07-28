@@ -8,6 +8,30 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class ChartRenderPlannerTests
 {
     [Fact]
+    public void BuildScenePlan_ShowDataLabelsOverMaximumFiltersValuesBeyondExplicitAxisMaximum()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            Categories = { "Within", "Beyond" },
+            DataLabels = new ChartDataLabels { ShowValue = true },
+            ShowDataLabelsOverMaximum = false
+        };
+        chart.ValueAxis.Max = 10;
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 5, 15 });
+        chart.Series.Add(series);
+
+        var hidden = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+
+        hidden.DataLabels.Should().ContainSingle().Which.CategoryIndex.Should().Be(0);
+
+        chart.ShowDataLabelsOverMaximum = true;
+        var shown = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+        shown.DataLabels.Should().HaveCount(2);
+    }
+
+    [Fact]
     public void BuildScenePlan_PieLeaderLinesFollowExplicitDataLabelOption()
     {
         var chart = new ChartShape

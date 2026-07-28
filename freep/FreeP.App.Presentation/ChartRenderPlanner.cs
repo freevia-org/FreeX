@@ -514,6 +514,8 @@ public readonly record struct ChartDataLabelPlan(
     public SrgbColor? TextColor { get; init; }
     public bool IsItalic { get; init; }
     public string? FontFamily { get; init; }
+    /// <summary>True when the data value exceeds the effective value-axis maximum.</summary>
+    public bool IsOverMaximum { get; init; }
 }
 
 public readonly record struct ChartLegendItemPlan(
@@ -6071,13 +6073,16 @@ public static partial class ChartRenderPlanner
                 isSmoothed));
         }
 
+        IReadOnlyList<ChartDataLabelPlan> renderedDataLabels = chart.ShowDataLabelsOverMaximum == false
+            ? dataLabels.Where(label => !label.IsOverMaximum).ToArray()
+            : dataLabels;
         return new ChartScatterPrimitivePlan(
             gridLines,
             ResolveScatterGridLineStroke(chart),
             xLabels,
             yLabels,
             seriesPrimitives,
-            dataLabels);
+            renderedDataLabels);
     }
 
     public static ChartBubblePrimitivePlan BuildBubblePrimitivePlan(
@@ -6585,7 +6590,9 @@ public static partial class ChartRenderPlanner
             plans.AddRange(seriesPlans);
         }
 
-        return plans;
+        return chart.ShowDataLabelsOverMaximum == false
+            ? plans.Where(plan => !plan.IsOverMaximum).ToArray()
+            : plans;
     }
 
     private static ChartDataLabelPlan ApplyDataLabelTextStyle(
@@ -7988,7 +7995,10 @@ public static partial class ChartRenderPlanner
                 PlanScatterDataLabelBounds(point.Value, labels.Position ?? DataLabelPosition.Above),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center), labels);
+                Alignment: ChartPlanTextAlignment.Center)
+            {
+                IsOverMaximum = value.Value > ComputePrimaryValueAxisRange(chart).max
+            }, labels);
             plans.Add(ApplyLegendKey(
                 labelPlan,
                 labels,
@@ -8185,7 +8195,8 @@ public static partial class ChartRenderPlanner
                 FontSize: ResolveTextFontSize(chart, 6.5),
                 Alignment: ChartPlanTextAlignment.Center)
             {
-                WrapText = importedPercentStackedCluster
+                WrapText = importedPercentStackedCluster,
+                IsOverMaximum = value > effectiveMin + effectiveRange
             };
             labelPlan = ApplyDataLabelTextStyle(labelPlan, labels);
             if (labels.ShowLegendKey)
@@ -8266,7 +8277,10 @@ public static partial class ChartRenderPlanner
                 new ChartPlanRect(x - 20, y - ResolveDataLabelHeight(chart) - 3, 40, ResolveDataLabelHeight(chart)),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center), labels);
+                Alignment: ChartPlanTextAlignment.Center)
+            {
+                IsOverMaximum = rawValue.Value > effectiveMin + effectiveRange
+            }, labels);
             plans.Add(ApplyLegendKey(
                 labelPlan,
                 labels,
@@ -8416,7 +8430,10 @@ public static partial class ChartRenderPlanner
                 new ChartPlanRect(labelX, labelY, 44, labelHeight),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center), labels);
+                Alignment: ChartPlanTextAlignment.Center)
+            {
+                IsOverMaximum = value > effectiveMin + effectiveRange
+            }, labels);
             plans.Add(ApplyLegendKey(
                 labelPlan,
                 labels,
