@@ -1444,6 +1444,25 @@ public sealed class SmartArtLayoutTests
             .Should().BeInAscendingOrder("verticalChevronList preserves the authored node order");
     }
 
+    [Theory]
+    [InlineData(13)]
+    [InlineData(20)]
+    public void VerticalChevronList_PreservesAllNodesBeyondOriginalTwelveItemCutoff(int nodeCount)
+    {
+        var data = MakeData(
+            SmartArtFamily.List,
+            Enumerable.Range(1, nodeCount).Select(index => $"Step {index}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalChevronList";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("verticalChevronList scales row height until its independent minimum-height guard");
+        shapes!.Should().HaveCount(nodeCount);
+        shapes.Should().AllSatisfy(shape => shape.AutoShapeKind.Should().Be(DrawingShapeKind.Chevron));
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(index => $"Step {index}"));
+    }
+
     [Fact]
     public void StackedList_ReturnsLiveVerticalListBoxesWithoutConnectors()
     {
