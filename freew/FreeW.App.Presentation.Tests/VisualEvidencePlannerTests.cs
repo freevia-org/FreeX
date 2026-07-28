@@ -2445,6 +2445,25 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void PictureWatermarkLayoutPlanner_SuppressesRecoloredNativeVmlPicturePaint()
+    {
+        var plan = WatermarkVisualPlanner.BuildPictureLayout(
+            new WatermarkOptions(string.Empty)
+            {
+                ImageBytes = [1, 2, 3],
+                NativeVmlPictureWidthPt = 468,
+                NativeVmlPictureHeightPt = 281,
+                NativeVmlPictureRecolor = true
+            },
+            pageWidthDip: 816,
+            pageHeightDip: 1056,
+            sourceWidthDip: 120,
+            sourceHeightDip: 72);
+
+        plan.Should().BeNull();
+    }
+
+    [Fact]
     public void PictureWatermarkLayoutPlanner_UsesMeasuredDrawingMlAlphaForTheImportedPictureSignature()
     {
         var options = new WatermarkOptions(string.Empty)

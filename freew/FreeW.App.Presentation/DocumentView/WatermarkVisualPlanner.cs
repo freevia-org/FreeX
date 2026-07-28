@@ -108,6 +108,7 @@ public static class WatermarkVisualPlanner
         ArgumentNullException.ThrowIfNull(options);
 
         if (!options.IsPicture
+            || options.NativeVmlPictureRecolor == true
             || pageWidthDip <= 0
             || pageHeightDip <= 0
             || sourceWidthDip <= 0

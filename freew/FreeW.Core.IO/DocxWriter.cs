@@ -1642,7 +1642,7 @@ public static class DocxWriter
                 new XAttribute(R + "id", watermarkImage.RelationshipId),
                 new XAttribute("type", "frame"),
                 new XAttribute("color2", "FFFFFF"),
-                new XAttribute("recolor", "t"),
+                new XAttribute("recolor", options.NativeVmlPictureRecolor is false ? "f" : "t"),
                 new XAttribute("opacity", opacity));
 
         var shape = new XElement(V + "shape",

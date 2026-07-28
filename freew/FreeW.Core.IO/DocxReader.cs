@@ -6245,6 +6245,7 @@ public static class DocxReader
                 ImageBytes = imageBytes,
                 NativeVmlPictureWidthPt = pictureWidthPt > 0 ? pictureWidthPt : null,
                 NativeVmlPictureHeightPt = pictureHeightPt > 0 ? pictureHeightPt : null,
+                NativeVmlPictureRecolor = ParseVmlBoolean(pictureFill?.Attribute("recolor")?.Value),
                 Layout = pictureRotation is { } pictureRotationValue && Math.Abs(pictureRotationValue) < 0.01
                     ? WatermarkLayout.Horizontal
                     : WatermarkLayout.Diagonal,
@@ -6304,7 +6305,8 @@ public static class DocxReader
             document.Page.WatermarkOptions = existingPictureWatermark with
             {
                 NativeVmlPictureWidthPt = widthPt,
-                NativeVmlPictureHeightPt = heightPt
+                NativeVmlPictureHeightPt = heightPt,
+                NativeVmlPictureRecolor = ParseVmlBoolean(pictureShape.Element(V + "fill")?.Attribute("recolor")?.Value)
             };
             return;
         }
