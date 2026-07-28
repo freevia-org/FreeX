@@ -96,6 +96,9 @@ public static class SmartArtLayoutEngine
         if (IsAlternatingProcessLayout(data.LayoutUniqueId))
             return LayoutAlternatingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsPhasedProcessLayout(data.LayoutUniqueId))
+            return LayoutPhasedProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsBendingProcessLayout(data.LayoutUniqueId))
             return LayoutBendingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -657,6 +660,14 @@ public static class SmartArtLayoutEngine
 
         return shapes;
     }
+
+    // Phased Process keeps the shared process-family authoring route live while using
+    // the existing two-track geometry until a native PowerPoint layout baseline is added.
+    private static IReadOnlyList<SlideShape> LayoutPhasedProcess(
+        List<SmartArtNode> nodes,
+        long frameXEmu, long frameYEmu, long frameCxEmu, long frameCyEmu,
+        SmartArtStylePlan stylePlan) =>
+        LayoutAlternatingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
     /// <summary>
     /// Basic Timeline geometry: a shared horizontal time rail, one marker per node,
@@ -2770,6 +2781,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "alternatingprocess", StringComparison.Ordinal);
+    }
+
+    private static bool IsPhasedProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "phasedprocess", StringComparison.Ordinal);
     }
 
     private static bool IsBendingProcessLayout(string uniqueId)

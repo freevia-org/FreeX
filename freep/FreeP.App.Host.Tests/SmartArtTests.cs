@@ -818,6 +818,7 @@ public sealed class SmartArtTests : IDisposable
     [Theory]
     [InlineData(SmartArtLayoutPreset.BasicProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.BasicTimeline, SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.PhasedProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.CircleAccentTimeline, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.StepDownProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.ContinuousBlockProcess, SmartArtFamily.Process)]

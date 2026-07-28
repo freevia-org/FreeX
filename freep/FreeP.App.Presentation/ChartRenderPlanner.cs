@@ -514,6 +514,8 @@ public readonly record struct ChartDataLabelPlan(
     public SrgbColor? TextColor { get; init; }
     public bool IsItalic { get; init; }
     public string? FontFamily { get; init; }
+    /// <summary>True when the data value exceeds the effective value-axis maximum.</summary>
+    public bool IsOverMaximum { get; init; }
 }
 
 public readonly record struct ChartLegendItemPlan(
@@ -554,6 +556,8 @@ public sealed class ChartScenePlan
     public ChartMajorGridLinePrimitivePlan MinorGridLines { get; init; }
     public ChartMajorAxisTickPrimitivePlan AxisTicks { get; init; }
     public IReadOnlyList<ChartDataLabelPlan> DataLabels { get; init; } = Array.Empty<ChartDataLabelPlan>();
+    /// <summary>Optional two-segment connectors from pie/doughnut slices to outside data labels.</summary>
+    public IReadOnlyList<ChartLineSegmentPrimitive> DataLabelLeaderLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
     public ChartDataTablePrimitivePlan DataTable { get; init; }
     public ChartSecondaryValueAxisPrimitivePlan SecondaryAxis { get; init; }
     public IReadOnlyList<ChartTextPlan> CategoryAxisLabels { get; init; } = Array.Empty<ChartTextPlan>();
@@ -1587,6 +1591,7 @@ public static partial class ChartRenderPlanner
             bubble,
             seriesColors);
         var trendlines = BuildTrendlinePrimitives(chart, plot, geometryKind, seriesColors);
+        var dataLabels = BuildDataLabelPlans(chart, plot, seriesColors, fillPlans);
 
         return new ChartScenePlan
         {
@@ -1606,7 +1611,12 @@ public static partial class ChartRenderPlanner
             GridLines = BuildMajorGridLinePrimitivePlan(chart, frame),
             MinorGridLines = BuildMinorGridLinePrimitivePlan(chart, frame),
             AxisTicks = BuildMajorAxisTickPrimitivePlan(chart, frame),
-            DataLabels = BuildDataLabelPlans(chart, plot, seriesColors, fillPlans),
+            DataLabels = dataLabels,
+            DataLabelLeaderLines = BuildDataLabelLeaderLines(
+                chart,
+                geometryKind,
+                dataLabels,
+                geometryKind == ChartSceneGeometryKind.Pie ? pieSlices : doughnutSlices),
             DataTable = BuildDataTablePrimitivePlan(chart, frame, seriesColors, fillPlans),
             SecondaryAxis = BuildSecondaryValueAxisPrimitivePlan(chart, frame),
             CategoryAxisLabels = BuildCategoryAxisLabelPlans(chart, frame),
@@ -1629,6 +1639,63 @@ public static partial class ChartRenderPlanner
             Trendlines = trendlines,
             ErrorBars = errorBars
         };
+    }
+
+    private static IReadOnlyList<ChartLineSegmentPrimitive> BuildDataLabelLeaderLines(
+        ChartShape chart,
+        ChartSceneGeometryKind geometryKind,
+        IReadOnlyList<ChartDataLabelPlan> labels,
+        IReadOnlyList<ChartPieSlicePrimitive> slices)
+    {
+        if (chart.DataLabels?.ShowLeaderLines != true ||
+            geometryKind is not (ChartSceneGeometryKind.Pie or ChartSceneGeometryKind.Doughnut) ||
+            chart.DataLabels.Position is DataLabelPosition.InsideEnd or DataLabelPosition.Center)
+        {
+            return Array.Empty<ChartLineSegmentPrimitive>();
+        }
+
+        var lines = new List<ChartLineSegmentPrimitive>();
+        foreach (var label in labels)
+        {
+            var slice = slices.FirstOrDefault(candidate => candidate.PointIndex == label.CategoryIndex);
+            if (slice.OuterRadius <= 0)
+                continue;
+
+            double midAngle = (slice.StartAngle + slice.EndAngle) / 2.0;
+            double scaleY = slice.EffectiveVerticalScale;
+            var unit = new ChartPlanPoint(Math.Cos(midAngle), Math.Sin(midAngle) * scaleY);
+            var radialStart = new ChartPlanPoint(
+                slice.Center.X + slice.OuterRadius * unit.X,
+                slice.Center.Y + slice.OuterRadius * unit.Y);
+            var elbow = new ChartPlanPoint(
+                slice.Center.X + (slice.OuterRadius + 7.0) * unit.X,
+                slice.Center.Y + (slice.OuterRadius + 7.0) * unit.Y);
+            var textBounds = label.TextBounds ?? label.Bounds;
+            bool rightSide = unit.X >= 0;
+            var labelAnchor = new ChartPlanPoint(
+                rightSide ? textBounds.X - 2.0 : textBounds.Right + 2.0,
+                textBounds.Y + textBounds.Height / 2.0);
+            var stroke = new ChartStrokePlan(
+                new SrgbColor(0x66, 0x66, 0x66),
+                210,
+                0.75);
+            lines.Add(new ChartLineSegmentPrimitive(
+                0,
+                label.CategoryIndex,
+                label.CategoryIndex,
+                radialStart,
+                elbow,
+                stroke));
+            lines.Add(new ChartLineSegmentPrimitive(
+                0,
+                label.CategoryIndex,
+                label.CategoryIndex,
+                elbow,
+                labelAnchor,
+                stroke));
+        }
+
+        return lines;
     }
 
     /// <summary>
@@ -6015,13 +6082,16 @@ public static partial class ChartRenderPlanner
                 isSmoothed));
         }
 
+        IReadOnlyList<ChartDataLabelPlan> renderedDataLabels = chart.ShowDataLabelsOverMaximum == false
+            ? dataLabels.Where(label => !label.IsOverMaximum).ToArray()
+            : dataLabels;
         return new ChartScatterPrimitivePlan(
             gridLines,
             ResolveScatterGridLineStroke(chart),
             xLabels,
             yLabels,
             seriesPrimitives,
-            dataLabels);
+            renderedDataLabels);
     }
 
     public static ChartBubblePrimitivePlan BuildBubblePrimitivePlan(
@@ -6529,7 +6599,9 @@ public static partial class ChartRenderPlanner
             plans.AddRange(seriesPlans);
         }
 
-        return plans;
+        return chart.ShowDataLabelsOverMaximum == false
+            ? plans.Where(plan => !plan.IsOverMaximum).ToArray()
+            : plans;
     }
 
     private static ChartDataLabelPlan ApplyDataLabelTextStyle(
@@ -7932,7 +8004,10 @@ public static partial class ChartRenderPlanner
                 PlanScatterDataLabelBounds(point.Value, labels.Position ?? DataLabelPosition.Above),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center), labels);
+                Alignment: ChartPlanTextAlignment.Center)
+            {
+                IsOverMaximum = value.Value > ComputePrimaryValueAxisRange(chart).max
+            }, labels);
             plans.Add(ApplyLegendKey(
                 labelPlan,
                 labels,
@@ -8129,7 +8204,8 @@ public static partial class ChartRenderPlanner
                 FontSize: ResolveTextFontSize(chart, 6.5),
                 Alignment: ChartPlanTextAlignment.Center)
             {
-                WrapText = importedPercentStackedCluster
+                WrapText = importedPercentStackedCluster,
+                IsOverMaximum = value > effectiveMin + effectiveRange
             };
             labelPlan = ApplyDataLabelTextStyle(labelPlan, labels);
             if (labels.ShowLegendKey)
@@ -8210,7 +8286,10 @@ public static partial class ChartRenderPlanner
                 new ChartPlanRect(x - 20, y - ResolveDataLabelHeight(chart) - 3, 40, ResolveDataLabelHeight(chart)),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center), labels);
+                Alignment: ChartPlanTextAlignment.Center)
+            {
+                IsOverMaximum = rawValue.Value > effectiveMin + effectiveRange
+            }, labels);
             plans.Add(ApplyLegendKey(
                 labelPlan,
                 labels,
@@ -8360,7 +8439,10 @@ public static partial class ChartRenderPlanner
                 new ChartPlanRect(labelX, labelY, 44, labelHeight),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center), labels);
+                Alignment: ChartPlanTextAlignment.Center)
+            {
+                IsOverMaximum = value > effectiveMin + effectiveRange
+            }, labels);
             plans.Add(ApplyLegendKey(
                 labelPlan,
                 labels,

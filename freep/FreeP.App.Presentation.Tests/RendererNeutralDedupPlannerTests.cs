@@ -517,6 +517,7 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("scene.DoughnutSlices");
             source.Should().Contain("scene.AxisTicks");
             source.Should().Contain("scene.DataLabels");
+            source.Should().Contain("scene.DataLabelLeaderLines");
             source.Should().Contain("scene.SecondaryAxis");
             source.Should().Contain("scene.CategoryAxisLabels");
             source.Should().Contain("scene.ValueAxisLabels");

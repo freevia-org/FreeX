@@ -2446,6 +2446,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicProcess)));
         r.Register(SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicTimeline)));
+        r.Register(SmartArtAuthoringPlanner.PhasedProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PhasedProcess)));
         r.Register(SmartArtAuthoringPlanner.StepDownProcessLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.StepDownProcess)));
         r.Register(SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,

@@ -1052,6 +1052,9 @@ public sealed class SlideCanvas : FrameworkElement
         RenderTrendlines(dc, scene.Trendlines);
         RenderErrorBars(dc, scene.ErrorBars);
 
+        foreach (var leaderLine in scene.DataLabelLeaderLines)
+            dc.DrawLine(ToPen(leaderLine.Stroke), ToPoint(leaderLine.Start), ToPoint(leaderLine.End));
+
         if (scene.AxisTicks.CategoryTicks.Count > 0 || scene.AxisTicks.ValueTicks.Count > 0)
         {
             var tickPen = CreateChartAxisTickPen(scene.AxisTicks);
