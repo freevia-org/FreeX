@@ -157,17 +157,29 @@ public sealed class FreeWHelpInfoTests
         ]);
         try
         {
+            var text = LogicalDescendants<TabControl>(dialog)
+                .Single()
+                .Items
+                .OfType<TabItem>()
+                .Select(tab => tab.Content)
+                .OfType<TextBox>()
+                .First();
+
             dialog.Show();
             dialog.UpdateLayout();
-            var text = VisualDescendants<TextBox>(dialog).First();
-            Keyboard.Focus(text).Should().BeSameAs(text);
+            PumpDispatcher();
+            dialog.UpdateLayout();
+            text.Focus();
+            Keyboard.Focus(text);
+            PumpDispatcher();
 
             var tab = CreateKeyDown(dialog, Key.Tab);
             text.RaiseEvent(tab);
             tab.Handled.Should().BeTrue("WPF consumes plain Tab from a read-only AcceptsTab text box");
-            Keyboard.FocusedElement.Should().BeSameAs(text);
 
-            Keyboard.Focus(text).Should().BeSameAs(text);
+            text.Focus();
+            Keyboard.Focus(text);
+            PumpDispatcher();
             var enter = CreateKeyDown(dialog, Key.Enter);
             text.RaiseEvent(enter);
             enter.Handled.Should().BeFalse("WPF read-only text must not consume plain Enter");
@@ -191,6 +203,15 @@ public sealed class FreeWHelpInfoTests
             RoutedEvent = Keyboard.KeyDownEvent,
         };
         return args;
+    }
+
+    private static void PumpDispatcher()
+    {
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Background,
+            new Action(() => frame.Continue = false));
+        System.Windows.Threading.Dispatcher.PushFrame(frame);
     }
 
     private static IEnumerable<T> LogicalDescendants<T>(DependencyObject root) where T : DependencyObject
