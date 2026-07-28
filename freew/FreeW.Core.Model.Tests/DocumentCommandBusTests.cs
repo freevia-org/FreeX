@@ -444,6 +444,7 @@ public class DocumentCommandBusTests
             BrightnessPct = 20,
             OriginalPixelWidth = 200,
             OriginalPixelHeight = 100,
+            ImportedEffects = new ShapeEffectLst { HasGlow = true, GlowRad = 63500, GlowAlpha = 60000 },
         };
         var paragraph = new Paragraph();
         paragraph.Runs.Add(Run.FromImage(image));
@@ -469,12 +470,51 @@ public class DocumentCommandBusTests
         image.FlipH.Should().BeFalse();
         image.HasCrop.Should().BeFalse();
         image.BrightnessPct.Should().Be(0);
+        image.ImportedEffects.Should().BeNull();
         bus.Undo().Should().BeTrue();
         (image.WidthPt, image.HeightPt).Should().Be((240, 120));
         image.RotationAngle.Should().Be(45);
         image.FlipH.Should().BeTrue();
         image.CropLeft.Should().Be(0.1);
         image.BrightnessPct.Should().Be(20);
+        image.ImportedEffects.Should().NotBeNull();
+        image.ImportedEffects!.GlowRad.Should().Be(63500);
+    }
+
+    [Fact]
+    public void PictureEffectAndStyleCommands_ClearImportedEffects_AndRestoreThemOnUndo()
+    {
+        var (doc, bus) = New();
+        var image = new InlineImage([1, 2, 3], widthPt: 120, heightPt: 80)
+        {
+            ImportedEffects = new ShapeEffectLst
+            {
+                HasShadow = true,
+                ShadowBlurRad = 76200,
+                ShadowAlpha = 55000,
+                HasReflection = true,
+                ReflectionScaleY = -100000,
+            },
+        };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(image));
+        doc.Blocks.Add(paragraph);
+
+        bus.Execute(new SetImageEffectCommand(0, 0, 2, 5, "4472C4", 1, 0, 0));
+        image.ImportedEffects.Should().BeNull();
+        bus.Undo().Should().BeTrue();
+        image.ImportedEffects.Should().NotBeNull();
+        image.ImportedEffects!.ShadowBlurRad.Should().Be(76200);
+        image.ImportedEffects.ReflectionScaleY.Should().Be(-100000);
+        bus.Redo().Should().BeTrue();
+        image.ImportedEffects.Should().BeNull();
+
+        bus.Undo().Should().BeTrue();
+        bus.Execute(new SetImageStyleCommand(0, 0, PictureStyleCatalog.Catalog[0]));
+        image.ImportedEffects.Should().BeNull();
+        bus.Undo().Should().BeTrue();
+        image.ImportedEffects.Should().NotBeNull();
+        image.ImportedEffects!.ShadowAlpha.Should().Be(55000);
     }
 
     [Fact]

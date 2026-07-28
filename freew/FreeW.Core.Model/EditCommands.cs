@@ -1279,6 +1279,7 @@ public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, doub
     private int _prevShadow, _prevReflection, _prevBevel;
     private double _prevGlow, _prevSoftEdge;
     private string? _prevGlowColor;
+    private ShapeEffectLst? _prevImportedEffects;
     private ImageRecolorMode _prevRecolor;
     private double _prevColorTemp;
     private bool _applied;
@@ -1302,6 +1303,7 @@ public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, doub
         _prevReflection = image.ReflectionPreset;
         _prevSoftEdge   = image.SoftEdgePt;
         _prevBevel      = image.BevelPreset;
+        _prevImportedEffects = image.ImportedEffects?.Clone();
         _prevRecolor    = image.RecolorMode;
         _prevColorTemp  = image.ColorTemperature;
         image.WidthPt = naturalWidthPt; image.HeightPt = naturalHeightPt;
@@ -1319,6 +1321,7 @@ public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, doub
         image.ReflectionPreset = 0;
         image.SoftEdgePt       = 0;
         image.BevelPreset      = 0;
+        image.ImportedEffects  = null;
         // Reset recolor.
         image.RecolorMode      = ImageRecolorMode.None;
         image.ColorTemperature = 0;
@@ -1341,6 +1344,7 @@ public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, doub
         image.ReflectionPreset = _prevReflection;
         image.SoftEdgePt       = _prevSoftEdge;
         image.BevelPreset      = _prevBevel;
+        image.ImportedEffects  = _prevImportedEffects?.Clone();
         image.RecolorMode      = _prevRecolor;
         image.ColorTemperature = _prevColorTemp;
         _applied = false;
@@ -1410,6 +1414,7 @@ public sealed class SetImageEffectCommand(
     private int _prevShadow, _prevReflection, _prevBevel;
     private double _prevGlow, _prevSoftEdge;
     private string? _prevGlowColor;
+    private ShapeEffectLst? _prevImportedEffects;
     private bool _applied;
 
     public string Label => "Picture Effect";
@@ -1423,12 +1428,14 @@ public sealed class SetImageEffectCommand(
         _prevReflection = image.ReflectionPreset;
         _prevSoftEdge   = image.SoftEdgePt;
         _prevBevel      = image.BevelPreset;
+        _prevImportedEffects = image.ImportedEffects?.Clone();
         image.ShadowPreset     = shadowPreset;
         image.GlowSizePt       = glowSizePt;
         image.GlowColorHex     = glowColorHex;
         image.ReflectionPreset = reflectionPreset;
         image.SoftEdgePt       = softEdgePt;
         image.BevelPreset      = bevelPreset;
+        image.ImportedEffects  = null;
         _applied = true;
     }
 
@@ -1441,6 +1448,7 @@ public sealed class SetImageEffectCommand(
         image.ReflectionPreset = _prevReflection;
         image.SoftEdgePt       = _prevSoftEdge;
         image.BevelPreset      = _prevBevel;
+        image.ImportedEffects  = _prevImportedEffects?.Clone();
         _applied = false;
     }
 
@@ -1517,6 +1525,7 @@ public sealed class SetImageStyleCommand(
     private string? _prevBorderDash;
     private int _prevShadow, _prevReflection, _prevStyle;
     private double _prevSoftEdge;
+    private ShapeEffectLst? _prevImportedEffects;
     private bool _applied;
 
     public string Label => "Apply Picture Style";
@@ -1531,6 +1540,7 @@ public sealed class SetImageStyleCommand(
         _prevReflection   = image.ReflectionPreset;
         _prevSoftEdge     = image.SoftEdgePt;
         _prevStyle        = image.PictureStylePreset;
+        _prevImportedEffects = image.ImportedEffects?.Clone();
         image.BorderColorHex    = borderColorHex;
         image.BorderWidthPt     = borderWidthPt;
         image.BorderDash        = borderDash;
@@ -1538,6 +1548,7 @@ public sealed class SetImageStyleCommand(
         image.ReflectionPreset  = reflectionPreset;
         image.SoftEdgePt        = softEdgePt;
         image.PictureStylePreset = stylePreset;
+        image.ImportedEffects   = null;
         _applied = true;
     }
 
@@ -1551,6 +1562,7 @@ public sealed class SetImageStyleCommand(
         image.ReflectionPreset  = _prevReflection;
         image.SoftEdgePt        = _prevSoftEdge;
         image.PictureStylePreset = _prevStyle;
+        image.ImportedEffects   = _prevImportedEffects?.Clone();
         _applied = false;
     }
 
