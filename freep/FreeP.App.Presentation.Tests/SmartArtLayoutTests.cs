@@ -1212,6 +1212,27 @@ public sealed class SmartArtLayoutTests
         boxes[1].OffsetYEmu.Should().BeGreaterThan(boxes[0].OffsetYEmu);
     }
 
+    [Theory]
+    [InlineData(13)]
+    [InlineData(20)]
+    public void BendingProcess_PreservesAllNodesBeyondOriginalTwelveItemCutoff(int nodeCount)
+    {
+        var data = MakeData(SmartArtFamily.Process,
+            Enumerable.Range(1, nodeCount).Select(index => $"Node {index}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/bendingProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("bendingProcess scales its shared two-track geometry by node count");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(nodeCount);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(nodeCount - 1);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(index => $"Node {index}"));
+    }
+
     [Fact]
     public void AlternatingProcess_ReturnsUpperLowerTrackBoxesAndConnectors()
     {

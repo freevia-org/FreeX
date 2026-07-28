@@ -3294,6 +3294,34 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_BendingProcessSmartArt_RendersAllNodesBeyondOriginalTwelveItemCutoff()
+    {
+        var nodes = Enumerable.Range(1, 13)
+            .Select(index => ($"n{index}", $"Node {index}"))
+            .ToArray();
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/bendingProcess",
+            nodes: nodes,
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(25, "13 bending-process boxes plus 12 connectors should remain live");
+        liveShapes.Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal(Enumerable.Range(1, 13).Select(index => $"Node {index}"));
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(12, "the shared two-track plan emits one connector between each adjacent pair");
+    }
+
+    [Fact]
     public void Compositor_CircleProcessSmartArt_RendersSharedLiveShapes()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
