@@ -461,6 +461,45 @@ public sealed class SlideShowMediaController
         return null; // nothing to play
     }
 
+    /// <summary>Seeks an active media element, matching the Avalonia playback controller.</summary>
+    public bool TrySeek(uint shapeId, TimeSpan position)
+    {
+        if (position < TimeSpan.Zero)
+            return false;
+
+        var element = _slots.FirstOrDefault(slot => slot.ShapeId == shapeId)?.Element;
+        if (element is null)
+            return false;
+
+        try
+        {
+            element.Position = position;
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Sets the active media volume using the shared 0-100 volume convention.</summary>
+    public bool TrySetVolume(uint shapeId, int volume)
+    {
+        var element = _slots.FirstOrDefault(slot => slot.ShapeId == shapeId)?.Element;
+        if (element is null)
+            return false;
+
+        try
+        {
+            element.Volume = Math.Clamp(volume, 0, 100) / 100d;
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
     private static void ApplyRect(MediaElement el, MediaShapeRect r)
     {
         el.Width  = Math.Max(1, r.Width);

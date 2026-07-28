@@ -1954,6 +1954,28 @@ public sealed class SlideShowMediaControllerTests
     // ── SlideShowWindow headless construction with media shape ───────────────
 
     [StaFact]
+    public void TrySetVolumeAndSeek_UseSharedMediaShapeIds()
+    {
+        var fakeWriter = new TempMediaFileWriter();
+        var overlay = new System.Windows.Controls.Canvas();
+        var ctrl = new SlideShowMediaController(overlay, fakeWriter);
+        var shape = MakeMediaShape();
+        var slide = SlideWithMedia(shape);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720);
+
+        ctrl.TrySetVolume(shape.Id, 35).Should().BeTrue();
+        var element = overlay.Children.OfType<System.Windows.Controls.MediaElement>().Single();
+        element.Volume.Should().BeApproximately(0.35, 0.0001);
+        ctrl.TrySetVolume(999, 35).Should().BeFalse();
+
+        ctrl.TrySeek(shape.Id, TimeSpan.FromSeconds(3)).Should().BeTrue();
+        element.Position.Should().Be(TimeSpan.FromSeconds(3));
+        ctrl.TrySeek(shape.Id, TimeSpan.FromSeconds(-1)).Should().BeFalse();
+        ctrl.Teardown();
+    }
+
+    [StaFact]
     public void SlideShowWindow_WithMediaShape_ConstructsWithoutThrowing()
     {
         var pres  = Presentation.CreateEmpty();
