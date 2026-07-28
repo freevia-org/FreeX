@@ -87,6 +87,11 @@ internal static class AvaloniaExtraCommandIds
         "3-D Rotation", "Bevel", "Glow", "Inner Shadow", "Reflection", "Soft Edges",
         // Picture Format ▸ Crop submenu items.
         "Crop", "Reset Crop",
+        // Chart Format shared axis controls.
+        "X Axis Ticks", "Y Axis Ticks", "X Axis Label Font", "Y Axis Label Font",
+        "X Axis Label Angle", "Y Axis Label Angle", "X Axis Line", "Y Axis Line",
+        "X Axis Number Format", "Y Axis Number Format", "X Gridline Style", "Y Gridline Style",
+        "X Log Scale", "Y Log Scale",
         // Home ▸ Clipboard ▸ Paste menu items.
         "Keep Source Column Widths", "Values & Source Formatting", "Paste Link",
         // Home ▸ Editing ▸ Sort & Filter split-button face.

@@ -461,6 +461,7 @@ public sealed partial class SetChartLayoutCommand
             chart.BubbleSizeRepresents = ValidEnumOrDefault(options.BubbleSizeRepresents.Value, ChartBubbleSizeRepresents.Area);
         EnforceAxisTitleSupport(chart);
         EnforceAxisBoundsSupport(chart);
+        EnforceAxisVisualSupport(chart);
         EnforcePieAndDoughnutSupport(chart);
         EnforcePercentageDataLabelSupport(chart);
         EnforceTrendlineSupport(chart);

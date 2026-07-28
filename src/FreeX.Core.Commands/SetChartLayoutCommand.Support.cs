@@ -46,6 +46,57 @@ public sealed partial class SetChartLayoutCommand
         chart.YAxisLogScale = false;
     }
 
+    private static void EnforceAxisVisualSupport(ChartModel chart)
+    {
+        if (ChartTypeSupport.SupportsAxes(chart.Type))
+            return;
+
+        ClearXAxisVisualStyle(chart);
+        ClearYAxisVisualStyle(chart);
+    }
+
+    private static void ClearXAxisVisualStyle(ChartModel chart)
+    {
+        chart.XAxisNumberFormat = ChartDataLabelNumberFormat.General;
+        chart.ShowXAxisMajorGridlines = false;
+        chart.ShowXAxisMinorGridlines = false;
+        chart.XAxisIsDateAxis = false;
+        chart.XAxisMajorGridlineColor = null;
+        chart.XAxisMinorGridlineColor = null;
+        chart.XAxisGridlineThickness = 1;
+        chart.XAxisMajorTickStyle = ChartAxisTickStyle.Outside;
+        chart.XAxisMinorTickStyle = ChartAxisTickStyle.None;
+        chart.ShowXAxisLabels = true;
+        chart.XAxisLabelTextColor = null;
+        chart.XAxisLabelTextThemeColor = null;
+        chart.XAxisLabelFontSize = 11;
+        chart.XAxisLabelAngle = 0;
+        chart.XAxisLabelSkip = 0;
+        chart.XAxisTickMarkSkip = 0;
+        chart.XAxisLabelOffset = 0;
+        chart.XAxisLineColor = null;
+        chart.XAxisLineThickness = 1;
+    }
+
+    private static void ClearYAxisVisualStyle(ChartModel chart)
+    {
+        chart.YAxisNumberFormat = ChartDataLabelNumberFormat.General;
+        chart.ShowYAxisMajorGridlines = false;
+        chart.ShowYAxisMinorGridlines = false;
+        chart.YAxisMajorGridlineColor = null;
+        chart.YAxisMinorGridlineColor = null;
+        chart.YAxisGridlineThickness = 1;
+        chart.YAxisMajorTickStyle = ChartAxisTickStyle.Outside;
+        chart.YAxisMinorTickStyle = ChartAxisTickStyle.None;
+        chart.ShowYAxisLabels = true;
+        chart.YAxisLabelTextColor = null;
+        chart.YAxisLabelTextThemeColor = null;
+        chart.YAxisLabelFontSize = 11;
+        chart.YAxisLabelAngle = 0;
+        chart.YAxisLineColor = null;
+        chart.YAxisLineThickness = 1;
+    }
+
     private static void EnforcePieAndDoughnutSupport(ChartModel chart)
     {
         if (!ChartTypeSupport.SupportsDoughnutHoleSize(chart.Type))
