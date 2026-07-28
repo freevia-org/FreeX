@@ -7585,6 +7585,9 @@ public sealed class DocumentView : RichTextBox
             case Floater floater when HasFloatingWrapReservationMarker(floater):
                 ReadFloatingWrapReservationFloater(modelParagraph, floater, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
                 break;
+            case Figure figure when HasFloatingWrapReservationMarker(figure):
+                ReadFloatingWrapReservationFigure(modelParagraph, figure, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
+                break;
             case Floater floater:
                 ReadFloaterInlineContent(modelParagraph, floater, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
                 break;
@@ -7743,6 +7746,43 @@ public sealed class DocumentView : RichTextBox
             return true;
 
         return floater.Blocks.OfType<BlockUIContainer>()
+            .Any(block => block.Child is FrameworkElement { Tag: FloatingWrapReservationMarker });
+    }
+
+    private static void ReadFloatingWrapReservationFigure(ModelParagraph modelParagraph, Figure figure, string? hyperlinkUrl, string? hyperlinkAnchor, string? hyperlinkTooltip)
+    {
+        if (figure.Tag is FloatingWrapReservationMarker { Anchor: { } marker } reservationMarker)
+        {
+            AddAnchorMarkerRun(
+                modelParagraph,
+                marker,
+                reservationMarker.HyperlinkUrl ?? hyperlinkUrl,
+                reservationMarker.HyperlinkAnchor ?? hyperlinkAnchor,
+                reservationMarker.HyperlinkTooltip ?? hyperlinkTooltip);
+            return;
+        }
+
+        foreach (var block in figure.Blocks)
+        {
+            if (block is BlockUIContainer { Child: FrameworkElement { Tag: FloatingWrapReservationMarker { Anchor: { } nestedMarker } nestedReservationMarker } })
+            {
+                AddAnchorMarkerRun(
+                    modelParagraph,
+                    nestedMarker,
+                    nestedReservationMarker.HyperlinkUrl ?? hyperlinkUrl,
+                    nestedReservationMarker.HyperlinkAnchor ?? hyperlinkAnchor,
+                    nestedReservationMarker.HyperlinkTooltip ?? hyperlinkTooltip);
+                return;
+            }
+        }
+    }
+
+    private static bool HasFloatingWrapReservationMarker(Figure figure)
+    {
+        if (figure.Tag is FloatingWrapReservationMarker)
+            return true;
+
+        return figure.Blocks.OfType<BlockUIContainer>()
             .Any(block => block.Child is FrameworkElement { Tag: FloatingWrapReservationMarker });
     }
 

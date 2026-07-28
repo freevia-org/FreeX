@@ -139,6 +139,30 @@ public sealed class FloatingImageRenderTests
         return doc;
     }
 
+    private static TextDocument DocWithFloatingFigureShapeText(out Shape shape)
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("before "));
+        shape = Shape.TextBoxWith("watermark backing layer", 170, 58);
+        shape.FillColorHex = "#E2F0D9";
+        shape.OutlineColorHex = "#70AD47";
+        shape.Placement = new FloatingPlacement
+        {
+            Wrapping = ImageWrapping.Square,
+            HorizontalAnchor = HorizontalAnchor.Margin,
+            VerticalAnchor = VerticalAnchor.Paragraph,
+            HorizontalOffsetPt = 36,
+            VerticalOffsetPt = 18,
+            ZOrderIndex = 5,
+        };
+        para.Runs.Add(Run.FromShape(shape));
+        para.Runs.Add(new Run(" after"));
+        doc.Blocks.Add(para);
+        return doc;
+    }
+
     private static WpfParagraph RenderedParagraph(DocumentView view) =>
         view.Document.Blocks.OfType<WpfParagraph>().Single();
 
@@ -429,6 +453,26 @@ public sealed class FloatingImageRenderTests
         view.LoadModel(doc);
 
         RenderedParagraph(view).Inlines.OfType<WpfFloater>().Should().ContainSingle();
+
+        view.CommitToModel();
+
+        var committed = (Paragraph)view.Model.Blocks[0];
+        committed.Runs.Should().HaveCount(3);
+        committed.Runs[0].Text.Should().Be("before ");
+        committed.Runs[1].Shape.Should().BeSameAs(originalShape);
+        committed.Runs[1].Shape!.Placement!.Wrapping.Should().Be(ImageWrapping.Square);
+        committed.Runs[2].Text.Should().Be(" after");
+    }
+
+    [StaFact]
+    public void FloatingFigureShape_SquareSurvivesCommitInOrder()
+    {
+        var doc = DocWithFloatingFigureShapeText(out var originalShape);
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        RenderedParagraph(view).Inlines.OfType<Figure>().Should().ContainSingle()
+            .Which.Tag.Should().NotBeNull();
 
         view.CommitToModel();
 
