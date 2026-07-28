@@ -491,6 +491,34 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void ChartAxisOptionsPlanner_EditsSecondaryValueAxisWithoutMutatingChart()
+    {
+        var chart = MakeChart();
+        chart.SecondaryValueAxis = new ChartAxis
+        {
+            Title = "Margin",
+            Min = 0,
+            Max = 1,
+            MajorUnit = 0.2,
+            HasMajorGridlines = false,
+        };
+
+        var planner = ChartAxisOptionsPlanner.FromChart(chart);
+        planner.SetAxis(ChartAxisKind.SecondaryValue);
+        planner.SetTitle("Rate");
+        planner.SetMinimum(0);
+        planner.SetMaximum(100);
+        planner.SetMajorUnit(25);
+        planner.SetNumberFormatCode("0%");
+
+        planner.BuildCommitPlan().Should().Be(new ChartAxisOptions(
+            ChartAxisKind.SecondaryValue, "Rate", 0, 100, 25, null, "0%", false));
+        chart.SecondaryValueAxis.Title.Should().Be("Margin");
+        ChartAxisOptionsPlanner.AxisOptions.Should().Contain(option =>
+            option.Value == ChartAxisKind.SecondaryValue);
+    }
+
+    [Fact]
     public void ChartSeriesOptionsPlanner_UsesWorkingCopyAndBuildsFormattingOptions()
     {
         var chart = MakeChart();

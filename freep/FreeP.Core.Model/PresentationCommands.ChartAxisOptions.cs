@@ -27,6 +27,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
     private bool? _oldNoMultiLevelLabels;
     private bool? _oldAutoCrossing;
     private bool _oldReverseOrder;
+    private bool _oldSecondaryAxisExisted;
 
     public SetChartAxisOptionsCommand(int slideIndex, uint shapeId, ChartAxisOptions options)
     {
@@ -43,7 +44,9 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         if (chart is null)
             return;
 
-        var axis = ResolveAxis(chart, _newOptions.Axis);
+        _oldSecondaryAxisExisted = chart.SecondaryValueAxis is not null;
+        var axis = ResolveAxis(chart, _newOptions.Axis, createSecondary: true)
+            ?? throw new InvalidOperationException("The chart axis could not be resolved.");
         Capture(axis);
         axis.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title.Trim();
         axis.Delete = !_newOptions.ShowAxis;
@@ -78,7 +81,9 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         if (chart is null)
             return;
 
-        var axis = ResolveAxis(chart, _newOptions.Axis);
+        var axis = ResolveAxis(chart, _newOptions.Axis, createSecondary: false);
+        if (axis is null)
+            return;
         axis.Title = _oldTitle;
         axis.Delete = _oldDelete;
         axis.Min = _oldMinimum;
@@ -99,6 +104,8 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         axis.NoMultiLevelLabels = _oldNoMultiLevelLabels;
         axis.AutoCrossing = _oldAutoCrossing;
         axis.ReverseOrder = _oldReverseOrder;
+        if (_newOptions.Axis == ChartAxisKind.SecondaryValue && !_oldSecondaryAxisExisted)
+            chart.SecondaryValueAxis = null;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -126,6 +133,14 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         _oldReverseOrder = axis.ReverseOrder;
     }
 
-    private static ChartAxis ResolveAxis(ChartShape chart, ChartAxisKind kind) =>
-        kind == ChartAxisKind.Category ? chart.CategoryAxis : chart.ValueAxis;
+    private static ChartAxis? ResolveAxis(ChartShape chart, ChartAxisKind kind, bool createSecondary)
+        => kind switch
+        {
+            ChartAxisKind.Category => chart.CategoryAxis,
+            ChartAxisKind.Value => chart.ValueAxis,
+            ChartAxisKind.SecondaryValue => createSecondary
+                ? chart.SecondaryValueAxis ??= new ChartAxis()
+                : chart.SecondaryValueAxis,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        };
 }

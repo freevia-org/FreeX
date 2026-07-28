@@ -1337,6 +1337,28 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartAxisOptions_CreatesAndUndoRemovesSecondaryAxis()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.SecondaryValueAxis.Should().BeNull();
+
+        bus.Execute(new SetChartAxisOptionsCommand(
+            0,
+            id,
+            new ChartAxisOptions(
+                ChartAxisKind.SecondaryValue, "Margin", 0, 100, 25, null, "0%", false)));
+
+        chart.SecondaryValueAxis.Should().NotBeNull();
+        chart.SecondaryValueAxis!.Title.Should().Be("Margin");
+        chart.SecondaryValueAxis.Max.Should().Be(100);
+        chart.SecondaryValueAxis.NumberFormatCode.Should().Be("0%");
+
+        bus.Undo();
+        chart.SecondaryValueAxis.Should().BeNull();
+    }
+
+    [Fact]
     public void SetChartSeriesOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
     {
         var (p, bus, id) = MakeChartPresentation();

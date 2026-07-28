@@ -50,7 +50,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             ItemsSource = ChartAxisOptionsPlanner.AxisOptions,
             DisplayMemberPath = nameof(ChartAxisKindOption.Label),
-            SelectedIndex = 1,
+            SelectedIndex = (int)ChartAxisKind.Value,
             MinWidth = 180,
         };
         _axisCombo.SelectionChanged += (_, _) =>
