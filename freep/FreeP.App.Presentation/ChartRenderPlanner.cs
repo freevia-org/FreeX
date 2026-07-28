@@ -1387,7 +1387,7 @@ public static partial class ChartRenderPlanner
                 bounds.Width - 65.0,
                 bounds.Height - 69.0 - ImportedPercentStackedPlotBottomReduction);
         }
-        if (TryResolveManualLayoutRect(chart.PlotAreaManualLayout, bounds, out var manualPlot))
+        if (TryResolveManualLayoutRect(chart.PlotAreaManualLayout, bounds, plot, out var manualPlot))
             plot = manualPlot;
         ChartPlanRect? titleBounds = chart.Title is not null
             ? new ChartPlanRect(
@@ -2218,7 +2218,12 @@ public static partial class ChartRenderPlanner
         if (!legendBounds.HasPositiveArea)
             return Array.Empty<ChartLegendItemPlan>();
 
-        bool hasManualLayout = TryResolveManualLayoutRect(chart.LegendManualLayout, frame.Bounds, out _);
+        var automaticLegendBounds = ResolveAutomaticLegendBounds(chart, frame);
+        bool hasManualLayout = TryResolveManualLayoutRect(
+            chart.LegendManualLayout,
+            frame.Bounds,
+            automaticLegendBounds,
+            out _);
         bool verticalLegend = frame.LegendRight;
         if (hasManualLayout &&
             legendBounds.Height < LegendHeight * 1.5 &&
@@ -2408,9 +2413,21 @@ public static partial class ChartRenderPlanner
 
     private static ChartPlanRect ResolveLegendBounds(ChartShape chart, ChartFramePlan frame)
     {
-        if (TryResolveManualLayoutRect(chart.LegendManualLayout, frame.Bounds, out var manualLegend))
+        var automaticLegend = ResolveAutomaticLegendBounds(chart, frame);
+        if (TryResolveManualLayoutRect(
+                chart.LegendManualLayout,
+                frame.Bounds,
+                automaticLegend,
+                out var manualLegend))
             return manualLegend;
 
+        return automaticLegend;
+    }
+
+    private static ChartPlanRect ResolveAutomaticLegendBounds(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
         var plot = frame.Plot;
         if (frame.LegendRight)
         {
@@ -2467,14 +2484,19 @@ public static partial class ChartRenderPlanner
 
     private static bool TryResolveManualLayoutRect(
         ChartManualLayout? layout,
-        ChartPlanRect parent,
+        ChartPlanRect outerParent,
+        ChartPlanRect innerParent,
         out ChartPlanRect rect)
     {
         rect = default;
         if (!HasResolvableManualLayout(layout))
             return false;
 
-        double x = ResolveManualLayoutStart(parent.X, parent.Width, layout!.X!.Value);
+        var parent = string.Equals(layout!.LayoutTarget, "inner", StringComparison.OrdinalIgnoreCase)
+            ? innerParent
+            : outerParent;
+
+        double x = ResolveManualLayoutStart(parent.X, parent.Width, layout.X!.Value);
         double y = ResolveManualLayoutStart(parent.Y, parent.Height, layout.Y!.Value);
         double right = layout.WidthMode == ChartManualLayoutMode.Edge
             ? ResolveManualLayoutEdge(parent.X, parent.Width, layout.Width!.Value)

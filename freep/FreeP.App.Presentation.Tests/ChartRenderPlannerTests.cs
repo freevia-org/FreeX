@@ -1825,7 +1825,7 @@ public sealed class ChartRenderPlannerTests
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
         chart.PlotAreaManualLayout = new ChartManualLayout
         {
-            LayoutTarget = "inner",
+            LayoutTarget = "outer",
             X = 0.20,
             Y = 0.15,
             Width = 0.50,
@@ -1858,7 +1858,7 @@ public sealed class ChartRenderPlannerTests
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
         chart.PlotAreaManualLayout = new ChartManualLayout
         {
-            LayoutTarget = "inner",
+            LayoutTarget = "outer",
             XMode = ChartManualLayoutMode.Edge,
             YMode = ChartManualLayoutMode.Edge,
             WidthMode = ChartManualLayoutMode.Edge,
@@ -1872,6 +1872,32 @@ public sealed class ChartRenderPlannerTests
         var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
 
         frame.Plot.Should().Be(new ChartPlanRect(40, 60, 320, 165));
+    }
+
+    [Fact]
+    public void BuildFramePlan_ManualPlotLayout_InnerUsesAutomaticPlotFrame()
+    {
+        var automaticChart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        var automaticFrame = ChartRenderPlanner.BuildFramePlan(
+            automaticChart,
+            new ChartPlanRect(0, 0, 400, 300));
+
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.PlotAreaManualLayout = new ChartManualLayout
+        {
+            LayoutTarget = "inner",
+            X = 0.10,
+            Y = 0.20,
+            Width = 0.50,
+            Height = 0.40
+        };
+
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        frame.Plot.X.Should().BeApproximately(automaticFrame.Plot.X + automaticFrame.Plot.Width * 0.10, 0.0001);
+        frame.Plot.Y.Should().BeApproximately(automaticFrame.Plot.Y + automaticFrame.Plot.Height * 0.20, 0.0001);
+        frame.Plot.Width.Should().BeApproximately(automaticFrame.Plot.Width * 0.50, 0.0001);
+        frame.Plot.Height.Should().BeApproximately(automaticFrame.Plot.Height * 0.40, 0.0001);
     }
 
     [Fact]
@@ -1967,6 +1993,52 @@ public sealed class ChartRenderPlannerTests
         items[1].SwatchBounds.X.Should().BeApproximately(220, 0.0001);
         items[1].SwatchBounds.Y.Should().BeApproximately(77, 0.0001);
         items[1].Label.Text.Should().Be("Forecast");
+    }
+
+    [Fact]
+    public void BuildLegendItemPlans_InnerManualLayoutUsesAutomaticLegendFrame()
+    {
+        var outerChart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        outerChart.Legend = LegendPosition.Right;
+        outerChart.LegendOverlay = true;
+        outerChart.LegendManualLayout = new ChartManualLayout
+        {
+            LayoutTarget = "outer",
+            X = 0,
+            Y = 0,
+            Width = 1,
+            Height = 1
+        };
+        var innerChart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        innerChart.Legend = LegendPosition.Right;
+        innerChart.LegendOverlay = true;
+        innerChart.LegendManualLayout = new ChartManualLayout
+        {
+            LayoutTarget = "inner",
+            X = 0,
+            Y = 0,
+            Width = 1,
+            Height = 1
+        };
+        var bounds = new ChartPlanRect(0, 0, 400, 300);
+        var colors = new[]
+        {
+            new SrgbColor(0x11, 0x22, 0x33),
+            new SrgbColor(0x44, 0x55, 0x66)
+        };
+
+        var outerItems = ChartRenderPlanner.BuildLegendItemPlans(
+            outerChart,
+            ChartRenderPlanner.BuildFramePlan(outerChart, bounds),
+            colors);
+        var innerItems = ChartRenderPlanner.BuildLegendItemPlans(
+            innerChart,
+            ChartRenderPlanner.BuildFramePlan(innerChart, bounds),
+            colors);
+
+        outerItems[0].SwatchBounds.X.Should().Be(0);
+        innerItems[0].SwatchBounds.X.Should().BeGreaterThan(0);
+        innerItems[0].SwatchBounds.X.Should().BeLessThan(outerItems[0].Label.Bounds.Right);
     }
 
     [Fact]
