@@ -174,6 +174,54 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
         controller.Teardown();
     }
 
+    [Fact]
+    public void Controller_UpdateLayout_RepositionsCaptionOverlayAfterCanvasResize()
+    {
+        var factory = new FakeBackendFactory();
+        var overlay = new Canvas();
+        var controller = new AvaloniaSlideShowMediaController(overlay, factory);
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 42,
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 6858000,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = [1, 2, 3],
+                ContentType = "video/mp4",
+            },
+        });
+        var track = new PresentationMediaTranscriptTrackDescriptor(
+            SlideIndex: 0,
+            ShapeId: 42,
+            ShapeName: "Video",
+            TrackIndex: 0,
+            Label: "English",
+            Language: "en-US",
+            Source: "captions.vtt",
+            ContentType: "text/vtt",
+            Status: PresentationMediaTranscriptTrackStatus.Available,
+            StatusMessage: string.Empty,
+            Cues: [new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Resize me")]);
+
+        controller.EnterSlide(slide, 960, 720, 960, 720, [track]);
+        factory.Backend.Sessions.Single().State.Should().Be(MediaPlaybackState.Playing);
+        var caption = overlay.Children.OfType<Border>().Single();
+        Canvas.GetLeft(caption).Should().Be(0);
+
+        controller.UpdateLayout(slide, 960, 720, 1280, 720);
+
+        Canvas.GetLeft(caption).Should().Be(160);
+        caption.Width.Should().Be(960);
+
+        controller.UpdateLayout(new Slide(), 960, 720, 1280, 720);
+        overlay.Children.Should().BeEmpty(
+            "a size event for a new slide must not leave old media overlays behind");
+    }
+
     private sealed class FakeBackendFactory : IMediaPlaybackBackendFactory
     {
         public FakeBackend Backend { get; } = new();

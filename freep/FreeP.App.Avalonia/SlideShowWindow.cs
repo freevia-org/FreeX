@@ -951,7 +951,14 @@ public sealed class SlideShowWindow : Window
     {
         var width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW;
         var height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH;
-        _mediaController.SetCanvasBounds(width, height);
+        var slide = _controller.CurrentSlide;
+        if (slide is null)
+        {
+            _mediaController.SetCanvasBounds(width, height);
+            return;
+        }
+
+        _mediaController.UpdateLayout(slide, _slideDipW, _slideDipH, width, height);
     }
 
     private void ShowSlideInstant(Slide slide)

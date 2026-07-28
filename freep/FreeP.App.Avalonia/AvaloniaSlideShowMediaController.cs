@@ -34,6 +34,7 @@ internal sealed class AvaloniaSlideShowMediaController
     private IMediaPlaybackBackend? _backend;
     private IMediaPlaybackSession? _transitionSoundSession;
     private IReadOnlyList<SlideShowMediaShapePlan> _active = Array.Empty<SlideShowMediaShapePlan>();
+    private Slide? _activeSlide;
 
     public AvaloniaSlideShowMediaController(
         Panel overlay,
@@ -64,6 +65,58 @@ internal sealed class AvaloniaSlideShowMediaController
         _overlay.Height = Math.Max(1, canvasH);
     }
 
+    /// <summary>
+    /// Repositions active media and caption overlays after the slideshow canvas changes size.
+    /// The shared planner owns the letterbox calculation used here and by click hit-testing.
+    /// </summary>
+    public void UpdateLayout(
+        Slide slide,
+        double slideDipW,
+        double slideDipH,
+        double canvasW,
+        double canvasH)
+    {
+        ArgumentNullException.ThrowIfNull(slide);
+        if (_activeSlide is not null && !ReferenceEquals(_activeSlide, slide))
+        {
+            Teardown();
+            SetCanvasBounds(canvasW, canvasH);
+            return;
+        }
+
+        SetCanvasBounds(canvasW, canvasH);
+
+        foreach (var slot in _slots)
+        {
+            var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == slot.ShapeId);
+            if (shape?.Media is null || shape.Kind != SlideShapeKind.Media)
+                continue;
+
+            var bounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
+                shape,
+                slideDipW,
+                slideDipH,
+                canvasW,
+                canvasH);
+            if (slot.VideoView is not null)
+            {
+                slot.VideoView.Width = Math.Max(1, bounds.Width);
+                slot.VideoView.Height = Math.Max(1, bounds.Height);
+                Canvas.SetLeft(slot.VideoView, bounds.X);
+                Canvas.SetTop(slot.VideoView, bounds.Y);
+            }
+
+            if (slot.CaptionHost is not null)
+            {
+                var captionHeight = Math.Clamp(bounds.Height * 0.2, 36, 86);
+                slot.CaptionHost.Width = Math.Max(1, bounds.Width);
+                slot.CaptionHost.Height = captionHeight;
+                Canvas.SetLeft(slot.CaptionHost, bounds.X);
+                Canvas.SetTop(slot.CaptionHost, Math.Max(bounds.Y, bounds.Y + bounds.Height - captionHeight));
+            }
+        }
+    }
+
     public void EnterSlide(
         Slide slide,
         double slideDipW,
@@ -75,6 +128,7 @@ internal sealed class AvaloniaSlideShowMediaController
         ArgumentNullException.ThrowIfNull(slide);
         SetCanvasBounds(canvasW, canvasH);
         TeardownPlayback();
+        _activeSlide = slide;
         _active = SlideShowMediaInteractionPlanner.BuildSlidePlan(
             slide, slideDipW, slideDipH, canvasW, canvasH);
 
@@ -306,6 +360,7 @@ internal sealed class AvaloniaSlideShowMediaController
                 _overlay.Children.Remove(slot.CaptionHost);
         }
         _slots.Clear();
+        _activeSlide = null;
         _captionTimer.Stop();
 
         _transitionSoundSession?.Dispose();

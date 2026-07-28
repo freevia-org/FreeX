@@ -134,6 +134,7 @@ public sealed class SlideShowMediaController
     // Slide DIP dimensions — used to compute on-screen rect.
     private double _slideDipW;
     private double _slideDipH;
+    private Slide? _activeSlide;
 
     // ── per-slide state ───────────────────────────────────────────────────────
 
@@ -209,6 +210,7 @@ public sealed class SlideShowMediaController
 
         _slideDipW = slideDipW;
         _slideDipH = slideDipH;
+        _activeSlide = slide;
 
         foreach (var shape in slide.Shapes)
         {
@@ -242,18 +244,30 @@ public sealed class SlideShowMediaController
     /// </summary>
     public void UpdateLayout(Slide slide, double canvasW, double canvasH)
     {
-        int idx = 0;
-        foreach (var shape in slide.Shapes)
+        if (_activeSlide is not null && !ReferenceEquals(_activeSlide, slide))
         {
-            if (shape.Kind != SlideShapeKind.Media || shape.Media is null)
-                continue;
-            if (idx >= _slots.Count) break;
+            Teardown();
+            return;
+        }
 
-            var slot = _slots[idx++];
-            if (slot.Element is null) continue;
+        foreach (var slot in _slots)
+        {
+            var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == slot.ShapeId);
+            if (shape?.Media is null || shape.Kind != SlideShapeKind.Media)
+                continue;
 
             var r = ComputeMediaRect(shape, _slideDipW, _slideDipH, canvasW, canvasH);
-            ApplyRect(slot.Element, r);
+            if (slot.Element is not null)
+                ApplyRect(slot.Element, r);
+
+            if (slot.CaptionHost is not null)
+            {
+                var captionHeight = Math.Clamp(r.Height * 0.2, 36, 86);
+                slot.CaptionHost.Width = Math.Max(1, r.Width);
+                slot.CaptionHost.Height = captionHeight;
+                Canvas.SetLeft(slot.CaptionHost, r.X);
+                Canvas.SetTop(slot.CaptionHost, Math.Max(r.Y, r.Y + r.Height - captionHeight));
+            }
         }
     }
 
@@ -282,6 +296,7 @@ public sealed class SlideShowMediaController
                 _fileWriter.Delete(slot.TempPath);
         }
         _slots.Clear();
+        _activeSlide = null;
         _captionTimer.Stop();
     }
 

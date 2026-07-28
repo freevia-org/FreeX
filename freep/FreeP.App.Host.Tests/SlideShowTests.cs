@@ -1734,6 +1734,40 @@ public sealed class SlideShowMediaControllerTests
     }
 
     [StaFact]
+    public void UpdateLayout_RepositionsCaptionOverlayAfterCanvasResize()
+    {
+        var fakeWriter = new FakeFileWriter();
+        var overlay = new System.Windows.Controls.Canvas();
+        var ctrl = new SlideShowMediaController(overlay, fakeWriter);
+        var slide = SlideWithMedia(MakeMediaShape());
+        var track = new PresentationMediaTranscriptTrackDescriptor(
+            SlideIndex: 0,
+            ShapeId: 1,
+            ShapeName: "Video1",
+            TrackIndex: 0,
+            Label: "English",
+            Language: "en-US",
+            Source: "captions.vtt",
+            ContentType: "text/vtt",
+            Status: PresentationMediaTranscriptTrackStatus.Available,
+            StatusMessage: string.Empty,
+            Cues: [new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Resize me")]);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720, [track]);
+        var caption = overlay.Children.OfType<System.Windows.Controls.Border>().Single();
+        System.Windows.Controls.Canvas.GetLeft(caption).Should().Be(0);
+
+        ctrl.UpdateLayout(slide, 1280, 720);
+
+        System.Windows.Controls.Canvas.GetLeft(caption).Should().Be(160);
+        caption.Width.Should().Be(960);
+
+        ctrl.UpdateLayout(new Slide(), 1280, 720);
+        overlay.Children.OfType<System.Windows.Controls.Border>()
+            .Should().BeEmpty("a size event for a new slide must not leave old media overlays behind");
+    }
+
+    [StaFact]
     public void Teardown_AfterEnter_DeletesWrittenFiles()
     {
         var fakeWriter = new FakeFileWriter();

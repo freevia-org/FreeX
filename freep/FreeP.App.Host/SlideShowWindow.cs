@@ -255,6 +255,7 @@ public sealed class SlideShowWindow : Window
         MouseLeftButtonDown  += OnMouseLeftButtonDown;
         MouseLeftButtonUp    += OnMouseLeftButtonUp;
         MouseMove            += OnMouseMove;
+        SizeChanged          += (_, _) => SyncMediaOverlayLayout();
         Loaded               += (_, _) => { Focus(); DisplayCurrentSlide(animated: false); };
         Closed               += (_, _) => Teardown();
     }
@@ -923,6 +924,17 @@ public sealed class SlideShowWindow : Window
     }
 
     private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
+
+    private void SyncMediaOverlayLayout()
+    {
+        var slide = _controller.CurrentSlide;
+        if (slide is null)
+            return;
+
+        var width = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : _slideDipW;
+        var height = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
+        _mediaController.UpdateLayout(slide, width, height);
+    }
 
     /// <summary>Instantly shows a slide without any transition animation.</summary>
     private void ShowSlideInstant(Slide slide)

@@ -132,6 +132,21 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void SlideShowMediaInteractionPlanner_RecomputesLetterboxBoundsAfterCanvasResize()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(MediaShape(10, 0, 0, 10, 10, embedded: true));
+
+        var initial = SlideShowMediaInteractionPlanner.BuildSlidePlan(
+            slide, 10, 10, 10, 10).Single();
+        var resized = SlideShowMediaInteractionPlanner.BuildSlidePlan(
+            slide, 10, 10, 20, 10).Single();
+
+        initial.Bounds.Should().Be(new LayoutRect(0, 0, 10, 10));
+        resized.Bounds.Should().Be(new LayoutRect(5, 0, 10, 10));
+    }
+
+    [Fact]
     public void BevelGeometryHelper_MapsSurfaceDimensionsToVisibleFootprint()
     {
         var dimensions = BevelGeometryHelper.GetRenderDimensions(
