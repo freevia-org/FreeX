@@ -85,7 +85,7 @@ public sealed class ParagraphShadingParityTests
 
         source.Should().Contain("private sealed class CharacterShadingCommand");
         source.Should().Contain("editor.SetCharacterShading(hex)");
-        source.Should().Contain("Content = \"No Color\"");
+        source.Should().Contain("Content = CharacterFormattingPickerPlanner.NoColorLabel");
         source.Should().Contain("#FFF2CC");
     }
 
@@ -126,7 +126,7 @@ public sealed class ParagraphShadingParityTests
 
         source.Should().Contain("private sealed class CharacterBorderCommand");
         source.Should().Contain("editor.SetCharacterBorder(border)");
-        source.Should().Contain("Content = \"No Border\"");
+        source.Should().Contain("Content = CharacterFormattingPickerPlanner.NoBorderLabel");
         source.Should().Contain("#0070C0");
     }
 
