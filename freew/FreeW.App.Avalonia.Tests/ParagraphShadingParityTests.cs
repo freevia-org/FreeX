@@ -48,6 +48,47 @@ public sealed class ParagraphShadingParityTests
         source.Should().Contain("#FFF2CC");
     }
 
+    [Fact]
+    public void Avalonia_character_shading_route_exposes_Wpf_palette_and_applies_explicit_choices()
+    {
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+        var shading = definition.Tabs
+            .SelectMany(tab => tab.Groups)
+            .SelectMany(group => group.Controls)
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.char-shading");
+
+        shading.Menu.Items.Select(item => item.CommandId?.Value)
+            .Should().Contain(new[] { "freew.char-shading.light-blue", "freew.char-shading.none" });
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Shaded"));
+        var editor = new DocumentView();
+        editor.LoadDocument(document);
+        editor.SelectAll();
+        var registry = FreeWAvaloniaRibbonCommands.Build(editor, CreateCallbacks());
+
+        Execute(registry, "freew.char-shading.light-blue");
+        ((Paragraph)document.Blocks[0]).Runs.All(run => run.Formatting.CharacterShadingHex == "#DEEBF7")
+            .Should().BeTrue();
+        Execute(registry, "freew.char-shading.none");
+        ((Paragraph)document.Blocks[0]).Runs.All(run => run.Formatting.CharacterShadingHex is null)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void Wpf_character_shading_remains_the_authority_for_palette_behavior()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
+
+        source.Should().Contain("private sealed class CharacterShadingCommand");
+        source.Should().Contain("editor.SetCharacterShading(hex)");
+        source.Should().Contain("Content = \"No Color\"");
+        source.Should().Contain("#FFF2CC");
+    }
+
     private static void Execute(RibbonCommandRegistry registry, string id)
     {
         registry.TryGet(new RibbonCommandId(id), out var command)

@@ -57,6 +57,25 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("No Color", new RibbonCommandId("freew.para-shading.none")),
         });
 
+    private static RibbonMenu BuildCharacterShadingMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Yellow", new RibbonCommandId("freew.char-shading.yellow")),
+            new("Green", new RibbonCommandId("freew.char-shading.green")),
+            new("Cyan", new RibbonCommandId("freew.char-shading.cyan")),
+            new("Gold", new RibbonCommandId("freew.char-shading.gold")),
+            new("Red", new RibbonCommandId("freew.char-shading.red")),
+            new("Gray", new RibbonCommandId("freew.char-shading.gray")),
+            new("Light Gray", new RibbonCommandId("freew.char-shading.light-gray")),
+            new("Light Yellow", new RibbonCommandId("freew.char-shading.light-yellow")),
+            new("Light Blue", new RibbonCommandId("freew.char-shading.light-blue")),
+            new("Light Green", new RibbonCommandId("freew.char-shading.light-green")),
+            new("Light Peach", new RibbonCommandId("freew.char-shading.light-peach")),
+            new("Very Light Gray", new RibbonCommandId("freew.char-shading.very-light-gray")),
+            RibbonMenuItem.Separator(),
+            new("No Color", new RibbonCommandId("freew.char-shading.none")),
+        });
+
     private static RibbonMenu BuildDisplayForReviewMenu() =>
         new(new RibbonMenuItem[]
         {
@@ -523,7 +542,11 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Toggle("freew.allcaps",         FreeWRibbonText.AllCapsCommand.Label);
                     g.Button("freew.highlight",       FreeWRibbonText.HighlightCompactCommand.Label);
                     g.Button("freew.char-border",     FreeWRibbonText.CharacterBorderCommand.Label);
-                    g.Button("freew.char-shading",    FreeWRibbonText.CharacterShadingCommand.Label);
+                    g.Dropdown("freew.char-shading",  FreeWRibbonText.CharacterShadingCommand.Label, BuildCharacterShadingMenu(), d => d with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill)
+                    });
                     g.Button("freew.grow-font",       FreeWRibbonText.GrowFontCompactCommand.Label);
                     g.Button("freew.shrink-font",     FreeWRibbonText.ShrinkFontCompactCommand.Label);
                     g.Button("freew.clear-formatting", FreeWRibbonText.ClearFormattingCompactCommand.Label);

@@ -137,7 +137,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.subscript",        new ActionRibbonCommand(editor.ToggleSubscript));
         r.Register("freew.highlight",        new ValueRibbonCommand(value => editor.SetHighlightColor(value)));
         r.Register("freew.char-border",      new ActionRibbonCommand(() => editor.SetCharacterBorder(new ParagraphBorder("#000000", 0.5))));
-        r.Register("freew.char-shading",     new ActionRibbonCommand(() => editor.SetCharacterShading("#FFF2CC")));
+        r.Register("freew.char-shading",     new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        RegisterCharacterShadingPalette(r, editor);
         r.Register("freew.grow-font",        new ActionRibbonCommand(editor.GrowFont));
         r.Register("freew.shrink-font",      new ActionRibbonCommand(editor.ShrinkFont));
         r.Register("freew.clear-formatting", new ActionRibbonCommand(editor.ClearFormatting));
@@ -924,6 +925,30 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.para-shading.light-peach", "#FCE4D6");
         Add(r, editor, "freew.para-shading.very-light-gray", "#EDEDED");
         Add(r, editor, "freew.para-shading.none", null);
+    }
+
+    /// <summary>
+    /// Registers the WPF-authority character shading palette. The top-level command only opens
+    /// the ribbon menu; formatting changes happen only after an explicit swatch or No Color choice.
+    /// </summary>
+    private static void RegisterCharacterShadingPalette(RibbonCommandRegistry r, DocumentView editor)
+    {
+        static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
+            reg.Register(id, new ActionRibbonCommand(() => ed.SetCharacterShading(hex)));
+
+        Add(r, editor, "freew.char-shading.yellow", "#FFFF00");
+        Add(r, editor, "freew.char-shading.green", "#92D050");
+        Add(r, editor, "freew.char-shading.cyan", "#00B0F0");
+        Add(r, editor, "freew.char-shading.gold", "#FFC000");
+        Add(r, editor, "freew.char-shading.red", "#FF0000");
+        Add(r, editor, "freew.char-shading.gray", "#D9D9D9");
+        Add(r, editor, "freew.char-shading.light-gray", "#A6A6A6");
+        Add(r, editor, "freew.char-shading.light-yellow", "#FFF2CC");
+        Add(r, editor, "freew.char-shading.light-blue", "#DEEBF7");
+        Add(r, editor, "freew.char-shading.light-green", "#E2EFDA");
+        Add(r, editor, "freew.char-shading.light-peach", "#FCE4D6");
+        Add(r, editor, "freew.char-shading.very-light-gray", "#EDEDED");
+        Add(r, editor, "freew.char-shading.none", null);
     }
 
     /// <summary>
