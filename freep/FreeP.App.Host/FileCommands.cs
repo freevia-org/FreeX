@@ -6,6 +6,7 @@ using Free.Shared.Pdf.Wpf;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
+using FreeP.App.Recording.Windows;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
 using Microsoft.Win32;
@@ -504,7 +505,9 @@ internal sealed class FileCommands
             CanCaptureNarration: false,
             CanCaptureCameraAndMedia: false,
             capability.CanEncodeMp4
-                ? "FFmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available."
+                ? string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal)
+                    ? "Windows MediaComposition video export is available; narration and captured camera picture-in-picture are unavailable."
+                    : "FFmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available."
                 : capability.Reason);
 
     /// <summary>Save-before-close gate, called from the window's Closing handler.</summary>

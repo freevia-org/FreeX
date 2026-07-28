@@ -655,7 +655,7 @@ public sealed partial class MainWindow : Window
         _nativeOutputCapabilities = nativeOutputCapabilities ??
             LinuxNativeOutputCapabilities.Unavailable("Native output capability detection is pending.");
         _nativePrintAdapter = nativePrintAdapter ?? CreateNativePrintAdapter(_nativeOutputCapabilities.Print);
-        _videoExportAdapter = videoExportAdapter ?? new LinuxVideoExportAdapter(_nativeOutputCapabilities.Video);
+        _videoExportAdapter = videoExportAdapter ?? CreateVideoExportAdapter(_nativeOutputCapabilities.Video);
         _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(_nativeOutputCapabilities.Print);
         _videoExportHostCapabilities = BuildVideoExportHostCapabilities(_nativeOutputCapabilities.Video);
         _nativeOutputCapabilityDetector = nativeOutputCapabilityDetector ??
@@ -907,7 +907,7 @@ public sealed partial class MainWindow : Window
                 {
                     _nativeOutputCapabilities = task.Result;
                     _nativePrintAdapter = CreateNativePrintAdapter(_nativeOutputCapabilities.Print);
-                    _videoExportAdapter = new LinuxVideoExportAdapter(_nativeOutputCapabilities.Video);
+                    _videoExportAdapter = CreateVideoExportAdapter(_nativeOutputCapabilities.Video);
                     _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(_nativeOutputCapabilities.Print);
                     _videoExportHostCapabilities = BuildVideoExportHostCapabilities(_nativeOutputCapabilities.Video);
                     if (_printOptionsPaneHost?.IsVisible == true)
@@ -4574,6 +4574,16 @@ public sealed partial class MainWindow : Window
             return WindowsNativePrintOutput.CreateAdapter(capability);
 #endif
         return new LinuxNativePrintHandoffAdapter(capability);
+    }
+
+    private static ILinuxVideoExportAdapter CreateVideoExportAdapter(
+        LinuxVideoEncoderCapability capability)
+    {
+#if FREEP_WINDOWS_CAPTURE
+        if (OperatingSystem.IsWindows())
+            return WindowsNativePrintOutput.CreateVideoAdapter(capability);
+#endif
+        return new LinuxVideoExportAdapter(capability);
     }
 
     private static PresentationVideoExportHandoffHostCapabilities BuildVideoExportHostCapabilities(

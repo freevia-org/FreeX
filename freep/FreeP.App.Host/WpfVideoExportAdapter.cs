@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Text;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
+using FreeP.App.Recording.Windows;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
@@ -81,6 +82,15 @@ internal static class WpfVideoEncoderCapabilityDetector
 
     public static WpfVideoEncoderCapability Detect()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            return new WpfVideoEncoderCapability(
+                true,
+                WindowsNativeVideoExportAdapter.ExecutablePath,
+                "Windows MediaComposition",
+                "Windows video export can encode the shared frame package through MediaComposition; narration and camera muxing remain unavailable on this path.");
+        }
+
         var executable = FindExecutable("ffmpeg");
         if (executable is null)
             return WpfVideoEncoderCapability.Unavailable(
@@ -196,6 +206,34 @@ internal sealed class WpfVideoExportAdapter : IWpfVideoProcessRunner
         if (!_capability.CanEncodeMp4 || string.IsNullOrWhiteSpace(_capability.ExecutablePath) ||
             string.IsNullOrWhiteSpace(_capability.EncoderName))
             return WpfVideoExportResult.Failed(_capability.Reason, outputPath);
+
+        if (string.Equals(
+                _capability.ExecutablePath,
+                WindowsNativeVideoExportAdapter.ExecutablePath,
+                StringComparison.Ordinal))
+        {
+            var nativeResult = await new WindowsNativeVideoExportAdapter(
+                    new LinuxVideoEncoderCapability(
+                        CanEncodeMp4: true,
+                        ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
+                        EncoderName: _capability.EncoderName,
+                        CanCaptureNarration: false,
+                        Reason: _capability.Reason))
+                .ExportAsync(package, outputPath, cancellationToken, mediaArtifacts)
+                .ConfigureAwait(false);
+            return nativeResult.Canceled
+                ? WpfVideoExportResult.CanceledResult(outputPath)
+                : nativeResult.Succeeded
+                    ? WpfVideoExportResult.Success(
+                        outputPath,
+                        nativeResult.EncoderName ?? _capability.EncoderName,
+                        nativeResult.ByteCount,
+                        nativeResult.MuxedNarrationTrackCount,
+                        nativeResult.MuxedCameraTrackCount)
+                    : WpfVideoExportResult.Failed(
+                        nativeResult.FailureReason ?? nativeResult.StatusText,
+                        outputPath);
+        }
 
         var validation = PresentationVideoFramePackageExecutor.ValidatePackage(package);
         if (!validation.IsValid)

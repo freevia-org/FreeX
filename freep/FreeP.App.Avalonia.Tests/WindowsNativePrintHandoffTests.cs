@@ -13,6 +13,7 @@ public sealed class WindowsNativePrintHandoffTests
 
         source.Should().Contain("WindowsNativePrintOutput.Detect()");
         source.Should().Contain("WindowsNativePrintOutput.CreateAdapter(capability)");
+        source.Should().Contain("WindowsNativePrintOutput.CreateVideoAdapter(capability)");
         source.Should().Contain("FREEP_WINDOWS_CAPTURE");
     }
 
@@ -31,5 +32,34 @@ public sealed class WindowsNativePrintHandoffTests
         result.Succeeded.Should().BeFalse();
         result.Canceled.Should().BeFalse();
         result.FailureReason.Should().Contain("valid non-empty PDF");
+    }
+
+    [Fact]
+    public void WindowsDetectionAdvertisesNativeVideoComposition()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var capability = WindowsNativePrintOutput.Detect().Video;
+
+        capability.CanEncodeMp4.Should().BeTrue();
+        capability.ExecutablePath.Should().Be(WindowsNativeVideoExportAdapter.ExecutablePath);
+        capability.EncoderName.Should().Be("Windows MediaComposition");
+        capability.CanCaptureNarration.Should().BeFalse();
+    }
+
+    [Fact]
+    public void WindowsVideoCapabilitySelectsTheNativeAdapter()
+    {
+        var capability = new LinuxVideoEncoderCapability(
+            CanEncodeMp4: true,
+            ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
+            EncoderName: "Windows MediaComposition",
+            CanCaptureNarration: false,
+            Reason: "ready");
+
+        var adapter = WindowsNativePrintOutput.CreateVideoAdapter(capability);
+
+        adapter.Should().BeOfType<WindowsNativeVideoExportAdapter>();
     }
 }
