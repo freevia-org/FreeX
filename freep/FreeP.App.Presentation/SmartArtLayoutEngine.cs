@@ -501,7 +501,7 @@ public static class SmartArtLayoutEngine
     {
         // Negative offsets are valid for objects that intentionally extend beyond the slide;
         // only the frame extents and the generated geometry are bounded here.
-        if (nodes.Count is < 1 or > 12 || fcx <= 0 || fcy <= 0)
+        if (nodes.Count < 1 || fcx <= 0 || fcy <= 0)
             return null;
 
         // Keep malformed imported text on the cached drawing path rather than allowing a
