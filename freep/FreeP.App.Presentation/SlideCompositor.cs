@@ -168,11 +168,14 @@ public static class SlideCompositor
 
             // Wave 25A: preserved modern objects — fallback preview image or grey placeholder.
             case SlideShapeKind.Zoom:
-            case SlideShapeKind.Ink:
             case SlideShapeKind.Model3d:
             case SlideShapeKind.PreservedObject:
                 if (shape.PreservedObject is not null)
                     ComposePreservedObject(shape, slide, presentation, theme, ops, effectiveClrMap);
+                break;
+
+            case SlideShapeKind.Ink:
+                ComposeInk(shape, slide, presentation, theme, ops, effectiveClrMap);
                 break;
 
             default:
@@ -527,7 +530,7 @@ public static class SlideCompositor
     // ─── Preserved modern objects (Wave 25A: zoom / ink / 3D / unknown) ─────────────────────
 
     /// <summary>
-    /// Renders a preserved modern object (slide zoom, ink annotation, 3D model, or unknown
+    /// Renders a preserved modern object (slide zoom, 3D model, or unknown
     /// graphicFrame) by drawing its fallback preview image if present, or a grey rectangle
     /// placeholder when no preview is available.
     /// </summary>
@@ -565,6 +568,69 @@ public static class SlideCompositor
                 RotationDeg = anchor.RotationDeg,
             });
         }
+    }
+
+    private static void ComposeInk(
+        SlideShape shape,
+        Slide slide,
+        PresentationModel presentation,
+        PresentationTheme theme,
+        List<DrawOp> ops,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
+    {
+        var inkStrokes = SlideShowInkRenderPlanner.Build(shape, presentation);
+        var slideBounds = new LayoutRect(
+            0,
+            0,
+            presentation.SlideSizeCxEmu / EmuPerDip,
+            presentation.SlideSizeCyEmu / EmuPerDip);
+
+        if (inkStrokes.Count > 0)
+        {
+            foreach (var stroke in inkStrokes)
+            {
+                if (stroke.Points.Count == 0)
+                    continue;
+
+                var path = new CustomGeometryPath
+                {
+                    PathW = Math.Max(1, (long)Math.Round(slideBounds.Width)),
+                    PathH = Math.Max(1, (long)Math.Round(slideBounds.Height)),
+                    Fill = false,
+                    Stroke = true,
+                };
+                path.Segments.Add(new CustomSegment(
+                    CustomSegmentKind.MoveTo,
+                    stroke.Points[0].X,
+                    stroke.Points[0].Y));
+                for (var pointIndex = 1; pointIndex < stroke.Points.Count; pointIndex++)
+                {
+                    var point = stroke.Points[pointIndex];
+                    path.Segments.Add(new CustomSegment(
+                        CustomSegmentKind.LineTo,
+                        point.X,
+                        point.Y));
+                }
+
+                ops.Add(new DrawOp.Shape
+                {
+                    ShapeId = shape.Id,
+                    Geometry = CustomGeometryBuilder.BuildCustom([path], slideBounds),
+                    Fill = ResolvedFill.None.Instance,
+                    Outline = new ResolvedOutline.Visible(
+                        stroke.Color,
+                        stroke.ThicknessDip,
+                        OutlineDash.Solid,
+                        stroke.Alpha),
+                    BoundsDip = slideBounds,
+                });
+            }
+
+            return;
+        }
+
+        // Preserve the existing fallback behavior for malformed or unsupported InkML.
+        ComposePreservedObject(shape, slide, presentation, theme, ops, effectiveClrMap);
     }
 
     // ─── Media (audio/video) ────────────────────────────────────────────────────────────────

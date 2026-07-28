@@ -32,7 +32,8 @@ public enum PreservedObjectKind
 /// Rendering: the fallback/preview image (if any) is stored in the parent
 /// <see cref="SlideShape.Picture"/> field and drawn by the compositor exactly like an OLE
 /// object — live Slide Zoom and Section Zoom navigation use the target metadata captured below;
-/// 3D interaction and ink replay remain deferred.
+/// 3D interaction remains deferred; InkML strokes are replayed when the preserved content part
+/// is readable, while the original payload remains authoritative for save/reopen.
 /// </summary>
 public sealed class PreservedObjectInfo
 {

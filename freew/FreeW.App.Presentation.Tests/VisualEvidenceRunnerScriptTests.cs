@@ -5,7 +5,7 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class VisualEvidenceRunnerScriptTests
 {
     [Fact]
-    public void WordBaselineEvidenceRunner_UsesSoftwareFallbackForWpfEvidenceRender()
+    public void WordBaselineEvidenceRunner_UsesTrustedWpfCompositeUnlessFallbackIsRequested()
     {
         var source = File.ReadAllText(RepositoryFile(
             "tools",
@@ -13,7 +13,11 @@ public sealed class VisualEvidenceRunnerScriptTests
 
         source.Should().Contain("FreeW.FidelityRender");
         source.Should().Contain("[int]$MaxPagesPerDocument = 4");
-        source.Should().Contain("\"--composite\", \"--software-fallback\"");
+        source.Should().Contain("[switch]$UseSoftwareFallback");
+        source.Should().Contain("$wpfRenderArgs = @(");
+        source.Should().Contain("if ($UseSoftwareFallback)");
+        source.Should().Contain("$wpfRenderArgs += \"--software-fallback\"");
+        source.Should().Contain("Invoke-DotNetRunNoBuild $fidelityRenderProject $wpfRenderArgs");
         source.Should().Contain("-AllowMissingWord");
         source.Should().Contain("[switch]$UseVisibleWordPublish");
         source.Should().Contain("Export-WordPdfsVisible.ps1");
