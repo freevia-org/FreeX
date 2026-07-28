@@ -2374,12 +2374,6 @@ public sealed partial class MainWindow : Window
                 continue;
             }
 
-            if (plan.RequiresSmartArtPicturePayload)
-            {
-                r.Register(plan.CommandId, new ActionRibbonCommand(() => _ = InsertPictureSmartArtFromFileAsync(plan)));
-                continue;
-            }
-
             if (plan.RequiresMediaPayload)
             {
                 var isVideo = plan.CommandId == SlideObjectInsertionPlanner.VideoCommandId;
@@ -3206,45 +3200,6 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.InsertPictureCommand, ex.Message);
-        }
-    }
-
-    private async Task InsertPictureSmartArtFromFileAsync(SlideObjectInsertionPlan plan)
-    {
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable("Picture Caption List");
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                "Picture Caption List",
-                [PictureFileType]));
-
-        if (file is null)
-            return;
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-
-            var picture = SlideObjectInsertionPlanner.CreatePicturePayload(memory.ToArray(), file.Name);
-            var payload = SlideObjectInsertionPlanner.CreateSmartArtPicturePayload([picture]);
-            var added = SlideObjectInsertionPlanner.Apply(
-                Editor,
-                plan,
-                smartArtPicturePayload: payload);
-
-            if (added is not null)
-                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed("Picture Caption List", ex.Message);
         }
     }
 

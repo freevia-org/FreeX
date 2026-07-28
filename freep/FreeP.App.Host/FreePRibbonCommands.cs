@@ -879,20 +879,6 @@ internal static class FreePRibbonCommands
                 continue;
             }
 
-            if (plan.RequiresSmartArtPicturePayload)
-            {
-                if (!includePictureCommand)
-                    continue;
-
-                registry.Register(plan.CommandId, new ActionRibbonCommand(() =>
-                {
-                    var payload = TryPickSmartArtPicturePayload();
-                    if (payload is not null)
-                        SlideObjectInsertionPlanner.Apply(editor, plan, smartArtPicturePayload: payload);
-                }));
-                continue;
-            }
-
             if (plan.RequiresMediaPayload)
             {
                 if (!includePictureCommand)
@@ -967,14 +953,6 @@ internal static class FreePRibbonCommands
         {
             return null;
         }
-    }
-
-    private static SlideObjectSmartArtPicturePayload? TryPickSmartArtPicturePayload()
-    {
-        var picture = TryPickPicturePayload();
-        return picture is null
-            ? null
-            : SlideObjectInsertionPlanner.CreateSmartArtPicturePayload([picture]);
     }
 
     // ── Transition helpers ────────────────────────────────────────────────────────

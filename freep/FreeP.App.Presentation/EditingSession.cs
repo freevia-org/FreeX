@@ -1895,6 +1895,19 @@ public sealed class EditingSession
             SmartArt = smartArt,
         };
 
+        // Seed the native drawing cache immediately so placeholder-only picture layouts
+        // are visible to package consumers before the first interactive edit.
+        var cacheRefresh = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            shape.OffsetXEmu,
+            shape.OffsetYEmu,
+            shape.ExtentCxEmu,
+            shape.ExtentCyEmu,
+            Presentation.Theme,
+            CurrentSlide?.ColorMapOverride);
+        if (!cacheRefresh.Applied)
+            throw new InvalidOperationException(cacheRefresh.Message);
+
         AddShape(shape);
         return shape;
     }
