@@ -1480,6 +1480,12 @@
   <data name="Ribbon_Command_SmartArtOrgChart_KeyTip" xml:space="preserve">
     <value>O</value>
   </data>
+  <data name="Ribbon_Command_SmartArtNameAndTitleOrgChart_Label" xml:space="preserve">
+    <value>Name and Title Organization Chart</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtNameAndTitleOrgChart_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
   <data name="Ribbon_Command_SmartArtPictureCaptionList_Label" xml:space="preserve">
     <value>Picture Caption List</value>
   </data>

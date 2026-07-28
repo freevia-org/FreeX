@@ -2742,7 +2742,7 @@ public static class SmartArtLayoutEngine
             return false;
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
-        return string.Equals(id.Split('/').Last(), "orgchart", StringComparison.Ordinal);
+        return id.Split('/').Last() is "orgchart" or "nameandtitleorgchart";
     }
 
     private static bool IsHorizontalHierarchyLayout(string uniqueId)

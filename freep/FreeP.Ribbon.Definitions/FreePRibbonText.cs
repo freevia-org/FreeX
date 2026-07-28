@@ -413,6 +413,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtHierarchy3Command { get; } = new("Ribbon_Command_SmartArtHierarchy3_Label", "Ribbon_Command_SmartArtHierarchy3_KeyTip");
     public static RibbonText SmartArtHorizontalHierarchyCommand { get; } = new("Ribbon_Command_SmartArtHorizontalHierarchy_Label", "Ribbon_Command_SmartArtHorizontalHierarchy_KeyTip");
     public static RibbonText SmartArtOrgChartCommand { get; } = new("Ribbon_Command_SmartArtOrgChart_Label", "Ribbon_Command_SmartArtOrgChart_KeyTip");
+    public static RibbonText SmartArtNameAndTitleOrgChartCommand { get; } = new("Ribbon_Command_SmartArtNameAndTitleOrgChart_Label", "Ribbon_Command_SmartArtNameAndTitleOrgChart_KeyTip");
     public static RibbonText SmartArtPictureCaptionListCommand { get; } = new("Ribbon_Command_SmartArtPictureCaptionList_Label", "Ribbon_Command_SmartArtPictureCaptionList_KeyTip");
     public static RibbonText SmartArtPictureAccentListCommand { get; } = new("Ribbon_Command_SmartArtPictureAccentList_Label", "Ribbon_Command_SmartArtPictureAccentList_KeyTip");
     public static RibbonText SmartArtPictureStackCommand { get; } = new("Ribbon_Command_SmartArtPictureStack_Label", "Ribbon_Command_SmartArtPictureStack_KeyTip");

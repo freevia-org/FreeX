@@ -111,6 +111,7 @@ public enum SmartArtLayoutPreset
     Hierarchy3,
     HorizontalHierarchy,
     OrgChart,
+    NameAndTitleOrgChart,
     PictureCaptionList,
     PictureAccentList,
     PictureStack,
@@ -241,6 +242,7 @@ public static class SmartArtAuthoringPlanner
     public const string Hierarchy3LayoutCommandId = "freep.smartart.layout.hierarchy-3";
     public const string HorizontalHierarchyLayoutCommandId = "freep.smartart.layout.horizontal-hierarchy";
     public const string OrgChartLayoutCommandId = "freep.smartart.layout.org-chart";
+    public const string NameAndTitleOrgChartLayoutCommandId = "freep.smartart.layout.name-and-title-org-chart";
     public const string PictureCaptionListLayoutCommandId = "freep.smartart.layout.picture-caption-list";
     public const string PictureAccentListLayoutCommandId = "freep.smartart.layout.picture-accent-list";
     public const string PictureStackLayoutCommandId = "freep.smartart.layout.picture-stack";
@@ -560,6 +562,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.OrgChart =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/orgChart", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.NameAndTitleOrgChart =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/nameAndTitleOrgChart", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.PictureCaptionList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList", SmartArtFamily.List),
             SmartArtLayoutPreset.PictureAccentList =>
