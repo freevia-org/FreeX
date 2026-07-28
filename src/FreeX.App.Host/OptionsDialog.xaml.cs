@@ -187,6 +187,7 @@ public partial class OptionsDialog : Window
             _ => 0
         };
         UpdateAfterEnterDirectionState();
+        OptAdvancedFillHandle.IsChecked = _opts.EnableFillHandleAndCellDragAndDrop;
         OptAdvancedAutoComplete.IsChecked = _opts.EnableAutoCompleteForCellValues;
         OptShowGridlines.IsChecked = _opts.ShowGridlines;
         OptShowHeadings.IsChecked = _opts.ShowHeadings;
@@ -581,6 +582,7 @@ public partial class OptionsDialog : Window
                 3 => FreeXEnterDirection.Left,
                 _ => FreeXEnterDirection.Down
             },
+            EnableFillHandleAndCellDragAndDrop = OptAdvancedFillHandle.IsChecked == true,
             EnableAutoCompleteForCellValues = OptAdvancedAutoComplete.IsChecked == true,
             ShowGridlines = OptShowGridlines.IsChecked == true,
             ShowHeadings = OptShowHeadings.IsChecked == true,

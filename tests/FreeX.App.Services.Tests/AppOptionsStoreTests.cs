@@ -152,6 +152,7 @@ public sealed class AppOptionsStoreTests
         options.FormulaBarExpanded.Should().BeFalse();
         options.MoveSelectionAfterEnter.Should().BeTrue();
         options.AfterEnterDirection.Should().Be(AppOptionsEnterDirection.Down);
+        options.EnableFillHandleAndCellDragAndDrop.Should().BeTrue();
         options.ShowGridlines.Should().BeTrue();
         options.ShowHeadings.Should().BeTrue();
         options.ObjectsDisplay.Should().Be(AppOptionsObjectDisplay.All);
@@ -162,6 +163,17 @@ public sealed class AppOptionsStoreTests
         options.CrashAnalyticsPrompted.Should().BeFalse();
         options.PdfExportLanguage.Should().Be(AppOptions.DefaultPdfExportLanguage);
         options.LastPersistenceError.Should().BeNull();
+    }
+
+    [Fact]
+    public void FillHandleAndCellDragAndDrop_RoundTripsThroughSharedStore()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "options.json");
+        var options = new AppOptions { EnableFillHandleAndCellDragAndDrop = false };
+
+        AppOptionsStore.SaveToPath(options, path).Should().BeTrue();
+        AppOptionsStore.LoadFromPath(path).EnableFillHandleAndCellDragAndDrop.Should().BeFalse();
     }
 
     private sealed class TestApplicationDataPathProvider(string path) : IApplicationDataPathProvider

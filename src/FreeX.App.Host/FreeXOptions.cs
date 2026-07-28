@@ -58,6 +58,7 @@ public sealed class FreeXOptions : IStatusBarOptionVisibilityStore
     public bool FormulaBarExpanded { get; set; }
     public bool MoveSelectionAfterEnter { get; set; } = true;
     public FreeXEnterDirection AfterEnterDirection { get; set; } = FreeXEnterDirection.Down;
+    public bool EnableFillHandleAndCellDragAndDrop { get; set; } = true;
     public bool EnableAutoCompleteForCellValues { get; set; } = true;
     public bool ShowGridlines { get; set; } = true;
     public bool ShowHeadings { get; set; } = true;
@@ -169,6 +170,7 @@ public sealed class FreeXOptions : IStatusBarOptionVisibilityStore
             FormulaBarExpanded = FormulaBarExpanded,
             MoveSelectionAfterEnter = MoveSelectionAfterEnter,
             AfterEnterDirection = (AppOptionsEnterDirection)AfterEnterDirection,
+            EnableFillHandleAndCellDragAndDrop = EnableFillHandleAndCellDragAndDrop,
             EnableAutoCompleteForCellValues = EnableAutoCompleteForCellValues,
             ShowGridlines = ShowGridlines,
             ShowHeadings = ShowHeadings,
@@ -220,6 +222,7 @@ public sealed class FreeXOptions : IStatusBarOptionVisibilityStore
         FormulaBarExpanded = options.FormulaBarExpanded;
         MoveSelectionAfterEnter = options.MoveSelectionAfterEnter;
         AfterEnterDirection = (FreeXEnterDirection)options.AfterEnterDirection;
+        EnableFillHandleAndCellDragAndDrop = options.EnableFillHandleAndCellDragAndDrop;
         EnableAutoCompleteForCellValues = options.EnableAutoCompleteForCellValues;
         ShowGridlines = options.ShowGridlines;
         ShowHeadings = options.ShowHeadings;

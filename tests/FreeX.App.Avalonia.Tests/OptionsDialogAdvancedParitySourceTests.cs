@@ -48,6 +48,17 @@ public sealed class OptionsDialogAdvancedParitySourceTests
     }
 
     [Fact]
+    public void AdvancedOptions_FillHandleAndCellDragAndDropUsesSharedPersistedState()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+
+        source.Should().Contain("isChecked: current.EnableFillHandleAndCellDragAndDrop");
+        source.Should().Contain("OptionsEnableFillHandleAndCellDragAndDropCheckBox");
+        source.Should().Contain("projected.EnableFillHandleAndCellDragAndDrop = advancedFillHandleBox.IsChecked == true");
+        source.Should().NotContain("isChecked: true,\n            isEnabled: false");
+    }
+
+    [Fact]
     public void ProofingOptions_UsesWpfGeometryAndKeyboardCategoryNavigation()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));

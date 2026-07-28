@@ -7768,6 +7768,9 @@ public sealed partial class MainWindow : Window
 
     private bool TryBeginAutofillDrag(PointerPressedEventArgs args, Control capture, CellAddress address)
     {
+        if (!EnableFillHandleAndCellDragAndDrop)
+            return false;
+
         if (!args.GetCurrentPoint(capture).Properties.IsLeftButtonPressed ||
             !IsPointerOnAutofillHandle(args))
         {
@@ -7851,6 +7854,9 @@ public sealed partial class MainWindow : Window
 
     private bool IsPointerOnAutofillHandle(PointerEventArgs args)
     {
+        if (!EnableFillHandleAndCellDragAndDrop)
+            return false;
+
         if (_autofillHandleVisual is not { } handle)
             return false;
 
@@ -7942,6 +7948,9 @@ public sealed partial class MainWindow : Window
 
     private bool TryBeginSelectionMoveDrag(PointerPressedEventArgs args, Control capture, CellAddress address)
     {
+        if (!EnableFillHandleAndCellDragAndDrop)
+            return false;
+
         // Excel's Ctrl+drag-to-copy gesture: holding Ctrl while dragging a selection's border
         // copies it to the destination instead of moving it (M33). The actual copy-vs-move
         // decision is resolved from the drop-time modifier state in EndCellSelectionDragAsync,
@@ -7969,6 +7978,9 @@ public sealed partial class MainWindow : Window
 
     private bool IsPointerOnSelectionMoveBorder(PointerEventArgs args)
     {
+        if (!EnableFillHandleAndCellDragAndDrop)
+            return false;
+
         if (IsPointerOnAutofillHandle(args))
             return false;
 
@@ -9803,7 +9815,7 @@ public sealed partial class MainWindow : Window
             _activeSelectionHasBottomEdge = hasBottomEdge;
             _activeSelectionHasRightEdge = hasRightEdge;
 
-            if (!hasRightEdge || !hasBottomEdge)
+            if (!EnableFillHandleAndCellDragAndDrop || !hasRightEdge || !hasBottomEdge)
                 continue;
 
             var handleSize = Math.Max(AutofillHandleSize, AutofillHandleSize * zoomFactor);
@@ -28239,6 +28251,35 @@ public sealed partial class MainWindow : Window
             _cachedUseR1C1ReferenceStyle = value;
             _cachedUseR1C1ReferenceStyleStorePath = storePath;
             _cachedUseR1C1ReferenceStyleWriteTimeUtc = writeTimeUtc;
+            return value;
+        }
+    }
+
+    // Same write-time cache strategy as UseR1C1ReferenceStyle above, for the "Enable fill handle and
+    // cell drag-and-drop" option (Options > Advanced). Both pointer gesture hosts read the same
+    // persisted AppOptions value; keyboard and ribbon fill commands do not use this gate.
+    private static bool? _cachedEnableFillHandleAndCellDragAndDrop;
+    private static DateTime _cachedEnableFillHandleAndCellDragAndDropWriteTimeUtc;
+    private static string? _cachedEnableFillHandleAndCellDragAndDropStorePath;
+
+    private static bool EnableFillHandleAndCellDragAndDrop
+    {
+        get
+        {
+            var storePath = AppOptionsStore.StorePath;
+            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
+
+            if (_cachedEnableFillHandleAndCellDragAndDrop is { } cached &&
+                _cachedEnableFillHandleAndCellDragAndDropStorePath == storePath &&
+                _cachedEnableFillHandleAndCellDragAndDropWriteTimeUtc == writeTimeUtc)
+            {
+                return cached;
+            }
+
+            var value = AppOptionsStore.Load().EnableFillHandleAndCellDragAndDrop;
+            _cachedEnableFillHandleAndCellDragAndDrop = value;
+            _cachedEnableFillHandleAndCellDragAndDropStorePath = storePath;
+            _cachedEnableFillHandleAndCellDragAndDropWriteTimeUtc = writeTimeUtc;
             return value;
         }
     }

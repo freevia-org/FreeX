@@ -1077,7 +1077,7 @@ public partial class GridView
             foreach (var range in selectedRanges)
                 RenderSelectionRange(dc, range, drawHandle: false);
 
-            if (SelectedRange is { } activeRange)
+            if (EnableFillHandleAndCellDragAndDrop && SelectedRange is { } activeRange)
                 RenderSelectionHandle(dc, activeRange);
             RenderActiveCellBox(dc);
             return;
@@ -1085,7 +1085,7 @@ public partial class GridView
 
         if (SelectedRange == null) return;
 
-        RenderSelectionRange(dc, SelectedRange.Value, drawHandle: true);
+        RenderSelectionRange(dc, SelectedRange.Value, drawHandle: EnableFillHandleAndCellDragAndDrop);
         RenderSelectionMovePreview(dc, SelectedRange.Value);
         RenderActiveCellBox(dc);
     }

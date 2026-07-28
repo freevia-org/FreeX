@@ -207,9 +207,7 @@ public sealed partial class OptionsDialogSourceTests
 
         "OptEaseQuickAnalysis",
 
-        "OptEaseAccessibilityDisplay",
-
-        "OptAdvancedFillHandle"
+        "OptEaseAccessibilityDisplay"
 
     ];
 

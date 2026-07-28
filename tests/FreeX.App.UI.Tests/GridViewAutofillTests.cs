@@ -100,4 +100,16 @@ public sealed class GridViewAutofillTests
 
         cursorAssignment.Should().Contain("IsOnAutofillHandle(pos) ? Cursors.Cross");
     }
+
+    [Fact]
+    public void GridViewGestureHitTestsAreGatedBySharedFillHandleOption()
+    {
+        var hitTesting = AppUiSourceTestSupport.ReadAppUiSources("GridView.HitTesting.cs");
+        var input = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Selection.cs");
+
+        hitTesting.Should().Contain("EnableFillHandleAndCellDragAndDrop && GridAutofillPlanner.IsOnHandle");
+        input.Should().Contain("EnableFillHandleAndCellDragAndDrop &&");
+        rendering.Should().Contain("drawHandle: EnableFillHandleAndCellDragAndDrop");
+    }
 }

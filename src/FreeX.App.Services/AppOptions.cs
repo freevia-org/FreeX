@@ -65,6 +65,7 @@ public sealed class AppOptions : INormalizableApplicationOptions, IStatusBarOpti
     public bool FormulaBarExpanded { get; set; }
     public bool MoveSelectionAfterEnter { get; set; } = true;
     public AppOptionsEnterDirection AfterEnterDirection { get; set; } = AppOptionsEnterDirection.Down;
+    public bool EnableFillHandleAndCellDragAndDrop { get; set; } = true;
 
     // Advanced — editing options. Parity with Excel's "Enable AutoComplete for cell values": while
     // typing a plain text entry, offers to complete it from a matching entry already in the same

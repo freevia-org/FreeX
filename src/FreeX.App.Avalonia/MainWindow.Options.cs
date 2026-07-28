@@ -521,8 +521,8 @@ public sealed partial class MainWindow
 
         var advancedFillHandleBox = OptionsCheckBox(
             OptionsText("Options_EnableFillHandleAndCellDragAndDrop"),
-            isChecked: true,
-            isEnabled: false);
+            isChecked: current.EnableFillHandleAndCellDragAndDrop);
+        AutomationProperties.SetAutomationId(advancedFillHandleBox, "OptionsEnableFillHandleAndCellDragAndDropCheckBox");
         var advancedAutoCompleteBox = OptionsCheckBox(
             OptionsText("Options_EnableAutoCompleteForCellValues"),
             isChecked: current.EnableAutoCompleteForCellValues);
@@ -1174,6 +1174,7 @@ public sealed partial class MainWindow
             }
 
             var projected = OptionsDialogPlanner.Project(current, input);
+            projected.EnableFillHandleAndCellDragAndDrop = advancedFillHandleBox.IsChecked == true;
             projected.QuickAccessToolbarBelowRibbon = quickAccessBelowRibbonBox.IsChecked == true;
             projected.QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(quickAccessCommandIds).ToList();
             projected.SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(customDictionaryWords);
@@ -1425,6 +1426,7 @@ public sealed partial class MainWindow
                 "Options_MaximumChange" => "Maximum Change",
                 "Options_WorkingWithFormulas" => "Working with formulas",
                 "Options_EnableAutoCompleteForCellValues" => "Enable AutoComplete for cell values",
+                "Options_EnableFillHandleAndCellDragAndDrop" => "Enable fill handle and cell drag-and-drop",
                 "Options_ErrorCheckingRules" => "Error Checking Rules",
                 "Options_EnableBackgroundErrorChecksFor" => "Enable background error checks for:",
                 "Options_AutoCorrectOptions" => "AutoCorrect options",
@@ -1454,7 +1456,6 @@ public sealed partial class MainWindow
                 "Options_AfterEnterDirectionRight" => "Right",
                 "Options_AfterEnterDirectionUp" => "Up",
                 "Options_AfterEnterDirectionLeft" => "Left",
-                "Options_EnableFillHandleAndCellDragAndDrop" => "Enable fill handle and cell drag-and-drop",
                 "Options_DisplayOptionsForThisWorkbook" => "Display options for this workbook",
                 "Options_ForObjectsShow" => "For objects, show:",
                 "Options_ObjectsDisplayAll" => "All",

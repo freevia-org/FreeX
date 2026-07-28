@@ -45,6 +45,16 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         options.DefaultFormat.Should().Be(FreeXOptions.FreeXWorkbookDefaultFormat);
     }
 
+    [Fact]
+    public void FillHandleAndCellDragAndDrop_RoundTripsThroughWpfOptionsBridge()
+    {
+        var path = Path.Combine(_temp.Path, "options.json");
+        var options = new FreeXOptions { EnableFillHandleAndCellDragAndDrop = false };
+
+        options.SaveToPath(path).Should().BeTrue();
+        FreeXOptions.LoadFromPath(path).EnableFillHandleAndCellDragAndDrop.Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(0, 1)]
     [InlineData(12, 12)]

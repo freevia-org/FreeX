@@ -1213,6 +1213,7 @@ public partial class GridView
     }
 
     private bool IsOnSelectionMoveBorder(Point pos) =>
+        EnableFillHandleAndCellDragAndDrop &&
         (Keyboard.Modifiers == ModifierKeys.None || Keyboard.Modifiers == ModifierKeys.Control) &&
         GridSelectionMovePlanner.IsOnMoveBorder(
             Viewport,

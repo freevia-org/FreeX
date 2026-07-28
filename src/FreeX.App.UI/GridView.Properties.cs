@@ -426,6 +426,15 @@ public partial class GridView
         set => SetValue(ShowGridLinesProperty, value);
     }
 
+    public static readonly DependencyProperty EnableFillHandleAndCellDragAndDropProperty =
+        DependencyProperty.Register(nameof(EnableFillHandleAndCellDragAndDrop), typeof(bool), typeof(GridView),
+            new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
+    public bool EnableFillHandleAndCellDragAndDrop
+    {
+        get => (bool)GetValue(EnableFillHandleAndCellDragAndDropProperty);
+        set => SetValue(EnableFillHandleAndCellDragAndDropProperty, value);
+    }
+
     public static readonly DependencyProperty ShowHeadersProperty =
         DependencyProperty.Register(nameof(ShowHeaders), typeof(bool), typeof(GridView),
             new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));

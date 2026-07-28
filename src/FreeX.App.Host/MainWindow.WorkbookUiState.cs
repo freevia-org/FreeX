@@ -16,6 +16,7 @@ public partial class MainWindow
     private void ApplyOptionsToView()
     {
         SheetGrid.UseR1C1ReferenceStyle = _options.UseR1C1ReferenceStyle;
+        SheetGrid.EnableFillHandleAndCellDragAndDrop = _options.EnableFillHandleAndCellDragAndDrop;
         ApplyFormulaBarVisibility(_options.ShowFormulaBar);
         _suppressAppViewOptionSync = true;
         try

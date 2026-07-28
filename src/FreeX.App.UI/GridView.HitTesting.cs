@@ -27,7 +27,7 @@ public partial class GridView
     }
 
     private bool IsOnAutofillHandle(Point pos)
-        => GridAutofillPlanner.IsOnHandle(
+        => EnableFillHandleAndCellDragAndDrop && GridAutofillPlanner.IsOnHandle(
             Viewport,
             SelectedRange,
             new GridPoint(pos.X, pos.Y),

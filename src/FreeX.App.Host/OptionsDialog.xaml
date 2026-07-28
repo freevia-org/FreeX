@@ -408,7 +408,7 @@
                         </Grid>
                         <CheckBox x:Name="OptAdvancedFillHandle"
                                   Content="{local:Loc Key=Options_EnableFillHandleAndCellDragAndDrop}"
-                                  IsChecked="True" IsEnabled="False" FontSize="12" Margin="0,0,0,6"/>
+                                  IsChecked="True" FontSize="12" Margin="0,0,0,6"/>
                         <CheckBox x:Name="OptAdvancedAutoComplete"
                                   Content="{local:Loc Key=Options_EnableAutoCompleteForCellValues}"
                                   IsChecked="True" FontSize="12" Margin="0,0,0,6"/>

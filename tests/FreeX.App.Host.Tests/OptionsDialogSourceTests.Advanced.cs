@@ -65,6 +65,21 @@ public sealed partial class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_FillHandleAndCellDragAndDropIsGenuineTogglableOption()
+    {
+        var xaml = XamlLocalizationTestHelper.LoadLocalizedXaml("OptionsDialog.xaml");
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xamlNamespace = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var fillHandle = xaml.Descendants(presentation + "CheckBox")
+            .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "OptAdvancedFillHandle");
+
+        fillHandle.Attribute("IsEnabled").Should().BeNull();
+        DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs")
+            .Should().Contain("OptAdvancedFillHandle.IsChecked = _opts.EnableFillHandleAndCellDragAndDrop")
+            .And.Contain("EnableFillHandleAndCellDragAndDrop = OptAdvancedFillHandle.IsChecked == true");
+    }
+
+    [Fact]
     public void OptionsDialog_RoundTripsAutoCompleteForCellValuesOption()
     {
         using var temp = new TestTemporaryDirectory();
