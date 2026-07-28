@@ -64,6 +64,7 @@ if [[ "$app" == "FreeW" ]]; then
     )
 else
     required_ids+=(
+        "nested-keytip-prefix-deferral"
         "slide-pane-new-slide-create"
         "slide-pane-new-slide-undo"
         "slide-pane-new-slide-redo"
@@ -980,6 +981,60 @@ else
         "Alt followed by key tip '$tab_key' did not change the rendered ribbon state."
 fi
 send_key Escape
+
+if [[ "$app" == "FreeP" ]]; then
+    capture "nested-keytip-before-target.png"
+    send_key Alt_L
+    send_key n
+    send_key t
+    send_key x
+    capture "nested-keytip-target-selected.png"
+
+    send_key Alt_L
+    send_key a
+    send_key n
+    send_key b
+    capture "nested-keytip-prefix-b.png"
+    prefix_deferred=false
+    if screen_changed \
+        "$output/nested-keytip-target-selected.png" \
+        "$output/nested-keytip-prefix-b.png" 100; then
+        prefix_deferred=true
+    fi
+
+    send_key i
+    capture "nested-keytip-blinds-menu.png"
+    longer_tip_opened=false
+    if screen_changed \
+        "$output/nested-keytip-prefix-b.png" \
+        "$output/nested-keytip-blinds-menu.png" 160; then
+        longer_tip_opened=true
+    fi
+
+    send_active_key Escape
+    focus_app
+    capture "nested-keytip-dismissed.png"
+    menu_dismissed=false
+    if screen_changed \
+        "$output/nested-keytip-blinds-menu.png" \
+        "$output/nested-keytip-dismissed.png" 160; then
+        menu_dismissed=true
+    fi
+
+    if $prefix_deferred && $longer_tip_opened && $menu_dismissed; then
+        record_evidence_set "nested-keytip-prefix-deferral" "passed" \
+            "Physical Alt,N,T,X selected an inserted text box; Alt,A,N,B kept the longer BI sequence alive, I opened the Blinds menu, and Escape dismissed it." \
+            "nested-keytip-before-target.png" "nested-keytip-target-selected.png" \
+            "nested-keytip-prefix-b.png" "nested-keytip-blinds-menu.png" \
+            "nested-keytip-dismissed.png"
+    else
+        record_evidence_set "nested-keytip-prefix-deferral" "failed" \
+            "The FreeP physical key-tip route did not prove B prefix deferral, BI menu opening, and Escape dismissal." \
+            "nested-keytip-before-target.png" "nested-keytip-target-selected.png" \
+            "nested-keytip-prefix-b.png" "nested-keytip-blinds-menu.png" \
+            "nested-keytip-dismissed.png"
+    fi
+fi
 
 window_count() {
     mapfile -t all_windows < <(wmctrl -l 2>/dev/null || true)
