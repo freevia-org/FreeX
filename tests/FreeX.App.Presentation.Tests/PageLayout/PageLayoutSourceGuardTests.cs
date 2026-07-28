@@ -12,7 +12,9 @@ public sealed class PageLayoutSourceGuardTests
 
         foreach (var file in Directory.EnumerateFiles(directory, "*.cs"))
         {
-            var source = File.ReadAllText(file);
+            var source = string.Join(
+                Environment.NewLine,
+                File.ReadLines(file).Where(PortableBoundaryGuard.IsNonCommentLine));
 
             source.Should().NotContain("System.Windows");
             source.Should().NotContain("Avalonia");

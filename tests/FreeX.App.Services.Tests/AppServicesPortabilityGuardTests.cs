@@ -32,7 +32,11 @@ public sealed class AppServicesPortabilityGuardTests
         var servicesRoot = Path.GetDirectoryName(projectPath)!;
         var repositoryRoot = Path.GetFullPath(Path.Combine(servicesRoot, "..", ".."));
 
-        var violations = PortableBoundaryGuard.FindSourceViolations(servicesRoot, repositoryRoot, ForbiddenPatterns)
+        var violations = PortableBoundaryGuard.FindSourceViolations(
+                servicesRoot,
+                repositoryRoot,
+                ForbiddenPatterns,
+                shouldScanLine: PortableBoundaryGuard.IsNonCommentLine)
             .Select(violation => violation.ToString())
             .ToArray();
 

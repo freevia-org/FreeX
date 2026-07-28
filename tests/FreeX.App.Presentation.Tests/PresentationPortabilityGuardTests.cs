@@ -37,7 +37,11 @@ public sealed class PresentationPortabilityGuardTests
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
 
-        var violations = PortableBoundaryGuard.FindSourceViolations(presentationRoot, presentationRoot, ForbiddenPatterns)
+        var violations = PortableBoundaryGuard.FindSourceViolations(
+                presentationRoot,
+                presentationRoot,
+                ForbiddenPatterns,
+                shouldScanLine: PortableBoundaryGuard.IsNonCommentLine)
             .Select(v => v.ToString())
             .ToArray();
 

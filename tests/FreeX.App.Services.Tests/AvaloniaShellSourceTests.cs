@@ -842,7 +842,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var showFormulas = !_session.IsShowingFormulas;");
         source.Should().Contain("var result = _session.SetShowFormulas(showFormulas);");
         source.Should().Contain("RefreshShell(showFormulas ? \"Showing formulas\" : \"Showing values\");");
-        source.Should().Contain("var showHeadings = _session.ActiveSheet.ShowHeadings;");
+        source.Should().Contain("var showHeadings = _session.IsShowingHeadings;");
         source.Should().Contain("var zoomFactor = GetActiveZoomFactor();");
         source.Should().Contain("var headerOffset = showHeadings ? 1 : 0;");
         source.Should().Contain("if (showHeadings)");
@@ -949,7 +949,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().NotContain("SaveCurrentWorkbookThenConfirmCleanAsync");
         source.Should().Contain("private static SaveChangesPrompt ToSaveChangesPrompt(DirtyWorkbookCloseChoice choice)");
         source.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
-        source.Should().Contain("() => _session.CanSaveCurrentSource(out var target) ? target : null");
+        source.Should().Contain("private FileSaveTarget? ResolveExistingSaveTarget()");
+        source.Should().Contain("_session.CanSaveCurrentSource(out var target) ? target : null;");
         // R68-async-ordering-race-sweep-3: OpenWorkbookAsync now claims _isOpening synchronously
         // before its own confirm-dialog/file-picker awaits, so its post-picker continuation must
         // call the guard-free OpenWorkbookPathCoreAsync directly -- routing back through the
@@ -2457,7 +2458,9 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.TextToColumns\", () => ShowTextToColumnsParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.CreateTable\", () => ShowCreateTableParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.RecommendedPivotTables\", async () => { await ShowRecommendedPivotTablesDialogAsync(); }),");
-        parityCaptureSource.Should().Contain("(\"dialog.Consolidate\", () => ShowConsolidateDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.Consolidate\", () =>");
+        parityCaptureSource.Should().Contain("PrepareConsolidateParityCaptureState();");
+        parityCaptureSource.Should().Contain("ShowConsolidateDialogAsync(ConsolidateParityFixture.CreateDialogInitialState())");
         parityCaptureSource.Should().Contain("(\"dialog.Sparkline\", () => ShowSparklineParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.InsertHyperlink\", () => ShowInsertHyperlinkParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.SymbolPicker\", () => ShowSymbolPickerAsync()),");
@@ -2574,7 +2577,8 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("private async Task ShowFormatChartAreaParityDialogAsync()");
         parityCaptureSource.Should().Contain("await ShowWithSelectedParityChartAsync(ShowFormatChartAreaDialog);");
         parityCaptureSource.Should().Contain("private async Task ShowShapeEffectsParityDialogAsync()");
-        parityCaptureSource.Should().Contain("await ShowWithSelectedParityShapeAsync(OpenShapeEffectsDialogAsync);");
+        parityCaptureSource.Should().Contain("DrawingShapeEffectPreset.Shadow");
+        parityCaptureSource.Should().Contain("await OpenShapeEffectsDialogAsync();");
         parityCaptureSource.Should().Contain("private async Task ShowShapeGradientParityDialogAsync()");
         parityCaptureSource.Should().Contain("await ShowWithSelectedParityShapeAsync(OpenShapeGradientDialogAsync);");
         parityCaptureSource.Should().Contain("private Task ShowTextToColumnsParityDialogAsync()");
@@ -2591,7 +2595,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("private async Task ShowPivotTableOptionsParityDialogAsync()");
         parityCaptureSource.Should().Contain("await OpenPivotTableOptionsDialogAsync(pivot);");
         parityCaptureSource.Should().Contain("private async Task ShowPivotFieldFilterParityDialogAsync()");
-        parityCaptureSource.Should().Contain("await OpenPivotItemFilterDialogAsync(pivot, headers, target);");
+        parityCaptureSource.Should().Contain("await OpenPivotItemFilterDialogAsync(pivot, headers, target, exposeActiveFilterActions: false);");
         parityCaptureSource.Should().Contain("private async Task ShowPivotValueFieldSettingsParityDialogAsync()");
         parityCaptureSource.Should().Contain("await OpenPivotValueFieldSettingsDialogAsync(pivot, headers, target);");
         parityCaptureSource.Should().Contain("private async Task ShowInsertSlicerParityDialogAsync()");
@@ -2606,7 +2610,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("private async Task ShowCustomViewsParityDialogAsync()");
         parityCaptureSource.Should().Contain("_session.Workbook.CustomViews.Clear();");
         parityCaptureSource.Should().Contain("private async Task ShowAllowEditRangesParityDialogAsync()");
-        parityCaptureSource.Should().Contain("new AllowEditRangeCommand(sheetId, range)");
+        parityCaptureSource.Should().Contain("_session.ExecuteReviewCommand(new AllowEditRangeCommand(sheetId, existingRange));");
 
         pictureShapeSource.Should().Contain("DrawingObjectContextualRibbonPlanner.CreatePictureShapeCommandSpecs()");
         pictureShapeSource.Should().Contain("DrawingObjectContextualCommandAction.ShapeEffectsDialog => () => RunGuarded(OpenShapeEffectsDialogAsync)");
@@ -2615,7 +2619,7 @@ public sealed class AvaloniaShellSourceTests
         drawingFormatSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ShapeEffectsDialog\");");
         drawingFormatSource.Should().Contain("AutomationProperties.SetAutomationId(effectBox, \"ShapeEffectsPresetBox\");");
         drawingFormatSource.Should().Contain("AutomationProperties.SetAutomationId(descriptionText, \"ShapeEffectsDescriptionText\");");
-        drawingFormatSource.Should().Contain("UiText.Get(\"ShapeEffects_Label\")");
+        drawingFormatSource.Should().Contain("UiText.Get(\"ShapeEffects_EffectLabel\")");
         drawingFormatSource.Should().Contain("new SetDrawingShapeEffectCommand(_session.ActiveSheet.Id, current.Id, normalized)");
         drawingFormatSource.Should().Contain("UiText.Get(\"ShapeGradient_GradientStopsGroup\")");
         drawingFormatSource.Should().Contain("UiText.Get(\"ShapeGradient_Stop1ColorLabel\")");
@@ -2993,10 +2997,10 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private async Task ShowScenarioManagerCompactDialogAsync(ScenarioManagerPlan initialPlan)");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ScenarioManagerCompactDialog\");");
-        source.Should().Contain("Width = 360,");
-        source.Should().Contain("Height = 420,");
-        source.Should().Contain("MaxWidth = 360,");
-        source.Should().Contain("MaxHeight = 420,");
+        source.Should().Contain("Width = ScenarioManagerDialogLayout.DialogWidth,");
+        source.Should().Contain("Height = ScenarioManagerDialogLayout.DialogHeight,");
+        source.Should().Contain("MaxWidth = ScenarioManagerDialogLayout.DialogWidth,");
+        source.Should().Contain("MaxHeight = ScenarioManagerDialogLayout.DialogHeight,");
         source.Should().Contain("CanResize = false,");
         source.Should().Contain("AutomationProperties.SetAutomationId(scenarioList, \"ScenarioManagerScenarioList\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(nameBox, \"ScenarioManagerNameBox\");");
@@ -3332,20 +3336,18 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var markers = new[]
         {
-            "AutomationProperties.SetName(rangeText, \"Subtotal range\");",
-            "AutomationProperties.SetHelpText(rangeText, \"Shows the selected range for subtotaling.\");",
-            "AutomationProperties.SetName(groupColumnBox, \"At each change in\");",
-            "AutomationProperties.SetHelpText(groupColumnBox, \"Choose the column used to group subtotal rows.\");",
-            "AutomationProperties.SetName(functionBox, \"Use function\");",
-            "AutomationProperties.SetHelpText(functionBox, \"Choose the subtotal calculation function.\");",
-            "AutomationProperties.SetName(columnsPanel, \"Add subtotal to\");",
-            "AutomationProperties.SetHelpText(columnsPanel, \"Columns that receive subtotal calculations.\");",
-            "AutomationProperties.SetName(replaceBox, \"Replace current subtotals\");",
-            "AutomationProperties.SetHelpText(replaceBox, \"Replace existing subtotals before applying new ones.\");",
-            "AutomationProperties.SetName(pageBreakBox, \"Page break between groups\");",
-            "AutomationProperties.SetHelpText(pageBreakBox, \"Insert a page break after each subtotal group.\");",
-            "AutomationProperties.SetName(summaryBelowBox, \"Summary below data\");",
-            "AutomationProperties.SetHelpText(summaryBelowBox, \"Place summary rows below the grouped data.\");",
+            "AutomationProperties.SetName(groupColumnBox, StripDisplayMnemonic(UiText.Get(\"Subtotal_AtEachChangeInAutomationName\")));",
+            "AutomationProperties.SetHelpText(groupColumnBox, UiText.Get(\"Subtotal_AtEachChangeInHelpText\"));",
+            "AutomationProperties.SetName(functionBox, StripDisplayMnemonic(UiText.Get(\"Subtotal_UseFunctionAutomationName\")));",
+            "AutomationProperties.SetHelpText(functionBox, UiText.Get(\"Subtotal_UseFunctionHelpText\"));",
+            "AutomationProperties.SetName(columnsList, StripDisplayMnemonic(UiText.Get(\"Subtotal_AddSubtotalToAutomationName\")));",
+            "AutomationProperties.SetHelpText(columnsList, UiText.Get(\"Subtotal_AddSubtotalToHelpText\"));",
+            "AutomationProperties.SetName(replaceBox, StripDisplayMnemonic(UiText.Get(\"Subtotal_ReplaceCurrentSubtotalsAutomationName\")));",
+            "AutomationProperties.SetHelpText(replaceBox, UiText.Get(\"Subtotal_ReplaceCurrentSubtotalsHelpText\"));",
+            "AutomationProperties.SetName(pageBreakBox, StripDisplayMnemonic(UiText.Get(\"Subtotal_PageBreakBetweenGroupsAutomationName\")));",
+            "AutomationProperties.SetHelpText(pageBreakBox, UiText.Get(\"Subtotal_PageBreakBetweenGroupsHelpText\"));",
+            "AutomationProperties.SetName(summaryBelowBox, StripDisplayMnemonic(UiText.Get(\"Subtotal_SummaryBelowDataAutomationName\")));",
+            "AutomationProperties.SetHelpText(summaryBelowBox, UiText.Get(\"Subtotal_SummaryBelowDataHelpText\"));",
             "AutomationProperties.SetName(errorText, \"Subtotal validation\");",
             "AutomationProperties.SetHelpText(errorText, \"Shows Subtotal validation messages.\");",
             "AutomationProperties.SetName(hasHeadersBox, \"My data has headers\");",
@@ -4474,6 +4476,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresCompactFormatCellsRouteThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var fillEditorSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "FormatCellsFillEditor.cs"));
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "FormatCellsCompactPlanner.cs"));
@@ -4505,9 +4508,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsMergeCellsBox\"");
         source.Should().Contain("\"FormatCellsFontSizeBox\"");
         source.Should().Contain("\"FormatCellsFontColorBox\"");
-        source.Should().Contain("\"FormatCellsFillColorBox\"");
-        source.Should().Contain("\"FormatCellsFillPatternStyleBox\"");
-        source.Should().Contain("\"FormatCellsFillPatternColorBox\"");
+        fillEditorSource.Should().Contain("\"FormatCellsFillColorBox\"");
+        fillEditorSource.Should().Contain("\"FormatCellsFillPatternStyleBox\"");
+        fillEditorSource.Should().Contain("\"FormatCellsFillPatternColorBox\"");
         source.Should().Contain("\"FormatCellsBorderPresetBox\"");
         source.Should().Contain("\"FormatCellsBorderStyleBox\"");
         source.Should().Contain("\"FormatCellsBorderColorBox\"");
@@ -4528,7 +4531,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsBorderLeftStyleBox\"");
         source.Should().Contain("\"FormatCellsBorderLeftColorBox\"");
         source.Should().Contain("\"FormatCellsFontPreview\"");
-        source.Should().Contain("\"FormatCellsFillPreview\"");
+        fillEditorSource.Should().Contain("\"FormatCellsFillSamplePreview\"");
         source.Should().Contain("\"FormatCellsBorderPresetNoneButton\"");
         source.Should().Contain("\"FormatCellsBorderPresetOutlineButton\"");
         source.Should().Contain("\"FormatCellsBorderPresetInsideButton\"");
@@ -4600,8 +4603,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("FontColor: normalFont ? normalStyle.FontColor : (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
         source.Should().Contain("SelectFormatCellsColor(fontColorBox, normal.FontColor)");
         source.Should().Contain("MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)");
-        source.Should().Contain("FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)");
-        source.Should().Contain("FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
+        source.Should().Contain("FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox)");
+        source.Should().Contain("FillPatternColor: clearFill ? null : fillEditor.PatternColor");
         source.Should().Contain("selection.Request.MergeCells");
         source.Should().Contain("var mergeContentResolution = MergeCellContentResolution.KeepFirstCell;");
         source.Should().Contain("if (selection.Request.MergeCells == true)");
@@ -4766,7 +4769,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("Focusable = true,");
         source.Should().Contain("Tag = tab.Id,");
         source.Should().Contain("button.ContextMenu = CreateSheetTabContextMenu(tab);");
-        source.Should().Contain("button.DoubleTapped += async (_, args) => await RenameSheetFromTabAsync(tab.Id, args);");
+        var pointerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.SheetTabPointer.cs"));
+        source.Should().Contain("button.AddHandler(");
+        source.Should().Contain("(_, args) => BeginSheetTabPointer(tab.Id, args)");
+        source.Should().Contain("RoutingStrategies.Tunnel");
         source.Should().Contain("button.KeyDown += (_, args) => HandleSheetTabKeyDown(tab.Id, button, args);");
         source.Should().Contain("AutomationProperties.SetName(button, tab.Name);");
         source.Should().Contain("AutomationProperties.SetHelpText(button, SheetTabContextHelpText);");
@@ -4785,8 +4791,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CreateSheetTabContextMenuItem(tab, \"Move Left\", MoveActiveSheetLeft, isIdle && sheetTabIndex > 0)");
         source.Should().Contain("\"Move Right\"");
         source.Should().Contain("internal bool SelectSheetForContextCommand(SheetId sheetId)");
-        source.Should().Contain("private async Task RenameSheetFromTabAsync(SheetId sheetId, TappedEventArgs args)");
-        source.Should().Contain("await RenameActiveSheetAsync();");
+        pointerSource.Should().Contain("private void BeginSheetTabPointer(SheetId sheetId, PointerPressedEventArgs args)");
+        pointerSource.Should().Contain("if (args.ClickCount >= 2)");
+        pointerSource.Should().Contain("if (SelectSheetForContextCommand(sheetId))");
+        pointerSource.Should().Contain("_ = RenameActiveSheetAsync();");
         source.Should().Contain("private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)");
         source.Should().Contain("NavigateSheetTabFromKeyboard(sheetId, args);");
         source.Should().Contain("private void OpenSheetTabContextMenuFromKeyboard(SheetId sheetId, Button button, KeyEventArgs args)");
@@ -4819,13 +4827,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private Button? FindSheetTabButton(SheetId sheetId)");
         source.Should().Contain("button.Tag is SheetId tag &&");
         source.Should().Contain("tag == sheetId");
-        source.Should().Contain("button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);");
-        source.Should().Contain("private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args)");
-        source.Should().Contain("if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed)");
-        source.Should().Contain("var selectRange = modifiers.HasFlag(KeyModifiers.Shift);");
-        source.Should().Contain("var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);");
-        source.Should().Contain("args.Handled = true;");
-        source.Should().Contain("_session.SelectSheetFromTab(sheetId, selectRange, toggle)");
+        pointerSource.Should().Contain("private bool BeginSheetTabPointer(SheetId sheetId, KeyModifiers modifiers)");
+        pointerSource.Should().Contain("var selectRange = modifiers.HasFlag(KeyModifiers.Shift);");
+        pointerSource.Should().Contain("var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);");
+        pointerSource.Should().Contain("SelectSheet(sheetId, selectRange, toggle);");
+        pointerSource.Should().Contain("args.Pointer.Capture(_sheetTabsHost);");
         source.Should().Contain("private void DuplicateActiveSheet()");
         source.Should().Contain("var result = _session.DuplicateActiveSheet();");
         source.Should().Contain("RefreshShell($\"Duplicated {sourceName}\");");

@@ -44,7 +44,10 @@ public sealed class QuickAnalysisSourceGuardTests
         avaloniaSource.Should().Contain("catch (Exception exception)");
         avaloniaSource.Should().Contain("ShowEditIssue(exception.Message)");
         avaloniaSource.Should().Contain("QuickAnalysisConditionalFormatDialogPlanner.Plan(command)");
-        avaloniaSource.Should().Contain("ShowConditionalFormatRuleEditorAsync(seed)");
+        avaloniaSource.Replace("\r\n", "\n", StringComparison.Ordinal).Should().Contain(
+            "var built = await ShowConditionalFormatRuleEditorAsync(\n"
+            + "            seed,\n"
+            + "            _interactionValidationConditionalFormatRuleProbe);");
         shellSources.Should().NotContain("QuickAnalysisSelectionReader.Describe(sheet, range)");
         shellSources.Should().NotContain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
         shellSources.Should().NotContain("QuickAnalysisPlanner.BuildDisplayModel(");
