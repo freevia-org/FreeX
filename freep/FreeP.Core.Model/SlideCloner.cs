@@ -11,7 +11,9 @@ namespace FreeP.Core.Model;
 /// - <see cref="ThemeAwareColor"/> is a struct — copied by value automatically.
 /// - Collections (<see cref="Slide.Shapes"/>, <see cref="TextBody.Paragraphs"/>, etc.) are
 ///   deep-cloned so mutations on the copy do not affect the original.
-/// - <see cref="ImagePart"/> bytes are shared (byte arrays are treated as immutable once loaded).
+/// - Regular <see cref="SlideShape.Picture"/> bytes are shared (byte arrays are treated as
+///   immutable once loaded); editable SmartArt image and diagram payloads are copied so a
+///   duplicate can be changed without mutating the source package.
 /// - <see cref="TableShape"/>, <see cref="ChartShape"/>, and editable SmartArt data are deep-cloned.
 /// </summary>
 public static class SlideCloner
@@ -427,12 +429,12 @@ public static class SlideCloner
             {
                 ContentType = kv.Value.ContentType,
                 PartPath = kv.Value.PartPath,
-                Bytes = kv.Value.Bytes,
+                Bytes = kv.Value.Bytes.ToArray(),
             };
         }
 
         foreach (var kv in source.PartRels)
-            copy.PartRels[kv.Key] = kv.Value;
+            copy.PartRels[kv.Key] = kv.Value.ToArray();
 
         return copy;
     }
@@ -490,7 +492,7 @@ public static class SlideCloner
             Text = source.Text,
             Level = source.Level,
             IsAssistant = source.IsAssistant,
-            Picture = source.Picture,
+            Picture = CloneImagePart(source.Picture),
         };
 
         foreach (var child in source.Children)
@@ -498,6 +500,15 @@ public static class SlideCloner
 
         return copy;
     }
+
+    private static ImagePart? CloneImagePart(ImagePart? source) =>
+        source is null
+            ? null
+            : new ImagePart
+            {
+                Bytes = source.Bytes.ToArray(),
+                ContentType = source.ContentType,
+            };
 
     private static SmartArtQuickStyleMetadata CloneSmartArtQuickStyle(SmartArtQuickStyleMetadata source)
     {

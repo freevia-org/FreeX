@@ -489,6 +489,55 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void CloneShape_DeepClonesSmartArtPicturesAndPackagePayloads()
+    {
+        var sourcePicture = new ImagePart { Bytes = [1, 2, 3], ContentType = "image/png" };
+        var shape = new SlideShape
+        {
+            Id = 13,
+            Kind = SlideShapeKind.SmartArt,
+            SmartArt = new SmartArtShape
+            {
+                Data = new SmartArtData
+                {
+                    Family = SmartArtFamily.List,
+                    LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList",
+                },
+            },
+        };
+        shape.SmartArt.Data.Nodes.Add(new SmartArtNode
+        {
+            ModelId = "picture-node",
+            Text = "Picture",
+            Picture = sourcePicture,
+        });
+        shape.SmartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/xml",
+            Bytes = [4, 5, 6],
+        };
+        shape.SmartArt.PartRels["ppt/diagrams/drawing1.xml"] = [7, 8, 9];
+
+        var clone = SlideCloner.CloneShape(shape);
+        var cloneSmartArt = clone.SmartArt!;
+
+        cloneSmartArt.Data!.Nodes[0].Picture.Should().NotBeSameAs(sourcePicture);
+        cloneSmartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes.Should()
+            .NotBeSameAs(shape.SmartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes);
+        cloneSmartArt.PartRels["ppt/diagrams/drawing1.xml"].Should()
+            .NotBeSameAs(shape.SmartArt.PartRels["ppt/diagrams/drawing1.xml"]);
+
+        cloneSmartArt.Data.Nodes[0].Picture!.Bytes[0] = 10;
+        cloneSmartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes[0] = 11;
+        cloneSmartArt.PartRels["ppt/diagrams/drawing1.xml"][0] = 12;
+
+        sourcePicture.Bytes.Should().Equal(1, 2, 3);
+        shape.SmartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes.Should().Equal(4, 5, 6);
+        shape.SmartArt.PartRels["ppt/diagrams/drawing1.xml"].Should().Equal(7, 8, 9);
+    }
+
+    [Fact]
     public void ApplyTextPaneOutline_RebuildsSharedTreeAndLiveLayout()
     {
         var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"), ("manager", "Manager"));
