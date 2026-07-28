@@ -79,7 +79,10 @@ internal static class SmartArtRenderer
     private static bool IsWordSimpleColorfulProcess(SmartArt smartArt, SmartArtVisualPlan plan) =>
         string.Equals(plan.LayoutId, "process1", StringComparison.OrdinalIgnoreCase)
         && string.Equals(smartArt.ColorSchemeId, "colorful1", StringComparison.OrdinalIgnoreCase)
-        && string.Equals(smartArt.StyleId, "simple1", StringComparison.OrdinalIgnoreCase)
+        // The DOCX writer emits Word's simple1 quick-style payload for the FreeW subtle1 gallery
+        // selection. Word resolves that serialized process signature to the same native visual.
+        && (string.Equals(smartArt.StyleId, "simple1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(smartArt.StyleId, "subtle1", StringComparison.OrdinalIgnoreCase))
         && plan.Nodes.Count == 3;
 
     // Word's 96-DPI gallery raster renders this native process signature as three solid accent nodes.
