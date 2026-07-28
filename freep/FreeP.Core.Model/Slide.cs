@@ -160,6 +160,17 @@ public sealed class ShapeEffects
     public Scene3dInfo? Scene3d { get; set; }
 }
 
+/// <summary>How a media object begins playback during a slide show.</summary>
+public enum MediaPlaybackStartMode
+{
+    /// <summary>Start from the slide's click sequence or a direct media click.</summary>
+    InClickSequence,
+
+    /// <summary>Start as soon as the slide begins.</summary>
+    Automatically,
+
+}
+
 /// <summary>
 /// Payload for an audio or video media object embedded in a slide.
 /// The poster image bytes (shown while not playing) are stored in the parent
@@ -171,6 +182,9 @@ public sealed class MediaInfo
 {
     /// <summary>True = video, false = audio.</summary>
     public bool IsVideo { get; set; }
+
+    /// <summary>PowerPoint's authored start behavior; click sequence is the default.</summary>
+    public MediaPlaybackStartMode PlaybackStartMode { get; set; } = MediaPlaybackStartMode.InClickSequence;
 
     /// <summary>Raw media bytes. Empty when the media is link-only (no embed).</summary>
     public byte[] Bytes { get; set; } = Array.Empty<byte>();

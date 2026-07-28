@@ -421,6 +421,11 @@ public sealed class SlideShowMediaController
             };
 
             _overlay.Children.Add(element);
+            if (media.PlaybackStartMode == MediaPlaybackStartMode.Automatically)
+            {
+                element.Play();
+                element.Tag = true;
+            }
         }
         catch
         {

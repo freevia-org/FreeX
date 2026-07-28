@@ -141,6 +141,7 @@ public static class SlideCloner
         var copy = new MediaInfo
         {
             IsVideo = source.IsVideo,
+            PlaybackStartMode = source.PlaybackStartMode,
             Bytes = source.Bytes.ToArray(),
             ContentType = source.ContentType,
             SourcePackagePath = source.SourcePackagePath,
