@@ -54,6 +54,7 @@ internal sealed record FreePRibbonProfile(
             FreePRibbonHomeGroupId.Font,
             FreePRibbonHomeGroupId.Paragraph,
             FreePRibbonHomeGroupId.Arrange,
+            FreePRibbonHomeGroupId.Edit,
             FreePRibbonHomeGroupId.Editing,
         ],
         HomeGroupPriorities: new Dictionary<FreePRibbonHomeGroupId, int>
@@ -63,6 +64,7 @@ internal sealed record FreePRibbonProfile(
             [FreePRibbonHomeGroupId.Font] = 80,
             [FreePRibbonHomeGroupId.Paragraph] = 78,
             [FreePRibbonHomeGroupId.Arrange] = 70,
+            [FreePRibbonHomeGroupId.Edit] = 75,
             [FreePRibbonHomeGroupId.Editing] = 70,
         },
         NewSlideKeyTip: () => FreePRibbonText.NewSlideKeyTip,

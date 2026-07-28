@@ -11,21 +11,7 @@ public sealed class FreePRibbonDefinitionProfileTests
     private static readonly string[] WpfOnlyTabIds = [];
 
     private static readonly IReadOnlyDictionary<string, string[]> PlatformOnlyShellCommandEvidence =
-        new Dictionary<string, string[]>(StringComparer.Ordinal)
-        {
-            ["freep.undo"] =
-            [
-                "Intended shell/profile variance",
-                "ApplicationCommands.Undo",
-                "Editor.Undo"
-            ],
-            ["freep.redo"] =
-            [
-                "Intended shell/profile variance",
-                "routed command",
-                "Editor.Redo"
-            ],
-        };
+        new Dictionary<string, string[]>(StringComparer.Ordinal);
 
     [Fact]
     public void Shared_factory_builds_valid_wpf_and_avalonia_profiles()
@@ -95,6 +81,17 @@ public sealed class FreePRibbonDefinitionProfileTests
                     "freep.numbering.number.alpha-lower-period",
                 ]);
         }
+    }
+
+    [Fact]
+    public void Wpf_profile_exposes_undo_and_redo_in_home_edit_group()
+    {
+        var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
+        var edit = RequiredGroup(wpf, "home", "edit");
+
+        edit.Controls.Select(control => control.CommandId.Value)
+            .Should()
+            .ContainInOrder("freep.undo", "freep.redo");
     }
 
     [Fact]
@@ -975,10 +972,10 @@ public sealed class FreePRibbonDefinitionProfileTests
 
         commands.Values.Select(command => command.GetProperty("surface").GetString())
             .Should()
-            .Contain(["both", "avalonia-only"]);
+            .OnlyContain(surface => surface == "both");
         commands.Values.Select(command => command.GetProperty("classification").GetString())
             .Should()
-            .Contain(["shared", "platform-only"]);
+            .OnlyContain(classification => classification == "shared");
 
         var platformOnlyRows = commands.Values
             .Where(command => command.GetProperty("classification").GetString() == "platform-only")

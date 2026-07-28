@@ -127,6 +127,10 @@ internal static class FreePRibbonCommands
         Action?             onTransitionSound = null)
     {
         var registry = new RibbonCommandRegistry();
+        registry.Register("freep.undo",
+            new ActionRibbonCommand(() => editor.Undo()));
+        registry.Register("freep.redo",
+            new ActionRibbonCommand(() => editor.Redo()));
 
         // ── Slide management ─────────────────────────────────────────────────────
 

@@ -417,6 +417,24 @@ public class RibbonEditorCompleteness5BTests
     // ── Command: clipboard (copy → CanPaste → paste) ─────────────────────────────
 
     [Fact]
+    public void Cmd_UndoRedo_RoutesThroughWpfRibbonRegistry()
+    {
+        var (ed, _) = MakeSession();
+        var reg = MakeRegistry(ed);
+
+        ed.InsertDefaultTextBox();
+        Assert.True(ed.CanUndo);
+
+        Exec(reg, "freep.undo");
+        Assert.False(ed.CanUndo);
+        Assert.True(ed.CanRedo);
+
+        Exec(reg, "freep.redo");
+        Assert.True(ed.CanUndo);
+        Assert.False(ed.CanRedo);
+    }
+
+    [Fact]
     public void Cmd_Copy_ThenPaste_AddsShapeToSlide()
     {
         var (ed, pres) = MakeSession();
