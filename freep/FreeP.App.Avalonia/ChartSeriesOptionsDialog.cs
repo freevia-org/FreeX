@@ -40,6 +40,8 @@ internal sealed class ChartSeriesOptionsDialog : Window
     private readonly ComboBox _trendlineTypeCombo;
     private readonly TextBox _trendlineOrderBox;
     private readonly TextBox _trendlinePeriodBox;
+    private readonly TextBox _trendlineForwardBox;
+    private readonly TextBox _trendlineBackwardBox;
     private readonly CheckBox _trendlineEquationCheck;
     private readonly CheckBox _trendlineRSquaredCheck;
     private readonly ComboBox _labelPositionCombo;
@@ -116,6 +118,8 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _trendlineTypeCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.TrendlineTypeOptions.Select(option => option.Label).ToArray(), MinWidth = 160 };
         _trendlineOrderBox = new TextBox { MinWidth = 130 };
         _trendlinePeriodBox = new TextBox { MinWidth = 130 };
+        _trendlineForwardBox = new TextBox { MinWidth = 130 };
+        _trendlineBackwardBox = new TextBox { MinWidth = 130 };
         _trendlineEquationCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.TrendlineEquationLabel, Margin = new Thickness(20, 0, 0, 0) };
         _trendlineRSquaredCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.TrendlineRSquaredLabel, Margin = new Thickness(20, 0, 0, 0) };
         _labelPositionCombo = new ComboBox
@@ -183,6 +187,8 @@ internal sealed class ChartSeriesOptionsDialog : Window
                 MakeRow(ChartSeriesOptionsPlanner.TrendlineTypeLabel, _trendlineTypeCombo),
                 MakeRow(ChartSeriesOptionsPlanner.TrendlineOrderLabel, _trendlineOrderBox),
                 MakeRow(ChartSeriesOptionsPlanner.TrendlinePeriodLabel, _trendlinePeriodBox),
+                MakeRow(ChartSeriesOptionsPlanner.TrendlineForwardLabel, _trendlineForwardBox),
+                MakeRow(ChartSeriesOptionsPlanner.TrendlineBackwardLabel, _trendlineBackwardBox),
                 _trendlineEquationCheck,
                 _trendlineRSquaredCheck,
                 MakeRow(surface.LabelPositionLabel, _labelPositionCombo),
@@ -238,6 +244,8 @@ internal sealed class ChartSeriesOptionsDialog : Window
         ChartTrendlineType trendlineType = ChartTrendlineType.Linear,
         int? trendlineOrder = null,
         int? trendlinePeriod = null,
+        double? trendlineForward = null,
+        double? trendlineBackward = null,
         bool trendlineEquation = false,
         bool trendlineRSquared = false,
         ChartType? overrideChartType = null)
@@ -265,6 +273,8 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _trendlineTypeCombo.SelectedIndex = FindTrendlineTypeIndex(trendlineType);
         _trendlineOrderBox.Text = Format(trendlineOrder);
         _trendlinePeriodBox.Text = Format(trendlinePeriod);
+        _trendlineForwardBox.Text = Format(trendlineForward);
+        _trendlineBackwardBox.Text = Format(trendlineBackward);
         _trendlineEquationCheck.IsChecked = trendlineEquation;
         _trendlineRSquaredCheck.IsChecked = trendlineRSquared;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
@@ -317,6 +327,8 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _trendlineTypeCombo.SelectedIndex = FindTrendlineTypeIndex(_planner.TrendlineType);
         _trendlineOrderBox.Text = Format(_planner.TrendlineOrder);
         _trendlinePeriodBox.Text = Format(_planner.TrendlinePeriod);
+        _trendlineForwardBox.Text = Format(_planner.TrendlineForward);
+        _trendlineBackwardBox.Text = Format(_planner.TrendlineBackward);
         _trendlineEquationCheck.IsChecked = _planner.TrendlineEquation;
         _trendlineRSquaredCheck.IsChecked = _planner.TrendlineRSquared;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(_planner.LabelPosition);
@@ -365,6 +377,8 @@ internal sealed class ChartSeriesOptionsDialog : Window
             _planner.SetTrendlineType(ChartSeriesOptionsPlanner.TrendlineTypeOptions[_trendlineTypeCombo.SelectedIndex].Value);
         _planner.SetTrendlineOrder(ParseOptionalInt(_trendlineOrderBox.Text, ChartSeriesOptionsPlanner.TrendlineOrderLabel));
         _planner.SetTrendlinePeriod(ParseOptionalInt(_trendlinePeriodBox.Text, ChartSeriesOptionsPlanner.TrendlinePeriodLabel));
+        _planner.SetTrendlineForward(ParseOptional(_trendlineForwardBox.Text, ChartSeriesOptionsPlanner.TrendlineForwardLabel));
+        _planner.SetTrendlineBackward(ParseOptional(_trendlineBackwardBox.Text, ChartSeriesOptionsPlanner.TrendlineBackwardLabel));
         _planner.SetTrendlineEquation(_trendlineEquationCheck.IsChecked == true);
         _planner.SetTrendlineRSquared(_trendlineRSquaredCheck.IsChecked == true);
         if (_labelPositionCombo.SelectedIndex >= 0 &&

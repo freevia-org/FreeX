@@ -17,6 +17,8 @@ public sealed class ChartErrorBarsTests
         planner.SetTrendlineEnabled(true);
         planner.SetTrendlineType(ChartTrendlineType.Polynomial);
         planner.SetTrendlineOrder(3);
+        planner.SetTrendlineForward(1.5);
+        planner.SetTrendlineBackward(0.5);
         planner.SetTrendlineEquation(true);
         planner.SetTrendlineRSquared(true);
 
@@ -24,6 +26,8 @@ public sealed class ChartErrorBarsTests
         options.Trendline.Should().NotBeNull();
         options.Trendline!.Type.Should().Be(ChartTrendlineType.Polynomial);
         options.Trendline.PolynomialOrder.Should().Be(3);
+        options.Trendline.Forward.Should().Be(1.5);
+        options.Trendline.Backward.Should().Be(0.5);
         options.Trendline.DisplayEquation.Should().BeTrue();
         options.Trendline.DisplayRSquared.Should().BeTrue();
         chart.Series[0].Trendline.Should().BeNull("the planner is a working copy");
@@ -66,7 +70,8 @@ public sealed class ChartErrorBarsTests
         using var stream = new MemoryStream();
         PptxPackageWriter.Write(presentation, stream);
         stream.Position = 0;
-        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!.Series[0].Trendline;
+        var reopenedChart = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        var roundTripped = reopenedChart.Series[0].Trendline;
 
         roundTripped.Should().NotBeNull();
         roundTripped!.Type.Should().Be(ChartTrendlineType.MovingAverage);
@@ -75,6 +80,14 @@ public sealed class ChartErrorBarsTests
         roundTripped.Backward.Should().Be(0.5);
         roundTripped.DisplayEquation.Should().BeTrue();
         roundTripped.DisplayRSquared.Should().BeTrue();
+
+        var reopenedPlanner = ChartSeriesOptionsPlanner.FromChart(reopenedChart);
+        reopenedPlanner.TrendlineForward.Should().Be(1.5);
+        reopenedPlanner.TrendlineBackward.Should().Be(0.5);
+        var reopenedOptions = reopenedPlanner.BuildCommitPlan();
+        reopenedOptions.Trendline.Should().NotBeNull();
+        reopenedOptions.Trendline!.Forward.Should().Be(1.5);
+        reopenedOptions.Trendline.Backward.Should().Be(0.5);
     }
     [Fact]
     public void SeriesOptionsPlanner_RoundTripsErrorBarOptionsInWorkingCopy()

@@ -81,6 +81,8 @@ public sealed class ChartSeriesOptionsPlanner
     public const string TrendlineTypeLabel = "Trendline type";
     public const string TrendlineOrderLabel = "Polynomial order";
     public const string TrendlinePeriodLabel = "Moving average period";
+    public const string TrendlineForwardLabel = "Forecast forward";
+    public const string TrendlineBackwardLabel = "Forecast backward";
     public const string TrendlineEquationLabel = "Display equation";
     public const string TrendlineRSquaredLabel = "Display R-squared";
     public const string LabelPositionLabel = "Label position";
@@ -190,6 +192,8 @@ public sealed class ChartSeriesOptionsPlanner
     private ChartTrendlineType _trendlineType;
     private int? _trendlineOrder;
     private int? _trendlinePeriod;
+    private double? _trendlineForward;
+    private double? _trendlineBackward;
     private bool _trendlineEquation;
     private bool _trendlineRSquared;
     private DataLabelPosition _labelPosition = DataLabelPosition.OutsideEnd;
@@ -281,6 +285,8 @@ public sealed class ChartSeriesOptionsPlanner
     public ChartTrendlineType TrendlineType => _trendlineType;
     public int? TrendlineOrder => _trendlineOrder;
     public int? TrendlinePeriod => _trendlinePeriod;
+    public double? TrendlineForward => _trendlineForward;
+    public double? TrendlineBackward => _trendlineBackward;
     public bool TrendlineEquation => _trendlineEquation;
     public bool TrendlineRSquared => _trendlineRSquared;
     public DataLabelPosition LabelPosition => _labelPosition;
@@ -325,6 +331,8 @@ public sealed class ChartSeriesOptionsPlanner
             _trendlineType = ChartTrendlineType.Linear;
             _trendlineOrder = null;
             _trendlinePeriod = null;
+            _trendlineForward = null;
+            _trendlineBackward = null;
             _trendlineEquation = false;
             _trendlineRSquared = false;
             _labelPosition = DataLabelPosition.OutsideEnd;
@@ -371,6 +379,8 @@ public sealed class ChartSeriesOptionsPlanner
         _trendlineType = trendline?.Type ?? ChartTrendlineType.Linear;
         _trendlineOrder = trendline?.PolynomialOrder;
         _trendlinePeriod = trendline?.MovingAveragePeriod;
+        _trendlineForward = trendline?.Forward;
+        _trendlineBackward = trendline?.Backward;
         _trendlineEquation = trendline?.DisplayEquation == true;
         _trendlineRSquared = trendline?.DisplayRSquared == true;
         _labelPosition = labels?.Position ?? DataLabelPosition.OutsideEnd;
@@ -426,6 +436,8 @@ public sealed class ChartSeriesOptionsPlanner
     public void SetTrendlineType(ChartTrendlineType value) => _trendlineType = value;
     public void SetTrendlineOrder(int? value) => _trendlineOrder = value is null ? null : Math.Clamp(value.Value, 2, 6);
     public void SetTrendlinePeriod(int? value) => _trendlinePeriod = value is null ? null : Math.Max(2, value.Value);
+    public void SetTrendlineForward(double? value) => _trendlineForward = NormalizeForecast(value);
+    public void SetTrendlineBackward(double? value) => _trendlineBackward = NormalizeForecast(value);
     public void SetTrendlineEquation(bool value) => _trendlineEquation = value;
     public void SetTrendlineRSquared(bool value) => _trendlineRSquared = value;
     public void SetLabelPosition(DataLabelPosition value) => _labelPosition = value;
@@ -484,6 +496,8 @@ public sealed class ChartSeriesOptionsPlanner
                 Type = _trendlineType,
                 PolynomialOrder = _trendlineType == ChartTrendlineType.Polynomial ? _trendlineOrder : null,
                 MovingAveragePeriod = _trendlineType == ChartTrendlineType.MovingAverage ? _trendlinePeriod : null,
+                Forward = _trendlineForward,
+                Backward = _trendlineBackward,
                 DisplayEquation = _trendlineEquation,
                 DisplayRSquared = _trendlineRSquared,
             }
@@ -492,6 +506,9 @@ public sealed class ChartSeriesOptionsPlanner
 
     private static string FormatColor(ThemeAwareColor? color) =>
         color is null ? string.Empty : color.Resolved.ToString();
+
+    private static double? NormalizeForecast(double? value) =>
+        value is { } number && double.IsFinite(number) && number >= 0 ? number : null;
 
     private ChartTextStyle? BuildLabelTextStyle()
     {

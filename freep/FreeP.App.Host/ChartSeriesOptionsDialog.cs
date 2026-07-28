@@ -37,6 +37,8 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly ComboBox _trendlineTypeCombo;
     private readonly TextBox _trendlineOrderBox;
     private readonly TextBox _trendlinePeriodBox;
+    private readonly TextBox _trendlineForwardBox;
+    private readonly TextBox _trendlineBackwardBox;
     private readonly CheckBox _trendlineEquationCheck;
     private readonly CheckBox _trendlineRSquaredCheck;
     private readonly ComboBox _labelPositionCombo;
@@ -114,6 +116,8 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _trendlineTypeCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.TrendlineTypeOptions, DisplayMemberPath = nameof(ChartTrendlineTypeOption.Label), MinWidth = 150 };
         _trendlineOrderBox = new TextBox { MinWidth = 120 };
         _trendlinePeriodBox = new TextBox { MinWidth = 120 };
+        _trendlineForwardBox = new TextBox { MinWidth = 120 };
+        _trendlineBackwardBox = new TextBox { MinWidth = 120 };
         _trendlineEquationCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.TrendlineEquationLabel, Margin = new Thickness(20, 0, 0, 0) };
         _trendlineRSquaredCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.TrendlineRSquaredLabel, Margin = new Thickness(20, 0, 0, 0) };
         _labelPositionCombo = new ComboBox
@@ -178,6 +182,8 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.TrendlineTypeLabel, _trendlineTypeCombo));
         content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.TrendlineOrderLabel, _trendlineOrderBox));
         content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.TrendlinePeriodLabel, _trendlinePeriodBox));
+        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.TrendlineForwardLabel, _trendlineForwardBox));
+        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.TrendlineBackwardLabel, _trendlineBackwardBox));
         content.Children.Add(_trendlineEquationCheck);
         content.Children.Add(_trendlineRSquaredCheck);
         content.Children.Add(MakeRow(surface.LabelPositionLabel, _labelPositionCombo));
@@ -232,6 +238,8 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         ChartTrendlineType trendlineType = ChartTrendlineType.Linear,
         int? trendlineOrder = null,
         int? trendlinePeriod = null,
+        double? trendlineForward = null,
+        double? trendlineBackward = null,
         bool trendlineEquation = false,
         bool trendlineRSquared = false,
         ChartType? overrideChartType = null)
@@ -259,6 +267,8 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _trendlineTypeCombo.SelectedIndex = FindTrendlineTypeIndex(trendlineType);
         _trendlineOrderBox.Text = Format(trendlineOrder);
         _trendlinePeriodBox.Text = Format(trendlinePeriod);
+        _trendlineForwardBox.Text = Format(trendlineForward);
+        _trendlineBackwardBox.Text = Format(trendlineBackward);
         _trendlineEquationCheck.IsChecked = trendlineEquation;
         _trendlineRSquaredCheck.IsChecked = trendlineRSquared;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
@@ -311,6 +321,8 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _trendlineTypeCombo.SelectedIndex = FindTrendlineTypeIndex(_planner.TrendlineType);
         _trendlineOrderBox.Text = Format(_planner.TrendlineOrder);
         _trendlinePeriodBox.Text = Format(_planner.TrendlinePeriod);
+        _trendlineForwardBox.Text = Format(_planner.TrendlineForward);
+        _trendlineBackwardBox.Text = Format(_planner.TrendlineBackward);
         _trendlineEquationCheck.IsChecked = _planner.TrendlineEquation;
         _trendlineRSquaredCheck.IsChecked = _planner.TrendlineRSquared;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(_planner.LabelPosition);
@@ -359,6 +371,8 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             _planner.SetTrendlineType(trendlineType.Value);
         _planner.SetTrendlineOrder(ParseOptionalInt(_trendlineOrderBox.Text, ChartSeriesOptionsPlanner.TrendlineOrderLabel));
         _planner.SetTrendlinePeriod(ParseOptionalInt(_trendlinePeriodBox.Text, ChartSeriesOptionsPlanner.TrendlinePeriodLabel));
+        _planner.SetTrendlineForward(ParseOptional(_trendlineForwardBox.Text, ChartSeriesOptionsPlanner.TrendlineForwardLabel));
+        _planner.SetTrendlineBackward(ParseOptional(_trendlineBackwardBox.Text, ChartSeriesOptionsPlanner.TrendlineBackwardLabel));
         _planner.SetTrendlineEquation(_trendlineEquationCheck.IsChecked == true);
         _planner.SetTrendlineRSquared(_trendlineRSquaredCheck.IsChecked == true);
         if (_labelPositionCombo.SelectedItem is ChartDisplayLabelPositionOption position)

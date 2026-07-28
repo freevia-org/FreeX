@@ -184,6 +184,7 @@ public sealed class ChartDataDialogTests : IDisposable
             true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
             "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, errorBars: true,
             trendline: true, trendlineType: ChartTrendlineType.Polynomial, trendlineOrder: 3,
+            trendlineForward: 1.5, trendlineBackward: 0.5,
             trendlineEquation: true, trendlineRSquared: true, overrideChartType: ChartType.LineMarkers);
         var options = dialog.BuildCommitPlanForTests();
 
@@ -205,6 +206,8 @@ public sealed class ChartDataDialogTests : IDisposable
         options.Trendline.Should().NotBeNull();
         options.Trendline!.Type.Should().Be(ChartTrendlineType.Polynomial);
         options.Trendline.PolynomialOrder.Should().Be(3);
+        options.Trendline.Forward.Should().Be(1.5);
+        options.Trendline.Backward.Should().Be(0.5);
         options.Trendline.DisplayEquation.Should().BeTrue();
         options.Trendline.DisplayRSquared.Should().BeTrue();
         options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);

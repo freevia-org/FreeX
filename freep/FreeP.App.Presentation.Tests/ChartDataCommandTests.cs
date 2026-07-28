@@ -1454,6 +1454,8 @@ public sealed class ChartDataCommandTests
                 {
                     Type = ChartTrendlineType.Polynomial,
                     PolynomialOrder = 3,
+                    Forward = 1.5,
+                    Backward = 0.5,
                     DisplayEquation = true,
                 })));
 
@@ -1480,6 +1482,8 @@ public sealed class ChartDataCommandTests
         series.Trendline.Should().NotBeNull();
         series.Trendline!.Type.Should().Be(ChartTrendlineType.Polynomial);
         series.Trendline.PolynomialOrder.Should().Be(3);
+        series.Trendline.Forward.Should().Be(1.5);
+        series.Trendline.Backward.Should().Be(0.5);
         series.Trendline.DisplayEquation.Should().BeTrue();
         series.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         series.DataLabels.NumberFormat.Should().Be("0.0%");
@@ -1525,6 +1529,8 @@ public sealed class ChartDataCommandTests
         roundTrippedTrendline.Should().NotBeNull();
         roundTrippedTrendline!.Type.Should().Be(ChartTrendlineType.Polynomial);
         roundTrippedTrendline.PolynomialOrder.Should().Be(3);
+        roundTrippedTrendline.Forward.Should().Be(1.5);
+        roundTrippedTrendline.Backward.Should().Be(0.5);
         roundTrippedTrendline.DisplayEquation.Should().BeTrue();
         var roundTrippedMarker = roundTripped.Series[1].MarkerStyle!;
         roundTrippedMarker.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
