@@ -1456,6 +1456,12 @@
   <data name="Ribbon_Command_SmartArtPictureStack_KeyTip" xml:space="preserve">
     <value>S</value>
   </data>
+  <data name="Ribbon_Command_SmartArtPictureLineup_Label" xml:space="preserve">
+    <value>Picture Lineup</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPictureLineup_KeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
   <data name="Ribbon_Command_SmartArtPictureGrid_Label" xml:space="preserve">
     <value>Picture Grid</value>
   </data>

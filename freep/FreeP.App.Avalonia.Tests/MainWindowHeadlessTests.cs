@@ -5601,6 +5601,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.PictureCaptionListLayoutCommandId,
                 SmartArtAuthoringPlanner.PictureAccentListLayoutCommandId,
                 SmartArtAuthoringPlanner.PictureStackLayoutCommandId,
+                SmartArtAuthoringPlanner.PictureLineupLayoutCommandId,
                 SmartArtAuthoringPlanner.LabeledHierarchyLayoutCommandId,
                 SmartArtAuthoringPlanner.TableHierarchyLayoutCommandId,
             })

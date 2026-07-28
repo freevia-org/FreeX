@@ -386,6 +386,43 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void PictureLineup_WithNodePictures_UsesHorizontalPicturesAndCaptions()
+    {
+        var data = MakeData(SmartArtFamily.List, "Alpha", "Beta", "Gamma");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureLineup";
+        data.IsLiveLayoutSupported = true;
+        foreach (var node in data.Nodes)
+            node.Picture = new ImagePart { Bytes = Minimal1x1Png(), ContentType = "image/png" };
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        shapes!.Where(s => s.Kind == SlideShapeKind.Picture).Should().HaveCount(3);
+        shapes.Where(s => s.Kind == SlideShapeKind.AutoShape)
+            .Select(s => s.PlainText)
+            .Should().ContainInOrder("Alpha", "Beta", "Gamma");
+        var pictures = shapes.Where(s => s.Kind == SlideShapeKind.Picture).OrderBy(s => s.OffsetXEmu).ToArray();
+        pictures[1].OffsetXEmu.Should().BeGreaterThan(pictures[0].OffsetXEmu);
+        pictures[2].OffsetXEmu.Should().BeGreaterThan(pictures[1].OffsetXEmu);
+    }
+
+    [Fact]
+    public void PictureLineup_MissingNodePicture_EmitsAddPicturePlaceholder()
+    {
+        var data = MakeData(SmartArtFamily.List, "Alpha");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureLineup";
+        data.IsLiveLayoutSupported = true;
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        shapes!.Where(s => s.Kind == SlideShapeKind.Picture).Should().BeEmpty();
+        shapes.Where(s => s.Kind == SlideShapeKind.AutoShape)
+            .Select(s => s.PlainText)
+            .Should().Contain("Add picture");
+    }
+
+    [Fact]
     public void Cycle_FiveNodes_ProducesFiveBoxesPlusFiveConnectors()
     {
         var data = MakeData(SmartArtFamily.Cycle, "A", "B", "C", "D", "E");

@@ -96,6 +96,7 @@ public sealed class PptxPackageReaderSourceTests
             .Contain("picturecaptionlist")
             .And.Contain("pictureaccentlist")
             .And.Contain("picturestack")
+            .And.Contain("picturelineup")
             .And.Contain("picturegrid")
             .And.Contain("pyramidlist")
             .And.Contain("relationship1")
