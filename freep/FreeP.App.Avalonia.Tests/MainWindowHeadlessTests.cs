@@ -5720,12 +5720,12 @@ public sealed class MainWindowHeadlessTests
                 SmartArtFamily.Process,
                 "urn:microsoft.com/office/officeart/2005/8/layout/bendingProcess",
                 ["Plan", "Build", "Ship"]);
+            window.Editor.CurrentSlide!.Shapes.Clear();
             window.Editor.CurrentSlide!.Shapes.Add(shape);
             window.Editor.Select(shape.Id);
 
             liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
                 .OfType<DrawOp.Shape>()
-                .Where(op => op.ShapeId is >= 100 and < 110)
                 .ToList();
         });
 
