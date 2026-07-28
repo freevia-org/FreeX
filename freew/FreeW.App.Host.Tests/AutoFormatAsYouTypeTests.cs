@@ -93,6 +93,17 @@ public sealed class AutoFormatAsYouTypeTests
     }
 
     [StaFact]
+    public void DisabledMaster_LeavesSmartQuotesVerbatim()
+    {
+        var view = NewEditor();
+        view.AutoCorrectEnabled = false;
+        view.SimulateTypeText("\"x\"");
+        view.CommitToModel();
+
+        view.Model.PlainText.Should().Be("\"x\"");
+    }
+
+    [StaFact]
     public void Hyperlink_AutoLinksUrl_AndRoundTripsThroughDocx()
     {
         var view = NewEditor();

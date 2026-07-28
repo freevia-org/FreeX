@@ -167,6 +167,16 @@ public class AutoCorrectTests
         AutoCorrect.Evaluate(null, 'a').Insert.Should().Be("A");
     }
 
+    [Fact]
+    public void AutoCorrectResult_ListOutcome_ConsumesOnlyTheLeadingMarker()
+    {
+        var result = AutoCorrect.Evaluate("*", ' ');
+
+        result.Outcome.Should().Be(AutoFormatOutcomeKind.BulletList);
+        result.DeleteBefore.Should().Be(1);
+        result.Insert.Should().BeEmpty();
+    }
+
     // ── AutoFormat-As-You-Type: dashes en vs. em ───────────────────────────────────────────────────────
 
     [Fact]

@@ -190,6 +190,9 @@ public sealed partial class MainWindow : Window
         _askHeaderFooterText = askHeaderFooterText;
         _options = options ?? _optionsStore.Load();
         _options.Normalize();
+        _editor.AutoCorrectEnabled = _options.AutoCorrectEnabled;
+        _editor.AutoFormatOptions = _options.AutoFormat ?? AutoFormatOptions.Default;
+        _editor.AutoCorrectOptions = _options.AutoCorrect ?? AutoCorrectOptions.Default;
 
         Title = DefaultTitle;
         Width = 1040;
@@ -4073,6 +4076,9 @@ public sealed partial class MainWindow : Window
         _options.AutoFormat = edited.AutoFormat;
         _options.AutoCorrect = edited.AutoCorrect;
         _options.Normalize();
+        _editor.AutoCorrectEnabled = _options.AutoCorrectEnabled;
+        _editor.AutoFormatOptions = _options.AutoFormat ?? AutoFormatOptions.Default;
+        _editor.AutoCorrectOptions = _options.AutoCorrect ?? AutoCorrectOptions.Default;
     }
 
     private string ResolveDataFolderLabel()

@@ -423,6 +423,16 @@ public sealed class DocumentView : Control
 
     public TextDocument Document => _doc;
     public string? CurrentParagraphStyleId => CurrentParagraph()?.StyleId;
+
+    /// <summary>Whether WPF-compatible AutoCorrect and AutoFormat-As-You-Type rules run during text input.</summary>
+    public bool AutoCorrectEnabled { get; set; } = true;
+
+    /// <summary>The persisted per-rule AutoFormat-As-You-Type settings shared with the WPF host.</summary>
+    public AutoFormatOptions AutoFormatOptions { get; set; } = AutoFormatOptions.Default;
+
+    /// <summary>The persisted AutoCorrect-tab settings shared with the WPF host.</summary>
+    public AutoCorrectOptions AutoCorrectOptions { get; set; } = AutoCorrectOptions.Default;
+
     public bool CanUndo =>
         _bus.CanUndo && AllowsRestrictEditingHistoryOperation(
             RestrictEditingOperationKind.HistoryUndo,
@@ -9721,8 +9731,131 @@ public sealed class DocumentView : Control
 
         if (string.IsNullOrEmpty(e.Text) || e.Text == "\r" || e.Text == "\n")
             return;
+
+        if (e.Text.Length == 1 && TryAutoCorrect(e.Text[0]))
+        {
+            e.Handled = true;
+            return;
+        }
+
         InsertText(e.Text);
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// Applies the same shared AutoCorrect/AutoFormat result that the WPF preview-text path uses. The
+    /// typed character is still outside the model when this runs, so the result replaces the preceding
+    /// <see cref="AutoCorrectResult.DeleteBefore"/> characters and emits the result's insertion text as
+    /// one undoable paragraph edit.
+    /// </summary>
+    private bool TryAutoCorrect(char justTyped)
+    {
+        if (!AutoCorrectEnabled
+            || _shapeCaret is not null
+            || _hfCaret is not null
+            || _cellCaret is not null
+            || NormalizedSelection() is not null
+            || CurrentParagraph() is not { } paragraph
+            || !IsEditable(paragraph))
+            return false;
+
+        var cells = ParaCells(paragraph);
+        var bodyOffset = Math.Clamp(_caret.Offset, 0, cells.Count);
+        var textBefore = new string(cells.Take(bodyOffset).Select(cell => cell.Ch).ToArray());
+        var result = AutoCorrectEngine.Evaluate(textBefore, justTyped, AutoCorrectOptions);
+        if (!result.Applies)
+        {
+            // WPF's list paragraph exposes its list marker to the native text range, so the first real
+            // list-item character is not treated as a sentence-start capitalization candidate. The custom
+            // Avalonia model stores that marker in paragraph formatting, so carry the same context into
+            // the shared rule evaluation.
+            var formatOptions = paragraph.Formatting.ListKind != ListKind.None && bodyOffset == 0
+                ? AutoFormatOptions with { Capitalization = false }
+                : AutoFormatOptions;
+            result = AutoCorrect.Evaluate(textBefore, justTyped, formatOptions);
+        }
+        if (!result.Applies)
+            return false;
+
+        var deleteStart = bodyOffset - result.DeleteBefore;
+        if (deleteStart < 0 || deleteStart > bodyOffset)
+            return false;
+
+        var pendingFmt = _pendingRunFmt;
+        _pendingRunFmt = null;
+        var replacementFmt = pendingFmt ?? ActiveFormatting(paragraph, bodyOffset);
+
+        if (result.Outcome is AutoFormatOutcomeKind.BulletList or AutoFormatOutcomeKind.NumberList)
+        {
+            _bus.BeginUndoGroup();
+            try
+            {
+                _bus.Execute(new ReplaceParagraphRunsCommand(_caret.Block, p =>
+                {
+                    var live = ParaCells(p);
+                    live.RemoveRange(deleteStart, Math.Min(result.DeleteBefore, live.Count - deleteStart));
+                    SetRuns(p, live);
+                }));
+                var listKind = result.Outcome == AutoFormatOutcomeKind.BulletList
+                    ? ListKind.Bullet
+                    : ListKind.Number;
+                _bus.Execute(new SetParagraphFormattingCommand(
+                    _caret.Block,
+                    paragraph.Formatting with { ListKind = listKind, ListLevel = 0 }));
+                _bus.CommitUndoGroup("AutoFormat list");
+            }
+            catch
+            {
+                _bus.AbortUndoGroup();
+                throw;
+            }
+
+            _caret = new DocPosition(_caret.Block, deleteStart);
+            _selectionAnchor = _caret;
+            return true;
+        }
+
+        var replacement = new List<Cell>(result.Insert.Length);
+        for (var index = 0; index < result.Insert.Length; index++)
+        {
+            var fmt = replacementFmt;
+            if (result.Outcome == AutoFormatOutcomeKind.SuperscriptSuffix
+                && result.SuffixLength > 0
+                && index >= result.Insert.Length - 1 - result.SuffixLength
+                && index < result.Insert.Length - 1)
+            {
+                fmt = fmt with { VerticalAlign = VerticalAlign.Superscript };
+            }
+
+            LinkInfo? link = null;
+            if (result.Outcome == AutoFormatOutcomeKind.Hyperlink
+                && result.LinkTarget is { Length: > 0 }
+                && index < result.Insert.Length - 1)
+            {
+                link = new LinkInfo(result.LinkTarget, null, null);
+            }
+
+            replacement.Add(new Cell(result.Insert[index], fmt, Link: link));
+        }
+
+        _bus.Execute(new ReplaceParagraphRunsCommand(_caret.Block, p =>
+        {
+            var live = ParaCells(p);
+            live.RemoveRange(deleteStart, Math.Min(result.DeleteBefore, live.Count - deleteStart));
+            live.InsertRange(deleteStart, replacement);
+            SetRuns(p, live);
+        }));
+
+        _caret = new DocPosition(_caret.Block, deleteStart + result.Insert.Length);
+        _selectionAnchor = _caret;
+        return true;
+    }
+
+    /// <summary>Test seam for driving the same one-character path used by Avalonia text input.</summary>
+    internal void SimulateTextInputForTest(string text)
+    {
+        foreach (var character in text)
+            OnTextInput(new TextInputEventArgs { Text = character.ToString() });
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
