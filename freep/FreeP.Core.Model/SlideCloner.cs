@@ -575,6 +575,7 @@ public static class SlideCloner
     {
         Kind            = t.Kind,
         Direction       = t.Direction,
+        SplitOrientation = t.SplitOrientation,
         DurationMs      = t.DurationMs,
         AdvanceOnClick  = t.AdvanceOnClick,
         AdvanceAfterMs  = t.AdvanceAfterMs,

@@ -131,6 +131,26 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DuplicateSlideCommand_DeepClone_PreservesTransitionSplitOrientation()
+    {
+        var (p, bus) = Make(1);
+        p.Slides[0].Transition = new SlideTransition
+        {
+            Kind = TransitionKind.Split,
+            Direction = TransitionDirection.In,
+            SplitOrientation = TransitionDirection.Vertical,
+        };
+
+        bus.Execute(new DuplicateSlideCommand(0));
+
+        var transition = p.Slides[1].Transition;
+        transition.Should().NotBeNull();
+        transition!.Kind.Should().Be(TransitionKind.Split);
+        transition.Direction.Should().Be(TransitionDirection.In);
+        transition.SplitOrientation.Should().Be(TransitionDirection.Vertical);
+    }
+
+    [Fact]
     public void DuplicateSlideCommand_DeepClone_MutatingDuplicateDoesNotTouchOriginal()
     {
         var (p, bus) = Make(1);
