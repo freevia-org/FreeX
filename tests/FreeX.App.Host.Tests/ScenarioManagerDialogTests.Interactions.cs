@@ -26,7 +26,7 @@ public sealed partial class ScenarioManagerDialogTests
             try
             {
                 GetField<TextBox>(dialog, "_newNameBox").Text.Should().Be("Best Case");
-                GetField<TextBox>(dialog, "_changingCellsBox").Text.Should().Be("B2:D3");
+                GetField<TextBox>(dialog, "_changingCellsBox").Text.Should().Be("B2:B2,D3:D3");
                 GetField<TextBox>(dialog, "_commentBox").Text.Should().Be("Use growth plan");
                 GetField<CheckBox>(dialog, "_lockedBox").IsChecked.Should().BeFalse();
                 GetField<CheckBox>(dialog, "_hiddenBox").IsChecked.Should().BeFalse();

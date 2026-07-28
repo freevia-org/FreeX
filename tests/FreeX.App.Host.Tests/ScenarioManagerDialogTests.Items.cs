@@ -37,7 +37,7 @@ public sealed partial class ScenarioManagerDialogTests
         var item = ScenarioManagerDialog.BuildScenarioItems(workbook).Single();
 
         item.Name.Should().Be("Best Case");
-        item.ChangingCellsText.Should().Be("B2:C4");
+        item.ChangingCellsText.Should().Be("B2:B2,C4:C4");
         item.Comment.Should().Be("Revenue lift");
         item.Hidden.Should().BeTrue();
         item.Locked.Should().BeTrue();

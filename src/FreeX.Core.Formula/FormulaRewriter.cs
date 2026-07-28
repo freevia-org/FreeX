@@ -279,7 +279,8 @@ public static class FormulaRewriter
     private static FormulaNode RewriteRange(
         RangeRefNode rr, RewriteOperation op, string hostSheetName, ref bool changed)
     {
-        // TODO(H28 3-D sheet-span refs): a span (EndSheetName set, e.g. Sheet1:Sheet3!A1) is passed
+        // TODO(H28-3d-span-refs): Keep 3-D sheet-span structural rewrites conservative until span-aware row/column/delete-sheet rewriting lands. (ref: docs/planning/outstanding-build.md#highest-priority-outstanding-work)
+        // A span (EndSheetName set, e.g. Sheet1:Sheet3!A1) is passed
         // through untouched for row/col structural ops — insert/delete rows or columns, cell moves.
         // None of the row/col shift or delete-shrink math below understands "this reference spans
         // multiple sheets", so blindly reusing that logic here would silently mis-rewrite (or wrongly
@@ -289,7 +290,7 @@ public static class FormulaRewriter
         // as Excel would need to fully re-resolve — for edits on a spanned sheet whose row/col shift
         // should have shown up in this reference). Full span-aware rewriting (per-sheet shift math) is
         // intentionally out of scope for this change. DeleteSheetOp contracting the span when an
-        // endpoint sheet is removed is also still TODO (needs sheet-order/membership machinery beyond
+        // endpoint sheet is removed is also still deferred (needs sheet-order/membership machinery beyond
         // this file); a delete of an endpoint sheet leaves the span's sheet name stale rather than
         // contracting it, which the caller compensates for by forcing a recalc (see R30-...-3dref-1).
         // RenameSheetOp, however, is purely textual — the span's endpoint sheet *names* live directly

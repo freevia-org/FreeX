@@ -581,7 +581,7 @@ public sealed class StatusBarLayoutTests
 
         public void ShowInlineEditor(CellAddress address)
         {
-            _showInlineEditor.Invoke(_window, [address]);
+            _showInlineEditor.Invoke(_window, [address, null]);
             PumpDispatcher();
         }
 

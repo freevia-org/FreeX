@@ -66,10 +66,24 @@ public sealed class FreeXCleanupB10Tests
                 var buildPreview = typeof(MainWindow)
                     .GetMethod("BuildActiveSheetPrintPreview", BindingFlags.Instance | BindingFlags.NonPublic)
                     ?? throw new MissingMethodException(nameof(MainWindow), "BuildActiveSheetPrintPreview");
+                var workbookField = typeof(MainWindow)
+                    .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
                 var currentSheetIdField = typeof(MainWindow)
                     .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
                     ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
-                currentSheetIdField.SetValue(window, sheet.Id);
+                var liveWorkbook = (Workbook)(workbookField.GetValue(window)
+                    ?? throw new InvalidOperationException("MainWindow workbook is not initialized."));
+                var liveSheet = liveWorkbook.Sheets[0];
+                liveSheet.SetCell(new CellAddress(liveSheet.Id, 1, 1), new TextValue("A1"));
+                liveSheet.SetCell(new CellAddress(liveSheet.Id, 1, 5), new TextValue("E1"));
+                liveSheet.SetCell(new CellAddress(liveSheet.Id, 1, 9), new TextValue("I1"));
+                liveSheet.SetPrintAreas([
+                    new GridRange(new CellAddress(liveSheet.Id, 1, 1), new CellAddress(liveSheet.Id, 2, 3)),
+                    new GridRange(new CellAddress(liveSheet.Id, 1, 5), new CellAddress(liveSheet.Id, 2, 7)),
+                    new GridRange(new CellAddress(liveSheet.Id, 1, 9), new CellAddress(liveSheet.Id, 2, 11)),
+                ]);
+                currentSheetIdField.SetValue(window, liveSheet.Id);
 
                 // Sanity check: confirm the unranged render really does produce 3+ pages, so the
                 // page-range slice below is exercising real multi-page re-parenting, not a no-op.

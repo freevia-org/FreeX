@@ -11,7 +11,7 @@ public sealed class ViewportOriginTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
         var createViewport = source[
             source.IndexOf("private ViewportModel CreateViewport", StringComparison.Ordinal)..
-            source.IndexOf("private SplitPaneViewportOffsets? GetSplitPaneViewportOffsets", StringComparison.Ordinal)];
+            source.IndexOf("private static SplitPaneViewportOffsets? GetSplitPaneViewportOffsets", StringComparison.Ordinal)];
 
         createViewport.Should().Contain("IncludeObjects: _options.ObjectsDisplay == FreeXObjectDisplay.All");
     }

@@ -67,7 +67,7 @@ public sealed class FreeXCleanupMED14Tests
 
                 setActiveCell.Invoke(window, [new CellAddress(sheet.Id, 1, 1)]);
                 PumpDispatcher();
-                showInlineEditor.Invoke(window, [new CellAddress(sheet.Id, 1, 1)]);
+                showInlineEditor.Invoke(window, [new CellAddress(sheet.Id, 1, 1), null]);
                 PumpDispatcher();
 
                 var editor = (TextBox)inlineEditorField.GetValue(window)!;
@@ -80,7 +80,7 @@ public sealed class FreeXCleanupMED14Tests
 
                 setActiveCell.Invoke(window, [new CellAddress(sheet.Id, 2, 2)]);
                 PumpDispatcher();
-                showInlineEditor.Invoke(window, [new CellAddress(sheet.Id, 2, 2)]);
+                showInlineEditor.Invoke(window, [new CellAddress(sheet.Id, 2, 2), null]);
                 PumpDispatcher();
 
                 var nameAtB2 = AutomationProperties.GetName(editor);

@@ -12,14 +12,15 @@ public sealed class SolutionProjectsPreflightTests
 
         script.Should().Contain("FreeX.slnx");
         script.Should().Contain("SelectNodes(\"//*[local-name()='Project']\")");
-        script.Should().Contain("Get-ProjectFiles -Directory");
-        script.Should().Contain("Test-IsIgnoredDirectoryName");
+        script.Should().Contain("ToolScriptSupport.ps1");
+        script.Should().Contain("Get-ToolProjectFiles");
+        script.Should().Contain("Test-IsIgnoredProjectPath");
         script.Should().Contain("ProjectPathPrefixes");
         script.Should().Contain("ExcludedProjectPathPrefixes");
         script.Should().Contain("Test-IsIncludedProjectPath");
         script.Should().Contain("*_wpftmp.csproj");
-        script.Should().Contain("$segments -contains \".worktrees\"");
-        script.Should().Contain("$segments -contains \".claude\"");
+        script.Should().Contain(".worktrees");
+        script.Should().Contain(".claude");
         script.Should().Contain("\"tools/\"");
         script.Should().Contain("\"shared/\"");
         script.Should().Contain("Duplicate solution project entry");

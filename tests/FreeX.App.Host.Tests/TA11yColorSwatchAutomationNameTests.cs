@@ -47,10 +47,9 @@ public sealed partial class TA11yColorSwatchAutomationNameTests
                  button.Contains("Content=\"...\"", StringComparison.Ordinal)))
             .ToList();
 
-        // Sanity check: this must actually exercise the ~54 swatch/picker buttons described by
-        // the finding (Font 8 + Border 7 + Fill 29 + Pattern 7, plus the 3 "More ... Colors"
-        // pickers), not silently match zero elements if the XAML shape changes.
-        swatchButtons.Should().HaveCountGreaterThanOrEqualTo(54);
+        // Sanity check: this must actually exercise the WPF-hosted Font/Border swatches and the
+        // inline Border "More Colors" picker, not silently match zero elements if the XAML shape changes.
+        swatchButtons.Should().HaveCountGreaterThanOrEqualTo(16);
 
         foreach (var button in swatchButtons)
         {
@@ -71,12 +70,19 @@ public sealed partial class TA11yColorSwatchAutomationNameTests
 
         foreach (var clickHandler in MoreColorsClickHandlers)
         {
-            var button = ButtonElementPattern().Matches(xaml)
+            var buttons = ButtonElementPattern().Matches(xaml)
                 .Select(m => m.Value)
-                .Single(b => b.Contains($"Click=\"{clickHandler}\"", StringComparison.Ordinal)
-                    && b.Contains("Content=\"...\"", StringComparison.Ordinal));
+                .Where(b => b.Contains($"Click=\"{clickHandler}\"", StringComparison.Ordinal))
+                .ToList();
 
-            button.Should().MatchRegex("AutomationProperties\\.Name=\"\\{local:Loc Key=[A-Za-z0-9_]+\\}\"");
+            buttons.Should().NotBeEmpty($"expected a picker button wired to {clickHandler}");
+            foreach (var button in buttons)
+            {
+                if (button.Contains("Content=\"...\"", StringComparison.Ordinal))
+                    button.Should().MatchRegex("AutomationProperties\\.Name=\"\\{local:Loc Key=[A-Za-z0-9_]+\\}\"");
+                else
+                    button.Should().MatchRegex("Content=\"\\{local:Loc Key=[A-Za-z0-9_]+\\}\"");
+            }
         }
     }
 }

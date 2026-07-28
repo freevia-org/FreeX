@@ -10,11 +10,12 @@ public sealed class DotNetProjectReferencesPreflightTests
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-DotNetProjectReferences.ps1");
 
-        script.Should().Contain("Get-ProjectFiles -Directory");
-        script.Should().Contain("Test-IsIgnoredDirectoryName");
+        script.Should().Contain("ToolScriptSupport.ps1");
+        script.Should().Contain("Get-ToolProjectFiles");
+        script.Should().Contain("Test-IsIgnoredProjectPath");
         script.Should().Contain("*_wpftmp.csproj");
-        script.Should().Contain("$segments -contains \".worktrees\"");
-        script.Should().Contain("$segments -contains \".claude\"");
+        script.Should().Contain(".worktrees");
+        script.Should().Contain(".claude");
         script.Should().Contain("ProjectReference");
         script.Should().Contain("Duplicate ProjectReference target");
         script.Should().Contain("ProjectReference target escapes project root");

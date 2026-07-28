@@ -102,8 +102,8 @@ replace this dependency or confirm the project has the required Xceed license.
 | SkiaSharp.NativeAssets.WebAssembly | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | SkiaSharp.NativeAssets.Win32 | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | System.IO.Packaging | 8.0.1 | MIT | https://dot.net/ |
-| System.Security.Cryptography.Pkcs | 10.0.9 | MIT | https://dot.net/ |
-| System.Security.Cryptography.Xml | 10.0.9 | MIT | https://dot.net/ |
+| System.Security.Cryptography.Pkcs | 10.0.10 | MIT | https://dot.net/ |
+| System.Security.Cryptography.Xml | 10.0.10 | MIT | https://dot.net/ |
 | Tmds.DBus.Protocol | 0.92.0 | MIT |  |
 | UglyToad.PdfPig | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
 | UglyToad.PdfPig.Core | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |

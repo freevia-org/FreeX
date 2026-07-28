@@ -240,7 +240,7 @@ public sealed partial class MainWindowSourceHygieneTests
         saveResolvedMethod.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
         saveResolvedMethod.Should().Contain("_workbookDirty");
         saveResolvedMethod.Should().Contain("_currentFilePath");
-        saveResolvedMethod.Should().Contain("_fileAdapters");
+        saveResolvedMethod.Should().Contain("ResolveExistingSaveTarget");
         saveResolvedMethod.Should().Contain("SaveWorkbookToTargetAsync");
         saveResolvedMethod.Should().Contain("SaveWorkbookWithDialogAsync");
 
@@ -442,10 +442,11 @@ public sealed partial class MainWindowSourceHygieneTests
         dataCommandsSource.Should().Contain("if (!result.Chosen) return;");
         dataCommandsSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format)");
         dataCommandsSource.Should().Contain("private async void GetDataBtn_Click(object sender, RoutedEventArgs e)");
+        dataCommandsSource.Should().Contain("private async Task ImportDataFromFileAsync(");
         dataCommandsSource.Should().Contain("await Task.Run(() =>");
         dataCommandsSource.Should().Contain("RecordDiagnosticEvent(\"import_failed\"");
         dataCommandsSource.Should().Contain("RecordDiagnosticEvent(\"import_completed\"");
-        dataCommandsSource.Should().Contain("new ImportSheetCommand(_currentSheetId, destination, imported.Sheets[0])");
+        dataCommandsSource.Should().Contain("new ImportSheetCommand(targetSheetId, destination, imported.Sheets[0])");
         dataCommandsSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
         dataCommandsSource.Should().Contain("SetActiveCell(destination);");
         dataCommandsSource.Should().Contain("EnsureCellVisible(destination);");

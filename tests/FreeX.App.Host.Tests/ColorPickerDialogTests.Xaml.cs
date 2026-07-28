@@ -65,11 +65,11 @@ public sealed partial class ColorPickerDialogTests
                 var spectrumPanel = (Panel)dialog.FindName("CustomSpectrumPanel");
                 var slider = (Slider)dialog.FindName("CustomLuminositySlider");
 
-                var themeButton = FindSwatchButton(themePanel, new CellColor(0x44, 0x72, 0xC4));
+                var themeButton = FindSwatchButton(themePanel, new CellColor(0x15, 0x60, 0x82));
                 var standardButton = FindSwatchButton(standardPanel, new CellColor(0xFF, 0x00, 0x00));
                 var spectrumButton = FindSwatchButton(spectrumPanel, new CellColor(0x00, 0xFF, 0x00));
 
-                AutomationProperties.GetName(themeButton).Should().Be(UiText.Format("ColorPicker_GroupSwatchAutomationName", "Accent 1", "#4472C4"));
+                AutomationProperties.GetName(themeButton).Should().Be(UiText.Format("ColorPicker_GroupSwatchAutomationName", "Accent 1", "#156082"));
                 AutomationProperties.GetName(standardButton).Should().Be(UiText.Format("ColorPicker_GroupSwatchAutomationName", UiText.Get("ColorPicker_StandardColorGroup"), "#FF0000"));
                 AutomationProperties.GetName(spectrumButton).Should().Be(UiText.Format("ColorPicker_GroupSwatchAutomationName", UiText.Get("ColorPicker_CustomSpectrumColorGroup"), "#00FF00"));
                 AutomationProperties.GetHelpText(themeButton).Should().Be(UiText.Get("ColorPicker_SwatchHelpText"));

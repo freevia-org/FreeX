@@ -17,6 +17,7 @@ using FreeW.Core.Model;
 using FreeW.Core.IO;
 using FreeW.App.Host;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun = System.Windows.Documents.Run;
 using WpfHyperlink = System.Windows.Documents.Hyperlink;
@@ -4746,7 +4747,7 @@ public sealed class DocumentView : RichTextBox
             }
         }
 
-        Document = flow;
+        AssignDocumentForRender(flow);
         ApplyPageChrome();
         ApplyProtection();
         SyncFormattingMarksAdorner();
@@ -4757,6 +4758,35 @@ public sealed class DocumentView : RichTextBox
         SyncPageGridlinesAdorner();
         SyncShapeEditPointsAdorner();
         SyncFloatingObjectsCanvas();
+    }
+
+    private void AssignDocumentForRender(FlowDocument flow)
+    {
+        var restoreSpellCheck = SpellCheck.IsEnabled;
+        if (restoreSpellCheck)
+            SpellCheck.IsEnabled = false;
+
+        try
+        {
+            Document = flow;
+        }
+        finally
+        {
+            if (restoreSpellCheck)
+                TryRestoreSpellCheck();
+        }
+    }
+
+    private void TryRestoreSpellCheck()
+    {
+        try
+        {
+            SpellCheck.IsEnabled = true;
+        }
+        catch (Exception ex) when (ex is InvalidComObjectException or NullReferenceException)
+        {
+            // Headless STA test hosts can disconnect WPF's WinRT spell-checker. Keep the render alive.
+        }
     }
 
     /// <summary>

@@ -96,13 +96,7 @@ public partial class MainWindow
                 for (var i = from - 1; i <= to - 1 && i < document.Pages.Count; i++)
                     selectedPages.Add(document.Pages[i]);
                 foreach (var page in selectedPages)
-                {
-                    var fixedPage = page.Child;
-                    page.Child = null;
-                    var moved = new PageContent();
-                    ((IAddChild)moved).AddChild(fixedPage);
-                    rangedDoc.Pages.Add(moved);
-                }
+                    rangedDoc.Pages.Add(CloneExportPage(document, page));
                 document = rangedDoc;
             }
         }

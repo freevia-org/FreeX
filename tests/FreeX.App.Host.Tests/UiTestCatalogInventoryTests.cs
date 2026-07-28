@@ -788,7 +788,7 @@ public sealed partial class UiTestCatalogInventoryTests
     [InlineData("screenshot_ribbon.ps1")]
     public void ScreenshotScripts_DefineForegroundOwnershipGuard(string scriptName)
     {
-        var script = ReadScreenshotToolScript(scriptName);
+        var script = ReadScreenshotToolScriptWithCaptureSupport(scriptName);
 
         script.Should().Contain("GetForegroundWindow");
         script.Should().Contain("function Assert-ForegroundWindowOwnership");
@@ -989,6 +989,11 @@ public sealed partial class UiTestCatalogInventoryTests
     private static string ReadScreenshotToolScript(string scriptName) =>
         WorkspaceFileLocator.ReadAllText("tools", scriptName);
 
+    private static string ReadScreenshotToolScriptWithCaptureSupport(string scriptName) =>
+        WorkspaceFileLocator.ReadAllText("tools", "ScreenshotCaptureSupport.ps1") +
+        Environment.NewLine +
+        ReadScreenshotToolScript(scriptName);
+
     private static string PreviousExecutableLine(IReadOnlyList<string> lines, int index)
     {
         for (var previous = index - 1; previous >= 0; previous--)
@@ -1072,7 +1077,7 @@ public sealed partial class UiTestCatalogInventoryTests
     [GeneratedRegex(@"`tools/(?<script>screenshot_(?:excel|ribbon)\.ps1)`")]
     private static partial Regex ScreenshotToolPath();
 
-    [GeneratedRegex(@"\[System\.Windows\.Forms\.SendKeys\]::SendWait\(|\[Clicker\]::mouse_event\(")]
+    [GeneratedRegex(@"\[System\.Windows\.Forms\.SendKeys\]::SendWait\(|\[ScreenshotWin32\]::mouse_event\(")]
     private static partial Regex GlobalInputCall();
 
     private sealed record InventorySnapshotRow(int Count, string Notes);

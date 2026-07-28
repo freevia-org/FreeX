@@ -33,12 +33,13 @@ public sealed partial class AutoFilterDialogTests
         var homeEditingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeEditing.cs");
 
         dataSource.Should().Contain("private GridRange? _lastAutoFilterRange;");
-        dataSource.Should().Contain("private Func<GridRange, IWorkbookCommand>? _lastAutoFilterCommandFactory;");
+        dataSource.Should().Contain("private readonly Dictionary<uint, Func<GridRange, IWorkbookCommand>> _activeAutoFilterColumnFactories = new();");
         dataSource.Should().Contain("private bool TryExecuteRememberedAutoFilterCommand(");
-        dataSource.Should().Contain("_lastAutoFilterCommandFactory = createCommand;");
+        dataSource.Should().Contain("TryExecuteRememberedAutoFilterColumnCommand(title, range, filterColOffset: 0, createCommand);");
+        dataSource.Should().Contain("_activeAutoFilterColumnFactories[range.Start.Col + filterColOffset] = createCommand;");
         dataSource.Should().Contain("private void ReapplyAutoFilter()");
         dataSource.Should().Contain("TryExecuteRepeatableCurrentRangeCommand(");
-        dataSource.Should().Contain("_lastAutoFilterCommandFactory");
+        dataSource.Should().Contain("BuildReapplyAllActiveAutoFilterColumnsCommand(_lastAutoFilterRange!.Value)");
         dataSource.Should().Contain("private void ClearRememberedAutoFilterCommand()");
         homeEditingSource.Should().Contain("private void FilterReapplyMenuItem_Click(object sender, RoutedEventArgs e) => ReapplyAutoFilter();");
         homeEditingSource.Should().NotContain("private void FilterReapplyMenuItem_Click(object sender, RoutedEventArgs e) => FilterButton_Click(sender, e);");

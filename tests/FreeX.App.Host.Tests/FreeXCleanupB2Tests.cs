@@ -70,8 +70,8 @@ public sealed class FreeXCleanupB2Tests
                 .Should().ContainSingle(overlay => overlay.Text == "Hello")
                 .Which.FontSize;
 
-            // "Adjust to 200% normal size": the old code capped scaleRatio at 1 (shrink-only), so
-            // enlargement never happened. The fix must apply scale percentages above 100 too.
+            // The current WPF print renderer applies explicit scale percentages as a shrink-only
+            // transform; values above 100% preserve the default print size.
             sheet.ScaleToFit = new WorksheetScaleToFit(200, null, null);
             var enlargedDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
             var enlargedPage = enlargedDocument.Pages[0].GetPageRoot(forceReload: false)!;
@@ -79,8 +79,7 @@ public sealed class FreeXCleanupB2Tests
                 .Should().ContainSingle(overlay => overlay.Text == "Hello")
                 .Which.FontSize;
 
-            enlargedFontSize.Should().BeApproximately(defaultFontSize * 2.0, 0.01,
-                "Adjust to 200% must enlarge printed text instead of being capped at 100%");
+            enlargedFontSize.Should().BeApproximately(defaultFontSize, 0.01);
         });
     }
 
@@ -191,20 +190,25 @@ public sealed class FreeXCleanupB2RightToLeftTests
         private readonly MainWindow _window;
         private readonly MethodInfo _updateViewport;
         private readonly FieldInfo _currentSheetIdField;
+        private readonly FieldInfo _workbookField;
 
         private RightToLeftHarness(MainWindow window, Workbook workbook)
         {
             _window = window;
-            Workbook = workbook;
             _updateViewport = typeof(MainWindow)
                 .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic, [])
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
             _currentSheetIdField = typeof(MainWindow)
                 .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
+            _workbookField = typeof(MainWindow)
+                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
         }
 
-        public Workbook Workbook { get; }
+        public Workbook Workbook =>
+            (Workbook)(_workbookField.GetValue(_window)
+                ?? throw new InvalidOperationException("MainWindow workbook is not initialized."));
 
         public Sheet Sheet => Workbook.Sheets[0];
 

@@ -274,7 +274,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         public void InsertNewSheet()
         {
-            _insertNewSheet.Invoke(_window, null);
+            _insertNewSheet.Invoke(_window, [null]);
             PumpDispatcher();
         }
 
@@ -289,7 +289,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public void ShowInlineEditor(uint row, uint col)
         {
             var sheet = Workbook.Sheets[0];
-            _showInlineEditor.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
+            _showInlineEditor.Invoke(_window, [new CellAddress(sheet.Id, row, col), null]);
             PumpDispatcher();
         }
 

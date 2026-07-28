@@ -817,7 +817,7 @@ public sealed class MainWindowSheetTabKeyboardTests
 
         public void InsertNewSheet()
         {
-            _insertNewSheet.Invoke(_window, null);
+            _insertNewSheet.Invoke(_window, [null]);
             _window.UpdateLayout();
             PumpDispatcher();
         }

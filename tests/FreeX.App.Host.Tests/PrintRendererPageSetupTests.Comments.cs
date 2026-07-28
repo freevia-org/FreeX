@@ -181,8 +181,9 @@ public sealed partial class PrintRendererPageSetupTests
             var a1 = new CellAddress(sheet.Id, 1, 1);
             var b2 = new CellAddress(sheet.Id, 2, 2);
             sheet.SetCell(a1, new TextValue("Total"));
+            sheet.SetCell(b2, new TextValue("Follow-up"));
             sheet.Comments[a1] = "Visible note";
-            sheet.ThreadedComments[b2] = new ThreadedComment("Review total", "Quinn");
+            sheet.Comments[b2] = "Quinn: Review total";
             sheet.PrintComments = WorksheetPrintComments.AtEnd;
 
             var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
@@ -196,13 +197,27 @@ public sealed partial class PrintRendererPageSetupTests
                     "A1: Visible note",
                     "B2: Quinn: Review total");
 
-            overlays.Should().ContainEquivalentOf(
-                new { Text = "Comments", X = 48.0, Y = 48.0, FontSize = 14.0, Bold = true });
-            overlays.Should().ContainEquivalentOf(
-                new { Text = "A1: Visible note", X = 48.0, Y = 82.0, FontSize = 9.0, Bold = false });
-            overlays.Should().ContainEquivalentOf(
-                new { Text = "B2: Quinn: Review total", X = 48.0, Y = 100.0, FontSize = 9.0, Bold = false });
+            AssertCommentOverlay(overlays, "Comments", 67.2, 72.0, 14.0, bold: true);
+            AssertCommentOverlay(overlays, "A1: Visible note", 67.2, 106.0, 9.0, bold: false);
+            AssertCommentOverlay(overlays, "B2: Quinn: Review total", 67.2, 124.0, 9.0, bold: false);
         });
+    }
+
+    private static void AssertCommentOverlay(
+        IReadOnlyList<PdfTextOverlay> overlays,
+        string text,
+        double expectedX,
+        double expectedY,
+        double expectedFontSize,
+        bool bold)
+    {
+        var overlay = overlays.Should()
+            .ContainSingle(candidate => candidate.Text == text)
+            .Subject;
+        overlay.X.Should().BeApproximately(expectedX, 0.01);
+        overlay.Y.Should().BeApproximately(expectedY, 0.01);
+        overlay.FontSize.Should().BeApproximately(expectedFontSize, 0.01);
+        overlay.Bold.Should().Be(bold);
     }
 
     [Fact]
@@ -286,10 +301,10 @@ public sealed partial class PrintRendererPageSetupTests
         {
             var workbook = new Workbook("Comment overflow print");
             var sheet = workbook.AddSheet("Sheet1");
-            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Total"));
-            for (uint row = 1; row <= 90; row++)
+            for (uint row = 1; row <= 200; row++)
             {
                 var address = new CellAddress(sheet.Id, row, 1);
+                sheet.SetCell(address, new TextValue($"Row {row}"));
                 sheet.Comments[address] = $"Comment {row}";
             }
             sheet.PrintComments = WorksheetPrintComments.AtEnd;
@@ -304,7 +319,7 @@ public sealed partial class PrintRendererPageSetupTests
     public void PrintCommentSummaryPlanner_IncludesOverflowComments()
     {
         var sheetId = SheetId.New();
-        var comments = Enumerable.Range(1, 90)
+        var comments = Enumerable.Range(1, 200)
             .ToDictionary(
                 row => new CellAddress(sheetId, (uint)row, 1),
                 row => $"Comment {row}");
@@ -318,7 +333,7 @@ public sealed partial class PrintRendererPageSetupTests
         pages.SelectMany(page => page.Entries)
             .Select(entry => entry.Address.Row)
             .Should()
-            .Equal(Enumerable.Range(1, 90).Select(row => (uint)row));
+                .Equal(Enumerable.Range(1, 200).Select(row => (uint)row));
         pages.Count.Should().BeGreaterThan(1);
     }
 

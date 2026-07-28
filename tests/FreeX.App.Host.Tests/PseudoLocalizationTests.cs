@@ -58,8 +58,7 @@ public sealed partial class PseudoLocalizationTests
     {
         UiText.GetNeutralResourceKeys().Should().Contain(key);
 
-        var neutralValues = ReadNeutralValues();
-        var neutral = neutralValues[key];
+        var neutral = UiText.GetNeutral(key);
 
         neutral.Should().NotBeNullOrEmpty();
 

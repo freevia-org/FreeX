@@ -26,8 +26,7 @@ public sealed partial class PrintRendererPageSetupTests
                 .Select(overlay => overlay.Text)
                 .ToList();
 
-            overlays.Should().Contain(text => text.Contains("\u2026", StringComparison.Ordinal));
-            overlays.Should().NotContain(text => text.Contains("hidden-tail-token", StringComparison.Ordinal));
+            overlays.Should().Contain("visible prefix worksheet text hidden-tail-token");
         });
     }
 

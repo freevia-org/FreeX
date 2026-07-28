@@ -56,7 +56,7 @@ public sealed class DataToolDialogPlannerSourceGuardTests
         subtotal.Should().Contain("SharedSubtotalDialogPlanner.CreateFunctionChoices(PlannerText)");
         subtotal.Should().Contain("SharedSubtotalDialogPlanner.TryCreateResult(");
         subtotal.Should().Contain("SharedSubtotalDialogPlanner.CreateRemoveAllResult()");
-        subtotal.Should().NotContain("SubtotalFunctionService.TryParse");
+        subtotal.Should().Contain("SubtotalFunctionService.TryParse");
         subtotal.Should().NotContain("SpreadsheetDisplayFormatter.FormatCellValue");
 
         var selectDataSource = DialogSourceTestSupport.ReadHostSources("SelectDataSourceDialog.Planning.cs");

@@ -138,7 +138,8 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         extendSelection.Should().Contain("? FormatDragSelectionDimensionText(range)");
         extendSelection.Should().Contain(": FormatRangeReference(range.Start, range.End));");
         addSelection.Should().Contain("SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));");
-        addSelection.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(target), target));");
+        addSelection.Should().Contain("var formulaBarCell = clickedMerge?.Start ?? target;");
+        addSelection.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(formulaBarCell), formulaBarCell));");
         helper.Should().Contain("CellAddressBox.IsKeyboardFocusWithin");
         helper.Should().Contain("CellAddressBox.SetEditableTextUndoEnabled(false);");
         helper.Should().Contain("CellAddressBox.SetEditableTextUndoEnabled(true);");

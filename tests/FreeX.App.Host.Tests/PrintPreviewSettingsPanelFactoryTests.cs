@@ -134,7 +134,7 @@ public sealed class PrintPreviewSettingsPanelFactoryTests
             var panel = PrintPreviewSettingsPanelFactory.Build(sheet.Id, sheet, commands.Add, () => refreshes++);
 
             // marginsBox is at index 6
-            ComboBoxes(panel)[6].SelectedIndex = 1;
+            ComboBoxes(panel)[6].SelectedIndex = 2;
 
             commands.Should().ContainSingle().Which.Should().BeOfType<SetPageMarginsCommand>();
             commands[0].Label.Should().Be("Page Margins");

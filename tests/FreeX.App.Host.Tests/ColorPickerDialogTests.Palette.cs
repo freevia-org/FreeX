@@ -38,7 +38,7 @@ public sealed partial class ColorPickerDialogTests
             "Accent 6");
         columns[0].Shades[0].Hex.Should().Be("#000000");
         columns[1].Shades[0].Hex.Should().Be("#FFFFFF");
-        columns[4].Shades[0].Hex.Should().Be("#4472C4");
+        columns[4].Shades[0].Hex.Should().Be("#156082");
         columns.SelectMany(column => column.Shades).Select(swatch => swatch.Hex).Should().OnlyHaveUniqueItems();
     }
 
@@ -99,12 +99,12 @@ public sealed partial class ColorPickerDialogTests
                     new CellColor(0xFF, 0xFF, 0xFF),
                     new CellColor(0x44, 0x54, 0x6A),
                     new CellColor(0xE7, 0xE6, 0xE6),
-                    new CellColor(0x44, 0x72, 0xC4),
-                    new CellColor(0xED, 0x7D, 0x31),
-                    new CellColor(0xA5, 0xA5, 0xA5),
-                    new CellColor(0xFF, 0xC0, 0x00),
-                    new CellColor(0x5B, 0x9B, 0xD5),
-                    new CellColor(0x70, 0xAD, 0x47));
+                    new CellColor(0x15, 0x60, 0x82),
+                    new CellColor(0xE9, 0x71, 0x32),
+                    new CellColor(0x19, 0x6B, 0x24),
+                    new CellColor(0x0F, 0x9E, 0xD5),
+                    new CellColor(0xA0, 0x2B, 0x93),
+                    new CellColor(0x4E, 0xA7, 0x2E));
             }
             finally
             {

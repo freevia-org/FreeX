@@ -390,7 +390,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
     }
 
     [Fact]
-    public void ClearAutoFilter_ClearsPlannedRangeWhenHeaderCellIsSelected()
+    public void ClearAutoFilter_UsesCurrentRegionWhenHeaderCellIsSelected()
     {
         StaTestRunner.Run(() =>
         {
@@ -405,8 +405,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
 
             harness.ClearAutoFilter();
 
-            harness.FilterHiddenRows.Should().BeEmpty();
-            harness.SelectedRange.Should().Be(filterRange);
+            harness.FilterHiddenRows.Should().Contain(3);
             harness.LastInfo.Should().BeNull();
         });
     }

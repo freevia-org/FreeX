@@ -440,10 +440,9 @@ public sealed partial class GridViewRenderPerformanceTests
     public void RenderSparklines_AvoidsEmptyRenderAllocations()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Overlays.Sparklines.cs");
-        // Slice the RenderSparklines method body (entry point is last method in file).
-        // Ends at the closing brace of the class (last "}" in the file).
         var renderSparklinesStart = source.IndexOf("private void RenderSparklines(DrawingContext dc)", StringComparison.Ordinal);
-        var renderSparklines = source[renderSparklinesStart..];
+        var renderSparklinesEnd = source.IndexOf("public static void BuildSparklineGroupScalingBounds", renderSparklinesStart, StringComparison.Ordinal);
+        var renderSparklines = source[renderSparklinesStart..renderSparklinesEnd];
 
         // Early-out guards are still in place — no work done when there's nothing to render.
         renderSparklines.Should().Contain("Sparklines is not { Count: > 0 }");

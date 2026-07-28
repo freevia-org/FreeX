@@ -13,8 +13,8 @@ public sealed class DataCommandSourceTests
         var dataSource = ReadHostSourceFile("MainWindow.DataCommands.cs");
         var editingDropdownSource = ReadHostSourceFile("MainWindow.EditingDropdowns.cs");
 
-        filterSource.Should().Contain("new SortCommand(_currentSheetId, currentRange, sortByColOffset: 0, ascending: true)");
-        filterSource.Should().Contain("new SortCommand(_currentSheetId, currentRange, sortByColOffset: 0, ascending: false)");
+        filterSource.Should().Contain("new SortCommand(_currentSheetId, ExcludeHeaderRowForQuickSort(currentRange), sortByColOffset: 0, ascending: true)");
+        filterSource.Should().Contain("new SortCommand(_currentSheetId, ExcludeHeaderRowForQuickSort(currentRange), sortByColOffset: 0, ascending: false)");
         filterSource.Should().Contain("new SortDialog(");
         var filterButtonHandler = SourceMethodExtractor.ExtractMethodSource(filterSource, "private void FilterButton_Click(");
         filterButtonHandler.Should().Contain("AutoFilterToggleRangePlanner.Create(sheet, selectedRange)");
@@ -38,7 +38,9 @@ public sealed class DataCommandSourceTests
         dataSource.Should().Contain("new AdvancedFilterDialog(");
         dataSource.Should().Contain("AdvancedFilterPlanner.CreateDefaultListRange(sheet, selected)");
         dataSource.Should().NotContain("AdvancedFilterDefaultListRangePlanner.");
+        dataSource.Should().Contain("private void ApplyAdvancedFilterResult(AdvancedFilterDialogResult result)");
         dataSource.Should().Contain("() => new AdvancedFilterCommand(");
+        dataSource.Should().Contain("_lastInPlaceAdvancedFilter = new AdvancedFilterReapplyState(");
         dataSource.Should().Contain("ApplyAdvancedFilterRangeSelection(dialog, request)");
     }
 

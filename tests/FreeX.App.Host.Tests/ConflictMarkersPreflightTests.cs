@@ -15,8 +15,9 @@ public sealed class ConflictMarkersPreflightTests
         script.Should().Contain("git -C $resolvedProjectRoot ls-files");
         script.Should().Contain("if ($SearchRoots.Count -eq 0)");
         script.Should().Contain("\".slnx\"");
-        script.Should().Contain("$segments -contains \".worktrees\"");
-        script.Should().Contain("$segments -contains \".claude\"");
+        script.Should().Contain("Test-ToolExcludedPath");
+        script.Should().Contain(".worktrees");
+        script.Should().Contain(".claude");
         script.Should().Contain("$conflictMarkerPattern = '^(<<<<<<<|=======|>>>>>>>)($|[ <].*)'");
         script.Should().Contain("Git conflict marker validation failed");
         script.Should().Contain("Validated $($candidateFiles.Count) text file(s) for Git conflict markers.");

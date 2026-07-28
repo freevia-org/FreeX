@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using FluentAssertions;
+using FreeX.App.Presentation.Protection;
 using FreeX.Core.Model;
 using System.IO;
 
@@ -118,7 +119,9 @@ public sealed partial class ProtectionDialogTests
     {
         var source = ReadProtectionDialogSources();
 
-        source.Should().Contain("DialogSizing.ApplyContentHeight(this, width: isProtectSheet ? 430 : 380, minHeight: isProtectSheet ? 540 : 280);");
+        source.Should().Contain("DialogSizing.ApplyContentHeight(");
+        source.Should().Contain("width: isProtectSheet ? ProtectionDialogPlanner.ProtectSheetWidth : ProtectionDialogPlanner.ProtectWorkbookCaptureWidth,");
+        source.Should().Contain("minHeight: isProtectSheet ? ProtectionDialogPlanner.ProtectSheetHeight : ProtectionDialogPlanner.ProtectWorkbookCaptureHeight);");
         source.Should().Contain("DialogSizing.ApplyContentHeight(this, width: 360, minHeight: 180);");
         source.Should().NotContain("Height = isProtectSheet ? 540 : 250;");
         source.Should().NotContain("Height = 170;");
@@ -139,7 +142,7 @@ public sealed partial class ProtectionDialogTests
 
                 dialog.SizeToContent.Should().Be(SizeToContent.Height);
                 dialog.MinWidth.Should().Be(380);
-                dialog.MinHeight.Should().Be(280);
+                dialog.MinHeight.Should().Be(ProtectionDialogPlanner.ProtectWorkbookCaptureHeight);
                 var root = dialog.Content.Should().BeAssignableTo<FrameworkElement>().Subject;
                 var passwordBox = DialogSourceTestSupport.GetPrivateField<PasswordBox>(dialog, "_passwordBox");
                 var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog)

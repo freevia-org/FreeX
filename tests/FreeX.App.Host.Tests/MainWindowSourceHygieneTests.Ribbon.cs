@@ -145,7 +145,7 @@ public sealed partial class MainWindowSourceHygieneTests
         dataSource.Should().Contain("private void TextToColumnsBtn_Click(");
         dataSource.Should().Contain("private void AdvancedFilterBtn_Click(");
         dataSource.Should().Contain("private void DataTableBtn_Click(");
-        scenarioSource.Should().Contain("private void ScenariosBtn_Click(");
+        scenarioSource.Should().Contain("private async void ScenariosBtn_Click(");
     }
 
     [Fact]
@@ -589,7 +589,7 @@ public sealed partial class MainWindowSourceHygieneTests
         adoptSharedWorkbook.Should().NotContain("RefreshToolbar();");
         adoptSharedWorkbook.Should().NotContain("RefreshStatusBar();");
 
-        ExtractMethodSource(dataSource, "private async void GetDataBtn_Click(")
+        ExtractMethodSource(dataSource, "private async Task ImportDataFromFileAsync(")
             .Should()
             .Contain("RefreshStatusBar();");
         ExtractMethodSource(dataSource, "private void ForecastSheetBtn_Click(")
@@ -766,7 +766,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
         ribbon.Should().Contain(".IconToggle(\"Split\", \"Split\"");
-        source.Should().Contain("_ribbonState.SetChecked(\"Split\", sheet?.SplitRow is not null || sheet?.SplitColumn is not null)");
+        source.Should().Contain("_ribbonState.SetChecked(\"Split\", viewState.SplitRow is not null || viewState.SplitColumn is not null)");
     }
 
     [Fact]
@@ -830,7 +830,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void MainWindow_UsesVisibleFreeXBrandingAndWindowIcon()
     {
-        var iconPath = DialogSourceTestSupport.FindHostSourceFile("Resources", "FreeX.ico");
+        var iconPath = WorkspaceFileLocator.Find("shared", "Free.Shared.Shell", "Resources", "FreeX.ico");
         var theme = DialogSourceTestSupport.ReadHostSources("Resources\\ThemeResources.xaml");
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         var project = DialogSourceTestSupport.ReadHostSources("FreeX.App.Host.csproj");
@@ -865,7 +865,7 @@ public sealed partial class MainWindowSourceHygieneTests
         // WS-G round 2 made the title bar token-driven and runtime-swappable, so the brand
         // background now binds via DynamicResource rather than StaticResource.
         xaml.Should().Contain("Background=\"{DynamicResource FreeXTitleBarBrush}\"");
-        project.Should().Contain("<ApplicationIcon>Resources\\FreeX.ico</ApplicationIcon>");
+        project.Should().Contain("<ApplicationIcon>..\\..\\shared\\Free.Shared.Shell\\Resources\\FreeX.ico</ApplicationIcon>");
     }
 
     [Fact]

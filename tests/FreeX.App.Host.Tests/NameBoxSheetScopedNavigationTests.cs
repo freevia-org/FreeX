@@ -29,116 +29,137 @@ public sealed class NameBoxSheetScopedNavigationTests
     [Fact]
     public void NameBoxEnter_ToNameOnAnotherSheet_RefreshesSheetTabActiveState()
     {
-        using var harness = MainWindowHarness.Create();
-        var sheet2 = harness.Workbook.AddSheet("Sheet2");
-        var targetRange = new GridRange(new CellAddress(sheet2.Id, 2, 2), new CellAddress(sheet2.Id, 2, 2));
-        harness.Workbook.DefineNamedRange("OtherSheetName", targetRange);
-        harness.RefreshSheetTabs();
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet2 = harness.Workbook.AddSheet("Sheet2");
+            var targetRange = new GridRange(new CellAddress(sheet2.Id, 2, 2), new CellAddress(sheet2.Id, 2, 2));
+            harness.Workbook.DefineNamedRange("OtherSheetName", targetRange);
+            harness.RefreshSheetTabs();
 
-        harness.ActiveSheetTabId.Should().Be(harness.Workbook.Sheets[0].Id);
+            harness.ActiveSheetTabId.Should().Be(harness.Workbook.Sheets[0].Id);
 
-        harness.SetCellAddressBoxText("OtherSheetName");
-        harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
+            harness.SetCellAddressBoxText("OtherSheetName");
+            harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
 
-        harness.CurrentSheetId.Should().Be(sheet2.Id);
-        harness.ActiveSheetTabId.Should().Be(sheet2.Id,
-            "Name Box navigation to a name on another sheet must refresh the sheet-tab strip's active tab");
+            harness.CurrentSheetId.Should().Be(sheet2.Id);
+            harness.ActiveSheetTabId.Should().Be(sheet2.Id,
+                "Name Box navigation to a name on another sheet must refresh the sheet-tab strip's active tab");
+        });
     }
 
     [Fact]
     public void NameBoxSelectionChanged_ToNameOnAnotherSheet_RefreshesSheetTabActiveState()
     {
-        using var harness = MainWindowHarness.Create();
-        var sheet2 = harness.Workbook.AddSheet("Sheet2");
-        var targetRange = new GridRange(new CellAddress(sheet2.Id, 3, 3), new CellAddress(sheet2.Id, 3, 3));
-        harness.Workbook.DefineNamedRange("PickedName", targetRange);
-        harness.RefreshSheetTabs();
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet2 = harness.Workbook.AddSheet("Sheet2");
+            var targetRange = new GridRange(new CellAddress(sheet2.Id, 3, 3), new CellAddress(sheet2.Id, 3, 3));
+            harness.Workbook.DefineNamedRange("PickedName", targetRange);
+            harness.RefreshSheetTabs();
 
-        harness.SelectCellAddressBoxDropdownItem("PickedName");
+            harness.SelectCellAddressBoxDropdownItem("PickedName");
 
-        harness.CurrentSheetId.Should().Be(sheet2.Id);
-        harness.ActiveSheetTabId.Should().Be(sheet2.Id,
-            "selecting a Name Box dropdown entry on another sheet must refresh the sheet-tab strip's active tab");
+            harness.CurrentSheetId.Should().Be(sheet2.Id);
+            harness.ActiveSheetTabId.Should().Be(sheet2.Id,
+                "selecting a Name Box dropdown entry on another sheet must refresh the sheet-tab strip's active tab");
+        });
     }
 
     [Fact]
     public void NameBoxEnter_WithSheetScopedNameOnActiveSheet_NavigatesToScopedRange()
     {
-        using var harness = MainWindowHarness.Create();
-        var sheet1 = harness.Workbook.Sheets[0];
-        var scopedRange = new GridRange(new CellAddress(sheet1.Id, 6, 2), new CellAddress(sheet1.Id, 7, 3));
-        // Defined with sheet scope only -- no matching entry in the workbook-global NamedRanges
-        // dictionary, exactly like a name created via Name Manager with scope = current sheet.
-        harness.Workbook.DefineNamedRange("ScopedOnly", scopedRange, metadata: null, scopeSheetId: sheet1.Id);
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet1 = harness.Workbook.Sheets[0];
+            var scopedRange = new GridRange(new CellAddress(sheet1.Id, 6, 2), new CellAddress(sheet1.Id, 7, 3));
+            // Defined with sheet scope only -- no matching entry in the workbook-global NamedRanges
+            // dictionary, exactly like a name created via Name Manager with scope = current sheet.
+            harness.Workbook.DefineNamedRange("ScopedOnly", scopedRange, metadata: null, scopeSheetId: sheet1.Id);
 
-        harness.SetCellAddressBoxText("ScopedOnly");
-        harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
+            harness.SetCellAddressBoxText("ScopedOnly");
+            harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
 
-        harness.SelectedRange.Should().Be(scopedRange);
+            harness.SelectedRange.Should().Be(scopedRange);
+        });
     }
 
     [Fact]
     public void NameBoxEnter_WithNameScopedToOtherSheet_IsNotVisibleFromActiveSheet()
     {
-        using var harness = MainWindowHarness.Create();
-        var sheet1 = harness.Workbook.Sheets[0];
-        var sheet2 = harness.Workbook.AddSheet("Sheet2");
-        var scopedRange = new GridRange(new CellAddress(sheet2.Id, 6, 2), new CellAddress(sheet2.Id, 6, 2));
-        harness.Workbook.DefineNamedRange("Sheet2Only", scopedRange, metadata: null, scopeSheetId: sheet2.Id);
-        harness.SelectActiveCell(1, 1);
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet1 = harness.Workbook.Sheets[0];
+            var sheet2 = harness.Workbook.AddSheet("Sheet2");
+            var scopedRange = new GridRange(new CellAddress(sheet2.Id, 6, 2), new CellAddress(sheet2.Id, 6, 2));
+            harness.Workbook.DefineNamedRange("Sheet2Only", scopedRange, metadata: null, scopeSheetId: sheet2.Id);
+            harness.SelectActiveCell(1, 1);
 
-        harness.SetCellAddressBoxText("Sheet2Only");
-        harness.PressCellAddressBoxKey(Key.Enter);
+            harness.SetCellAddressBoxText("Sheet2Only");
+            harness.PressCellAddressBoxKey(Key.Enter);
 
-        // Not resolvable from Sheet1 (wrong scope) -- the Name Box falls through to its
-        // "not a valid reference / define new name" handling, so the selection is unchanged.
-        harness.CurrentSheetId.Should().Be(sheet1.Id);
-        harness.SelectedRange.Should().Be(new GridRange(
-            new CellAddress(sheet1.Id, 1, 1),
-            new CellAddress(sheet1.Id, 1, 1)));
+            // Not resolvable from Sheet1 (wrong scope) -- the Name Box falls through to its
+            // "not a valid reference / define new name" handling, so the selection is unchanged.
+            harness.CurrentSheetId.Should().Be(sheet1.Id);
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(sheet1.Id, 1, 1),
+                new CellAddress(sheet1.Id, 1, 1)));
+        });
     }
 
     [Fact]
     public void NameBoxEnter_WithScopedNameShadowingGlobalName_PrefersScopedRange()
     {
-        using var harness = MainWindowHarness.Create();
-        var sheet1 = harness.Workbook.Sheets[0];
-        var globalRange = new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 1, 1));
-        var scopedRange = new GridRange(new CellAddress(sheet1.Id, 9, 9), new CellAddress(sheet1.Id, 9, 9));
-        harness.Workbook.DefineNamedRange("Shadowed", globalRange);
-        harness.Workbook.DefineNamedRange("Shadowed", scopedRange, metadata: null, scopeSheetId: sheet1.Id);
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet1 = harness.Workbook.Sheets[0];
+            var globalRange = new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 1, 1));
+            var scopedRange = new GridRange(new CellAddress(sheet1.Id, 9, 9), new CellAddress(sheet1.Id, 9, 9));
+            harness.Workbook.DefineNamedRange("Shadowed", globalRange);
+            harness.Workbook.DefineNamedRange("Shadowed", scopedRange, metadata: null, scopeSheetId: sheet1.Id);
 
-        harness.SetCellAddressBoxText("Shadowed");
-        harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
+            harness.SetCellAddressBoxText("Shadowed");
+            harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
 
-        harness.SelectedRange.Should().Be(scopedRange,
-            "sheet-scoped names take precedence over a same-named workbook-global name, matching formula evaluation");
+            harness.SelectedRange.Should().Be(scopedRange,
+                "sheet-scoped names take precedence over a same-named workbook-global name, matching formula evaluation");
+        });
     }
 
     [Fact]
     public void NameBoxDropDownOpened_IncludesSheetScopedNameForActiveSheet()
     {
-        using var harness = MainWindowHarness.Create();
-        var sheet1 = harness.Workbook.Sheets[0];
-        var scopedRange = new GridRange(new CellAddress(sheet1.Id, 4, 4), new CellAddress(sheet1.Id, 4, 4));
-        harness.Workbook.DefineNamedRange("ScopedDropdownName", scopedRange, metadata: null, scopeSheetId: sheet1.Id);
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet1 = harness.Workbook.Sheets[0];
+            var scopedRange = new GridRange(new CellAddress(sheet1.Id, 4, 4), new CellAddress(sheet1.Id, 4, 4));
+            harness.Workbook.DefineNamedRange("ScopedDropdownName", scopedRange, metadata: null, scopeSheetId: sheet1.Id);
 
-        var names = harness.OpenCellAddressBoxDropdown();
+            var names = harness.OpenCellAddressBoxDropdown();
 
-        names.Should().Contain("ScopedDropdownName");
+            names.Should().Contain("ScopedDropdownName");
+        });
     }
 
     [Fact]
     public void NameBoxDropDownOpened_ExcludesSheetScopedNameFromOtherSheet()
     {
-        using var harness = MainWindowHarness.Create();
-        var sheet2 = harness.Workbook.AddSheet("Sheet2");
-        var scopedRange = new GridRange(new CellAddress(sheet2.Id, 4, 4), new CellAddress(sheet2.Id, 4, 4));
-        harness.Workbook.DefineNamedRange("OtherSheetScopedName", scopedRange, metadata: null, scopeSheetId: sheet2.Id);
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet2 = harness.Workbook.AddSheet("Sheet2");
+            var scopedRange = new GridRange(new CellAddress(sheet2.Id, 4, 4), new CellAddress(sheet2.Id, 4, 4));
+            harness.Workbook.DefineNamedRange("OtherSheetScopedName", scopedRange, metadata: null, scopeSheetId: sheet2.Id);
 
-        var names = harness.OpenCellAddressBoxDropdown();
+            var names = harness.OpenCellAddressBoxDropdown();
 
-        names.Should().NotContain("OtherSheetScopedName");
+            names.Should().NotContain("OtherSheetScopedName");
+        });
     }
 
     private sealed class MainWindowHarness : IDisposable

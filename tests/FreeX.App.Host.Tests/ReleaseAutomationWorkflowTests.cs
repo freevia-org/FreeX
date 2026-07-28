@@ -188,7 +188,8 @@ public sealed class ReleaseAutomationWorkflowTests
         script.Should().Contain("function ConvertTo-MsixPackageVersion");
         script.Should().Contain("function Import-MsixSigningCertificate");
         script.Should().Contain("function Get-MsixManifestPublisher");
-        script.Should().Contain("function ConvertTo-XmlAttributeValue");
+        script.Should().Contain("ToolScriptSupport.ps1");
+        script.Should().Contain("ConvertTo-ToolXmlAttribute");
         script.Should().Contain("MSIX packages require MsixCertificatePath; pass -AllowUnsignedMsix only for local packaging validation.");
         script.Should().Contain("ConvertTo-SecureString -String $CertificatePassword -AsPlainText -Force");
         script.Should().Contain("Cert:\\CurrentUser\\My");
@@ -196,7 +197,7 @@ public sealed class ReleaseAutomationWorkflowTests
         script.Should().Contain("$msixVersion = ConvertTo-MsixPackageVersion -DisplayVersion $Version");
         script.Should().Contain("$msixParts[$i] = $msixParts[$i] % 65536");
         script.Should().Contain("$msixPublisher = Get-MsixManifestPublisher -Certificate $importedSigningCertificate");
-        script.Should().Contain("$msixPublisherAttribute = ConvertTo-XmlAttributeValue -Value $msixPublisher");
+        script.Should().Contain("$msixPublisherAttribute = ConvertTo-ToolXmlAttribute -Value $msixPublisher");
         script.Should().Contain("<Identity Name=\"FreeX.Tester\" Publisher=\"$msixPublisherAttribute\" Version=\"$msixVersion\" />");
         script.Should().Contain("EntryPoint=\"Windows.FullTrustApplication\"");
         script.Should().Contain("<rescap:Capability Name=\"runFullTrust\" />");
@@ -261,7 +262,8 @@ public sealed class ReleaseAutomationWorkflowTests
     {
         var plan = WorkspaceFileLocator.ReadAllText("docs", "release/test-distribution.md");
 
-        plan.Should().Contain("Stable latest non-prerelease tester downloads");
+        plan.Should().Contain("Stable latest non-prerelease FreeX Windows tester downloads");
+        plan.Should().Contain("Optional FreeX macOS latest links");
         plan.Should().Contain("FreeX-latest-win-x64.exe");
         plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe");
         plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-arm64.zip");

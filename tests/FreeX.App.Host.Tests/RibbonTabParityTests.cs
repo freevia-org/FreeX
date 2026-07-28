@@ -370,7 +370,8 @@ public sealed class RibbonTabParityTests
             "Current Selection",
             "Shape Styles",
             "Text",
-            "Axes");
+            "Axes",
+            "Axis Options");
 
         CommandTitles(Group(formatTab, "Current Selection")).Should().Contain([
             "Format Chart Area",

@@ -18575,6 +18575,9 @@ and {0} more.</value>
   <data name="MainWindowMessage_ScenarioManagerTitle" xml:space="preserve">
     <value>Scenario Manager</value>
   </data>
+  <data name="MainWindowMessage_ScenarioMergeOpenFailed" xml:space="preserve">
+    <value>The selected file could not be opened for merging scenarios.</value>
+  </data>
   <data name="MainWindow_Content_WhatIfAnalysis" xml:space="preserve">
     <value>What-If Analysis</value>
   </data>

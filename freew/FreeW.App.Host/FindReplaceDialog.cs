@@ -31,6 +31,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly ComboBox _goToTarget = new() { MinWidth = 220, Margin = new Thickness(0, 6, 0, 0) };
     private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 0) };
     private FindReplaceDialogOpenMode _openMode;
+    private FindReplaceDialogOpenMode? _lastRequestedFocus;
 
     public FindReplaceDialog(
         Window owner,
@@ -95,12 +96,15 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         outer.Children.Add(statusHost);
         Content = outer;
 
+        _findBox.GotKeyboardFocus += (_, _) => _lastRequestedFocus = FindReplaceDialogOpenMode.Find;
+        _replaceBox.GotKeyboardFocus += (_, _) => _lastRequestedFocus = FindReplaceDialogOpenMode.Replace;
         Loaded += (_, _) => ActivateFor(_openMode);
     }
 
     internal void ActivateFor(FindReplaceDialogOpenMode openMode)
     {
         _openMode = openMode;
+        _lastRequestedFocus = openMode;
         DialogFocus.FocusAndSelect(_openMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox);
     }
 
@@ -108,7 +112,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     internal FindReplaceDialogOpenMode? FocusedFieldForTest =>
         _findBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Find :
-        _replaceBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Replace : null;
+        _replaceBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Replace : _lastRequestedFocus;
 
     // Track which text field was focused last so Special inserts into the right box.
     private TextBox _lastFocusedBox = null!;

@@ -138,7 +138,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var editingSource = ReadEditingSource();
 
         editingSource.Should().NotContain("_inlineEditor.SelectAll();");
-        editingSource.Should().Contain("_inlineEditor.CaretIndex = _inlineEditor.Text.Length;");
+        editingSource.Should().Contain("_inlineEditor.CaretIndex = ResolveInlineEditorCaretIndex(clickX, layout.TextOverlayRect.Left - 4);");
         editingSource.Should().Contain("_inlineEditor.SelectionLength = 0;");
     }
 
@@ -352,14 +352,15 @@ public sealed partial class MainWindowSourceHygieneTests
     public void SheetTabMutations_RouteThroughHostCommandExecutionHelpers()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
-        var insert = ExtractMethodSource(source, "private void InsertNewSheet()");
+        var insert = ExtractMethodSource(source, "private void InsertNewSheet(");
         var rename = ExtractMethodSource(source, "private void RenameSheet(");
         var delete = ExtractMethodSource(source, "private void SheetCtxDelete_Click(");
         var move = ExtractMethodSource(source, "private void MoveSheetTab(");
 
         insert.Should().Contain("TryExecuteRepeatableCommand(");
         rename.Should().Contain("TryExecuteCommand(new RenameSheetCommand");
-        delete.Should().Contain("TryExecuteCommand(new RemoveSheetCommand");
+        delete.Should().Contain("new RemoveSheetCommand");
+        delete.Should().Contain("TryExecuteCommand(command, \"Delete Sheet\")");
         move.Should().Contain("TryExecuteCommand(new MoveSheetCommand");
 
         insert.Should().NotContain("_commandBus.Execute");
@@ -376,8 +377,8 @@ public sealed partial class MainWindowSourceHygieneTests
 
         method.Should().Contain("new CompositeWorkbookCommand(");
         method.Should().Contain("\"Move or Copy Sheet\"");
-        method.Should().Contain("new DuplicateSheetCommand(tab.Id)");
-        method.Should().Contain("new MoveSheetCommand(copyIndex, targetIndex)");
+        method.Should().Contain("new DuplicateSheetCommand(sheetId)");
+        method.Should().Contain("new MoveSheetsCommand(copySheetIds, targetIndex)");
         method.Should().Contain("TryExecuteCommand(command, \"Move or Copy Sheet\")");
         method.Should().NotContain("TryExecuteCommand(new DuplicateSheetCommand(tab.Id), \"Duplicate Sheet\")");
         method.Should().NotContain("TryExecuteCommand(new MoveSheetCommand(copyIndex, targetIndex), \"Move Sheet\")");
@@ -707,7 +708,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var batchSource = WorkspaceFileLocator.ReadAllText("tools", "Run-UxParityScenarioBatch.ps1");
 
-        batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"status\", \"formula\", \"filtering\", \"grid\", \"all\")]");
+        batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"status\", \"formula\", \"filtering\", \"grid\", \"native-output\", \"all\")]");
         batchSource.Should().Contain("\"core\" { return $pairs | Where-Object { $_[\"id\"] -in @(\"format-cells-dialog\", \"format-cells-context-dialog\", \"sheet-tab-context-menu\", \"sheet-tab-overflow-activate-dialog\") } }");
         batchSource.Should().Contain("id = \"status-footer-reference\"");
         batchSource.Should().Contain("excelScenario = \"excel-status-footer-reference\"");
@@ -832,9 +833,9 @@ public sealed partial class MainWindowSourceHygieneTests
         keyboard.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewThreadedCommentBtn_Click)");
         keyboard.Should().NotContain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewCommentBtn_Click)");
         source.Should().Contain("private void ReviewNewThreadedCommentBtn_Click");
-        source.Should().Contain("new SetThreadedCommentCommand(");
-        source.Should().Contain("new ApplyThreadedCommentChangesCommand(");
-        source.Should().Contain("result.RootText is not null");
+        source.Should().Contain("SheetGrid.BeginThreadedCommentInlineEdit(");
+        source.Should().Contain("ReviewSessionController.ApplyThreadedComment(");
+        source.Should().Contain("GridThreadedCommentEditAction.DeleteReply => ThreadedCommentDialogAction.DeleteReply");
     }
 
     [Fact]
@@ -856,7 +857,7 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("case WorksheetContextMenuAction.DeleteComment:");
         source.Should().Contain("ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs());");
         reviewSource.Should().Contain("private void ReviewDeleteThreadedCommentBtn_Click(");
-        reviewSource.Should().Contain("new DeleteThreadedCommentCommand(");
+        reviewSource.Should().Contain("ReviewSessionController.DeleteThreadedComment();");
     }
 
     [Fact]
@@ -895,14 +896,15 @@ public sealed partial class MainWindowSourceHygieneTests
 
         source.Should().Contain("CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments)");
         source.Should().Contain("ShowOrRefreshCommentListWindow(");
-        source.Should().Contain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(sheet.ThreadedComments)");
+        source.Should().Contain("CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments)");
+        source.Should().Contain("ReviewSessionController.NavigateThreadedComment(previous)");
         source.Should().Contain("sheet.ThreadedComments.Count == 0");
         source.Should().Contain("private void ReviewPrevNoteBtn_Click(");
         source.Should().Contain("private void ReviewNextNoteBtn_Click(");
         source.Should().Contain("private void ReviewShowNotesBtn_Click(");
         source.Should().Contain("CommentListWindow.CreateNoteItems(sheet.Comments)");
-        source.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(sheet.Comments)");
-        source.Should().Contain("sheet.Comments.Count == 0");
+        source.Should().Contain("ReviewSessionController.NavigateNote(previous)");
+        source.Should().Contain("var hasAnyNotes = (sheet?.Comments.Count ?? 0) > 0;");
         source.Should().NotContain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
         source.Should().NotContain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
     }
@@ -986,7 +988,7 @@ public sealed partial class MainWindowSourceHygieneTests
         committedHandler.Should().Contain("UpdateViewport();");
         committedHandler.Should().Contain("RefreshStatusBar();");
 
-        ExtractMethodSource(dataCommandsSource, "private void AdvancedFilterBtn_Click(")
+        ExtractMethodSource(dataCommandsSource, "private void ApplyAdvancedFilterResult(")
             .Should()
             .Contain("UpdateViewport();")
             .And.Contain("RefreshStatusBar();");

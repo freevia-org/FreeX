@@ -77,7 +77,7 @@ public sealed partial class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private const int MarchingAntsPhaseCount = 16;");
         gridViewSource.Should().Contain("private static readonly Pen[] MarchingAntsBlackPens = CreateMarchingAntsPens(Brushes.Black, 2.5);");
         gridViewSource.Should().Contain("private static readonly Pen[] MarchingAntsCopyOverlayPens = CreateMarchingAntsPens(Brushes.White, 1.5);");
-        gridViewSource.Should().Contain("private static readonly Pen[] MarchingAntsCutOverlayPens = CreateMarchingAntsPens(MakeBrush(245, 124, 0), 1.5);");
+        gridViewSource.Should().Contain("private static readonly Pen[] MarchingAntsCutOverlayPens = MarchingAntsCopyOverlayPens;");
         gridViewSource.Should().Contain("private static Pen[] CreateMarchingAntsPens");
         gridViewSource.Should().Contain("private static int GetMarchingAntsPhase(double offset)");
         renderMarchingAnts.Should().Contain("var phase = GetMarchingAntsPhase(_marchOffset);");

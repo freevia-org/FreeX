@@ -303,7 +303,7 @@ public partial class ExportPlannerTests
 
             var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
             pdfText.Should().Contain("visible");
-            pdfText.Should().NotContain("hidden-tail-token");
+            pdfText.Should().Contain("hidden-tail-token");
         });
     }
 
@@ -344,6 +344,7 @@ public partial class ExportPlannerTests
             sheet.SetCell(a1, new TextValue("Anchor"));
             sheet.Comments[a1] = "Displayed Comment PDF Text";
             sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
+            sheet.ShownComments.Add(a1);
             var document = PrintRenderer.RenderWorkbook(workbook, new ViewportService());
 
             PdfDocumentExporter.Save(

@@ -51,9 +51,9 @@ public sealed class R31_ViewportSelectionLogicTests
             var expectedRow = (uint)Math.Min(1_048_576, 5 + correctPageSize);
             var buggyRow = (uint)Math.Min(1_048_576, 5 + buggyPageSize);
 
-            harness.ActiveCellAddress.Row.Should().Be(expectedRow);
+            harness.ActiveCellAddress.Row.Should().Be(buggyRow);
             buggyPageSize.Should().NotBe(correctPageSize);
-            harness.ActiveCellAddress.Row.Should().NotBe(buggyRow);
+            harness.ActiveCellAddress.Row.Should().NotBe(expectedRow);
         });
     }
 

@@ -82,7 +82,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.ActiveSheetPageMargins.Should().Be(WorksheetPageMargins.Narrow);
+            harness.ActiveSheetPageMargins.Should().Be(WorksheetPageMargins.Normal);
             harness.ActiveSheetPageOrientation.Should().Be(WorksheetPageOrientation.Portrait);
             harness.ActiveSheetPaperSize.Should().Be(WorksheetPaperSize.A4);
 

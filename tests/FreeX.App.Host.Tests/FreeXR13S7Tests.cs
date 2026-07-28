@@ -40,7 +40,8 @@ public sealed class FreeXR13S7Tests
                 [],
                 workbookRef,
                 workbook,
-                NullUserMessageService.Instance);
+                NullUserMessageService.Instance,
+                options: CreateStatusReadoutOptions());
 
             try
             {
@@ -56,25 +57,27 @@ public sealed class FreeXR13S7Tests
                 grid.SelectedRange = new GridRange(cellAddress, cellAddress);
                 PumpDispatcher();
 
-                InvokeInstanceMethod(window, "RefreshStatusBar");
-                PumpDispatcher();
-
-                var sumText = (TextBlock)window.FindName("StatusSumText");
-                sumText.Text.Should().Be("Sum: 10", "priming the status-bar stats cache with the original value");
+                var cache = GetStatusBarStatsCache(window);
+                var revision = GetNavigationCacheRevision(window);
+                var range = new GridRange(cellAddress, cellAddress);
+                var primedStats = cache.GetOrCalculate(sheet, range, revision);
+                primedStats.Sum.Should().Be(10, "priming the status-bar stats cache with the original value");
 
                 // Simulate what a sheet recalculation does to a formula cell's value: the underlying
                 // cell value changes WITHOUT going through the normal edit commands that themselves
                 // invalidate navigation caches (mirroring RAND()-style volatility recalculated by
                 // Shift+F9 / RecalcEngine.RecalculateSheetFormulas).
                 sheet.SetCell(cellAddress, new NumberValue(999));
+                cache.GetOrCalculate(sheet, range, revision).Sum.Should().Be(10,
+                    "without a navigation-cache invalidation the cached status-bar aggregate would stay stale");
 
                 InvokeClickHandler(window, "CalcSheetBtn_Click");
                 PumpDispatcher();
 
-                InvokeInstanceMethod(window, "RefreshStatusBar");
-                PumpDispatcher();
+                var refreshedRevision = GetNavigationCacheRevision(window);
+                refreshedRevision.Should().BeGreaterThan(revision);
 
-                sumText.Text.Should().Be("Sum: 999",
+                cache.GetOrCalculate(sheet, range, refreshedRevision).Sum.Should().Be(999,
                     "Shift+F9 (Calculate Sheet) must invalidate the navigation caches (like the full " +
                     "Calculate Now / F9 path already does) so the status bar doesn't keep serving the " +
                     "pre-recalculation cached aggregate");
@@ -87,6 +90,11 @@ public sealed class FreeXR13S7Tests
         });
     }
 
+    private static FreeXOptions CreateStatusReadoutOptions() => new()
+    {
+        StatusBarShowSum = true
+    };
+
     private static void InvokeClickHandler(MainWindow window, string methodName)
     {
         var method = typeof(MainWindow).GetMethod(
@@ -97,10 +105,17 @@ public sealed class FreeXR13S7Tests
         method!.Invoke(window, [window, new RoutedEventArgs()]);
     }
 
-    private static void InvokeInstanceMethod(MainWindow window, string methodName)
+    private static StatusBarStatsCache GetStatusBarStatsCache(MainWindow window)
     {
-        var method = typeof(MainWindow).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic, []);
-        method.Should().NotBeNull($"{methodName} should exist as a private instance method on MainWindow");
-        method!.Invoke(window, []);
+        var field = typeof(MainWindow).GetField("_statusBarStatsCache", BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull("MainWindow should keep a status-bar stats cache keyed by navigation revision");
+        return (StatusBarStatsCache)field!.GetValue(window)!;
+    }
+
+    private static ulong GetNavigationCacheRevision(MainWindow window)
+    {
+        var field = typeof(MainWindow).GetField("_navigationCacheRevision", BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull("MainWindow should expose its navigation-cache revision to cache-dependent tests");
+        return (ulong)field!.GetValue(window)!;
     }
 }

@@ -276,7 +276,7 @@ public sealed class GoToNavigationR1C1RegressionTests
         public void ShowInlineEditor(uint row, uint col)
         {
             var sheet = Workbook.Sheets[0];
-            _showInlineEditor.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
+            _showInlineEditor.Invoke(_window, [new CellAddress(sheet.Id, row, col), null]);
             PumpDispatcher();
         }
 

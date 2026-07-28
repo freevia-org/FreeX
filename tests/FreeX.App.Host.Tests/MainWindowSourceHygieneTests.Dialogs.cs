@@ -16,7 +16,9 @@ public sealed partial class MainWindowSourceHygieneTests
         method.Should().Contain("var zoomPercent = ZoomSelectionPlanner.CalculateZoomPercent(");
         method.Should().Contain("dialog.Result.ZoomPercent,");
         method.Should().Contain("dialog.Result.FitSelection,");
-        method.Should().Contain("SheetGrid.SelectedRange?.ColCount ?? 1,");
+        method.Should().Contain("var (selectedColumnWidths, selectedRowHeights) = GetSelectionPixelMetrics(SheetGrid.SelectedRange);");
+        method.Should().Contain("selectedColumnWidths,");
+        method.Should().Contain("selectedRowHeights);");
         method.Should().Contain("ZoomSlider.Value = StatusZoomSliderValueForPercent(zoomPercent);");
         method.Should().Contain("finally");
         method.Should().Contain("FocusSheetGridIfNeeded();");
@@ -176,7 +178,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         method.Should().Contain("new SparklineDialog(");
         method.Should().Contain("SparklinePlanner.ParseKind(type)");
-        method.Should().Contain("SparklinePlanner.ValidateInsert(");
+        method.Should().Contain("SparklinePlanner.ValidateInsertGroup(");
         method.Should().Contain("SparklineInputValidation.InvalidDataRange");
         method.Should().Contain("SparklineInputValidation.InvalidLocation");
         method.Should().Contain("var kind = dialog.Result.Kind;");
@@ -288,7 +290,8 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var dataSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
-        dataSource.Should().Contain("var result = dialog.Result;");
+        dataSource.Should().Contain("private void ApplyAdvancedFilterResult(AdvancedFilterDialogResult result)");
+        dataSource.Should().Contain("ApplyAdvancedFilterResult(dialog.Result);");
         dataSource.Should().Contain("_commandBus.ExecuteRepeatable(");
         dataSource.Should().Contain("() => new AdvancedFilterCommand(");
         dataSource.Should().Contain("result.ListRange");
@@ -342,7 +345,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var plannerSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("RowColumnSizingPlanner.cs");
         plannerSource.Should().Contain("sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight");
         plannerSource.Should().Contain("sheet.ColumnWidths.TryGetValue(startCol, out var width) ? width : sheet.DefaultColumnWidth");
-        plannerSource.Should().Contain("new SetRowHeightCommand(sheetId, startRow, endRow, height)");
+        plannerSource.Should().Contain("new SetRowHeightCommand(sheetId, startRow, endRow, height * PixelsPerPoint)");
         plannerSource.Should().Contain("new SetColumnWidthCommand(sheetId, startCol, endCol, width)");
         plannerSource.Should().Contain("new SetRowsHiddenCommand(sheetId, startRow, endRow, hidden)");
         plannerSource.Should().Contain("new SetColumnsHiddenCommand(sheetId, startCol, endCol, hidden)");

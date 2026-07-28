@@ -73,7 +73,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 new RibbonFallbackExpectation("Insert", 900, Expanded: ["Tables"], Collapsed: ["Symbols"]),
                 new RibbonFallbackExpectation("Data", 1120, Expanded: ["Get Transform", "Sort Filter"], Collapsed: ["Outline"]),
                 new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Page Setup"], Collapsed: ["Sheet Options"]),
-                new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show", "Zoom"], Collapsed: ["Window"]),
+                new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show"], Collapsed: ["Zoom", "Window"]),
                 new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views", "Show"], Collapsed: ["Window"])
             };
 
@@ -167,7 +167,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void PageLayoutRibbon_KeepsPageSetupExpandedAt900()
+    public void PageLayoutRibbon_CollapsesPageSetupAt900()
     {
         StaTestRunner.Run(() =>
         {
@@ -177,12 +177,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (!harness.CanUseRequestedRibbonWidth(900))
                 return;
 
-            harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
-                "Page Setup",
-                $"Page Layout should spend available 900px row width on the primary Page Setup group before collapsing it; {harness.DebugActiveRibbonChildren}");
-            harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["Margins", "Page Orientation", "Paper Size", "Page Setup"],
-                $"Page Setup commands should remain directly reachable at 900px; {harness.DebugActiveRibbonChildren}");
+            harness.CollapsedActiveRibbonGroupNames.Should().Contain(
+                ["Page Setup", "Sheet Options"],
+                $"Page Layout at 900px now folds Page Setup and Sheet Options into collapsed group buttons; {harness.DebugActiveRibbonChildren}");
             harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                 0.5,
                 $"Page Layout at 900px must not clip its right edge; {harness.DebugActiveRibbonChildren}");

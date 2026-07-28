@@ -21,7 +21,9 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("private void SparklineColumnBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"column\");");
         insertSource.Should().Contain("private void SparklineWinLossBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"winloss\");");
         insertSource.Should().Contain("new SparklineDialog(");
-        insertSource.Should().Contain("new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind)");
+        insertSource.Should().Contain("SparklinePlanner.ValidateInsertGroup(");
+        insertSource.Should().Contain("new AddSparklineCommand(_currentSheetId, members[0].DataRange, currentRange.Start, kind)");
+        insertSource.Should().Contain("new CompositeWorkbookCommand(\"Insert Sparkline\", commands)");
 
         pivotSource.Should().Contain("private void PivotTableBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("PivotCreatePlanner.CreateSourceRangePlan(sheet, SheetGrid.SelectedRange)");

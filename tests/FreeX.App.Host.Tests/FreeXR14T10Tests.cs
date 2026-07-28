@@ -35,7 +35,8 @@ public sealed class FreeXR14T10Tests
                 [],
                 workbookRef,
                 workbook,
-                NullUserMessageService.Instance);
+                NullUserMessageService.Instance,
+                options: CreateStatusReadoutOptions());
 
             try
             {
@@ -54,24 +55,30 @@ public sealed class FreeXR14T10Tests
                 // Mirrors what AddOrMoveAdditionalSelection (MainWindow.Selection.cs) does when the user
                 // clicks A1, then Ctrl+clicks B1, then Ctrl+clicks C1: SelectedRanges accumulates every
                 // area while SelectedRange tracks only the last (active) one.
-                window.SheetGrid.SelectedRanges =
+                GridRange[] selectedRanges =
                 [
                     new GridRange(a1, a1),
                     new GridRange(b1, b1),
                     new GridRange(c1, c1),
                 ];
+                window.SheetGrid.SelectedRanges = selectedRanges;
                 window.SheetGrid.SelectedRange = new GridRange(c1, c1);
                 PumpDispatcher();
 
                 InvokeInstanceMethod(window, "RefreshStatusBar");
                 PumpDispatcher();
 
-                ((TextBlock)window.FindName("StatusSumText")).Text.Should().Be("Sum: 60",
+                var cache = GetStatusBarStatsCache(window);
+                var revision = GetNavigationCacheRevision(window);
+                var stats = cache.GetOrCalculate(sheet, selectedRanges, revision);
+
+                stats.Sum.Should().Be(60,
                     "Excel sums every selected area (10+20+30), not just the last-clicked cell");
-                ((TextBlock)window.FindName("StatusCountText")).Text.Should().Be("Count: 3");
-                ((TextBlock)window.FindName("StatusAvgText")).Text.Should().Be("Average: 20");
-                ((TextBlock)window.FindName("StatusMinText")).Text.Should().Be("Min: 10");
-                ((TextBlock)window.FindName("StatusMaxText")).Text.Should().Be("Max: 30");
+                stats.Count.Should().Be(3);
+                stats.NumericalCount.Should().Be(3);
+                stats.Average.Should().Be(20);
+                stats.Min.Should().Be(10);
+                stats.Max.Should().Be(30);
             }
             finally
             {
@@ -81,10 +88,33 @@ public sealed class FreeXR14T10Tests
         });
     }
 
+    private static FreeXOptions CreateStatusReadoutOptions() => new()
+    {
+        StatusBarShowAverage = true,
+        StatusBarShowCount = true,
+        StatusBarShowMinimum = true,
+        StatusBarShowMaximum = true,
+        StatusBarShowSum = true
+    };
+
     private static void InvokeInstanceMethod(MainWindow window, string methodName)
     {
         var method = typeof(MainWindow).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic, []);
         method.Should().NotBeNull($"{methodName} should exist as a private instance method on MainWindow");
         method!.Invoke(window, []);
+    }
+
+    private static StatusBarStatsCache GetStatusBarStatsCache(MainWindow window)
+    {
+        var field = typeof(MainWindow).GetField("_statusBarStatsCache", BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull("MainWindow should keep a status-bar stats cache for selected ranges");
+        return (StatusBarStatsCache)field!.GetValue(window)!;
+    }
+
+    private static ulong GetNavigationCacheRevision(MainWindow window)
+    {
+        var field = typeof(MainWindow).GetField("_navigationCacheRevision", BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull("MainWindow should key status-bar stats by navigation revision");
+        return (ulong)field!.GetValue(window)!;
     }
 }

@@ -261,7 +261,7 @@ public partial class MainWindow
         var openDialog = new Microsoft.Win32.OpenFileDialog
         {
             Filter = FileDialogFilterBuilder.BuildOpenFilter(_fileAdapters),
-            Title = "Merge Scenarios",
+            Title = UiText.Get("MainWindowMessage_ScenarioManagerTitle"),
             CheckFileExists = true
         };
         if (openDialog.ShowDialog(this) != true)
@@ -269,7 +269,9 @@ public partial class MainWindow
 
         if (!WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, openDialog.FileName, out var target, out _))
         {
-            _messageService.ShowInfo("The selected file could not be opened for merging scenarios.", "Scenario Manager");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_ScenarioMergeOpenFailed"),
+                UiText.Get("MainWindowMessage_ScenarioManagerTitle"));
             return;
         }
 
@@ -287,7 +289,9 @@ public partial class MainWindow
         }
         catch (Exception)
         {
-            _messageService.ShowInfo("The selected file could not be opened for merging scenarios.", "Scenario Manager");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_ScenarioMergeOpenFailed"),
+                UiText.Get("MainWindowMessage_ScenarioManagerTitle"));
             return;
         }
 

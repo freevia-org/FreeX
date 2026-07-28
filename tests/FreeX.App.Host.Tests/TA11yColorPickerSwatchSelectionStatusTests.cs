@@ -19,7 +19,7 @@ public sealed class TA11yColorPickerSwatchSelectionStatusTests
     {
         StaTestRunner.Run(() =>
         {
-            var initialColor = new CellColor(0xFF, 0x00, 0x00); // Standard "Red" swatch.
+            var initialColor = new CellColor(0xC0, 0x00, 0x00); // Standard "Dark Red" swatch.
             var dialog = new ColorPickerDialog(initialColor);
             try
             {
@@ -42,7 +42,7 @@ public sealed class TA11yColorPickerSwatchSelectionStatusTests
     {
         StaTestRunner.Run(() =>
         {
-            var initialColor = new CellColor(0xFF, 0x00, 0x00); // "Red"
+            var initialColor = new CellColor(0xC0, 0x00, 0x00); // "Dark Red"
             var dialog = new ColorPickerDialog(initialColor);
             try
             {

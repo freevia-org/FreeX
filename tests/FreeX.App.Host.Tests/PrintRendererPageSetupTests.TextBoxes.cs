@@ -39,14 +39,13 @@ public sealed partial class PrintRendererPageSetupTests
             var page = document.Pages[0].GetPageRoot(forceReload: false)!;
             var overlays = PdfTextOverlayExtractor.Extract(page);
 
-            overlays.Should().ContainEquivalentOf(new
-            {
-                Text = "Printable callout",
-                X = 52.0,
-                Y = 52.0,
-                FontSize = 9.0,
-                Bold = false
-            });
+            var calloutOverlay = overlays.Should()
+                .ContainSingle(overlay => overlay.Text == "Printable callout")
+                .Subject;
+            calloutOverlay.X.Should().BeApproximately(71.2, 0.01);
+            calloutOverlay.Y.Should().BeApproximately(76.0, 0.01);
+            calloutOverlay.FontSize.Should().BeApproximately(9.0, 0.01);
+            calloutOverlay.Bold.Should().BeFalse();
             overlays.Select(overlay => overlay.Text).Should().NotContain("Hidden callout");
             overlays.Select(overlay => overlay.Text).Should().NotContain("Off-page callout");
             CountApproximateRgbPixels(page, 200, 220, 240).Should().BeGreaterThan(100);

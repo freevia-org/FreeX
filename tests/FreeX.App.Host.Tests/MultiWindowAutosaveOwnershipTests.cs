@@ -78,6 +78,8 @@ public sealed class MultiWindowAutosaveOwnershipTests
     [Fact]
     public void ViewNewWindow_AttachesIndependentAutosaveToSecondaryWindow()
     {
+        StaTestRunner.Run(() =>
+        {
         using var temp = new RecoveryTempDirectory();
         var store = new AutosaveSnapshotStore(temp.Path);
 
@@ -127,11 +129,14 @@ public sealed class MultiWindowAutosaveOwnershipTests
             MainWindowTestCleanup.CloseWithoutSavePrompt(primary);
             PumpDispatcher();
         }
+        });
     }
 
     [Fact]
     public void ClosingOneWindow_DoesNotDeleteSurvivingWindowsSnapshotOrStopItsTimer()
     {
+        StaTestRunner.Run(() =>
+        {
         using var temp = new RecoveryTempDirectory();
         var store = new AutosaveSnapshotStore(temp.Path);
 
@@ -180,5 +185,6 @@ public sealed class MultiWindowAutosaveOwnershipTests
         PumpDispatcher();
 
         SnapshotFileCount(temp.Path).Should().Be(0, "closing the last window over the workbook cleans up its own snapshot too");
+        });
     }
 }
