@@ -3,6 +3,7 @@ using FreeP.Core.Model;
 namespace FreeP.App.Compositor;
 
 public sealed record ChartLayoutTargetOption(ChartLayoutTarget Value, string Label);
+public sealed record ChartLayoutTargetSemanticOption(string? Value, string Label);
 public sealed record ChartLayoutModeOption(ChartManualLayoutMode Value, string Label);
 
 public sealed record ChartLayoutOptionsSurfacePlan(
@@ -54,6 +55,24 @@ public sealed class ChartLayoutOptionsPlanner
         new(ChartManualLayoutMode.Factor, "Factor"),
         new(ChartManualLayoutMode.Edge, "Edge"),
     ];
+
+    public static IReadOnlyList<ChartLayoutTargetSemanticOption> LayoutTargetOptionsFor(string? currentValue)
+    {
+        var options = new List<ChartLayoutTargetSemanticOption>
+        {
+            new(null, "Automatic (outer)"),
+            new("inner", "Inner"),
+            new("outer", "Outer"),
+        };
+
+        if (!string.IsNullOrWhiteSpace(currentValue) &&
+            !options.Any(option => string.Equals(option.Value, currentValue, StringComparison.OrdinalIgnoreCase)))
+        {
+            options.Add(new(currentValue, $"Imported ({currentValue})"));
+        }
+
+        return options;
+    }
 
     private readonly ChartShape _chart;
     private ChartLayoutTarget _target;
