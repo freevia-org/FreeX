@@ -656,6 +656,35 @@ public sealed partial class MainWindow
                 "The Quick Analysis flyout opened for the supported multi-cell selection and was dismissed without applying an action.");
         }
 
+        if (OpensContextInlineEditor(row))
+        {
+            var inlineEditor = await WaitForContextInlineEditorAsync(row);
+            if (!inlineEditor)
+                return Failed(row, "The production route was expected to mount the WPF-parity inline editor, but no editor controls appeared.");
+
+            CloseContextInlineEditor(row);
+            await Task.Delay(25);
+            return Passed(
+                row,
+                "production-inline-editor-opened-cancelled",
+                row.ProductionRoute,
+                "The production route mounted the worksheet inline editor and validation cancelled it without applying changes.");
+        }
+
+        if (EntersPictureCropMode(row))
+        {
+            if (!await WaitForPictureCropModeAsync())
+                return Failed(row, "The production route was expected to enter picture crop mode, but crop mode was not observed.");
+
+            ExitPictureCropMode();
+            await Task.Delay(25);
+            return Passed(
+                row,
+                "production-mode-entered-exited",
+                row.ProductionRoute,
+                "The production route entered picture crop mode and validation exited it without applying changes.");
+        }
+
         Window? dialog;
         if (MayOpenOwnedContextDialog(row))
         {
@@ -718,6 +747,61 @@ public sealed partial class MainWindow
             : null;
     }
 
+    private async Task<bool> WaitForContextInlineEditorAsync(ContextMenuValidationDescriptor row)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(1);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            if (ContextInlineEditorIsMounted(row))
+                return true;
+            await Task.Delay(25);
+        }
+
+        return ContextInlineEditorIsMounted(row);
+    }
+
+    private async Task<bool> WaitForPictureCropModeAsync()
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(1);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            if (_isPictureCropMode)
+                return true;
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            await Task.Delay(25);
+        }
+
+        return _isPictureCropMode;
+    }
+
+    private bool ContextInlineEditorIsMounted(ContextMenuValidationDescriptor row) =>
+        (row.ActionKey is nameof(WorksheetContextMenuAction.NewComment) or
+            nameof(WorksheetContextMenuAction.EditComment))
+            ? _inlineThreadedCommentEditAddress is not null && _inlineThreadedCommentRootBox is not null
+            : _inlineNoteEditAddress is not null && _inlineNoteEditBox is not null;
+
+    private void CloseContextInlineEditor(ContextMenuValidationDescriptor row)
+    {
+        if (row.ActionKey is nameof(WorksheetContextMenuAction.NewComment) or
+            nameof(WorksheetContextMenuAction.EditComment))
+            CancelThreadedCommentInlineEdit();
+        else
+            CancelNoteInlineEdit();
+    }
+
+    private static bool OpensContextInlineEditor(ContextMenuValidationDescriptor row) =>
+        row.FamilyId == WorksheetContextFamily &&
+        (row.ActionKey is nameof(WorksheetContextMenuAction.NewComment) or
+            nameof(WorksheetContextMenuAction.EditComment) or
+            nameof(WorksheetContextMenuAction.NewNote) or
+            nameof(WorksheetContextMenuAction.EditNote));
+
+    private static bool EntersPictureCropMode(ContextMenuValidationDescriptor row) =>
+        row.FamilyId == WorksheetContextFamily &&
+        row.VariantId.Contains(".picture", StringComparison.Ordinal) &&
+        row.ActionKey == nameof(WorksheetContextMenuAction.CropPicture);
+
     private static bool OpensQuickAnalysisFlyout(ContextMenuValidationDescriptor row) =>
         row.FamilyId == WorksheetContextFamily &&
         row.ActionKey == nameof(WorksheetContextMenuAction.QuickAnalysis);
@@ -755,16 +839,11 @@ public sealed partial class MainWindow
             nameof(WorksheetContextMenuAction.DataValidation) or
             nameof(WorksheetContextMenuAction.RowHeight) or
             nameof(WorksheetContextMenuAction.ColumnWidth) or
-            nameof(WorksheetContextMenuAction.NewComment) or
-            nameof(WorksheetContextMenuAction.EditComment) or
-            nameof(WorksheetContextMenuAction.NewNote) or
-            nameof(WorksheetContextMenuAction.EditNote) or
             nameof(WorksheetContextMenuAction.ShowNotes) or
             nameof(WorksheetContextMenuAction.Hyperlink) or
             nameof(WorksheetContextMenuAction.PivotTableOptions) or
             nameof(WorksheetContextMenuAction.FormatCells) or
             nameof(WorksheetContextMenuAction.FormatPicture) or
-            nameof(WorksheetContextMenuAction.CropPicture) or
             nameof(WorksheetContextMenuAction.FormatDrawingObject) or
             nameof(WorksheetContextMenuAction.ResizeDrawingObject) or
             nameof(WorksheetContextMenuAction.RotateDrawingObject) or

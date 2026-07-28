@@ -286,6 +286,56 @@ public sealed class ContextMenuInteractionValidationTests
     }
 
     [Fact]
+    public async Task ProductionDispatch_ObservesWorksheetInlineEditorsAndPictureCropMode()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            window.Show();
+            try
+            {
+                var inventory = MainWindow.BuildContextMenuValidationInventory();
+                var rows = inventory
+                    .Where(row => row.IsEnabled &&
+                        row.FamilyId == "context-menu.worksheet" &&
+                        ((row.VariantId == "context-menu.worksheet.target.worksheet" &&
+                            (row.ActionKey is nameof(WorksheetContextMenuAction.NewComment) or
+                                nameof(WorksheetContextMenuAction.EditComment) or
+                                nameof(WorksheetContextMenuAction.NewNote) or
+                                nameof(WorksheetContextMenuAction.EditNote))) ||
+                         (row.VariantId.Contains(".picture", StringComparison.Ordinal) &&
+                            row.ActionKey == nameof(WorksheetContextMenuAction.CropPicture))))
+                    .GroupBy(row => row.ActionKey, StringComparer.Ordinal)
+                    .Select(group => group.First())
+                    .OrderBy(row => row.ActionKey, StringComparer.Ordinal)
+                    .ToArray();
+
+                rows.Should().HaveCount(5);
+                rows.Should().OnlyContain(row => !MainWindow.MayOpenOwnedContextDialog(row));
+
+                var results = new List<InteractionValidationResult>();
+                foreach (var row in rows)
+                    results.Add(await window.RunContextMenuInteractionValidationForTestAsync(row.Id));
+
+                results.Should().OnlyContain(result => result.Status == "passed", because:
+                    string.Join(Environment.NewLine, results.Select(result =>
+                        $"{result.Id}: {result.EvidenceLevel} | {result.Note}")));
+                results.Where(result => result.Id.EndsWith(":NewComment", StringComparison.Ordinal) ||
+                        result.Id.EndsWith(":EditComment", StringComparison.Ordinal) ||
+                        result.Id.EndsWith(":NewNote", StringComparison.Ordinal) ||
+                        result.Id.EndsWith(":EditNote", StringComparison.Ordinal))
+                    .Should().OnlyContain(result => result.EvidenceLevel == "production-inline-editor-opened-cancelled");
+                results.Single(result => result.Id.EndsWith(":CropPicture", StringComparison.Ordinal))
+                    .EvidenceLevel.Should().Be("production-mode-entered-exited");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ProductionDispatch_ExercisesOwnedFileMenuRoutes()
     {
         string[] ids =
