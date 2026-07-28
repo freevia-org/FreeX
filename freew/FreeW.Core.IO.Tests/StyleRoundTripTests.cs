@@ -95,6 +95,21 @@ public class StyleRoundTripTests
     }
 
     [Fact]
+    public void OutlineLevel_RoundTripsAndWritesHeadingStyleMetadata()
+    {
+        var doc = TextDocument.CreateEmpty();
+
+        var styles = StylesXml(doc);
+        StyleElement(styles, "Heading1").Element(W + "pPr")!.Element(W + "outlineLvl")!
+            .Attribute(W + "val")!.Value.Should().Be("0");
+
+        var result = RoundTrip(doc);
+        result.Styles["Heading1"].OutlineLevel.Should().Be(0);
+        result.Styles["Heading2"].OutlineLevel.Should().Be(1);
+        result.Styles["Heading3"].OutlineLevel.Should().Be(2);
+    }
+
+    [Fact]
     public void StyleParagraphFormatting_RoundTrips()
     {
         var doc = TextDocument.CreateEmpty();

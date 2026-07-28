@@ -74,12 +74,25 @@ public sealed class PageNumberFormatRoundTripTests
         var read = RoundTrip(doc);
         var xml = DocumentXml(doc);
         var pgNumType = xml.Descendants(W + "sectPr").Last().Element(W + "pgNumType");
+        var styles = PackageXml(doc, "word/styles.xml");
+        var numbering = PackageXml(doc, "word/numbering.xml");
 
         read.Page.PageNumberChapterStyleLevel.Should().Be(1);
         read.Page.PageNumberChapterSeparator.Should().Be(PageNumberChapterSeparator.Colon);
         pgNumType.Should().NotBeNull();
         pgNumType!.Attribute(W + "chapStyle")!.Value.Should().Be("1");
         pgNumType.Attribute(W + "chapSep")!.Value.Should().Be("colon");
+        styles.Descendants(W + "style")
+            .Single(style => style.Attribute(W + "styleId")?.Value == "Heading1")
+            .Element(W + "pPr")!.Element(W + "numPr")!
+            .Element(W + "numId")!.Attribute(W + "val")!.Value.Should().Be("3");
+        numbering.Descendants(W + "abstractNum")
+            .Single(number => number.Attribute(W + "abstractNumId")?.Value == "2")
+            .Elements(W + "lvl").Single(level => level.Attribute(W + "ilvl")?.Value == "0")
+            .Element(W + "pStyle")!.Attribute(W + "val")!.Value.Should().Be("Heading1");
+        PackageXml(read, "word/styles.xml").Descendants(W + "style")
+            .Single(style => style.Attribute(W + "styleId")?.Value == "Heading1")
+            .Element(W + "pPr")!.Elements(W + "numPr").Should().ContainSingle();
     }
 
     private static TextDocument RoundTrip(TextDocument document)
@@ -91,11 +104,14 @@ public sealed class PageNumberFormatRoundTripTests
     }
 
     private static XDocument DocumentXml(TextDocument document)
+        => PackageXml(document, "word/document.xml");
+
+    private static XDocument PackageXml(TextDocument document, string partName)
     {
         using var stream = new MemoryStream();
         DocxWriter.Write(document, stream);
         using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
-        using var entry = zip.GetEntry("word/document.xml")!.Open();
+        using var entry = zip.GetEntry(partName)!.Open();
         return XDocument.Load(entry);
     }
 

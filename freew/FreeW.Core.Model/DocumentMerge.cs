@@ -482,6 +482,7 @@ public static class DocumentMerge
                 Type = sourceStyle.Type,
                 BasedOnStyleId = RemapStyleReference(sourceStyle.BasedOnStyleId, styleNames),
                 NextStyleId = RemapStyleReference(sourceStyle.NextStyleId, styleNames),
+                OutlineLevel = sourceStyle.OutlineLevel,
                 Run = sourceStyle.Run,
                 Paragraph = sourceStyle.Paragraph,
                 TableBorders = sourceStyle.TableBorders,

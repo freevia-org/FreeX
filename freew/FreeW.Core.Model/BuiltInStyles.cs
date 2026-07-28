@@ -48,6 +48,7 @@ public static class BuiltInStyles
             () => new DocumentStyle
             {
                 Id = "Heading1", Name = "Heading 1", BasedOnStyleId = "Normal", NextStyleId = "Normal",
+                OutlineLevel = 0,
                 Run = new RunFormatting { Bold = true, FontSizePt = 16, ColorHex = Accent },
                 Paragraph = new ParagraphFormatting
                 {
@@ -59,6 +60,7 @@ public static class BuiltInStyles
             () => new DocumentStyle
             {
                 Id = "Heading2", Name = "Heading 2", BasedOnStyleId = "Normal", NextStyleId = "Normal",
+                OutlineLevel = 1,
                 Run = new RunFormatting { Bold = true, FontSizePt = 13, ColorHex = Accent },
                 Paragraph = new ParagraphFormatting
                 {
@@ -70,6 +72,7 @@ public static class BuiltInStyles
             () => new DocumentStyle
             {
                 Id = "Heading3", Name = "Heading 3", BasedOnStyleId = "Normal", NextStyleId = "Normal",
+                OutlineLevel = 2,
                 Run = new RunFormatting { Bold = true, FontSizePt = 12, ColorHex = AccentDark },
                 Paragraph = new ParagraphFormatting
                 {
@@ -81,6 +84,7 @@ public static class BuiltInStyles
             () => new DocumentStyle
             {
                 Id = "Heading4", Name = "Heading 4", BasedOnStyleId = "Normal", NextStyleId = "Normal",
+                OutlineLevel = 3,
                 Run = new RunFormatting { Bold = true, Italic = true, FontSizePt = 11, ColorHex = AccentDark },
                 Paragraph = new ParagraphFormatting
                 {

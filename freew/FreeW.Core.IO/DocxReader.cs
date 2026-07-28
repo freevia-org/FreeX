@@ -1897,6 +1897,7 @@ public static class DocxReader
                 // defaults must not leak into materialized altChunk content.
                 BasedOnStyleId = null,
                 NextStyleId = RemapStyleId(style.NextStyleId, styleMap),
+                OutlineLevel = style.OutlineLevel,
                 Run = effectiveRun,
                 Paragraph = effectiveParagraph,
                 TableBorders = style.TableBorders
@@ -6455,6 +6456,7 @@ public static class DocxReader
                 // The "Style for following paragraph" (w:next): the style applied to the paragraph created
                 // when Enter is pressed at the end of one carrying this style (e.g. Heading1 -> Normal).
                 NextStyleId = s.Element(W + "next")?.Attribute(W + "val")?.Value,
+                OutlineLevel = ReadOutlineLevel(pPr),
                 Run = rPr is null ? RunFormatting.Default : ReadRunFormatting(rPr),
                 Paragraph = pPr is null ? ParagraphFormatting.Default : ReadParagraphFormatting(pPr),
                 // A table style (e.g. the built-in TableGrid) defines its cell borders in w:tblPr/w:tblBorders;
@@ -6479,6 +6481,16 @@ public static class DocxReader
     /// <c>wps:wsp</c>, <c>pic:pic</c>, and <c>wpg:graphicFrame</c> children. Returns null when the run
     /// does not carry a wpg:wgp element.
     /// </summary>
+    private static int? ReadOutlineLevel(XElement? pPr)
+    {
+        var value = pPr?.Element(W + "outlineLvl")?.Attribute(W + "val")?.Value;
+        return int.TryParse(value, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var level)
+            && level is >= 0 and <= 8
+                ? level
+                : null;
+    }
+
     private static DrawingGroup? ReadDrawingGroup(
         XElement run,
         ZipArchive archive,

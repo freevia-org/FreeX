@@ -3280,6 +3280,7 @@ public sealed class TextDocument
             Id = "Heading1",
             Name = "Heading 1",
             BasedOnStyleId = "Normal",
+            OutlineLevel = 0,
             Run = new RunFormatting { Bold = true, FontSizePt = 16, ColorHex = "#2F5496" },
             Paragraph = new ParagraphFormatting { SpaceBeforePt = 12, SpaceAfterPt = 4 }
         };
@@ -3288,6 +3289,7 @@ public sealed class TextDocument
             Id = "Heading2",
             Name = "Heading 2",
             BasedOnStyleId = "Normal",
+            OutlineLevel = 1,
             Run = new RunFormatting { Bold = true, FontSizePt = 13, ColorHex = "#2F5496" },
             Paragraph = new ParagraphFormatting { SpaceBeforePt = 10, SpaceAfterPt = 4 }
         };
@@ -3296,6 +3298,7 @@ public sealed class TextDocument
             Id = "Heading3",
             Name = "Heading 3",
             BasedOnStyleId = "Normal",
+            OutlineLevel = 2,
             Run = new RunFormatting { Bold = true, FontSizePt = 12, ColorHex = "#1F3864" },
             Paragraph = new ParagraphFormatting { SpaceBeforePt = 8, SpaceAfterPt = 4 }
         };

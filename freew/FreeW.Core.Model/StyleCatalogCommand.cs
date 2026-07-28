@@ -38,6 +38,7 @@ public sealed class StyleCatalogCommand(string label, Action<TextDocument> apply
         Type = style.Type,
         BasedOnStyleId = style.BasedOnStyleId,
         NextStyleId = style.NextStyleId,
+        OutlineLevel = style.OutlineLevel,
         Run = style.Run,
         Paragraph = style.Paragraph,
         TableBorders = style.TableBorders,

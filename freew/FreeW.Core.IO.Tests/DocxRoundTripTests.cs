@@ -1864,6 +1864,7 @@ public class DocxRoundTripTests
         {
             Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel }
         });
+        doc.Page.PageNumberChapterStyleLevel = 1;
 
         using var stream = new MemoryStream();
         DocxWriter.Write(doc, stream);
@@ -1879,6 +1880,8 @@ public class DocxRoundTripTests
         numbering.Should().Contain("multilevel");
         numbering.Should().Contain("%1.%2.");
         numbering.Should().Contain("%1.%2.%3.");
+        numbering.Should().Contain("<w:pStyle w:val=\"Heading1\"");
+        numbering.Should().Contain("<w:pStyle w:val=\"Heading3\"");
 
         using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
         docReader.ReadToEnd().Should().Contain("w:val=\"3\"");
