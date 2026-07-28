@@ -27,6 +27,8 @@ public sealed class PresenterViewWindow : Window
     private readonly Button _advanceButton;
     private readonly Button _recordTimingsButton;
     private readonly Button _rehearseTimingsButton;
+    private readonly Button _narrationButton;
+    private readonly Button _narrationAndMediaButton;
     private readonly Button _applyRecordingButton;
     private readonly TextBlock _recordingStatusText;
     private readonly Action? _goBack;
@@ -36,6 +38,7 @@ public sealed class PresenterViewWindow : Window
     private readonly Action<SlideShowPresenterPointerMode>? _selectPointerMode;
     private readonly Action? _clearInk;
     private readonly Action<SlideShowTimingIntent>? _setTimingIntent;
+    private readonly Action<SlideShowRecordingMediaIntent>? _setMediaIntent;
     private readonly Func<SlideShowRecordingReviewPlan>? _recordingReviewProvider;
     private readonly Func<SlideShowRecordingReviewApplyResult>? _applyRecordingReview;
     private bool _refreshing;
@@ -49,6 +52,7 @@ public sealed class PresenterViewWindow : Window
         Action<SlideShowPresenterPointerMode>? selectPointerMode = null,
         Action? clearInk = null,
         Action<SlideShowTimingIntent>? setTimingIntent = null,
+        Action<SlideShowRecordingMediaIntent>? setMediaIntent = null,
         Func<SlideShowRecordingReviewPlan>? recordingReviewProvider = null,
         Func<SlideShowRecordingReviewApplyResult>? applyRecordingReview = null)
     {
@@ -60,6 +64,7 @@ public sealed class PresenterViewWindow : Window
         _selectPointerMode = selectPointerMode;
         _clearInk = clearInk;
         _setTimingIntent = setTimingIntent;
+        _setMediaIntent = setMediaIntent;
         _recordingReviewProvider = recordingReviewProvider;
         _applyRecordingReview = applyRecordingReview;
 
@@ -121,6 +126,28 @@ public sealed class PresenterViewWindow : Window
                 RefreshFromState();
             }
         });
+        _narrationButton = MakeActionButton("Narration", () =>
+        {
+            if (_setMediaIntent is not null)
+            {
+                var current = _stateProvider().ToolPlan.Recording.MediaIntent;
+                _setMediaIntent(current == SlideShowRecordingMediaIntent.Narration
+                    ? SlideShowRecordingMediaIntent.None
+                    : SlideShowRecordingMediaIntent.Narration);
+                RefreshFromState();
+            }
+        });
+        _narrationAndMediaButton = MakeActionButton("Narration + camera", () =>
+        {
+            if (_setMediaIntent is not null)
+            {
+                var current = _stateProvider().ToolPlan.Recording.MediaIntent;
+                _setMediaIntent(current == SlideShowRecordingMediaIntent.NarrationAndMedia
+                    ? SlideShowRecordingMediaIntent.None
+                    : SlideShowRecordingMediaIntent.NarrationAndMedia);
+                RefreshFromState();
+            }
+        });
         _recordingStatusText = MakeText(13, FontWeight.Normal);
         _recordingStatusText.Foreground = new SolidColorBrush(Color.FromRgb(170, 178, 194));
         _recordingStatusText.Margin = new Thickness(0, 6, 0, 0);
@@ -137,6 +164,8 @@ public sealed class PresenterViewWindow : Window
         controls.Children.Add(_advanceButton);
         controls.Children.Add(_recordTimingsButton);
         controls.Children.Add(_rehearseTimingsButton);
+        controls.Children.Add(_narrationButton);
+        controls.Children.Add(_narrationAndMediaButton);
         controls.Children.Add(_applyRecordingButton);
         var normalButton = MakeActionButton("Show", () => _setScreenMode?.Invoke(SlideShowScreenMode.Normal));
         var blackButton = MakeActionButton("Black", () => _setScreenMode?.Invoke(SlideShowScreenMode.Black));
@@ -231,7 +260,8 @@ public sealed class PresenterViewWindow : Window
 
     public void RefreshFromState()
     {
-        var plan = SlideShowPresenterViewPlanner.Build(_stateProvider());
+        var state = _stateProvider();
+        var plan = SlideShowPresenterViewPlanner.Build(state);
         _refreshing = true;
         try
         {
@@ -246,6 +276,15 @@ public sealed class PresenterViewWindow : Window
             _recordTimingsButton.IsEnabled = _setTimingIntent is not null;
             _rehearseTimingsButton.Content = plan.IsRehearsingTimings ? "Stop rehearsal" : "Rehearse timings";
             _rehearseTimingsButton.IsEnabled = _setTimingIntent is not null;
+            var mediaIntent = state.ToolPlan.Recording.MediaIntent;
+            _narrationButton.Content = mediaIntent == SlideShowRecordingMediaIntent.Narration
+                ? "Stop narration"
+                : "Narration";
+            _narrationButton.IsEnabled = _setMediaIntent is not null;
+            _narrationAndMediaButton.Content = mediaIntent == SlideShowRecordingMediaIntent.NarrationAndMedia
+                ? "Stop narration + camera"
+                : "Narration + camera";
+            _narrationAndMediaButton.IsEnabled = _setMediaIntent is not null;
             var recordingReview = _recordingReviewProvider?.Invoke();
             _recordingStatusText.Text = recordingReview is null
                 ? "Recording review unavailable."

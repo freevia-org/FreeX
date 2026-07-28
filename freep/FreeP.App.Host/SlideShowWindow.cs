@@ -383,6 +383,7 @@ public sealed class SlideShowWindow : Window
             mode => SetPresenterPointerMode(mode),
             () => ClearPresenterInkStrokes(),
             timing => SetPresenterTimingIntent(timing),
+            media => SetPresenterMediaIntent(media),
             () => RecordingReviewPlan,
             () => ApplyRecordingReview());
         _presenterViewWindow = window;
@@ -442,6 +443,21 @@ public sealed class SlideShowWindow : Window
         return ApplyPresenterToolIntent(
             timingIntent,
             current.Recording.MediaIntent,
+            current.PointerInk.PointerMode,
+            current.PointerInk.InkState.ColorHex,
+            current.PointerInk.InkState.ThicknessDip,
+            current.PointerInk.InkRetentionDecision,
+            nowUtc);
+    }
+
+    public SlideShowPresenterToolPlan SetPresenterMediaIntent(
+        SlideShowRecordingMediaIntent mediaIntent,
+        DateTimeOffset? nowUtc = null)
+    {
+        var current = _session.ToolPlan;
+        return ApplyPresenterToolIntent(
+            current.Recording.TimingIntent,
+            mediaIntent,
             current.PointerInk.PointerMode,
             current.PointerInk.InkState.ColorHex,
             current.PointerInk.InkState.ThicknessDip,

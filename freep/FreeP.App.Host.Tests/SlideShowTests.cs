@@ -805,6 +805,34 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_SetPresenterMediaIntent_PreservesTimingAndPointerState()
+    {
+        var window = new SlideShowWindow(
+            Presentation.CreateEmpty(),
+            0,
+            SlideShowHostCapabilityRecordingCaptureBackend.Deferred("WPF slideshow"));
+        try
+        {
+            window.ApplyPresenterToolIntent(
+                SlideShowTimingIntent.RecordTimings,
+                SlideShowRecordingMediaIntent.None,
+                SlideShowPresenterPointerMode.Pen);
+
+            var plan = window.SetPresenterMediaIntent(SlideShowRecordingMediaIntent.NarrationAndMedia);
+
+            plan.Recording.TimingIntent.Should().Be(SlideShowTimingIntent.RecordTimings);
+            plan.Recording.MediaIntent.Should().Be(SlideShowRecordingMediaIntent.NarrationAndMedia);
+            plan.PointerInk.PointerMode.Should().Be(SlideShowPresenterPointerMode.Pen);
+            plan.Recording.NarrationCapture.IsDeferred.Should().BeTrue();
+            plan.Recording.MediaCapture.IsDeferred.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_RecordTimings_PersistsAdvanceAfterOnNavigationAndClose()
     {
         var pres = Presentation.CreateEmpty();

@@ -19,6 +19,8 @@ public sealed class PresenterViewControlSourceTests
         slideshow.Should().Contain("() => ClearPresenterInkStrokes(),");
         slideshow.Should().Contain("SetPresenterTimingIntent(timing)");
         slideshow.Should().Contain("public SlideShowPresenterToolPlan SetPresenterTimingIntent");
+        slideshow.Should().Contain("SetPresenterMediaIntent(media)");
+        slideshow.Should().Contain("public SlideShowPresenterToolPlan SetPresenterMediaIntent");
         presenter.Should().Contain("_goBack?.Invoke();");
         presenter.Should().Contain("_goNext?.Invoke();");
         presenter.Should().Contain("SlideShowScreenMode.Black");
@@ -27,6 +29,9 @@ public sealed class PresenterViewControlSourceTests
         presenter.Should().Contain("_selectPointerMode?.Invoke");
         presenter.Should().Contain("Record timings");
         presenter.Should().Contain("Rehearse timings");
+        presenter.Should().Contain("Narration + camera");
+        presenter.Should().Contain("SlideShowRecordingMediaIntent.Narration");
+        presenter.Should().Contain("SlideShowRecordingMediaIntent.NarrationAndMedia");
         presenter.Should().Contain("SlideShowTimingIntent.RecordTimings");
         presenter.Should().Contain("SlideShowTimingIntent.RehearseTimings");
         presenter.Should().Contain("_setTimingIntent");

@@ -273,6 +273,32 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_set_presenter_media_intent_preserves_timing_and_pointer_state()
+    {
+        SlideShowPresenterToolPlan? plan = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new SlideShowWindow(
+                MakePresentation(1),
+                0,
+                CreateDeferredRecordingCaptureBackend());
+            window.ApplyPresenterToolIntent(
+                SlideShowTimingIntent.RecordTimings,
+                SlideShowRecordingMediaIntent.None,
+                SlideShowPresenterPointerMode.Pen);
+            plan = window.SetPresenterMediaIntent(SlideShowRecordingMediaIntent.NarrationAndMedia);
+        });
+
+        if (!ran) return;
+        plan.Should().NotBeNull();
+        plan!.Recording.TimingIntent.Should().Be(SlideShowTimingIntent.RecordTimings);
+        plan.Recording.MediaIntent.Should().Be(SlideShowRecordingMediaIntent.NarrationAndMedia);
+        plan.PointerInk.PointerMode.Should().Be(SlideShowPresenterPointerMode.Pen);
+        plan.Recording.NarrationCapture.IsDeferred.Should().BeTrue();
+        plan.Recording.MediaCapture.IsDeferred.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task SlideShowWindow_RecordTimings_persists_advance_after_on_navigation_and_close()
     {
         int? firstTiming = null;
