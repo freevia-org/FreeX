@@ -1393,10 +1393,31 @@ public static class SmartArtEditingPlanner
             .Where(item => !string.IsNullOrWhiteSpace(item.Id))
             .GroupBy(item => item.Id!, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First().Point, StringComparer.Ordinal);
+        var authoredConnections = sourceDocument?.Root?.Element(Dgm + "cxnLst")?.Elements(Dgm + "cxn")
+            .Select(connection =>
+            {
+                var type = connection.Attribute("type")?.Value?.Trim() ?? "parOf";
+                var sourceId = connection.Attribute("srcId")?.Value?.Trim();
+                var destinationId = connection.Attribute("destId")?.Value?.Trim();
+                return (Key: sourceId is null || destinationId is null
+                    ? null
+                    : BuildConnectionKey(type, sourceId, destinationId), Connection: connection);
+            })
+            .Where(item => item.Key is not null)
+            .GroupBy(item => item.Key!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().Connection, StringComparer.Ordinal);
+        var reservedConnectionIds = authoredConnections?.Values
+            .Select(connection => connection.Attribute("modelId")?.Value?.Trim())
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!)
+            .ToHashSet(StringComparer.Ordinal)
+            ?? new HashSet<string>(StringComparer.Ordinal);
+        var emittedConnectionIds = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var root in data.Nodes)
             CollectDataPartElements(root, null, 0, points, connections, nodeIds,
-                ref generatedIdIndex, ref nodeCount, ref connectionCount, authoredPoints);
+                ref generatedIdIndex, ref nodeCount, ref connectionCount,
+                authoredPoints, authoredConnections, reservedConnectionIds, emittedConnectionIds);
 
         if (sourceDocument?.Root is { } sourceRoot && sourceRoot.Name == Dgm + "dataModel")
         {
@@ -1434,7 +1455,10 @@ public static class SmartArtEditingPlanner
         ref int generatedIdIndex,
         ref int nodeCount,
         ref int connectionCount,
-        IReadOnlyDictionary<string, XElement>? authoredPoints = null)
+        IReadOnlyDictionary<string, XElement>? authoredPoints = null,
+        IReadOnlyDictionary<string, XElement>? authoredConnections = null,
+        ISet<string>? reservedConnectionIds = null,
+        ISet<string>? emittedConnectionIds = null)
     {
         var id = GetNodeId(node, nodeIds, ref generatedIdIndex);
         XElement? authoredPoint = null;
@@ -1445,22 +1469,48 @@ public static class SmartArtEditingPlanner
         if (parent is not null)
         {
             var parentId = GetNodeId(parent, nodeIds, ref generatedIdIndex);
-            connections.Add(new XElement(Dgm + "cxn",
-                new XAttribute("modelId", (connectionCount + 1).ToString(CultureInfo.InvariantCulture)),
-                new XAttribute("type", "parOf"),
-                new XAttribute("srcId", parentId),
-                new XAttribute("destId", id),
-                new XAttribute("srcOrd", sourceOrder),
-                new XAttribute("destOrd", 0)));
+            var connectionKey = BuildConnectionKey("parOf", parentId, id);
+            XElement? authoredConnection = null;
+            authoredConnections?.TryGetValue(connectionKey, out authoredConnection);
+            var connection = authoredConnection is null
+                ? new XElement(Dgm + "cxn")
+                : new XElement(authoredConnection);
+            var connectionId = authoredConnection?.Attribute("modelId")?.Value?.Trim();
+            if (string.IsNullOrWhiteSpace(connectionId) ||
+                emittedConnectionIds is null || !emittedConnectionIds.Add(connectionId))
+            {
+                var generatedConnectionId = connectionCount + 1;
+                do
+                {
+                    connectionId = generatedConnectionId.ToString(CultureInfo.InvariantCulture);
+                    generatedConnectionId++;
+                }
+                while (reservedConnectionIds?.Contains(connectionId) == true ||
+                       emittedConnectionIds?.Contains(connectionId) == true);
+
+                emittedConnectionIds?.Add(connectionId);
+            }
+
+            connection.SetAttributeValue("modelId", connectionId);
+            connection.SetAttributeValue("type", "parOf");
+            connection.SetAttributeValue("srcId", parentId);
+            connection.SetAttributeValue("destId", id);
+            connection.SetAttributeValue("srcOrd", sourceOrder);
+            connection.SetAttributeValue("destOrd", 0);
+            connections.Add(connection);
             connectionCount++;
         }
 
         for (var index = 0; index < node.Children.Count; index++)
         {
             CollectDataPartElements(node.Children[index], node, index, points, connections, nodeIds,
-                ref generatedIdIndex, ref nodeCount, ref connectionCount, authoredPoints);
+                ref generatedIdIndex, ref nodeCount, ref connectionCount,
+                authoredPoints, authoredConnections, reservedConnectionIds, emittedConnectionIds);
         }
     }
+
+    private static string BuildConnectionKey(string type, string sourceId, string destinationId) =>
+        $"{type}\u001F{sourceId}\u001F{destinationId}";
 
     private static XElement BuildPointElement(SmartArtNode node, string id, XElement? authoredPoint)
     {

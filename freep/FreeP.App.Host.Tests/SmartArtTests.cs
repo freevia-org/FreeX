@@ -1164,7 +1164,7 @@ public sealed class SmartArtTests : IDisposable
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
             nodes: [("root", "Leader"), ("manager", "Manager")],
-            parOfConnections: []);
+            parOfConnections: [("root", "manager")]);
         var presentation = PptxPackageReader.Read(pptxPath);
         var smartArt = presentation.Slides[0].Shapes
             .First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
@@ -1177,6 +1177,8 @@ public sealed class SmartArtTests : IDisposable
         var source = XDocument.Load(sourceStream);
         var managerPoint = source.Descendants(dgm + "pt")
             .Single(point => (string?)point.Attribute("modelId") == "manager");
+        var managerConnection = source.Descendants(dgm + "cxn")
+            .Single(connection => (string?)connection.Attribute("destId") == "manager");
         managerPoint.SetAttributeValue("phldr", "1");
         managerPoint.Add(new XElement(dgm + "prSet",
             new XAttribute("phldr", "1"),
@@ -1184,6 +1186,9 @@ public sealed class SmartArtTests : IDisposable
                 new XElement(dgm + "ext",
                     new XAttribute("uri", "urn:freep:node-payload"),
                     new XElement(extension + "nodeState", new XAttribute("value", "keep"))))));
+        managerConnection.SetAttributeValue("modelId", "authored-connection-id");
+        managerConnection.Add(new XElement(extension + "connectionState",
+            new XAttribute("value", "keep")));
         dataPart.Bytes = Encoding.UTF8.GetBytes(source.ToString(SaveOptions.DisableFormatting));
 
         SmartArtEditingPlanner.Apply(
@@ -1202,6 +1207,11 @@ public sealed class SmartArtTests : IDisposable
             .Single().Attribute("value")?.Value.Should().Be("keep");
         rewrittenManager.Descendants(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "t")
             .Single().Value.Should().Be("Delivery Lead");
+        var rewrittenConnection = rewritten.Descendants(dgm + "cxn")
+            .Single(connection => (string?)connection.Attribute("destId") == "manager");
+        rewrittenConnection.Attribute("modelId")?.Value.Should().Be("authored-connection-id");
+        rewrittenConnection.Descendants(extension + "connectionState")
+            .Single().Attribute("value")?.Value.Should().Be("keep");
 
         var savedPath = Path.Combine(_tempDir, "smartart-node-payload-roundtrip.pptx");
         PptxPackageWriter.Write(presentation, savedPath);
@@ -1213,6 +1223,11 @@ public sealed class SmartArtTests : IDisposable
             .Single(point => (string?)point.Attribute("modelId") == "manager");
         rereadManager.Attribute("phldr")?.Value.Should().Be("1");
         rereadManager.Descendants(extension + "nodeState")
+            .Single().Attribute("value")?.Value.Should().Be("keep");
+        var rereadConnection = reread.Descendants(dgm + "cxn")
+            .Single(connection => (string?)connection.Attribute("destId") == "manager");
+        rereadConnection.Attribute("modelId")?.Value.Should().Be("authored-connection-id");
+        rereadConnection.Descendants(extension + "connectionState")
             .Single().Attribute("value")?.Value.Should().Be("keep");
     }
 
