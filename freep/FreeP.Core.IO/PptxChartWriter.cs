@@ -1375,6 +1375,9 @@ internal static class PptxChartWriter
             axis.HasMajorGridlines
                 ? new XElement(C + "majorGridlines")
                 : null,
+            axis.HasMinorGridlines
+                ? new XElement(C + "minorGridlines")
+                : null,
             axis.Title is not null ? BuildTitleEl(axis.Title) : null,
             BuildAxisNumFmtEl(axis),
             BuildAxisCrossingElement(axis, null),
@@ -1403,6 +1406,9 @@ internal static class PptxChartWriter
             BuildAxisDisplayElements(axis),
             axis.HasMajorGridlines
                 ? new XElement(C + "majorGridlines")
+                : null,
+            axis.HasMinorGridlines
+                ? new XElement(C + "minorGridlines")
                 : null,
             axis.Title is not null ? BuildTitleEl(axis.Title) : null,
             BuildAxisNumFmtEl(axis),

@@ -470,6 +470,7 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetMinorUnit(5);
         planner.SetNumberFormatCode("$#,##0");
         planner.SetMajorGridlines(false);
+        planner.SetMinorGridlines(true);
         planner.SetMajorTickMark(ChartTickMark.Out);
         planner.SetMinorTickMark(ChartTickMark.In);
         planner.SetTickLabelPosition(ChartTickLabelPosition.NextTo);
@@ -486,7 +487,7 @@ public sealed class ChartDataDialogPlannerTests
             ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false,
             ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
             null, 10, false, ChartCrossBetween.MidCat, ChartLabelAlignment.Right,
-            35, true, false, true));
+            35, true, false, true, true));
         chart.ValueAxis.Title.Should().Be("Amount", "axis dialogs must edit a working copy");
         chart.ValueAxis.Delete.Should().BeTrue("axis dialogs must edit a working copy");
         ChartAxisOptionsPlanner.BuildSurfacePlan().CommandId

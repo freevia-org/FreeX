@@ -498,6 +498,9 @@ public sealed class ChartAxis
     /// <summary>Whether major gridlines are shown on this axis.</summary>
     public bool HasMajorGridlines { get; set; } = true;
 
+    /// <summary>Whether minor gridlines are shown on this axis.</summary>
+    public bool HasMinorGridlines { get; set; }
+
     /// <summary>Authored <c>c:majorTickMark/@val</c>; null means unspecified.</summary>
     public ChartTickMark? MajorTickMark { get; set; }
 

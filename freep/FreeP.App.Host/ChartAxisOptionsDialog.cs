@@ -20,6 +20,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _minorUnitBox;
     private readonly TextBox _numberFormatBox;
     private readonly CheckBox _majorGridlinesCheck;
+    private readonly CheckBox _minorGridlinesCheck;
     private readonly ComboBox _majorTickMarkCombo;
     private readonly ComboBox _minorTickMarkCombo;
     private readonly ComboBox _tickLabelPositionCombo;
@@ -69,6 +70,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _minorUnitBox = new TextBox { MinWidth = 120 };
         _numberFormatBox = new TextBox { MinWidth = 180 };
         _majorGridlinesCheck = new CheckBox { Content = surface.MajorGridlinesLabel };
+        _minorGridlinesCheck = new CheckBox { Content = surface.MinorGridlinesLabel };
         _majorTickMarkCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickMarkOptions);
         _minorTickMarkCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickMarkOptions);
         _tickLabelPositionCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickLabelPositionOptions);
@@ -106,6 +108,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         content.Children.Add(MakeRow(surface.NumberFormatLabel, _numberFormatBox));
         content.Children.Add(new TextBlock { Text = surface.AutoHint, Margin = new Thickness(150, -4, 0, 8), Opacity = 0.7 });
         content.Children.Add(_majorGridlinesCheck);
+        content.Children.Add(_minorGridlinesCheck);
         content.Children.Add(MakeRow(surface.MajorTickMarkLabel, _majorTickMarkCombo));
         content.Children.Add(MakeRow(surface.MinorTickMarkLabel, _minorTickMarkCombo));
         content.Children.Add(MakeRow(surface.TickLabelPositionLabel, _tickLabelPositionCombo));
@@ -150,6 +153,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _minorUnitBox.Text = Format(_planner.MinorUnit);
         _numberFormatBox.Text = _planner.NumberFormatCode;
         _majorGridlinesCheck.IsChecked = _planner.MajorGridlines;
+        _minorGridlinesCheck.IsChecked = _planner.MinorGridlines;
         _majorTickMarkCombo.SelectedItem = ChartAxisOptionsPlanner.TickMarkOptions.FirstOrDefault(x => x.Value == _planner.MajorTickMark);
         _minorTickMarkCombo.SelectedItem = ChartAxisOptionsPlanner.TickMarkOptions.FirstOrDefault(x => x.Value == _planner.MinorTickMark);
         _tickLabelPositionCombo.SelectedItem = ChartAxisOptionsPlanner.TickLabelPositionOptions.FirstOrDefault(x => x.Value == _planner.TickLabelPosition);
@@ -173,6 +177,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _planner.SetMinorUnit(ParseOptional(_minorUnitBox.Text, "Minor unit"));
         _planner.SetNumberFormatCode(_numberFormatBox.Text);
         _planner.SetMajorGridlines(_majorGridlinesCheck.IsChecked == true);
+        _planner.SetMinorGridlines(_minorGridlinesCheck.IsChecked == true);
         _planner.SetMajorTickMark(((ChartTickMarkOption)_majorTickMarkCombo.SelectedItem).Value);
         _planner.SetMinorTickMark(((ChartTickMarkOption)_minorTickMarkCombo.SelectedItem).Value);
         _planner.SetTickLabelPosition(((ChartTickLabelPositionOption)_tickLabelPositionCombo.SelectedItem).Value);

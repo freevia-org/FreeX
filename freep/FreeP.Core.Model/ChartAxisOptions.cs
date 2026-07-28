@@ -29,4 +29,5 @@ public sealed record ChartAxisOptions(
     int? LabelOffsetPercent = null,
     bool? NoMultiLevelLabels = null,
     bool? AutoCrossing = null,
-    bool ReverseOrder = false);
+    bool ReverseOrder = false,
+    bool MinorGridlines = false);

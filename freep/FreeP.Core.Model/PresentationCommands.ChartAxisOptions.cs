@@ -16,6 +16,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
     private string? _oldNumberFormatCode;
     private bool? _oldNumberFormatSourceLinked;
     private bool _oldMajorGridlines;
+    private bool _oldMinorGridlines;
     private ChartTickMark? _oldMajorTickMark;
     private ChartTickMark? _oldMinorTickMark;
     private ChartTickLabelPosition? _oldTickLabelPosition;
@@ -59,6 +60,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
             : _newOptions.NumberFormatCode.Trim();
         axis.NumberFormatSourceLinked = axis.NumberFormatCode is null ? null : false;
         axis.HasMajorGridlines = _newOptions.MajorGridlines;
+        axis.HasMinorGridlines = _newOptions.MinorGridlines;
         axis.MajorTickMark = _newOptions.MajorTickMark;
         axis.MinorTickMark = _newOptions.MinorTickMark;
         axis.TickLabelPosition = _newOptions.TickLabelPosition;
@@ -93,6 +95,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         axis.NumberFormatCode = _oldNumberFormatCode;
         axis.NumberFormatSourceLinked = _oldNumberFormatSourceLinked;
         axis.HasMajorGridlines = _oldMajorGridlines;
+        axis.HasMinorGridlines = _oldMinorGridlines;
         axis.MajorTickMark = _oldMajorTickMark;
         axis.MinorTickMark = _oldMinorTickMark;
         axis.TickLabelPosition = _oldTickLabelPosition;
@@ -120,6 +123,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         _oldNumberFormatCode = axis.NumberFormatCode;
         _oldNumberFormatSourceLinked = axis.NumberFormatSourceLinked;
         _oldMajorGridlines = axis.HasMajorGridlines;
+        _oldMinorGridlines = axis.HasMinorGridlines;
         _oldMajorTickMark = axis.MajorTickMark;
         _oldMinorTickMark = axis.MinorTickMark;
         _oldTickLabelPosition = axis.TickLabelPosition;

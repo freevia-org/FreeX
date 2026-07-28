@@ -23,6 +23,7 @@ internal sealed class ChartAxisOptionsDialog : Window
     private readonly TextBox _minorUnitBox;
     private readonly TextBox _numberFormatBox;
     private readonly CheckBox _majorGridlinesCheck;
+    private readonly CheckBox _minorGridlinesCheck;
     private readonly ComboBox _majorTickMarkCombo;
     private readonly ComboBox _minorTickMarkCombo;
     private readonly ComboBox _tickLabelPositionCombo;
@@ -74,6 +75,7 @@ internal sealed class ChartAxisOptionsDialog : Window
         _minorUnitBox = new TextBox { MinWidth = 130 };
         _numberFormatBox = new TextBox { MinWidth = 180 };
         _majorGridlinesCheck = new CheckBox { Content = surface.MajorGridlinesLabel };
+        _minorGridlinesCheck = new CheckBox { Content = surface.MinorGridlinesLabel };
         _majorTickMarkCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickMarkOptions.Select(x => x.Label));
         _minorTickMarkCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickMarkOptions.Select(x => x.Label));
         _tickLabelPositionCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickLabelPositionOptions.Select(x => x.Label));
@@ -116,6 +118,7 @@ internal sealed class ChartAxisOptionsDialog : Window
                 MakeRow(surface.NumberFormatLabel, _numberFormatBox),
                 new TextBlock { Text = surface.AutoHint, Opacity = 0.7 },
                 _majorGridlinesCheck,
+                _minorGridlinesCheck,
                 MakeRow(surface.MajorTickMarkLabel, _majorTickMarkCombo),
                 MakeRow(surface.MinorTickMarkLabel, _minorTickMarkCombo),
                 MakeRow(surface.TickLabelPositionLabel, _tickLabelPositionCombo),
@@ -158,7 +161,8 @@ internal sealed class ChartAxisOptionsDialog : Window
         int? labelOffsetPercent = null,
         bool? noMultiLevelLabels = null,
         bool? autoCrossing = null,
-        bool reverseOrder = false)
+        bool reverseOrder = false,
+        bool minorGridlines = false)
     {
         _axisCombo.SelectedIndex = (int)axis;
         _titleBox.Text = title;
@@ -169,6 +173,7 @@ internal sealed class ChartAxisOptionsDialog : Window
         _minorUnitBox.Text = Format(minorUnit);
         _numberFormatBox.Text = numberFormatCode;
         _majorGridlinesCheck.IsChecked = majorGridlines;
+        _minorGridlinesCheck.IsChecked = minorGridlines;
         _majorTickMarkCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, majorTickMark);
         _minorTickMarkCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, minorTickMark);
         _tickLabelPositionCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickLabelPositionOptions, tickLabelPosition);
@@ -205,6 +210,7 @@ internal sealed class ChartAxisOptionsDialog : Window
         _minorUnitBox.Text = Format(_planner.MinorUnit);
         _numberFormatBox.Text = _planner.NumberFormatCode;
         _majorGridlinesCheck.IsChecked = _planner.MajorGridlines;
+        _minorGridlinesCheck.IsChecked = _planner.MinorGridlines;
         _majorTickMarkCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, _planner.MajorTickMark);
         _minorTickMarkCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, _planner.MinorTickMark);
         _tickLabelPositionCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickLabelPositionOptions, _planner.TickLabelPosition);
@@ -228,6 +234,7 @@ internal sealed class ChartAxisOptionsDialog : Window
         _planner.SetMinorUnit(ParseOptional(_minorUnitBox.Text, "Minor unit"));
         _planner.SetNumberFormatCode(_numberFormatBox.Text);
         _planner.SetMajorGridlines(_majorGridlinesCheck.IsChecked == true);
+        _planner.SetMinorGridlines(_minorGridlinesCheck.IsChecked == true);
         _planner.SetMajorTickMark(ChartAxisOptionsPlanner.TickMarkOptions[_majorTickMarkCombo.SelectedIndex].Value);
         _planner.SetMinorTickMark(ChartAxisOptionsPlanner.TickMarkOptions[_minorTickMarkCombo.SelectedIndex].Value);
         _planner.SetTickLabelPosition(ChartAxisOptionsPlanner.TickLabelPositionOptions[_tickLabelPositionCombo.SelectedIndex].Value);

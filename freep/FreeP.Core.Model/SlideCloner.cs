@@ -387,6 +387,7 @@ public static class SlideCloner
         MajorUnit         = a.MajorUnit,
         MinorUnit         = a.MinorUnit,
         HasMajorGridlines = a.HasMajorGridlines,
+        HasMinorGridlines = a.HasMinorGridlines,
         MajorTickMark     = a.MajorTickMark,
         MinorTickMark     = a.MinorTickMark,
         TickLabelPosition = a.TickLabelPosition,

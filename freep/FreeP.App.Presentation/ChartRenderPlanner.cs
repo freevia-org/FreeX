@@ -551,6 +551,7 @@ public sealed class ChartScenePlan
     public bool UseWpfPixelSnappedImportedGrid { get; init; }
     public bool DrawProjectedThreeDBarFrame { get; init; }
     public ChartMajorGridLinePrimitivePlan GridLines { get; init; }
+    public ChartMajorGridLinePrimitivePlan MinorGridLines { get; init; }
     public ChartMajorAxisTickPrimitivePlan AxisTicks { get; init; }
     public IReadOnlyList<ChartDataLabelPlan> DataLabels { get; init; } = Array.Empty<ChartDataLabelPlan>();
     public ChartDataTablePrimitivePlan DataTable { get; init; }
@@ -1471,6 +1472,7 @@ public static partial class ChartRenderPlanner
                 GeometryKind = ChartSceneGeometryKind.Empty,
                 Title = title,
                 GridLines = EmptyMajorGridLinePrimitivePlan(),
+                MinorGridLines = EmptyMajorGridLinePrimitivePlan(),
                 AxisTicks = EmptyMajorAxisTickPrimitivePlan(),
                 DataTable = EmptyDataTablePrimitivePlan(),
                 SecondaryAxis = EmptySecondaryValueAxisPrimitivePlan()
@@ -1593,6 +1595,7 @@ public static partial class ChartRenderPlanner
             UseWpfPixelSnappedImportedGrid = UsesImportedLabeledColumnWidth(chart),
             DrawProjectedThreeDBarFrame = UsesImportedThreeDColumnDefaults(chart),
             GridLines = BuildMajorGridLinePrimitivePlan(chart, frame),
+            MinorGridLines = BuildMinorGridLinePrimitivePlan(chart, frame),
             AxisTicks = BuildMajorAxisTickPrimitivePlan(chart, frame),
             DataLabels = BuildDataLabelPlans(chart, plot, seriesColors, fillPlans),
             DataTable = BuildDataTablePrimitivePlan(chart, frame, seriesColors, fillPlans),
@@ -2620,6 +2623,54 @@ public static partial class ChartRenderPlanner
         return new ChartMajorGridLinePrimitivePlan(
             lines,
             DefaultGridLineStroke(chart));
+    }
+
+    public static ChartMajorGridLinePrimitivePlan BuildMinorGridLinePrimitivePlan(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        if (!frame.HasPlot || frame.IsPie || frame.IsRadar || frame.IsScatterLike ||
+            !chart.ValueAxis.HasMinorGridlines)
+            return EmptyMinorGridLinePrimitivePlan();
+
+        var (minValue, maxValue, majorUnit) = ComputePrimaryValueAxisRange(chart);
+        double minorUnit = chart.ValueAxis.MinorUnit is > 0
+            ? chart.ValueAxis.MinorUnit.Value
+            : majorUnit / 5.0;
+        if (!(minorUnit > 0) || maxValue <= minValue)
+            return EmptyMinorGridLinePrimitivePlan();
+
+        double steps = (maxValue - minValue) / minorUnit;
+        int tickCount = (int)Math.Floor(steps + 1e-9);
+        var plot = frame.Plot;
+        var lines = new List<ChartGridLinePlan>(Math.Max(0, tickCount - 1));
+        for (int index = 1; index < tickCount; index++)
+        {
+            double value = minValue + minorUnit * index;
+            double majorPosition = (value - minValue) / majorUnit;
+            if (Math.Abs(majorPosition - Math.Round(majorPosition)) < 0.0001)
+                continue;
+
+            double fraction = (value - minValue) / (maxValue - minValue);
+            if (frame.IsBar)
+            {
+                double x = plot.X + plot.Width * fraction;
+                lines.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(x, plot.Y),
+                    new ChartPlanPoint(x, plot.Bottom)));
+            }
+            else
+            {
+                double y = plot.Bottom - plot.Height * fraction;
+                lines.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(plot.X, y),
+                    new ChartPlanPoint(plot.Right, y)));
+            }
+        }
+
+        return new ChartMajorGridLinePrimitivePlan(
+            lines,
+            new ChartStrokePlan(new SrgbColor(0xB7, 0xB7, 0xB7), Alpha: 170, Thickness: 0.75));
     }
 
     public static ChartMajorAxisTickPrimitivePlan BuildMajorAxisTickPrimitivePlan(
@@ -7615,6 +7666,11 @@ public static partial class ChartRenderPlanner
         new(
             Array.Empty<ChartGridLinePlan>(),
             DefaultGridLineStroke());
+
+    private static ChartMajorGridLinePrimitivePlan EmptyMinorGridLinePrimitivePlan() =>
+        new(
+            Array.Empty<ChartGridLinePlan>(),
+            new ChartStrokePlan(new SrgbColor(0xB7, 0xB7, 0xB7), Alpha: 170, Thickness: 0.75));
 
     private static ChartMajorAxisTickPrimitivePlan EmptyMajorAxisTickPrimitivePlan() =>
         new(

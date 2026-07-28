@@ -1311,6 +1311,28 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildMinorGridLinePrimitivePlan_UsesMinorUnitAndSkipsMajorPositions()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.ValueAxis.Min = 0;
+        chart.ValueAxis.Max = 20;
+        chart.ValueAxis.MajorUnit = 10;
+        chart.ValueAxis.MinorUnit = 2;
+        chart.ValueAxis.HasMinorGridlines = true;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildMinorGridLinePrimitivePlan(chart, frame);
+
+        plan.GridLines.Should().HaveCount(8);
+        plan.GridLines.Should().NotContain(line =>
+            Math.Abs(line.Start.Y - (frame.Plot.Bottom - frame.Plot.Height * 0.5)) < 0.001);
+        plan.Stroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0xB7, 0xB7, 0xB7),
+            Alpha: 170,
+            Thickness: 0.75));
+    }
+
+    [Fact]
     public void BuildMajorAxisTickPrimitivePlan_ColumnChart_PlansCategoryAndValueTicks()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);

@@ -25,6 +25,7 @@ public sealed record ChartAxisOptionsSurfacePlan(
     string MinorUnitLabel,
     string NumberFormatLabel,
     string MajorGridlinesLabel,
+    string MinorGridlinesLabel,
     string MajorTickMarkLabel,
     string MinorTickMarkLabel,
     string TickLabelPositionLabel,
@@ -60,6 +61,7 @@ public sealed class ChartAxisOptionsPlanner
     public const string MinorUnitLabel = "Minor unit";
     public const string NumberFormatLabel = "Number format";
     public const string MajorGridlinesLabel = "Major gridlines";
+    public const string MinorGridlinesLabel = "Minor gridlines";
     public const string MajorTickMarkLabel = "Major tick marks";
     public const string MinorTickMarkLabel = "Minor tick marks";
     public const string TickLabelPositionLabel = "Tick labels";
@@ -149,6 +151,7 @@ public sealed class ChartAxisOptionsPlanner
     private double? _minorUnit;
     private string _numberFormat = string.Empty;
     private bool _majorGridlines;
+    private bool _minorGridlines;
     private ChartTickMark? _majorTickMark;
     private ChartTickMark? _minorTickMark;
     private ChartTickLabelPosition? _tickLabelPosition;
@@ -183,6 +186,7 @@ public sealed class ChartAxisOptionsPlanner
             MinorUnitLabel,
             NumberFormatLabel,
             MajorGridlinesLabel,
+            MinorGridlinesLabel,
             MajorTickMarkLabel,
             MinorTickMarkLabel,
             TickLabelPositionLabel,
@@ -213,6 +217,7 @@ public sealed class ChartAxisOptionsPlanner
     public double? MinorUnit => _minorUnit;
     public string NumberFormatCode => _numberFormat;
     public bool MajorGridlines => _majorGridlines;
+    public bool MinorGridlines => _minorGridlines;
     public ChartTickMark? MajorTickMark => _majorTickMark;
     public ChartTickMark? MinorTickMark => _minorTickMark;
     public ChartTickLabelPosition? TickLabelPosition => _tickLabelPosition;
@@ -237,6 +242,7 @@ public sealed class ChartAxisOptionsPlanner
         _minorUnit = axis.MinorUnit;
         _numberFormat = axis.NumberFormatCode ?? string.Empty;
         _majorGridlines = axis.HasMajorGridlines;
+        _minorGridlines = axis.HasMinorGridlines;
         _majorTickMark = axis.MajorTickMark;
         _minorTickMark = axis.MinorTickMark;
         _tickLabelPosition = axis.TickLabelPosition;
@@ -258,6 +264,7 @@ public sealed class ChartAxisOptionsPlanner
     public void SetMinorUnit(double? minorUnit) => _minorUnit = minorUnit;
     public void SetNumberFormatCode(string? formatCode) => _numberFormat = formatCode ?? string.Empty;
     public void SetMajorGridlines(bool show) => _majorGridlines = show;
+    public void SetMinorGridlines(bool show) => _minorGridlines = show;
     public void SetMajorTickMark(ChartTickMark? value) => _majorTickMark = value;
     public void SetMinorTickMark(ChartTickMark? value) => _minorTickMark = value;
     public void SetTickLabelPosition(ChartTickLabelPosition? value) => _tickLabelPosition = value;
@@ -290,7 +297,8 @@ public sealed class ChartAxisOptionsPlanner
         _labelOffsetPercent,
         _noMultiLevelLabels,
         _autoCrossing,
-        _reverseOrder);
+        _reverseOrder,
+        _minorGridlines);
 
     private ChartAxis ResolveAxis() =>
         _axisKind switch

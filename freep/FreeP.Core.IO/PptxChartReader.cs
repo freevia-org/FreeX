@@ -1174,6 +1174,7 @@ internal static class PptxChartReader
     {
         axis.Delete = axEl.Element(C + "delete")?.Attribute("val")?.Value is "1" or "true";
         axis.HasMajorGridlines = axEl.Element(C + "majorGridlines") is not null;
+        axis.HasMinorGridlines = axEl.Element(C + "minorGridlines") is not null;
         axis.MajorTickMark = ParseTickMark(axEl.Element(C + "majorTickMark"));
         axis.MinorTickMark = ParseTickMark(axEl.Element(C + "minorTickMark"));
         axis.TickLabelPosition = ParseTickLabelPosition(axEl.Element(C + "tickLblPos"));

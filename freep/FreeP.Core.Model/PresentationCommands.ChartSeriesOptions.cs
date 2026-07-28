@@ -196,6 +196,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
             MajorUnit = source.MajorUnit,
             MinorUnit = source.MinorUnit,
             HasMajorGridlines = source.HasMajorGridlines,
+            HasMinorGridlines = source.HasMinorGridlines,
             MajorTickMark = source.MajorTickMark,
             MinorTickMark = source.MinorTickMark,
             TickLabelPosition = source.TickLabelPosition,
