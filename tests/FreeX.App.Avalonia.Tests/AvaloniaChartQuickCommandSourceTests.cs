@@ -16,6 +16,7 @@ public sealed class AvaloniaChartQuickCommandSourceTests
         source.Should().Contain("ChartQuickCommandCatalog.DataLabelTextColor");
         source.Should().Contain("ChartQuickCommandCatalog.SeriesDash");
         source.Should().Contain("ChartQuickCommandCatalog.SeriesMarkerSize");
+        source.Should().Contain("ChartQuickCommandCatalog.SecondaryAxisSeries");
         source.Should().Contain("private void ExecuteChartQuickCommand(");
         source.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command.Command)");
         source.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
@@ -55,6 +56,20 @@ public sealed class AvaloniaChartQuickCommandSourceTests
         source.Should().Contain("[\"chartFormat.seriesWidth\"] = () => RunGuarded(ShowChartSeriesFormatDialog)");
         source.Should().NotContain("[\"chartFormat.seriesColor\"] = () => RunGuarded(ShowChartSeriesColorDialog)");
         source.Should().Contain("ChartSeriesFormatPlanner");
+    }
+
+    [Fact]
+    public void SecondaryAxisSeriesRibbonRoute_UsesWpfSharedQuickCommand()
+    {
+        var contextualSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ContextualTabs.cs"));
+        var quickSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatTextTabs.cs"));
+        var adapterSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "Ribbon", "AvaloniaCommandIdAdapter.cs"));
+
+        contextualSource.Should().Contain("[\"chartDesign.secondaryAxisSeries\"] = CycleChartSecondaryAxisSeries");
+        quickSource.Should().Contain("private void CycleChartSecondaryAxisSeries()");
+        quickSource.Should().Contain("ChartQuickCommandCatalog.SecondaryAxisSeries");
+        quickSource.Should().Contain("MainWindowMessage_ChartSecondaryAxisUnsupported");
+        adapterSource.Should().Contain("[\"chartDesign.secondaryAxisSeries\"] = \"Secondary Axis Series\"");
     }
 
     private static string RepoFile(params string[] parts)

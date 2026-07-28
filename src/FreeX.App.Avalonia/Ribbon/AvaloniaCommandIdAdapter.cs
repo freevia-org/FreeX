@@ -273,6 +273,7 @@ internal static class AvaloniaCommandIdAdapter
         ["chartDesign.trendline"] = "Trendline",
         ["chartDesign.errorBars"] = "Error Bars",
         ["chartDesign.secondaryAxis"] = "Secondary Axis",
+        ["chartDesign.secondaryAxisSeries"] = "Secondary Axis Series",
         ["chartDesign.chartStyles"] = "Chart Styles",
         ["chartDesign.selectData"] = "Select Data Source",
         ["chartDesign.changeType"] = "Change Chart Type#ChangeChartTypeBtn_Click",

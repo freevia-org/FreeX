@@ -278,7 +278,8 @@ public static class FreeXRibbonDefinition
                 .Medium("Data Label Position", "Data Label Position", Ico.Align, "P")
                 .Medium("Trendline", "Trendline", Ico.Trendline, "R")
                 .Medium("Error Bars", "Error Bars", Ico.ErrorBars, "E")
-                .Medium("Secondary Axis", "Secondary Axis", Ico.SecondaryAxis, "S"))
+                .Medium("Secondary Axis", "Secondary Axis", Ico.SecondaryAxis, "S")
+                .Medium("Secondary Axis Series", "Secondary Axis Series", Ico.SecondaryAxis, "SS"))
             .Group("ChartDesignStylesGroup", "Styles", null, priority: 170,
                 g => g
                 .Medium("Chart Styles", "Chart Styles", Ico.Theme, "Y"))

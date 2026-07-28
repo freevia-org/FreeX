@@ -349,7 +349,8 @@ public sealed class RibbonTabParityTests
             "Data Labels",
             "Trendline",
             "Error Bars",
-            "Secondary Axis"]);
+            "Secondary Axis",
+            "Secondary Axis Series"]);
         Command(Group(designTab, "Styles"), "Chart Styles").KeyTip.Should().Be("Y");
         Command(Group(designTab, "Data"), "Select Data Source").KeyTip.Should().Be("A");
         CommandTitles(Group(designTab, "Type")).Should().ContainInOrder(

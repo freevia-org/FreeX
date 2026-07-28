@@ -43,6 +43,7 @@ public sealed partial class MainWindow
             // (ChartErrorBarsPlanner).
             ["chartDesign.errorBars"] = () => RunGuarded(ShowChartErrorBarsDialog),
             ["chartDesign.secondaryAxis"] = CycleChartSecondaryAxis,
+            ["chartDesign.secondaryAxisSeries"] = CycleChartSecondaryAxisSeries,
             ["chartDesign.chartStyles"] = CycleChartStyle,
             ["chartDesign.selectData"] = () => RunGuarded(ShowSelectChartDataDialog),
             ["chartDesign.changeType"] = () => RunGuarded(ShowChangeChartTypeDialog),

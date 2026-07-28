@@ -34,6 +34,13 @@ public sealed partial class MainWindow
 
     // ---- Chart Format ▸ Text group: title / axis-title / legend / data-label color & size -------------
 
+    private void CycleChartSecondaryAxisSeries()
+    {
+        ExecuteChartQuickCommand(
+            ChartQuickCommandCatalog.SecondaryAxisSeries,
+            UiText.Get("MainWindowMessage_ChartSecondaryAxisUnsupported"));
+    }
+
     private void CycleChartTitleColor()
     {
         ExecuteChartQuickCommand(ChartQuickCommandCatalog.ChartTitleColor);
