@@ -313,6 +313,42 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void PictureAccentList_WithNodePictures_UsesAccentBarsAndCaptions()
+    {
+        var data = MakeData(SmartArtFamily.List, "Alpha", "Beta");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureAccentList";
+        data.IsLiveLayoutSupported = true;
+        foreach (var node in data.Nodes)
+            node.Picture = new ImagePart { Bytes = Minimal1x1Png(), ContentType = "image/png" };
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        shapes!.Where(s => s.Kind == SlideShapeKind.Picture).Should().HaveCount(2);
+        shapes.Where(s => s.Kind == SlideShapeKind.AutoShape && s.Fill is ShapeFill.Solid)
+            .Should().HaveCount(2, "each row has one accent bar");
+        shapes.Where(s => s.Kind == SlideShapeKind.AutoShape)
+            .Select(s => s.PlainText)
+            .Should().Contain("Alpha").And.Contain("Beta");
+    }
+
+    [Fact]
+    public void PictureAccentList_MissingNodePicture_EmitsAddPicturePlaceholder()
+    {
+        var data = MakeData(SmartArtFamily.List, "Alpha");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureAccentList";
+        data.IsLiveLayoutSupported = true;
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        shapes!.Where(s => s.Kind == SlideShapeKind.Picture).Should().BeEmpty();
+        shapes.Where(s => s.Kind == SlideShapeKind.AutoShape)
+            .Select(s => s.PlainText)
+            .Should().Contain("Add picture");
+    }
+
+    [Fact]
     public void Cycle_FiveNodes_ProducesFiveBoxesPlusFiveConnectors()
     {
         var data = MakeData(SmartArtFamily.Cycle, "A", "B", "C", "D", "E");

@@ -81,6 +81,9 @@ public static class SmartArtLayoutEngine
         if (IsPictureCaptionListLayout(data.LayoutUniqueId))
             return LayoutPictureCaptionList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsPictureAccentListLayout(data.LayoutUniqueId))
+            return LayoutPictureAccentList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsPictureGridLayout(data.LayoutUniqueId))
             return LayoutPictureGrid(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1089,6 +1092,67 @@ public static class SmartArtLayoutEngine
                 captionW,
                 rowH));
 
+            curY += rowH + gapY;
+        }
+
+        return shapes;
+    }
+
+    private static IReadOnlyList<SlideShape>? LayoutPictureAccentList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>(n * 3);
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapY = Math.Max((long)(fcy * 0.025), 1L);
+        long gapX = Math.Max((long)(fcx * 0.018), 1L);
+        long rowW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long availH = Math.Max(fcy - 2 * outerPadY - Math.Max(n - 1, 0) * gapY, 1L);
+        long rowH = n > 0 ? Math.Max(availH / n, 1L) : 1L;
+        long pictureW = Math.Max(Math.Min(rowH, (long)(rowW * 0.27)), 1L);
+        long accentW = Math.Max((long)(fcx * 0.018), 1L);
+        long captionX = fx + outerPadX + pictureW + gapX + accentW + gapX;
+        long captionW = Math.Max(fx + fcx - outerPadX - captionX, 1L);
+        long curY = fy + outerPadY;
+        long leftX = fx + outerPadX;
+        uint idCounter = 360;
+
+        for (int i = 0; i < n; i++)
+        {
+            var node = nodes[i];
+            var nodeStyle = stylePlan.GetNodeStyle(i, node.Level, SmartArtFamily.List);
+            shapes.Add(node.Picture is { Bytes.Length: > 0 }
+                ? new SlideShape
+                {
+                    Id = idCounter++,
+                    Name = $"SmartArt_AccentPicture_{i + 1}",
+                    Kind = SlideShapeKind.Picture,
+                    OffsetXEmu = leftX,
+                    OffsetYEmu = curY,
+                    ExtentCxEmu = pictureW,
+                    ExtentCyEmu = rowH,
+                    Picture = node.Picture,
+                }
+                : MakePicturePlaceholder(idCounter++, leftX, curY, pictureW, rowH, nodeStyle));
+
+            shapes.Add(new SlideShape
+            {
+                Id = idCounter++,
+                Name = $"SmartArt_AccentBar_{i + 1}",
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = DrawingShapeKind.Rectangle,
+                OffsetXEmu = leftX + pictureW + gapX,
+                OffsetYEmu = curY,
+                ExtentCxEmu = accentW,
+                ExtentCyEmu = rowH,
+                Fill = new ShapeFill.Solid(nodeStyle.Fill),
+                Outline = ShapeOutline.None.Instance,
+            });
+
+            shapes.Add(MakeCaption(idCounter++, node.Text, nodeStyle, captionX, curY, captionW, rowH));
             curY += rowH + gapY;
         }
 
@@ -2445,6 +2509,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "picturecaptionlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsPictureAccentListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "pictureaccentlist", StringComparison.Ordinal);
     }
 
     private static bool IsPictureGridLayout(string uniqueId)
