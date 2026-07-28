@@ -1021,18 +1021,27 @@ if [[ "$app" == "FreeP" ]]; then
         menu_dismissed=true
     fi
 
-    if $prefix_deferred && $longer_tip_opened && $menu_dismissed; then
+    send_key Escape
+    capture "nested-keytip-neutral.png"
+    keytips_dismissed=false
+    if screen_changed \
+        "$output/nested-keytip-dismissed.png" \
+        "$output/nested-keytip-neutral.png" 100; then
+        keytips_dismissed=true
+    fi
+
+    if $prefix_deferred && $longer_tip_opened && $menu_dismissed && $keytips_dismissed; then
         record_evidence_set "nested-keytip-prefix-deferral" "passed" \
-            "Physical Alt,N,T,X selected an inserted text box; Alt,A,N,B kept the longer BI sequence alive, I opened the Blinds menu, and Escape dismissed it." \
+            "Physical Alt,N,T,X selected an inserted text box; Alt,A,N,B kept the longer BI sequence alive, I opened the Blinds menu, and two Escape presses dismissed the menu and key-tip mode." \
             "nested-keytip-before-target.png" "nested-keytip-target-selected.png" \
             "nested-keytip-prefix-b.png" "nested-keytip-blinds-menu.png" \
-            "nested-keytip-dismissed.png"
+            "nested-keytip-dismissed.png" "nested-keytip-neutral.png"
     else
         record_evidence_set "nested-keytip-prefix-deferral" "failed" \
-            "The FreeP physical key-tip route did not prove B prefix deferral, BI menu opening, and Escape dismissal." \
+            "The FreeP physical key-tip route did not prove B prefix deferral, BI menu opening, menu dismissal, and return to a neutral key-tip state." \
             "nested-keytip-before-target.png" "nested-keytip-target-selected.png" \
             "nested-keytip-prefix-b.png" "nested-keytip-blinds-menu.png" \
-            "nested-keytip-dismissed.png"
+            "nested-keytip-dismissed.png" "nested-keytip-neutral.png"
     fi
 fi
 
