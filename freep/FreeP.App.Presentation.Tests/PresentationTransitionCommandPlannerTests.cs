@@ -54,6 +54,7 @@ public sealed class PresentationTransitionCommandPlannerTests
     [InlineData("freep.transition.apply-all", PresentationTransitionCommandIntentKind.ApplyToAllSlides)]
     [InlineData("freep.transition.sound", PresentationTransitionCommandIntentKind.RequestSoundPicker)]
     [InlineData("freep.transition.sound-none", PresentationTransitionCommandIntentKind.ClearSound)]
+    [InlineData("freep.transition.sound-loop", PresentationTransitionCommandIntentKind.ToggleSoundLoop)]
     public void TryPlan_MapsTimingAndApplyAllCommandIdsToTypedIntents(
         string commandId,
         PresentationTransitionCommandIntentKind expectedIntent)
@@ -297,6 +298,40 @@ public sealed class PresentationTransitionCommandPlannerTests
         editor.Undo();
         editor.CurrentSlideTransition!.Sound.Should().NotBeNull();
         editor.CurrentSlideTransition.Sound!.AudioBytes.Should().Equal(sound.AudioBytes);
+    }
+
+    [Fact]
+    public void TryApply_TransitionSoundLoop_TogglesOnlyLoopAndIsUndoable()
+    {
+        var editor = MakeSession(out _);
+        var sound = new TransitionSound
+        {
+            AudioBytes = [0x52, 0x49, 0x46, 0x46],
+            ContentType = "audio/wav",
+            RelId = "rIdSound",
+            PartPath = "ppt/media/transition.wav",
+            Loop = false,
+        };
+        editor.SetTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Fade,
+            DurationMs = 900,
+            AdvanceOnClick = false,
+            Sound = sound,
+        });
+
+        PresentationTransitionCommandPlanner.TryPlan("freep.transition.sound-loop", out var plan)
+            .Should().BeTrue();
+        PresentationTransitionCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        editor.CurrentSlideTransition!.DurationMs.Should().Be(900);
+        editor.CurrentSlideTransition.AdvanceOnClick.Should().BeFalse();
+        editor.CurrentSlideTransition.Sound!.Loop.Should().BeTrue();
+        editor.CurrentSlideTransition.Sound.RelId.Should().Be("rIdSound");
+        editor.CurrentSlideTransition.Sound.AudioBytes.Should().Equal(sound.AudioBytes);
+
+        editor.Undo();
+        editor.CurrentSlideTransition!.Sound!.Loop.Should().BeFalse();
     }
 
     [Fact]

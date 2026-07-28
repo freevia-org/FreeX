@@ -182,6 +182,24 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
+    public void Cmd_TransitionSoundLoop_TogglesLoopAndUndoRestoresIt()
+    {
+        var (ed, pres) = MakeSession();
+        pres.Slides[0].Transition = new SlideTransition
+        {
+            Kind = TransitionKind.Fade,
+            Sound = new TransitionSound { AudioBytes = [1, 2, 3], ContentType = "audio/mpeg" },
+        };
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.transition.sound-loop");
+        Assert.True(ed.CurrentSlideTransition?.Sound?.Loop);
+
+        ed.Undo();
+        Assert.False(ed.CurrentSlideTransition?.Sound?.Loop);
+    }
+
+    [Fact]
     public void Cmd_TransitionNone_ClearsTransition()
     {
         var (ed, pres) = MakeSession();

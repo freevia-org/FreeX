@@ -986,6 +986,8 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Picture, FreePRibbonText.TransitionSoundCommand.KeyTip);
             group.Medium("freep.transition.sound-none", FreePRibbonText.TransitionSoundNoneCommand.Label,
                 RibbonCommandIconKind.Clear, FreePRibbonText.TransitionSoundNoneCommand.KeyTip);
+            group.MediumToggle("freep.transition.sound-loop", FreePRibbonText.TransitionSoundLoopCommand.Label,
+                RibbonCommandIconKind.Refresh, FreePRibbonText.TransitionSoundLoopCommand.KeyTip);
         });
         tab.Group("slideshow-from-transitions", FreePRibbonText.SlideShowGroupLabel,
             profile.SlideShowGroupKeyTip(), 80, group => AddSlideShowControls(group, profile));

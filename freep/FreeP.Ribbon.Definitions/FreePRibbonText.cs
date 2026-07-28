@@ -508,6 +508,7 @@ internal static class FreePRibbonText
     public static RibbonText TransitionApplyAllCommand { get; } = new("Ribbon_Command_TransitionApplyAll_Label", "Ribbon_Command_TransitionApplyAll_KeyTip");
     public static RibbonText TransitionSoundCommand { get; } = new("Ribbon_Command_TransitionSound_Label", "Ribbon_Command_TransitionSound_KeyTip");
     public static RibbonText TransitionSoundNoneCommand { get; } = new("Ribbon_Command_TransitionSoundNone_Label", "Ribbon_Command_TransitionSoundNone_KeyTip");
+    public static RibbonText TransitionSoundLoopCommand { get; } = new("Ribbon_Command_TransitionSoundLoop_Label", "Ribbon_Command_TransitionSoundLoop_KeyTip");
     public static string TransitionAdvanceAfterNoneOption => Get("Ribbon_Option_TransitionAdvanceAfterNone_Label");
 
     public static RibbonText AnimationsTab { get; } = new("Ribbon_Tab_Animations_Label", "Ribbon_Tab_Animations_KeyTip");
