@@ -111,6 +111,65 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void SlideCloner_ChartPreservesAuthoredSurfaceLayoutAndBubbleMetadata()
+    {
+        var slide = new Slide();
+        var chart = BuildColumnChart();
+        chart.ChartAreaFill = new ShapeFill.Solid(SrgbColor.FromRgb(0xF2F2F2));
+        chart.ChartAreaOutline = new ShapeOutline.Visible(SrgbColor.FromRgb(0x7F7F7F), 1.25);
+        chart.HasAutomaticTitle = true;
+        chart.PlotAreaManualLayout = new ChartManualLayout
+        {
+            LayoutTarget = "inner",
+            XMode = ChartManualLayoutMode.Edge,
+            YMode = ChartManualLayoutMode.Factor,
+            WidthMode = ChartManualLayoutMode.Factor,
+            HeightMode = ChartManualLayoutMode.Edge,
+            X = 0.10,
+            Y = 0.20,
+            Width = 0.70,
+            Height = 0.85,
+        };
+        chart.PlotAreaFill = new ShapeFill.Solid(SrgbColor.FromRgb(0xEAF2F8));
+        chart.PlotAreaOutline = new ShapeOutline.Visible(SrgbColor.FromRgb(0x1F4E79), 0.75);
+        chart.Legend = LegendPosition.Right;
+        chart.LegendOverlay = true;
+        chart.LegendManualLayout = new ChartManualLayout
+        {
+            LayoutTarget = "outer",
+            X = 0.60,
+            Y = 0.10,
+            Width = 0.35,
+            Height = 0.40,
+        };
+        chart.VaryColors = true;
+        chart.BubbleScalePercent = 175;
+        chart.BubbleSizeRepresents = BubbleSizeRepresentation.Width;
+        chart.ShowNegativeBubbles = true;
+        slide.Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.Chart, Chart = chart });
+
+        var clone = SlideCloner.CloneSlide(slide).Shapes.Single().Chart!;
+
+        ((ShapeFill.Solid)clone.ChartAreaFill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xF2F2F2));
+        ((ShapeOutline.Visible)clone.ChartAreaOutline!).WidthPt.Should().Be(1.25);
+        clone.HasAutomaticTitle.Should().BeTrue();
+        clone.PlotAreaManualLayout.Should().NotBeSameAs(chart.PlotAreaManualLayout);
+        clone.PlotAreaManualLayout!.LayoutTarget.Should().Be("inner");
+        clone.PlotAreaManualLayout.XMode.Should().Be(ChartManualLayoutMode.Edge);
+        clone.PlotAreaManualLayout.Height.Should().Be(0.85);
+        ((ShapeFill.Solid)clone.PlotAreaFill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xEAF2F8));
+        ((ShapeOutline.Visible)clone.PlotAreaOutline!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        clone.LegendOverlay.Should().BeTrue();
+        clone.LegendManualLayout.Should().NotBeSameAs(chart.LegendManualLayout);
+        clone.LegendManualLayout!.LayoutTarget.Should().Be("outer");
+        clone.LegendManualLayout.Width.Should().Be(0.35);
+        clone.VaryColors.Should().BeTrue();
+        clone.BubbleScalePercent.Should().Be(175);
+        clone.BubbleSizeRepresents.Should().Be(BubbleSizeRepresentation.Width);
+        clone.ShowNegativeBubbles.Should().BeTrue();
+    }
+
+    [Fact]
     public void SlideCloner_ChartPreservesAxisDisplayMetadata()
     {
         var chart = BuildColumnChart();

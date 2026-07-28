@@ -170,8 +170,17 @@ public static class SlideCloner
             HasHighLowLines = src.HasHighLowLines,
             StyleId      = src.StyleId,
             Title        = src.Title,
+            ChartAreaFill = src.ChartAreaFill,
+            ChartAreaOutline = src.ChartAreaOutline,
+            HasAutomaticTitle = src.HasAutomaticTitle,
             TextStyle    = CloneChartTextStyle(src.TextStyle),
             Legend       = src.Legend,
+            PlotAreaManualLayout = CloneChartManualLayout(src.PlotAreaManualLayout),
+            PlotAreaFill = src.PlotAreaFill,
+            PlotAreaOutline = src.PlotAreaOutline,
+            LegendManualLayout = CloneChartManualLayout(src.LegendManualLayout),
+            LegendOverlay = src.LegendOverlay,
+            VaryColors = src.VaryColors,
             CategoryAxis = CloneChartAxis(src.CategoryAxis),
             ValueAxis    = CloneChartAxis(src.ValueAxis),
             DataTable    = src.DataTable is null ? null : CloneChartDataTableSettings(src.DataTable),
@@ -195,6 +204,9 @@ public static class SlideCloner
             DoughnutHolePercent = src.DoughnutHolePercent,
             FirstSliceAngleDegrees = src.FirstSliceAngleDegrees,
             ScatterStyle = src.ScatterStyle,
+            BubbleScalePercent = src.BubbleScalePercent,
+            BubbleSizeRepresents = src.BubbleSizeRepresents,
+            ShowNegativeBubbles = src.ShowNegativeBubbles,
             RadarStyle = src.RadarStyle,
             DataLabels = CloneChartDataLabels(src.DataLabels),
             SecondaryValueAxis = src.SecondaryValueAxis is null ? null : CloneChartAxis(src.SecondaryValueAxis),
@@ -233,6 +245,22 @@ public static class SlideCloner
 
         return copy;
     }
+
+    private static ChartManualLayout? CloneChartManualLayout(ChartManualLayout? source) =>
+        source is null
+            ? null
+            : new ChartManualLayout
+            {
+                LayoutTarget = source.LayoutTarget,
+                XMode = source.XMode,
+                YMode = source.YMode,
+                WidthMode = source.WidthMode,
+                HeightMode = source.HeightMode,
+                X = source.X,
+                Y = source.Y,
+                Width = source.Width,
+                Height = source.Height,
+            };
 
     private static ChartDataTableSettings CloneChartDataTableSettings(ChartDataTableSettings settings) => new()
     {
