@@ -19,7 +19,7 @@ using SkiaSharp;
 // "FreeW side" of a visual fidelity comparison; the ground-truth side (MS Word / LibreOffice) and the
 // image diff are produced by freew-fidelity-corpus/tools/Run-VisualFidelity.ps1.
 //
-// Usage: FreeW.FidelityRender <input.docx | inputDir> <outputDir> [maxPagesPerDoc] [--composite|--no-composite] [--software-fallback|--auto-software-fallback]
+// Usage: FreeW.FidelityRender <input.docx | inputDir> <outputDir> [maxPagesPerDoc] [--composite|--no-composite] [--review-markup] [--software-fallback|--auto-software-fallback]
 //   - input is a single .docx or a directory (all *.docx are rendered)
 //   - output PNGs are named <docname>_pN.png (N = 1-based page index)
 //   - --composite (default) renders the full composite the live app shows:
@@ -38,6 +38,7 @@ using SkiaSharp;
 var composite = true; // composite is the default
 var softwareFallback = false;
 var autoSoftwareFallback = false;
+var reviewMarkup = false;
 var generateFixtures = false;
 var generateF2Corpus = false;
 var filteredArgs = new List<string>();
@@ -47,6 +48,7 @@ foreach (var a in args)
     else if (a == "--no-composite") composite = false;
     else if (a == "--software-fallback") softwareFallback = true;
     else if (a == "--auto-software-fallback") autoSoftwareFallback = true;
+    else if (a == "--review-markup") reviewMarkup = true;
     else if (a == "--generate-fixtures") generateFixtures = true;
     else if (a == "--generate-f2-corpus") generateF2Corpus = true;
     else filteredArgs.Add(a);
@@ -76,7 +78,7 @@ if (generateF2Corpus)
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("usage: FreeW.FidelityRender <input.docx | inputDir> <outputDir> [maxPagesPerDoc] [--composite|--no-composite] [--software-fallback|--auto-software-fallback]");
+    Console.Error.WriteLine("usage: FreeW.FidelityRender <input.docx | inputDir> <outputDir> [maxPagesPerDoc] [--composite|--no-composite] [--review-markup] [--software-fallback|--auto-software-fallback]");
     Console.Error.WriteLine("       FreeW.FidelityRender --generate-fixtures <outputDir>");
     Console.Error.WriteLine("       FreeW.FidelityRender --generate-f2-corpus <outputDir>");
     return 2;
@@ -88,7 +90,7 @@ int maxPages = args.Length > 2 && int.TryParse(args[2], out var mp) ? Math.Max(1
 
 int exit = 0;
 var sta = new Thread(() => exit = composite
-    ? RunComposite(input, outDir, maxPages, softwareFallback, autoSoftwareFallback)
+    ? RunComposite(input, outDir, maxPages, softwareFallback, autoSoftwareFallback, reviewMarkup)
     : RunBare(input, outDir, maxPages));
 sta.SetApartmentState(ApartmentState.STA);
 sta.Start();
@@ -99,7 +101,7 @@ return exit;
 // COMPOSITE render path — composites all layers the live app shows
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
-static int RunComposite(string input, string outDir, int maxPages, bool softwareFallback, bool autoSoftwareFallback)
+static int RunComposite(string input, string outDir, int maxPages, bool softwareFallback, bool autoSoftwareFallback, bool reviewMarkup)
 {
     Directory.CreateDirectory(outDir);
 
@@ -141,7 +143,7 @@ static int RunComposite(string input, string outDir, int maxPages, bool software
         try
         {
             var doc = DocxReader.Read(file);
-            RenderDocumentComposite(doc, name, outDir, maxPages, evidence, wpfRenderTargetFailure);
+            RenderDocumentComposite(doc, name, outDir, maxPages, evidence, wpfRenderTargetFailure, reviewMarkup);
         }
         catch (Exception ex)
         {
@@ -177,7 +179,8 @@ static void RenderDocumentComposite(
     string outDir,
     int maxPages,
     List<FreeWVisualEvidenceRow> evidence,
-    string? wpfRenderTargetFailure)
+    string? wpfRenderTargetFailure,
+    bool reviewMarkup)
 {
     // Calibrated against the cached Word page: the WPF note bitmap's measured height differs
     // from the Avalonia overlay, so it needs its own printable-frame reserve.
@@ -202,7 +205,8 @@ static void RenderDocumentComposite(
     var bodyView = new DocumentView
     {
         Width = pageWDip,
-        RenderPageBreakMarkers = false
+        RenderPageBreakMarkers = false,
+        ShowMarkupComments = reviewMarkup,
     };
     bodyView.LoadModel(doc);
 
@@ -882,11 +886,9 @@ static void RenderDocumentComposite(
             }
         }
 
-        // Word switches from its print-page surface to a reduced review-markup surface when
-        // comments are visible: the page is zoomed into the left portion of the capture and a
-        // dedicated right strip owns the balloons. Keep that view-mode composition out of the
-        // ordinary document renderer, but reproduce it for the canonical 96-DPI evidence page.
-        if (doc.Comments.Count > 0 && thisPixW == 816 && thisPixH == 1056)
+        // Word PDF export is a print-page capture. Review balloons remain available for explicit
+        // review-markup renders, but are not part of the default comparison surface.
+        if (reviewMarkup && doc.Comments.Count > 0 && thisPixW == 816 && thisPixH == 1056)
             bmp = RenderReviewMarkupCapture(bmp, doc, i, reviewAnchorPageAssignment);
 
         // Word's capture script fits each page within a fixed evidence surface. Normalize only

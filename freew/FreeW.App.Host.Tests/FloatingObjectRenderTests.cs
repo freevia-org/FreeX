@@ -261,8 +261,10 @@ public sealed class FloatingObjectRenderTests
         view.SetFloatingCanvas(canvas);
         view.LoadModel(DocWithImportedBehindTextbox());
 
-        Canvas.GetTop(canvas.Children.OfType<FrameworkElement>().Single())
-            .Should().BeApproximately(97, 0.01);
+        var rendered = canvas.Children.OfType<FrameworkElement>().Single();
+        Canvas.GetTop(rendered).Should().BeApproximately(96, 0.01);
+        rendered.Width.Should().BeApproximately(203, 0.01);
+        rendered.Height.Should().BeApproximately(84, 0.01);
     }
 
     [StaFact]
