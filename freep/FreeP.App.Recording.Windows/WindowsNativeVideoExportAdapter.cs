@@ -11,8 +11,7 @@ namespace FreeP.App.Recording.Windows;
 /// <summary>
 /// Encodes the shared PNG frame package with the Windows media stack.
 ///
-/// This supports narration and captured camera PIP through MediaComposition. Offset or
-/// multi-track narration remains explicitly deferred to the ffmpeg path.
+/// This supports delayed multi-track narration and captured camera PIP through MediaComposition.
 /// </summary>
 public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
 {
@@ -64,14 +63,6 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
                 package,
                 mediaArtifacts,
                 temporaryDirectory);
-            if (mediaPlan.NarrationTracks.Count > 1 ||
-                mediaPlan.NarrationTracks.Any(track => track.StartTime != TimeSpan.Zero))
-            {
-                return LinuxVideoExportResult.Failed(
-                    "Windows MediaComposition supports one narration track starting at presentation time zero; offset or multiple narration tracks require the ffmpeg video export path.",
-                    outputPath);
-            }
-
             using var archive = new ZipArchive(
                 new MemoryStream(package.Bytes),
                 ZipArchiveMode.Read,
@@ -91,15 +82,18 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
                 composition.Clips.Add(clip);
             }
 
-            if (mediaPlan.NarrationTracks is [{ } narration])
+            foreach (var narration in mediaPlan.NarrationTracks)
             {
-                stage = "creating narration track";
+                stage = $"creating narration track {narration.Path}";
                 var narrationFile = await StorageFile.GetFileFromPathAsync(narration.Path)
                     .AsTask(cancellationToken)
                     .ConfigureAwait(false);
                 var audioTrack = await BackgroundAudioTrack.CreateFromFileAsync(narrationFile)
                     .AsTask(cancellationToken)
                     .ConfigureAwait(false);
+                audioTrack.Delay = narration.StartTime;
+                if (narration.Duration > TimeSpan.Zero && audioTrack.OriginalDuration > narration.Duration)
+                    audioTrack.TrimTimeFromEnd = audioTrack.OriginalDuration - narration.Duration;
                 composition.BackgroundAudioTracks.Add(audioTrack);
             }
 

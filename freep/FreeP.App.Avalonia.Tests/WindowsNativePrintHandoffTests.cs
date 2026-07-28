@@ -73,6 +73,7 @@ public sealed class WindowsNativePrintHandoffTests
             return;
 
         var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Add(new Slide());
         var package = PresentationVideoFramePackageExecutor.BuildPackage(
             presentation,
             new PresentationVideoExportRequest(SecondsPerSlide: 0.2),
@@ -112,6 +113,19 @@ public sealed class WindowsNativePrintHandoffTests
                 CapturedByHost: "test",
                 StatusText: "captured",
                 PayloadBytes: narrationBytes);
+            var secondNarrationBytes = BuildPcmWav(durationMs: 100);
+            var secondNarrationArtifact = new PresentationRecordingMediaArtifact(
+                PresentationRecordingMediaArtifactKind.NarrationAudio,
+                SlideIndex: 1,
+                SuggestedFileName: "narration-2.wav",
+                ContentType: "audio/wav",
+                PackagePath: "ppt/media/freep-recordings/test/narration-2.wav",
+                ContentLengthBytes: secondNarrationBytes.LongLength,
+                ContentSha256: "test-narration-2",
+                DurationMs: 100,
+                CapturedByHost: "test",
+                StatusText: "captured",
+                PayloadBytes: secondNarrationBytes);
             var narrationPackage = PresentationVideoFramePackageExecutor.BuildPackage(
                 presentation,
                 new PresentationVideoExportRequest(SecondsPerSlide: 0.2, IncludeNarration: true),
@@ -120,7 +134,7 @@ public sealed class WindowsNativePrintHandoffTests
                 narrationPackage,
                 narrationOutputPath,
                 CancellationToken.None,
-                [narrationArtifact]);
+                [narrationArtifact, secondNarrationArtifact]);
             if (!narrationResult.Succeeded)
                 throw new Xunit.Sdk.XunitException(
                     $"Native narration export failed: canceled={narrationResult.Canceled}; " +
