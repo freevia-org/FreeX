@@ -434,7 +434,7 @@ public static class SmartArtLayoutEngine
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan)
     {
-        if (nodes.Count is < 1 or > 12 || fcx <= 0 || fcy <= 0)
+        if (nodes.Count < 1 || fcx <= 0 || fcy <= 0)
             return null;
 
         if (nodes.Any(node => node.Text is null || node.Text.Length > 512))
