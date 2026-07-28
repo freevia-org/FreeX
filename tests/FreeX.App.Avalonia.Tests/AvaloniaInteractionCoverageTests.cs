@@ -64,11 +64,11 @@ public sealed class AvaloniaInteractionCoverageTests
         var definition = AvaloniaRibbonComposition.BuildDefinition();
         var rows = AvaloniaRibbonComposition.EnumerateSurfaceRows(definition).ToArray();
 
-        // 574 canonical shared placements plus the 42 runtime shape-gallery leaves.
-        Assert.Equal(616, rows.Length);
-        Assert.Equal(294, rows.Count(row => row.Kind != nameof(RibbonMenuItem)));
+        // 575 canonical shared placements plus the 42 runtime shape-gallery leaves.
+        Assert.Equal(617, rows.Length);
+        Assert.Equal(295, rows.Count(row => row.Kind != nameof(RibbonMenuItem)));
         Assert.Equal(322, rows.Count(row => row.Kind == nameof(RibbonMenuItem)));
-        Assert.Equal(573, rows.Select(row => row.CommandId).Distinct().Count());
+        Assert.Equal(574, rows.Select(row => row.CommandId).Distinct().Count());
         Assert.Equal(73, definition.Tabs.Sum(tab => tab.Groups.Count));
     }
 
