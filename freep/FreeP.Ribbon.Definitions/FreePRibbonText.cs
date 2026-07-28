@@ -418,6 +418,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtPictureAccentListCommand { get; } = new("Ribbon_Command_SmartArtPictureAccentList_Label", "Ribbon_Command_SmartArtPictureAccentList_KeyTip");
     public static RibbonText SmartArtPictureStackCommand { get; } = new("Ribbon_Command_SmartArtPictureStack_Label", "Ribbon_Command_SmartArtPictureStack_KeyTip");
     public static RibbonText SmartArtPictureLineupCommand { get; } = new("Ribbon_Command_SmartArtPictureLineup_Label", "Ribbon_Command_SmartArtPictureLineup_KeyTip");
+    public static RibbonText SmartArtContinuousPictureListCommand { get; } = new("Ribbon_Command_SmartArtContinuousPictureList_Label", "Ribbon_Command_SmartArtContinuousPictureList_KeyTip");
     public static RibbonText SmartArtPictureGridCommand { get; } = new("Ribbon_Command_SmartArtPictureGrid_Label", "Ribbon_Command_SmartArtPictureGrid_KeyTip");
     public static RibbonText SmartArtLabeledHierarchyCommand { get; } = new("Ribbon_Command_SmartArtLabeledHierarchy_Label", "Ribbon_Command_SmartArtLabeledHierarchy_KeyTip");
     public static RibbonText SmartArtTableHierarchyCommand { get; } = new("Ribbon_Command_SmartArtTableHierarchy_Label", "Ribbon_Command_SmartArtTableHierarchy_KeyTip");
@@ -508,6 +509,7 @@ internal static class FreePRibbonText
     public static RibbonText TransitionApplyAllCommand { get; } = new("Ribbon_Command_TransitionApplyAll_Label", "Ribbon_Command_TransitionApplyAll_KeyTip");
     public static RibbonText TransitionSoundCommand { get; } = new("Ribbon_Command_TransitionSound_Label", "Ribbon_Command_TransitionSound_KeyTip");
     public static RibbonText TransitionSoundNoneCommand { get; } = new("Ribbon_Command_TransitionSoundNone_Label", "Ribbon_Command_TransitionSoundNone_KeyTip");
+    public static RibbonText TransitionSoundLoopCommand { get; } = new("Ribbon_Command_TransitionSoundLoop_Label", "Ribbon_Command_TransitionSoundLoop_KeyTip");
     public static string TransitionAdvanceAfterNoneOption => Get("Ribbon_Option_TransitionAdvanceAfterNone_Label");
 
     public static RibbonText AnimationsTab { get; } = new("Ribbon_Tab_Animations_Label", "Ribbon_Tab_Animations_KeyTip");

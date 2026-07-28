@@ -862,6 +862,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.PictureLineupLayoutCommandId,
                 FreePRibbonText.SmartArtPictureLineupCommand.Label, RibbonCommandIconKind.Picture,
                 FreePRibbonText.SmartArtPictureLineupCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.ContinuousPictureListLayoutCommandId,
+                FreePRibbonText.SmartArtContinuousPictureListCommand.Label, RibbonCommandIconKind.Picture,
+                FreePRibbonText.SmartArtContinuousPictureListCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.PictureGridLayoutCommandId,
                 FreePRibbonText.SmartArtPictureGridCommand.Label, RibbonCommandIconKind.Picture,
                 FreePRibbonText.SmartArtPictureGridCommand.KeyTip);
@@ -986,6 +989,8 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Picture, FreePRibbonText.TransitionSoundCommand.KeyTip);
             group.Medium("freep.transition.sound-none", FreePRibbonText.TransitionSoundNoneCommand.Label,
                 RibbonCommandIconKind.Clear, FreePRibbonText.TransitionSoundNoneCommand.KeyTip);
+            group.MediumToggle("freep.transition.sound-loop", FreePRibbonText.TransitionSoundLoopCommand.Label,
+                RibbonCommandIconKind.Refresh, FreePRibbonText.TransitionSoundLoopCommand.KeyTip);
         });
         tab.Group("slideshow-from-transitions", FreePRibbonText.SlideShowGroupLabel,
             profile.SlideShowGroupKeyTip(), 80, group => AddSlideShowControls(group, profile));

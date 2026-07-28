@@ -1510,6 +1510,12 @@
   <data name="Ribbon_Command_SmartArtPictureLineup_KeyTip" xml:space="preserve">
     <value>L</value>
   </data>
+  <data name="Ribbon_Command_SmartArtContinuousPictureList_Label" xml:space="preserve">
+    <value>Continuous Picture List</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtContinuousPictureList_KeyTip" xml:space="preserve">
+    <value>CP</value>
+  </data>
   <data name="Ribbon_Command_SmartArtPictureGrid_Label" xml:space="preserve">
     <value>Picture Grid</value>
   </data>
@@ -1956,6 +1962,12 @@
   </data>
   <data name="Ribbon_Command_TransitionSoundNone_KeyTip" xml:space="preserve">
     <value>N</value>
+  </data>
+  <data name="Ribbon_Command_TransitionSoundLoop_Label" xml:space="preserve">
+    <value>Loop Sound</value>
+  </data>
+  <data name="Ribbon_Command_TransitionSoundLoop_KeyTip" xml:space="preserve">
+    <value>L</value>
   </data>
   <data name="Ribbon_Option_TransitionAdvanceAfterNone_Label" xml:space="preserve">
     <value>(none)</value>

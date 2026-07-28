@@ -1000,6 +1000,15 @@ public sealed class MainWindowHeadlessTests
         commandIds.Should().Contain(PresentationTransitionCommandPlanner.BuiltInPlans.Select(plan => plan.CommandId));
     }
 
+    [Fact]
+    public void RibbonDefinition_transitions_tab_exposes_transition_sound_loop_toggle()
+    {
+        var definition = FreePRibbonAvalonia.Build();
+        var commandIds = EnumerateRibbonCommandIds(definition.Tabs.Single(t => t.Id == "transitions"));
+
+        commandIds.Should().Contain("freep.transition.sound-loop");
+    }
+
     // ── Slide management ────────────────────────────────────────────────────────
 
     [Fact]

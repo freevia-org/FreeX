@@ -161,7 +161,12 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     /// be shared; the mutable image object itself is not shared, so commands such as resize or crop on an
     /// inserted copy cannot alter the source document.
     /// </summary>
-    public InlineImage Clone() => (InlineImage)MemberwiseClone();
+    public InlineImage Clone()
+    {
+        var clone = (InlineImage)MemberwiseClone();
+        clone.ImportedEffects = ImportedEffects?.Clone();
+        return clone;
+    }
 
     public double WidthPt { get; set; } = widthPt;
     public double HeightPt { get; set; } = heightPt;
@@ -481,9 +486,16 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     /// </summary>
     public int BevelPreset { get; set; }
 
+    /// <summary>
+    /// Exact DrawingML effect values read from the source package. UI preset fields remain available for
+    /// editing, while this payload preserves Word-authored shadow, glow, and reflection semantics on save.
+    /// </summary>
+    public ShapeEffectLst? ImportedEffects { get; set; }
+
     /// <summary>True when any picture effect is active.</summary>
     public bool HasEffects =>
-        ShadowPreset != 0 || GlowSizePt > 0 || ReflectionPreset != 0 || SoftEdgePt > 0 || BevelPreset != 0;
+        ShadowPreset != 0 || GlowSizePt > 0 || ReflectionPreset != 0 || SoftEdgePt > 0 || BevelPreset != 0
+        || ImportedEffects?.HasAny == true;
 
     // ── Artistic Effects (a14:artisticEffect / freew:artisticEffect) ─────────────────────────────────
     // Picture Format > Adjust > Artistic Effects gallery. Non-destructive: applied at render time by

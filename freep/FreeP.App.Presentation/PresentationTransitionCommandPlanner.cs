@@ -13,6 +13,7 @@ public enum PresentationTransitionCommandIntentKind
     ApplyToAllSlides,
     RequestSoundPicker,
     ClearSound,
+    ToggleSoundLoop,
 }
 
 public sealed record PresentationTransitionCommandPlan(
@@ -256,6 +257,9 @@ public static class PresentationTransitionCommandPlanner
             new PresentationTransitionCommandPlan(
                 "freep.transition.sound-none",
                 PresentationTransitionCommandIntentKind.ClearSound),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.sound-loop",
+                PresentationTransitionCommandIntentKind.ToggleSoundLoop),
         };
 
     public static bool TryPlan(string commandId, out PresentationTransitionCommandPlan plan)
@@ -347,6 +351,24 @@ public static class PresentationTransitionCommandPlanner
                 }
 
                 editor.SetCurrentSlideTransitionSound(null);
+                return true;
+
+            case PresentationTransitionCommandIntentKind.ToggleSoundLoop:
+                if (editor.CurrentSlideTransition?.Sound is not { } sound)
+                {
+                    return false;
+                }
+
+                var loopedSound = new TransitionSound
+                {
+                    AudioBytes = sound.AudioBytes is null ? null : (byte[])sound.AudioBytes.Clone(),
+                    ContentType = sound.ContentType,
+                    RelId = sound.RelId,
+                    PartPath = sound.PartPath,
+                    Loop = !sound.Loop,
+                    IsBuiltIn = sound.IsBuiltIn,
+                };
+                editor.SetCurrentSlideTransitionSound(loopedSound);
                 return true;
 
             default:

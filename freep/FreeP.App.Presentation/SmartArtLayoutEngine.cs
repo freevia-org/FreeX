@@ -2805,7 +2805,7 @@ public static class SmartArtLayoutEngine
             return false;
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
-        return string.Equals(id.Split('/').Last(), "picturelineup", StringComparison.Ordinal);
+        return id.Split('/').Last() is "picturelineup" or "continuouspicturelist";
     }
 
     private static bool IsPictureGridLayout(string uniqueId)
