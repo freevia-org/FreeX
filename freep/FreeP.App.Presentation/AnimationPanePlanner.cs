@@ -1598,6 +1598,7 @@ public static class AnimationPanePlanner
             case AnimationPreset.RandomBars:
             case AnimationPreset.Blinds:
             case AnimationPreset.Checkerboard:
+            case AnimationPreset.Wave:
                 foreach (var option in HorizontalVerticalOptions())
                     yield return option;
                 break;
