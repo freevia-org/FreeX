@@ -533,9 +533,7 @@ public sealed class AnimationPane : Border
         };
         removeBtn.Click += (_, _) =>
         {
-            _editor.RemoveAnimation(capturedIndex);
-            if (_selectedRowIndex >= _editor.CurrentSlideAnimations.Count)
-                _selectedRowIndex = _editor.CurrentSlideAnimations.Count - 1;
+            ApplyRemoveMutation(capturedIndex);
         };
 
         // ── Assemble button cluster ──────────────────────────────────────────────
@@ -647,6 +645,23 @@ public sealed class AnimationPane : Border
             offset);
         if (AnimationPanePlanner.TryApplyReorderMutation(_editor, plan))
             _selectedRowIndex = plan.SelectedAnimationIndex;
+
+        return plan;
+    }
+
+    internal AnimationPaneRemoveMutationPlan RemoveAnimationForTest(int animationIndex) =>
+        ApplyRemoveMutation(animationIndex);
+
+    private AnimationPaneRemoveMutationPlan ApplyRemoveMutation(int animationIndex)
+    {
+        var plan = AnimationPanePlanner.BuildRemoveMutationPlan(
+            _editor.CurrentSlideAnimations,
+            animationIndex);
+        if (AnimationPanePlanner.TryApplyRemoveMutation(_editor, plan))
+        {
+            _selectedRowIndex = plan.SelectedAnimationIndex;
+            Rebuild();
+        }
 
         return plan;
     }

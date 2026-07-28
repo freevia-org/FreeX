@@ -427,6 +427,35 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Fact]
+    public void BuildRemoveMutationPlan_AppliesUndoableSharedPaneRemoval()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(new ShapeAnimation { ShapeId = 10u, Preset = AnimationPreset.Appear });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation { ShapeId = 20u, Preset = AnimationPreset.Fade });
+
+        var plan = AnimationPanePlanner.BuildRemoveMutationPlan(
+            editor.CurrentSlideAnimations,
+            0);
+
+        plan.Should().Be(new AnimationPaneRemoveMutationPlan(
+            true,
+            0,
+            0,
+            "Remove animation 1",
+            null));
+        AnimationPanePlanner.TryApplyRemoveMutation(editor, plan).Should().BeTrue();
+        editor.CurrentSlideAnimations.Select(animation => animation.ShapeId)
+            .Should()
+            .Equal(20u);
+
+        editor.Undo();
+        editor.CurrentSlideAnimations.Select(animation => animation.ShapeId)
+            .Should()
+            .Equal(10u, 20u);
+    }
+
+    [Fact]
     public void BuildReorderMutationPlan_DisablesOutOfRangePaneMoves()
     {
         var slide = CreateSlideWithTimelineAnimations();

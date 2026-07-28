@@ -772,6 +772,9 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("AnimationPanePlanner.TryApplyTimingMutation(");
         source.Should().Contain("AnimationPanePlanner.BuildReorderMutationPlan(");
         source.Should().Contain("AnimationPanePlanner.TryApplyReorderMutation(");
+        source.Should().Contain("AnimationPanePlanner.BuildRemoveMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.TryApplyRemoveMutation(");
+        source.Should().Contain("BuildAnimationPaneActionButton(");
         source.Should().NotContain("Editor.MoveAnimation(");
         source.Should().NotContain("BuildAnimationPaneRowSummary(");
         source.Should().NotContain("FormatEffectOptions(");
@@ -3250,6 +3253,48 @@ public sealed class MainWindowHeadlessTests
             .And.Contain("move earlier available")
             .And.Contain("move later unavailable");
         selectedIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Animation_pane_removes_rows_through_shared_undoable_mutation_plan()
+    {
+        AnimationPaneRemoveMutationPlan? removePlan = null;
+        IReadOnlyList<uint> remainingAnimationShapeIds = [];
+        IReadOnlyList<string> paneRows = [];
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.entrance.fade", out var fade).Should().BeTrue();
+
+            var hero = window.Editor.InsertDefaultRectangle();
+            hero.Name = "Hero box";
+            window.Editor.Select(hero.Id);
+            fade!.Execute(RibbonCommandContext.Empty);
+
+            var caption = window.Editor.InsertDefaultRectangle();
+            caption.Name = "Caption box";
+            window.Editor.Select(caption.Id);
+            fade.Execute(RibbonCommandContext.Empty);
+            window.ShowAnimationPane();
+
+            removePlan = window.RemoveAnimationPaneItemForTests(0);
+            remainingAnimationShapeIds = window.Editor.CurrentSlideAnimations
+                .Select(animation => animation.ShapeId)
+                .ToArray();
+            paneRows = window.AnimationPaneRenderedRows.ToArray();
+            window.Editor.Undo();
+        });
+
+        if (!ran) return;
+        removePlan.Should().Be(new AnimationPaneRemoveMutationPlan(
+            true,
+            0,
+            0,
+            "Remove animation 1",
+            null));
+        remainingAnimationShapeIds.Should().HaveCount(1);
+        paneRows.Should().ContainSingle(row => row.Contains("Caption box", StringComparison.Ordinal));
     }
 
     [Fact]
