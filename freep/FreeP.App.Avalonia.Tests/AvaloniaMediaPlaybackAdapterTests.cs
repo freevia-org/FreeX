@@ -80,9 +80,11 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
         {
             AudioBytes = new byte[] { 4, 5, 6 },
             ContentType = "audio/wav",
+            Loop = true,
         }).Should().BeTrue();
         factory.Backend.Sessions.Should().HaveCount(2);
         factory.Backend.Sessions[1].PlayCount.Should().Be(1);
+        factory.Backend.Sessions[1].LastSource!.Loop.Should().BeTrue();
 
         controller.Teardown();
         mediaSession.Disposed.Should().BeTrue();
@@ -279,10 +281,12 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
         public int PlayCount { get; private set; }
         public int PauseCount { get; private set; }
         public TimeSpan LastSeek { get; private set; }
+        public MediaPlaybackSource? LastSource { get; private set; }
         public bool Disposed { get; private set; }
 
         public void Open(MediaPlaybackSource source)
         {
+            LastSource = source;
             OpenCount++;
             SetState(MediaPlaybackState.Opening);
         }

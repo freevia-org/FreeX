@@ -1223,9 +1223,16 @@ public sealed class SlideShowWindow : Window
             player.Play();
             _transitionSoundPlayer = player;
 
-            // Clean up temp file after playback (best-effort).
+            // Restart looping transition sounds; otherwise clean up after playback.
             player.MediaEnded += (_, _) =>
             {
+                if (sound.Loop)
+                {
+                    player.Position = TimeSpan.Zero;
+                    player.Play();
+                    return;
+                }
+
                 player.Close();
                 try { System.IO.File.Delete(tmpPath); } catch { /* ignore */ }
             };

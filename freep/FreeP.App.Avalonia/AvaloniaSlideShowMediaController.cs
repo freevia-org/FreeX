@@ -244,7 +244,8 @@ internal sealed class AvaloniaSlideShowMediaController
                 null,
                 sound.ContentType,
                 isVideo: false,
-                out var source) || !EnsureBackend())
+                out var source,
+                loop: sound.Loop) || !EnsureBackend())
             return false;
 
         _transitionSoundSession?.Dispose();

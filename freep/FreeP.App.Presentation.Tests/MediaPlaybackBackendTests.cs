@@ -33,6 +33,15 @@ public sealed class MediaPlaybackBackendTests
         embedded.IsVideo.Should().BeTrue();
 
         MediaPlaybackSourceFactory.TryCreate(
+            new byte[] { 4, 5, 6 },
+            null,
+            "audio/wav",
+            false,
+            out var looping,
+            loop: true).Should().BeTrue();
+        looping!.Loop.Should().BeTrue();
+
+        MediaPlaybackSourceFactory.TryCreate(
             null,
             "https://example.test/video.mp4",
             "video/mp4",

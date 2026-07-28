@@ -63,14 +63,16 @@ public static class MediaPlaybackSourceFactory
         string? linkUrl,
         string? contentType,
         bool isVideo,
-        out MediaPlaybackSource? source)
+        out MediaPlaybackSource? source,
+        bool loop = false)
     {
         if (embeddedBytes is { Length: > 0 })
         {
             source = MediaPlaybackSource.FromBytes(
                 embeddedBytes,
                 contentType ?? "application/octet-stream",
-                isVideo);
+                isVideo,
+                loop);
             return true;
         }
 
@@ -80,7 +82,8 @@ public static class MediaPlaybackSourceFactory
             source = MediaPlaybackSource.FromUri(
                 uri,
                 contentType ?? "application/octet-stream",
-                isVideo);
+                isVideo,
+                loop);
             return true;
         }
 
