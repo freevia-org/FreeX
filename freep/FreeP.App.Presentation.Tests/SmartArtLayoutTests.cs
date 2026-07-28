@@ -1143,6 +1143,10 @@ public sealed class SmartArtLayoutTests
             .Should().Equal("A", "B", "C");
         boxes.Select(s => s.OffsetXEmu)
             .Should().BeInAscendingOrder("bendingProcess should reuse the shared process-family geometry");
+        boxes.Select(s => s.OffsetYEmu)
+            .Distinct()
+            .Should().HaveCountGreaterThan(1, "bendingProcess uses its two-track zig-zag geometry");
+        boxes[1].OffsetYEmu.Should().BeGreaterThan(boxes[0].OffsetYEmu);
     }
 
     [Fact]

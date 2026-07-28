@@ -96,6 +96,9 @@ public static class SmartArtLayoutEngine
         if (IsAlternatingProcessLayout(data.LayoutUniqueId))
             return LayoutAlternatingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsBendingProcessLayout(data.LayoutUniqueId))
+            return LayoutBendingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsBasicTimelineLayout(data.LayoutUniqueId))
             return LayoutBasicTimeline(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -406,6 +409,71 @@ public static class SmartArtLayoutEngine
             }
 
             curX += boxW + gap + connectorW;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Bending Process uses a two-track zig-zag: each stage advances horizontally while
+    /// alternating between the upper and lower track.  The diagonal connectors preserve
+    /// the authored sequence without collapsing the preset into the generic single-row
+    /// process layout.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutBendingProcess(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Count is < 1 or > 12 || fcx <= 0 || fcy <= 0)
+            return null;
+
+        if (nodes.Any(node => node.Text is null || node.Text.Length > 512))
+            return null;
+
+        long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long padY = Math.Max((long)(fcy * 0.10), 1L);
+        long rawGap = Math.Max((long)(fcx * GapFrac), 1L);
+        long rawConnectorW = Math.Max((long)(fcx * 0.03), 1L);
+        long availableWidth = fcx - 2 * padX;
+        long overhead = (nodes.Count - 1) * (rawGap + rawConnectorW);
+        double scale = overhead > 0 && overhead > availableWidth / 2
+            ? (double)(availableWidth / 2) / overhead
+            : 1.0;
+        long gap = Math.Max((long)(rawGap * scale), 1L);
+        long connectorW = Math.Max((long)(rawConnectorW * scale), 1L);
+        long boxW = Math.Max((availableWidth - (nodes.Count - 1) * (gap + connectorW)) / nodes.Count, 1L);
+        long boxH = Math.Max((long)(fcy * 0.28), 1L);
+        long upperY = fy + padY;
+        long lowerY = fy + fcy - padY - boxH;
+        if (boxW <= 0 || boxH <= 0 || lowerY <= upperY)
+            return null;
+
+        var shapes = new List<SlideShape>(nodes.Count * 2);
+        var centers = new (long x, long y)[nodes.Count];
+        uint idCounter = 140;
+        long x = fx + padX;
+
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            long y = i % 2 == 0 ? upperY : lowerY;
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Process);
+            shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, x, y, boxW, boxH));
+            centers[i] = (x + boxW / 2, y + boxH / 2);
+            x += boxW + gap + connectorW;
+        }
+
+        for (var i = 0; i < centers.Length - 1; i++)
+        {
+            var from = centers[i];
+            var to = centers[i + 1];
+            shapes.Add(MakeConnector(
+                idCounter++,
+                from.x + boxW / 2,
+                from.y,
+                to.x - boxW / 2,
+                to.y,
+                stylePlan.Connector));
         }
 
         return shapes;
@@ -2655,6 +2723,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "alternatingprocess", StringComparison.Ordinal);
+    }
+
+    private static bool IsBendingProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "bendingprocess", StringComparison.Ordinal);
     }
 
     private static bool IsBasicTimelineLayout(string uniqueId)
