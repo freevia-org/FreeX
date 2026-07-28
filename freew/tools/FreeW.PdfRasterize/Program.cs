@@ -107,45 +107,35 @@ int exitCode = await Task.Run(async () =>
         // DestinationWidth/Height. Re-encode explicit evidence surfaces so their
         // PNG pixel dimensions are the requested comparison dimensions.
         stream.Seek(0);
-        byte[] bytes;
-        if (width is { } requestedWidth)
+        var decoder = await BitmapDecoder.CreateAsync(stream);
+        var transform = new BitmapTransform
         {
-            var requestedHeight = height.GetValueOrDefault();
-            var decoder = await BitmapDecoder.CreateAsync(stream);
-            var transform = new BitmapTransform
-            {
-                ScaledWidth = requestedWidth,
-                ScaledHeight = requestedHeight
-            };
-            var pixels = await decoder.GetPixelDataAsync(
-                BitmapPixelFormat.Rgba8,
-                BitmapAlphaMode.Straight,
-                transform,
-                ExifOrientationMode.IgnoreExifOrientation,
-                ColorManagementMode.DoNotColorManage);
+            ScaledWidth = outputWidth,
+            ScaledHeight = outputHeight
+        };
+        var pixels = await decoder.GetPixelDataAsync(
+            BitmapPixelFormat.Rgba8,
+            BitmapAlphaMode.Straight,
+            transform,
+            ExifOrientationMode.IgnoreExifOrientation,
+            ColorManagementMode.DoNotColorManage);
 
-            using var encoded = new InMemoryRandomAccessStream();
-            var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, encoded);
-            encoder.SetPixelData(
-                BitmapPixelFormat.Rgba8,
-                BitmapAlphaMode.Straight,
-                requestedWidth,
-                requestedHeight,
-                decoder.DpiX,
-                decoder.DpiY,
-                pixels.DetachPixelData());
-            await encoder.FlushAsync();
-            encoded.Seek(0);
-            bytes = new byte[encoded.Size];
-            using var reader = new DataReader(encoded);
-            await reader.LoadAsync((uint)encoded.Size);
-            reader.ReadBytes(bytes);
-        }
-        else
+        using var encoded = new InMemoryRandomAccessStream();
+        var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, encoded);
+        encoder.SetPixelData(
+            BitmapPixelFormat.Rgba8,
+            BitmapAlphaMode.Straight,
+            outputWidth,
+            outputHeight,
+            decoder.DpiX,
+            decoder.DpiY,
+            pixels.DetachPixelData());
+        await encoder.FlushAsync();
+        encoded.Seek(0);
+        byte[] bytes = new byte[encoded.Size];
+        using (var reader = new DataReader(encoded))
         {
-            bytes = new byte[stream.Size];
-            using var reader = new DataReader(stream);
-            await reader.LoadAsync((uint)stream.Size);
+            await reader.LoadAsync((uint)encoded.Size);
             reader.ReadBytes(bytes);
         }
 
