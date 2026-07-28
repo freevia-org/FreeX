@@ -196,6 +196,7 @@ public static class SmartArtAuthoringPlanner
     public const string SmartArtColorsGalleryCommandId = "freep.smartart.colors.gallery";
     public const string BasicProcessLayoutCommandId = "freep.smartart.layout.basic-process";
     public const string BasicTimelineLayoutCommandId = "freep.smartart.layout.basic-timeline";
+    public const string CircleAccentTimelineLayoutCommandId = "freep.smartart.layout.circle-accent-timeline";
     public const string PhasedProcessLayoutCommandId = "freep.smartart.layout.phased-process";
     public const string StepDownProcessLayoutCommandId = "freep.smartart.layout.step-down-process";
     public const string ContinuousBlockProcessLayoutCommandId = "freep.smartart.layout.continuous-block-process";

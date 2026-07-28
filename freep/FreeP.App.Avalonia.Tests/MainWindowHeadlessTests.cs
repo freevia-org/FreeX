@@ -5660,6 +5660,7 @@ public sealed class MainWindowHeadlessTests
             foreach (var commandId in new[]
             {
                 SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
+                SmartArtAuthoringPlanner.CircleAccentTimelineLayoutCommandId,
                 SmartArtAuthoringPlanner.StepDownProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,
