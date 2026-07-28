@@ -243,18 +243,18 @@ public sealed class EditingSession
             return false;
 
         var smartArt = smartArtShape.SmartArt;
-        if (smartArt.Data is null)
-            return false;
-        var converted = SmartArtLayoutEngine.Layout(
-            smartArt.Data,
-            smartArtShape.OffsetXEmu,
-            smartArtShape.OffsetYEmu,
-            smartArtShape.ExtentCxEmu,
-            smartArtShape.ExtentCyEmu,
-            Presentation.Theme,
-            slide.ColorMapOverride,
-            smartArt.QuickStyle,
-            smartArt.Colors)?.Select(SlideCloner.CloneShape).ToList();
+        var converted = smartArt.Data is null
+            ? null
+            : SmartArtLayoutEngine.Layout(
+                smartArt.Data,
+                smartArtShape.OffsetXEmu,
+                smartArtShape.OffsetYEmu,
+                smartArtShape.ExtentCxEmu,
+                smartArtShape.ExtentCyEmu,
+                Presentation.Theme,
+                slide.ColorMapOverride,
+                smartArt.QuickStyle,
+                smartArt.Colors)?.Select(SlideCloner.CloneShape).ToList();
 
         if (converted is not { Count: > 0 })
             converted = smartArt.FallbackShapes.Select(SlideCloner.CloneShape).ToList();

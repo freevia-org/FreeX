@@ -186,6 +186,35 @@ public sealed class EditingSessionTests
     // ── Slide operations ──────────────────────────────────────────────────────────
 
     [Fact]
+    public void ConvertSmartArtToShapes_UsesCachedFallbackWhenLiveDataIsMissing()
+    {
+        var (session, smartArt) = MakeSmartArtSession();
+        smartArt.Data = null;
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Id = 41,
+            Name = "Cached SmartArt node",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 2_000_000,
+            ExtentCyEmu = 1_000_000,
+        });
+
+        session.ConvertSmartArtToShapes(7).Should().BeTrue();
+        session.CurrentSlide!.Shapes.Should().ContainSingle(shape =>
+            shape.Kind == SlideShapeKind.AutoShape && shape.Name == "Cached SmartArt node");
+        session.SelectedShapeIds.Should().ContainSingle();
+
+        session.Bus.Undo();
+        session.CurrentSlide.Shapes.Should().ContainSingle(shape => shape.Kind == SlideShapeKind.SmartArt);
+        session.Bus.Redo();
+        session.CurrentSlide.Shapes.Should().ContainSingle(shape =>
+            shape.Kind == SlideShapeKind.AutoShape && shape.Name == "Cached SmartArt node");
+    }
+
+    [Fact]
     public void InsertSlide_IncreasesSlideCount()
     {
         var sess = Make();
