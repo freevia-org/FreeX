@@ -11,7 +11,7 @@ namespace Free.Shared.Drawing;
 /// (the equivalent of a horizontal/vertical flip about the rectangle's center), matching how the
 /// hosts hand flipped shapes to this math.
 ///
-/// Ported from FreeX.App.Presentation.Shapes.ShapeGeometryBuilder (44 presets).
+/// Ported from FreeX.App.Presentation.Shapes.ShapeGeometryBuilder (45 presets).
 /// </summary>
 public static class ShapeGeometryBuilder
 {
@@ -105,8 +105,24 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.HomePlate => HomePlate(rect, adjustments),
             DrawingShapeKind.Cylinder => CylinderShape(rect, adjustments),
             DrawingShapeKind.Chord => Chord(rect, adjustments),
+            DrawingShapeKind.Heart => Heart(rect),
             _ => Rectangle(rect)
         };
+    }
+
+    private static ShapeGeometry Heart(LayoutRect rect)
+    {
+        var start = P(rect, 0.5, 0.22);
+        ShapeSegment[] segments =
+        [
+            ShapeSegment.BezierTo(P(rect, 0.58, 0.04), P(rect, 0.80, 0.02), P(rect, 1.0, 0.20)),
+            ShapeSegment.BezierTo(P(rect, 1.0, 0.55), P(rect, 0.78, 0.72), P(rect, 0.64, 0.85)),
+            ShapeSegment.BezierTo(P(rect, 0.58, 0.91), P(rect, 0.53, 0.97), P(rect, 0.5, 1.0)),
+            ShapeSegment.BezierTo(P(rect, 0.47, 0.97), P(rect, 0.42, 0.91), P(rect, 0.36, 0.85)),
+            ShapeSegment.BezierTo(P(rect, 0.22, 0.72), P(rect, 0.0, 0.55), P(rect, 0.0, 0.20)),
+            ShapeSegment.BezierTo(P(rect, 0.20, 0.02), P(rect, 0.42, 0.04), start)
+        ];
+        return Single(new ShapeContour(start, segments, Closed: true, Filled: true));
     }
 
     private static LayoutRect Normalize(LayoutRect bounds) =>

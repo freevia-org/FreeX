@@ -310,6 +310,8 @@ internal static class FreePRibbonText
     public static string ShapeCylinderKeyTip => Get("Ribbon_Command_ShapeCylinder_KeyTip");
     public static string ShapeChordLabel => Get("Ribbon_Command_ShapeChord_Label");
     public static string ShapeChordKeyTip => Get("Ribbon_Command_ShapeChord_KeyTip");
+    public static string ShapeHeartLabel => Get("Ribbon_Command_ShapeHeart_Label");
+    public static string ShapeHeartKeyTip => Get("Ribbon_Command_ShapeHeart_KeyTip");
     public static string ConnectorLabel => Get("Ribbon_Command_Connector_Label");
     public static string ConnectorKeyTip => Get("Ribbon_Command_Connector_KeyTip");
     public static string ElbowConnectorLabel => Get("Ribbon_Command_ElbowConnector_Label");

@@ -55,7 +55,8 @@ public static class DrawingMlPresetGeometryMap
             [DrawingShapeKind.Chevron] = "chevron",
             [DrawingShapeKind.HomePlate] = "homePlate",
             [DrawingShapeKind.Cylinder] = "can",
-            [DrawingShapeKind.Chord] = "chord"
+            [DrawingShapeKind.Chord] = "chord",
+            [DrawingShapeKind.Heart] = "heart"
         };
 
     private static readonly IReadOnlyDictionary<string, DrawingShapeKind> ShapeKindsByPreset = BuildPresetMap();

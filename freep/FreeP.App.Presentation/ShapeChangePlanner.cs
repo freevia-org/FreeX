@@ -49,6 +49,7 @@ public static class ShapeChangePlanner
     public const string LineCalloutCommandId = "freep.arrange.change-shape.line-callout";
     public const string CylinderCommandId = "freep.arrange.change-shape.cylinder";
     public const string ChordCommandId = "freep.arrange.change-shape.chord";
+    public const string HeartCommandId = "freep.arrange.change-shape.heart";
 
     public static IReadOnlyList<(string CommandId, DrawingShapeKind Kind)> Presets =>
     [
@@ -95,5 +96,6 @@ public static class ShapeChangePlanner
         (LineCalloutCommandId, DrawingShapeKind.LineCallout),
         (CylinderCommandId, DrawingShapeKind.Cylinder),
         (ChordCommandId, DrawingShapeKind.Chord),
+        (HeartCommandId, DrawingShapeKind.Heart),
     ];
 }

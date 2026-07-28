@@ -916,6 +916,7 @@ public sealed class MainWindowHeadlessTests
         illustrationIds.Should().Contain(PictureColorEffectAuthoringPlanner.ResetCommandId, "Reset Effects command required");
         illustrationIds.Should().Contain("freep.shape-rectangle", "Rectangle command required");
         illustrationIds.Should().Contain("freep.shape-ellipse", "Ellipse command required");
+        illustrationIds.Should().Contain("freep.shape-heart", "Heart command required");
     }
 
     [Fact]
@@ -1421,6 +1422,7 @@ public sealed class MainWindowHeadlessTests
     [InlineData("freep.shape-line-callout", DrawingShapeKind.LineCallout, false)]
     [InlineData("freep.shape-cylinder", DrawingShapeKind.Cylinder, false)]
     [InlineData("freep.shape-chord", DrawingShapeKind.Chord, false)]
+    [InlineData("freep.shape-heart", DrawingShapeKind.Heart, false)]
     public async Task Ribbon_insert_shape_commands_add_expected_shape(
         string commandId,
         DrawingShapeKind expectedShape,

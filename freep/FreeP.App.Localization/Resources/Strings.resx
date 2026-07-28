@@ -910,6 +910,12 @@
   <data name="Ribbon_Command_ShapeChord_KeyTip" xml:space="preserve">
     <value>CH</value>
   </data>
+  <data name="Ribbon_Command_ShapeHeart_Label" xml:space="preserve">
+    <value>Heart</value>
+  </data>
+  <data name="Ribbon_Command_ShapeHeart_KeyTip" xml:space="preserve">
+    <value>HE</value>
+  </data>
   <data name="Ribbon_Command_Connector_Label" xml:space="preserve">
     <value>Connector</value>
   </data>

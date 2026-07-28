@@ -95,6 +95,7 @@ internal static class FreePRibbonIcons
             ["freep.shape-line-callout"] = RibbonCommandIconKind.LineCallout,
             ["freep.shape-cylinder"] = RibbonCommandIconKind.Rectangle,
             ["freep.shape-chord"] = RibbonCommandIconKind.Diamond,
+            ["freep.shape-heart"] = RibbonCommandIconKind.RibbonShape,
             ["freep.insert-connector"] = RibbonCommandIconKind.Line,
             ["freep.insert-elbow-connector"] = RibbonCommandIconKind.Line,
             ["freep.insert-curved-connector"] = RibbonCommandIconKind.Line,

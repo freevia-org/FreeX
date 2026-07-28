@@ -346,6 +346,7 @@ public class RibbonEditorCompleteness5BTests
         Assert.Contains(SlideObjectInsertionPlanner.LineCalloutCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.CylinderCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.ChordCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.HeartCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.ConnectorCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.ElbowConnectorCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.CurvedConnectorCommandId, ids);
@@ -502,6 +503,7 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.arrange.change-shape.line-callout", DrawingShapeKind.LineCallout)]
     [InlineData("freep.arrange.change-shape.cylinder", DrawingShapeKind.Cylinder)]
     [InlineData("freep.arrange.change-shape.chord", DrawingShapeKind.Chord)]
+    [InlineData("freep.arrange.change-shape.heart", DrawingShapeKind.Heart)]
     public void Cmd_ChangeShape_RoutesThroughSharedEditingSession(
         string commandId,
         DrawingShapeKind expectedKind)
@@ -1391,6 +1393,7 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.shape-line-callout")]
     [InlineData("freep.shape-cylinder")]
     [InlineData("freep.shape-chord")]
+    [InlineData("freep.shape-heart")]
     [InlineData("freep.header-footer")]
     [InlineData("freep.date-time")]
     [InlineData("freep.slide-number")]

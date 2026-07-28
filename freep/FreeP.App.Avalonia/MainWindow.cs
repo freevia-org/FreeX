@@ -146,6 +146,7 @@ public sealed partial class MainWindow : Window
         (ShapeChangePlanner.LineCalloutCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.LineCallout)),
         (ShapeChangePlanner.CylinderCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Cylinder)),
         (ShapeChangePlanner.ChordCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Chord)),
+        (ShapeChangePlanner.HeartCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Heart)),
         ("freep.arrange.bring-to-front", static editor => editor.BringToFront()),
         ("freep.arrange.bring-forward", static editor => editor.BringForward()),
         ("freep.arrange.send-backward", static editor => editor.SendBackward()),

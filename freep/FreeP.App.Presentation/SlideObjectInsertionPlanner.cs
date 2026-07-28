@@ -94,6 +94,7 @@ public static class SlideObjectInsertionPlanner
     public const string LineCalloutCommandId = "freep.shape-line-callout";
     public const string CylinderCommandId = "freep.shape-cylinder";
     public const string ChordCommandId = "freep.shape-chord";
+    public const string HeartCommandId = "freep.shape-heart";
     public const string ConnectorCommandId = "freep.insert-connector";
     public const string ElbowConnectorCommandId = "freep.insert-elbow-connector";
     public const string CurvedConnectorCommandId = "freep.insert-curved-connector";
@@ -178,6 +179,7 @@ public static class SlideObjectInsertionPlanner
         new(LineCalloutCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.LineCallout),
         new(CylinderCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Cylinder),
         new(ChordCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Chord),
+        new(HeartCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Heart),
         new(ConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.Line),
         new(ElbowConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.ElbowConnector),
         new(CurvedConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.CurvedConnector),
