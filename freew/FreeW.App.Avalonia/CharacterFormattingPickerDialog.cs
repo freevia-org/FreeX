@@ -15,13 +15,16 @@ internal sealed class CharacterFormattingPickerDialog : FreeWDialogWindow
     private enum PickerKind { Border, Shading }
 
     private readonly PickerKind _kind;
+    private readonly WrapPanel _palette;
+    private readonly TextBlock? _prompt;
+    private readonly Button _clear;
 
     internal IReadOnlyList<Button> PaletteButtonsForTest =>
-        ((Panel)((StackPanel)Content!).Children[0]).Children.OfType<Button>().ToArray();
+        _palette.Children.OfType<Button>().ToArray();
 
-    internal Button ClearButtonForTest =>
-        ((StackPanel)Content!).Children.OfType<Button>().Single(button =>
-            AutomationProperties.GetAutomationId(button) is "CharacterBorderNoBorderButton" or "CharacterShadingNoColorButton");
+    internal TextBlock? PromptForTest => _prompt;
+
+    internal Button ClearButtonForTest => _clear;
 
     private CharacterFormattingPickerDialog(PickerKind kind)
     {
@@ -36,10 +39,18 @@ internal sealed class CharacterFormattingPickerDialog : FreeWDialogWindow
 
         var layout = CharacterFormattingPickerPlanner.Layout;
         var panel = new StackPanel { Margin = new Thickness(layout.PanelMargin) };
-        var palette = new WrapPanel { Width = layout.PaletteWidth };
+        _palette = new WrapPanel { Width = layout.PaletteWidth };
         var choices = kind == PickerKind.Border
             ? CharacterFormattingPickerPlanner.BorderPalette
             : CharacterFormattingPickerPlanner.ShadingPalette;
+
+        _prompt = kind == PickerKind.Border
+            ? new TextBlock
+            {
+                Text = CharacterFormattingPickerPlanner.BorderPrompt,
+                Margin = new Thickness(0, 0, 0, 4),
+            }
+            : null;
 
         for (var index = 0; index < choices.Count; index++)
         {
@@ -71,11 +82,13 @@ internal sealed class CharacterFormattingPickerDialog : FreeWDialogWindow
             AutomationProperties.SetName(swatch, choice.Label);
             var selectedIndex = index;
             swatch.Click += (_, _) => Select(selectedIndex);
-            palette.Children.Add(swatch);
+            _palette.Children.Add(swatch);
         }
 
-        panel.Children.Add(palette);
-        var clear = new Button
+        if (_prompt is not null)
+            panel.Children.Add(_prompt);
+        panel.Children.Add(_palette);
+        _clear = new Button
         {
             Content = kind == PickerKind.Border
                 ? CharacterFormattingPickerPlanner.NoBorderLabel
@@ -85,16 +98,16 @@ internal sealed class CharacterFormattingPickerDialog : FreeWDialogWindow
             HorizontalAlignment = HorizontalAlignment.Left,
             Focusable = true,
         };
-        AutomationProperties.SetAutomationId(clear, kind == PickerKind.Border
+        AutomationProperties.SetAutomationId(_clear, kind == PickerKind.Border
             ? "CharacterBorderNoBorderButton"
             : "CharacterShadingNoColorButton");
-        clear.Click += (_, _) => Close(kind == PickerKind.Border
+        _clear.Click += (_, _) => Close(kind == PickerKind.Border
             ? CharacterFormattingPickerPlanner.SelectNoBorder()
             : CharacterFormattingPickerPlanner.SelectNoColor());
-        panel.Children.Add(clear);
+        panel.Children.Add(_clear);
         Content = panel;
 
-        Opened += (_, _) => palette.Children.OfType<Button>().FirstOrDefault()?.Focus();
+        Opened += (_, _) => _palette.Children.OfType<Button>().FirstOrDefault()?.Focus();
         KeyDown += (_, e) =>
         {
             if (e.Key != Key.Escape)

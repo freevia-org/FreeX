@@ -46,6 +46,8 @@ public sealed class CharacterFormattingPickerTests
             border.PaletteButtonsForTest.Should().HaveCount(CharacterFormattingPickerPlanner.BorderPalette.Count);
             border.PaletteButtonsForTest.Select(button => AutomationProperties.GetName(button))
                 .Should().Equal(CharacterFormattingPickerPlanner.BorderPalette.Select(choice => choice.Label));
+            border.PromptForTest.Should().NotBeNull();
+            border.PromptForTest!.Text.Should().Be(CharacterFormattingPickerPlanner.BorderPrompt);
             AutomationProperties.GetAutomationId(border.ClearButtonForTest)
                 .Should().Be("CharacterBorderNoBorderButton");
 
@@ -53,6 +55,7 @@ public sealed class CharacterFormattingPickerTests
             shading.PaletteButtonsForTest.Should().HaveCount(CharacterFormattingPickerPlanner.ShadingPalette.Count);
             shading.PaletteButtonsForTest.Select(button => AutomationProperties.GetName(button))
                 .Should().Equal(CharacterFormattingPickerPlanner.ShadingPalette.Select(choice => choice.Label));
+            shading.PromptForTest.Should().BeNull();
             AutomationProperties.GetAutomationId(shading.ClearButtonForTest)
                 .Should().Be("CharacterShadingNoColorButton");
         }, CancellationToken.None);
