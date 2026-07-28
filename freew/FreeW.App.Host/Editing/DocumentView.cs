@@ -5486,9 +5486,11 @@ public sealed class DocumentView : RichTextBox
                     }
                 })
             {
-                // Word registers this imported textbox's shadowed visual body fifteen DIPs above
-                // the generic WPF paragraph-anchor overlay location.
-                topDip -= 15;
+                // Preserve Word's full shadowed textbox footprint at its paragraph anchor.
+                visual.Width += 3;
+                visual.Height += 4;
+                leftDip -= 1;
+                topDip -= 16;
             }
             else if (isImportedWatermarkBackingShape)
             {
