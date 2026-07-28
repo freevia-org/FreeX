@@ -7,11 +7,13 @@ public sealed record ChartDisplayLegendOption(LegendPosition? Value, string Labe
 public sealed record ChartDisplayLabelPositionOption(DataLabelPosition Value, string Label);
 
 public sealed record ChartDisplayBlanksOption(ChartDisplayBlanksAs? Value, string Label);
+public sealed record ChartDisplayStyleOption(int? Value, string Label);
 
 public sealed record ChartDisplayOptionsSurfacePlan(
     string CommandId,
     string Title,
     string ChartTitleLabel,
+    string ChartStyleLabel,
     string LegendLabel,
     string ValueLabelsLabel,
     string PercentLabelsLabel,
@@ -49,6 +51,7 @@ public sealed class ChartDisplayOptionsPlanner
     public const string CommandId = "freep.chart.format-options";
     public const string DialogTitle = "Chart Options";
     public const string ChartTitleLabel = "Chart Title";
+    public const string ChartStyleLabel = "Chart Style";
     public const string LegendLabel = "Legend";
     public const string ValueLabelsLabel = "Value Labels";
     public const string PercentLabelsLabel = "Percentage Labels";
@@ -79,6 +82,13 @@ public sealed class ChartDisplayOptionsPlanner
     public const double DefaultDialogWidth = 420;
     public const double DefaultDialogHeight = 650;
 
+    public static IReadOnlyList<ChartDisplayStyleOption> StyleOptions { get; } =
+        [
+            new(null, "Automatic (classic)"),
+            .. Enumerable.Range(1, 48).Select(id => new ChartDisplayStyleOption(id, $"Style {id}")),
+            .. Enumerable.Range(100, 7).Select(id => new ChartDisplayStyleOption(id, $"Style {id}")),
+        ];
+
     public static IReadOnlyList<ChartDisplayLegendOption> LegendOptions { get; } =
     [
         new(null, "Hidden"),
@@ -102,6 +112,7 @@ public sealed class ChartDisplayOptionsPlanner
     ];
 
     private string _title = string.Empty;
+    private int? _styleId;
     private LegendPosition? _legend;
     private bool _showValueLabels;
     private bool _showPercentLabels;
@@ -127,10 +138,13 @@ public sealed class ChartDisplayOptionsPlanner
     private bool? _legendOverlay;
     private bool? _highLowLines;
     private bool _supportsHighLowLines;
+    private IReadOnlyList<ChartDisplayStyleOption> _availableStyleOptions = StyleOptions;
 
     private ChartDisplayOptionsPlanner(ChartShape chart)
     {
         _title = chart.Title ?? string.Empty;
+        _styleId = chart.StyleId;
+        _availableStyleOptions = StyleOptionsFor(chart.StyleId);
         _legend = chart.Legend;
         _showValueLabels = chart.DataLabels?.ShowValue == true;
         _showPercentLabels = chart.DataLabels?.ShowPercent == true;
@@ -163,6 +177,7 @@ public sealed class ChartDisplayOptionsPlanner
             CommandId,
             DialogTitle,
             ChartTitleLabel,
+            ChartStyleLabel,
             LegendLabel,
             ValueLabelsLabel,
             PercentLabelsLabel,
@@ -198,6 +213,16 @@ public sealed class ChartDisplayOptionsPlanner
     }
 
     public string Title => _title;
+    public int? StyleId => _styleId;
+    public IReadOnlyList<ChartDisplayStyleOption> AvailableStyleOptions => _availableStyleOptions;
+
+    public static IReadOnlyList<ChartDisplayStyleOption> StyleOptionsFor(int? currentStyleId)
+    {
+        if (currentStyleId is null || StyleOptions.Any(option => option.Value == currentStyleId))
+            return StyleOptions;
+
+        return [.. StyleOptions, new ChartDisplayStyleOption(currentStyleId, $"Style {currentStyleId} (imported)")];
+    }
     public LegendPosition? Legend => _legend;
     public bool ShowValueLabels => _showValueLabels;
     public bool ShowPercentLabels => _showPercentLabels;
@@ -233,6 +258,13 @@ public sealed class ChartDisplayOptionsPlanner
     ];
 
     public void SetTitle(string? title) => _title = title ?? string.Empty;
+    public void SetStyleId(int? styleId)
+    {
+        if (styleId is not null && !StyleOptions.Any(option => option.Value == styleId) &&
+            !_availableStyleOptions.Any(option => option.Value == styleId))
+            throw new ArgumentOutOfRangeException(nameof(styleId), styleId, "The chart style is not a supported PowerPoint style ID.");
+        _styleId = styleId;
+    }
     public void SetLegend(LegendPosition? legend) => _legend = legend;
     public void SetShowValueLabels(bool show) => _showValueLabels = show;
     public void SetShowPercentLabels(bool show) => _showPercentLabels = show;
@@ -281,7 +313,8 @@ public sealed class ChartDisplayOptionsPlanner
         _legendOverlay,
         _highLowLines,
         BuildLabelTextStyle(),
-        _showBubbleSize);
+        _showBubbleSize,
+        _styleId);
 
     private ChartTextStyle? BuildLabelTextStyle()
     {

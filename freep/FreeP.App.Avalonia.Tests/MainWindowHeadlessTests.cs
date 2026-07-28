@@ -6602,6 +6602,7 @@ public sealed class MainWindowHeadlessTests
             dialog.SetVaryColorsForTests(true);
             dialog.SetLegendOverlayForTests(true);
             dialog.SetHighLowLinesForTests(false);
+            dialog.SetStyleIdForTests(102);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6617,6 +6618,7 @@ public sealed class MainWindowHeadlessTests
         options.LabelTextStyle.Italic.Should().BeFalse();
         options.LabelTextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
         options.ShowBubbleSize.Should().BeTrue();
+        options.StyleId.Should().Be(102);
     }
 
     [Fact]

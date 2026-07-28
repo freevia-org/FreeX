@@ -12,6 +12,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly EditingSession _editor;
     private readonly ChartDisplayOptionsPlanner _planner;
     private readonly TextBox _titleBox;
+    private readonly ComboBox _styleCombo;
     private readonly ComboBox _legendCombo;
     private readonly CheckBox _valueLabelsCheck;
     private readonly CheckBox _percentLabelsCheck;
@@ -53,6 +54,13 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         ResizeMode = ResizeMode.NoResize;
 
         _titleBox = new TextBox { Text = _planner.Title, MinWidth = 240 };
+        _styleCombo = new ComboBox
+        {
+            ItemsSource = _planner.AvailableStyleOptions,
+            DisplayMemberPath = nameof(ChartDisplayStyleOption.Label),
+            MinWidth = 160,
+            SelectedIndex = FindStyleIndex(_planner.StyleId),
+        };
         _legendCombo = new ComboBox
         {
             ItemsSource = ChartDisplayOptionsPlanner.LegendOptions,
@@ -163,6 +171,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
         var content = new StackPanel { Margin = new Thickness(14) };
         content.Children.Add(MakeRow(surface.ChartTitleLabel, _titleBox));
+        content.Children.Add(MakeRow(surface.ChartStyleLabel, _styleCombo));
         content.Children.Add(MakeRow(surface.LegendLabel, _legendCombo));
         content.Children.Add(MakeRow(surface.LabelPositionLabel, _labelPositionCombo));
         content.Children.Add(_valueLabelsCheck);
@@ -200,6 +209,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     internal void SetVaryColorsForTests(bool value) => _varyColorsCheck.IsChecked = value;
 
+    internal void SetStyleIdForTests(int? styleId) => _styleCombo.SelectedIndex = FindStyleIndex(styleId);
+
     internal void SetLegendOverlayForTests(bool? value) => _legendOverlayCheck.IsChecked = value;
 
     internal void SetHighLowLinesForTests(bool? value) => _highLowLinesCheck.IsChecked = value;
@@ -224,6 +235,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private void UpdatePlannerFromControls()
     {
         _planner.SetTitle(_titleBox.Text);
+        if (_styleCombo.SelectedItem is ChartDisplayStyleOption style)
+            _planner.SetStyleId(style.Value);
         _planner.SetLegend(_legendCombo.SelectedItem is ChartDisplayLegendOption legend ? legend.Value : null);
         _planner.SetShowValueLabels(_valueLabelsCheck.IsChecked == true);
         _planner.SetShowPercentLabels(_percentLabelsCheck.IsChecked == true);
@@ -268,6 +281,11 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         ChartDisplayOptionsPlanner.LegendOptions
             .Select((option, index) => (option, index))
             .FirstOrDefault(item => item.option.Value == position).index;
+
+    private static int FindStyleIndex(int? styleId) =>
+        Math.Max(0, ChartDisplayOptionsPlanner.StyleOptionsFor(styleId)
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == styleId).index);
 
     private static int FindLabelPositionIndex(DataLabelPosition position) =>
         Math.Max(0, ChartDisplayOptionsPlanner.LabelPositionOptions

@@ -130,6 +130,7 @@ public sealed class ChartDataDialogTests : IDisposable
         dialog.SetVaryColorsForTests(true);
         dialog.SetLegendOverlayForTests(true);
         dialog.SetHighLowLinesForTests(false);
+        dialog.SetStyleIdForTests(102);
         dialog.SetBubbleSizeLabelsForTests(true);
         dialog.SetLabelTextStyleForTests("Aptos", 9, true, false, "#2F5496");
         var options = dialog.BuildCommitPlanForTests();
@@ -141,6 +142,7 @@ public sealed class ChartDataDialogTests : IDisposable
         options.VaryColors.Should().BeTrue();
         options.LegendOverlay.Should().BeTrue();
         options.HighLowLines.Should().BeFalse();
+        options.StyleId.Should().Be(102);
         options.ShowBubbleSize.Should().BeTrue();
         options.LabelTextStyle.Should().NotBeNull();
         options.LabelTextStyle!.FontFamily.Should().Be("Aptos");

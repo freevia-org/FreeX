@@ -1064,6 +1064,37 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartDisplayOptions_ChangesChartStyleAndUndoRestoresIt()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.StyleId = 2;
+
+        bus.Execute(new SetChartDisplayOptionsCommand(
+            0,
+            id,
+            new ChartDisplayOptions(
+                null,
+                null,
+                false,
+                DataLabelPosition.OutsideEnd,
+                false,
+                false,
+                StyleId: 102)));
+
+        chart.StyleId.Should().Be(102);
+        bus.Undo();
+        chart.StyleId.Should().Be(2);
+        bus.Redo();
+        chart.StyleId.Should().Be(102);
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!.StyleId.Should().Be(102);
+    }
+
+    [Fact]
     public void SetChartDisplayOptions_StockHighLowLines_RoundTripsAndUndo()
     {
         var (p, bus, id) = MakeChartPresentation();

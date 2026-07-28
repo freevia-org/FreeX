@@ -88,6 +88,9 @@ internal static class PptxChartWriter
 
         var chartSpace = new XElement(C + "chartSpace",
             NsAttr("c", C), NsAttr("a", A), NsAttr("r", R),
+            chart.StyleId is { } styleId
+                ? new XElement(C + "style", new XAttribute("val", styleId))
+                : null,
             new XElement(C + "chart",
                 titleEl,
                 new XElement(C + "autoTitleDeleted", new XAttribute("val", chart.Title is null ? "1" : "0")),

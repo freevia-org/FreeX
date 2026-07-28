@@ -20,6 +20,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
     private bool _oldVaryColors;
     private bool? _oldLegendOverlay;
     private bool? _oldHighLowLines;
+    private int? _oldStyleId;
 
     public SetChartDisplayOptionsCommand(
         int slideIndex,
@@ -52,6 +53,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         _oldVaryColors = chart.VaryColors;
         _oldLegendOverlay = chart.LegendOverlay;
         _oldHighLowLines = chart.ChartType == ChartType.Stock ? chart.HasHighLowLines : null;
+        _oldStyleId = chart.StyleId;
 
         chart.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title;
         chart.HasAutomaticTitle = false;
@@ -64,6 +66,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.ShowDataLabelsOverMaximum = _newOptions.ShowDataLabelsOverMaximum;
         chart.VaryColors = _newOptions.VaryColors ?? chart.VaryColors;
         chart.LegendOverlay = _newOptions.LegendOverlay;
+        chart.StyleId = _newOptions.StyleId;
         if (chart.ChartType == ChartType.Stock && _newOptions.HighLowLines.HasValue)
             chart.HasHighLowLines = _newOptions.HighLowLines.Value;
 
@@ -126,6 +129,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.ShowDataLabelsOverMaximum = _oldShowDataLabelsOverMaximum;
         chart.VaryColors = _oldVaryColors;
         chart.LegendOverlay = _oldLegendOverlay;
+        chart.StyleId = _oldStyleId;
         if (chart.ChartType == ChartType.Stock && _oldHighLowLines.HasValue)
             chart.HasHighLowLines = _oldHighLowLines.Value;
         ChartHelper.MarkWorkbookDirty(chart);
