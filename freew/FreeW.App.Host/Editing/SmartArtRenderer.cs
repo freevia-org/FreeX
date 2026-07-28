@@ -186,16 +186,7 @@ internal static class SmartArtRenderer
             BorderBrush = node.BorderThickness > 0 ? new SolidColorBrush(ParseHex(node.BorderHex)) : null,
             BorderThickness = new Thickness(node.BorderThickness > 0 ? node.BorderThickness : 0),
             Effect = effect,
-            Child = new TextBlock
-            {
-                Text = node.Text,
-                Foreground = new SolidColorBrush(ParseHex(node.TextHex)),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = Math.Max(1, node.FontSizeDip),
-                TextAlignment = System.Windows.TextAlignment.Center
-            }
+            Child = MakeNodeText(node)
         };
         if (width.HasValue) box.Width = width.Value;
         if (minWidth.HasValue) box.MinWidth = minWidth.Value;
@@ -214,17 +205,25 @@ internal static class SmartArtRenderer
             Margin = margin,
             Padding = padding,
             Width = width,
-            Child = new TextBlock
-            {
-                Text = node.Text,
-                Foreground = new SolidColorBrush(ParseHex(node.TextHex)),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = Math.Max(1, node.FontSizeDip),
-                TextAlignment = System.Windows.TextAlignment.Center
-            }
+            Child = MakeNodeText(node)
         };
+    }
+
+    private static TextBlock MakeNodeText(SmartArtNodeVisualPlan node)
+    {
+        var text = new TextBlock
+        {
+            Text = node.Text,
+            Foreground = new SolidColorBrush(ParseHex(node.TextHex)),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = Math.Max(1, node.FontSizeDip),
+            TextAlignment = System.Windows.TextAlignment.Center
+        };
+        if (!string.IsNullOrWhiteSpace(node.FontFamilyName))
+            text.FontFamily = new FontFamily(node.FontFamilyName);
+        return text;
     }
 
     // ── Layout renderers ─────────────────────────────────────────────────────────────────────────────
