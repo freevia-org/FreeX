@@ -1,0 +1,117 @@
+namespace FreeP.Core.Model;
+
+/// <summary>Authoritative outer-shadow values used by the shape-effects authoring command.</summary>
+public readonly record struct ShapeShadowValues(
+    bool Enabled,
+    SrgbColor Color,
+    byte Alpha,
+    long BlurRadEmu,
+    long DistEmu,
+    double DirDeg)
+{
+    public static ShapeShadowValues None { get; } = new(
+        Enabled: false,
+        Color: SrgbColor.Black,
+        Alpha: 0,
+        BlurRadEmu: 0,
+        DistEmu: 0,
+        DirDeg: 0);
+}
+
+/// <summary>Changes only a shape's outer shadow, preserving every other effect layer.</summary>
+public sealed class SetShapeShadowCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly ShapeShadowValues _values;
+    private bool _captured;
+    private ShapeEffects? _oldEffects;
+
+    public SetShapeShadowCommand(int slideIndex, uint shapeId, ShapeShadowValues values)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _values = values;
+    }
+
+    public string Label => "Shape Shadow";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        if (shape is null)
+            return false;
+
+        return ReadValues(shape.Effects) != _values;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        if (shape is null)
+            return;
+
+        if (!_captured)
+        {
+            _captured = true;
+            _oldEffects = PresentationModelCloneHelper.CloneShapeEffects(shape.Effects);
+        }
+
+        if (!_values.Enabled && shape.Effects is null)
+            return;
+
+        if (shape.Effects is null)
+            shape.Effects = new ShapeEffects();
+
+        shape.Effects.HasOuterShadow = _values.Enabled;
+        shape.Effects.OuterShadowColor = _values.Color;
+        shape.Effects.OuterShadowAlpha = _values.Alpha;
+        shape.Effects.OuterShadowBlurRadEmu = _values.BlurRadEmu;
+        shape.Effects.OuterShadowDistEmu = _values.DistEmu;
+        shape.Effects.OuterShadowDirDeg = _values.DirDeg;
+
+        if (!HasAnyEffects(shape.Effects))
+            shape.Effects = null;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        if (shape is null || !_captured)
+            return;
+
+        shape.Effects = PresentationModelCloneHelper.CloneShapeEffects(_oldEffects);
+    }
+
+    private static ShapeShadowValues ReadValues(ShapeEffects? effects) => effects is null
+        ? ShapeShadowValues.None
+        : new(
+            effects.HasOuterShadow,
+            effects.OuterShadowColor,
+            effects.OuterShadowAlpha,
+            effects.OuterShadowBlurRadEmu,
+            effects.OuterShadowDistEmu,
+            effects.OuterShadowDirDeg);
+
+    private SlideShape? FindShape(Presentation presentation)
+    {
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return null;
+
+        return presentation.Slides[_slideIndex].Shapes.FirstOrDefault(shape => shape.Id == _shapeId);
+    }
+
+    private static bool HasAnyEffects(ShapeEffects effects) =>
+        effects.HasOuterShadow ||
+        effects.HasInnerShadow ||
+        effects.HasGlow ||
+        effects.HasSoftEdge ||
+        effects.BevelTop is not null ||
+        effects.BevelBottom is not null ||
+        effects.ExtrusionHeightEmu != 0 ||
+        effects.ContourWidthEmu != 0 ||
+        effects.Scene3d is not null ||
+        !string.IsNullOrWhiteSpace(effects.PrstMaterial) ||
+        effects.ExtrusionColor is not null ||
+        effects.ContourColor is not null;
+}

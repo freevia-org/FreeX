@@ -843,6 +843,19 @@ public sealed class EditingSession
         return count;
     }
 
+    /// <summary>Applies one outer-shadow preset to every selected shape.</summary>
+    public int SetSelectedShapeShadow(ShapeShadowValues values)
+    {
+        var count = 0;
+        foreach (var id in _selectedShapeIds)
+        {
+            Bus.Execute(new SetShapeShadowCommand(_currentSlideIndex, id, values));
+            count++;
+        }
+
+        return count;
+    }
+
     /// <summary>Sets fill on all selected shapes.</summary>
     public void SetSelectedFill(ShapeFill? fill)
     {

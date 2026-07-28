@@ -161,6 +161,15 @@ internal static class FreePRibbonCommands
         registry.Register(
             PictureColorEffectAuthoringPlanner.ResetCommandId,
             new ActionRibbonCommand(() => editor.SetSelectedPictureColorEffects(PictureColorEffectAuthoringPlanner.Reset())));
+        registry.Register(
+            ShapeEffectAuthoringPlanner.NoneCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedShapeShadow(ShapeEffectAuthoringPlanner.None())));
+        registry.Register(
+            ShapeEffectAuthoringPlanner.SubtleCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedShapeShadow(ShapeEffectAuthoringPlanner.Subtle())));
+        registry.Register(
+            ShapeEffectAuthoringPlanner.OffsetCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedShapeShadow(ShapeEffectAuthoringPlanner.Offset())));
         RegisterHeaderFooterCommands(registry, editor, onHeaderFooter);
         registry.Register(SmartArtAuthoringPlanner.ThemeAccentsCommandId,
             new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.ThemeAccents)));

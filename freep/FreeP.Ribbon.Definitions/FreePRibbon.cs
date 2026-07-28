@@ -519,6 +519,15 @@ public static class FreePRibbon
             group.Medium(PictureColorEffectAuthoringPlanner.ResetCommandId,
                 FreePRibbonText.PictureEffectsResetCommand.Label, RibbonCommandIconKind.Delete,
                 FreePRibbonText.PictureEffectsResetCommand.KeyTip);
+            group.Medium(ShapeEffectAuthoringPlanner.NoneCommandId,
+                FreePRibbonText.ShapeShadowNoneCommand.Label, RibbonCommandIconKind.Delete,
+                FreePRibbonText.ShapeShadowNoneCommand.KeyTip);
+            group.Medium(ShapeEffectAuthoringPlanner.SubtleCommandId,
+                FreePRibbonText.ShapeShadowSubtleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.ShapeShadowSubtleCommand.KeyTip);
+            group.Medium(ShapeEffectAuthoringPlanner.OffsetCommandId,
+                FreePRibbonText.ShapeShadowOffsetCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.ShapeShadowOffsetCommand.KeyTip);
             group.Medium(OleInsertionPlanner.InsertEmbeddedObjectCommandId,
                 FreePRibbonText.InsertEmbeddedObjectCommand.Label, RibbonCommandIconKind.RibbonShape,
                 FreePRibbonText.InsertEmbeddedObjectCommand.KeyTip);

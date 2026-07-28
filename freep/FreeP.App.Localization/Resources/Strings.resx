@@ -631,6 +631,24 @@
   <data name="Ribbon_Command_PictureEffectsReset_KeyTip" xml:space="preserve">
     <value>ER</value>
   </data>
+  <data name="Ribbon_Command_ShapeShadowNone_Label" xml:space="preserve">
+    <value>No Shape Shadow</value>
+  </data>
+  <data name="Ribbon_Command_ShapeShadowNone_KeyTip" xml:space="preserve">
+    <value>SSN</value>
+  </data>
+  <data name="Ribbon_Command_ShapeShadowSubtle_Label" xml:space="preserve">
+    <value>Subtle Shape Shadow</value>
+  </data>
+  <data name="Ribbon_Command_ShapeShadowSubtle_KeyTip" xml:space="preserve">
+    <value>SSS</value>
+  </data>
+  <data name="Ribbon_Command_ShapeShadowOffset_Label" xml:space="preserve">
+    <value>Offset Shape Shadow</value>
+  </data>
+  <data name="Ribbon_Command_ShapeShadowOffset_KeyTip" xml:space="preserve">
+    <value>SSO</value>
+  </data>
   <data name="Ribbon_Command_Picture_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
