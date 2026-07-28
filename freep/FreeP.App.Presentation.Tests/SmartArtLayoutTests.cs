@@ -1175,16 +1175,29 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void ChevronProcess_MalformedOrOverlargeInput_UsesCachedFallback()
+    public void ChevronProcess_MalformedInput_UsesCachedFallback()
     {
-        var data = MakeChevronData("chevronProcess", Enumerable.Repeat("x", 13).ToArray());
-
-        SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
-            .Should().BeNull("unsupported node counts must keep the cached drawing authoritative");
-
-        data = MakeChevronData("basicChevronProcess", new string('x', 513));
+        var data = MakeChevronData("basicChevronProcess", new string('x', 513));
         SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
             .Should().BeNull("pathological node text must keep the cached drawing authoritative");
+    }
+
+    [Theory]
+    [InlineData(13)]
+    [InlineData(20)]
+    public void ChevronProcess_PreservesAllStagesBeyondOriginalTwelveItemCutoff(int nodeCount)
+    {
+        var data = MakeChevronData(
+            "chevronProcess",
+            Enumerable.Range(1, nodeCount).Select(index => $"Stage {index}").ToArray());
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("Chevron stage geometry scales its interlocking step by node count");
+        shapes!.Should().HaveCount(nodeCount);
+        shapes.Should().AllSatisfy(shape => shape.AutoShapeKind.Should().Be(DrawingShapeKind.Chevron));
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(index => $"Stage {index}"));
     }
 
     [Fact]
@@ -1429,6 +1442,25 @@ public sealed class SmartArtLayoutTests
             .Should().Equal("A", "B", "C");
         shapes.Select(s => s.OffsetYEmu)
             .Should().BeInAscendingOrder("verticalChevronList preserves the authored node order");
+    }
+
+    [Theory]
+    [InlineData(13)]
+    [InlineData(20)]
+    public void VerticalChevronList_PreservesAllNodesBeyondOriginalTwelveItemCutoff(int nodeCount)
+    {
+        var data = MakeData(
+            SmartArtFamily.List,
+            Enumerable.Range(1, nodeCount).Select(index => $"Step {index}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalChevronList";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("verticalChevronList scales row height until its independent minimum-height guard");
+        shapes!.Should().HaveCount(nodeCount);
+        shapes.Should().AllSatisfy(shape => shape.AutoShapeKind.Should().Be(DrawingShapeKind.Chevron));
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(index => $"Step {index}"));
     }
 
     [Fact]

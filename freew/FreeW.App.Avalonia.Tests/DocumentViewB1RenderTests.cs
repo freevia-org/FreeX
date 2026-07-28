@@ -99,6 +99,7 @@ public sealed class DocumentViewB1RenderTests
                 RibbonButton b      => b.CommandId.Value,
                 RibbonToggleButton t => t.CommandId.Value,
                 RibbonComboBox combo => combo.CommandId.Value,
+                RibbonDropdown dropdown => dropdown.CommandId.Value,
                 _ => null
             })
             .Where(v => v is not null)

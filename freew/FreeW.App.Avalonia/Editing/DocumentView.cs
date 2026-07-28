@@ -10527,7 +10527,6 @@ public sealed class DocumentView : Control
         var insLink = ActiveLink(paragraph, bodyOffset);
         _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
         {
-            var cells = ParaCells(p);
             // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
             // model inserts like a citation string) keeps its order — a fixed insert index would reverse it.
             // Cells carry the tracked-insertion revision tags when Track Changes is on (null otherwise).
@@ -10543,6 +10542,7 @@ public sealed class DocumentView : Control
                     insLink?.Url,
                     insLink?.Anchor,
                     insLink?.Tooltip));
+            CoalesceAdjacentPlainTextRuns(p);
             CoalesceAdjacentHyperlinkRuns(p);
         }));
         _caret = new DocPosition(block, bodyOffset + text.Length);
@@ -10611,6 +10611,54 @@ public sealed class DocumentView : Control
         InvalidateLayoutAndVisual();
     }
 
+    // Avalonia's model edit planner splits a run at every insertion boundary. WPF's text surface
+    // coalesces adjacent ordinary runs with the same formatting, so keep the model representation
+    // equivalent while preserving boundaries that carry links, revisions, comments, or objects.
+    private static void CoalesceAdjacentPlainTextRuns(Paragraph paragraph)
+    {
+        for (var index = 0; index < paragraph.Runs.Count - 1; index++)
+        {
+            var left = paragraph.Runs[index];
+            var right = paragraph.Runs[index + 1];
+            if (!IsPlainTextRun(left) || !IsPlainTextRun(right)
+                || !left.Formatting.Equals(right.Formatting))
+                continue;
+
+            paragraph.Runs[index] = RevisionEditPlanner.CloneRunWithText(left, left.Text + right.Text);
+            paragraph.Runs.RemoveAt(index + 1);
+            index--;
+        }
+    }
+
+    private static bool IsPlainTextRun(Run run) =>
+        run.Text.Length > 0
+        && run.Image is null
+        && run.Equation is null
+        && run.Shape is null
+        && run.WordArt is null
+        && run.Ruby is null
+        && run.Chart is null
+        && run.EmbeddedObject is null
+        && run.SmartArt is null
+        && run.PreservedDrawing is null
+        && run.DrawingGroup is null
+        && run.HyperlinkUrl is null
+        && run.HyperlinkAnchor is null
+        && run.HyperlinkTooltip is null
+        && run.FieldKind == RunFieldKind.None
+        && run.TableFormula is null
+        && run.Citation is null
+        && run.CrossReference is null
+        && run.ComplexField is null
+        && run.FootnoteId is null
+        && run.EndnoteId is null
+        && run.CommentId is null
+        && !run.IsCommentReference
+        && !run.IsPageBreak
+        && run.Revision == RevisionKind.None
+        && run.Control is null
+        && run.FormatRevision is null;
+
     /// <summary>
     /// Word keeps ordinary text typed inside one hyperlink as one contiguous link span. The shared edit
     /// planner intentionally splits runs at the insertion boundary, so restore that representation here
@@ -10626,7 +10674,7 @@ public sealed class DocumentView : Control
             if (!CanCoalesceHyperlinkRuns(left, right))
                 continue;
 
-            left.Text += right.Text;
+            paragraph.Runs[index] = RevisionEditPlanner.CloneRunWithText(left, left.Text + right.Text);
             paragraph.Runs.RemoveAt(index + 1);
             index--;
         }
