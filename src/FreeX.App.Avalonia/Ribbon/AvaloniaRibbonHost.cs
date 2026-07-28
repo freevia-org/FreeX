@@ -515,24 +515,25 @@ internal static class AvaloniaRibbonComposition
         var numberFormatLabels = HomeNumberFormatDropdownPlanner.Options
             .Select(option => option.Label)
             .ToArray();
-        return definition with
+        var tabs = definition.Tabs.Select(tab => tab with
         {
-            Tabs = definition.Tabs.Select(tab => tab with
+            Groups = tab.Groups.Select(group => group with
             {
-                Groups = tab.Groups.Select(group => group with
+                Controls = group.Controls.Select(control =>
                 {
-                    Controls = group.Controls.Select(control =>
-                    {
-                        if (control is RibbonComboBox combo &&
-                            string.Equals(combo.CommandId.Value, numberFormatCommandId, StringComparison.Ordinal))
-                            return combo with { Items = numberFormatLabels };
+                    if (control is RibbonComboBox combo &&
+                        string.Equals(combo.CommandId.Value, numberFormatCommandId, StringComparison.Ordinal))
+                        return combo with { Items = numberFormatLabels };
 
-                        return string.Equals(control.CommandId.Value, "Shapes", StringComparison.Ordinal)
-                            ? CreateShapeGallerySplitButton(control)
-                            : control;
-                    }).ToArray(),
+                    return string.Equals(control.CommandId.Value, "Shapes", StringComparison.Ordinal)
+                        ? CreateShapeGallerySplitButton(control)
+                        : control;
                 }).ToArray(),
             }).ToArray(),
+        }).ToArray();
+        return definition with
+        {
+            Tabs = tabs,
         };
     }
 

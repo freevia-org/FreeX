@@ -1204,10 +1204,26 @@ public sealed class AvaloniaChartRenderer
             return;
 
         var horizontal = axis.Side is AxisSide.Bottom or AxisSide.Top;
+        var axisLineBrush = horizontal
+            ? _chart.XAxisLineColor is { } xLineColor ? SolidBrush(xLineColor) : AxisBrush
+            : _chart.YAxisLineColor is { } yLineColor ? SolidBrush(yLineColor) : AxisBrush;
+        var axisLineThickness = horizontal
+            ? PositiveOrDefault(_chart.XAxisLineThickness, 1)
+            : PositiveOrDefault(_chart.YAxisLineThickness, 1);
+        var labelBrush = horizontal
+            ? _chart.ResolveXAxisLabelTextColor(_theme) is { } xLabelColor ? SolidBrush(xLabelColor) : AxisLabelBrush
+            : _chart.ResolveYAxisLabelTextColor(_theme) is { } yLabelColor ? SolidBrush(yLabelColor) : AxisLabelBrush;
+        var labelFontSize = horizontal
+            ? PositiveOrDefault(_chart.XAxisLabelFontSize, AxisLabelFontSize)
+            : PositiveOrDefault(_chart.YAxisLabelFontSize, AxisLabelFontSize);
+        var showLabels = horizontal ? _chart.ShowXAxisLabels : _chart.ShowYAxisLabels;
+
         if (horizontal)
-            AddLine(canvas, FirstTickPos(axis), axis.LinePosition, LastTickPos(axis), axis.LinePosition);
+            AddLine(canvas, FirstTickPos(axis), axis.LinePosition, LastTickPos(axis), axis.LinePosition,
+                axisLineBrush, axisLineThickness);
         else
-            AddLine(canvas, axis.LinePosition, FirstTickPos(axis), axis.LinePosition, LastTickPos(axis));
+            AddLine(canvas, axis.LinePosition, FirstTickPos(axis), axis.LinePosition, LastTickPos(axis),
+                axisLineBrush, axisLineThickness);
 
         var labelAngle = axis.LabelAngle;
 
@@ -1225,18 +1241,23 @@ public sealed class AvaloniaChartRenderer
             // Excel's "Interval between tick marks" (<c:tickMarkSkip>) thins out. Label thinning
             // ("Interval between labels") arrives as an empty tick.Label, which needs no gate here.
             if (tick.DrawTickMark)
-                RenderTickMark(canvas, axis, horizontal, tick.Position, majorTickStyle, TickLength);
+                RenderTickMark(canvas, axis, horizontal, tick.Position, majorTickStyle, TickLength, axisLineBrush);
 
-            if (horizontal)
+            if (showLabels && horizontal)
             {
-                AddTickLabel(canvas, tick.Label, tick.Position, axis.LinePosition + TickLength + 1, centerHorizontally: true, angle: labelAngle);
+                AddTickLabel(canvas, tick.Label, tick.Position, axis.LinePosition + TickLength + 1,
+                    centerHorizontally: true, angle: labelAngle, fontSize: labelFontSize, foreground: labelBrush);
             }
-            else
+            else if (showLabels)
             {
                 if (axis.Side == AxisSide.Right)
-                    AddTickLabel(canvas, tick.Label, axis.LinePosition + TickLength + 1, tick.Position, centerHorizontally: false, rightAligned: false, angle: labelAngle);
+                    AddTickLabel(canvas, tick.Label, axis.LinePosition + TickLength + 1, tick.Position,
+                        centerHorizontally: false, rightAligned: false, angle: labelAngle,
+                        fontSize: labelFontSize, foreground: labelBrush);
                 else
-                    AddTickLabel(canvas, tick.Label, axis.LinePosition - TickLength - 1, tick.Position, centerHorizontally: false, angle: labelAngle);
+                    AddTickLabel(canvas, tick.Label, axis.LinePosition - TickLength - 1, tick.Position,
+                        centerHorizontally: false, angle: labelAngle,
+                        fontSize: labelFontSize, foreground: labelBrush);
             }
         }
 
@@ -1248,7 +1269,7 @@ public sealed class AvaloniaChartRenderer
         if (axis.MinorTicks is { Count: > 0 } minorTicks)
         {
             foreach (var tick in minorTicks)
-                RenderTickMark(canvas, axis, horizontal, tick.Position, minorTickStyle, MinorTickLength);
+                RenderTickMark(canvas, axis, horizontal, tick.Position, minorTickStyle, MinorTickLength, axisLineBrush);
         }
     }
 
@@ -1257,7 +1278,14 @@ public sealed class AvaloniaChartRenderer
     /// per <paramref name="style"/>: None draws nothing, Outside extends away from the plot area (the
     /// prior unconditional behavior), Inside extends toward the plot area, and Cross extends both ways.
     /// </summary>
-    private static void RenderTickMark(Canvas canvas, AxisLayout axis, bool horizontal, double tickPos, ChartAxisTickStyle style, double length)
+    private static void RenderTickMark(
+        Canvas canvas,
+        AxisLayout axis,
+        bool horizontal,
+        double tickPos,
+        ChartAxisTickStyle style,
+        double length,
+        IBrush stroke)
     {
         var (outerLen, innerLen) = style switch
         {
@@ -1274,13 +1302,15 @@ public sealed class AvaloniaChartRenderer
         {
             // Bottom axis: outward (away from the plot area above it) is +Y. Top axis: outward is -Y.
             var sign = axis.Side == AxisSide.Top ? -1 : 1;
-            AddLine(canvas, tickPos, axis.LinePosition - sign * innerLen, tickPos, axis.LinePosition + sign * outerLen);
+            AddLine(canvas, tickPos, axis.LinePosition - sign * innerLen, tickPos,
+                axis.LinePosition + sign * outerLen, stroke);
         }
         else
         {
             // Right axis: outward (away from the plot area to its left) is +X. Left axis: outward is -X.
             var sign = axis.Side == AxisSide.Right ? 1 : -1;
-            AddLine(canvas, axis.LinePosition - sign * innerLen, tickPos, axis.LinePosition + sign * outerLen, tickPos);
+            AddLine(canvas, axis.LinePosition - sign * innerLen, tickPos,
+                axis.LinePosition + sign * outerLen, tickPos, stroke);
         }
     }
 
@@ -1376,7 +1406,9 @@ public sealed class AvaloniaChartRenderer
         double y,
         bool centerHorizontally,
         bool rightAligned = true,
-        double angle = 0)
+        double angle = 0,
+        double fontSize = AxisLabelFontSize,
+        IBrush? foreground = null)
     {
         if (string.IsNullOrEmpty(text))
             return;
@@ -1384,13 +1416,13 @@ public sealed class AvaloniaChartRenderer
         var label = new TextBlock
         {
             Text = text,
-            FontSize = AxisLabelFontSize,
-            Foreground = AxisLabelBrush,
+            FontSize = fontSize,
+            Foreground = foreground ?? AxisLabelBrush,
         };
 
         label.Measure(Size.Infinity);
         var w = label.DesiredSize.Width > 0 ? label.DesiredSize.Width : 40;
-        var h = label.DesiredSize.Height > 0 ? label.DesiredSize.Height : AxisLabelFontSize + 4;
+        var h = label.DesiredSize.Height > 0 ? label.DesiredSize.Height : fontSize + 4;
 
         if (Math.Abs(angle) < 0.5)
         {
@@ -1440,16 +1472,26 @@ public sealed class AvaloniaChartRenderer
         canvas.Children.Add(label);
     }
 
-    private static void AddLine(Canvas canvas, double x1, double y1, double x2, double y2)
+    private static void AddLine(
+        Canvas canvas,
+        double x1,
+        double y1,
+        double x2,
+        double y2,
+        IBrush? stroke = null,
+        double thickness = 1)
     {
         canvas.Children.Add(new Line
         {
             StartPoint = new AvaloniaPoint(x1, y1),
             EndPoint = new AvaloniaPoint(x2, y2),
-            Stroke = AxisBrush,
-            StrokeThickness = 1,
+            Stroke = stroke ?? AxisBrush,
+            StrokeThickness = PositiveOrDefault(thickness, 1),
         });
     }
+
+    private static double PositiveOrDefault(double value, double fallback) =>
+        double.IsFinite(value) && value > 0 ? value : fallback;
 
     // ── Legend ──────────────────────────────────────────────────────────────
 

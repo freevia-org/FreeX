@@ -200,6 +200,33 @@ public sealed class AvaloniaChartAxisTickTests
             "a non-zero XAxisLabelAngle must produce a non-zero LabelAngle on the category axis layout");
         layout.CategoryAxis.LabelAngle.Should().Be(-45);
     }
+
+    [Fact]
+    public void ChartLayout_ValueAxis_MinorTickStyleProducesTicksWithoutMinorGridlines()
+    {
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            ShowLegend = false,
+            YAxisMinimum = 0,
+            YAxisMaximum = 20,
+            YAxisMajorUnit = 10,
+            YAxisMinorUnit = 5,
+            YAxisMinorTickStyle = ChartAxisTickStyle.Inside,
+            ShowYAxisMinorGridlines = false,
+        };
+        var layout = ChartLayoutEngine.Layout(new ChartLayoutRequest
+        {
+            Chart = chart,
+            Categories = ["A", "B"],
+            Series = [new ChartSeriesData { SeriesIndex = 0, Values = [5, 15] }],
+            PlotArea = new PlotRect(0, 0, 400, 300),
+            TextMeasurer = new FakeAxisTestMeasurer(),
+        });
+
+        layout.ValueAxis!.MinorTicks.Should().NotBeNullOrEmpty(
+            "minor tick marks are independent of minor gridline visibility");
+    }
 }
 
 /// <summary>Minimal text measurer stub for axis layout tests (no font measurement needed).</summary>

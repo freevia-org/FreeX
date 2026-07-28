@@ -5648,6 +5648,29 @@ public sealed partial class MainWindow : Window
         repeatCombo.SelectionChanged += (_, _) => ApplyRepeat();
         autoReverseCheck.IsCheckedChanged += (_, _) => ApplyRepeat();
 
+        var moveEarlierButton = BuildAnimationPaneActionButton(
+            "▲",
+            item.CanMoveEarlier,
+            "Move earlier",
+            () => MoveAnimationPaneItem(item.Index, -1));
+        var moveLaterButton = BuildAnimationPaneActionButton(
+            "▼",
+            item.CanMoveLater,
+            "Move later",
+            () => MoveAnimationPaneItem(item.Index, 1));
+        var removeButton = BuildAnimationPaneActionButton(
+            "×",
+            true,
+            "Remove animation",
+            () => RemoveAnimationPaneItem(item.Index));
+        removeButton.Foreground = new SolidColorBrush(Color.FromRgb(0xC0, 0x20, 0x20));
+        var actionPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { moveEarlierButton, moveLaterButton, removeButton },
+        };
+
         var innerGrid = new Grid
         {
             VerticalAlignment = VerticalAlignment.Center,
@@ -5656,6 +5679,7 @@ public sealed partial class MainWindow : Window
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = new GridLength(80) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Auto },
@@ -5704,6 +5728,7 @@ public sealed partial class MainWindow : Window
                      (delayBox, 7),
                      (repeatCombo, 8),
                      (autoReverseCheck, 9),
+                     (actionPanel, 10),
                  })
         {
             Grid.SetColumn(placement.Control, placement.Column);
@@ -5723,6 +5748,28 @@ public sealed partial class MainWindow : Window
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, _) => SelectAnimationPaneItem(item.Index);
         return border;
+    }
+
+    private static Button BuildAnimationPaneActionButton(
+        string content,
+        bool isEnabled,
+        string toolTip,
+        Action action)
+    {
+        var button = new Button
+        {
+            Content = content,
+            FontSize = 9,
+            Width = 18,
+            Height = 18,
+            Padding = new Thickness(0),
+            Margin = new Thickness(1),
+            IsEnabled = isEnabled,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        ToolTip.SetTip(button, toolTip);
+        button.Click += (_, _) => action();
+        return button;
     }
 
     internal AnimationPaneTimingMutationPlan ApplyAnimationPaneTriggerEditForTests(
@@ -5824,6 +5871,23 @@ public sealed partial class MainWindow : Window
 
         _selectedAnimationIndex = plan.SelectedAnimationIndex;
         RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        return plan;
+    }
+
+    internal AnimationPaneRemoveMutationPlan RemoveAnimationPaneItemForTests(int animationIndex) =>
+        RemoveAnimationPaneItem(animationIndex);
+
+    private AnimationPaneRemoveMutationPlan RemoveAnimationPaneItem(int animationIndex)
+    {
+        var plan = AnimationPanePlanner.BuildRemoveMutationPlan(
+            Editor.CurrentSlideAnimations,
+            animationIndex);
+        if (AnimationPanePlanner.TryApplyRemoveMutation(Editor, plan))
+        {
+            _selectedAnimationIndex = plan.SelectedAnimationIndex;
+            RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        }
+
         return plan;
     }
 

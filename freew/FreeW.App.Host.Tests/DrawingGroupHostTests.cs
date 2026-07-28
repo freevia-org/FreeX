@@ -49,6 +49,37 @@ public sealed class DrawingGroupHostTests
         return doc;
     }
 
+    private static TextDocument NestedGroupDoc(out DrawingGroup nested, out Shape sibling)
+    {
+        nested = new DrawingGroup
+        {
+            WidthPt = 96,
+            HeightPt = 48,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 1
+            }
+        };
+        nested.Children.Add(new Shape(ShapeKind.Rectangle, 48, 24));
+        nested.Children.Add(new Shape(ShapeKind.Ellipse, 36, 24));
+        nested.ChildOffsets.Add((0, 0));
+        nested.ChildOffsets.Add((60, 24));
+
+        sibling = FloatingShape(156, 54, z: 2);
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+        var p0 = new Paragraph();
+        p0.Runs.Add(Run.FromDrawingGroup(nested));
+        doc.Blocks.Add(p0);
+        var p1 = new Paragraph();
+        p1.Runs.Add(Run.FromShape(sibling));
+        doc.Blocks.Add(p1);
+        return doc;
+    }
+
     // ── Multi-select management ──────────────────────────────────────────────────────────────────
 
     [StaFact]
@@ -177,6 +208,37 @@ public sealed class DrawingGroupHostTests
         p0.Runs.Should().HaveCount(2, "two individual member runs should be restored");
         p0.Runs.Any(r => r.Image is not null).Should().BeTrue();
         p0.Runs.Any(r => r.Shape is not null).Should().BeTrue();
+    }
+
+    [StaFact]
+    public void NestedGroup_CanBeGroupedUngroupedAndUndoneThroughWpfHost()
+    {
+        var doc = NestedGroupDoc(out var nested, out var sibling);
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        view.SelectFloatingObject(nested);
+        view.SelectFloatingObject(sibling, addToMultiSelect: true);
+        view.HasMultipleFloatingObjectsSelected.Should().BeTrue();
+
+        view.GroupSelectedFloatingObjects();
+        view.CommitToModel();
+        var outer = ((Paragraph)view.Model.Blocks[0]).Runs[0].DrawingGroup!;
+        outer.Children.Should().HaveCount(2);
+        outer.Children[0].Should().BeSameAs(nested);
+
+        view.LoadModel(view.Model);
+        var outerReloaded = ((Paragraph)view.Model.Blocks[0]).Runs[0].DrawingGroup!;
+        view.SelectFloatingObject(outerReloaded);
+        view.IsGroupSelected.Should().BeTrue();
+        view.UngroupSelectedFloatingObject();
+
+        var restoredNested = ((Paragraph)view.Model.Blocks[0]).Runs[0].DrawingGroup!;
+        restoredNested.Placement.HorizontalOffsetPt.Should().BeApproximately(36, 0.5);
+        restoredNested.Placement.VerticalOffsetPt.Should().BeApproximately(18, 0.5);
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().ContainSingle();
+        ((Paragraph)view.Model.Blocks[0]).Runs[0].DrawingGroup!.Children.Should().HaveCount(2);
     }
 
     // ── IsGroupSelected ──────────────────────────────────────────────────────────────────────────

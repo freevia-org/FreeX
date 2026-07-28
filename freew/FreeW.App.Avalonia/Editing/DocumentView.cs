@@ -206,8 +206,8 @@ public sealed class DocumentView : Control
     private (int BlockIndex, int RunIndex, string Kind, Rect Rect)? _selectedFloating;
     // AV-SHAPETEXT: bounded one-paragraph caret for the selected floating text box.
     private (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? _shapeCaret;
-    // Multi-select set for object arrange commands. DrawingGroup itself is single-select because the
-    // shared grouping command currently consumes only concrete floating object runs.
+    // Multi-select set for object arrange and nested-group commands. Valid DrawingGroups are
+    // groupable members just like the concrete floating object runs they contain.
     private readonly List<(int BlockIndex, int RunIndex, string Kind)> _selectedFloatingObjects = [];
     // AV-HANDLES: drag state — non-null while the user is dragging a selected float (move OR resize).
     // PointerDown : pointer page-space position when the drag started.
@@ -8492,7 +8492,6 @@ public sealed class DocumentView : Control
                 return;
             }
 
-            _selectedFloatingObjects.RemoveAll(existingItem => existingItem.Kind == "Group");
             _selectedFloatingObjects.Add(item);
         }
         else
@@ -8507,7 +8506,7 @@ public sealed class DocumentView : Control
     }
 
     private static bool IsGroupableFloatingKind(string kind) =>
-        kind is "Image" or "Shape" or "Chart" or "WordArt" or "SmartArt";
+        kind is "Image" or "Shape" or "Chart" or "WordArt" or "SmartArt" or "Group";
 
     private bool TryGetRun(int blockIndex, int runIndex, out Run run)
     {
@@ -8547,7 +8546,8 @@ public sealed class DocumentView : Control
             || run.Shape is { IsFloating: true }
             || run.Chart is { IsFloating: true }
             || run.WordArt is { IsFloating: true }
-            || run.SmartArt is { IsFloating: true };
+            || run.SmartArt is { IsFloating: true }
+            || run.DrawingGroup is { IsValid: true };
     }
 
     private List<(int Bi, int Ri)> SelectedGroupMemberLocations()

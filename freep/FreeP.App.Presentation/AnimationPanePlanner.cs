@@ -287,6 +287,13 @@ public sealed record AnimationPaneReorderMutationPlan(
     string DisplayText,
     string? DisabledReason);
 
+public sealed record AnimationPaneRemoveMutationPlan(
+    bool ShouldApply,
+    int AnimationIndex,
+    int SelectedAnimationIndex,
+    string DisplayText,
+    string? DisabledReason);
+
 public static class AnimationPanePlanner
 {
     public const string MissingAnimationMessage = "Select an animation to edit timing.";
@@ -297,6 +304,7 @@ public static class AnimationPanePlanner
     public const string UnsupportedEffectOptionMessage = "This effect has no shared effect options yet.";
     public const string InvalidEffectOptionMessage = "Choose a valid effect option.";
     public const string InvalidReorderMessage = "Select an animation row that can move in that direction.";
+    public const string InvalidRemoveMessage = "Select an animation row to remove.";
 
     private static readonly string[] TriggerLabelValues =
     [
@@ -1131,6 +1139,47 @@ public static class AnimationPanePlanner
         }
 
         editor.MoveAnimation(plan.FromIndex, plan.ToIndex);
+        return true;
+    }
+
+    public static AnimationPaneRemoveMutationPlan BuildRemoveMutationPlan(
+        IReadOnlyList<ShapeAnimation> animations,
+        int animationIndex)
+    {
+        bool canRemove = animationIndex >= 0 && animationIndex < animations.Count;
+        if (!canRemove)
+        {
+            return new AnimationPaneRemoveMutationPlan(
+                false,
+                animationIndex,
+                NormalizeReorderSelection(animationIndex, animations.Count),
+                "Remove animation",
+                InvalidRemoveMessage);
+        }
+
+        return new AnimationPaneRemoveMutationPlan(
+            true,
+            animationIndex,
+            Math.Min(animationIndex, animations.Count - 2),
+            $"Remove animation {animationIndex + 1}",
+            null);
+    }
+
+    public static bool TryApplyRemoveMutation(
+        EditingSession editor,
+        AnimationPaneRemoveMutationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!plan.ShouldApply
+            || plan.AnimationIndex < 0
+            || plan.AnimationIndex >= editor.CurrentSlideAnimations.Count)
+        {
+            return false;
+        }
+
+        editor.RemoveAnimation(plan.AnimationIndex);
         return true;
     }
 

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
@@ -76,6 +77,22 @@ public sealed partial class MainWindow
             ["chartFormat.yGridlines"] = CycleChartYAxisGridlines,
             ["chartFormat.xLabels"] = ToggleChartXAxisLabels,
             ["chartFormat.yLabels"] = ToggleChartYAxisLabels,
+            // Legacy WPF axis quick commands are surfaced by the host-specific axis group as well as
+            // the shared bounds dialog. They all use the shared planner and SetChartLayoutCommand path.
+            ["X Axis Ticks"] = () => ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.TickMarks(true), "ChartLoc_NoAxes"),
+            ["Y Axis Ticks"] = () => ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.TickMarks(false), "ChartLoc_NoAxes"),
+            ["X Axis Label Font"] = () => ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.LabelFont(true), "ChartLoc_NoAxes"),
+            ["Y Axis Label Font"] = () => ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.LabelFont(false), "ChartLoc_NoAxes"),
+            ["X Axis Label Angle"] = () => ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.LabelAngle(true), "ChartLoc_NoAxes"),
+            ["Y Axis Label Angle"] = () => ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.LabelAngle(false), "ChartLoc_NoAxes"),
+            ["X Axis Line"] = () => ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.AxisLine(true), "ChartLoc_NoAxes"),
+            ["Y Axis Line"] = () => ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.AxisLine(false), "ChartLoc_NoAxes"),
+            ["X Axis Number Format"] = () => ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.NumberFormat(true), "ChartLoc_NoAxes"),
+            ["Y Axis Number Format"] = () => ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.NumberFormat(false), "ChartLoc_NoAxes"),
+            ["X Gridline Style"] = () => ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.GridlineStyle(true), "ChartLoc_NoAxes"),
+            ["Y Gridline Style"] = () => ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.GridlineStyle(false), "ChartLoc_NoAxes"),
+            ["X Log Scale"] = () => ExecuteChartAxisPlannedCommand(ChartAxisWorkflowCommandCatalog.LogScale(true), ChartAxisPlanner.PlanLogScaleToggle),
+            ["Y Log Scale"] = () => ExecuteChartAxisPlannedCommand(ChartAxisWorkflowCommandCatalog.LogScale(false), ChartAxisPlanner.PlanLogScaleToggle),
             // The Format Chart Area button opens the chart-area / plot-area fill + border dialog
             // (ChartAreaFormatPlanner -> SetChartLayoutCommand).
             ["chartFormat.formatChartArea"] = () => RunGuarded(ShowFormatChartAreaDialog),

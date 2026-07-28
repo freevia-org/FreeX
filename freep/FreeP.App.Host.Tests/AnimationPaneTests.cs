@@ -517,6 +517,8 @@ public sealed class AnimationPaneTests
         source.Should().Contain("AnimationPanePlanner.TryApplyEffectOptionMutation(");
         source.Should().Contain("AnimationPanePlanner.BuildReorderMutationPlan(");
         source.Should().Contain("AnimationPanePlanner.TryApplyReorderMutation(");
+        source.Should().Contain("AnimationPanePlanner.BuildRemoveMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.TryApplyRemoveMutation(");
         source.Should().Contain("AnimationPanePlanner.TriggerLabels");
         source.Should().Contain("Text              = item.DurationText");
         source.Should().Contain("Text              = item.DelayText");
@@ -534,6 +536,31 @@ public sealed class AnimationPaneTests
         source.Should().NotContain("private static ShapeAnimation CloneAnimation");
         source.Should().NotContain("double.TryParse");
         source.Should().NotContain("_editor.MoveAnimation(");
+    }
+
+    [StaFact]
+    public void AnimationPane_RemovesThroughSharedUndoableMutationPlan()
+    {
+        var editor = MakeSessionWithAnimations();
+        var pane = new AnimationPane(editor);
+
+        var plan = pane.RemoveAnimationForTest(0);
+
+        plan.Should().Be(new AnimationPaneRemoveMutationPlan(
+            true,
+            0,
+            0,
+            "Remove animation 1",
+            null));
+        editor.CurrentSlideAnimations.Select(animation => animation.ShapeId)
+            .Should()
+            .Equal(20u);
+        pane.CurrentTimelinePlanForTest.Items.Should().ContainSingle();
+
+        editor.Undo();
+        editor.CurrentSlideAnimations.Select(animation => animation.ShapeId)
+            .Should()
+            .Equal(10u, 20u);
     }
 
     // ── Test-seam helpers ─────────────────────────────────────────────────────────

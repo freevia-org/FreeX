@@ -159,6 +159,47 @@ public sealed class DocumentViewFloatingSelectionTests
         return doc;
     }
 
+    private static TextDocument MakeDocWithNestedGroupAndShape()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+
+        var nested = new DrawingGroup
+        {
+            WidthPt = 96,
+            HeightPt = 48,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 1
+            }
+        };
+        nested.Children.Add(new Shape(ShapeKind.Rectangle, 48, 24));
+        nested.Children.Add(new Shape(ShapeKind.Ellipse, 36, 24));
+        nested.ChildOffsets.Add((0, 0));
+        nested.ChildOffsets.Add((60, 24));
+
+        var first = new Paragraph("Body text.");
+        first.Runs.Add(Run.FromDrawingGroup(nested));
+        doc.Blocks.Add(first);
+
+        var second = new Paragraph("More text.");
+        second.Runs.Add(Run.FromShape(new Shape(ShapeKind.Rectangle, 72, 36)
+        {
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 156,
+                VerticalOffsetPt = 54,
+                ZOrderIndex = 2
+            }
+        }));
+        doc.Blocks.Add(second);
+        return doc;
+    }
+
     // ── FLSEL-1: SelectFloating sets SelectedFloatingInfo ────────────────────────────────────────────
 
     [Fact]
@@ -271,6 +312,41 @@ public sealed class DocumentViewFloatingSelectionTests
         Assert.Equal(3, ungroupedRunCount);
         Assert.True(hasImage);
         Assert.True(hasShape);
+    }
+
+    [Fact]
+    public async Task Nested_group_can_be_selected_grouped_ungrouped_and_undone()
+    {
+        int outerChildCount = 0;
+        int restoredGroupCount = 0;
+        bool canGroup = false;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = MakeDocWithNestedGroupAndShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+
+            view.SelectFloating(0, 1);
+            view.SelectFloating(1, 1, addToMultiSelect: true);
+            canGroup = view.HasMultipleFloatingObjectsSelected;
+            view.GroupSelectedFloatingObjects();
+
+            var grouped = ((Paragraph)doc.Blocks[0]).Runs[1].DrawingGroup!;
+            outerChildCount = grouped.Children.Count;
+            grouped.Children[0].Should().BeOfType<DrawingGroup>();
+
+            view.SelectFloating(0, 1);
+            view.IsGroupSelected.Should().BeTrue();
+            view.UngroupSelectedFloatingObject();
+            restoredGroupCount = ((Paragraph)doc.Blocks[0]).Runs.Count(run => run.DrawingGroup is not null);
+            view.Undo();
+        });
+        if (!ran) return;
+
+        Assert.True(canGroup, "a valid nested group must be eligible for multi-selection");
+        Assert.Equal(2, outerChildCount);
+        Assert.Equal(1, restoredGroupCount);
     }
 
     [Fact]
