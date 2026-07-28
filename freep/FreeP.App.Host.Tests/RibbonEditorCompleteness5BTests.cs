@@ -909,6 +909,36 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_TextDirection_WithSelectedValue_RoutesToShapeAndUndo()
+    {
+        var (ed, pres) = MakeSession();
+        ed.InsertDefaultTextBox();
+        var shape = pres.Slides[0].Shapes.Last();
+        ed.Select(shape.Id);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.text-direction", RibbonCommandContext.ForSelectedValue("Rotate 90 degrees"));
+
+        Assert.Equal(TextVerticalType.Vertical, shape.TextBody!.VerticalType);
+        ed.Undo();
+        Assert.Equal(TextVerticalType.Horizontal, shape.TextBody.VerticalType);
+    }
+
+    [Fact]
+    public void Cmd_TextDirection_WithActiveTableCell_RoutesToCell()
+    {
+        var (ed, pres) = MakeSession();
+        var table = AddSingleCellTable(pres, 10, MakeTextBody("cell"));
+        ed.Select(table.Id);
+        ed.SetActiveTableCell(0, 0);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.text-direction", RibbonCommandContext.ForSelectedValue("East Asian vertical"));
+
+        Assert.Equal(TextVerticalType.EastAsianVertical, table.Table!.Rows[0].Cells[0].TextBody!.VerticalType);
+    }
+
+    [Fact]
     public void Cmd_FontSizeAndColor_WithSelectedTextShape_RoutesToEditor()
     {
         var (ed, pres) = MakeSession();

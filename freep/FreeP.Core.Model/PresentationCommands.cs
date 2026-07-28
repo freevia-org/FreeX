@@ -1869,6 +1869,49 @@ public sealed class SetShapeTextAutoFitCommand : IPresentationCommand
     }
 }
 
+/// <summary>Changes the DrawingML text-frame text direction of one shape.</summary>
+public sealed class SetShapeTextVerticalTypeCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly TextVerticalType _newType;
+    private TextVerticalType _oldType;
+
+    public SetShapeTextVerticalTypeCommand(int slideIndex, uint shapeId, TextVerticalType newType)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _newType = newType;
+    }
+
+    public string Label => "Set Text Direction";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        return shape?.TextBody is { } body && body.VerticalType != _newType;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.TextBody is not { } body)
+            return;
+
+        _oldType = body.VerticalType;
+        body.VerticalType = _newType;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.TextBody is not { } body)
+            return;
+
+        body.VerticalType = _oldType;
+    }
+}
+
 /// <summary>
 /// Base for run-format toggle commands that operate over a single run identified by
 /// (slideIndex, shapeId, paragraphIndex, runIndex).

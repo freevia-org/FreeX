@@ -1077,6 +1077,27 @@ public sealed class EditingSession
         return commands.Length;
     }
 
+    /// <summary>Sets the DrawingML text direction on all selected text shapes as one undo step.</summary>
+    public int SetTextVerticalTypeOnSelection(TextVerticalType verticalType)
+    {
+        if (CurrentSlide is null)
+            return 0;
+
+        var commands = _selectedShapeIds
+            .Where(id => CurrentSlide.Shapes.FirstOrDefault(shape => shape.Id == id)?.TextBody is not null)
+            .Select(id => (IPresentationCommand)new SetShapeTextVerticalTypeCommand(
+                _currentSlideIndex,
+                id,
+                verticalType))
+            .ToArray();
+
+        if (commands.Length == 0)
+            return 0;
+
+        Bus.Execute(new BatchCommand("Set Text Direction", commands));
+        return commands.Length;
+    }
+
     // ── Notes operations ─────────────────────────────────────────────────────────
 
     /// <summary>
@@ -2076,6 +2097,29 @@ public sealed class EditingSession
 
         ExecuteTableCommand((si, id) => new SetTableCellAnchorCommand(
             si, id, active.Row, active.Col, anchor));
+        return true;
+    }
+
+    /// <summary>Sets the DrawingML text direction on the active table cell. Undoable.</summary>
+    public bool TryApplyActiveTableCellTextVerticalType(TextVerticalType verticalType)
+    {
+        if (ActiveTableCell is not { } active)
+            return false;
+
+        var (shapeId, table) = RequireSelectedTable();
+        if (shapeId == 0 || table is null || active.Row < 0 || active.Row >= table.Rows.Count)
+            return false;
+
+        var row = table.Rows[active.Row];
+        if (active.Col < 0 || active.Col >= row.Cells.Count || row.Cells[active.Col].TextBody is null)
+            return false;
+
+        ExecuteTableCommand((si, id) => new SetTableCellTextVerticalTypeCommand(
+            si,
+            id,
+            active.Row,
+            active.Col,
+            verticalType));
         return true;
     }
 

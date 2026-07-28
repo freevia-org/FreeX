@@ -166,6 +166,12 @@
   <data name="Ribbon_Command_TextAutoFit_KeyTip" xml:space="preserve">
     <value>TA</value>
   </data>
+  <data name="Ribbon_Command_TextDirection_Label" xml:space="preserve">
+    <value>Text Direction</value>
+  </data>
+  <data name="Ribbon_Command_TextDirection_KeyTip" xml:space="preserve">
+    <value>TD</value>
+  </data>
   <data name="Ribbon_Command_TableCellFill_Label" xml:space="preserve">
     <value>Table Cell Fill</value>
   </data>
