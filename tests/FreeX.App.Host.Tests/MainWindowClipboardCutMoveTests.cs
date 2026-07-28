@@ -20,7 +20,7 @@ public sealed class MainWindowClipboardCutMoveTests
     [Fact]
     public void CutThenPaste_KeepsMovedFormulaOwnReferenceAndUpdatesReferencingFormula()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             var initialWorkbook = new Workbook("Book1");
             initialWorkbook.AddSheet("Sheet1");
@@ -81,7 +81,7 @@ public sealed class MainWindowClipboardCutMoveTests
     [Fact]
     public void CopyThenPaste_StillOffsetsOwnFormulaReferenceAndLeavesSourceIntact()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             var initialWorkbook = new Workbook("Book1");
             initialWorkbook.AddSheet("Sheet1");

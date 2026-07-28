@@ -14,6 +14,8 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private const string InternalClipboardFormat = "FreeX.InternalClipboard";
+
     // SourceAreas records every area of a Ctrl+click multi-area selection that was actually copied
     // (R49-render-multiarea-selection-3-1); null means "just SourceRange", so existing call sites
     // that never touch this field (e.g. MainWindow.ScreenshotTour.cs's seeded clipboard) keep their
@@ -24,7 +26,8 @@ public partial class MainWindow
         List<(CellAddress Source, PictureCellSnapshot Snapshot)> PictureCells,
         string Text,
         bool IsCut = false,
-        IReadOnlyList<GridRange>? SourceAreas = null);
+        IReadOnlyList<GridRange>? SourceAreas = null,
+        string? Token = null);
     private InternalClipboard? _internalClipboard;
 
     private void CancelCopyAndTransientModes()
@@ -133,12 +136,14 @@ public partial class MainWindow
         var fullRangeViewport = BuildFullRangeViewportForClipboard(copyRange) ?? viewport;
 
         var text = ClipboardSerializer.Serialize(fullRangeViewport, copyRange);
+        var clipboardToken = Guid.NewGuid().ToString("N");
         // Place plain text AND an HTML table fragment (CF_HTML) on the OS clipboard together,
         // matching real Excel: destination apps that understand HTML (Word, Outlook, browsers,
         // LibreOffice Calc) pick the richer format and preserve bold/fill/merges/number-format
         // display text, while anything HTML-unaware still gets the existing plain TSV text (M7).
         var data = new DataObject();
         data.SetText(text);
+        data.SetData(InternalClipboardFormat, clipboardToken);
         var html = BuildHtmlClipboardFragment(fullRangeViewport, sheet, copyRange, _workbook.Theme);
         if (!string.IsNullOrEmpty(html))
             data.SetData(System.Windows.DataFormats.Html, html);
@@ -204,7 +209,8 @@ public partial class MainWindow
             pictureCells,
             text,
             isCut,
-            areas.Count > 1 ? areas : null);
+            areas.Count > 1 ? areas : null,
+            clipboardToken);
     }
 
     /// <summary>Matches the phrasing of WorkbookSession's (Avalonia-facing) identical
@@ -253,6 +259,7 @@ public partial class MainWindow
             try
             {
                 System.Windows.Clipboard.SetDataObject(data, copy: true);
+                System.Windows.Clipboard.Flush();
                 if (System.Windows.Clipboard.GetText() == text)
                     return;
             }
@@ -274,6 +281,7 @@ public partial class MainWindow
             try
             {
                 System.Windows.Clipboard.SetText(text);
+                System.Windows.Clipboard.Flush();
                 if (System.Windows.Clipboard.GetText() == text)
                     return;
             }
@@ -466,9 +474,26 @@ public partial class MainWindow
         // paste instead (review P44).
         if (!externalTextAsText && _internalClipboard is { } clip)
         {
-            currentClipboardText = TryGetClipboardText(out var clipboardReadFailed);
-            currentClipboardTextRead = true;
-            var pastePlan = ClipboardPastePlanner.PlanPaste(clip.Text, currentClipboardText, clipboardReadFailed);
+            var internalClipboardMarkerMatches = clip.Token is not null &&
+                string.Equals(TryGetClipboardInternalMarker(), clip.Token, StringComparison.Ordinal);
+            var clipboardReadFailed = false;
+            ClipboardPastePlan pastePlan;
+            if (internalClipboardMarkerMatches)
+            {
+                // WPF can transiently serve an older/empty text projection while a flushed
+                // DataObject is being published. The private marker is the authoritative
+                // ownership signal for a same-app copy, so do not misclassify that copy as
+                // external based on a racy plain-text read.
+                currentClipboardText = clip.Text;
+                currentClipboardTextRead = true;
+                pastePlan = ClipboardPastePlan.UseInternalClipboard;
+            }
+            else
+            {
+                currentClipboardText = TryGetClipboardText(out clipboardReadFailed);
+                currentClipboardTextRead = true;
+                pastePlan = ClipboardPastePlanner.PlanPaste(clip.Text, currentClipboardText, clipboardReadFailed);
+            }
             if (pastePlan == ClipboardPastePlan.ReadFailed)
             {
                 // A transient OS-clipboard read failure must not silently fall back to a stale
@@ -668,6 +693,18 @@ public partial class MainWindow
     }
 
     private static string? TryGetClipboardText() => TryGetClipboardText(out _);
+
+    private static string? TryGetClipboardInternalMarker()
+    {
+        try
+        {
+            return System.Windows.Clipboard.GetData(InternalClipboardFormat) as string;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Reads the OS clipboard text, distinguishing "read failed" (clipboard locked by another

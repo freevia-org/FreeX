@@ -97,7 +97,7 @@ public sealed class FreeXCleanupMED2Tests
     [Fact]
     public void PasteSpecialAsText_AfterInternalCopy_PastesPlainTextNotFormula()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             var initialWorkbook = new Workbook("Book1");
             initialWorkbook.AddSheet("Sheet1");
