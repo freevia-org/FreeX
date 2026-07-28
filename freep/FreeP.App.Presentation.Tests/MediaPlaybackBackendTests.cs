@@ -49,6 +49,14 @@ public sealed class MediaPlaybackBackendTests
     }
 
     [Fact]
+    public void LoopPolicy_ReplaysOnlyWhileTheSessionIsAlive()
+    {
+        MediaPlaybackLoopPolicy.ShouldReplay(loop: true, disposed: false).Should().BeTrue();
+        MediaPlaybackLoopPolicy.ShouldReplay(loop: false, disposed: false).Should().BeFalse();
+        MediaPlaybackLoopPolicy.ShouldReplay(loop: true, disposed: true).Should().BeFalse();
+    }
+
+    [Fact]
     public void TempSourceStore_ReleasesEmbeddedPayload()
     {
         var store = new TempMediaPlaybackSourceStore();

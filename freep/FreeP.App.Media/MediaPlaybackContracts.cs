@@ -51,6 +51,11 @@ public sealed record MediaPlaybackSource(
         new(null, bytes, contentType, isVideo, loop);
 }
 
+public static class MediaPlaybackLoopPolicy
+{
+    public static bool ShouldReplay(bool loop, bool disposed) => loop && !disposed;
+}
+
 public static class MediaPlaybackSourceFactory
 {
     public static bool TryCreate(

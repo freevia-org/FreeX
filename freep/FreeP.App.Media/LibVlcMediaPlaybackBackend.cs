@@ -108,6 +108,7 @@ public sealed class LibVlcMediaPlaybackSession : IMediaPlaybackSession
     private MediaPlayer? _player;
     private LibVLCSharp.Shared.Media? _media;
     private Uri? _sourceUri;
+    private bool _loop;
     private bool _disposed;
     private MediaPlaybackState _state = MediaPlaybackState.Idle;
     private int _volume = 100;
@@ -148,6 +149,7 @@ public sealed class LibVlcMediaPlaybackSession : IMediaPlaybackSession
         try
         {
             _sourceUri = _sourceStore.Materialize(source);
+            _loop = source.Loop;
             _media = new LibVLCSharp.Shared.Media(_libVlc, _sourceUri);
             _player = new MediaPlayer(_media) { Volume = _volume };
             _player.EndReached += OnEndReached;
@@ -226,6 +228,22 @@ public sealed class LibVlcMediaPlaybackSession : IMediaPlaybackSession
 
     private void OnEndReached(object? sender, EventArgs e)
     {
+        if (MediaPlaybackLoopPolicy.ShouldReplay(_loop, _disposed))
+        {
+            try
+            {
+                SetState(MediaPlaybackState.Opening);
+                if (!(_player?.Play() ?? false))
+                    Fail(MediaPlaybackFailureKind.EngineError, "LibVLC could not restart looping media playback.");
+            }
+            catch (Exception ex)
+            {
+                Fail(MediaPlaybackFailureKind.EngineError, "LibVLC raised an error while restarting looping media playback.", ex);
+            }
+
+            return;
+        }
+
         SetState(MediaPlaybackState.Ended);
         Ended?.Invoke(this, EventArgs.Empty);
     }
@@ -252,6 +270,7 @@ public sealed class LibVlcMediaPlaybackSession : IMediaPlaybackSession
 
     private void ReleaseNativeMedia()
     {
+        _loop = false;
         if (_player is not null)
         {
             _player.EndReached -= OnEndReached;
