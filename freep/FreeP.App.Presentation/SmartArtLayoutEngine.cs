@@ -547,16 +547,16 @@ public static class SmartArtLayoutEngine
     }
 
     /// <summary>
-    /// Titled matrix: a full-width title band followed by a bounded two-column body.
-    /// The first node is semantic title content rather than a quadrant. Returning null
-    /// for malformed or overlarge input keeps the imported PowerPoint cache authoritative.
+    /// Titled matrix: a full-width title band followed by a two-column body.
+    /// The first node is semantic title content rather than a quadrant. Body rows are
+    /// derived from the parsed node count so larger authored matrices remain editable.
     /// </summary>
     private static IReadOnlyList<SlideShape>? LayoutTitledMatrix(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan)
     {
-        if (nodes.Count is < 2 or > 9 || string.IsNullOrWhiteSpace(nodes[0].Text))
+        if (nodes.Count < 2 || string.IsNullOrWhiteSpace(nodes[0].Text))
             return null;
 
         var bodyNodes = nodes.Skip(1).ToList();

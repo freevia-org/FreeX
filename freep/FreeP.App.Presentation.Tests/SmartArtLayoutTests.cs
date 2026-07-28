@@ -1567,18 +1567,36 @@ public sealed class SmartArtLayoutTests
             "the third body cell should start the lower row");
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(10)]
-    public void TitledMatrix_MalformedBodyFallsBackToCachedDrawing(int nodeCount)
+    [Fact]
+    public void TitledMatrix_MissingTitleFallsBackToCachedDrawing()
     {
         var data = MakeData(
             SmartArtFamily.Matrix,
-            Enumerable.Range(0, nodeCount).Select(i => $"Node{i}").ToArray());
+            "", "North", "East");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix";
 
         SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
-            .Should().BeNull("malformed or overlarge titled matrices must keep the imported cache authoritative");
+            .Should().BeNull("a titled matrix without title text must keep the imported cache authoritative");
+    }
+
+    [Theory]
+    [InlineData(10)]
+    [InlineData(16)]
+    public void TitledMatrix_PreservesAllBodyNodesBeyondOriginalNineItemCutoff(int nodeCount)
+    {
+        var data = MakeData(
+            SmartArtFamily.Matrix,
+            Enumerable.Range(0, nodeCount).Select(i => i == 0 ? "Title" : $"Node{i}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("titledMatrix should remain live for every parsed body node");
+        shapes!.Should().HaveCount(nodeCount);
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(0, nodeCount).Select(i => i == 0 ? "Title" : $"Node{i}"));
+        shapes.Skip(1).Select(shape => shape.OffsetXEmu).Distinct().Should().HaveCount(2,
+            "larger titled matrices continue in two aligned body columns");
     }
 
     [Fact]

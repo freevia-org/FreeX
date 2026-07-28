@@ -1706,7 +1706,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "titledMatrix now uses the bounded shared matrix-family live-layout path for up to four parsed nodes as renderer-neutral quadrant rectangles. Unsupported matrix siblings and matrix diagrams with more than four parsed nodes remain on cached drawing fallback. PowerPoint-authoritative titled-matrix visual baselines, exact title-band geometry, richer variant styling, and SmartArt authoring/editing remain deferred.")
+            RemainingWork: "titledMatrix now uses the shared two-column title-band/body plan for every parsed body node, so larger matrices no longer fall back solely because of item count. Unsupported matrix siblings, exact PowerPoint title-band geometry, richer variant styling, and SmartArt authoring/editing remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.basic-venn",
