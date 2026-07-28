@@ -938,6 +938,33 @@ public sealed partial class MainWindow
         ApplyChartLayout(command.Label, chart, ChartAxisPlanner.PlanQuickCommand(chart, command.UseXAxis, quickCommand));
     }
 
+    private void ExecuteChartAxisPlannedCommand(
+        ChartAxisWorkflowCommandDescriptor command,
+        Func<Sheet, ChartModel, bool, ChartAxisCommandPlan> planner)
+    {
+        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
+            return;
+        if (!TryGetSelectedChart(command.Label, out var chart))
+            return;
+
+        var plan = planner(_session.ActiveSheet, chart, command.UseXAxis);
+        if (plan.Options is not { } options)
+        {
+            RefreshShell(plan.Issue switch
+            {
+                ChartAxisCommandIssue.UnsupportedLogScale => UiText.Get(command.UseXAxis
+                    ? "MainWindowMessage_ChartXAxisLogScaleSupportedTypes"
+                    : "MainWindowMessage_ChartYAxisLogScaleSupportedTypes"),
+                ChartAxisCommandIssue.UnsupportedBounds => UiText.Get("MainWindowMessage_ChartAxisBoundsSupportedTypes"),
+                ChartAxisCommandIssue.NumericBoundsRequired => UiText.Get("MainWindowMessage_ChartAxisBoundsRequiresNumericData"),
+                _ => UiText.Get("MainWindowMessage_ChartAxisOptionsRequiresChart"),
+            });
+            return;
+        }
+
+        ApplyChartLayout(command.Label, chart, options);
+    }
+
     /// <summary>Reports that a Chart-tab command has no Core support yet (no silent no-op, no invented behavior).</summary>
     private void ReportChartCommandNotYetAvailable(string commandLabel)
         => RefreshShell(UiText.Format(ChartWorkflowCommandCatalog.CommandNotYetAvailableStatusResourceKey, commandLabel));

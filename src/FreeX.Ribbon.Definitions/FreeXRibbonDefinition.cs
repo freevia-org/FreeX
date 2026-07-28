@@ -332,6 +332,22 @@ public static class FreeXRibbonDefinition
                 .Medium("Y Axis Gridlines", "Y Axis Gridlines", Ico.Grid, "YG")
                 .Medium("X Axis Labels", "X Axis Labels", Ico.Label, "XA")
                 .Medium("Y Axis Labels", "Y Axis Labels", Ico.Label, "YA"))
+            .Group("ChartFormatLegacyAxesGroup", "Axis Options", null, priority: 145,
+                g => g
+                .Medium("X Axis Ticks", "X Axis Ticks", Ico.AxisBounds, "XT")
+                .Medium("Y Axis Ticks", "Y Axis Ticks", Ico.AxisBounds, "YT")
+                .Medium("X Axis Label Font", "X Axis Label Font", Ico.Font, "XF")
+                .Medium("Y Axis Label Font", "Y Axis Label Font", Ico.Font, "YF")
+                .Medium("X Axis Label Angle", "X Axis Label Angle", Ico.Rotate, "XLA")
+                .Medium("Y Axis Label Angle", "Y Axis Label Angle", Ico.Rotate, "YLA")
+                .Medium("X Axis Line", "X Axis Line", Ico.Line, "XL")
+                .Medium("Y Axis Line", "Y Axis Line", Ico.Line, "YL")
+                .Medium("X Axis Number Format", "X Axis Number Format", Ico.Number, "XNF")
+                .Medium("Y Axis Number Format", "Y Axis Number Format", Ico.Number, "YNF")
+                .Medium("X Gridline Style", "X Gridline Style", Ico.Grid, "XGS")
+                .Medium("Y Gridline Style", "Y Gridline Style", Ico.Grid, "YGS")
+                .Medium("X Log Scale", "X Log Scale", Ico.Scale, "XLS")
+                .Medium("Y Log Scale", "Y Log Scale", Ico.Scale, "YLS"))
         )
         .ContextualTab("PictureFormatTab", "Picture Format", new RibbonTabContext("picture.selected", "Picture Format", RibbonContextColor.Teal), tab => tab
             .Group("PictureFormatFormatGroup", "Format", null, priority: 180,

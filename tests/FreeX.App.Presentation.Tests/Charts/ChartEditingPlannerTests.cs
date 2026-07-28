@@ -1099,6 +1099,31 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void Axis_CategoryAxisVisualStyle_IsNotClearedByUnsupportedNumericBoundsGuard()
+    {
+        var chart = new ChartModel { Type = ChartType.Column };
+
+        ApplyLayout(chart, new ChartLayoutOptions(
+            XAxisNumberFormat: ChartDataLabelNumberFormat.Number,
+            XAxisMajorTickStyle: ChartAxisTickStyle.Cross,
+            XAxisMinorTickStyle: ChartAxisTickStyle.Inside,
+            ShowXAxisLabels: false,
+            XAxisLabelFontSize: 13,
+            XAxisLabelAngle: -45,
+            XAxisLineColor: new CellColor(4, 5, 6),
+            XAxisLineThickness: 2));
+
+        chart.XAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.Number);
+        chart.XAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Cross);
+        chart.XAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.Inside);
+        chart.ShowXAxisLabels.Should().BeFalse();
+        chart.XAxisLabelFontSize.Should().Be(13);
+        chart.XAxisLabelAngle.Should().Be(-45);
+        chart.XAxisLineColor.Should().Be(new CellColor(4, 5, 6));
+        chart.XAxisLineThickness.Should().Be(2);
+    }
+
+    [Fact]
     public void Axis_CanToggleSecondaryAxis_RequiresSupportedChartAndEnoughSeries()
     {
         ChartAxisPlanner.CanToggleSecondaryAxis(MakeChartWithSeries(ChartType.Column, columns: 4))

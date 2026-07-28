@@ -1257,8 +1257,9 @@ public static class ChartLayoutEngine
         // previously never computed minor-tick positions at all, so the portable-shell renderers
         // silently dropped them. Populate the same data here so the portable-shell renderers can draw them too.
         var showMinorGridlines = isXAxis ? chart.ShowXAxisMinorGridlines : chart.ShowYAxisMinorGridlines;
+        var minorTickStyle = isXAxis ? chart.XAxisMinorTickStyle : chart.YAxisMinorTickStyle;
         var minorUnit = isXAxis ? chart.XAxisMinorUnit : chart.YAxisMinorUnit;
-        var minorTicks = showMinorGridlines && !scale.IsLogarithmic
+        var minorTicks = (showMinorGridlines || minorTickStyle != ChartAxisTickStyle.None) && !scale.IsLogarithmic
             ? BuildMinorTickValues(scale, minorUnit)
             : null;
 

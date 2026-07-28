@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
 
 using FreeX.App.Avalonia.Charts;
 using FreeX.App.Presentation.Charts;
@@ -126,6 +128,42 @@ public sealed class R90_AvaloniaChartTickMarkStyleTests
                     Math.Min(l.StartPoint.X, l.EndPoint.X) < linePosition &&
                     Math.Max(l.StartPoint.X, l.EndPoint.X) > linePosition,
                 "R90: Cross tick marks must extend to both sides of the axis line, unlike Outside (which only ever extended away from the plot area)");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ChartAxisStyle_UsesPersistedLabelAndLineAppearance()
+    {
+        await Session.Dispatch(() =>
+        {
+            var chart = new ChartModel
+            {
+                Type = ChartType.Column,
+                ShowLegend = false,
+                XAxisLabelFontSize = 17,
+                XAxisLabelAngle = -45,
+                XAxisLabelTextColor = new CellColor(1, 2, 3),
+                XAxisLineColor = new CellColor(4, 5, 6),
+                XAxisLineThickness = 3,
+            };
+            var layout = ChartLayoutEngine.Layout(BuildRequest(chart));
+            var canvas = new AvaloniaChartRenderer(chart, WorkbookTheme.Office).Render(layout, 300, 200);
+
+            var label = canvas.Children.OfType<TextBlock>().First(text => text.Text == "A");
+            label.FontSize.Should().Be(17);
+            label.RenderTransform.Should().BeOfType<RotateTransform>();
+            var labelBrush = label.Foreground.Should().BeOfType<ImmutableSolidColorBrush>().Subject;
+            labelBrush.Color.Should().Be(Color.FromRgb(1, 2, 3));
+
+            var axisLine = canvas.Children.OfType<Line>().First(line =>
+                line.StrokeThickness == 3 &&
+                line.Stroke is ImmutableSolidColorBrush brush && brush.Color == Color.FromRgb(4, 5, 6));
+            axisLine.StrokeThickness.Should().Be(3);
+
+            chart.ShowXAxisLabels = false;
+            var withoutLabels = new AvaloniaChartRenderer(chart, WorkbookTheme.Office)
+                .Render(ChartLayoutEngine.Layout(BuildRequest(chart)), 300, 200);
+            withoutLabels.Children.OfType<TextBlock>().Should().NotContain(text => text.Text == "A");
         }, CancellationToken.None);
     }
 }

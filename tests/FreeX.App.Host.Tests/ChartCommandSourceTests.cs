@@ -158,6 +158,29 @@ public sealed class ChartCommandSourceTests
     }
 
     [Fact]
+    public void DeclarativeWpfChartFormatSurface_ExposesLegacyAxisCommands()
+    {
+        var ribbonSource = DialogSourceTestSupport.ReadRibbonDefinitionSource("FreeXRibbonDefinition.cs");
+        var handlerMap = ReadHostSourceFile("Ribbon\\FreeXRibbonHandlerMap.g.cs");
+
+        foreach (var label in new[]
+        {
+            "X Axis Ticks", "Y Axis Ticks", "X Axis Label Font", "Y Axis Label Font",
+            "X Axis Label Angle", "Y Axis Label Angle", "X Axis Line", "Y Axis Line",
+            "X Axis Number Format", "Y Axis Number Format", "X Gridline Style", "Y Gridline Style",
+            "X Log Scale", "Y Log Scale",
+        })
+        {
+            ribbonSource.Should().Contain(label);
+            handlerMap.Should().Contain(label);
+        }
+
+        ribbonSource.Should().Contain("ChartFormatLegacyAxesGroup");
+        handlerMap.Should().Contain("ChartXAxisLabelAngleBtn_Click");
+        handlerMap.Should().Contain("ChartYAxisLogBtn_Click");
+    }
+
+    [Fact]
     public void WpfComboChartButton_UsesTheImmediateSharedToggle()
     {
         var source = ReadHostSourceFile("MainWindow.ChartCommands.cs");
