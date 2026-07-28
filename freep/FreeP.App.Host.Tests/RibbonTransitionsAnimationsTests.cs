@@ -465,6 +465,28 @@ public class RibbonTransitionsAnimationsTests
         Assert.Equal(250, ed.CurrentSlideAnimations[0].DelayMs);
     }
 
+    [Fact]
+    public void Cmd_AnimTiming_PreservesWheelSpokeCount()
+    {
+        var (ed, pres) = MakeSession();
+        var shapeId = pres.Slides[0].Shapes[0].Id;
+        ed.Select(shapeId);
+        pres.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = shapeId,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Wheel,
+            WheelSpokeCount = 8,
+            DurationMs = 500,
+        });
+
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.anim.duration", RibbonCommandContext.ForSelectedValue("1.50s"));
+
+        Assert.Equal(1500, ed.CurrentSlideAnimations[0].DurationMs);
+        Assert.Equal(8, ed.CurrentSlideAnimations[0].WheelSpokeCount);
+    }
+
     // ── Move Earlier / Move Later ──────────────────────────────────────────────────
 
     [Fact]

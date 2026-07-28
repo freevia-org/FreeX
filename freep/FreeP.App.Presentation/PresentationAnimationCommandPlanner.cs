@@ -241,6 +241,7 @@ public static class PresentationAnimationCommandPlanner
             RepeatIndefinitely = animation.RepeatIndefinitely,
             AutoReverse = animation.AutoReverse,
             Direction = animation.Direction,
+            WheelSpokeCount = animation.WheelSpokeCount,
             EffectSubtype = animation.EffectSubtype,
             ScaleBehavior = animation.ScaleBehavior?.Clone(),
             RawPresetClass = animation.RawPresetClass,
