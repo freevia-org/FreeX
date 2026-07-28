@@ -224,8 +224,10 @@ public static class SlideCloner
             {
                 Name              = s.Name,
                 FillColor         = s.FillColor,
+                Fill              = s.Fill,
                 LineStyle         = CloneChartLineStyle(s.LineStyle),
                 MarkerStyle       = CloneChartMarkerStyle(s.MarkerStyle),
+                SmoothLine        = s.SmoothLine,
                 OnSecondaryAxis   = s.OnSecondaryAxis,
                 DataLabels        = CloneChartDataLabels(s.DataLabels),
                 ErrorBars         = CloneChartErrorBars(s.ErrorBars),
@@ -241,6 +243,12 @@ public static class SlideCloner
                 sc.PointColors[kv.Key] = kv.Value;
             foreach (var kv in s.PointStyles)
                 sc.PointStyles[kv.Key] = CloneChartPointStyle(kv.Value);
+            sc.FormulaReferences.SeriesName = s.FormulaReferences.SeriesName;
+            sc.FormulaReferences.Category = s.FormulaReferences.Category;
+            sc.FormulaReferences.Values = s.FormulaReferences.Values;
+            sc.FormulaReferences.XValues = s.FormulaReferences.XValues;
+            sc.FormulaReferences.YValues = s.FormulaReferences.YValues;
+            sc.FormulaReferences.BubbleSizes = s.FormulaReferences.BubbleSizes;
             copy.Series.Add(sc);
         }
 
@@ -343,7 +351,9 @@ public static class SlideCloner
     private static ChartPointStyle CloneChartPointStyle(ChartPointStyle style) =>
         new()
         {
+            DataLabels    = CloneChartDataLabels(style.DataLabels),
             FillColor     = style.FillColor,
+            Fill          = style.Fill,
             StrokeColor   = style.StrokeColor,
             StrokeWidthPt = style.StrokeWidthPt,
             Marker        = CloneChartMarkerStyle(style.Marker),

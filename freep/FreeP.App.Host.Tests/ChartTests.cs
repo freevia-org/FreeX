@@ -225,6 +225,46 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void SlideCloner_ChartPreservesSeriesAndPointAuthoredPayload()
+    {
+        var chart = BuildColumnChart();
+        var series = chart.Series[0];
+        series.Fill = new ShapeFill.Pattern(
+            "diagStripe",
+            new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0x33)),
+            new ThemeAwareColor(new SrgbColor(0xEE, 0xDD, 0xCC)));
+        series.SmoothLine = true;
+        series.FormulaReferences.SeriesName = "Sheet1!$B$1";
+        series.FormulaReferences.Category = "Sheet1!$A$2:$A$4";
+        series.FormulaReferences.Values = "Sheet1!$B$2:$B$4";
+        series.PointStyles[1] = new ChartPointStyle
+        {
+            Fill = new ShapeFill.Solid(new SrgbColor(0xAA, 0xBB, 0xCC)),
+            DataLabels = new ChartDataLabels
+            {
+                ShowValue = true,
+                NumberFormat = "0.0%",
+            },
+        };
+
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.Chart, Chart = chart });
+        var clone = SlideCloner.CloneSlide(slide).Shapes.Single().Chart!;
+        var clonedSeries = clone.Series[0];
+        var clonedPoint = clonedSeries.PointStyles[1];
+
+        clonedSeries.Fill.Should().BeOfType<ShapeFill.Pattern>();
+        clonedSeries.SmoothLine.Should().BeTrue();
+        clonedSeries.FormulaReferences.SeriesName.Should().Be("Sheet1!$B$1");
+        clonedSeries.FormulaReferences.Category.Should().Be("Sheet1!$A$2:$A$4");
+        clonedSeries.FormulaReferences.Values.Should().Be("Sheet1!$B$2:$B$4");
+        clonedPoint.Fill.Should().BeOfType<ShapeFill.Solid>();
+        clonedPoint.DataLabels.Should().NotBeSameAs(series.PointStyles[1].DataLabels);
+        clonedPoint.DataLabels!.ShowValue.Should().BeTrue();
+        clonedPoint.DataLabels.NumberFormat.Should().Be("0.0%");
+    }
+
+    [Fact]
     public void ChartSeries_DefaultValues()
     {
         var series = new ChartSeries();
