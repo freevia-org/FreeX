@@ -924,6 +924,15 @@ public static partial class ChartRenderPlanner
         chart.ChartType == ChartType.ColumnClustered &&
         chart.DataLabels is not null;
 
+    private static bool HasVisibleDataLabels(ChartDataLabels? labels) =>
+        labels is not null &&
+        (labels.ShowValue ||
+         labels.ShowPercent ||
+         labels.ShowCategoryName ||
+         labels.ShowSeriesName ||
+         labels.ShowLegendKey ||
+         labels.ShowBubbleSize);
+
     /// <summary>
     /// Chart parts without an authored style use PowerPoint's classic default
     /// appearance. Newer Office chart styles carry an explicit style id.
@@ -1169,7 +1178,7 @@ public static partial class ChartRenderPlanner
         double titleHeight = UsesImportedTextMetrics(chart) ? 28.0 : TitleHeight;
         bool titleOverlaysPlot = family == ChartRenderFamily.Pie &&
             chart.HasAutomaticTitle &&
-            chart.DataLabels is null;
+            !HasVisibleDataLabels(chart.DataLabels);
         double titleAreaHeight = chart.Title is not null && !titleOverlaysPlot
             ? titleHeight + margin
             : 0;

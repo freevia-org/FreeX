@@ -904,7 +904,13 @@ public sealed class ChartBaselineCorpusTests
 
         pie.ChartType.Should().Be(ChartType.Pie);
         pie.HasAutomaticTitle.Should().BeTrue();
-        pie.DataLabels.Should().BeNull();
+        pie.DataLabels.Should().NotBeNull(
+            "the imported chart explicitly persists leader-line configuration");
+        pie.DataLabels!.ShowLeaderLines.Should().BeTrue();
+        pie.DataLabels.ShowValue.Should().BeFalse();
+        pie.DataLabels.ShowPercent.Should().BeFalse();
+        pie.DataLabels.ShowCategoryName.Should().BeFalse();
+        pie.DataLabels.ShowSeriesName.Should().BeFalse();
 
         ChartRenderPlanner.BuildFramePlan(pie, new ChartPlanRect(0, 0, 480, 288)).Plot
             .Should().Be(new ChartPlanRect(26.5, 11, 382.4, 310),
