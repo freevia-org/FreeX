@@ -142,6 +142,7 @@ public static class SlideCloner
         {
             IsVideo = source.IsVideo,
             PlaybackStartMode = source.PlaybackStartMode,
+            Loop = source.Loop,
             Bytes = source.Bytes.ToArray(),
             ContentType = source.ContentType,
             SourcePackagePath = source.SourcePackagePath,

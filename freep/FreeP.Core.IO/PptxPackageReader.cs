@@ -4815,7 +4815,13 @@ public static class PptxPackageReader
             if (shape?.Media is null)
                 continue;
 
-            var conditions = mediaNode.Element(P + "cTn")?.Element(P + "stCondLst")?.Elements(P + "cond")
+            var cTn = mediaNode.Element(P + "cTn");
+            var repeatCount = cTn?.Attribute("repeatCount")?.Value;
+            shape.Media.Loop = string.Equals(repeatCount, "indefinite", StringComparison.OrdinalIgnoreCase)
+                || (int.TryParse(repeatCount, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
+                    && count > 1);
+
+            var conditions = cTn?.Element(P + "stCondLst")?.Elements(P + "cond")
                 ?? Enumerable.Empty<XElement>();
             if (conditions.Any(condition =>
                     condition.Attribute("evt")?.Value == "onBegin" &&

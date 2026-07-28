@@ -186,6 +186,9 @@ public sealed class MediaInfo
     /// <summary>PowerPoint's authored start behavior; click sequence is the default.</summary>
     public MediaPlaybackStartMode PlaybackStartMode { get; set; } = MediaPlaybackStartMode.InClickSequence;
 
+    /// <summary>Whether playback restarts when the media reaches its end.</summary>
+    public bool Loop { get; set; }
+
     /// <summary>Raw media bytes. Empty when the media is link-only (no embed).</summary>
     public byte[] Bytes { get; set; } = Array.Empty<byte>();
 

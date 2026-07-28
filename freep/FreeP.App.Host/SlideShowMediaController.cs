@@ -420,6 +420,23 @@ public sealed class SlideShowMediaController
                 element.Visibility = Visibility.Collapsed;
             };
 
+            element.MediaEnded += (_, _) =>
+            {
+                if (!media.Loop)
+                    return;
+
+                try
+                {
+                    element.Position = TimeSpan.Zero;
+                    element.Play();
+                    element.Tag = true;
+                }
+                catch (InvalidOperationException)
+                {
+                    element.Tag = false;
+                }
+            };
+
             _overlay.Children.Add(element);
             if (media.PlaybackStartMode == MediaPlaybackStartMode.Automatically)
             {
