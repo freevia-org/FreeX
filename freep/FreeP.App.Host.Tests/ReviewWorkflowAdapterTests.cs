@@ -2026,7 +2026,7 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastVideoExportHandoffPlan.Status.Should()
                 .Be(PresentationVideoExportHandoffStatus.HostEncoderReady);
             window.LastVideoExportHandoffPlan.StatusText.Should()
-                .Be("WPF video export host: host MP4 encoder ready");
+                .Be("WPF Windows video export host: host MP4 encoder ready");
             plan.CommandId.Should().Be(PresentationExportPlanner.VideoExportCommandId);
             plan.SlideRange.SlideNumbers.Should().Equal(1, 2);
             plan.Quality.Quality.Should().Be(PresentationVideoQualityKind.Standard);

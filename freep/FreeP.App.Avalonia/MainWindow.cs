@@ -4597,10 +4597,10 @@ public sealed partial class MainWindow : Window
             isWindowsNative ? "Avalonia Windows video export host" : "Avalonia Linux video export host",
             capability.CanEncodeMp4,
             CanCaptureNarration: capability.CanCaptureNarration,
-            CanCaptureCameraAndMedia: false,
+            CanCaptureCameraAndMedia: isWindowsNative,
             capability.CanEncodeMp4
                 ? isWindowsNative
-                    ? "Windows MediaComposition video export and one zero-offset narration track are available; camera/PIP and complex multi-track muxing remain deferred."
+                    ? "Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available."
                     : capability.CanCaptureNarration
                         ? "ffmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available."
                         : "Video-only ffmpeg export is available; narration and captured camera picture-in-picture are unavailable."
