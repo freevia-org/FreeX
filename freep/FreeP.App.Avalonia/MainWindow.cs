@@ -8996,13 +8996,10 @@ public sealed partial class MainWindow : Window
         if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
             slideShow.SetPresenterTimingIntent(timingIntent);
 
-        // DA5: restore the editor's selected slide to wherever the slideshow ended.
+        // WPF leaves the editor selection unchanged while the separate slideshow window
+        // plays. Avalonia must keep that same editor-side selection authority on close.
         slideShow.Closed += (_, _) =>
         {
-            int exitIdx = slideShow.Controller.CurrentSlideIndex;
-            int sourceIdx = route.GetSourceSlideIndex(exitIdx);
-            if (sourceIdx >= 0 && sourceIdx < _presentation.Slides.Count)
-                Editor.SelectSlide(sourceIdx);
             RestoreOwnerFocus();
         };
 
@@ -9073,13 +9070,6 @@ public sealed partial class MainWindow : Window
         }
 
         var slideShow = new SlideShowWindow(_presentation, route);
-        slideShow.Closed += (_, _) =>
-        {
-            int exitIdx = slideShow.Controller.CurrentSlideIndex;
-            int sourceIdx = route.GetSourceSlideIndex(exitIdx);
-            if (sourceIdx >= 0 && sourceIdx < _presentation.Slides.Count)
-                Editor.SelectSlide(sourceIdx);
-        };
 
         if (IsVisible)
             slideShow.Show(this);

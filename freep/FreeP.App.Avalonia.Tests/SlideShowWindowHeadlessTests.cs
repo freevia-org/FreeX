@@ -1054,12 +1054,13 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
-    public async Task MainWindow_StartSlideShow_restores_selection_and_focus_on_close()
+    public async Task MainWindow_StartSlideShow_preserves_editor_selection_and_restores_focus_on_close()
     {
         MainWindow? owner = null;
         var ran = await OnUiThread(() =>
         {
             owner = new MainWindow(Array.Empty<string>());
+            owner.Editor.SelectSlide(0);
             owner.Show();
             owner.StartSlideShow(fromStart: true);
 
@@ -1072,7 +1073,8 @@ public sealed class SlideShowWindowHeadlessTests
         });
 
         if (!ran) return;
-        owner!.CurrentSlideIndex.Should().Be(1);
+        owner!.CurrentSlideIndex.Should().Be(0,
+            "WPF keeps the editor's selected slide unchanged while slideshow playback advances independently");
         owner.OwnerFocusRestoreCountForTests.Should().Be(1);
         owner.Close();
     }
@@ -1520,9 +1522,9 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
-    public async Task DA5_SlideShowWindow_exposes_CurrentSlideIndex_for_exit_restore()
+    public async Task SlideShowWindow_exposes_CurrentSlideIndex_for_playback_state()
     {
-        // The controller must expose the final slide index so the editor can restore it.
+        // The controller tracks playback independently of the editor selection.
         var finalIdx = -1;
         var ran = await OnUiThread(() =>
         {
@@ -1535,7 +1537,7 @@ public sealed class SlideShowWindowHeadlessTests
 
         if (!ran) return;
         finalIdx.Should().Be(2,
-            "Controller.CurrentSlideIndex must track the current slide for DA5 exit restore");
+            "Controller.CurrentSlideIndex must track playback independently of editor selection");
     }
 
 
