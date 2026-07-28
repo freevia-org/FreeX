@@ -148,8 +148,10 @@ public sealed class EditingSession
     /// refreshes the native drawing cache so a saved package does not retain stale visuals.
     /// </summary>
     public bool ApplySmartArtQuickStyle(uint shapeId, SmartArtQuickStylePreset preset) =>
-        EditSmartArtWithPackageRefresh(shapeId, smartArt =>
-            SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, preset).Applied);
+        EditSmartArtWithPackageRefresh(
+            shapeId,
+            smartArt => SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, preset).Applied,
+            allowCachedPackageEdit: true);
 
     /// <summary>
     /// Applies one supported SmartArt Change Colors preset through the same shared, undoable
@@ -157,12 +159,14 @@ public sealed class EditingSession
     /// </summary>
     public bool ApplySmartArtColor(uint shapeId, SmartArtColorPreset preset)
     {
-        return EditSmartArtWithPackageRefresh(shapeId, smartArt =>
-            SmartArtAuthoringPlanner.ApplyColorPreset(
+        return EditSmartArtWithPackageRefresh(
+            shapeId,
+            smartArt => SmartArtAuthoringPlanner.ApplyColorPreset(
                 smartArt,
                 preset,
                 Presentation.Theme,
-            CurrentSlide?.ColorMapOverride).Applied);
+                CurrentSlide?.ColorMapOverride).Applied,
+            allowCachedPackageEdit: true);
     }
 
     /// <summary>
@@ -373,7 +377,10 @@ public sealed class EditingSession
             "The selected SmartArt graphic is not available.");
     }
 
-    private bool EditSmartArtWithPackageRefresh(uint shapeId, Func<SmartArtShape, bool> edit)
+    private bool EditSmartArtWithPackageRefresh(
+        uint shapeId,
+        Func<SmartArtShape, bool> edit,
+        bool allowCachedPackageEdit = false)
     {
         var shape = CurrentSlide?.Shapes.FirstOrDefault(candidate =>
             candidate.Id == shapeId &&
@@ -386,6 +393,13 @@ public sealed class EditingSession
         {
             if (!edit(smartArt))
                 return false;
+
+            // Quick Style and Change Colors are native diagram-part edits.  A legacy or
+            // preview-backed graphic may have those parts while its live data model is
+            // unavailable; commit the package edit and keep the imported fallback drawing.
+            // Layout and node edits leave this flag false because they need fresh cache output.
+            if (smartArt.Data is null)
+                return allowCachedPackageEdit;
 
             var dataRewrite = SmartArtEditingPlanner.RewriteDataPart(smartArt);
             if (!dataRewrite.Applied)

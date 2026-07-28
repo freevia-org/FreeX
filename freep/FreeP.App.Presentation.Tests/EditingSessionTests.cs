@@ -158,6 +158,57 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void ApplySmartArtQuickStyle_UsesNativePartWhenLiveDataIsMissing()
+    {
+        var (session, smartArt) = MakeSmartArtSession();
+        smartArt.Data = null;
+        smartArt.Parts["ppt/diagrams/quickStyle1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/quickStyle1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
+            Bytes = System.Text.Encoding.UTF8.GetBytes(
+                "<dgm:styleDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />"),
+        };
+        var originalBytes = smartArt.Parts["ppt/diagrams/quickStyle1.xml"].Bytes.ToArray();
+
+        session.ApplySmartArtQuickStyle(7, SmartArtQuickStylePreset.Polished).Should().BeTrue();
+
+        var saved = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        saved.Data.Should().BeNull();
+        saved.QuickStyle!.UniqueId.Should().Contain("/quickstyle/3d1");
+        saved.Parts["ppt/diagrams/quickStyle1.xml"].Bytes.Should().NotEqual(originalBytes);
+
+        session.Undo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.Parts["ppt/diagrams/quickStyle1.xml"].Bytes
+            .Should().Equal(originalBytes);
+        session.Redo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.QuickStyle!.UniqueId
+            .Should().Contain("/quickstyle/3d1");
+    }
+
+    [Fact]
+    public void ApplySmartArtColor_UsesNativePartWhenLiveDataIsMissing()
+    {
+        var (session, smartArt) = MakeSmartArtSession();
+        smartArt.Data = null;
+        smartArt.Parts["ppt/diagrams/colors1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/colors1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml",
+            Bytes = System.Text.Encoding.UTF8.GetBytes(
+                "<dgm:colorsDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><dgm:styleLbl name=\"node0\"><dgm:fillClrLst><a:schemeClr val=\"accent1\" /></dgm:fillClrLst></dgm:styleLbl></dgm:colorsDef>"),
+        };
+
+        session.ApplySmartArtColor(7, SmartArtColorPreset.ColoredFillAccent2).Should().BeTrue();
+
+        var saved = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        saved.Data.Should().BeNull();
+        saved.Colors!.Palette.Should().NotBeEmpty();
+        saved.Parts["ppt/diagrams/colors1.xml"].Bytes.Should().Contain((byte)'2');
+        session.Bus.CanUndo.Should().BeTrue();
+    }
+
+    [Fact]
     public void ConvertSmartArtToShapes_ReplacesAtSameSlotAndUndoRestoresGraphic()
     {
         var (session, _) = MakeSmartArtSession();
