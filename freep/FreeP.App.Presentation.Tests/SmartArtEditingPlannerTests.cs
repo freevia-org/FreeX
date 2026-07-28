@@ -1,6 +1,8 @@
+using System.IO.Compression;
 using System.Text;
 using System.Xml.Linq;
 using FreeP.App.Compositor;
+using FreeP.Core.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
@@ -107,7 +109,37 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
-    public void ApplyLayoutPreset_RequiresNativeLayoutPart()
+    public void ApplyLayoutPreset_CreatesNativeLayoutPartWhenDataPartExists()
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan"))
+        };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(
+            smartArt,
+            SmartArtLayoutPreset.BasicCycle);
+
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/basicCycle");
+        smartArt.DiagramRelIds["lo"].Should().Be("rIdFreePLayout");
+        var layoutPart = smartArt.Parts.Values.Single(part =>
+            part.ContentType.Contains("diagramLayout", StringComparison.OrdinalIgnoreCase));
+        var layout = XDocument.Parse(Encoding.UTF8.GetString(layoutPart.Bytes));
+        layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/layout/basicCycle");
+        layout.Root.Element(XName.Get("layoutNode", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))
+            .Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ApplyLayoutPreset_RequiresNativeDataPartWhenLayoutIsMissing()
     {
         var smartArt = new SmartArtShape
         {
@@ -119,7 +151,68 @@ public sealed class SmartArtEditingPlannerTests
             SmartArtLayoutPreset.BasicCycle);
 
         result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("native layout definition");
+        result.Message.Should().Contain("native diagram data part");
+    }
+
+    [Fact]
+    public void ApplyLayoutPreset_NewLayoutPartIsWrittenAsDiagramRelationship()
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan")),
+            DrawingPartPath = "ppt/diagrams/drawing1.xml",
+        };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+        smartArt.Parts[smartArt.DrawingPartPath] = new DiagramPart
+        {
+            PartPath = smartArt.DrawingPartPath,
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+        smartArt.DiagramRelIds["dm"] = "rIdDm1";
+        smartArt.PartRels["ppt/diagrams/data1.xml"] = Encoding.UTF8.GetBytes(
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rIdDrawing1\" Type=\"http://schemas.microsoft.com/office/2007/relationships/diagramDrawing\" Target=\"drawing1.xml\" /></Relationships>");
+
+        SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.BasicCycle)
+            .Applied.Should().BeTrue();
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.SmartArt,
+            SmartArt = smartArt,
+            ExtentCxEmu = 7_315_200,
+            ExtentCyEmu = 3_657_600,
+        });
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+
+        using var archive = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        archive.GetEntry("ppt/diagrams/layout1.xml").Should().NotBeNull();
+        var slideRels = XDocument.Load(archive.GetEntry("ppt/slides/_rels/slide1.xml.rels")!.Open());
+        var layoutRelations = slideRels
+            .Descendants(XName.Get("Relationship", "http://schemas.openxmlformats.org/package/2006/relationships"))
+            .Where(relation =>
+                relation.Attribute("Type") is { } type &&
+                type.Value.EndsWith("/diagramLayout", StringComparison.Ordinal) &&
+                relation.Attribute("Target") is { } target &&
+                target.Value == "../diagrams/layout1.xml")
+            .ToArray();
+        layoutRelations.Should().ContainSingle();
+
+        var slide = XDocument.Load(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        slide.Descendants(XName.Get("relIds", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))
+            .Single()
+            .Attributes(XName.Get("lo", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"))
+            .Should().ContainSingle();
     }
 
     [Fact]
@@ -147,89 +240,101 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
-    public void ApplyPictureCaptionList_RequiresPicturePayloadOnEveryNode()
+    public void ApplyPictureCaptionList_AllowsMissingPicturePayloadForPlaceholders()
     {
         var smartArt = new SmartArtShape
         {
             Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
         };
+        AddLayoutPart(smartArt);
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(
             smartArt,
             SmartArtLayoutPreset.PictureCaptionList);
 
-        result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("require image content for every SmartArt node");
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/pictureCaptionList");
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
     }
 
     [Fact]
-    public void ApplyPictureGrid_RequiresPicturePayloadOnEveryNode()
+    public void ApplyPictureGrid_AllowsMissingPicturePayloadForPlaceholders()
     {
         var smartArt = new SmartArtShape
         {
             Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
         };
+        AddLayoutPart(smartArt);
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureGrid);
 
-        result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("require image content for every SmartArt node");
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/pictureGrid");
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
     }
 
     [Fact]
-    public void ApplyPictureAccentList_RequiresPicturePayloadOnEveryNode()
+    public void ApplyPictureAccentList_AllowsMissingPicturePayloadForPlaceholders()
     {
         var smartArt = new SmartArtShape
         {
             Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
         };
+        AddLayoutPart(smartArt);
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureAccentList);
 
-        result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("require image content for every SmartArt node");
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/pictureAccentList");
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
     }
 
     [Fact]
-    public void ApplyPictureStack_RequiresPicturePayloadOnEveryNode()
+    public void ApplyPictureStack_AllowsMissingPicturePayloadForPlaceholders()
     {
         var smartArt = new SmartArtShape
         {
             Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
         };
+        AddLayoutPart(smartArt);
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureStack);
 
-        result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("require image content for every SmartArt node");
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/pictureStack");
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
     }
 
     [Fact]
-    public void ApplyPictureLineup_RequiresPicturePayloadOnEveryNode()
+    public void ApplyPictureLineup_AllowsMissingPicturePayloadForPlaceholders()
     {
         var smartArt = new SmartArtShape
         {
             Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
         };
+        AddLayoutPart(smartArt);
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureLineup);
 
-        result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("require image content for every SmartArt node");
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/pictureLineup");
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
     }
 
     [Fact]
-    public void ApplyContinuousPictureList_RequiresPicturePayloadOnEveryNode()
+    public void ApplyContinuousPictureList_AllowsMissingPicturePayloadForPlaceholders()
     {
         var smartArt = new SmartArtShape
         {
             Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
         };
+        AddLayoutPart(smartArt);
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.ContinuousPictureList);
 
-        result.Applied.Should().BeFalse();
-        result.Message.Should().Contain("require image content for every SmartArt node");
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/continuousPictureList");
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
     }
 
     [Theory]
@@ -1337,4 +1442,13 @@ public sealed class SmartArtEditingPlannerTests
             data.Nodes.Add(new SmartArtNode { ModelId = id, Text = text, Level = 0 });
         return data;
     }
+
+    private static void AddLayoutPart(SmartArtShape smartArt) =>
+        smartArt.Parts["ppt/diagrams/layout1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/layout1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dgm:root xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\"><dgm:layoutDef uniqueId=\"old\" /></dgm:root>"),
+        };
 }

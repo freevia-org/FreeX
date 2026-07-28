@@ -5,7 +5,7 @@
 // Usage: _corpus_f2_objects <outDir>
 //
 // Files generated:
-//   f2-01-float-wrap.docx        — floating image, Square wrap; floating image, Tight wrap
+//   f2-objects-01-float-wrap.docx — floating image, Square wrap; floating image, Tight wrap
 //   f2-02-float-zorder.docx      — three overlapping floating shapes (z-order: blue<orange<green)
 //   f2-03-object-effects.docx    — inline shape with drop shadow; shape with glow; image with shadow
 //   f2-04-border-watermark.docx  — navy page border + diagonal DRAFT watermark
@@ -97,8 +97,10 @@ static Paragraph BodyRuns(params Run[] runs)
     for (int i = 0; i < 4; i++)
         doc.Blocks.Add(Body(LoremText(10)));
 
-    DocxWriter.Write(doc, Path.Combine(outDir, "f2-01-float-wrap.docx"));
-    Console.WriteLine("wrote f2-01-float-wrap.docx");
+    // Keep this exploratory corpus distinct from FidelityRender's canonical
+    // f2-01-float-wrap Word-baseline fixture in the same run directory.
+    DocxWriter.Write(doc, Path.Combine(outDir, "f2-objects-01-float-wrap.docx"));
+    Console.WriteLine("wrote f2-objects-01-float-wrap.docx");
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════

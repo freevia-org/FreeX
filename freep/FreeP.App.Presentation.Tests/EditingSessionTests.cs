@@ -144,6 +144,28 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void ApplySmartArtPictureLayout_RefreshesPlaceholdersAndRemainsUndoableWithoutImages()
+    {
+        var (session, _) = MakeSmartArtSession();
+
+        session.ApplySmartArtLayout(7, SmartArtLayoutPreset.PictureCaptionList).Should().BeTrue();
+
+        var saved = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        saved.Data!.LayoutUniqueId.Should().EndWith("/layout/pictureCaptionList");
+        saved.FallbackShapes.Should().Contain(shape => shape.PlainText == "Add picture");
+        saved.FallbackShapes.Should().Contain(shape => shape.PlainText == "Plan");
+        saved.FallbackShapes.Should().Contain(shape => shape.PlainText == "Build");
+        session.Bus.CanUndo.Should().BeTrue();
+
+        session.Undo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.Data!.LayoutUniqueId
+            .Should().EndWith("/layout/basicProcess");
+        session.Redo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.Data!.LayoutUniqueId
+            .Should().EndWith("/layout/pictureCaptionList");
+    }
+
+    [Fact]
     public void ApplySmartArtLayout_WhenCacheRefreshFails_DoesNotCommitPartialEdit()
     {
         var (session, _) = MakeSmartArtSession();
@@ -231,6 +253,34 @@ public sealed class EditingSessionTests
         session.Redo();
         session.CurrentSlide.Shapes.Single().SmartArt!.Parts["ppt/diagrams/layout1.xml"].Bytes
             .Should().NotEqual(originalBytes);
+    }
+
+    [Fact]
+    public void ApplySmartArtLayout_RecoversMissingNativeLayoutPartAndRemainsUndoable()
+    {
+        var (session, smartArt) = MakeSmartArtSession();
+        smartArt.Parts.Remove("ppt/diagrams/layout1.xml");
+        smartArt.DiagramRelIds.Remove("lo");
+
+        session.ApplySmartArtLayout(7, SmartArtLayoutPreset.BasicCycle).Should().BeTrue();
+
+        var saved = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        saved.Parts.Values.Should().ContainSingle(part =>
+            part.ContentType.Contains("diagramLayout", StringComparison.OrdinalIgnoreCase));
+        saved.DiagramRelIds.Should().ContainKey("lo");
+        saved.Data!.LayoutUniqueId.Should().EndWith("/layout/basicCycle");
+        saved.FallbackShapes.Should().NotBeEmpty();
+        session.Bus.CanUndo.Should().BeTrue();
+
+        session.Bus.Undo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.Parts.Should()
+            .NotContainKey("ppt/diagrams/layout1.xml");
+        session.CurrentSlide.Shapes.Single().SmartArt!.DiagramRelIds.Should()
+            .NotContainKey("lo");
+
+        session.Bus.Redo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.Parts.Should()
+            .ContainKey("ppt/diagrams/layout1.xml");
     }
 
     [Fact]
