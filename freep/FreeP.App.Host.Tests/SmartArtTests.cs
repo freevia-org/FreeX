@@ -1049,6 +1049,61 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_SmartArt_BendingProcessCachePreservesConnectorFlipDirections()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/bendingProcess",
+            nodes: [("n1", "Plan"), ("n2", "Build"), ("n3", "Ship")],
+            parOfConnections: []);
+        var savedPath = Path.Combine(_tempDir, "smartart-bending-process-cache.pptx");
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var shape = presentation.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt);
+        var smartArt = shape.SmartArt!;
+
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        var cache = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            shape.OffsetXEmu,
+            shape.OffsetYEmu,
+            shape.ExtentCxEmu,
+            shape.ExtentCyEmu,
+            presentation.Theme!);
+        cache.Applied.Should().BeTrue();
+        cache.ShapeCount.Should().Be(5, "three bending-process boxes plus two diagonal connectors are cached");
+
+        PptxPackageWriter.Write(presentation, savedPath);
+
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        using (var archive = ZipFile.OpenRead(savedPath))
+        {
+            var entry = archive.GetEntry("ppt/diagrams/drawing1.xml");
+            entry.Should().NotBeNull();
+            using var reader = new StreamReader(entry!.Open(), Encoding.UTF8);
+            var document = XDocument.Parse(reader.ReadToEnd());
+            var lineTransforms = document.Descendants(dsp + "sp")
+                .Where(element => element.Descendants(a + "prstGeom")
+                    .Any(geometry => geometry.Attribute("prst")?.Value == "line"))
+                .Select(element => element.Descendants(a + "xfrm").First())
+                .ToList();
+
+            lineTransforms.Should().HaveCount(2);
+            lineTransforms[0].Attribute("flipH")?.Value.Should().BeNull();
+            lineTransforms[0].Attribute("flipV")?.Value.Should().BeNull();
+            lineTransforms[1].Attribute("flipH")?.Value.Should().BeNull();
+            lineTransforms[1].Attribute("flipV")?.Value.Should().Be("1");
+        }
+
+        var reread = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        reread.FallbackShapes
+            .Where(fallback => fallback.AutoShapeKind == DrawingShapeKind.Line)
+            .Select(fallback => (fallback.FlipH, fallback.FlipV))
+            .Should().Equal((false, false), (false, true));
+    }
+
+    [Fact]
     public void SmartArtDataRewrite_PreservesAuthoredDataModelMetadataAndExtensions()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(

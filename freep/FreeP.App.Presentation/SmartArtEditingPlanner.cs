@@ -1218,14 +1218,20 @@ public static class SmartArtEditingPlanner
 
     private static XElement BuildShapeProperties(SlideShape shape)
     {
+        var transform = new XElement(A + "xfrm",
+            new XElement(A + "off",
+                new XAttribute("x", shape.OffsetXEmu),
+                new XAttribute("y", shape.OffsetYEmu)),
+            new XElement(A + "ext",
+                new XAttribute("cx", shape.ExtentCxEmu),
+                new XAttribute("cy", shape.ExtentCyEmu)));
+        if (shape.FlipH)
+            transform.SetAttributeValue("flipH", "1");
+        if (shape.FlipV)
+            transform.SetAttributeValue("flipV", "1");
+
         var spPr = new XElement(Dsp + "spPr",
-            new XElement(A + "xfrm",
-                new XElement(A + "off",
-                    new XAttribute("x", shape.OffsetXEmu),
-                    new XAttribute("y", shape.OffsetYEmu)),
-                new XElement(A + "ext",
-                    new XAttribute("cx", shape.ExtentCxEmu),
-                    new XAttribute("cy", shape.ExtentCyEmu))),
+            transform,
             new XElement(A + "prstGeom",
                 new XAttribute("prst", ToPresetGeometry(shape.AutoShapeKind)),
                 new XElement(A + "avLst",
