@@ -640,6 +640,33 @@ public sealed class ChartSmartArtVisualPlannerTests
             .Should().ContainInOrder((136.5, 6), (163.5, 6), (186, 39), (114, 39));
     }
 
+    [Fact]
+    public void SmartArtPlan_CurrentWordPyramidUsesCachedDrawingSignatureAndThemeAccent()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
+        smartArt.LayoutId = "pyramid1";
+        smartArt.ColorSchemeId = "accent1_2";
+        smartArt.StyleId = "simple1";
+        var theme = DocumentTheme.Default with { PrimaryColorHex = "#156082" };
+
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt, theme);
+
+        plan.Nodes.Should().OnlyContain(node =>
+            node.FillHex == "#156082"
+            && node.TextHex == "#000000"
+            && node.BorderHex == "#FFFFFF"
+            && Math.Abs(node.FontSizeDip - 18.48 * 96.0 / 72.0) < 0.001);
+        var geometry = plan.LayoutGeometry!;
+        geometry.NaturalWidth.Should().Be(300);
+        geometry.NaturalHeight.Should().Be(150);
+        geometry.Nodes.Select(node => (node.X, node.Y, node.Width, node.Height))
+            .Should().ContainInOrder(
+                (112.5, 0, 75, 37.5),
+                (75, 37.5, 150, 37.5),
+                (37.5, 75, 225, 37.5),
+                (0, 112.5, 300, 37.5));
+    }
+
     [Theory]
     [InlineData("list1", "BasicList", 4, 0, 128, 154)]
     [InlineData("vertbullet1", "VerticalBulletList", 4, 0, 128, 154)]

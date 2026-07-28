@@ -2068,7 +2068,7 @@ public static class FreeWVisualEvidencePlanner
             .Select(ChartSmartArtVisualPlanner.BuildChartPlan)
             .ToList();
         var smartArts = smartArtModels
-            .Select(ChartSmartArtVisualPlanner.BuildSmartArtPlan)
+            .Select(smartArt => ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt))
             .ToList();
         var smartArtNodeCount = smartArts.Sum(plan => plan.Nodes.Count);
         var chartVisualSignatures = ChartSmartArtVisualPlanner.BuildChartVisualSignatures(charts);

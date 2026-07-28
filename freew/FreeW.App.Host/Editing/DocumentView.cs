@@ -6473,7 +6473,7 @@ public sealed class DocumentView : RichTextBox
         BuildFloatingPlannedInlineObjectVisual(
             smartArt,
             rect,
-            BuildSmartArtRun(smartArt, DocumentEffectSet.FromTheme(_model.Theme)),
+            BuildSmartArtRun(smartArt, DocumentEffectSet.FromTheme(_model.Theme), _model.Theme),
             enableSelection);
 
     private FrameworkElement BuildFloatingPlannedInlineObjectVisual(
@@ -9355,7 +9355,7 @@ public sealed class DocumentView : RichTextBox
         {
             if (smartArt.IsFloating)
                 return BuildFloatingAnchorRun(run, document, new AnchorMarker(SmartArt: smartArt));
-            return WrapHyperlinkIfNeeded(run, BuildSmartArtRun(smartArt, effectSet));
+            return WrapHyperlinkIfNeeded(run, BuildSmartArtRun(smartArt, effectSet, document.Theme));
         }
 
         if (run.DrawingGroup is { } drawingGroup)
@@ -12608,7 +12608,10 @@ public sealed class DocumentView : RichTextBox
     /// and <see cref="SmartArt.StyleId"/> to produce distinct layout geometries, node colours and
     /// fill/shadow treatments. Hierarchy children are rendered as indented sub-boxes.
     /// </summary>
-    private static InlineUIContainer BuildSmartArtRun(SmartArt smartArt, DocumentEffectSet effectSet)
+    private static InlineUIContainer BuildSmartArtRun(
+        SmartArt smartArt,
+        DocumentEffectSet effectSet,
+        DocumentTheme documentTheme)
     {
         var widthPx = smartArt.WidthPt * PxPerPoint;
         var heightPx = smartArt.HeightPt * PxPerPoint;
@@ -12625,7 +12628,7 @@ public sealed class DocumentView : RichTextBox
 
         var strokeThickness = EffectLineThickness(effectSet);
 
-        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt, documentTheme);
         var content = SmartArtRenderer.Build(smartArt, plan, strokeThickness);
         var isNativeWordSmartArt = plan.LayoutId is "orgchart1" or "pyramid1";
 
@@ -12704,7 +12707,7 @@ public sealed class DocumentView : RichTextBox
     public void InsertWordArt(WordArt wordArt) => InsertInlineContainer(BuildWordArtRun(wordArt, DocumentEffectSet.FromTheme(_model.Theme)));
 
     /// <summary>Inserts an inline SmartArt diagram at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
-    public void InsertSmartArt(SmartArt smartArt) => InsertInlineContainer(BuildSmartArtRun(smartArt, DocumentEffectSet.FromTheme(_model.Theme)));
+    public void InsertSmartArt(SmartArt smartArt) => InsertInlineContainer(BuildSmartArtRun(smartArt, DocumentEffectSet.FromTheme(_model.Theme), _model.Theme));
 
     /// <summary>Inserts an inline embedded OLE object at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
     public void InsertEmbeddedObject(EmbeddedObject embedded) => InsertInlineContainer(BuildEmbeddedObjectRun(embedded));
