@@ -82,7 +82,31 @@ public static class PptxPackageReader
         var snapshot = CapturePackageSnapshot(archive);
         var presentation = ReadArchive(archive);
         presentation.PackageSnapshot = snapshot;
+        presentation.PackageKind = DetectPackageKind(snapshot);
         return presentation;
+    }
+
+    private static PresentationPackageKind DetectPackageKind(PptxPackageSnapshot snapshot)
+    {
+        if (!snapshot.TryGetEntry("[Content_Types].xml", out var bytes))
+            return PresentationPackageKind.Presentation;
+
+        var contentTypes = OpcXml.TryLoadXml(bytes);
+        var contentType = contentTypes?.Root?
+            .Elements(OpcMediaTypes.ContentTypesNamespace + "Override")
+            .FirstOrDefault(overrideElement =>
+                string.Equals(overrideElement.Attribute("PartName")?.Value, "/ppt/presentation.xml", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("ContentType")?.Value;
+
+        return contentType switch
+        {
+            "application/vnd.ms-powerpoint.presentation.macroEnabled.main+xml" => PresentationPackageKind.MacroEnabledPresentation,
+            "application/vnd.openxmlformats-officedocument.presentationml.template.main+xml" => PresentationPackageKind.Template,
+            "application/vnd.ms-powerpoint.template.macroEnabled.main+xml" => PresentationPackageKind.MacroEnabledTemplate,
+            "application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml" => PresentationPackageKind.SlideShow,
+            "application/vnd.ms-powerpoint.slideshow.macroEnabled.main+xml" => PresentationPackageKind.MacroEnabledSlideShow,
+            _ => PresentationPackageKind.Presentation,
+        };
     }
 
     // ── Core archive reading ──────────────────────────────────────────────────────
@@ -2622,7 +2646,7 @@ public static class PptxPackageReader
             return false;
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
-        return id.Split('/').Last() is "picturecaptionlist" or "picturegrid";
+        return id.Split('/').Last() is "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "picturegrid";
     }
 
     /// <summary>
@@ -2655,7 +2679,7 @@ public static class PptxPackageReader
             return SmartArtFamily.Process;
 
         if (uid.Contains("list") || uid.Contains("lproc") || uid.Contains("bullet")
-            || uid.Contains("pyramid") || uid.Contains("stack") || uid.Contains("picturegrid"))
+            || uid.Contains("pyramid") || uid.Contains("stack") || uid.Contains("picturegrid") || uid.Contains("pictureaccentlist") || uid.Contains("picturestack") || uid.Contains("picturelineup"))
             return SmartArtFamily.List;
 
         return SmartArtFamily.Unknown;
@@ -2677,7 +2701,7 @@ public static class PptxPackageReader
         return family switch
         {
             SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "basictimeline" or "stepdownprocess" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess" or "basicchevronprocess" or "closedchevronprocess" or "bendingprocess" or "alternatingprocess" or "arrowribbon" or "circleprocess" or "funnelprocess" or "verticalprocess",
-            SmartArtFamily.List => layoutId is "list1" or "basicblocklist" or "verticalboxlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "picturecaptionlist" or "picturegrid",
+            SmartArtFamily.List => layoutId is "list1" or "basicblocklist" or "verticalboxlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "picturegrid",
             SmartArtFamily.Cycle => layoutId is "cycle1" or "radial1" or "basiccycle" or "radialcycle" or "radiallist" or "gearcycle" or "textcycle" or "blockcycle" or "nondirectionalcycle" or "continuouscycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "hierarchy3" or "basichierarchy" or "horizontalhierarchy" or "labeledhierarchy" or "tablehierarchy" or "verticalbulletlist" or "orgchart",
             SmartArtFamily.Matrix => layoutId is "matrix1" or "basicmatrix" or "titledmatrix" or "gridmatrix",

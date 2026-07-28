@@ -27,12 +27,22 @@ public sealed record PresentationFileSaveResult(
 public static class PresentationFilePersistenceWorkflow
 {
     public const string DefaultPresentationExtension = ".pptx";
+    public const string MacroEnabledPresentationExtension = ".pptm";
+    public const string TemplateExtension = ".potx";
+    public const string MacroEnabledTemplateExtension = ".potm";
+    public const string SlideShowExtension = ".ppsx";
+    public const string MacroEnabledSlideShowExtension = ".ppsm";
     public const string LegacyFxpExtension = ".fxp";
 
     public static bool IsSupportedPresentationPath(string path)
     {
         var extension = Path.GetExtension(path);
         return string.Equals(extension, DefaultPresentationExtension, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(extension, MacroEnabledPresentationExtension, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(extension, TemplateExtension, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(extension, MacroEnabledTemplateExtension, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(extension, SlideShowExtension, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(extension, MacroEnabledSlideShowExtension, StringComparison.OrdinalIgnoreCase)
             || string.Equals(extension, LegacyFxpExtension, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -79,7 +89,22 @@ public static class PresentationFilePersistenceWorkflow
             return Encoding.UTF8.GetBytes(FxpFormat.Serialize(presentation));
 
         using var stream = new MemoryStream();
-        PptxPackageWriter.Write(presentation, stream);
+        PptxPackageWriter.Write(presentation, stream, ResolvePackageKind(path));
         return stream.ToArray();
     }
+
+    public static bool IsPowerPointPackagePath(string path) =>
+        !string.Equals(Path.GetExtension(path), LegacyFxpExtension, StringComparison.OrdinalIgnoreCase) &&
+        IsSupportedPresentationPath(path);
+
+    public static PresentationPackageKind ResolvePackageKind(string path) =>
+        Path.GetExtension(path).ToLowerInvariant() switch
+        {
+            MacroEnabledPresentationExtension => PresentationPackageKind.MacroEnabledPresentation,
+            TemplateExtension => PresentationPackageKind.Template,
+            MacroEnabledTemplateExtension => PresentationPackageKind.MacroEnabledTemplate,
+            SlideShowExtension => PresentationPackageKind.SlideShow,
+            MacroEnabledSlideShowExtension => PresentationPackageKind.MacroEnabledSlideShow,
+            _ => PresentationPackageKind.Presentation,
+        };
 }

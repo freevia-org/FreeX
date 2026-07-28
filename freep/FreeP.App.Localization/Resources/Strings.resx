@@ -1444,6 +1444,24 @@
   <data name="Ribbon_Command_SmartArtPictureCaptionList_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
+  <data name="Ribbon_Command_SmartArtPictureAccentList_Label" xml:space="preserve">
+    <value>Picture Accent List</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPictureAccentList_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPictureStack_Label" xml:space="preserve">
+    <value>Picture Stack</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPictureStack_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPictureLineup_Label" xml:space="preserve">
+    <value>Picture Lineup</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPictureLineup_KeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
   <data name="Ribbon_Command_SmartArtPictureGrid_Label" xml:space="preserve">
     <value>Picture Grid</value>
   </data>

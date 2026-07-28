@@ -406,6 +406,9 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtHorizontalHierarchyCommand { get; } = new("Ribbon_Command_SmartArtHorizontalHierarchy_Label", "Ribbon_Command_SmartArtHorizontalHierarchy_KeyTip");
     public static RibbonText SmartArtOrgChartCommand { get; } = new("Ribbon_Command_SmartArtOrgChart_Label", "Ribbon_Command_SmartArtOrgChart_KeyTip");
     public static RibbonText SmartArtPictureCaptionListCommand { get; } = new("Ribbon_Command_SmartArtPictureCaptionList_Label", "Ribbon_Command_SmartArtPictureCaptionList_KeyTip");
+    public static RibbonText SmartArtPictureAccentListCommand { get; } = new("Ribbon_Command_SmartArtPictureAccentList_Label", "Ribbon_Command_SmartArtPictureAccentList_KeyTip");
+    public static RibbonText SmartArtPictureStackCommand { get; } = new("Ribbon_Command_SmartArtPictureStack_Label", "Ribbon_Command_SmartArtPictureStack_KeyTip");
+    public static RibbonText SmartArtPictureLineupCommand { get; } = new("Ribbon_Command_SmartArtPictureLineup_Label", "Ribbon_Command_SmartArtPictureLineup_KeyTip");
     public static RibbonText SmartArtPictureGridCommand { get; } = new("Ribbon_Command_SmartArtPictureGrid_Label", "Ribbon_Command_SmartArtPictureGrid_KeyTip");
     public static RibbonText SmartArtLabeledHierarchyCommand { get; } = new("Ribbon_Command_SmartArtLabeledHierarchy_Label", "Ribbon_Command_SmartArtLabeledHierarchy_KeyTip");
     public static RibbonText SmartArtTableHierarchyCommand { get; } = new("Ribbon_Command_SmartArtTableHierarchy_Label", "Ribbon_Command_SmartArtTableHierarchy_KeyTip");

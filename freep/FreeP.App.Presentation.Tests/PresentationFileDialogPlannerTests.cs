@@ -13,7 +13,7 @@ public sealed class PresentationFileDialogPlannerTests
 
         var openPlan = PresentationFileDialogPlanner.BuildOpenDialogPlan();
         openPlan.Filter.Should().Be(
-            "PowerPoint presentations (*.pptx)|*.pptx|FreeP legacy presentations (*.fxp)|*.fxp|All files (*.*)|*.*");
+            "PowerPoint presentations (*.pptx)|*.pptx|PowerPoint macro-enabled presentations (*.pptm)|*.pptm|PowerPoint templates (*.potx)|*.potx|PowerPoint macro-enabled templates (*.potm)|*.potm|PowerPoint slide shows (*.ppsx)|*.ppsx|PowerPoint macro-enabled slide shows (*.ppsm)|*.ppsm|FreeP legacy presentations (*.fxp)|*.fxp|All files (*.*)|*.*");
         openPlan.DefaultExtensionWithDot.Should().Be(".pptx");
 
         var savePlan = PresentationFileDialogPlanner.BuildSaveAsDialogPlan(null);
@@ -26,6 +26,11 @@ public sealed class PresentationFileDialogPlannerTests
         var legacySourcePlan = PresentationFileDialogPlanner.BuildSaveAsDialogPlan("Legacy.fxp");
         legacySourcePlan.SuggestedFileName.Should().Be("Legacy.pptx");
         legacySourcePlan.FilterIndex.Should().Be(1);
+
+        var macroSourcePlan = PresentationFileDialogPlanner.BuildSaveAsDialogPlan("MacroDeck.pptm");
+        macroSourcePlan.SuggestedFileName.Should().Be("MacroDeck.pptm");
+        macroSourcePlan.DefaultExtensionWithDot.Should().Be(".pptm");
+        macroSourcePlan.FilterIndex.Should().Be(2);
     }
 
     [Fact]
@@ -34,10 +39,10 @@ public sealed class PresentationFileDialogPlannerTests
         var openPlan = PresentationFileDialogPlanner.BuildOpenPickerPlan();
         openPlan.FileTypes.Select(fileType => fileType.DisplayName)
             .Should()
-            .Equal("All supported presentations", "PowerPoint presentations", "FreeP legacy presentations");
-        openPlan.FileTypes[0].Patterns.Should().Equal("*.pptx", "*.fxp");
+            .Equal("All supported presentations", "PowerPoint presentations", "PowerPoint macro-enabled presentations", "PowerPoint templates", "PowerPoint macro-enabled templates", "PowerPoint slide shows", "PowerPoint macro-enabled slide shows", "FreeP legacy presentations");
+        openPlan.FileTypes[0].Patterns.Should().Equal("*.pptx", "*.pptm", "*.potx", "*.potm", "*.ppsx", "*.ppsm", "*.fxp");
         openPlan.FileTypes[1].Patterns.Should().Equal("*.pptx");
-        openPlan.FileTypes[2].Patterns.Should().Equal("*.fxp");
+        openPlan.FileTypes[7].Patterns.Should().Equal("*.fxp");
 
         var savePlan = PresentationFileDialogPlanner.BuildSavePickerPlan("Legacy.fxp");
         savePlan.SuggestedFileName.Should().Be("Legacy.pptx");
@@ -45,7 +50,7 @@ public sealed class PresentationFileDialogPlannerTests
         savePlan.DefaultExtensionWithoutDot.Should().Be("pptx");
         savePlan.FileTypes.Select(fileType => fileType.DisplayName)
             .Should()
-            .Equal("PowerPoint presentations", "FreeP legacy presentations");
+            .Equal("PowerPoint presentations", "PowerPoint macro-enabled presentations", "PowerPoint templates", "PowerPoint macro-enabled templates", "PowerPoint slide shows", "PowerPoint macro-enabled slide shows", "FreeP legacy presentations");
     }
 
     [Theory]
@@ -62,6 +67,18 @@ public sealed class PresentationFileDialogPlannerTests
 
         success.Should().Be(expectedSuccess);
         resolvedPath.Should().Be(expectedPath);
+    }
+
+    [Theory]
+    [InlineData("deck.pptm")]
+    [InlineData("deck.potx")]
+    [InlineData("deck.potm")]
+    [InlineData("deck.ppsx")]
+    [InlineData("deck.ppsm")]
+    public void TryResolveSavePickerPath_AcceptsOfficePackageFamilies(string path)
+    {
+        PresentationFileDialogPlanner.TryResolveSavePickerPath(path, out var resolvedPath).Should().BeTrue();
+        resolvedPath.Should().Be(path);
     }
 
     [Theory]

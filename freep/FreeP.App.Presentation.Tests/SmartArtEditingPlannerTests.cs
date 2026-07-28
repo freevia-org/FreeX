@@ -60,6 +60,9 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.HorizontalHierarchy, "horizontalHierarchy", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.OrgChart, "orgChart", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.PictureCaptionList, "pictureCaptionList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.PictureAccentList, "pictureAccentList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.PictureStack, "pictureStack", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.PictureLineup, "pictureLineup", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureGrid, "pictureGrid", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.LabeledHierarchy, "labeledHierarchy", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.TableHierarchy, "tableHierarchy", SmartArtFamily.Hierarchy)]
@@ -72,7 +75,7 @@ public sealed class SmartArtEditingPlannerTests
         {
             Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan"), ("n2", "Build")),
         };
-        if (preset is SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureGrid)
+        if (preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureGrid))
         {
             foreach (var node in smartArt.Data!.Nodes)
                 node.Picture = new ImagePart { Bytes = [0x89, 0x50, 0x4E, 0x47], ContentType = "image/png" };
@@ -138,6 +141,48 @@ public sealed class SmartArtEditingPlannerTests
         };
 
         var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureGrid);
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Contain("require image content for every SmartArt node");
+    }
+
+    [Fact]
+    public void ApplyPictureAccentList_RequiresPicturePayloadOnEveryNode()
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
+        };
+
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureAccentList);
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Contain("require image content for every SmartArt node");
+    }
+
+    [Fact]
+    public void ApplyPictureStack_RequiresPicturePayloadOnEveryNode()
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
+        };
+
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureStack);
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Contain("require image content for every SmartArt node");
+    }
+
+    [Fact]
+    public void ApplyPictureLineup_RequiresPicturePayloadOnEveryNode()
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build")),
+        };
+
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.PictureLineup);
 
         result.Applied.Should().BeFalse();
         result.Message.Should().Contain("require image content for every SmartArt node");
