@@ -269,6 +269,7 @@ public sealed partial class MainWindow : Window
     private StackPanel _smartArtTextPaneRowsPanel = null!;
     private Button _smartArtTextPaneAssistantButton = null!;
     private Button _smartArtTextPanePictureButton = null!;
+    private Button _smartArtTextPaneClearPictureButton = null!;
     private WrapPanel _smartArtTextPaneOutlineActions = null!;
     private readonly List<Button> _smartArtTextPaneActionButtons = new();
     private Button _smartArtTextPaneApplyButton = null!;
@@ -1472,6 +1473,13 @@ public sealed partial class MainWindow : Window
             Padding = new Thickness(10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
+        _smartArtTextPaneClearPictureButton = new Button
+        {
+            Content = "Remove picture",
+            MinWidth = 120,
+            Padding = new Thickness(10, 4),
+            Margin = new Thickness(0, 0, 8, 0),
+        };
         _smartArtTextPaneApplyButton = new Button
         {
             Content = "Apply",
@@ -1487,6 +1495,7 @@ public sealed partial class MainWindow : Window
         };
         _smartArtTextPaneAssistantButton.Click += (_, _) => ToggleSmartArtTextPaneAssistant();
         _smartArtTextPanePictureButton.Click += async (_, _) => await ReplaceSmartArtTextPanePictureFromFileAsync();
+        _smartArtTextPaneClearPictureButton.Click += (_, _) => ClearSmartArtTextPanePicture();
         _smartArtTextPaneApplyButton.Click += (_, _) => ApplySmartArtTextPane();
         _smartArtTextPaneCloseButton.Click += (_, _) => HideSmartArtTextPane();
 
@@ -1536,6 +1545,7 @@ public sealed partial class MainWindow : Window
             {
                 _smartArtTextPaneAssistantButton,
                 _smartArtTextPanePictureButton,
+                _smartArtTextPaneClearPictureButton,
                 _smartArtTextPaneApplyButton,
                 _smartArtTextPaneCloseButton,
             }
@@ -6674,6 +6684,26 @@ public sealed partial class MainWindow : Window
 
         RefreshSmartArtTextPane();
         return LastSmartArtTextPaneEditResult;
+    }
+
+    private void ClearSmartArtTextPanePicture()
+    {
+        var smartArtShape = GetSelectedSmartArtShape();
+        var targetId = _selectedSmartArtTextPaneModelId;
+        LastSmartArtTextPaneEditResult = smartArtShape is null || string.IsNullOrWhiteSpace(targetId)
+            ? SmartArtNodeEditResult.NotApplied(
+                SmartArtNodeEditKind.ClearPicture,
+                targetId,
+                "Select a SmartArt row first.")
+            : Editor.ClearSmartArtNodePicture(smartArtShape.Id, targetId);
+
+        if (LastSmartArtTextPaneEditResult.Applied)
+        {
+            _fileWorkflow.MarkDirty();
+            RefreshCanvas();
+            UpdateStatus();
+        }
+        RefreshSmartArtTextPane();
     }
 
     private void CommitSmartArtTextPaneMutation(SmartArtShape smartArt, SlideShape smartArtShape)

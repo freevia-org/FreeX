@@ -19,7 +19,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
 
         source.Should().Contain("var reserveTableHeaderFrame = hasMultiPageTable");
-        source.Should().Contain("doc.FinalSectionHeadersFooters.Header is { IsEmpty: false }");
+        source.Should().Contain("doc.Sections.Any(section => section.HeadersFooters.Header is { IsEmpty: false })");
         source.Should().Contain("var tableHeaderReserveDip = reserveTableHeaderFrame");
         source.Should().Contain("marginTop + tableHeaderReserveDip");
         source.Should().Contain("headerTop = reserveTableHeaderFrame");

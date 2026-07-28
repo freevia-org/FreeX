@@ -306,7 +306,7 @@ static void RenderDocumentComposite(
             .Pagination.Pages.Count > 1);
     var bodyFootnoteReserveDip = hasMultiPageTable ? 0 : footnoteReserveDip;
     var reserveTableHeaderFrame = hasMultiPageTable
-        && doc.FinalSectionHeadersFooters.Header is { IsEmpty: false }
+        && doc.Sections.Any(section => section.HeadersFooters.Header is { IsEmpty: false })
         && page.HeaderDistancePt > 0;
     var tableHeaderReserveDip = reserveTableHeaderFrame
         ? PageLayout.PointsToDip(page.HeaderDistancePt)

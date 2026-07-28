@@ -828,7 +828,7 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
-    public void SetPicture_UpdatesNodePayloadAndCachedMediaWithoutChangingRelationshipIds()
+    public void SetPictureAndClearPicture_UpdatesPayloadAndCachedMedia()
     {
         var data = new SmartArtData
         {
@@ -910,6 +910,45 @@ public sealed class SmartArtEditingPlannerTests
         drawing.Descendants().Where(element => element.Name.LocalName == "blip")
             .Select(element => (string?)element.Attribute(r + "embed"))
             .Should().Equal("rIdPic1", "rIdPic2");
+
+        var clearOne = SmartArtEditingPlanner.Apply(
+            data,
+            SmartArtNodeEditIntent.ClearPicture("two"));
+        clearOne.Applied.Should().BeTrue(clearOne.Message);
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme()).Applied.Should().BeTrue();
+        data.Nodes[1].Picture.Should().BeNull();
+        smartArt.Parts.Should().NotContainKey("ppt/media/two.png");
+        drawing = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
+        drawing.Descendants().Where(element => element.Name.LocalName == "blip")
+            .Select(element => (string?)element.Attribute(r + "embed"))
+            .Should().Equal("rIdPic1");
+
+        var clearLast = SmartArtEditingPlanner.Apply(
+            data,
+            SmartArtNodeEditIntent.ClearPicture("one"));
+        clearLast.Applied.Should().BeTrue(clearLast.Message);
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme()).Applied.Should().BeTrue();
+        data.Nodes[0].Picture.Should().BeNull();
+        smartArt.Parts.Should().NotContainKey("ppt/media/one.png");
+        Encoding.UTF8.GetString(smartArt.PartRels["ppt/diagrams/drawing1.xml"])
+            .Should().NotContain("/image");
+        drawing = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
+        drawing.Descendants().Where(element => element.Name.LocalName == "blip")
+            .Should().BeEmpty();
     }
 
     [Fact]

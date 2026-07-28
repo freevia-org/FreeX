@@ -638,6 +638,47 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void EditingSession_ClearSmartArtNodePicture_RestoresPlaceholderAndIsUndoable()
+    {
+        var sourcePath = MakeSmartArtPptx(["Alpha caption", "Beta caption"], pictureCaptionList: true, includeNodeImage: true);
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var shape = presentation.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt);
+        var smartArt = shape.SmartArt!;
+        var firstId = smartArt.Data!.Nodes[0].ModelId;
+        var secondId = smartArt.Data.Nodes[1].ModelId;
+        var firstBytes = smartArt.Data.Nodes[0].Picture!.Bytes.ToArray();
+        var secondBytes = smartArt.Data.Nodes[1].Picture!.Bytes.ToArray();
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        var clearFirst = session.ClearSmartArtNodePicture(shape.Id, firstId);
+        clearFirst.Applied.Should().BeTrue(clearFirst.Message);
+        var clearSecond = session.ClearSmartArtNodePicture(shape.Id, secondId);
+        clearSecond.Applied.Should().BeTrue(clearSecond.Message);
+        smartArt.Data.Nodes.Select(node => node.Picture).Should().OnlyContain(picture => picture == null);
+        smartArt.FallbackShapes.Select(shape => shape.PlainText).Should().Contain("Add picture");
+        Encoding.UTF8.GetString(smartArt.PartRels[smartArt.DrawingPartPath!])
+            .Should().NotContain("/image");
+
+        session.Bus.Undo();
+        smartArt.Data.Nodes[0].Picture.Should().BeNull();
+        smartArt.Data.Nodes[1].Picture!.Bytes.Should().Equal(secondBytes);
+        session.Bus.Undo();
+        smartArt.Data.Nodes[0].Picture!.Bytes.Should().Equal(firstBytes);
+        smartArt.Data.Nodes[1].Picture!.Bytes.Should().Equal(secondBytes);
+
+        session.Bus.Redo();
+        session.Bus.Redo();
+        var roundTripPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(roundTripPath);
+        var reopenedSmartArt = reopened.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        reopenedSmartArt.Data!.Nodes.Select(node => node.Picture)
+            .Should().OnlyContain(picture => picture == null);
+        reopenedSmartArt.FallbackShapes.Select(shape => shape.PlainText).Should().Contain("Add picture");
+    }
+
+    [Fact]
     public void EditingSession_AddsPictureSmartArtNodeWithPlaceholderAndKeepsExistingMedia()
     {
         var sourcePath = MakeSmartArtPptx(
