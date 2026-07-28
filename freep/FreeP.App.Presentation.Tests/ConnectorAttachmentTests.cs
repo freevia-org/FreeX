@@ -156,6 +156,54 @@ public sealed class ConnectorAttachmentTests
         ConnectionSiteHelper.Resolve(shape, 3).Should().Be((50L, 71L));
     }
 
+    [Fact]
+    public void ConnectionSiteHelper_CustomGeometrySitesFollowAuthoredOutline()
+    {
+        var shape = MakeRect(1, 0, 0, 100, 100);
+        var path = new CustomGeometryPath { PathW = 200, PathH = 200 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, 100, 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 200, 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 150, 200));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 0, 200));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        shape.CustomGeometry.Add(path);
+
+        ConnectionSiteHelper.Resolve(shape, 0).Should().Be((0L, 100L));
+        ConnectionSiteHelper.Resolve(shape, 1).Should().Be((50L, 0L));
+        ConnectionSiteHelper.Resolve(shape, 2).Should().Be((100L, 0L));
+        ConnectionSiteHelper.Resolve(shape, 3).Should().Be((75L, 100L));
+    }
+
+    [Fact]
+    public void MoveShape_ReroutesAttachedConnectorToCustomGeometryOutline()
+    {
+        var (_, bus, slide) = MakePresentation();
+        var custom = MakeRect(1, 1000, 1000, 2000, 1000);
+        var path = new CustomGeometryPath { PathW = 200, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, 50, 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 200, 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 150, 100));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 0, 100));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        custom.CustomGeometry.Add(path);
+        var target = MakeRect(2, 6000, 1000, 2000, 1000);
+        var connector = MakeConnector(3,
+            start: new ConnectorAttachment { ShapeId = 1, SiteIndex = 0 },
+            end: new ConnectorAttachment { ShapeId = 2, SiteIndex = 0 });
+
+        slide.Shapes.Add(custom);
+        slide.Shapes.Add(target);
+        slide.Shapes.Add(connector);
+
+        bus.Execute(new MoveShapeCommand(0, 1, 500, 200));
+
+        var movedConnector = slide.Shapes.First(shape => shape.Id == 3);
+        movedConnector.OffsetXEmu.Should().Be(1500);
+        movedConnector.OffsetYEmu.Should().Be(1500);
+        movedConnector.ExtentCxEmu.Should().Be(4500);
+        movedConnector.ExtentCyEmu.Should().Be(700);
+    }
+
     [Theory]
     [InlineData(Free.Shared.Drawing.DrawingShapeKind.Parallelogram, 0, 10, 50)]
     [InlineData(Free.Shared.Drawing.DrawingShapeKind.Parallelogram, 2, 90, 50)]
