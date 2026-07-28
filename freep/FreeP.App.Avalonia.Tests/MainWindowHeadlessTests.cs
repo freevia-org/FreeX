@@ -232,6 +232,49 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Backstage_print_actions_route_layout_selection_to_native_handoff()
+    {
+        var printAdapter = new RecordingPrintAdapter();
+        PresentationPrintRequest? printedRequest = null;
+        IReadOnlyList<(string AutomationId, bool IsEnabled)> actions = [];
+        MainWindow? window = null;
+        var capabilities = new LinuxNativeOutputCapabilities(
+            new LinuxNativePrintCapability(true, "lp", "office", "ready"),
+            LinuxVideoEncoderCapability.Unavailable("no encoder"));
+
+        var ran = await OnUiThread(() =>
+        {
+            window = new MainWindow(
+                Array.Empty<string>(),
+                loadRecentFilesStore: null,
+                nativeOutputCapabilities: capabilities,
+                nativePrintAdapter: printAdapter,
+                videoExportAdapter: new RecordingVideoAdapter(capabilities.Video),
+                printOutputPackageFactory: request =>
+                {
+                    printedRequest = request;
+                    return BuildTestPrintPackage();
+                });
+
+            window.ShowBackstageForTests();
+            window.ActivateBackstageEntryForTests("Print").Should().BeTrue();
+            actions = window.BackstagePrintActionsForTests;
+            actions.Should().HaveCount(window.LastPrintBackstagePlan!.LayoutChoices.Count);
+            actions.Should().OnlyContain(action => action.IsEnabled);
+            window.InvokeBackstagePrintActionForTests(actions[0].AutomationId).Should().BeTrue();
+        });
+
+        if (!ran) return;
+        var result = await window!.BackstagePrintOperationForTests;
+
+        result.Succeeded.Should().BeTrue(result.FailureReason);
+        printedRequest.Should().NotBeNull();
+        printedRequest!.Layout.Should().Be(
+            window.LastPrintBackstagePlan!.LayoutChoices[0].Layout.Layout);
+        printAdapter.PdfBytes.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
     public async Task Video_picker_cancel_and_non_local_selection_are_honest_and_successful_capability_adds_video_action()
     {
         var output = Path.Combine(Path.GetTempPath(), $"freep-host-video-{Guid.NewGuid():N}.mp4");

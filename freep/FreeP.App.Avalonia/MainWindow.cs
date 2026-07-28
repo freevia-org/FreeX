@@ -201,6 +201,8 @@ public sealed partial class MainWindow : Window
     private readonly TextBox _notesBox;
     private readonly TextBlock _statusText;
     private readonly BackstageView _backstage;
+    private Task<LinuxNativePrintResult> _backstagePrintOperation =
+        Task.FromResult(LinuxNativePrintResult.Failed("No Backstage print action has run."));
     private readonly Border _titleBar;
     private IReadOnlyList<Button> _quickAccessButtons = [];
     private Border _layoutPickerHost = null!;
@@ -612,6 +614,11 @@ public sealed partial class MainWindow : Window
     }
     internal bool ApplyBackstageCustomPrintRangeForTests(string rangeText) =>
         _backstage.ApplyCustomPrintRangeForTests(rangeText);
+    internal IReadOnlyList<(string AutomationId, bool IsEnabled)> BackstagePrintActionsForTests =>
+        _backstage.PrintActionsForTests;
+    internal bool InvokeBackstagePrintActionForTests(string automationId) =>
+        _backstage.InvokePrintActionForTests(automationId);
+    internal Task<LinuxNativePrintResult> BackstagePrintOperationForTests => _backstagePrintOperation;
     internal bool IsBackstageOpen => _backstage.IsOpen;
     internal string? CurrentBackstagePaneLabel => _backstage.CurrentPaneLabel;
     internal IReadOnlyList<SisterBackstageEntryPlan<Control>> BackstageEntries => _backstage.Entries;
@@ -3748,6 +3755,7 @@ public sealed partial class MainWindow : Window
                 new PresentationSlideRangeRequest(
                     PresentationSlideRangeKind.CustomRange,
                     CustomRangeText: rangeText))),
+        Print: request => _backstagePrintOperation = ExecuteNativePrintHandoffAsync(request),
         ExportVideo: () => _ = FileExportVideoAsync(),
         CanExportVideo: () => _nativeOutputCapabilities.Video.CanEncodeMp4);
 

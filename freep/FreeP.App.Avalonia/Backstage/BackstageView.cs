@@ -36,6 +36,7 @@ internal sealed class BackstageView : UserControl
     private string? _customRangeText;
     private TextBox? _customRangeInput;
     private Button? _customRangeApplyButton;
+    private readonly List<(string AutomationId, Button Button)> _printActionButtons = new();
 
     public BackstageView(BackstageCallbacks callbacks)
     {
@@ -105,6 +106,22 @@ internal sealed class BackstageView : UserControl
         return true;
     }
 
+    internal IReadOnlyList<(string AutomationId, bool IsEnabled)> PrintActionsForTests =>
+        _printActionButtons
+            .Select(action => (action.AutomationId, action.Button.IsEnabled))
+            .ToArray();
+
+    internal bool InvokePrintActionForTests(string automationId)
+    {
+        var action = _printActionButtons.FirstOrDefault(
+            candidate => candidate.AutomationId == automationId);
+        if (action.Button is null)
+            return false;
+
+        action.Button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        return true;
+    }
+
     private Control BuildInfoPane()
     {
         var presentation = _callbacks.GetPresentation();
@@ -146,6 +163,7 @@ internal sealed class BackstageView : UserControl
 
     private Control BuildPrintPane()
     {
+        _printActionButtons.Clear();
         var plan = _customRangeText is null
             ? _callbacks.GetPrintPlan()
             : _callbacks.GetPrintPlanForCustomRange(_customRangeText);
@@ -207,6 +225,38 @@ internal sealed class BackstageView : UserControl
             PaneStyle,
             fontStyle: FontStyle.Italic,
             margin: new Thickness(0, 8, 0, 0)));
+
+        panel.Children.Add(AvaloniaBackstageChrome.CreateSectionHeader("Print", PaneStyle));
+        foreach (var choice in plan.LayoutChoices)
+        {
+            var printRequest = new PresentationPrintRequest(
+                choice.Layout.Layout,
+                plan.SelectedRange.Request,
+                HandoutSlidesPerPage: choice.Layout.SlidesPerPage);
+            var automationId = "BackstagePrint_" + AutomationToken(choice.Layout.DisplayName);
+            var canPrint = choice.PackagePlan.CanBuildPackage &&
+                (plan.NativePrintHandoff.CanOpenNativePrintDialog ||
+                 plan.NativePrintHandoff.CanSubmitToNativePrinter);
+            var printButton = AvaloniaBackstageChrome.CreateActionButton(
+                new AvaloniaBackstageActionButtonSpec(
+                    $"Print {choice.Layout.DisplayName}",
+                    automationId,
+                    () =>
+                    {
+                        Hide();
+                        _callbacks.Print(printRequest);
+                    })
+                {
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    IsEnabled = canPrint,
+                    AutomationName = canPrint
+                        ? choice.PackagePlan.LayoutSummary
+                        : plan.NativePrintHandoff.Reason,
+                });
+            printButton.Margin = new Thickness(0, 0, 0, 8);
+            _printActionButtons.Add((automationId, printButton));
+            panel.Children.Add(printButton);
+        }
         return panel;
     }
 
