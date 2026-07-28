@@ -2631,6 +2631,36 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_TitledMatrix_RendersAllBodyNodesBeyondOriginalNineItemCutoff()
+    {
+        var nodes = Enumerable.Range(0, 10)
+            .Select(index => ($"id{index}", index == 0 ? "Title" : $"Node{index}"))
+            .ToArray();
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix",
+            nodes: nodes,
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var liveShapes = SlideCompositor.Compose(pres, pres.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+
+        liveShapes.Should().HaveCount(10,
+            "the shared WPF/Avalonia compositor should emit one title and nine body cells");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(nodes.Select(node => node.Item2));
+        liveShapes[0].BoundsDip.Width.Should().BeGreaterThan(liveShapes[1].BoundsDip.Width,
+            "the title band should continue to span the complete matrix width");
+    }
+
+    [Fact]
     public void Reader_ParsesKnownListFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
