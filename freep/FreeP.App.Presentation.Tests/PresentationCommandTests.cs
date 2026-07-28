@@ -1154,6 +1154,43 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SlideCloner_CloneShape_ClonesEmbeddedAndPreservedPackagePayloads()
+    {
+        var shape = MakeShape(1);
+        shape.OleObject = new OleObjectInfo
+        {
+            EmbeddedBytes = new byte[] { 1, 2, 3 },
+            EmbeddedContentType = "application/octet-stream",
+            ProgId = "Excel.Sheet.12",
+        };
+        shape.PreservedObject = new PreservedObjectInfo
+        {
+            ObjectKind = PreservedObjectKind.Ink,
+            RawXml = "<p:contentPart />",
+        };
+        shape.PreservedObject.Parts["ppt/ink/ink1.xml"] = new byte[] { 4, 5, 6 };
+        shape.PreservedObject.PartRels["ppt/ink/ink1.xml"] = new byte[] { 7, 8 };
+
+        var clone = SlideCloner.CloneShape(shape);
+
+        clone.OleObject.Should().NotBeSameAs(shape.OleObject);
+        clone.OleObject!.EmbeddedBytes.Should().NotBeSameAs(shape.OleObject!.EmbeddedBytes);
+        clone.PreservedObject.Should().NotBeSameAs(shape.PreservedObject);
+        clone.PreservedObject!.Parts["ppt/ink/ink1.xml"]
+            .Should().NotBeSameAs(shape.PreservedObject.Parts["ppt/ink/ink1.xml"]);
+        clone.PreservedObject.PartRels["ppt/ink/ink1.xml"]
+            .Should().NotBeSameAs(shape.PreservedObject.PartRels["ppt/ink/ink1.xml"]);
+
+        clone.OleObject.EmbeddedBytes[0] = 10;
+        clone.PreservedObject.Parts["ppt/ink/ink1.xml"][0] = 11;
+        clone.PreservedObject.PartRels["ppt/ink/ink1.xml"][0] = 12;
+
+        shape.OleObject.EmbeddedBytes[0].Should().Be(1);
+        shape.PreservedObject.Parts["ppt/ink/ink1.xml"][0].Should().Be(4);
+        shape.PreservedObject.PartRels["ppt/ink/ink1.xml"][0].Should().Be(7);
+    }
+
+    [Fact]
     public void SlideCloner_CloneShape_ClonesTextBody()
     {
         var shape = MakeShape(1);

@@ -12,8 +12,8 @@ namespace FreeP.Core.Model;
 /// - Collections (<see cref="Slide.Shapes"/>, <see cref="TextBody.Paragraphs"/>, etc.) are
 ///   deep-cloned so mutations on the copy do not affect the original.
 /// - Regular <see cref="SlideShape.Picture"/> bytes are shared (byte arrays are treated as
-///   immutable once loaded); editable SmartArt image and diagram payloads are copied so a
-///   duplicate can be changed without mutating the source package.
+///   immutable once loaded); editable SmartArt, OLE, and preserved-object package payloads are
+///   copied so a duplicate can be changed without mutating the source package.
 /// - <see cref="TableShape"/>, <see cref="ChartShape"/>, and editable SmartArt data are deep-cloned.
 /// </summary>
 public static class SlideCloner
@@ -111,10 +111,10 @@ public static class SlideCloner
             copy.CustomGeometry.Add(pathCopy);
         }
 
-        // Theme 21: OLE — byte arrays are treated as immutable once loaded; share reference.
+        // Theme 21: OLE package bytes belong to the editable duplicate.
         copy.OleObject = shape.OleObject is null ? null : CloneOleObject(shape.OleObject);
 
-        // Wave 25A: preserved modern objects — byte arrays are immutable once loaded; share references.
+        // Wave 25A: preserved modern-object package bytes belong to the editable duplicate.
         copy.PreservedObject = shape.PreservedObject is null ? null : ClonePreservedObject(shape.PreservedObject);
 
         // Connector attachments — small value-like objects, always deep-copied.
@@ -664,10 +664,10 @@ public static class SlideCloner
         SiteIndex = src.SiteIndex,
     };
 
-    // Theme 21: OLE cloner — byte arrays are treated as immutable; share the reference.
+    // Theme 21: OLE cloner — copy the package payload for duplicate/undo isolation.
     private static OleObjectInfo CloneOleObject(OleObjectInfo src) => new()
     {
-        EmbeddedBytes        = src.EmbeddedBytes,   // immutable byte[]
+        EmbeddedBytes        = src.EmbeddedBytes.ToArray(),
         EmbeddedContentType  = src.EmbeddedContentType,
         ProgId               = src.ProgId,
         RelType              = src.RelType,
@@ -676,7 +676,7 @@ public static class SlideCloner
         EmbeddedExtension    = src.EmbeddedExtension,
     };
 
-    // Wave 25A: PreservedObject cloner — share byte arrays (immutable once loaded).
+    // Wave 25A: PreservedObject cloner — copy all referenced package bytes.
     private static PreservedObjectInfo ClonePreservedObject(PreservedObjectInfo src)
     {
         var copy = new PreservedObjectInfo
@@ -690,11 +690,11 @@ public static class SlideCloner
             McRequiresNsUri     = src.McRequiresNsUri,
         };
         foreach (var kv in src.Parts)
-            copy.Parts[kv.Key] = kv.Value;
+            copy.Parts[kv.Key] = kv.Value.ToArray();
         foreach (var kv in src.PartContentTypes)
             copy.PartContentTypes[kv.Key] = kv.Value;
         foreach (var kv in src.PartRels)
-            copy.PartRels[kv.Key] = kv.Value;
+            copy.PartRels[kv.Key] = kv.Value.ToArray();
         foreach (var kv in src.SlideRels)
             copy.SlideRels[kv.Key] = kv.Value;
         foreach (var kv in src.McRequiresNsUris)
