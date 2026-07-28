@@ -11,8 +11,8 @@ namespace FreeP.App.Recording.Windows;
 /// <summary>
 /// Encodes the shared PNG frame package with the Windows media stack.
 ///
-/// This is deliberately video-only. Narration and camera artifacts need a separate media
-/// composition policy and are left to the existing ffmpeg path rather than being silently lost.
+/// This supports the common single-narration-track case through MediaComposition. Camera/PIP
+/// overlays and offset or multi-track narration remain explicitly deferred to the ffmpeg path.
 /// </summary>
 public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
 {
@@ -59,6 +59,25 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
         {
             Directory.CreateDirectory(temporaryDirectory);
             var composition = new MediaComposition();
+            var mediaPlan = PresentationVideoMediaMuxPlanner.Prepare(
+                package,
+                mediaArtifacts,
+                temporaryDirectory);
+            if (mediaPlan.CameraTracks.Count > 0)
+            {
+                return LinuxVideoExportResult.Failed(
+                    "Windows MediaComposition does not yet support camera/PIP track composition; use the ffmpeg video export path.",
+                    outputPath);
+            }
+
+            if (mediaPlan.NarrationTracks.Count > 1 ||
+                mediaPlan.NarrationTracks.Any(track => track.StartTime != TimeSpan.Zero))
+            {
+                return LinuxVideoExportResult.Failed(
+                    "Windows MediaComposition supports one narration track starting at presentation time zero; offset or multiple narration tracks require the ffmpeg video export path.",
+                    outputPath);
+            }
+
             using var archive = new ZipArchive(
                 new MemoryStream(package.Bytes),
                 ZipArchiveMode.Read,
@@ -75,6 +94,17 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
                     .AsTask(cancellationToken)
                     .ConfigureAwait(false);
                 composition.Clips.Add(clip);
+            }
+
+            if (mediaPlan.NarrationTracks is [{ } narration])
+            {
+                var narrationFile = await StorageFile.GetFileFromPathAsync(narration.Path)
+                    .AsTask(cancellationToken)
+                    .ConfigureAwait(false);
+                var audioTrack = await BackgroundAudioTrack.CreateFromFileAsync(narrationFile)
+                    .AsTask(cancellationToken)
+                    .ConfigureAwait(false);
+                composition.BackgroundAudioTracks.Add(audioTrack);
             }
 
             var outputDirectory = Path.GetDirectoryName(fullOutputPath)!;

@@ -45,7 +45,7 @@ public sealed class WindowsNativePrintHandoffTests
         capability.CanEncodeMp4.Should().BeTrue();
         capability.ExecutablePath.Should().Be(WindowsNativeVideoExportAdapter.ExecutablePath);
         capability.EncoderName.Should().Be("Windows MediaComposition");
-        capability.CanCaptureNarration.Should().BeFalse();
+        capability.CanCaptureNarration.Should().BeTrue();
     }
 
     [Fact]
