@@ -151,7 +151,7 @@ internal static class SmartArtInsertionFactory
             return null;
 
         if (pictures is null || pictures.Count == 0)
-            throw new ArgumentException("Picture-based SmartArt layouts require at least one image.", nameof(pictures));
+            return null;
 
         if (pictures.Count == nodeCount)
             return pictures;
