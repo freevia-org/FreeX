@@ -9,7 +9,8 @@
 # if it appears to hang at 0 PDFs, it is the non-interactive context, not the document.
 param(
   [string]$CorpusDir = (Join-Path $PSScriptRoot '..\..\freew-fidelity-corpus\files'),
-  [string]$OutDir    = (Join-Path $PSScriptRoot '..\..\freew-fidelity-corpus\runs\word')
+  [string]$OutDir    = (Join-Path $PSScriptRoot '..\..\freew-fidelity-corpus\runs\word'),
+  [string]$PdfStagingDir
 )
 $ErrorActionPreference = 'Stop'
 $CorpusDir = (Resolve-Path $CorpusDir).Path
@@ -20,31 +21,30 @@ $done = Join-Path $OutDir '_done.flag'
 Remove-Item $done -ErrorAction SilentlyContinue
 "start $(Get-Date -Format o)" | Set-Content $log
 
-$wdExportFormatPDF = 17
-$wdStatisticPages  = 2
+if (-not $PdfStagingDir) {
+  $PdfStagingDir = Join-Path $env:SystemDrive 'Temp'
+}
+$PdfStagingDir = [IO.Path]::GetFullPath($PdfStagingDir)
+New-Item -ItemType Directory -Force -Path $PdfStagingDir | Out-Null
+$wordExportHelper = Join-Path $PSScriptRoot '..\..\freew-fidelity-corpus\tools\Export-WordPdf.ps1'
+$powerShellExe = Join-Path $PSHOME 'powershell.exe'
+if (-not (Test-Path -LiteralPath $powerShellExe)) { $powerShellExe = 'powershell.exe' }
 
-$word = New-Object -ComObject Word.Application
-$word.Visible = $false; $word.DisplayAlerts = 0
-try { $word.AutomationSecurity = 3 } catch {}
 $results = @()
-try {
-  foreach ($f in (Get-ChildItem -Path $CorpusDir -Filter *.docx | Sort-Object Name)) {
-    $pdf = Join-Path $OutDir ($f.BaseName + '.pdf')
-    if (Test-Path $pdf) { "skip $($f.Name)" | Add-Content $log; continue }
-    $rec = [ordered]@{ file = $f.Name; pages = $null; status = 'ok'; error = '' }
-    $doc = $null
-    try {
-      $doc = $word.Documents.Open($f.FullName, $false, $true)   # ConfirmConversions=false, ReadOnly=true
-      $rec.pages = $doc.ComputeStatistics($wdStatisticPages)
-      $doc.ExportAsFixedFormat($pdf, $wdExportFormatPDF)
-    } catch { $rec.status = 'fail'; $rec.error = $_.Exception.Message }
-    finally { if ($doc) { $doc.Close($false) | Out-Null } }
-    "$($rec.status) $($f.Name) pages=$($rec.pages) $($rec.error)" | Add-Content $log
-    $results += (New-Object psobject -Property $rec)
-  }
-} finally {
-  $word.Quit()
-  [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null
+foreach ($f in (Get-ChildItem -Path $CorpusDir -Filter *.docx | Sort-Object Name)) {
+  $pdf = Join-Path $OutDir ($f.BaseName + '.pdf')
+  if (Test-Path $pdf) { "skip $($f.Name)" | Add-Content $log; continue }
+  $rec = [ordered]@{ file = $f.Name; pages = $null; status = 'ok'; error = '' }
+  $stagedPdf = Join-Path $PdfStagingDir ("fw-{0}-{1}.pdf" -f $PID, $results.Count)
+  try {
+    & $powerShellExe -NoProfile -ExecutionPolicy Bypass -File $wordExportHelper -InputPath $f.FullName -OutputPath $stagedPdf
+    if ($LASTEXITCODE -ne 0) { throw "Word PDF child exited with code $LASTEXITCODE." }
+    if (-not (Test-Path -LiteralPath $stagedPdf)) { throw 'Word PDF child completed without creating a PDF.' }
+    Move-Item -LiteralPath $stagedPdf -Destination $pdf -Force
+  } catch { $rec.status = 'fail'; $rec.error = $_.Exception.Message }
+  finally { if (Test-Path -LiteralPath $stagedPdf) { Remove-Item -LiteralPath $stagedPdf -Force -ErrorAction SilentlyContinue } }
+  "$($rec.status) $($f.Name) pages=$($rec.pages) $($rec.error)" | Add-Content $log
+  $results += (New-Object psobject -Property $rec)
 }
 $results | Export-Csv -Path (Join-Path $OutDir 'word-export.csv') -NoTypeInformation
 "done $(Get-Date -Format o) pdfs=$((Get-ChildItem (Join-Path $OutDir '*.pdf')).Count)" | Tee-Object -FilePath $done
