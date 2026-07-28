@@ -2530,6 +2530,8 @@ public sealed class GroupFloatingObjectsCommand : IDocumentCommand
         if (run.SmartArt is { IsFloating: true } sa && sa.Placement is { } sap) return (sa, sa.WidthPt, sa.HeightPt, sap);
         if (run.WordArt is { IsFloating: true } wa && wa.Placement is { } wap)
             return (wa, wa.FontSizePt * Math.Max(1, wa.Text.Length) * 0.62, wa.FontSizePt * 1.6, wap);
+        if (run.DrawingGroup is { IsValid: true } group)
+            return (group, group.WidthPt, group.HeightPt, group.Placement);
         return (null, 0, 0, null);
     }
 }
@@ -2570,6 +2572,7 @@ public sealed class UngroupFloatingObjectsCommand(int paragraphIndex, int runInd
                 Chart chart     => RestoreChartPlacement(chart, group.Placement, absH, absV, z),
                 SmartArt sa     => RestoreSmartArtPlacement(sa, group.Placement, absH, absV, z),
                 WordArt wa      => RestoreWordArtPlacement(wa, group.Placement, absH, absV, z),
+                DrawingGroup nested => RestoreGroupPlacement(nested, group.Placement, absH, absV, z),
                 _               => null
             };
             if (memberRun is null) continue;
@@ -2624,6 +2627,19 @@ public sealed class UngroupFloatingObjectsCommand(int paragraphIndex, int runInd
         wa.Placement.Wrapping = gp.Wrapping; wa.Placement.HorizontalOffsetPt = h; wa.Placement.VerticalOffsetPt = v;
         wa.Placement.HorizontalAnchor = gp.HorizontalAnchor; wa.Placement.VerticalAnchor = gp.VerticalAnchor; wa.Placement.ZOrderIndex = z;
         return Run.FromWordArt(wa);
+    }
+    private static Run RestoreGroupPlacement(DrawingGroup nested, FloatingPlacement gp, double h, double v, int z)
+    {
+        nested.Placement = new FloatingPlacement
+        {
+            Wrapping = gp.Wrapping,
+            HorizontalOffsetPt = h,
+            VerticalOffsetPt = v,
+            HorizontalAnchor = gp.HorizontalAnchor,
+            VerticalAnchor = gp.VerticalAnchor,
+            ZOrderIndex = z
+        };
+        return Run.FromDrawingGroup(nested);
     }
 }
 

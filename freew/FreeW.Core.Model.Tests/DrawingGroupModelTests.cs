@@ -30,6 +30,27 @@ public sealed class DrawingGroupModelTests
             }
         };
 
+    private static DrawingGroup NestedGroup(double x, double y, int z = 3)
+    {
+        var group = new DrawingGroup
+        {
+            WidthPt = 96,
+            HeightPt = 48,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = x,
+                VerticalOffsetPt = y,
+                ZOrderIndex = z
+            }
+        };
+        group.Children.Add(new Shape(ShapeKind.Rectangle, 48, 24));
+        group.Children.Add(new Shape(ShapeKind.Ellipse, 36, 24));
+        group.ChildOffsets.Add((0, 0));
+        group.ChildOffsets.Add((60, 24));
+        return group;
+    }
+
     /// <summary>
     /// Build a document with two floating objects (image + shape) in two paragraphs,
     /// execute GroupFloatingObjectsCommand, and assert the group run is placed at the
@@ -163,6 +184,33 @@ public sealed class DrawingGroupModelTests
         grp.ChildOffsets[1].Y.Should().BeApproximately(36, 0.5,  "shape is 36 pts below the image");
     }
 
+    [Fact]
+    public void Group_ValidNestedGroup_IsPreservedAsAChild()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+        var nested = NestedGroup(36, 18);
+        var p0 = new Paragraph();
+        p0.Runs.Add(Run.FromDrawingGroup(nested));
+        doc.Blocks.Add(p0);
+        var p1 = new Paragraph();
+        p1.Runs.Add(Run.FromShape(FloatingShape(156, 54)));
+        doc.Blocks.Add(p1);
+        var bus = new DocumentCommandBus(new TestCtx(doc));
+
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (1, 0)]));
+
+        var outer = ((Paragraph)doc.Blocks[0]).Runs[0].DrawingGroup!;
+        outer.Children.Should().HaveCount(2);
+        outer.Children[0].Should().BeSameAs(nested);
+        outer.ChildOffsets[0].X.Should().BeApproximately(0, 0.5);
+        outer.ChildOffsets[0].Y.Should().BeApproximately(0, 0.5);
+
+        bus.Undo();
+        ((Paragraph)doc.Blocks[0]).Runs[0].DrawingGroup.Should().BeSameAs(nested);
+        nested.Placement.HorizontalOffsetPt.Should().BeApproximately(36, 0.5);
+    }
+
     // ── GroupFloatingObjectsCommand.Revert ───────────────────────────────────────────────────────
 
     [Fact]
@@ -226,6 +274,36 @@ public sealed class DrawingGroupModelTests
         img.VerticalOffsetPt.Should().BeApproximately(18, 0.5);
         shp.Placement!.HorizontalOffsetPt.Should().BeApproximately(108, 0.5);
         shp.Placement.VerticalOffsetPt.Should().BeApproximately(54, 0.5);
+    }
+
+    [Fact]
+    public void Ungroup_RestoresNestedGroupAsFloatingRunWithAbsolutePlacement()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+        var nested = NestedGroup(36, 18);
+        var p0 = new Paragraph();
+        p0.Runs.Add(Run.FromDrawingGroup(nested));
+        doc.Blocks.Add(p0);
+        var p1 = new Paragraph();
+        p1.Runs.Add(Run.FromShape(FloatingShape(156, 54)));
+        doc.Blocks.Add(p1);
+        var bus = new DocumentCommandBus(new TestCtx(doc));
+
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (1, 0)]));
+        bus.Execute(new UngroupFloatingObjectsCommand(0, 0));
+
+        var runs = ((Paragraph)doc.Blocks[0]).Runs;
+        runs.Should().HaveCount(2);
+        var restoredNested = runs.Single(run => run.DrawingGroup is not null).DrawingGroup!;
+        restoredNested.Should().BeSameAs(nested);
+        restoredNested.Placement.HorizontalOffsetPt.Should().BeApproximately(36, 0.5);
+        restoredNested.Placement.VerticalOffsetPt.Should().BeApproximately(18, 0.5);
+        restoredNested.Placement.ZOrderIndex.Should().Be(3);
+
+        bus.Undo();
+        ((Paragraph)doc.Blocks[0]).Runs.Should().ContainSingle();
+        ((Paragraph)doc.Blocks[0]).Runs[0].DrawingGroup!.Children.Should().HaveCount(2);
     }
 
     [Fact]
