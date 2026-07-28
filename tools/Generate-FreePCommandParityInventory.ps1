@@ -1371,7 +1371,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "chevronProcess, basicChevronProcess, and closedChevronProcess now share the bounded Chevron preset planner for parsed ordered-stage nodes, using the evidence-backed 24% notch and 76% interlocking step. The checked-in corpus does not justify distinct basic/closed geometry, so no separate closed behavior is claimed. Malformed or out-of-bound input remains on cached drawing fallback. Exact PowerPoint chevron metrics, effects, authoring regeneration, and PowerPoint-authoritative pixel baselines remain deferred."),
+            RemainingWork: "chevronProcess, basicChevronProcess, and closedChevronProcess now share the Chevron preset planner for parsed ordered-stage nodes, and larger inputs no longer fall back solely because of item count. The checked-in corpus does not justify distinct basic/closed geometry, so no separate closed behavior is claimed. Malformed or out-of-bound input remains on cached drawing fallback. Exact PowerPoint chevron metrics, effects, authoring regeneration, and PowerPoint-authoritative pixel baselines remain deferred."),
         new(
             EvidenceId: "freep.smartart.bending-process",
             Area: "SmartArt bendingProcess live layout",
