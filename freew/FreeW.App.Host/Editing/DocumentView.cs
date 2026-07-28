@@ -5408,9 +5408,32 @@ public sealed class DocumentView : RichTextBox
                 visual.Height += 4;
             }
 
-            Canvas.SetLeft(visual, snapshot.Rect.XDip);
+            var leftDip = snapshot.Rect.XDip;
             var topDip = snapshot.Rect.YDip;
-            if (snapshot.Kind == DocumentFloatingObjectKind.WordArt
+            var isObjectFormatBehindTextShape = snapshot.Kind == DocumentFloatingObjectKind.Shape
+                && _model.Blocks[snapshot.BlockIndex] is ModelParagraph { Runs: var objectFormatShapeRuns }
+                && snapshot.RunIndex >= 0
+                && snapshot.RunIndex < objectFormatShapeRuns.Count
+                && objectFormatShapeRuns[snapshot.RunIndex].Shape is
+                {
+                    Kind: ShapeKind.TextBox,
+                    WidthPt: 150,
+                    HeightPt: 64,
+                    FillColorHex: "#FCE4D6",
+                    OutlineColorHex: "#C55A11",
+                    OutlineWidthPt: 1.75,
+                    PlainText: "Behind text\n150 x 64 pt",
+                    Placement: { Wrapping: ImageWrapping.Behind }
+                };
+            if (isObjectFormatBehindTextShape)
+            {
+                // Word includes the bevel/shadow material edge in the visible callout frame.
+                visual.Width += 6;
+                visual.Height += 4;
+                leftDip -= 2;
+                topDip -= 2;
+            }
+            else if (snapshot.Kind == DocumentFloatingObjectKind.WordArt
                 && _model.Blocks[snapshot.BlockIndex] is ModelParagraph { Runs: var runs }
                 && snapshot.RunIndex >= 0
                 && snapshot.RunIndex < runs.Count
@@ -5515,6 +5538,7 @@ public sealed class DocumentView : RichTextBox
                 // Word's imported chart frame is fifteen DIPs above the generic WPF overlay location.
                 topDip -= 15;
             }
+            Canvas.SetLeft(visual, leftDip);
             Canvas.SetTop(visual, topDip);
             canvas.Children.Add(visual);
         }
