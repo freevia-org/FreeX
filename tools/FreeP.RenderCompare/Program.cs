@@ -86,6 +86,7 @@ internal static class Program
                 "--whole-window-visual-evidence" => RunWholeWindowVisualEvidence(args[1..]),
                 "--whole-window-visual-report" => RunWholeWindowVisualReport(args[1..]),
                 "--corpus-summary"    => RunCorpusSummary(args[1..]),
+                "--powerpoint-corpus-validate" => RunPowerPointCorpusValidation(args[1..]),
                 "--generate-corpus"           => RunGenerateCorpus(args[1..]),
                 "--patch-chart-labels-19"     => RunPatchChartLabels19(args[1..]),
                 "--generate-smartart-fixture" => RunGenerateSmartArtFixture(args[1..]),
@@ -649,6 +650,46 @@ internal static class Program
     }
 
     // -----------------------------------------------------------------------
+    // Mode: --powerpoint-corpus-validate
+    // -----------------------------------------------------------------------
+    private static int RunPowerPointCorpusValidation(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("usage: --powerpoint-corpus-validate <corpusDir> <outDir> [--refs <refsDir>] [--width W] [--height H]");
+            return 2;
+        }
+
+        var corpusDirectory = Path.GetFullPath(args[0]);
+        var outputDirectory = Path.GetFullPath(args[1]);
+        var referenceDirectory = ReadOption(args, "--refs");
+        if (referenceDirectory is not null)
+            referenceDirectory = Path.GetFullPath(referenceDirectory);
+
+        if (!Directory.Exists(corpusDirectory))
+        {
+            Console.Error.WriteLine($"Corpus directory not found: {corpusDirectory}");
+            return 1;
+        }
+
+        if (referenceDirectory is not null && !Directory.Exists(referenceDirectory))
+        {
+            Console.Error.WriteLine($"Reference directory not found: {referenceDirectory}");
+            return 1;
+        }
+
+        var (width, height) = ParseWidthHeight(args[2..], 1280, 720);
+        var result = PowerPointCorpusValidator.Validate(
+            corpusDirectory,
+            outputDirectory,
+            referenceDirectory,
+            width,
+            height);
+        result.Print(Console.Out);
+        return result.ExitCode;
+    }
+
+    // -----------------------------------------------------------------------
     // Mode: --patch-chart-labels-19
     //   Patches 19-chart-labels.pptx chart XML (injects c:dLbls + secondary valAx).
     //   Run --powerpoint-export on the result to generate reference PNGs.
@@ -758,6 +799,9 @@ internal static class Program
         Console.WriteLine("  --corpus-summary <corpusDir> [--refs <refsDir>] [--manifest <out.json>] [--require-complete-refs] [--allow-missing-powerpoint]");
         Console.WriteLine("      Print compact per-deck status and PowerPoint reference PNG availability.");
         Console.WriteLine("      --require-complete-refs fails when refs are missing unless --allow-missing-powerpoint is set and PowerPoint COM is unavailable.");
+        Console.WriteLine();
+        Console.WriteLine("  --powerpoint-corpus-validate <corpusDir> <outDir> [--refs <refsDir>] [--width W] [--height H]");
+        Console.WriteLine("      Open/export every corpus deck through PowerPoint COM and optionally verify slide hashes against references.");
         Console.WriteLine();
         Console.WriteLine("  --generate-corpus <outDir>");
         Console.WriteLine("      Author test .pptx decks via PowerPoint COM.");
