@@ -15,7 +15,7 @@ internal sealed class ChartLayoutOptionsDialog : Window
     private readonly EditingSession _editor;
     private readonly ChartLayoutOptionsPlanner _planner;
     private readonly ComboBox _targetCombo;
-    private readonly TextBox _layoutTargetBox;
+    private readonly ComboBox _layoutTargetCombo;
     private readonly ComboBox _xModeCombo;
     private readonly ComboBox _yModeCombo;
     private readonly ComboBox _widthModeCombo;
@@ -42,7 +42,7 @@ internal sealed class ChartLayoutOptionsDialog : Window
 
         _targetCombo = new ComboBox { ItemsSource = ChartLayoutOptionsPlanner.TargetOptions.Select(x => x.Label).ToArray(), SelectedIndex = 0, MinWidth = 190 };
         _targetCombo.SelectionChanged += (_, _) => { _planner.SetTarget(SelectedTarget()); LoadControls(); };
-        _layoutTargetBox = new TextBox { MinWidth = 190 };
+        _layoutTargetCombo = MakeLayoutTargetCombo();
         _xModeCombo = MakeModeCombo();
         _yModeCombo = MakeModeCombo();
         _widthModeCombo = MakeModeCombo();
@@ -66,7 +66,7 @@ internal sealed class ChartLayoutOptionsDialog : Window
             Margin = new Thickness(14), Spacing = 8,
             Children =
             {
-                MakeRow(surface.TargetLabel, _targetCombo), MakeRow(surface.LayoutTargetLabel, _layoutTargetBox),
+                MakeRow(surface.TargetLabel, _targetCombo), MakeRow(surface.LayoutTargetLabel, _layoutTargetCombo),
                 MakeRow(surface.XLabel, _xBox, _xModeCombo), MakeRow(surface.YLabel, _yBox, _yModeCombo),
                 MakeRow(surface.WidthLabel, _widthBox, _widthModeCombo), MakeRow(surface.HeightLabel, _heightBox, _heightModeCombo),
                 new TextBlock { Text = surface.Hint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 }, buttons,
@@ -83,7 +83,7 @@ internal sealed class ChartLayoutOptionsDialog : Window
     internal void SetOptionsForTests(ChartLayoutTarget target, string? layoutTarget, ChartManualLayoutMode xMode, ChartManualLayoutMode yMode, ChartManualLayoutMode widthMode, ChartManualLayoutMode heightMode, double? x, double? y, double? width, double? height)
     {
         _targetCombo.SelectedIndex = FindTargetIndex(target);
-        _layoutTargetBox.Text = layoutTarget ?? string.Empty;
+        SelectLayoutTarget(layoutTarget);
         _xModeCombo.SelectedIndex = FindModeIndex(xMode); _yModeCombo.SelectedIndex = FindModeIndex(yMode);
         _widthModeCombo.SelectedIndex = FindModeIndex(widthMode); _heightModeCombo.SelectedIndex = FindModeIndex(heightMode);
         _xBox.Text = Format(x); _yBox.Text = Format(y); _widthBox.Text = Format(width); _heightBox.Text = Format(height);
@@ -97,7 +97,7 @@ internal sealed class ChartLayoutOptionsDialog : Window
 
     private void LoadControls()
     {
-        _layoutTargetBox.Text = _planner.LayoutTarget ?? string.Empty;
+        SelectLayoutTarget(_planner.LayoutTarget);
         _xModeCombo.SelectedIndex = FindModeIndex(_planner.XMode); _yModeCombo.SelectedIndex = FindModeIndex(_planner.YMode);
         _widthModeCombo.SelectedIndex = FindModeIndex(_planner.WidthMode); _heightModeCombo.SelectedIndex = FindModeIndex(_planner.HeightMode);
         _xBox.Text = Format(_planner.X); _yBox.Text = Format(_planner.Y); _widthBox.Text = Format(_planner.Width); _heightBox.Text = Format(_planner.Height);
@@ -105,7 +105,7 @@ internal sealed class ChartLayoutOptionsDialog : Window
 
     private void UpdatePlannerFromControls()
     {
-        _planner.SetLayoutTarget(_layoutTargetBox.Text);
+        _planner.SetLayoutTarget(SelectedLayoutTarget());
         _planner.SetXMode(SelectedMode(_xModeCombo)); _planner.SetYMode(SelectedMode(_yModeCombo));
         _planner.SetWidthMode(SelectedMode(_widthModeCombo)); _planner.SetHeightMode(SelectedMode(_heightModeCombo));
         _planner.SetX(ParseOptional(_xBox.Text, "X")); _planner.SetY(ParseOptional(_yBox.Text, "Y"));
@@ -113,6 +113,24 @@ internal sealed class ChartLayoutOptionsDialog : Window
     }
 
     private ChartLayoutTarget SelectedTarget() => _targetCombo.SelectedIndex == 1 ? ChartLayoutTarget.Legend : ChartLayoutTarget.PlotArea;
+    private string? SelectedLayoutTarget()
+    {
+        var options = ChartLayoutOptionsPlanner.LayoutTargetOptionsFor(_planner.LayoutTarget);
+        return _layoutTargetCombo.SelectedIndex >= 0 && _layoutTargetCombo.SelectedIndex < options.Count
+            ? options[_layoutTargetCombo.SelectedIndex].Value
+            : null;
+    }
+
+    private void SelectLayoutTarget(string? value)
+    {
+        var options = ChartLayoutOptionsPlanner.LayoutTargetOptionsFor(value);
+        _layoutTargetCombo.ItemsSource = options.Select(option => option.Label).ToArray();
+        _layoutTargetCombo.SelectedIndex = Math.Max(0,
+            options.Select((item, index) => (item, index))
+                .FirstOrDefault(x => string.Equals(x.item.Value, value, StringComparison.OrdinalIgnoreCase)).index);
+    }
+
+    private static ComboBox MakeLayoutTargetCombo() => new() { MinWidth = 190 };
     private static ComboBox MakeModeCombo() => new() { ItemsSource = ChartLayoutOptionsPlanner.ModeOptions.Select(x => x.Label).ToArray(), MinWidth = 105 };
     private static ChartManualLayoutMode SelectedMode(ComboBox combo) => combo.SelectedIndex == 1 ? ChartManualLayoutMode.Edge : ChartManualLayoutMode.Factor;
     private static double? ParseOptional(string? text, string label) { if (string.IsNullOrWhiteSpace(text)) return null; if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) && double.IsFinite(value)) return value; throw new FormatException($"{label} must be a finite number or blank."); }

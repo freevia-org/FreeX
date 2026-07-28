@@ -753,6 +753,25 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void ChartLayoutOptionsPlanner_ExposesControlledLayoutTargetChoicesAndPreservesUnknownTokens()
+    {
+        var builtIns = ChartLayoutOptionsPlanner.LayoutTargetOptionsFor(null);
+        builtIns.Select(option => option.Value).Should().Equal(null, "inner", "outer");
+        builtIns.Select(option => option.Label).Should().Equal("Automatic (outer)", "Inner", "Outer");
+
+        var imported = ChartLayoutOptionsPlanner.LayoutTargetOptionsFor("futureTarget");
+        imported.Should().Contain(option => option.Value == "futureTarget" && option.Label == "Imported (futureTarget)");
+
+        var chart = MakeChart();
+        chart.PlotAreaManualLayout = new ChartManualLayout { LayoutTarget = "futureTarget" };
+        var planner = ChartLayoutOptionsPlanner.FromChart(chart);
+
+        planner.BuildCommitPlan().LayoutTarget.Should().Be("futureTarget");
+        planner.SetLayoutTarget(null);
+        planner.BuildCommitPlan().LayoutTarget.Should().BeNull();
+    }
+
+    [Fact]
     public void ChartPieOptionsPlanner_UsesWorkingCopyAndBuildsRotationAndHoleOptions()
     {
         var chart = MakeChart();

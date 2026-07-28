@@ -12,7 +12,7 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly EditingSession _editor;
     private readonly ChartLayoutOptionsPlanner _planner;
     private readonly ComboBox _targetCombo;
-    private readonly TextBox _layoutTargetBox;
+    private readonly ComboBox _layoutTargetCombo;
     private readonly ComboBox _xModeCombo;
     private readonly ComboBox _yModeCombo;
     private readonly ComboBox _widthModeCombo;
@@ -50,7 +50,7 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
                 LoadControls();
             }
         };
-        _layoutTargetBox = new TextBox { MinWidth = 180 };
+        _layoutTargetCombo = MakeLayoutTargetCombo();
         _xModeCombo = MakeModeCombo();
         _yModeCombo = MakeModeCombo();
         _widthModeCombo = MakeModeCombo();
@@ -76,7 +76,7 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         var content = new StackPanel { Margin = new Thickness(14) };
         content.Children.Add(MakeRow(surface.TargetLabel, _targetCombo));
-        content.Children.Add(MakeRow(surface.LayoutTargetLabel, _layoutTargetBox));
+        content.Children.Add(MakeRow(surface.LayoutTargetLabel, _layoutTargetCombo));
         content.Children.Add(MakeRow(surface.XLabel, _xBox, surface.XModeLabel, _xModeCombo));
         content.Children.Add(MakeRow(surface.YLabel, _yBox, surface.YModeLabel, _yModeCombo));
         content.Children.Add(MakeRow(surface.WidthLabel, _widthBox, surface.WidthModeLabel, _widthModeCombo));
@@ -105,7 +105,7 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         double? height)
     {
         _targetCombo.SelectedIndex = FindTargetIndex(target);
-        _layoutTargetBox.Text = layoutTarget ?? string.Empty;
+        SelectLayoutTarget(layoutTarget);
         _xModeCombo.SelectedIndex = FindModeIndex(xMode);
         _yModeCombo.SelectedIndex = FindModeIndex(yMode);
         _widthModeCombo.SelectedIndex = FindModeIndex(widthMode);
@@ -131,7 +131,7 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     private void LoadControls()
     {
-        _layoutTargetBox.Text = _planner.LayoutTarget ?? string.Empty;
+        SelectLayoutTarget(_planner.LayoutTarget);
         _xModeCombo.SelectedIndex = FindModeIndex(_planner.XMode);
         _yModeCombo.SelectedIndex = FindModeIndex(_planner.YMode);
         _widthModeCombo.SelectedIndex = FindModeIndex(_planner.WidthMode);
@@ -144,7 +144,7 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     private void UpdatePlannerFromControls()
     {
-        _planner.SetLayoutTarget(_layoutTargetBox.Text);
+        _planner.SetLayoutTarget(SelectedLayoutTarget());
         _planner.SetXMode(SelectedMode(_xModeCombo));
         _planner.SetYMode(SelectedMode(_yModeCombo));
         _planner.SetWidthMode(SelectedMode(_widthModeCombo));
@@ -161,6 +161,24 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         DisplayMemberPath = nameof(ChartLayoutModeOption.Label),
         MinWidth = 100,
     };
+
+    private static ComboBox MakeLayoutTargetCombo() => new()
+    {
+        DisplayMemberPath = nameof(ChartLayoutTargetSemanticOption.Label),
+        MinWidth = 180,
+    };
+
+    private string? SelectedLayoutTarget() =>
+        _layoutTargetCombo.SelectedItem is ChartLayoutTargetSemanticOption option ? option.Value : null;
+
+    private void SelectLayoutTarget(string? value)
+    {
+        var options = ChartLayoutOptionsPlanner.LayoutTargetOptionsFor(value);
+        _layoutTargetCombo.ItemsSource = options;
+        _layoutTargetCombo.SelectedIndex = Math.Max(0,
+            options.Select((item, index) => (item, index))
+                .FirstOrDefault(x => string.Equals(x.item.Value, value, StringComparison.OrdinalIgnoreCase)).index);
+    }
 
     private static ChartManualLayoutMode SelectedMode(ComboBox combo) =>
         combo.SelectedItem is ChartLayoutModeOption option ? option.Value : ChartManualLayoutMode.Factor;
