@@ -234,6 +234,57 @@ public sealed class EditingSession
     }
 
     /// <summary>
+    /// Removes the image assigned to one SmartArt node, restoring its authored placeholder in
+    /// the live model and refreshing the native data/cache package in one undoable command.
+    /// </summary>
+    public SmartArtNodeEditResult ClearSmartArtNodePicture(uint shapeId, string targetModelId)
+    {
+        SmartArtNodeEditResult? result = null;
+        string? failureMessage = null;
+        var shape = CurrentSlide?.Shapes.FirstOrDefault(candidate =>
+            candidate.Id == shapeId &&
+            candidate.Kind == SlideShapeKind.SmartArt &&
+            candidate.SmartArt is not null);
+        var applied = shape?.SmartArt is not null && EditSmartArt(shapeId, smartArt =>
+        {
+            result = SmartArtEditingPlanner.Apply(
+                smartArt.Data,
+                SmartArtNodeEditIntent.ClearPicture(targetModelId));
+            if (!result.Applied)
+            {
+                failureMessage = result.Message;
+                return false;
+            }
+
+            var dataRewrite = SmartArtEditingPlanner.RewriteDataPart(smartArt);
+            if (!dataRewrite.Applied)
+            {
+                failureMessage = dataRewrite.Message;
+                return false;
+            }
+
+            var cacheRefresh = SmartArtEditingPlanner.RegenerateDrawingCache(
+                smartArt,
+                shape.OffsetXEmu,
+                shape.OffsetYEmu,
+                shape.ExtentCxEmu,
+                shape.ExtentCyEmu,
+                Presentation.Theme,
+                CurrentSlide?.ColorMapOverride);
+            if (!cacheRefresh.Applied)
+                failureMessage = cacheRefresh.Message;
+            return cacheRefresh.Applied;
+        });
+
+        return applied && result is not null
+            ? result
+            : SmartArtNodeEditResult.NotApplied(
+                SmartArtNodeEditKind.ClearPicture,
+                targetModelId,
+                failureMessage ?? "The selected SmartArt picture node could not be cleared.");
+    }
+
+    /// <summary>
     /// Converts one SmartArt graphic to the ordinary shapes produced by its live layout (or its
     /// cached fallback when no live layout is available). The replacement is one undoable edit and
     /// retains the graphic's original z-order slot.
