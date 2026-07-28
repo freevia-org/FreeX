@@ -2693,6 +2693,28 @@ public static class DocxWriter
                 openCommentId = coveringId;
             }
 
+            // A Mark Citation (TA) is an instruction-only complex field in native Word packages.
+            // It must be emitted as three paragraph siblings rather than a w:fldSimple.
+            if (runs[i].Citation is { } citation)
+            {
+                var fieldRun = runs[i++];
+                var rPr = BuildRunProperties(fieldRun.Formatting);
+                XElement WithProps(params object[] children)
+                {
+                    var r = new XElement(W + "r");
+                    if (rPr is not null)
+                        r.Add(new XElement(rPr));
+                    r.Add(children);
+                    return r;
+                }
+
+                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))));
+                Content(fieldRun, WithProps(new XElement(W + "instrText",
+                    new XAttribute(XNamespace.Xml + "space", "preserve"), CitationInstruction(citation))));
+                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "end"))));
+                continue;
+            }
+
             // A content control (w:sdt) wraps the maximal span of consecutive runs sharing the same
             // ContentControl instance. The wrapped run(s) keep their ordinary w:r form inside w:sdtContent;
             // the sdt itself still routes through the revision wrapper so a control can sit inside a
@@ -3169,14 +3191,6 @@ public static class DocxWriter
             wr.Add(BuildWordArtDrawing(wordArt, drawings.Ids));
             return wr;
         }
-
-        // A Mark Citation (TA) field emits a hidden w:fldSimple whose w:instr is the TA instruction
-        // (" TA \l "long" \s "short" \c N "). It wraps an empty run so it produces no visible glyph, matching
-        // Word's hidden citation mark. The reader recovers the Citation from the instruction.
-        if (run.Citation is { } citation)
-            return new XElement(W + "fldSimple",
-                new XAttribute(W + "instr", CitationInstruction(citation)),
-                new XElement(W + "r"));
 
         // A cross-reference field (Word's References > Cross-reference) emits a w:fldSimple whose w:instr is
         // a REF/PAGEREF/NOTEREF instruction over a bookmark name or note id, with optional \w/\n/\p and \h
