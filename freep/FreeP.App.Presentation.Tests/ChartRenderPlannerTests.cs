@@ -8,6 +8,57 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class ChartRenderPlannerTests
 {
     [Fact]
+    public void BuildScenePlan_PieLeaderLinesFollowExplicitDataLabelOption()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            Categories = { "North", "South", "West" },
+            DataLabels = new ChartDataLabels
+            {
+                ShowPercent = true,
+                ShowLeaderLines = true,
+                Position = DataLabelPosition.OutsideEnd
+            }
+        };
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 40, 35, 25 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+
+        scene.DataLabels.Should().HaveCount(3);
+        scene.DataLabelLeaderLines.Should().HaveCount(6);
+        scene.DataLabelLeaderLines.Should().AllSatisfy(line =>
+        {
+            line.Stroke.Thickness.Should().Be(0.75);
+            line.Start.Should().NotBe(line.End);
+        });
+    }
+
+    [Fact]
+    public void BuildScenePlan_DoesNotEmitLeaderLinesForNonPieChartsOrDisabledOption()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            Categories = { "North", "South" },
+            DataLabels = new ChartDataLabels { ShowPercent = true, ShowLeaderLines = false }
+        };
+        var series = new ChartSeries();
+        series.Values.AddRange(new double?[] { 60, 40 });
+        chart.Series.Add(series);
+
+        var disabled = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+        disabled.DataLabelLeaderLines.Should().BeEmpty();
+
+        chart.ChartType = ChartType.ColumnClustered;
+        chart.DataLabels.ShowLeaderLines = true;
+        var column = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+        column.DataLabelLeaderLines.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildScenePlan_ResolvesChartFamilyAndAllSharedPaintInputsOnce()
     {
         var chart = new ChartShape
