@@ -231,6 +231,7 @@ internal static class SmartArtInsertionFactory
         {
             SmartArtLayoutPreset.BasicProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/process1", SmartArtFamily.Process),
             SmartArtLayoutPreset.BasicTimeline => ("urn:microsoft.com/office/officeart/2005/8/layout/basicTimeline", SmartArtFamily.Process),
+            SmartArtLayoutPreset.CircleAccentTimeline => ("urn:microsoft.com/office/officeart/2005/8/layout/circleAccentTimeline", SmartArtFamily.Process),
             SmartArtLayoutPreset.StepDownProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/StepDownProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.ContinuousBlockProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/continuousBlockProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.SegmentedProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess", SmartArtFamily.Process),

@@ -50,6 +50,13 @@ public static class ConnectionSiteHelper
     /// <returns>The (x, y) point in EMU relative to the slide top-left corner.</returns>
     public static (long X, long Y) Resolve(SlideShape shape, int siteIndex)
     {
+        if (shape.CustomGeometry.Count > 0)
+        {
+            var customSite = ResolveCustomGeometrySite(shape, siteIndex);
+            if (customSite.HasValue)
+                return TransformSite(shape, customSite.Value);
+        }
+
         // Dispatch to per-shape tables for shapes whose real geometry differs from the bbox.
         if (shape.Kind == SlideShapeKind.AutoShape || shape.Kind == SlideShapeKind.Connector)
         {
@@ -58,6 +65,60 @@ public static class ConnectionSiteHelper
         }
 
         return TransformSite(shape, ResolveBbox(shape, siteIndex));
+    }
+
+    /// <summary>
+    /// Resolves the four standard connection directions from an authored custom path.
+    /// Custom geometry has no preset-specific site table, so the visible path vertices are
+    /// the only reliable geometry available after import. Pick the extreme vertex for the
+    /// requested side, preferring the one nearest the perpendicular centre line. This keeps
+    /// attached connectors on the authored outline instead of the transparent bbox corners.
+    /// </summary>
+    private static (long X, long Y)? ResolveCustomGeometrySite(SlideShape shape, int siteIndex)
+    {
+        if (siteIndex is < 0 or > 3)
+            return null;
+
+        var candidates = new List<(double X, double Y)>();
+        foreach (var path in shape.CustomGeometry)
+        {
+            var pathW = path.PathW > 0 ? path.PathW : shape.ExtentCxEmu;
+            var pathH = path.PathH > 0 ? path.PathH : shape.ExtentCyEmu;
+            if (pathW <= 0 || pathH <= 0)
+                continue;
+
+            foreach (var segment in path.Segments)
+            {
+                (double X, double Y)? point = segment.Kind switch
+                {
+                    CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo => (segment.X, segment.Y),
+                    CustomSegmentKind.QuadBezTo => (segment.X1, segment.Y1),
+                    CustomSegmentKind.CubicBezTo => (segment.X2, segment.Y2),
+                    _ => null,
+                };
+                if (point is { } p)
+                {
+                    candidates.Add((
+                        shape.OffsetXEmu + p.X / pathW * shape.ExtentCxEmu,
+                        shape.OffsetYEmu + p.Y / pathH * shape.ExtentCyEmu));
+                }
+            }
+        }
+
+        if (candidates.Count == 0)
+            return null;
+
+        var centerX = shape.OffsetXEmu + shape.ExtentCxEmu / 2.0;
+        var centerY = shape.OffsetYEmu + shape.ExtentCyEmu / 2.0;
+        var selected = siteIndex switch
+        {
+            0 => candidates.OrderBy(point => point.X).ThenBy(point => Math.Abs(point.Y - centerY)).First(),
+            1 => candidates.OrderBy(point => point.Y).ThenBy(point => Math.Abs(point.X - centerX)).First(),
+            2 => candidates.OrderByDescending(point => point.X).ThenBy(point => Math.Abs(point.Y - centerY)).First(),
+            _ => candidates.OrderByDescending(point => point.Y).ThenBy(point => Math.Abs(point.X - centerX)).First(),
+        };
+
+        return ((long)Math.Round(selected.X), (long)Math.Round(selected.Y));
     }
 
     private static (long X, long Y) TransformSite(SlideShape shape, (long X, long Y) site)
@@ -223,6 +284,67 @@ public static class ConnectionSiteHelper
                 };
             }
 
+            // Directional arrows use the same guide contract as ShapeGeometryBuilder:
+            // adj1 controls shaft thickness and adj2 controls head length.  Site 2/0
+            // is the visible tip for right/left arrows, while site 1/3 follow the
+            // midpoint of the authored top/bottom shaft edge rather than the bbox.
+            case DrawingShapeKind.RightArrow:
+            case DrawingShapeKind.LeftArrow:
+            {
+                var headBase = ResolveArrowHeadBase(shape);
+                var topBottomX = shape.AutoShapeKind == DrawingShapeKind.RightArrow
+                    ? left + (long)Math.Round(shape.ExtentCxEmu * headBase)
+                    : right - (long)Math.Round(shape.ExtentCxEmu * headBase);
+                return siteIndex switch
+                {
+                    0 => (left, midY),
+                    1 => (topBottomX, top),
+                    2 => (right, midY),
+                    3 => (topBottomX, bottom),
+                    _ => (midX, midY)
+                };
+            }
+
+            case DrawingShapeKind.UpArrow:
+            case DrawingShapeKind.DownArrow:
+            {
+                var headBase = ResolveArrowHeadBase(shape);
+                var topBottomY = shape.AutoShapeKind == DrawingShapeKind.UpArrow
+                    ? top + (long)Math.Round(shape.ExtentCyEmu * (1 - headBase))
+                    : top + (long)Math.Round(shape.ExtentCyEmu * headBase);
+                return siteIndex switch
+                {
+                    0 => (left, topBottomY),
+                    1 => (midX, top),
+                    2 => (right, topBottomY),
+                    3 => (midX, bottom),
+                    _ => (midX, midY)
+                };
+            }
+
+            // Compound arrows have real tips at both ends.  Keep the other two
+            // sites on the shaft edges so attached connectors never land in the
+            // transparent corner of the bounding rectangle.
+            case DrawingShapeKind.LeftRightArrow:
+                return siteIndex switch
+                {
+                    0 => (left, midY),
+                    1 => (midX, top),
+                    2 => (right, midY),
+                    3 => (midX, bottom),
+                    _ => (midX, midY)
+                };
+
+            case DrawingShapeKind.UpDownArrow:
+                return siteIndex switch
+                {
+                    0 => (left, midY),
+                    1 => (midX, top),
+                    2 => (right, midY),
+                    3 => (midX, bottom),
+                    _ => (midX, midY)
+                };
+
             case DrawingShapeKind.Star8:
             {
                 var topStar8 = StarPoint(midX, midY, shape.ExtentCxEmu / 2.0, shape.ExtentCyEmu / 2.0, -90);
@@ -317,6 +439,20 @@ public static class ConnectionSiteHelper
         var maximum = 100000.0 * shape.ExtentCxEmu / Math.Max(1, Math.Min(shape.ExtentCxEmu, shape.ExtentCyEmu));
         var depth = Math.Clamp(adjustment, 0, maximum) / 100000.0;
         return Math.Clamp(depth, 0, 1);
+    }
+
+    private static double ResolveArrowHeadBase(SlideShape shape)
+    {
+        if (!shape.PresetGeometryAdjustments.ContainsKey("adj1") &&
+            !shape.PresetGeometryAdjustments.ContainsKey("adj2"))
+        {
+            return shape.AutoShapeKind == DrawingShapeKind.LeftArrow ? 0.38 : 0.62;
+        }
+
+        var adjustment = shape.PresetGeometryAdjustments.TryGetValue("adj2", out var value)
+            ? value
+            : 50000;
+        return 1 - Math.Clamp(adjustment, 0, 100000) / 100000.0;
     }
 
     private static (long X, long Y) StarPoint(

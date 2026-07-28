@@ -9072,6 +9072,9 @@ public sealed partial class MainWindow : Window
         }
 
         var slideShow = new SlideShowWindow(_presentation, route);
+        // A named custom show is still a separate playback window. Restore the
+        // editor's focus when it closes just like the normal slideshow route.
+        slideShow.Closed += (_, _) => RestoreOwnerFocus();
 
         if (IsVisible)
             slideShow.Show(this);

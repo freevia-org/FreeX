@@ -63,6 +63,7 @@ public enum SmartArtLayoutPreset
 {
     BasicProcess,
     BasicTimeline,
+    CircleAccentTimeline,
     StepDownProcess,
     ContinuousBlockProcess,
     SegmentedProcess,
@@ -453,6 +454,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.BasicTimeline =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicTimeline", SmartArtFamily.Process),
+            SmartArtLayoutPreset.CircleAccentTimeline =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/circleAccentTimeline", SmartArtFamily.Process),
             SmartArtLayoutPreset.StepDownProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/StepDownProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.ContinuousBlockProcess =>

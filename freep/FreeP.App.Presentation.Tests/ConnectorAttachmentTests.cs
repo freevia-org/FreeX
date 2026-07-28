@@ -156,6 +156,54 @@ public sealed class ConnectorAttachmentTests
         ConnectionSiteHelper.Resolve(shape, 3).Should().Be((50L, 71L));
     }
 
+    [Fact]
+    public void ConnectionSiteHelper_CustomGeometrySitesFollowAuthoredOutline()
+    {
+        var shape = MakeRect(1, 0, 0, 100, 100);
+        var path = new CustomGeometryPath { PathW = 200, PathH = 200 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, 100, 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 200, 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 150, 200));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 0, 200));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        shape.CustomGeometry.Add(path);
+
+        ConnectionSiteHelper.Resolve(shape, 0).Should().Be((0L, 100L));
+        ConnectionSiteHelper.Resolve(shape, 1).Should().Be((50L, 0L));
+        ConnectionSiteHelper.Resolve(shape, 2).Should().Be((100L, 0L));
+        ConnectionSiteHelper.Resolve(shape, 3).Should().Be((75L, 100L));
+    }
+
+    [Fact]
+    public void MoveShape_ReroutesAttachedConnectorToCustomGeometryOutline()
+    {
+        var (_, bus, slide) = MakePresentation();
+        var custom = MakeRect(1, 1000, 1000, 2000, 1000);
+        var path = new CustomGeometryPath { PathW = 200, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, 50, 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 200, 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 150, 100));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 0, 100));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        custom.CustomGeometry.Add(path);
+        var target = MakeRect(2, 6000, 1000, 2000, 1000);
+        var connector = MakeConnector(3,
+            start: new ConnectorAttachment { ShapeId = 1, SiteIndex = 0 },
+            end: new ConnectorAttachment { ShapeId = 2, SiteIndex = 0 });
+
+        slide.Shapes.Add(custom);
+        slide.Shapes.Add(target);
+        slide.Shapes.Add(connector);
+
+        bus.Execute(new MoveShapeCommand(0, 1, 500, 200));
+
+        var movedConnector = slide.Shapes.First(shape => shape.Id == 3);
+        movedConnector.OffsetXEmu.Should().Be(1500);
+        movedConnector.OffsetYEmu.Should().Be(1500);
+        movedConnector.ExtentCxEmu.Should().Be(4500);
+        movedConnector.ExtentCyEmu.Should().Be(700);
+    }
+
     [Theory]
     [InlineData(Free.Shared.Drawing.DrawingShapeKind.Parallelogram, 0, 10, 50)]
     [InlineData(Free.Shared.Drawing.DrawingShapeKind.Parallelogram, 2, 90, 50)]
@@ -196,6 +244,78 @@ public sealed class ConnectorAttachmentTests
         homePlate.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.HomePlate;
         ConnectionSiteHelper.Resolve(homePlate, 1).Should().Be((38L, 0L));
         ConnectionSiteHelper.Resolve(homePlate, 2).Should().Be((100L, 50L));
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_DirectionalArrowSitesFollowVisibleTipAndGuides()
+    {
+        var arrow = MakeRect(1, 0, 0, 100, 100);
+        arrow.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.RightArrow;
+
+        ConnectionSiteHelper.Resolve(arrow, 0).Should().Be((0L, 50L));
+        ConnectionSiteHelper.Resolve(arrow, 2).Should().Be((100L, 50L));
+        ConnectionSiteHelper.Resolve(arrow, 1).Should().Be((62L, 0L));
+        ConnectionSiteHelper.Resolve(arrow, 3).Should().Be((62L, 100L));
+
+        arrow.PresetGeometryAdjustments["adj1"] = 25000;
+        arrow.PresetGeometryAdjustments["adj2"] = 75000;
+        ConnectionSiteHelper.Resolve(arrow, 1).Should().Be((25L, 0L));
+        ConnectionSiteHelper.Resolve(arrow, 3).Should().Be((25L, 100L));
+    }
+
+    [Theory]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.LeftArrow, 0, 0, 50)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.UpArrow, 1, 50, 0)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.DownArrow, 3, 50, 100)]
+    public void ConnectionSiteHelper_DirectionalArrowTipSitesStayOnVisiblePoint(
+        Free.Shared.Drawing.DrawingShapeKind kind,
+        int siteIndex,
+        int expectedX,
+        int expectedY)
+    {
+        var arrow = MakeRect(1, 0, 0, 100, 100);
+        arrow.AutoShapeKind = kind;
+
+        ConnectionSiteHelper.Resolve(arrow, siteIndex).Should().Be((expectedX, expectedY));
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_CompoundArrowSitesCoverBothVisibleTips()
+    {
+        var horizontal = MakeRect(1, 0, 0, 100, 100);
+        horizontal.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.LeftRightArrow;
+        ConnectionSiteHelper.Resolve(horizontal, 0).Should().Be((0L, 50L));
+        ConnectionSiteHelper.Resolve(horizontal, 2).Should().Be((100L, 50L));
+
+        var vertical = MakeRect(2, 0, 0, 100, 100);
+        vertical.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.UpDownArrow;
+        ConnectionSiteHelper.Resolve(vertical, 1).Should().Be((50L, 0L));
+        ConnectionSiteHelper.Resolve(vertical, 3).Should().Be((50L, 100L));
+    }
+
+    [Fact]
+    public void MoveShape_ReroutesAttachedArrowConnectorToVisibleTip()
+    {
+        var (_, bus, slide) = MakePresentation();
+        var arrow = MakeRect(1, 1000, 1000, 2000, 1000);
+        arrow.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.RightArrow;
+        var target = MakeRect(2, 6000, 1000, 2000, 1000);
+        var connector = MakeConnector(3,
+            start: new ConnectorAttachment { ShapeId = 1, SiteIndex = 2 },
+            end: new ConnectorAttachment { ShapeId = 2, SiteIndex = 0 });
+
+        slide.Shapes.Add(arrow);
+        slide.Shapes.Add(target);
+        slide.Shapes.Add(connector);
+
+        bus.Execute(new MoveShapeCommand(0, 1, 500, 200));
+
+        // Right-arrow site 2 is its point, not the old bbox midpoint.
+        var movedConnector = slide.Shapes.First(shape => shape.Id == 3);
+        movedConnector.OffsetXEmu.Should().Be(3500);
+        movedConnector.OffsetYEmu.Should().Be(1500);
+        movedConnector.ExtentCxEmu.Should().Be(2500);
+        movedConnector.ExtentCyEmu.Should().Be(200);
     }
 
     [Fact]
