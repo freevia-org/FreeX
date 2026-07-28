@@ -103,6 +103,25 @@ public sealed class PptxRepairCorpusValidityTests
     }
 
     [Fact]
+    public void SmartArtLiveCorpus_UsesCachedDrawingForImportedHierarchy3()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+
+        var hierarchy3 = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Where(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .Select(shape => shape.SmartArt!)
+            .Where(smartArt => smartArt.Data?.LayoutUniqueId.EndsWith(
+                "/hierarchy3", StringComparison.OrdinalIgnoreCase) == true)
+            .ToArray();
+
+        hierarchy3.Should().NotBeEmpty();
+        hierarchy3.Should().OnlyContain(smartArt => !smartArt.Data!.IsLiveLayoutSupported);
+        hierarchy3.Should().OnlyContain(smartArt => smartArt.FallbackShapes.Count > 0);
+    }
+
+    [Fact]
     public void PictureCaptionListInsertion_RoundTripsWithSchemaValidMediaParts()
     {
         var presentation = Presentation.CreateEmpty();

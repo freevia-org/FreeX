@@ -17374,7 +17374,7 @@ public sealed class DocumentView : Control
         };
     }
 
-    private static FloatingSmartArtData BuildFloatingSmartArtData(
+    private FloatingSmartArtData BuildFloatingSmartArtData(
         SmartArt smartArt,
         Rect rect,
         bool behindText,
@@ -17382,7 +17382,7 @@ public sealed class DocumentView : Control
         int blockIndex = -1,
         int runIndex = -1)
     {
-        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt, _doc.Theme);
 
         return new FloatingSmartArtData
         {

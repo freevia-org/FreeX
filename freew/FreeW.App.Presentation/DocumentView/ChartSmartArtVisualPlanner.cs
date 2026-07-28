@@ -960,7 +960,7 @@ public static class ChartSmartArtVisualPlanner
             HasAxisTitles: plan.ShowAxisTitles);
     }
 
-    public static SmartArtVisualPlan BuildSmartArtPlan(SmartArt smartArt)
+    public static SmartArtVisualPlan BuildSmartArtPlan(SmartArt smartArt, DocumentTheme? documentTheme = null)
     {
         ArgumentNullException.ThrowIfNull(smartArt);
 
@@ -992,8 +992,11 @@ public static class ChartSmartArtVisualPlanner
             isBasicProcessLayout,
             useNativeDefaultProcessStyle);
 
+        var isCurrentWordPyramid = IsCurrentWordPyramidStyle(layoutId, smartArt);
         if (IsNativeWordOrgChartStyle(layoutId, colorScheme, style))
             nodes = ApplyNativeWordOrgChartStyle(nodes);
+        else if (isCurrentWordPyramid)
+            nodes = ApplyCurrentWordPyramidStyle(nodes, documentTheme);
         else if (IsNativeWordPyramidStyle(layoutId, colorScheme, style))
             nodes = ApplyNativeWordPyramidStyle(nodes);
 
@@ -1001,7 +1004,7 @@ public static class ChartSmartArtVisualPlanner
             ? BuildHierarchyGeometry(layoutId, smartArt.Nodes)
             : null;
         var layoutGeometry = hierarchyGeometry is null
-            ? BuildLayoutGeometry(layout.Id, nodes.Count)
+            ? BuildLayoutGeometry(layout.Id, nodes.Count, isCurrentWordPyramid)
             : null;
 
         return new SmartArtVisualPlan(
@@ -1319,7 +1322,44 @@ public static class ChartSmartArtVisualPlanner
             })
             .ToList();
 
-    private static SmartArtLayoutGeometryPlan? BuildLayoutGeometry(string layoutId, int nodeCount) =>
+    private static bool IsCurrentWordPyramidStyle(string layoutId, SmartArt smartArt) =>
+        string.Equals(layoutId, "pyramid1", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(smartArt.ColorSchemeId, "accent1_2", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(smartArt.StyleId, "simple1", StringComparison.OrdinalIgnoreCase);
+
+    private static List<SmartArtNodeVisualPlan> ApplyCurrentWordPyramidStyle(
+        IReadOnlyList<SmartArtNodeVisualPlan> nodes,
+        DocumentTheme? documentTheme)
+    {
+        var accent = documentTheme?.PrimaryColorHex;
+        if (string.IsNullOrWhiteSpace(accent))
+            accent = "#1F3864";
+        else if (!accent.StartsWith('#'))
+            accent = "#" + accent;
+
+        return nodes
+            .Select(node => node with
+            {
+                FillHex = accent,
+                TextHex = "#000000",
+                BorderHex = "#FFFFFF",
+                BorderThickness = 1,
+                CornerRadius = 0,
+                ShadowOpacity = 0,
+                ShadowBlur = 0,
+                ShadowDepth = 0,
+                ConnectorHex = accent,
+                // The cached source declares 28pt, but Word applies SmartArt text fitting
+                // before scaling the 300pt by 150pt drawing into the anchor rectangle.
+                FontSizeDip = 18.48 * 96.0 / 72.0
+            })
+            .ToList();
+    }
+
+    private static SmartArtLayoutGeometryPlan? BuildLayoutGeometry(
+        string layoutId,
+        int nodeCount,
+        bool isCurrentWordPyramid) =>
         layoutId switch
         {
             "list1" => BuildVerticalListGeometry(nodeCount, SmartArtLayoutGeometryKind.BasicList),
@@ -1330,7 +1370,7 @@ public static class ChartSmartArtVisualPlanner
             "stepup1" => BuildStepGeometry(nodeCount, ascending: true),
             "stepdown1" => BuildStepGeometry(nodeCount, ascending: false),
             "cycle1" => BuildCycleGeometry(nodeCount),
-            "pyramid1" => BuildPyramidGeometry(nodeCount),
+            "pyramid1" => BuildPyramidGeometry(nodeCount, isCurrentWordPyramid),
             "radial1" => BuildRadialGeometry(nodeCount),
             "matrix1" => BuildMatrixGeometry(nodeCount),
             _ => null
@@ -1639,8 +1679,11 @@ public static class ChartSmartArtVisualPlanner
             nodeCount == 0 ? 0 : naturalHeight);
     }
 
-    private static SmartArtLayoutGeometryPlan BuildPyramidGeometry(int nodeCount)
+    private static SmartArtLayoutGeometryPlan BuildPyramidGeometry(int nodeCount, bool isCurrentWordPyramid)
     {
+        if (isCurrentWordPyramid && nodeCount == 4)
+            return BuildCurrentWordPyramidGeometry();
+
         if (nodeCount == 4)
             return BuildNativeWordPyramidGeometry();
 
@@ -1700,6 +1743,28 @@ public static class ChartSmartArtVisualPlanner
             BuildNativeWordPyramidBand(1, 78, 41, 144, bandHeight, trapezoidInset),
             BuildNativeWordPyramidBand(2, 42, 76, 216, bandHeight, trapezoidInset),
             BuildNativeWordPyramidBand(3, 6, 111, 288, bandHeight, trapezoidInset)
+        };
+
+        return new SmartArtLayoutGeometryPlan(
+            SmartArtLayoutGeometryKind.Pyramid,
+            nodes,
+            [],
+            NaturalWidth: 300,
+            NaturalHeight: 150);
+    }
+
+    private static SmartArtLayoutGeometryPlan BuildCurrentWordPyramidGeometry()
+    {
+        // The imported cached dsp:drawing uses contiguous trapezoids, rather than the
+        // inset bands used by Word's older accent2/flat1 pyramid gallery signature.
+        const double bandHeight = 37.5;
+        const double trapezoidInset = 37.5;
+        var nodes = new SmartArtLayoutNodeGeometry[]
+        {
+            BuildNativeWordPyramidBand(0, 112.5, 0, 75, bandHeight, trapezoidInset),
+            BuildNativeWordPyramidBand(1, 75, 37.5, 150, bandHeight, trapezoidInset),
+            BuildNativeWordPyramidBand(2, 37.5, 75, 225, bandHeight, trapezoidInset),
+            BuildNativeWordPyramidBand(3, 0, 112.5, 300, bandHeight, trapezoidInset)
         };
 
         return new SmartArtLayoutGeometryPlan(

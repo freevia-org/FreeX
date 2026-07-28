@@ -4549,8 +4549,8 @@ public sealed class MainWindowHeadlessTests
                 row.Category == "Media" &&
                 row.ShapeId == 713 &&
                 row.ShapeName == "Demo video" &&
-                row.ActionLabel == "Select Media" &&
-                row.CommandHint == null &&
+                row.ActionLabel == "Open Captions" &&
+                row.CommandHint == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneOpenCommandId &&
                 row.ShouldNavigateToSlide &&
                 row.ShouldSelectShape);
         summary.Should().NotBeNull();
