@@ -59,6 +59,47 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_AutomaticPlayback_RoundTripsThroughPresentationTiming()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Name = "Automatically playing video",
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                PlaybackStartMode = MediaPlaybackStartMode.Automatically,
+                Bytes = [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70],
+                ContentType = "video/mp4",
+            },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+
+        ms.Position = 0;
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+            var p = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+            var mediaTiming = slideXml.Descendants(p + "video").Single();
+            mediaTiming.Descendants(p + "cond").Single().Attribute("evt")!.Value.Should().Be("onBegin");
+            mediaTiming.Descendants(p + "spTgt").Single().Attribute("spid")!.Value.Should().Be("7");
+        }
+
+        ms.Position = 0;
+        var reopened = PptxPackageReader.Read(ms);
+        reopened.Slides[0].Shapes[0].Media!.PlaybackStartMode
+            .Should().Be(MediaPlaybackStartMode.Automatically);
+    }
+
+    [Fact]
     public void Media_ReadsCaptionTrackMetadataFromSlideRelationships()
     {
         var pres = new Presentation();

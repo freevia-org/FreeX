@@ -1292,7 +1292,7 @@ public static class PptxPackageWriter
                 // that carry it on the master/layout (which the reader already handles).
                 BuildSlideClrMapOvrEl(slide.ColorMapOverride),
                 BuildTransitionEl(slide.Transition, transSoundRelId),
-                BuildTimingEl(slide.Animations)));
+                BuildTimingEl(slide)));
     }
 
     /// <summary>
@@ -2129,9 +2129,14 @@ public static class PptxPackageWriter
 
     // ── p:timing ─────────────────────────────────────────────────────────────────
 
-    private static XElement? BuildTimingEl(List<ShapeAnimation> animations)
+    private static XElement? BuildTimingEl(Slide slide)
     {
-        if (animations.Count == 0) return null;
+        var animations = slide.Animations;
+        var automaticMedia = slide.Shapes
+            .Where(shape => shape.Kind == SlideShapeKind.Media
+                && shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically)
+            .ToList();
+        if (animations.Count == 0 && automaticMedia.Count == 0) return null;
 
         // Split animations into main-sequence and trigger groups.
         var mainAnims    = animations.Where(a => a.TriggerShapeId is null).ToList();
@@ -2190,13 +2195,17 @@ public static class PptxPackageWriter
             triggerPars.Add(trigSeqEl);
         }
 
-        var rootChildTnLst = new XElement(P + "childTnLst",
-            new XElement(P + "par", outerParCTn));
+        var rootChildTnLst = new XElement(P + "childTnLst");
+        if (animations.Count > 0)
+            rootChildTnLst.Add(new XElement(P + "par", outerParCTn));
 
         // Triggered sequences must live under the single root p:par. PowerPoint
         // repairs slides that put multiple p:par siblings directly under p:tnLst.
         foreach (var triggerPar in triggerPars)
             rootChildTnLst.Add(triggerPar);
+
+        foreach (var shape in automaticMedia)
+            rootChildTnLst.Add(BuildAutomaticMediaTimingEl(shape, ref nodeId));
 
         var outerPar = new XElement(P + "par",
             new XElement(P + "cTn",
@@ -2211,6 +2220,26 @@ public static class PptxPackageWriter
 
         return new XElement(P + "timing",
             new XElement(P + "tnLst", outerPar));
+    }
+
+    private static XElement BuildAutomaticMediaTimingEl(SlideShape shape, ref uint nodeId)
+    {
+        var mediaElementName = shape.Media?.IsVideo == true ? P + "video" : P + "audio";
+        return new XElement(mediaElementName,
+            new XElement(P + "cMediaNode",
+                new XAttribute("vol", "80000"),
+                new XElement(P + "cTn",
+                    new XAttribute("id", nodeId++),
+                    new XAttribute("dur", "indefinite"),
+                    new XAttribute("fill", "hold"),
+                    new XAttribute("display", "0"),
+                    new XElement(P + "stCondLst",
+                        new XElement(P + "cond",
+                            new XAttribute("evt", "onBegin"),
+                            new XAttribute("delay", "0")))),
+                new XElement(P + "tgtEl",
+                    new XElement(P + "spTgt",
+                        new XAttribute("spid", shape.Id.ToString(CultureInfo.InvariantCulture))))));
     }
 
     /// <summary>

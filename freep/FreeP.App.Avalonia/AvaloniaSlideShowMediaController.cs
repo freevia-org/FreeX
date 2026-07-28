@@ -178,7 +178,8 @@ internal sealed class AvaloniaSlideShowMediaController
                     CaptionHost = captionHost,
                     CaptionText = captionText,
                 });
-                session.Play();
+                if (shape.Media.PlaybackStartMode == MediaPlaybackStartMode.Automatically)
+                    session.Play();
             }
             catch (Exception ex)
             {

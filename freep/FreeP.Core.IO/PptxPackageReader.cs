@@ -4791,10 +4791,42 @@ public static class PptxPackageReader
                 foreach (var clickGroup in seqChild.Elements(P + "par"))
                     ReadClickGroup(clickGroup, slide, triggerShapeId: trigSpid);
             }
+
+            ReadMediaPlaybackStartModes(timingEl, slide);
         }
         catch
         {
             // If we fail to parse the timing tree (complex/unknown structure), skip silently.
+        }
+    }
+
+    private static void ReadMediaPlaybackStartModes(XElement timingEl, Slide slide)
+    {
+        foreach (var mediaNode in timingEl.Descendants()
+                     .Where(element => element.Name == P + "video" || element.Name == P + "audio")
+                     .Select(element => element.Element(P + "cMediaNode"))
+                     .OfType<XElement>())
+        {
+            var shapeIdText = mediaNode.Element(P + "tgtEl")?.Element(P + "spTgt")?.Attribute("spid")?.Value;
+            if (!uint.TryParse(shapeIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId))
+                continue;
+
+            var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+            if (shape?.Media is null)
+                continue;
+
+            var conditions = mediaNode.Element(P + "cTn")?.Element(P + "stCondLst")?.Elements(P + "cond")
+                ?? Enumerable.Empty<XElement>();
+            if (conditions.Any(condition =>
+                    condition.Attribute("evt")?.Value == "onBegin" &&
+                    (condition.Attribute("delay")?.Value is null or "0")))
+            {
+                shape.Media.PlaybackStartMode = MediaPlaybackStartMode.Automatically;
+            }
+            else
+            {
+                shape.Media.PlaybackStartMode = MediaPlaybackStartMode.InClickSequence;
+            }
         }
     }
 
