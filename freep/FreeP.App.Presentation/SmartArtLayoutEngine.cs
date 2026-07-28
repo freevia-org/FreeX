@@ -84,6 +84,9 @@ public static class SmartArtLayoutEngine
         if (IsPictureAccentListLayout(data.LayoutUniqueId))
             return LayoutPictureAccentList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsPictureStackLayout(data.LayoutUniqueId))
+            return LayoutPictureStack(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsPictureGridLayout(data.LayoutUniqueId))
             return LayoutPictureGrid(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1212,6 +1215,57 @@ public static class SmartArtLayoutEngine
                 y + pictureH,
                 cellW,
                 captionH));
+        }
+
+        return shapes;
+    }
+
+    private static IReadOnlyList<SlideShape>? LayoutPictureStack(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>(n * 2);
+        long padX = (long)(fcx * OuterPaddingFrac);
+        long padY = (long)(fcy * OuterPaddingFrac);
+        long gapX = Math.Max((long)(fcx * 0.035), 1L);
+        long pictureW = Math.Max((long)(fcx * 0.34), 1L);
+        long pictureH = Math.Max((long)(fcy * 0.26), 1L);
+        long stepY = Math.Max((long)(pictureH * 0.32), 1L);
+        long stackH = n == 0 ? pictureH : pictureH + Math.Max(n - 1, 0) * stepY;
+        long stackY = fy + Math.Max((fcy - stackH) / 2, padY);
+        long captionX = fx + padX + pictureW + gapX;
+        long captionW = Math.Max(fx + fcx - padX - captionX, 1L);
+        uint idCounter = 410;
+
+        for (int i = 0; i < n; i++)
+        {
+            var node = nodes[i];
+            var nodeStyle = stylePlan.GetNodeStyle(i, node.Level, SmartArtFamily.List);
+            long pictureY = stackY + i * stepY;
+            shapes.Add(node.Picture is { Bytes.Length: > 0 }
+                ? new SlideShape
+                {
+                    Id = idCounter++,
+                    Name = $"SmartArt_StackPicture_{i + 1}",
+                    Kind = SlideShapeKind.Picture,
+                    OffsetXEmu = fx + padX,
+                    OffsetYEmu = pictureY,
+                    ExtentCxEmu = pictureW,
+                    ExtentCyEmu = pictureH,
+                    Picture = node.Picture,
+                }
+                : MakePicturePlaceholder(idCounter++, fx + padX, pictureY, pictureW, pictureH, nodeStyle));
+
+            shapes.Add(MakeCaption(
+                idCounter++,
+                node.Text,
+                nodeStyle,
+                captionX,
+                pictureY,
+                captionW,
+                pictureH));
         }
 
         return shapes;
@@ -2518,6 +2572,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "pictureaccentlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsPictureStackLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "picturestack", StringComparison.Ordinal);
     }
 
     private static bool IsPictureGridLayout(string uniqueId)
