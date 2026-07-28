@@ -1099,17 +1099,24 @@ public sealed partial class MainWindow
                 return;
 
             var pointer = args.GetCurrentPoint(canvas).Position;
+            var minimumChartWidth = DrawingObjectMinimumSizePlanner.MinimumWidth(DrawingObjectMinimumSizeKind.Chart);
+            var minimumChartHeight = DrawingObjectMinimumSizePlanner.MinimumHeight(DrawingObjectMinimumSizeKind.Chart);
             var transform = ObjectDragPlanner.CalculateDragTransform(
                 session.Kind,
                 session.StartCanvasRect,
                 new LayoutPoint(session.StartPointerInCanvas.X, session.StartPointerInCanvas.Y),
-                new LayoutPoint(pointer.X, pointer.Y));
+                new LayoutPoint(pointer.X, pointer.Y),
+                Math.Min(minimumChartWidth, minimumChartHeight));
 
-            var rect = transform.Rect;
+            var rect = ObjectDragPlanner.ClampResizeToMinimums(
+                session.Kind,
+                transform,
+                minimumChartWidth,
+                minimumChartHeight);
             AvaloniaCanvas.SetLeft(container, rect.Left);
             AvaloniaCanvas.SetTop(container, rect.Top);
-            container.Width = Math.Max(1, rect.Width);
-            container.Height = Math.Max(1, rect.Height);
+            container.Width = rect.Width;
+            container.Height = rect.Height;
 
             // Keep the selection adorner's border + handles tracking the live preview size.
             if (container is Panel panel && panel.Children.Count > 0 &&
@@ -1163,8 +1170,10 @@ public sealed partial class MainWindow
         var canvasTop = AvaloniaCanvas.GetTop(container);
         var sheetLeft = Math.Max(0, (canvasLeft - headerLeft) / zoomFactor);
         var sheetTop = Math.Max(0, (canvasTop - headerTop) / zoomFactor);
-        var sheetWidth = Math.Max(ObjectDragPlanner.MinimumObjectSize, container.Width / zoomFactor);
-        var sheetHeight = Math.Max(ObjectDragPlanner.MinimumObjectSize, container.Height / zoomFactor);
+        var minimumChartWidth = DrawingObjectMinimumSizePlanner.MinimumWidth(DrawingObjectMinimumSizeKind.Chart);
+        var minimumChartHeight = DrawingObjectMinimumSizePlanner.MinimumHeight(DrawingObjectMinimumSizeKind.Chart);
+        var sheetWidth = Math.Max(minimumChartWidth, container.Width / zoomFactor);
+        var sheetHeight = Math.Max(minimumChartHeight, container.Height / zoomFactor);
 
         var command = new SetChartBoundsCommand(sheet.Id, session.Chart.Id, sheetLeft, sheetTop, sheetWidth, sheetHeight);
         var status = session.Kind == ObjectDragKind.Move

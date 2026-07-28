@@ -42,6 +42,27 @@ public sealed class ObjectDragPlannerTests
         ObjectDragPlanner.ShouldCommitResize(Start, Start, false, false, true, false).Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(ObjectDragKind.ResizeW, 276, 100, 24, 100)]
+    [InlineData(ObjectDragKind.ResizeN, 100, 182, 200, 18)]
+    public void ClampResizeToMinimums_PreservesOppositeEdgeForWestAndNorthHandles(
+        ObjectDragKind kind,
+        double expectedLeft,
+        double expectedTop,
+        double expectedWidth,
+        double expectedHeight)
+    {
+        var transform = ObjectDragPlanner.CalculateDragTransform(
+            kind,
+            Start,
+            kind == ObjectDragKind.ResizeW ? new LayoutPoint(100, 150) : new LayoutPoint(150, 100),
+            kind == ObjectDragKind.ResizeW ? new LayoutPoint(295, 150) : new LayoutPoint(150, 190),
+            minimumSize: 18);
+
+        ObjectDragPlanner.ClampResizeToMinimums(kind, transform, 24, 18)
+            .Should().Be(new LayoutRect(expectedLeft, expectedTop, expectedWidth, expectedHeight));
+    }
+
     [Fact]
     public void CalculateDragRect_ResizeSE_MovesBottomRightAndKeepsTopLeft()
     {

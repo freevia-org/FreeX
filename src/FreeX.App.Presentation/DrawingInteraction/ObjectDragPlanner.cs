@@ -75,6 +75,45 @@ public static class ObjectDragPlanner
             shared.CrossedVertically);
     }
 
+    /// <summary>
+    /// Applies independent width and height minimums to a live resize preview while retaining the
+    /// opposite edge for west/north handles. The crossed flags identify which edge became the fixed
+    /// side after the drag passed through the original bounds.
+    /// </summary>
+    public static LayoutRect ClampResizeToMinimums(
+        ObjectDragKind dragKind,
+        ObjectDragTransform transform,
+        double minimumWidth,
+        double minimumHeight)
+    {
+        var width = Math.Max(1, minimumWidth);
+        var height = Math.Max(1, minimumHeight);
+        var rect = transform.Rect;
+
+        var movesLeft = dragKind is ObjectDragKind.ResizeNW or ObjectDragKind.ResizeW or ObjectDragKind.ResizeSW;
+        var movesRight = dragKind is ObjectDragKind.ResizeNE or ObjectDragKind.ResizeE or ObjectDragKind.ResizeSE;
+        var movesTop = dragKind is ObjectDragKind.ResizeNW or ObjectDragKind.ResizeN or ObjectDragKind.ResizeNE;
+        var movesBottom = dragKind is ObjectDragKind.ResizeSW or ObjectDragKind.ResizeS or ObjectDragKind.ResizeSE;
+
+        var left = rect.Left;
+        var top = rect.Top;
+        if (rect.Width < width && movesLeft != movesRight)
+        {
+            left = movesLeft == transform.CrossedHorizontally
+                ? rect.Left
+                : rect.Right - width;
+        }
+
+        if (rect.Height < height && movesTop != movesBottom)
+        {
+            top = movesTop == transform.CrossedVertically
+                ? rect.Top
+                : rect.Bottom - height;
+        }
+
+        return new LayoutRect(left, top, Math.Max(width, rect.Width), Math.Max(height, rect.Height));
+    }
+
     public static bool ShouldCommitMove(CellAddress startAnchor, CellAddress currentAnchor) =>
         startAnchor != currentAnchor;
 

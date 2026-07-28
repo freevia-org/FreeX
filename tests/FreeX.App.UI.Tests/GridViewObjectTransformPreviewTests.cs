@@ -102,6 +102,28 @@ public sealed class GridViewObjectTransformPreviewTests
     }
 
     [Fact]
+    public void ChartResizeCommit_ClampsToWpfMinimumBounds()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var chart = CreateRedChart(sheetId, left: 4, top: 4, width: 48, height: 32);
+            var grid = CreateGrid(chart, width: 160, height: 90);
+            (Guid Id, double Left, double Top, double Width, double Height)? committed = null;
+            grid.ChartBoundsChanged += (id, left, top, width, height) =>
+                committed = (id, left, top, width, height);
+
+            GridViewTestHelpers.CommitChartObjectBoundsChange(
+                grid,
+                chart.Id,
+                new Rect(4, 4, 48, 32),
+                new Rect(4, 4, 3, 2));
+
+            committed.Should().Be((chart.Id, 4d, 4d, 24d, 18d));
+        });
+    }
+
+    [Fact]
     public void ActivePictureResizePreview_DrawsPictureAtLiveSizeWithoutMutatingModel()
     {
         WpfTestThread.Run(() =>

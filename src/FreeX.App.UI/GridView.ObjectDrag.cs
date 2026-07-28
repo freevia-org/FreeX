@@ -1,20 +1,29 @@
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
 
 public partial class GridView
 {
-    private const double MinimumShapeObjectWidth = 8.0;
-    private const double MinimumShapeObjectHeight = 8.0;
-    private const double MinimumPictureObjectWidth = 24.0;
-    private const double MinimumPictureObjectHeight = 18.0;
-    private const double MinimumTextBoxObjectWidth = 24.0;
-    private const double MinimumTextBoxObjectHeight = 18.0;
-    private const double MinimumChartObjectWidth = 24.0;
-    private const double MinimumChartObjectHeight = 18.0;
+    private static readonly double MinimumShapeObjectWidth =
+        DrawingObjectMinimumSizePlanner.MinimumWidth(DrawingObjectMinimumSizeKind.Shape);
+    private static readonly double MinimumShapeObjectHeight =
+        DrawingObjectMinimumSizePlanner.MinimumHeight(DrawingObjectMinimumSizeKind.Shape);
+    private static readonly double MinimumPictureObjectWidth =
+        DrawingObjectMinimumSizePlanner.MinimumWidth(DrawingObjectMinimumSizeKind.Picture);
+    private static readonly double MinimumPictureObjectHeight =
+        DrawingObjectMinimumSizePlanner.MinimumHeight(DrawingObjectMinimumSizeKind.Picture);
+    private static readonly double MinimumTextBoxObjectWidth =
+        DrawingObjectMinimumSizePlanner.MinimumWidth(DrawingObjectMinimumSizeKind.TextBox);
+    private static readonly double MinimumTextBoxObjectHeight =
+        DrawingObjectMinimumSizePlanner.MinimumHeight(DrawingObjectMinimumSizeKind.TextBox);
+    private static readonly double MinimumChartObjectWidth =
+        DrawingObjectMinimumSizePlanner.MinimumWidth(DrawingObjectMinimumSizeKind.Chart);
+    private static readonly double MinimumChartObjectHeight =
+        DrawingObjectMinimumSizePlanner.MinimumHeight(DrawingObjectMinimumSizeKind.Chart);
 
     private const double HandleSize = 8.0;
     private const double HandleHitPad = 4.0;
