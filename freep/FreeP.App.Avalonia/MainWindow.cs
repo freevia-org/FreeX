@@ -4587,17 +4587,25 @@ public sealed partial class MainWindow : Window
     }
 
     private static PresentationVideoExportHandoffHostCapabilities BuildVideoExportHostCapabilities(
-        LinuxVideoEncoderCapability capability) =>
-        new(
-            "Avalonia Linux video export host",
+        LinuxVideoEncoderCapability capability)
+    {
+        var isWindowsNative = string.Equals(
+            capability.ExecutablePath,
+            "windows-media-composition",
+            StringComparison.Ordinal);
+        return new(
+            isWindowsNative ? "Avalonia Windows video export host" : "Avalonia Linux video export host",
             capability.CanEncodeMp4,
             CanCaptureNarration: capability.CanCaptureNarration,
             CanCaptureCameraAndMedia: false,
             capability.CanEncodeMp4
-                ? capability.CanCaptureNarration
-                    ? "ffmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available."
-                    : "Video-only ffmpeg export is available; narration and captured camera picture-in-picture are unavailable."
+                ? isWindowsNative
+                    ? "Windows MediaComposition video export and one zero-offset narration track are available; camera/PIP and complex multi-track muxing remain deferred."
+                    : capability.CanCaptureNarration
+                        ? "ffmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available."
+                        : "Video-only ffmpeg export is available; narration and captured camera picture-in-picture are unavailable."
                 : capability.Reason);
+    }
 
     private void RegisterReviewWorkflowCommands(RibbonCommandRegistry registry)
     {

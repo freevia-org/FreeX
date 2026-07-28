@@ -500,13 +500,15 @@ internal sealed class FileCommands
     private static PresentationVideoExportHandoffHostCapabilities BuildVideoExportHostCapabilities(
         WpfVideoEncoderCapability capability) =>
         new(
-            "WPF video export host",
+            string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal)
+                ? "WPF Windows video export host"
+                : "WPF video export host",
             capability.CanEncodeMp4,
-            CanCaptureNarration: false,
+            CanCaptureNarration: string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal),
             CanCaptureCameraAndMedia: false,
             capability.CanEncodeMp4
                 ? string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal)
-                    ? "Windows MediaComposition video export is available; narration and captured camera picture-in-picture are unavailable."
+                    ? "Windows MediaComposition video export and one zero-offset narration track are available; camera/PIP and complex multi-track muxing remain deferred."
                     : "FFmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available."
                 : capability.Reason);
 
