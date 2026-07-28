@@ -1103,8 +1103,16 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.equation.fraction",  new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.Fraction("a", "b")]))));
         r.Register("freew.equation.script",    new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.SubSuperscript("x", "n", "2")]))));
         r.Register("freew.equation.radical",   new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.Radical("x")]))));
+        r.Register("freew.equation.nthroot",   new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.Radical("x", "n")]))));
         r.Register("freew.equation.integral",  new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∫", "a", "b", "f(x) dx")]))));
         r.Register("freew.equation.summation", new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∑", "i=1", "n", "i")]))));
+        r.Register("freew.equation.product",   new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∏", "i=1", "n", "i")]))));
+        r.Register("freew.equation.accent",    new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.AccentOf("x")]))));
+        r.Register("freew.equation.bar",       new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.BarOf("x")]))));
+        r.Register("freew.equation.bracket",   new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.Delimiter("a, b")]))));
+        r.Register("freew.equation.matrix",    new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]))));
+        r.Register("freew.equation.func",      new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.FunctionApply("sin", "x")]))));
+        r.Register("freew.equation.groupchr",  new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.GroupCharOf("x+y")]))));
 
         // ── Text from File ───────────────────────────────────────────────────
         // Opens a file picker (shell callback) and inserts the loaded document's text at the caret.

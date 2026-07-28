@@ -438,8 +438,17 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("Fraction  a/b",       new RibbonCommandId("freew.equation.fraction")),
             new("Script  xⁿ",          new RibbonCommandId("freew.equation.script")),
             new("Radical  √x",         new RibbonCommandId("freew.equation.radical")),
+            new("Nth Root",            new RibbonCommandId("freew.equation.nthroot")),
             new("Integral  ∫",         new RibbonCommandId("freew.equation.integral")),
             new("Summation  ∑",        new RibbonCommandId("freew.equation.summation")),
+            new("Product",             new RibbonCommandId("freew.equation.product")),
+            RibbonMenuItem.Separator(),
+            new("Accent",              new RibbonCommandId("freew.equation.accent")),
+            new("Bar",                 new RibbonCommandId("freew.equation.bar")),
+            new("Bracket",             new RibbonCommandId("freew.equation.bracket")),
+            new("Matrix",              new RibbonCommandId("freew.equation.matrix")),
+            new("Function",            new RibbonCommandId("freew.equation.func")),
+            new("Group Character",     new RibbonCommandId("freew.equation.groupchr")),
         });
 
     /// <summary>

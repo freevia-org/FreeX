@@ -103,7 +103,9 @@ public sealed class InsertDepth2Tests
             "freew.quick-parts", "freew.quick-parts.title", "freew.quick-parts.author",
             "freew.quick-parts.subject", "freew.quick-parts.date", "freew.quick-parts.snippet",
             "freew.equation", "freew.equation.default", "freew.equation.fraction", "freew.equation.script",
-            "freew.equation.radical", "freew.equation.integral", "freew.equation.summation",
+            "freew.equation.radical", "freew.equation.nthroot", "freew.equation.integral", "freew.equation.summation",
+            "freew.equation.product", "freew.equation.accent", "freew.equation.bar", "freew.equation.bracket",
+            "freew.equation.matrix", "freew.equation.func", "freew.equation.groupchr",
             "freew.insert-file", "freew.text-from-file",
             "freew.wordart", "freew.object", "freew.update-fields", "freew.toggle-field-codes",
         };
@@ -615,6 +617,30 @@ public sealed class InsertDepth2Tests
             .FirstOrDefault(run => run.Equation is not null);
         eqRun.Should().NotBeNull();
         eqRun!.Equation!.Runs[0].Kind.Should().Be(MathRunKind.Fraction);
+    }
+
+    [Theory]
+    [InlineData("freew.equation.nthroot", MathRunKind.Radical)]
+    [InlineData("freew.equation.product", MathRunKind.NAry)]
+    [InlineData("freew.equation.accent", MathRunKind.Accent)]
+    [InlineData("freew.equation.bar", MathRunKind.Bar)]
+    [InlineData("freew.equation.bracket", MathRunKind.Delimiter)]
+    [InlineData("freew.equation.matrix", MathRunKind.Matrix)]
+    [InlineData("freew.equation.func", MathRunKind.FunctionApply)]
+    [InlineData("freew.equation.groupchr", MathRunKind.GroupChar)]
+    public void Equation_extended_gallery_preset_inserts_expected_structure(string commandId, MathRunKind expectedKind)
+    {
+        var view = MakeView("");
+        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+
+        Exec(registry, commandId);
+
+        var equation = view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.Equation is not null)
+            .Equation;
+        equation!.Runs.Should().ContainSingle();
+        equation.Runs[0].Kind.Should().Be(expectedKind);
     }
 
     [Fact]
