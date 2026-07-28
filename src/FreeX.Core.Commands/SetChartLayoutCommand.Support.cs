@@ -18,17 +18,21 @@ public sealed partial class SetChartLayoutCommand
 
     private static void EnforceAxisBoundsSupport(ChartModel chart)
     {
+        if (!ChartTypeSupport.SupportsAxes(chart.Type))
+        {
+            ClearXAxis(chart);
+            ClearYAxis(chart);
+            return;
+        }
+
         if (!ChartTypeSupport.SupportsXAxisBounds(chart.Type))
-            ClearXAxisBounds(chart);
+            ClearXAxisValueBounds(chart);
         if (!ChartTypeSupport.SupportsYAxisBounds(chart.Type))
-            ClearYAxisBounds(chart);
+            ClearYAxisValueBounds(chart);
     }
 
-    private static void ClearXAxisBounds(ChartModel chart)
+    private static void ClearXAxisValueBounds(ChartModel chart)
     {
-        // A column/line chart has a category X axis, so numeric X bounds/log scale are unsupported,
-        // but its label, tick, gridline, number-format, and line styling remain valid axis edits.
-        // Do not reset those visual fields when a layout command carries an X-axis style delta.
         chart.XAxisMinimum = null;
         chart.XAxisMaximum = null;
         chart.XAxisMajorUnit = null;
@@ -36,14 +40,57 @@ public sealed partial class SetChartLayoutCommand
         chart.XAxisLogScale = false;
     }
 
-    private static void ClearYAxisBounds(ChartModel chart)
+    private static void ClearYAxisValueBounds(ChartModel chart)
     {
-        // Keep the Y-axis visual styling intact when only numeric bounds are unsupported.
         chart.YAxisMinimum = null;
         chart.YAxisMaximum = null;
         chart.YAxisMajorUnit = null;
         chart.YAxisMinorUnit = null;
         chart.YAxisLogScale = false;
+    }
+
+    private static void ClearXAxis(ChartModel chart)
+    {
+        ClearXAxisValueBounds(chart);
+        chart.XAxisNumberFormat = ChartDataLabelNumberFormat.General;
+        chart.XAxisNumberFormatCode = null;
+        chart.XAxisNumberFormatSourceLinked = null;
+        chart.ShowXAxisMajorGridlines = false;
+        chart.ShowXAxisMinorGridlines = false;
+        chart.XAxisMajorGridlineColor = null;
+        chart.XAxisMinorGridlineColor = null;
+        chart.XAxisGridlineThickness = 1;
+        chart.XAxisMajorTickStyle = ChartAxisTickStyle.Outside;
+        chart.XAxisMinorTickStyle = ChartAxisTickStyle.None;
+        chart.ShowXAxisLabels = true;
+        chart.XAxisLabelTextColor = null;
+        chart.XAxisLabelTextThemeColor = null;
+        chart.XAxisLabelFontSize = 11;
+        chart.XAxisLabelAngle = 0;
+        chart.XAxisLineColor = null;
+        chart.XAxisLineThickness = 1;
+    }
+
+    private static void ClearYAxis(ChartModel chart)
+    {
+        ClearYAxisValueBounds(chart);
+        chart.YAxisNumberFormat = ChartDataLabelNumberFormat.General;
+        chart.YAxisNumberFormatCode = null;
+        chart.YAxisNumberFormatSourceLinked = null;
+        chart.ShowYAxisMajorGridlines = false;
+        chart.ShowYAxisMinorGridlines = false;
+        chart.YAxisMajorGridlineColor = null;
+        chart.YAxisMinorGridlineColor = null;
+        chart.YAxisGridlineThickness = 1;
+        chart.YAxisMajorTickStyle = ChartAxisTickStyle.Outside;
+        chart.YAxisMinorTickStyle = ChartAxisTickStyle.None;
+        chart.ShowYAxisLabels = true;
+        chart.YAxisLabelTextColor = null;
+        chart.YAxisLabelTextThemeColor = null;
+        chart.YAxisLabelFontSize = 11;
+        chart.YAxisLabelAngle = 0;
+        chart.YAxisLineColor = null;
+        chart.YAxisLineThickness = 1;
     }
 
     private static void EnforcePieAndDoughnutSupport(ChartModel chart)

@@ -85,6 +85,11 @@ internal static class AvaloniaExtraCommandIds
         "Arial", "Times New Roman", "Subtle", "Refined",
         // Shape Format ▸ Shape Effects submenu items.
         "3-D Rotation", "Bevel", "Glow", "Inner Shadow", "Reflection", "Soft Edges",
+        // Chart Format ▸ Axis Options workflow menu items.
+        "X Axis Ticks", "Y Axis Ticks", "X Axis Label Font", "Y Axis Label Font",
+        "X Axis Label Angle", "Y Axis Label Angle", "X Axis Line", "Y Axis Line",
+        "X Axis Number Format", "Y Axis Number Format", "X Gridline Style", "Y Gridline Style",
+        "X Log Scale", "Y Log Scale",
         // Picture Format ▸ Crop submenu items.
         "Crop", "Reset Crop",
         // Home ▸ Clipboard ▸ Paste menu items.

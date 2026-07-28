@@ -109,9 +109,9 @@ public sealed partial class SetChartLayoutCommand
             }
         }
         if (options.ClearXAxisBounds)
-            ClearXAxisBounds(chart);
+            ClearXAxisValueBounds(chart);
         if (options.ClearYAxisBounds)
-            ClearYAxisBounds(chart);
+            ClearYAxisValueBounds(chart);
         if (options.XAxisMinimum is not null)
             chart.XAxisMinimum = FiniteOrNull(options.XAxisMinimum.Value);
         if (options.XAxisMaximum is not null)
