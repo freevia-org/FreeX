@@ -155,6 +155,79 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void RegenerateDrawingCache_CreatesMissingDrawingPartAndRelationships()
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan")),
+        };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />"),
+        };
+
+        var result = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme());
+
+        result.Applied.Should().BeTrue(result.Message);
+        smartArt.DrawingPartPath.Should().Be("ppt/diagrams/drawing1.xml");
+        smartArt.Parts[smartArt.DrawingPartPath].Bytes.Should().Contain((byte)'d');
+        var dataRels = Encoding.UTF8.GetString(smartArt.PartRels["ppt/diagrams/data1.xml"]);
+        dataRels.Should().Contain("/diagramDrawing").And.Contain("drawing1.xml");
+        XDocument.Parse(Encoding.UTF8.GetString(smartArt.PartRels[smartArt.DrawingPartPath]))
+            .Root!.Name.LocalName.Should().Be("Relationships");
+    }
+
+    [Fact]
+    public void RegenerateDrawingCache_CreatesPictureRelationshipsWhenDrawingPartIsMissing()
+    {
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.List,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid",
+            IsLiveLayoutSupported = true,
+        };
+        data.Nodes.Add(new SmartArtNode
+        {
+            ModelId = "n1",
+            Text = "Picture",
+            Level = 0,
+            Picture = new ImagePart { Bytes = [1, 2, 3], ContentType = "image/png" },
+        });
+        var smartArt = new SmartArtShape { Data = data };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />"),
+        };
+
+        var result = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme());
+
+        result.Applied.Should().BeTrue(result.Message);
+        var drawingRels = XDocument.Parse(Encoding.UTF8.GetString(smartArt.PartRels[smartArt.DrawingPartPath!]));
+        drawingRels.Descendants()
+            .Where(element => element.Name.LocalName == "Relationship")
+            .Where(element =>
+                element.Attribute("Type")?.Value.EndsWith("/image", StringComparison.Ordinal) == true)
+            .Should().ContainSingle();
+        smartArt.Parts.Keys.Should().Contain(path => path.StartsWith("ppt/media/freep-smartart-picture", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ApplyLayoutPreset_NewLayoutPartIsWrittenAsDiagramRelationship()
     {
         var smartArt = new SmartArtShape

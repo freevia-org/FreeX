@@ -1865,8 +1865,9 @@ public static class SmartArtLayoutEngine
 
     /// <summary>
     /// Basic target/list geometry: concentric ellipses centered in the frame.
-    /// This is a bounded relationship-family approximation; exact PowerPoint
-    /// ring clipping, label offsets, and effects remain on cached fallback.
+    /// The shared plan keeps one live ellipse per parsed node; exact PowerPoint
+    /// ring clipping, label offsets, and effects remain outside this renderer-
+    /// neutral geometry contract.
     /// </summary>
     private static IReadOnlyList<SlideShape>? LayoutTargetList(
         List<SmartArtNode> nodes,
@@ -1874,7 +1875,7 @@ public static class SmartArtLayoutEngine
         SmartArtStylePlan stylePlan)
     {
         int n = nodes.Count;
-        if (n is 0 or > 5)
+        if (n == 0)
             return null;
 
         var shapes = new List<SlideShape>();

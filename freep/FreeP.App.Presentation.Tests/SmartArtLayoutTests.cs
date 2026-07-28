@@ -1737,15 +1737,25 @@ public sealed class SmartArtLayoutTests
         }
     }
 
-    [Fact]
-    public void TargetList_MoreThanFiveNodes_ReturnsNullForCachedFallback()
+    [Theory]
+    [InlineData(6)]
+    [InlineData(12)]
+    public void TargetList_PreservesEveryNodeBeyondOriginalFiveNodeCutoff(int nodeCount)
     {
-        var data = MakeData(SmartArtFamily.Relationship, "A", "B", "C", "D", "E", "F");
+        var data = MakeData(
+            SmartArtFamily.Relationship,
+            Enumerable.Range(1, nodeCount).Select(i => $"Node {i}").ToArray());
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/targetList";
 
-        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        result.Should().BeNull("the bounded targetList planner owns only readable one-to-five node target diagrams");
+        shapes.Should().NotBeNull("targetList should remain live for every parsed node");
+        shapes!.Should().HaveCount(nodeCount,
+            "a larger targetList must not silently fall back to its cached drawing");
+        shapes.Should().OnlyContain(s => s.AutoShapeKind == DrawingShapeKind.Ellipse);
+        shapes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(i => $"Node {i}"));
+        shapes.Select(s => s.ExtentCxEmu).Should().BeInDescendingOrder();
     }
 
     [Fact]

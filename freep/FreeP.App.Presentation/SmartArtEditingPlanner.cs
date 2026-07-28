@@ -148,6 +148,8 @@ public static class SmartArtEditingPlanner
     private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace Dsp = "http://schemas.microsoft.com/office/drawing/2008/diagram";
     private static readonly XNamespace R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace PackageRelationships = "http://schemas.openxmlformats.org/package/2006/relationships";
+    private const string DiagramDrawingRelationshipType = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
 
     public static SmartArtTextPaneKeyboardRoute? PlanTextPaneKeyboardRoute(
         SmartArtTextPaneShortcutKey key,
@@ -453,12 +455,12 @@ public static class SmartArtEditingPlanner
                 0);
         }
 
-        var drawingPart = FindDrawingPart(smartArt);
+        var drawingPart = FindDrawingPart(smartArt) ?? CreateDrawingPart(smartArt);
         if (drawingPart is null)
         {
             return new SmartArtDrawingCacheRegenerationResult(
                 false,
-                "No SmartArt drawing cache part is available.",
+                "No SmartArt data part is available from which to create a drawing cache part.",
                 null,
                 CountNodes(smartArt.Data),
                 0);
@@ -975,6 +977,95 @@ public static class SmartArtEditingPlanner
             part.PartPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
     }
 
+    private static DiagramPart? CreateDrawingPart(SmartArtShape smartArt)
+    {
+        var dataPart = FindDataPart(smartArt);
+        if (dataPart is null || string.IsNullOrWhiteSpace(dataPart.PartPath))
+            return null;
+
+        var dataRelationships = LoadOrCreateRelationships(smartArt, dataPart.PartPath);
+        var drawingRelationship = dataRelationships.Root?
+            .Elements()
+            .FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "Relationship", StringComparison.Ordinal) &&
+                string.Equals(element.Attribute("Type")?.Value, DiagramDrawingRelationshipType, StringComparison.Ordinal));
+
+        var drawingPath = string.Empty;
+        if (drawingRelationship?.Attribute("Target")?.Value is { Length: > 0 } target)
+            drawingPath = ResolveRelativeZipPath(GetDirectoryName(dataPart.PartPath), target);
+
+        if (string.IsNullOrWhiteSpace(drawingPath))
+        {
+            var dataFileName = dataPart.PartPath[(dataPart.PartPath.LastIndexOf('/') + 1)..];
+            var drawingFileName = dataFileName.StartsWith("data", StringComparison.OrdinalIgnoreCase)
+                ? "drawing" + dataFileName[4..]
+                : "drawing-freep.xml";
+            drawingPath = GetDirectoryName(dataPart.PartPath) + "/" + drawingFileName;
+            var suffix = 2;
+            while (smartArt.Parts.ContainsKey(drawingPath))
+                drawingPath = GetDirectoryName(dataPart.PartPath) + $"/drawing-freep-{suffix++}.xml";
+
+            var usedRelationshipIds = dataRelationships.Root?
+                .Elements()
+                .Select(element => element.Attribute("Id")?.Value)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Select(id => id!)
+                .ToHashSet(StringComparer.Ordinal)
+                ?? new HashSet<string>(StringComparer.Ordinal);
+            var relationshipId = "rIdFreePDrawing";
+            var relationshipSuffix = 1;
+            while (!usedRelationshipIds.Add(relationshipId))
+                relationshipId = $"rIdFreePDrawing{relationshipSuffix++}";
+
+            dataRelationships.Root!.Add(new XElement(
+                PackageRelationships + "Relationship",
+                new XAttribute("Id", relationshipId),
+                new XAttribute("Type", DiagramDrawingRelationshipType),
+                new XAttribute("Target", MakeRelativeZipPath(
+                    GetDirectoryName(dataPart.PartPath), drawingPath))));
+            smartArt.PartRels[dataPart.PartPath] = SerializeXml(dataRelationships);
+        }
+
+        if (!smartArt.Parts.TryGetValue(drawingPath, out var drawingPart))
+        {
+            drawingPart = new DiagramPart
+            {
+                ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+                PartPath = drawingPath,
+                Bytes = Array.Empty<byte>(),
+            };
+            smartArt.Parts[drawingPath] = drawingPart;
+        }
+
+        smartArt.DrawingPartPath = drawingPath;
+        if (!smartArt.PartRels.ContainsKey(drawingPath))
+            smartArt.PartRels[drawingPath] = SerializeXml(CreateEmptyRelationshipsDocument());
+
+        return drawingPart;
+    }
+
+    private static XDocument LoadOrCreateRelationships(SmartArtShape smartArt, string partPath)
+    {
+        if (smartArt.PartRels.TryGetValue(partPath, out var bytes) && bytes.Length > 0)
+        {
+            try
+            {
+                var document = XDocument.Parse(Encoding.UTF8.GetString(bytes), LoadOptions.PreserveWhitespace);
+                if (document.Root?.Name.LocalName == "Relationships")
+                    return document;
+            }
+            catch (XmlException)
+            {
+                // Rebuild malformed relationship metadata from the authoritative part model.
+            }
+        }
+
+        return CreateEmptyRelationshipsDocument();
+    }
+
+    private static XDocument CreateEmptyRelationshipsDocument() =>
+        new(new XElement(PackageRelationships + "Relationships"));
+
     private static XDocument BuildDrawingCacheDocument(
         IReadOnlyList<SlideShape> shapes,
         IReadOnlyList<string> pictureRelIds,
@@ -1152,11 +1243,10 @@ public static class SmartArtEditingPlanner
         var pictureNodes = nodes
             .Where(node => node.Picture?.Bytes is { Length: > 0 })
             .ToList();
-        var relationships = GetPictureRelationships(smartArt, drawingPartPath);
-        if (!smartArt.PartRels.TryGetValue(drawingPartPath, out var relationshipBytes))
-            return false;
-
-        var document = OpcXml.TryLoadXml(relationshipBytes);
+        var document = smartArt.PartRels.TryGetValue(drawingPartPath, out var relationshipBytes) &&
+                       relationshipBytes.Length > 0
+            ? OpcXml.TryLoadXml(relationshipBytes)
+            : CreateEmptyRelationshipsDocument();
         if (document is null)
             return false;
         var relationshipElements = document.Descendants()
@@ -1181,22 +1271,23 @@ public static class SmartArtEditingPlanner
         for (var index = 0; index < pictureNodes.Count; index++)
         {
             var picture = pictureNodes[index].Picture!;
-
-            var source = relationships[Math.Min(index, relationships.Count - 1)];
             var relationshipId = index < imageElements.Count
-                ? source.Id
+                ? imageElements[index].Attribute("Id")!.Value
                 : AllocatePictureRelationshipId(usedIds, index + 1);
-            var mediaPath = ResolveRelativeZipPath(
-                GetDirectoryName(drawingPartPath),
-                source.Target);
+
+            var mediaPath = index < imageElements.Count
+                ? ResolveRelativeZipPath(
+                    GetDirectoryName(drawingPartPath),
+                    imageElements[index].Attribute("Target")?.Value ?? string.Empty)
+                : AllocatePictureMediaPath(smartArt, picture.ContentType, index + 1);
             if (!usedTargets.Add(mediaPath))
-            {
                 mediaPath = AllocatePictureMediaPath(smartArt, picture.ContentType, index + 1);
-            }
 
             var existing = index < imageElements.Count
                 ? new XElement(imageElements[index])
-                : new XElement(imageElements[0]);
+                : new XElement(
+                    PackageRelationships + "Relationship",
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"));
             existing.SetAttributeValue("Id", relationshipId);
             existing.SetAttributeValue(
                 "Target",

@@ -1755,7 +1755,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "targetList now uses the bounded shared relationship-family live-layout path for one to five parsed nodes as concentric translucent ellipse shapes. Unsupported relationship siblings and targetList diagrams with more than five parsed nodes remain on cached drawing fallback. Exact PowerPoint ring clipping, label offsets, effects, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
+            RemainingWork: "targetList now uses the shared relationship-family live-layout path for every parsed node as concentric translucent ellipse shapes, so larger diagrams no longer fall back solely because of node count. Unsupported relationship siblings, exact PowerPoint ring clipping, label offsets, effects, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.stacked-venn",
