@@ -212,6 +212,7 @@ public static class SlideCloner
             SecondaryValueAxis = src.SecondaryValueAxis is null ? null : CloneChartAxis(src.SecondaryValueAxis),
             RegenerateWorkbookOnSave = src.RegenerateWorkbookOnSave,
             SourcePartPath = src.SourcePartPath,
+            PreservedChartSpaceExtensionsXml = src.PreservedChartSpaceExtensionsXml,
         };
 
         foreach (var c in src.Categories)

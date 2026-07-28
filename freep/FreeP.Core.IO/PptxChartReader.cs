@@ -47,7 +47,9 @@ internal static class PptxChartReader
 
         var shape = new ChartShape
         {
-            StyleId = ReadStyleId(chartSpace)
+            StyleId = ReadStyleId(chartSpace),
+            PreservedChartSpaceExtensionsXml = chartSpace.Element(C + "extLst")
+                ?.ToString(SaveOptions.DisableFormatting)
         };
         var chartSpaceSpPr = chartSpace.Element(C + "spPr");
         shape.ChartAreaFill = chartSpaceSpPr is null ? null : PptxColorReader.TryReadFill(chartSpaceSpPr, scheme);

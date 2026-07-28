@@ -713,4 +713,12 @@ public sealed class ChartShape
     /// </summary>
     [JsonIgnore]
     public string? SourcePartPath { get; set; }
+
+    /// <summary>
+    /// Verbatim <c>c:chartSpace/c:extLst</c> payload from the source chart, retained so
+    /// compatibility and producer-specific extensions survive a save or duplicate operation.
+    /// Modeled chart fields remain authoritative for the generated chart body.
+    /// </summary>
+    [JsonIgnore]
+    public string? PreservedChartSpaceExtensionsXml { get; set; }
 }

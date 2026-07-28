@@ -146,6 +146,8 @@ public sealed class ChartTests : IDisposable
         chart.BubbleScalePercent = 175;
         chart.BubbleSizeRepresents = BubbleSizeRepresentation.Width;
         chart.ShowNegativeBubbles = true;
+        chart.PreservedChartSpaceExtensionsXml =
+            "<c:extLst xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><c:ext uri=\"urn:freep:chart-test\" /></c:extLst>";
         slide.Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.Chart, Chart = chart });
 
         var clone = SlideCloner.CloneSlide(slide).Shapes.Single().Chart!;
@@ -167,6 +169,36 @@ public sealed class ChartTests : IDisposable
         clone.BubbleScalePercent.Should().Be(175);
         clone.BubbleSizeRepresents.Should().Be(BubbleSizeRepresentation.Width);
         clone.ShowNegativeBubbles.Should().BeTrue();
+        clone.PreservedChartSpaceExtensionsXml.Should().Be(chart.PreservedChartSpaceExtensionsXml);
+    }
+
+    [Fact]
+    public void ChartSpaceExtensions_SurviveReadWriteAndReopen()
+    {
+        var sourcePath = WriteToPptx(BuildPresWithChart(BuildColumnChart()));
+        var extension = XNamespace.Get("urn:freep:chart-extension-test");
+        RewriteChartXml(sourcePath, 1, document =>
+        {
+            document.Root!.Add(new XElement(ChartNs + "extLst",
+                new XElement(ChartNs + "ext",
+                    new XAttribute("uri", "urn:freep:chart-extension"),
+                    new XElement(extension + "state", new XAttribute("value", "keep")))));
+        });
+
+        var imported = PptxPackageReader.Read(sourcePath);
+        var importedChart = imported.Slides[0].Shapes.Single().Chart!;
+        importedChart.PreservedChartSpaceExtensionsXml.Should().Contain("urn:freep:chart-extension");
+        importedChart.PreservedChartSpaceExtensionsXml.Should().Contain("value=\"keep\"");
+
+        var savedPath = WriteToPptx(imported);
+        using var archive = ZipFile.OpenRead(savedPath);
+        var chartXml = LoadChartXml(archive, 1);
+        var savedState = chartXml.Root!
+            .Element(ChartNs + "extLst")
+            ?.Descendants(extension + "state")
+            .Single();
+        savedState.Should().NotBeNull();
+        savedState!.Attribute("value")?.Value.Should().Be("keep");
     }
 
     [Fact]

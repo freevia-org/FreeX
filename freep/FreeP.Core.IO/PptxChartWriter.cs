@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Opc;
 using FreeP.Core.Model;
@@ -85,21 +86,40 @@ internal static class PptxChartWriter
             ? BuildTitleEl(chart.Title)
             : null;
 
+        var chartSpace = new XElement(C + "chartSpace",
+            NsAttr("c", C), NsAttr("a", A), NsAttr("r", R),
+            new XElement(C + "chart",
+                titleEl,
+                new XElement(C + "autoTitleDeleted", new XAttribute("val", chart.Title is null ? "1" : "0")),
+                BuildView3DEl(chart),
+                plotArea,
+                legendEl,
+                new XElement(C + "plotVisOnly", new XAttribute("val", "1")),
+                BuildDisplayBlanksAsEl(chart),
+                BuildShowDataLabelsOverMaximumEl(chart)),
+            BuildChartShapePropertiesEl(chart.ChartAreaFill, chart.ChartAreaOutline),
+            BuildChartTextPropertiesEl(chart.TextStyle),
+            TryParsePreservedChartSpaceExtensions(chart.PreservedChartSpaceExtensionsXml));
+
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(C + "chartSpace",
-                NsAttr("c", C), NsAttr("a", A), NsAttr("r", R),
-                new XElement(C + "chart",
-                    titleEl,
-                    new XElement(C + "autoTitleDeleted", new XAttribute("val", chart.Title is null ? "1" : "0")),
-                    BuildView3DEl(chart),
-                    plotArea,
-                    legendEl,
-                    new XElement(C + "plotVisOnly", new XAttribute("val", "1")),
-                    BuildDisplayBlanksAsEl(chart),
-                    BuildShowDataLabelsOverMaximumEl(chart)),
-                BuildChartShapePropertiesEl(chart.ChartAreaFill, chart.ChartAreaOutline),
-                BuildChartTextPropertiesEl(chart.TextStyle)));
+            chartSpace);
+    }
+
+    private static XElement? TryParsePreservedChartSpaceExtensions(string? xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return null;
+
+        try
+        {
+            var extensionList = XElement.Parse(xml, LoadOptions.PreserveWhitespace);
+            return extensionList.Name == C + "extLst" ? extensionList : null;
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
     }
 
     private static XElement? BuildChartShapePropertiesEl(ShapeFill? fill, ShapeOutline? outline)
