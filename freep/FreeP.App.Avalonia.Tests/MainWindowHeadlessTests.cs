@@ -6819,6 +6819,34 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartAreaOptionsDialog_accepts_fill_transparency()
+    {
+        ChartAreaOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartAreaOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(
+                ChartAreaFormattingTarget.ChartArea,
+                "#4472C4",
+                null,
+                null,
+                fillTransparency: 40);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().NotBeNull();
+        var fill = options!.Fill.Should().BeOfType<ShapeFill.Solid>().Subject;
+        fill.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
+        fill.Color.Alpha.Should().Be(153);
+    }
+
+    [Fact]
     public async Task ChartAxisOptionsDialog_constructs_and_commits_shared_options()
     {
         ChartAxisOptions? options = null;

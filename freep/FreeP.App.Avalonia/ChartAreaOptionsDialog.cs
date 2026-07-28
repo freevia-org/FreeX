@@ -16,6 +16,7 @@ internal sealed class ChartAreaOptionsDialog : Window
     private readonly ChartAreaOptionsPlanner _planner;
     private readonly ComboBox _targetCombo;
     private readonly TextBox _fillBox;
+    private readonly TextBox _fillTransparencyBox;
     private readonly CheckBox _noFillCheck;
     private readonly TextBox _outlineBox;
     private readonly CheckBox _noOutlineCheck;
@@ -28,7 +29,7 @@ internal sealed class ChartAreaOptionsDialog : Window
         var surface = ChartAreaOptionsPlanner.BuildSurfacePlan();
         Title = surface.Title;
         Width = 400;
-        Height = 300;
+        Height = 340;
         MinWidth = 400;
         MinHeight = 280;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -37,6 +38,7 @@ internal sealed class ChartAreaOptionsDialog : Window
         _targetCombo = new ComboBox { ItemsSource = ChartAreaOptionsPlanner.TargetOptions.Select(x => x.Label).ToArray(), SelectedIndex = 0, MinWidth = 190 };
         _targetCombo.SelectionChanged += (_, _) => { _planner.SetTarget(SelectedTarget()); LoadControls(); };
         _fillBox = new TextBox { MinWidth = 190 };
+        _fillTransparencyBox = new TextBox { MinWidth = 120 };
         _noFillCheck = new CheckBox { Content = surface.NoFillLabel };
         _outlineBox = new TextBox { MinWidth = 190 };
         _noOutlineCheck = new CheckBox { Content = surface.NoOutlineLabel };
@@ -58,6 +60,7 @@ internal sealed class ChartAreaOptionsDialog : Window
             {
                 MakeRow(surface.TargetLabel, _targetCombo),
                 MakeRow(surface.FillLabel, _fillBox),
+                MakeRow(surface.FillTransparencyLabel, _fillTransparencyBox),
                 _noFillCheck,
                 MakeRow(surface.OutlineLabel, _outlineBox),
                 _noOutlineCheck,
@@ -71,6 +74,7 @@ internal sealed class ChartAreaOptionsDialog : Window
     internal ChartAreaOptions BuildCommitPlanForTests()
     {
         _planner.SetFillColor(_fillBox.Text);
+        _planner.SetFillTransparency(ParseOptional(_fillTransparencyBox.Text));
         _planner.SetNoFill(_noFillCheck.IsChecked == true);
         _planner.SetOutlineColor(_outlineBox.Text);
         _planner.SetNoOutline(_noOutlineCheck.IsChecked == true);
@@ -78,10 +82,11 @@ internal sealed class ChartAreaOptionsDialog : Window
         return _planner.BuildCommitPlan();
     }
 
-    internal void SetOptionsForTests(ChartAreaFormattingTarget target, string? fill, string? outline, double? width, bool noFill = false, bool noOutline = false)
+    internal void SetOptionsForTests(ChartAreaFormattingTarget target, string? fill, string? outline, double? width, bool noFill = false, bool noOutline = false, double? fillTransparency = null)
     {
         _targetCombo.SelectedIndex = target == ChartAreaFormattingTarget.PlotArea ? 1 : 0;
         _fillBox.Text = fill ?? string.Empty;
+        _fillTransparencyBox.Text = Format(fillTransparency);
         _noFillCheck.IsChecked = noFill;
         _outlineBox.Text = outline ?? string.Empty;
         _noOutlineCheck.IsChecked = noOutline;
@@ -97,6 +102,7 @@ internal sealed class ChartAreaOptionsDialog : Window
     private void LoadControls()
     {
         _fillBox.Text = _planner.FillColor;
+        _fillTransparencyBox.Text = Format(_planner.FillTransparencyPercent);
         _noFillCheck.IsChecked = _planner.NoFill;
         _outlineBox.Text = _planner.OutlineColor;
         _noOutlineCheck.IsChecked = _planner.NoOutline;
@@ -104,7 +110,7 @@ internal sealed class ChartAreaOptionsDialog : Window
     }
 
     private ChartAreaFormattingTarget SelectedTarget() => _targetCombo.SelectedIndex == 1 ? ChartAreaFormattingTarget.PlotArea : ChartAreaFormattingTarget.ChartArea;
-    private static double? ParseOptional(string? text) { if (string.IsNullOrWhiteSpace(text)) return null; if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) && double.IsFinite(value)) return value; throw new FormatException("Outline width must be a finite number or blank."); }
+    private static double? ParseOptional(string? text) { if (string.IsNullOrWhiteSpace(text)) return null; if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) && double.IsFinite(value)) return value; throw new FormatException("The value must be a finite number or blank."); }
     private static string Format(double? value) => value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
     private static Control MakeRow(string label, Control control) { var row = new Grid { ColumnDefinitions = new ColumnDefinitions("170, *") }; row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) }); Grid.SetColumn(control, 1); row.Children.Add(control); return row; }
     private static Button MakeButton(string label, bool isDefault, Action action) { var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 }; AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault); button.Click += (_, _) => action(); return button; }

@@ -397,6 +397,24 @@ public sealed class ChartDataDialogTests : IDisposable
         options.Outline.Should().BeSameAs(ShapeOutline.None.Instance);
     }
 
+    [StaFact]
+    public void ChartAreaOptionsDialog_AcceptsFillTransparency()
+    {
+        var (sess, _) = MakeSession();
+        var dialog = new ChartAreaOptionsDialog(sess);
+        dialog.SetOptionsForTests(
+            ChartAreaFormattingTarget.ChartArea,
+            "#4472C4",
+            null,
+            null,
+            fillTransparency: 40);
+
+        var options = dialog.BuildCommitPlanForTests();
+        var fill = options.Fill.Should().BeOfType<ShapeFill.Solid>().Subject;
+        fill.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
+        fill.Color.Alpha.Should().Be(153);
+    }
+
     [Fact]
     public void ChartDisplayOptionsDialog_UsesSharedPlannerAndSessionCommand()
     {

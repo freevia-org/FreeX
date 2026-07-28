@@ -14,6 +14,7 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
     private readonly ChartAreaOptionsPlanner _planner;
     private readonly ComboBox _targetCombo;
     private readonly TextBox _fillBox;
+    private readonly TextBox _fillTransparencyBox;
     private readonly CheckBox _noFillCheck;
     private readonly TextBox _outlineBox;
     private readonly CheckBox _noOutlineCheck;
@@ -26,7 +27,7 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
         var surface = ChartAreaOptionsPlanner.BuildSurfacePlan();
         Title = surface.Title;
         Width = 390;
-        Height = 300;
+        Height = 340;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
@@ -45,6 +46,7 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
             }
         };
         _fillBox = new TextBox { MinWidth = 190 };
+        _fillTransparencyBox = new TextBox { MinWidth = 120 };
         _noFillCheck = new CheckBox { Content = surface.NoFillLabel };
         _outlineBox = new TextBox { MinWidth = 190 };
         _noOutlineCheck = new CheckBox { Content = surface.NoOutlineLabel };
@@ -63,6 +65,7 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
         var content = new StackPanel { Margin = new Thickness(14) };
         content.Children.Add(MakeRow(surface.TargetLabel, _targetCombo));
         content.Children.Add(MakeRow(surface.FillLabel, _fillBox));
+        content.Children.Add(MakeRow(surface.FillTransparencyLabel, _fillTransparencyBox));
         content.Children.Add(_noFillCheck);
         content.Children.Add(MakeRow(surface.OutlineLabel, _outlineBox));
         content.Children.Add(_noOutlineCheck);
@@ -78,10 +81,11 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
         return _planner.BuildCommitPlan();
     }
 
-    internal void SetOptionsForTests(ChartAreaFormattingTarget target, string? fill, string? outline, double? width, bool noFill = false, bool noOutline = false)
+    internal void SetOptionsForTests(ChartAreaFormattingTarget target, string? fill, string? outline, double? width, bool noFill = false, bool noOutline = false, double? fillTransparency = null)
     {
         _targetCombo.SelectedIndex = target == ChartAreaFormattingTarget.PlotArea ? 1 : 0;
         _fillBox.Text = fill ?? string.Empty;
+        _fillTransparencyBox.Text = Format(fillTransparency);
         _noFillCheck.IsChecked = noFill;
         _outlineBox.Text = outline ?? string.Empty;
         _noOutlineCheck.IsChecked = noOutline;
@@ -104,6 +108,7 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
     private void LoadControls()
     {
         _fillBox.Text = _planner.FillColor;
+        _fillTransparencyBox.Text = Format(_planner.FillTransparencyPercent);
         _noFillCheck.IsChecked = _planner.NoFill;
         _outlineBox.Text = _planner.OutlineColor;
         _noOutlineCheck.IsChecked = _planner.NoOutline;
@@ -113,6 +118,7 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
     private void UpdatePlannerFromControls()
     {
         _planner.SetFillColor(_fillBox.Text);
+        _planner.SetFillTransparency(ParseOptional(_fillTransparencyBox.Text));
         _planner.SetNoFill(_noFillCheck.IsChecked == true);
         _planner.SetOutlineColor(_outlineBox.Text);
         _planner.SetNoOutline(_noOutlineCheck.IsChecked == true);
@@ -124,7 +130,7 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
         if (string.IsNullOrWhiteSpace(text)) return null;
         if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) && double.IsFinite(value))
             return value;
-        throw new FormatException("Outline width must be a finite number or blank.");
+        throw new FormatException("The value must be a finite number or blank.");
     }
 
     private static string Format(double? value) => value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;

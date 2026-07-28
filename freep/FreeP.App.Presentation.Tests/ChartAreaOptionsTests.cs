@@ -39,6 +39,29 @@ public sealed class ChartAreaOptionsTests
     }
 
     [Fact]
+    public void Planner_PreservesFillTransparencyAsDrawingMlAlpha()
+    {
+        var chart = new ChartShape
+        {
+            ChartAreaFill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4))),
+        };
+
+        var planner = ChartAreaOptionsPlanner.FromChart(chart);
+        planner.SetFillTransparency(40);
+
+        var options = planner.BuildCommitPlan();
+        var fill = options.Fill.Should().BeOfType<ShapeFill.Solid>().Subject;
+        fill.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
+        fill.Color.Alpha.Should().Be(153);
+
+        var reloaded = ChartAreaOptionsPlanner.FromChart(new ChartShape
+        {
+            ChartAreaFill = fill,
+        });
+        reloaded.FillTransparencyPercent.Should().BeApproximately(40, 0.5);
+    }
+
+    [Fact]
     public void Planner_AuthorsExplicitNoFillAndNoOutlineStates()
     {
         var chart = new ChartShape();
@@ -69,7 +92,7 @@ public sealed class ChartAreaOptionsTests
 
         var options = new ChartAreaOptions(
             ChartAreaFormattingTarget.PlotArea,
-            new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79))),
+            new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79), alpha: 153)),
             new ShapeOutline.Visible(new ThemeAwareColor(SrgbColor.FromRgb(0x17365D)), 1.5));
         bus.Execute(new SetChartAreaOptionsCommand(0, shape.Id, options));
 
@@ -79,7 +102,9 @@ public sealed class ChartAreaOptionsTests
         PptxPackageWriter.Write(presentation, stream);
         stream.Position = 0;
         var reopened = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
-        ((ShapeFill.Solid)reopened.PlotAreaFill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        var reopenedFill = ((ShapeFill.Solid)reopened.PlotAreaFill!).Color;
+        reopenedFill.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        reopenedFill.Alpha.Should().Be(153);
         ((ShapeOutline.Visible)reopened.PlotAreaOutline!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x17365D));
 
         bus.Undo();

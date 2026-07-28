@@ -9,6 +9,7 @@ public sealed record ChartAreaOptionsSurfacePlan(
     string Title,
     string TargetLabel,
     string FillLabel,
+    string FillTransparencyLabel,
     string NoFillLabel,
     string OutlineLabel,
     string NoOutlineLabel,
@@ -24,6 +25,7 @@ public sealed class ChartAreaOptionsPlanner
     public const string DialogTitle = "Chart Area Options";
     public const string TargetLabel = "Apply to";
     public const string FillLabel = "Fill color (#RRGGBB)";
+    public const string FillTransparencyLabel = "Fill transparency (%)";
     public const string NoFillLabel = "No fill";
     public const string OutlineLabel = "Outline color (#RRGGBB)";
     public const string NoOutlineLabel = "No outline";
@@ -41,6 +43,7 @@ public sealed class ChartAreaOptionsPlanner
     private readonly ChartShape _chart;
     private ChartAreaFormattingTarget _target = ChartAreaFormattingTarget.ChartArea;
     private string _fillColor = string.Empty;
+    private double? _fillTransparencyPercent;
     private bool _noFill;
     private string _outlineColor = string.Empty;
     private bool _noOutline;
@@ -53,7 +56,7 @@ public sealed class ChartAreaOptionsPlanner
     }
 
     public static ChartAreaOptionsSurfacePlan BuildSurfacePlan() => new(
-        CommandId, DialogTitle, TargetLabel, FillLabel, NoFillLabel, OutlineLabel, NoOutlineLabel, WidthLabel,
+        CommandId, DialogTitle, TargetLabel, FillLabel, FillTransparencyLabel, NoFillLabel, OutlineLabel, NoOutlineLabel, WidthLabel,
         Hint, OkLabel, CancelLabel);
 
     public static ChartAreaOptionsPlanner FromChart(ChartShape chart)
@@ -64,6 +67,7 @@ public sealed class ChartAreaOptionsPlanner
 
     public ChartAreaFormattingTarget Target => _target;
     public string FillColor => _fillColor;
+    public double? FillTransparencyPercent => _fillTransparencyPercent;
     public bool NoFill => _noFill;
     public string OutlineColor => _outlineColor;
     public bool NoOutline => _noOutline;
@@ -81,6 +85,13 @@ public sealed class ChartAreaOptionsPlanner
         if (!string.IsNullOrWhiteSpace(_fillColor))
             _noFill = false;
     }
+
+    public void SetFillTransparency(double? value)
+    {
+        if (value is { } percent && (!double.IsFinite(percent) || percent < 0 || percent > 100))
+            throw new ArgumentOutOfRangeException(nameof(value), "Fill transparency must be between 0 and 100 percent.");
+        _fillTransparencyPercent = value;
+    }
     public void SetOutlineColor(string? value) => _outlineColor = value?.Trim() ?? string.Empty;
     public void SetNoFill(bool value) => _noFill = value;
     public void SetNoOutline(bool value) => _noOutline = value;
@@ -93,7 +104,10 @@ public sealed class ChartAreaOptionsPlanner
         if (_noFill)
             fill = ShapeFill.None.Instance;
         else if (!string.IsNullOrWhiteSpace(_fillColor))
-            fill = new ShapeFill.Solid(ChartPointOptionsPlanner.ParseColor(_fillColor, FillLabel)!);
+        {
+            var color = ChartPointOptionsPlanner.ParseColor(_fillColor, FillLabel)!;
+            fill = new ShapeFill.Solid(new ThemeAwareColor(color.Resolved, ToAlpha(_fillTransparencyPercent)));
+        }
 
         ShapeOutline? outline = null;
         if (_noOutline)
@@ -110,7 +124,16 @@ public sealed class ChartAreaOptionsPlanner
         var fill = _target == ChartAreaFormattingTarget.ChartArea ? _chart.ChartAreaFill : _chart.PlotAreaFill;
         var outline = _target == ChartAreaFormattingTarget.ChartArea ? _chart.ChartAreaOutline : _chart.PlotAreaOutline;
         _noFill = fill is ShapeFill.None;
-        _fillColor = fill is ShapeFill.Solid solid ? solid.Color.Resolved.ToString() : string.Empty;
+        if (fill is ShapeFill.Solid solid)
+        {
+            _fillColor = solid.Color.Resolved.ToString();
+            _fillTransparencyPercent = 100 - solid.Color.Alpha / 255d * 100;
+        }
+        else
+        {
+            _fillColor = string.Empty;
+            _fillTransparencyPercent = null;
+        }
         _noOutline = outline is ShapeOutline.None;
         if (outline is ShapeOutline.Visible visible)
         {
@@ -123,4 +146,10 @@ public sealed class ChartAreaOptionsPlanner
             _outlineWidthPt = null;
         }
     }
+
+    private static byte ToAlpha(double? transparencyPercent) =>
+        (byte)Math.Clamp(
+            Math.Round(255 * (1 - (transparencyPercent ?? 0) / 100), MidpointRounding.AwayFromZero),
+            0,
+            255);
 }
