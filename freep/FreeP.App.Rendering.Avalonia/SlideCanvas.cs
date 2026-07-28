@@ -1108,6 +1108,13 @@ public sealed class SlideCanvas : Control
                 dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
         }
 
+        if (scene.DrawFlatGrid && scene.MinorGridLines.GridLines.Count > 0)
+        {
+            var minorGridPen = CreateChartGridLinePen(scene.MinorGridLines);
+            foreach (var gridLine in scene.MinorGridLines.GridLines)
+                dc.DrawLine(minorGridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
+        }
+
         if (scene.DrawProjectedThreeDBarFrame)
             RenderProjectedThreeDBarFrame(dc, scene);
 

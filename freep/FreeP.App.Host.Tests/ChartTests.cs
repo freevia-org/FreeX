@@ -359,6 +359,7 @@ public sealed class ChartTests : IDisposable
         chart.ValueAxis.CrossesAt = 12.5;
         chart.ValueAxis.MajorUnit = 5;
         chart.ValueAxis.MinorUnit = 1;
+        chart.ValueAxis.HasMinorGridlines = true;
         chart.CategoryAxis.ReverseOrder = true;
         chart.ValueAxis.ReverseOrder = true;
 
@@ -380,6 +381,7 @@ public sealed class ChartTests : IDisposable
         roundTripped.ValueAxis.CrossesAt.Should().Be(12.5);
         roundTripped.ValueAxis.MajorUnit.Should().Be(5);
         roundTripped.ValueAxis.MinorUnit.Should().Be(1);
+        roundTripped.ValueAxis.HasMinorGridlines.Should().BeTrue();
         roundTripped.CategoryAxis.ReverseOrder.Should().BeTrue();
         roundTripped.ValueAxis.ReverseOrder.Should().BeTrue();
     }

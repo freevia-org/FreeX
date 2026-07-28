@@ -1298,7 +1298,7 @@ public sealed class ChartDataCommandTests
                 ChartTickMark.Out, ChartTickMark.In, ChartTickLabelPosition.NextTo,
                 ChartAxisCrossing.Min, 10, false,
                 ChartCrossBetween.MidCat, ChartLabelAlignment.Right,
-                35, true, false, true)));
+                35, true, false, true, true)));
 
         chart.ValueAxis.Title.Should().Be("Revenue");
         chart.ValueAxis.Delete.Should().BeTrue();
@@ -1309,6 +1309,7 @@ public sealed class ChartDataCommandTests
         chart.ValueAxis.NumberFormatCode.Should().Be("$#,##0");
         chart.ValueAxis.NumberFormatSourceLinked.Should().BeFalse();
         chart.ValueAxis.HasMajorGridlines.Should().BeFalse();
+        chart.ValueAxis.HasMinorGridlines.Should().BeTrue();
         chart.ValueAxis.MajorTickMark.Should().Be(ChartTickMark.Out);
         chart.ValueAxis.MinorTickMark.Should().Be(ChartTickMark.In);
         chart.ValueAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.NextTo);
@@ -1333,6 +1334,7 @@ public sealed class ChartDataCommandTests
         roundTripped.ValueAxis.MinorUnit.Should().Be(5);
         roundTripped.ValueAxis.NumberFormatCode.Should().Be("$#,##0");
         roundTripped.ValueAxis.HasMajorGridlines.Should().BeFalse();
+        roundTripped.ValueAxis.HasMinorGridlines.Should().BeTrue();
         roundTripped.ValueAxis.MajorTickMark.Should().Be(ChartTickMark.Out);
         roundTripped.ValueAxis.MinorTickMark.Should().Be(ChartTickMark.In);
         roundTripped.ValueAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.NextTo);
@@ -1354,6 +1356,7 @@ public sealed class ChartDataCommandTests
         chart.ValueAxis.NumberFormatCode.Should().Be("0");
         chart.ValueAxis.NumberFormatSourceLinked.Should().BeTrue();
         chart.ValueAxis.HasMajorGridlines.Should().BeTrue();
+        chart.ValueAxis.HasMinorGridlines.Should().BeFalse();
         chart.ValueAxis.MajorTickMark.Should().Be(ChartTickMark.Cross);
         chart.ValueAxis.MinorTickMark.Should().Be(ChartTickMark.Out);
         chart.ValueAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.High);
