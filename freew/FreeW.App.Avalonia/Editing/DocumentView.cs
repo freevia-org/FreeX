@@ -9927,9 +9927,11 @@ public sealed class DocumentView : Control
         // AV-FLSEL: when a float is selected, intercept navigation/delete keys before body text.
         if (_selectedFloating is { } selFloat)
         {
-            if (e.Key == Key.Enter && selFloat.Kind == "Shape")
+            if (e.Key == Key.Enter)
             {
-                if (EnterSelectedShapeTextEditing())
+                if (selFloat.Kind == "Shape" && EnterSelectedShapeTextEditing())
+                    e.Handled = true;
+                else if (selFloat.Kind != "Shape")
                     e.Handled = true;
                 return;
             }

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Input;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
 using SkiaSharp;
@@ -601,6 +602,32 @@ public sealed class DocumentViewFloatingSelectionTests
         });
         if (!ran) return;
         Assert.True(isNullAfterDelete, "SelectedFloatingInfo should be null after delete");
+    }
+
+    [Fact]
+    public async Task Enter_on_selected_image_does_not_insert_a_body_paragraph_break()
+    {
+        string? before = null;
+        string? after = null;
+        bool handled = false;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingImage();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            before = ((Paragraph)doc.Blocks[bi]).PlainText;
+
+            var args = new KeyEventArgs { Key = Key.Enter };
+            view.RaiseKeyDownForContextMenuTests(args);
+            handled = args.Handled;
+            after = ((Paragraph)doc.Blocks[bi]).PlainText;
+        });
+
+        if (!ran) return;
+        handled.Should().BeTrue("Enter belongs to the selected floating object route");
+        after.Should().Be(before, "WPF keeps object selection active instead of inserting a body paragraph break");
     }
 
     // ── FLSEL-13: TryHitTestFloat — point inside float rect selects it ───────────────────────────────
