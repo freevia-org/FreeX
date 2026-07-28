@@ -148,6 +148,9 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("WatermarkVisualPlanner.BuildPictureLayout(");
         source.Should().Contain("RenderReviewMarkupCapture(bmp, doc, i, reviewAnchorPageAssignment)");
         source.Should().Contain("ReviewBalloonLayoutPlanner.BuildSources(document, ReviewDisplayPolicy.Default)");
+        source.Should().Contain("else if (a == \"--review-markup\") reviewMarkup = true;");
+        source.Should().Contain("ShowMarkupComments = reviewMarkup");
+        source.Should().Contain("if (reviewMarkup && doc.Comments.Count > 0");
         source.Should().Contain("PaginationEngine.ComputeBlockPageAssignment(bodyView)");
         source.Should().Contain("anchorPageAssignment[source.BlockIndex] == pageIndex");
         source.Should().Contain("new Rect(stripLeft, stripTop, width - stripLeft, stripBottom - stripTop)");
