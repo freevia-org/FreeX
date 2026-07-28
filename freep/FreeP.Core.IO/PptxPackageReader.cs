@@ -5039,6 +5039,12 @@ public static class PptxPackageReader
         var wheelSpokeCount = preset == AnimationPreset.Wheel
             ? ReadWheelSpokeCount(buildPar, cTn)
             : null;
+        var authoredEffectSubtype = direction is null
+            && preset is not (AnimationPreset.Grow or AnimationPreset.Shrink)
+            && !string.IsNullOrWhiteSpace(presetSubtype)
+            && !StringComparer.Ordinal.Equals(presetSubtype, "0")
+                ? presetSubtype
+                : null;
 
         return new ShapeAnimation
         {
@@ -5053,9 +5059,7 @@ public static class PptxPackageReader
             AutoReverse    = autoReverse,
             Direction      = direction,
             WheelSpokeCount = wheelSpokeCount,
-            EffectSubtype  = preset == AnimationPreset.Spin
-                ? presetSubtype
-                : null,
+            EffectSubtype  = authoredEffectSubtype,
             ScaleBehavior = scaleBehavior,
             TriggerShapeId = triggerShapeId,
             RawPresetClass = knownPreset ? null : presetClass,
