@@ -1307,12 +1307,15 @@ internal static class PptxChartReader
         bool showSer     = ParseBoolAttr(dLblsEl.Element(C + "showSerName"));
         bool showLegend  = ParseBoolAttr(dLblsEl.Element(C + "showLegendKey"));
         bool showBubble  = ParseBoolAttr(dLblsEl.Element(C + "showBubbleSize"));
+        bool? showLeader = dLblsEl.Element(C + "showLeaderLines") is { } leaderEl
+            ? ParseBoolAttr(leaderEl)
+            : null;
         bool? deleted = dLblsEl.Element(C + "delete") is { } deleteEl
             ? ParseBoolAttr(deleteEl)
             : null;
 
         // If nothing is shown this is a no-op element — return null to keep model clean.
-        if (!allowEmpty && !deleted.HasValue && !showVal && !showPct && !showCat && !showSer && !showLegend && !showBubble)
+        if (!allowEmpty && !deleted.HasValue && !showVal && !showPct && !showCat && !showSer && !showLegend && !showBubble && !showLeader.HasValue)
             return null;
 
         var posStr = dLblsEl.Element(C + "dLblPos")?.Attribute("val")?.Value;
@@ -1327,6 +1330,7 @@ internal static class PptxChartReader
             ShowSeriesName   = showSer,
             ShowLegendKey    = showLegend,
             ShowBubbleSize   = showBubble,
+            ShowLeaderLines  = showLeader,
             NumberFormat     = string.IsNullOrEmpty(numFmt) ? null : numFmt,
             Separator        = dLblsEl.Element(C + "separator")?.Value,
             TextStyle        = ReadChartTextStyle(dLblsEl.Element(C + "txPr"), scheme),

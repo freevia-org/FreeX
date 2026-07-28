@@ -78,6 +78,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
             chart.DataLabels.ShowSeriesName = _newOptions.ShowSeriesLabels;
             chart.DataLabels.ShowLegendKey = _newOptions.ShowLegendKeys;
             chart.DataLabels.ShowBubbleSize = _newOptions.ShowBubbleSize;
+            chart.DataLabels.ShowLeaderLines = _newOptions.ShowLeaderLines;
             chart.DataLabels.Position = _newOptions.LabelPosition;
             chart.DataLabels.NumberFormat = _newOptions.LabelNumberFormat;
             chart.DataLabels.Separator = _newOptions.LabelSeparator;
@@ -89,6 +90,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
                   _newOptions.ShowSeriesLabels ||
                   _newOptions.ShowLegendKeys ||
                   _newOptions.ShowBubbleSize ||
+                  _newOptions.ShowLeaderLines.HasValue ||
                   !string.IsNullOrWhiteSpace(_newOptions.LabelNumberFormat) ||
                  !string.IsNullOrEmpty(_newOptions.LabelSeparator) ||
                  _newOptions.LabelTextStyle is not null)
@@ -101,6 +103,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
                 ShowSeriesName = _newOptions.ShowSeriesLabels,
                 ShowLegendKey = _newOptions.ShowLegendKeys,
                 ShowBubbleSize = _newOptions.ShowBubbleSize,
+                ShowLeaderLines = _newOptions.ShowLeaderLines,
                 Position = _newOptions.LabelPosition,
                 NumberFormat = _newOptions.LabelNumberFormat,
                 Separator = _newOptions.LabelSeparator,
@@ -145,6 +148,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
             ShowSeriesName = source.ShowSeriesName,
             ShowLegendKey = source.ShowLegendKey,
             ShowBubbleSize = source.ShowBubbleSize,
+            ShowLeaderLines = source.ShowLeaderLines,
             Position = source.Position,
             NumberFormat = source.NumberFormat,
             Separator = source.Separator,

@@ -144,6 +144,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
                 ShowSeriesName = source.ShowSeriesName,
                 ShowLegendKey = source.ShowLegendKey,
                 ShowBubbleSize = source.ShowBubbleSize,
+                ShowLeaderLines = source.ShowLeaderLines,
             Position = source.Position,
             NumberFormat = source.NumberFormat,
             Separator = source.Separator,

@@ -180,6 +180,7 @@ public sealed class ChartSeriesOptionsPlanner
     private bool _showSeriesLabels;
     private bool _showLegendKeys;
     private bool _showBubbleSize;
+    private bool? _showLeaderLines;
     private bool _errorBarsEnabled;
     private ChartErrorDirection _errorDirection;
     private ChartErrorBarType _errorBarType;
@@ -359,6 +360,7 @@ public sealed class ChartSeriesOptionsPlanner
         _showSeriesLabels = labels?.ShowSeriesName == true;
         _showLegendKeys = labels?.ShowLegendKey == true;
         _showBubbleSize = labels?.ShowBubbleSize == true;
+        _showLeaderLines = labels?.ShowLeaderLines;
         var errorBars = series.ErrorBars;
         _errorBarsEnabled = errorBars is not null;
         _errorDirection = errorBars?.Direction ?? ChartErrorDirection.Y;
@@ -462,6 +464,7 @@ public sealed class ChartSeriesOptionsPlanner
                 ShowSeriesName = _showSeriesLabels,
                 ShowLegendKey = _showLegendKeys,
                 ShowBubbleSize = _showBubbleSize,
+                ShowLeaderLines = _showLeaderLines,
                 Position = _labelPosition,
                 NumberFormat = string.IsNullOrWhiteSpace(_labelNumberFormat) ? null : _labelNumberFormat,
                 Separator = string.IsNullOrEmpty(_labelSeparator) ? null : _labelSeparator,

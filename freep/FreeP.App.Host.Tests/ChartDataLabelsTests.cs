@@ -34,6 +34,7 @@ public sealed class ChartDataLabelsTests : IDisposable
         dl.ShowSeriesName.Should().BeFalse();
         dl.ShowLegendKey.Should().BeFalse();
         dl.ShowBubbleSize.Should().BeFalse();
+        dl.ShowLeaderLines.Should().BeNull();
         dl.Position.Should().BeNull();
         dl.NumberFormat.Should().BeNull();
         dl.HasAny.Should().BeFalse();
@@ -64,6 +65,13 @@ public sealed class ChartDataLabelsTests : IDisposable
     public void ChartDataLabels_HasAny_TrueWhenShowBubbleSizeSet()
     {
         var dl = new ChartDataLabels { ShowBubbleSize = true };
+        dl.HasAny.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ChartDataLabels_HasAny_TrueWhenLeaderLinesExplicitlyDisabled()
+    {
+        var dl = new ChartDataLabels { ShowLeaderLines = false };
         dl.HasAny.Should().BeTrue();
     }
 
@@ -186,6 +194,19 @@ public sealed class ChartDataLabelsTests : IDisposable
 
         rt.DataLabels.Should().NotBeNull("pie chart percent labels survive round-trip");
         rt.DataLabels!.ShowPercent.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void RoundTrip_PieChart_ShowLeaderLines_PreservesExplicitState(bool value)
+    {
+        var chart = BuildPieChartWithLabels(showPercent: true);
+        chart.DataLabels!.ShowLeaderLines = value;
+        var rt = DoRoundTrip(chart);
+
+        rt.DataLabels.Should().NotBeNull("leader-line setting survives round-trip");
+        rt.DataLabels!.ShowLeaderLines.Should().Be(value);
     }
 
     [Fact]

@@ -295,6 +295,7 @@ public static class SlideCloner
                 ShowSeriesName = labels.ShowSeriesName,
                 ShowLegendKey = labels.ShowLegendKey,
                 ShowBubbleSize = labels.ShowBubbleSize,
+                ShowLeaderLines = labels.ShowLeaderLines,
                 Position = labels.Position,
                 NumberFormat = labels.NumberFormat,
                 Separator = labels.Separator,
