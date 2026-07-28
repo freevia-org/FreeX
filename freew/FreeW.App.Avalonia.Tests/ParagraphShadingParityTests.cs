@@ -130,6 +130,46 @@ public sealed class ParagraphShadingParityTests
         source.Should().Contain("#0070C0");
     }
 
+    [Fact]
+    public void Avalonia_highlight_route_exposes_Wpf_palette_and_applies_explicit_choices()
+    {
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+        var highlight = definition.Tabs
+            .SelectMany(tab => tab.Groups)
+            .SelectMany(group => group.Controls)
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.highlight");
+
+        highlight.Menu.Items.Select(item => item.CommandId?.Value)
+            .Should().Contain(new[] { "freew.highlight.yellow", "freew.highlight.none" });
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Highlighted"));
+        var editor = new DocumentView();
+        editor.LoadDocument(document);
+        editor.SelectAll();
+        var registry = FreeWAvaloniaRibbonCommands.Build(editor, CreateCallbacks());
+
+        Execute(registry, "freew.highlight.yellow");
+        ((Paragraph)document.Blocks[0]).Runs.All(run => run.Formatting.HighlightColorHex == "#FFFF00")
+            .Should().BeTrue();
+        Execute(registry, "freew.highlight.none");
+        ((Paragraph)document.Blocks[0]).Runs.All(run => run.Formatting.HighlightColorHex is null)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void Wpf_highlight_remains_the_authority_for_palette_behavior()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
+
+        source.Should().Contain("new ColorPickCommand(editor, isHighlight: true)");
+        source.Should().Contain("Content = isHighlight ? \"No Color\" : \"Automatic\"");
+        source.Should().Contain("#2F5496");
+    }
+
     private static void Execute(RibbonCommandRegistry registry, string id)
     {
         registry.TryGet(new RibbonCommandId(id), out var command)

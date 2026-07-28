@@ -135,7 +135,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.allcaps",          new ActionRibbonCommand(editor.ToggleAllCaps));
         r.Register("freew.superscript",      new ActionRibbonCommand(editor.ToggleSuperscript));
         r.Register("freew.subscript",        new ActionRibbonCommand(editor.ToggleSubscript));
-        r.Register("freew.highlight",        new ValueRibbonCommand(value => editor.SetHighlightColor(value)));
+        r.Register("freew.highlight",        new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        RegisterHighlightPalette(r, editor);
         r.Register("freew.char-border",      new ActionRibbonCommand(() => { /* dropdown opener */ }));
         RegisterCharacterBorderPalette(r, editor);
         r.Register("freew.char-shading",     new ActionRibbonCommand(() => { /* dropdown opener */ }));
@@ -975,6 +976,32 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.char-border.brown", "#974706");
         Add(r, editor, "freew.char-border.dark-gray", "#3F3F3F");
         Add(r, editor, "freew.char-border.none", null);
+    }
+
+    /// <summary>
+    /// Registers the WPF-authority text-highlight palette. The top-level command only opens
+    /// the ribbon menu; formatting changes happen only after an explicit swatch or No Color choice.
+    /// </summary>
+    private static void RegisterHighlightPalette(RibbonCommandRegistry r, DocumentView editor)
+    {
+        static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
+            reg.Register(id, new ActionRibbonCommand(() => ed.SetHighlightColor(hex)));
+
+        Add(r, editor, "freew.highlight.black", "#000000");
+        Add(r, editor, "freew.highlight.dark-gray", "#404040");
+        Add(r, editor, "freew.highlight.gray", "#7F7F7F");
+        Add(r, editor, "freew.highlight.dark-red", "#C00000");
+        Add(r, editor, "freew.highlight.red", "#FF0000");
+        Add(r, editor, "freew.highlight.gold", "#FFC000");
+        Add(r, editor, "freew.highlight.yellow", "#FFFF00");
+        Add(r, editor, "freew.highlight.light-green", "#92D050");
+        Add(r, editor, "freew.highlight.green", "#00B050");
+        Add(r, editor, "freew.highlight.cyan", "#00B0F0");
+        Add(r, editor, "freew.highlight.blue", "#0070C0");
+        Add(r, editor, "freew.highlight.dark-blue", "#2F5496");
+        Add(r, editor, "freew.highlight.purple", "#7030A0");
+        Add(r, editor, "freew.highlight.white", "#FFFFFF");
+        Add(r, editor, "freew.highlight.none", null);
     }
 
     /// <summary>
