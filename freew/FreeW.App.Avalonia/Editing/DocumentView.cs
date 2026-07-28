@@ -18218,6 +18218,7 @@ public sealed class DocumentView : Control
         var fmt = new RunFormatting
         {
             FontSizePt = Math.Max(1, fontSizePt),
+            FontFamily = plan?.FontFamilyName,
             ColorHex = $"#{textColor.R:X2}{textColor.G:X2}{textColor.B:X2}"
         };
         var ft  = Build(text, fmt);

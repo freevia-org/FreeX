@@ -647,7 +647,9 @@ public sealed class ChartSmartArtVisualPlannerTests
         smartArt.LayoutId = "pyramid1";
         smartArt.ColorSchemeId = "accent1_2";
         smartArt.StyleId = "simple1";
-        var theme = DocumentTheme.Default with { PrimaryColorHex = "#156082" };
+        smartArt.WidthPt = 300;
+        smartArt.HeightPt = 150;
+        var theme = DocumentTheme.Default with { PrimaryColorHex = "#156082", BodyFont = "Aptos" };
 
         var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt, theme);
 
@@ -655,7 +657,8 @@ public sealed class ChartSmartArtVisualPlannerTests
             node.FillHex == "#156082"
             && node.TextHex == "#000000"
             && node.BorderHex == "#FFFFFF"
-            && Math.Abs(node.FontSizeDip - 18.48 * 96.0 / 72.0) < 0.001);
+            && Math.Abs(node.FontSizeDip - 18.48 * 96.0 / 72.0) < 0.001
+            && node.FontFamilyName == "Aptos");
         var geometry = plan.LayoutGeometry!;
         geometry.NaturalWidth.Should().Be(300);
         geometry.NaturalHeight.Should().Be(150);
@@ -665,6 +668,30 @@ public sealed class ChartSmartArtVisualPlannerTests
                 (75, 37.5, 150, 37.5),
                 (37.5, 75, 225, 37.5),
                 (0, 112.5, 300, 37.5));
+    }
+
+    [Fact]
+    public void SmartArtPlan_CurrentWordPyramidPreservesImportedAnchorAspect()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
+        smartArt.LayoutId = "pyramid1";
+        smartArt.ColorSchemeId = "accent1_2";
+        smartArt.StyleId = "simple1";
+        smartArt.WidthPt = 432;
+        smartArt.HeightPt = 252;
+
+        var geometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt, DocumentTheme.Default).LayoutGeometry!;
+
+        geometry.NaturalWidth.Should().Be(432);
+        geometry.NaturalHeight.Should().Be(252);
+        geometry.Nodes.Select(node => (node.X, node.Y, node.Width, node.Height))
+            .Should().ContainInOrder(
+                (162, 0, 108, 63),
+                (108, 63, 216, 63),
+                (54, 126, 324, 63),
+                (0, 189, 432, 63));
+        ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt, DocumentTheme.Default).Nodes
+            .Should().OnlyContain(node => Math.Abs(node.FontSizeDip - 18.48 * 96.0 / 72.0) < 0.001);
     }
 
     [Theory]

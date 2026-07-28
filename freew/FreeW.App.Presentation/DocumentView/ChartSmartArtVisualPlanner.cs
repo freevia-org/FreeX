@@ -236,7 +236,8 @@ public sealed record SmartArtNodeVisualPlan(
     double ShadowBlur,
     double ShadowDepth,
     string ConnectorHex,
-    double FontSizeDip = 11 * 96.0 / 72.0);
+    double FontSizeDip = 11 * 96.0 / 72.0,
+    string? FontFamilyName = null);
 
 public sealed record SmartArtHierarchyNodeGeometry(
     int NodeIndex,
@@ -1004,7 +1005,12 @@ public static class ChartSmartArtVisualPlanner
             ? BuildHierarchyGeometry(layoutId, smartArt.Nodes)
             : null;
         var layoutGeometry = hierarchyGeometry is null
-            ? BuildLayoutGeometry(layout.Id, nodes.Count, isCurrentWordPyramid)
+            ? BuildLayoutGeometry(
+                layout.Id,
+                nodes.Count,
+                isCurrentWordPyramid,
+                smartArt.WidthPt,
+                smartArt.HeightPt)
             : null;
 
         return new SmartArtVisualPlan(
@@ -1351,7 +1357,8 @@ public static class ChartSmartArtVisualPlanner
                 ConnectorHex = accent,
                 // The cached source declares 28pt, but Word applies SmartArt text fitting
                 // before scaling the 300pt by 150pt drawing into the anchor rectangle.
-                FontSizeDip = 18.48 * 96.0 / 72.0
+                FontSizeDip = 18.48 * 96.0 / 72.0,
+                FontFamilyName = documentTheme?.BodyFont
             })
             .ToList();
     }
@@ -1359,7 +1366,9 @@ public static class ChartSmartArtVisualPlanner
     private static SmartArtLayoutGeometryPlan? BuildLayoutGeometry(
         string layoutId,
         int nodeCount,
-        bool isCurrentWordPyramid) =>
+        bool isCurrentWordPyramid,
+        double targetWidth,
+        double targetHeight) =>
         layoutId switch
         {
             "list1" => BuildVerticalListGeometry(nodeCount, SmartArtLayoutGeometryKind.BasicList),
@@ -1370,7 +1379,7 @@ public static class ChartSmartArtVisualPlanner
             "stepup1" => BuildStepGeometry(nodeCount, ascending: true),
             "stepdown1" => BuildStepGeometry(nodeCount, ascending: false),
             "cycle1" => BuildCycleGeometry(nodeCount),
-            "pyramid1" => BuildPyramidGeometry(nodeCount, isCurrentWordPyramid),
+            "pyramid1" => BuildPyramidGeometry(nodeCount, isCurrentWordPyramid, targetWidth, targetHeight),
             "radial1" => BuildRadialGeometry(nodeCount),
             "matrix1" => BuildMatrixGeometry(nodeCount),
             _ => null
@@ -1679,10 +1688,14 @@ public static class ChartSmartArtVisualPlanner
             nodeCount == 0 ? 0 : naturalHeight);
     }
 
-    private static SmartArtLayoutGeometryPlan BuildPyramidGeometry(int nodeCount, bool isCurrentWordPyramid)
+    private static SmartArtLayoutGeometryPlan BuildPyramidGeometry(
+        int nodeCount,
+        bool isCurrentWordPyramid,
+        double targetWidth,
+        double targetHeight)
     {
         if (isCurrentWordPyramid && nodeCount == 4)
-            return BuildCurrentWordPyramidGeometry();
+            return BuildCurrentWordPyramidGeometry(targetWidth, targetHeight);
 
         if (nodeCount == 4)
             return BuildNativeWordPyramidGeometry();
@@ -1753,26 +1766,32 @@ public static class ChartSmartArtVisualPlanner
             NaturalHeight: 150);
     }
 
-    private static SmartArtLayoutGeometryPlan BuildCurrentWordPyramidGeometry()
+    private static SmartArtLayoutGeometryPlan BuildCurrentWordPyramidGeometry(
+        double targetWidth,
+        double targetHeight)
     {
         // The imported cached dsp:drawing uses contiguous trapezoids, rather than the
         // inset bands used by Word's older accent2/flat1 pyramid gallery signature.
-        const double bandHeight = 37.5;
-        const double trapezoidInset = 37.5;
+        // Its local coordinate system matches the authored anchor extent, so retain the
+        // source aspect ratio instead of normalizing every imported pyramid to 300 by 150.
+        var width = targetWidth > 0 ? targetWidth : 300;
+        var height = targetHeight > 0 ? targetHeight : 150;
+        var bandHeight = height / 4;
+        var trapezoidInset = width / 8;
         var nodes = new SmartArtLayoutNodeGeometry[]
         {
-            BuildNativeWordPyramidBand(0, 112.5, 0, 75, bandHeight, trapezoidInset),
-            BuildNativeWordPyramidBand(1, 75, 37.5, 150, bandHeight, trapezoidInset),
-            BuildNativeWordPyramidBand(2, 37.5, 75, 225, bandHeight, trapezoidInset),
-            BuildNativeWordPyramidBand(3, 0, 112.5, 300, bandHeight, trapezoidInset)
+            BuildNativeWordPyramidBand(0, width * 3 / 8, 0, width / 4, bandHeight, trapezoidInset),
+            BuildNativeWordPyramidBand(1, width / 4, bandHeight, width / 2, bandHeight, trapezoidInset),
+            BuildNativeWordPyramidBand(2, width / 8, bandHeight * 2, width * 3 / 4, bandHeight, trapezoidInset),
+            BuildNativeWordPyramidBand(3, 0, bandHeight * 3, width, bandHeight, trapezoidInset)
         };
 
         return new SmartArtLayoutGeometryPlan(
             SmartArtLayoutGeometryKind.Pyramid,
             nodes,
             [],
-            NaturalWidth: 300,
-            NaturalHeight: 150);
+            NaturalWidth: width,
+            NaturalHeight: height);
     }
 
     private static SmartArtLayoutNodeGeometry BuildNativeWordPyramidBand(
