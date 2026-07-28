@@ -902,6 +902,35 @@ public sealed class SmartArtTests : IDisposable
         reread.Data.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
     }
 
+    [Fact]
+    public void SmartArtLayoutPreset_PersistsNativeLayoutWhenLiveDataIsUnavailable()
+    {
+        var sourcePath = MakeSmartArtPptx(["One", "Two"]);
+        var savedPath = Path.Combine(_tempDir, "smartart-layout-cached-only.pptx");
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        smartArt.Data = null;
+        var originalFallbackCount = smartArt.FallbackShapes.Count;
+
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(
+            smartArt,
+            SmartArtLayoutPreset.BasicProcess);
+
+        result.Applied.Should().BeTrue(result.Message);
+        smartArt.Data.Should().BeNull();
+        smartArt.FallbackShapes.Should().HaveCount(originalFallbackCount);
+        PptxPackageWriter.Write(presentation, savedPath);
+
+        var reread = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        reread.Data.Should().NotBeNull();
+        reread.Data!.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
+        reread.FallbackShapes.Should().HaveCount(originalFallbackCount);
+    }
+
     [Theory]
     [InlineData(SmartArtQuickStylePreset.SimpleFill, "simple1", "Simple Fill")]
     [InlineData(SmartArtQuickStylePreset.WhiteOutline, "simple2", "White Outline")]

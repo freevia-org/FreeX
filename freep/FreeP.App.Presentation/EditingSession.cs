@@ -140,8 +140,10 @@ public sealed class EditingSession
     /// the native data/cache payload before the replacement command is committed.
     /// </summary>
     public bool ApplySmartArtLayout(uint shapeId, SmartArtLayoutPreset preset) =>
-        EditSmartArtWithPackageRefresh(shapeId, smartArt =>
-            SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, preset).Applied);
+        EditSmartArtWithPackageRefresh(
+            shapeId,
+            smartArt => SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, preset).Applied,
+            allowCachedPackageEdit: true);
 
     /// <summary>
     /// Applies one supported SmartArt Quick Style through the shared undoable edit path and

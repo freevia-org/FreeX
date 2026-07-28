@@ -209,6 +209,31 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void ApplySmartArtLayout_UsesNativePartWhenLiveDataIsMissing()
+    {
+        var (session, smartArt) = MakeSmartArtSession();
+        smartArt.Data = null;
+        smartArt.Parts["ppt/diagrams/layout1.xml"].Bytes = System.Text.Encoding.UTF8.GetBytes(
+            "<dgm:layoutDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" uniqueId=\"old\" />");
+        var originalBytes = smartArt.Parts["ppt/diagrams/layout1.xml"].Bytes.ToArray();
+
+        session.ApplySmartArtLayout(7, SmartArtLayoutPreset.BasicProcess).Should().BeTrue();
+
+        var saved = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        saved.Data.Should().BeNull();
+        saved.Parts["ppt/diagrams/layout1.xml"].Bytes.Should().NotEqual(originalBytes);
+        saved.Parts["ppt/diagrams/layout1.xml"].Bytes.Should().Contain((byte)'b');
+        session.Bus.CanUndo.Should().BeTrue();
+
+        session.Undo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.Parts["ppt/diagrams/layout1.xml"].Bytes
+            .Should().Equal(originalBytes);
+        session.Redo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.Parts["ppt/diagrams/layout1.xml"].Bytes
+            .Should().NotEqual(originalBytes);
+    }
+
+    [Fact]
     public void ConvertSmartArtToShapes_ReplacesAtSameSlotAndUndoRestoresGraphic()
     {
         var (session, _) = MakeSmartArtSession();

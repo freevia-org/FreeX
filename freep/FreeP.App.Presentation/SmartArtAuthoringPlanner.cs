@@ -437,11 +437,17 @@ public static class SmartArtAuthoringPlanner
         SmartArtShape? smartArt,
         SmartArtLayoutPreset preset)
     {
-        if (smartArt?.Data is null)
-            return NotAppliedLayout("No SmartArt data model is available.");
+        if (smartArt is null)
+            return NotAppliedLayout("No SmartArt graphic is available.");
 
-        if (preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureGrid) &&
-            smartArt.Data.Nodes.Any(node => node.Picture?.Bytes is not { Length: > 0 }))
+        var pictureLayout = preset is (
+            SmartArtLayoutPreset.PictureCaptionList or
+            SmartArtLayoutPreset.PictureAccentList or
+            SmartArtLayoutPreset.PictureStack or
+            SmartArtLayoutPreset.PictureLineup or
+            SmartArtLayoutPreset.PictureGrid);
+        if (pictureLayout && (smartArt.Data is null ||
+            smartArt.Data.Nodes.Any(node => node.Picture?.Bytes is not { Length: > 0 })))
         {
             return NotAppliedLayout("Picture-based SmartArt layouts require image content for every SmartArt node.");
         }
@@ -589,10 +595,13 @@ public static class SmartArtAuthoringPlanner
 
         layoutDefinition.SetAttributeValue("uniqueId", layoutId);
         layoutPart.Bytes = Serialize(document);
-        smartArt.Data.LayoutUniqueId = layoutId;
-        smartArt.Data.Family = family;
-        smartArt.Data.IsLiveLayoutSupported = true;
-        smartArt.FallbackShapes.Clear();
+        if (smartArt.Data is { } data)
+        {
+            data.LayoutUniqueId = layoutId;
+            data.Family = family;
+            data.IsLiveLayoutSupported = true;
+            smartArt.FallbackShapes.Clear();
+        }
 
         return new SmartArtLayoutApplyResult(
             true,

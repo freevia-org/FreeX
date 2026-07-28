@@ -121,6 +121,30 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void ApplyLayoutPreset_PersistsNativeLayoutWhenLiveDataIsMissing()
+    {
+        var smartArt = new SmartArtShape();
+        var layoutPart = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/layout1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dgm:layoutDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" uniqueId=\"old\" />")
+        };
+        smartArt.Parts[layoutPart.PartPath] = layoutPart;
+
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(
+            smartArt,
+            SmartArtLayoutPreset.BasicProcess);
+
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith("/layout/basicProcess");
+        smartArt.Data.Should().BeNull();
+        XDocument.Parse(Encoding.UTF8.GetString(layoutPart.Bytes))
+            .Root!.Attribute("uniqueId")!.Value.Should().Be(result.LayoutUniqueId);
+    }
+
+    [Fact]
     public void ApplyPictureCaptionList_RequiresPicturePayloadOnEveryNode()
     {
         var smartArt = new SmartArtShape
