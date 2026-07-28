@@ -88,6 +88,10 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenTabsDialog = null,
     /// <summary>Home &gt; Paragraph &gt; Borders and Shading. Optional; registry no-ops when null.</summary>
     Action? OpenBordersAndShadingDialog = null,
+    /// <summary>Home &gt; Font &gt; Character Border. Opens the WPF-parity interactive picker.</summary>
+    Action? OpenCharacterBorderDialog = null,
+    /// <summary>Home &gt; Font &gt; Character Shading. Opens the WPF-parity interactive picker.</summary>
+    Action? OpenCharacterShadingDialog = null,
     /// <summary>Table Design &gt; Shading. Optional; registry no-ops when null.</summary>
     Action? OpenCellShadingDialog = null,
     /// <summary>Home/Table Layout &gt; Sort. Optional; registry applies a default text ascending sort when null.</summary>

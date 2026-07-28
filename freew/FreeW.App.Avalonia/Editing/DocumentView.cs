@@ -11258,10 +11258,10 @@ public sealed class DocumentView : Control
         ApplyRunFormatting(f => f with { HighlightColorHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex });
 
     public void SetCharacterBorder(ParagraphBorder? border) =>
-        ApplyRunFormatting(f => f with { CharacterBorder = border });
+        ApplyCharacterFormattingToParagraphs(f => f with { CharacterBorder = border });
 
     public void SetCharacterShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear) =>
-        ApplyRunFormatting(f => f with
+        ApplyCharacterFormattingToParagraphs(f => f with
         {
             CharacterShadingHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex,
             CharacterShadingPattern = string.IsNullOrWhiteSpace(colorHex) ? ShadingPattern.Clear : pattern,
@@ -15379,6 +15379,27 @@ public sealed class DocumentView : Control
         if (isTitle)
             return text.ToUpperInvariant();
         return text.ToLowerInvariant();
+    }
+
+    // WPF's character border/shading route formats every run in each paragraph touched by the
+    // selection. Keep that paragraph-scoped behavior separate from the generic character formatter,
+    // whose range semantics are correct for ordinary font commands and pending caret formatting.
+    private void ApplyCharacterFormattingToParagraphs(Func<RunFormatting, RunFormatting> transform)
+    {
+        var indices = SelectedParagraphIndices();
+        if (indices.Count == 0)
+            return;
+
+        if (indices.Count == 1)
+        {
+            _bus.Execute(new FormatParagraphRunsCommand(indices[0], transform));
+            return;
+        }
+
+        _bus.BeginUndoGroup();
+        foreach (var index in indices)
+            _bus.Execute(new FormatParagraphRunsCommand(index, transform));
+        _bus.CommitUndoGroup("Character Formatting");
     }
 
     private void ApplyRunFormatting(Func<RunFormatting, RunFormatting> transform)

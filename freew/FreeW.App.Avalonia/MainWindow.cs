@@ -552,6 +552,18 @@ public sealed partial class MainWindow : Window
     private Task OpenBordersAndShadingDialogAsync() =>
         BordersAndShadingDialog.ShowAndApplyAsync(this, _editor);
 
+    private Task OpenCharacterBorderDialogAsync()
+    {
+        _editor.Focus();
+        return CharacterFormattingPickerDialog.ShowAndApplyBorderAsync(this, _editor);
+    }
+
+    private Task OpenCharacterShadingDialogAsync()
+    {
+        _editor.Focus();
+        return CharacterFormattingPickerDialog.ShowAndApplyShadingAsync(this, _editor);
+    }
+
     private Task OpenCellShadingDialogAsync() =>
         CellShadingDialog.ShowAndApplyAsync(this, _editor);
 
@@ -1688,6 +1700,8 @@ public sealed partial class MainWindow : Window
             },
             OpenTabsDialog: () => _ = OpenTabsDialogAsync(),
             OpenBordersAndShadingDialog: () => _ = OpenBordersAndShadingDialogAsync(),
+            OpenCharacterBorderDialog: () => _ = OpenCharacterBorderDialogAsync(),
+            OpenCharacterShadingDialog: () => _ = OpenCharacterShadingDialogAsync(),
             OpenCellShadingDialog: () => _ = OpenCellShadingDialogAsync(),
             OpenSortDialog: () => _ = OpenSortDialogAsync(),
             OpenZoomDialog: () => _ = OpenZoomDialogAsync(),

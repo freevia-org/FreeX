@@ -9060,12 +9060,6 @@ internal static class FreeWRibbonCommands
     // "None" clears the border. Uses the ParagraphShadingCommand colour-swatch pattern for consistency.
     private sealed class CharacterBorderCommand(DocumentView editor) : IRibbonCommand
     {
-        private static readonly string[] Palette =
-        [
-            "#000000", "#FF0000", "#0070C0", "#00B050", "#FFC000", "#7030A0",
-            "#808080", "#C00000", "#002060", "#375623", "#974706", "#3F3F3F",
-        ];
-
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
@@ -9082,7 +9076,7 @@ internal static class FreeWRibbonCommands
             ParagraphBorder? border = null;
             var window = new Window
             {
-                Title = "Character Border",
+                Title = CharacterFormattingPickerPlanner.BorderTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
@@ -9090,31 +9084,43 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var panel = new StackPanel { Margin = new Thickness(8) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Choose border colour:", Margin = new Thickness(0, 0, 0, 4) });
-            var grid = new WrapPanel { Width = 6 * 26 };
-            foreach (var swatchHex in Palette)
+            var layout = CharacterFormattingPickerPlanner.Layout;
+            var panel = new StackPanel { Margin = new Thickness(layout.PanelMargin) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = CharacterFormattingPickerPlanner.BorderPrompt, Margin = new Thickness(0, 0, 0, 4) });
+            var grid = new WrapPanel { Width = layout.PaletteWidth };
+            foreach (var (choice, choiceIndex) in CharacterFormattingPickerPlanner.BorderPalette.Select((choice, index) => (choice, index)))
             {
                 var swatch = new Button
                 {
-                    Width = 22, Height = 22, Margin = new Thickness(2),
-                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(swatchHex)),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                    Width = layout.SwatchSize, Height = layout.SwatchSize, Margin = new Thickness(layout.SwatchMargin),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(choice.Hex)),
+                    BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(layout.SwatchBorderHex)),
                     BorderThickness = new Thickness(1),
-                    ToolTip = swatchHex
+                    ToolTip = choice.Hex
                 };
                 swatch.Click += (_, _) =>
                 {
                     chosen = true;
-                    border = new ParagraphBorder(swatchHex, 0.5) { LineStyle = BorderLineStyle.Single };
+                    border = CharacterFormattingPickerPlanner.SelectBorder(choiceIndex).Border;
                     window.Close();
                 };
                 grid.Children.Add(swatch);
             }
             panel.Children.Add(grid);
 
-            var clear = new Button { Content = "No Border", Margin = new Thickness(2, 6, 2, 0), Padding = new Thickness(8, 2, 8, 2) };
-            clear.Click += (_, _) => { chosen = true; border = null; window.Close(); };
+            var clear = new Button
+            {
+                Content = CharacterFormattingPickerPlanner.NoBorderLabel,
+                Margin = new Thickness(layout.ClearHorizontalMargin, layout.ClearTopMargin, layout.ClearHorizontalMargin, 0),
+                Padding = new Thickness(layout.ClearHorizontalPadding, 2, layout.ClearHorizontalPadding, 2)
+            };
+            clear.Click += (_, _) =>
+            {
+                var result = CharacterFormattingPickerPlanner.SelectNoBorder();
+                chosen = result.Accepted;
+                border = result.Border;
+                window.Close();
+            };
             panel.Children.Add(clear);
 
             window.Content = panel;
@@ -9127,12 +9133,6 @@ internal static class FreeWRibbonCommands
     // fill (pattern-aware w:shd at run level). Mirrors ParagraphShadingCommand's UI.
     private sealed class CharacterShadingCommand(DocumentView editor) : IRibbonCommand
     {
-        private static readonly string[] Palette =
-        [
-            "#FFFF00", "#92D050", "#00B0F0", "#FFC000", "#FF0000", "#D9D9D9",
-            "#A6A6A6", "#FFF2CC", "#DEEBF7", "#E2EFDA", "#FCE4D6", "#EDEDED",
-        ];
-
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
@@ -9149,7 +9149,7 @@ internal static class FreeWRibbonCommands
             string? hex = null;
             var window = new Window
             {
-                Title = "Character Shading",
+                Title = CharacterFormattingPickerPlanner.ShadingTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
@@ -9157,25 +9157,43 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var panel = new StackPanel { Margin = new Thickness(8) };
-            var grid = new WrapPanel { Width = 6 * 26 };
-            foreach (var swatchHex in Palette)
+            var layout = CharacterFormattingPickerPlanner.Layout;
+            var panel = new StackPanel { Margin = new Thickness(layout.PanelMargin) };
+            var grid = new WrapPanel { Width = layout.PaletteWidth };
+            foreach (var (choice, choiceIndex) in CharacterFormattingPickerPlanner.ShadingPalette.Select((choice, index) => (choice, index)))
             {
                 var swatch = new Button
                 {
-                    Width = 22, Height = 22, Margin = new Thickness(2),
-                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(swatchHex)),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                    Width = layout.SwatchSize, Height = layout.SwatchSize, Margin = new Thickness(layout.SwatchMargin),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(choice.Hex)),
+                    BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(layout.SwatchBorderHex)),
                     BorderThickness = new Thickness(1),
-                    ToolTip = swatchHex
+                    ToolTip = choice.Hex
                 };
-                swatch.Click += (_, _) => { chosen = true; hex = swatchHex; window.Close(); };
+                swatch.Click += (_, _) =>
+                {
+                    var result = CharacterFormattingPickerPlanner.SelectShading(choiceIndex);
+                    chosen = result.Accepted;
+                    hex = result.Hex;
+                    window.Close();
+                };
                 grid.Children.Add(swatch);
             }
             panel.Children.Add(grid);
 
-            var clear = new Button { Content = "No Color", Margin = new Thickness(2, 6, 2, 0), Padding = new Thickness(8, 2, 8, 2) };
-            clear.Click += (_, _) => { chosen = true; hex = null; window.Close(); };
+            var clear = new Button
+            {
+                Content = CharacterFormattingPickerPlanner.NoColorLabel,
+                Margin = new Thickness(layout.ClearHorizontalMargin, layout.ClearTopMargin, layout.ClearHorizontalMargin, 0),
+                Padding = new Thickness(layout.ClearHorizontalPadding, 2, layout.ClearHorizontalPadding, 2)
+            };
+            clear.Click += (_, _) =>
+            {
+                var result = CharacterFormattingPickerPlanner.SelectNoColor();
+                chosen = result.Accepted;
+                hex = result.Hex;
+                window.Close();
+            };
             panel.Children.Add(clear);
 
             window.Content = panel;

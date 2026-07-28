@@ -606,7 +606,11 @@ public sealed class CommandRegistryTests
         view.LoadDocument(doc);
         view.SelectAll();
 
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
+        {
+            OpenCharacterBorderDialog = () => view.SetCharacterBorder(new ParagraphBorder("#000000", 0.5)),
+            OpenCharacterShadingDialog = () => view.SetCharacterShading("#FFF2CC"),
+        });
         registry.TryGet(new RibbonCommandId("freew.char-border"), out var borderCommand)
             .Should().BeTrue("freew.char-border must be registered");
         registry.TryGet(new RibbonCommandId("freew.char-shading"), out var shadingCommand)
