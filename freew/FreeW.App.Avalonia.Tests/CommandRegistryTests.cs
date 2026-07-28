@@ -392,8 +392,12 @@ public sealed class CommandRegistryTests
         Execute(registry, "freew.para-border");
         paragraph.Formatting.Border.Should().NotBeNull();
 
-        Execute(registry, "freew.para-shading");
+        Execute(registry, "freew.para-shading.light-yellow");
         paragraph.Formatting.ShadingColorHex.Should().Be("#FFF2CC");
+        paragraph.Formatting.ShadingPattern.Should().Be(ShadingPattern.Clear);
+
+        Execute(registry, "freew.para-shading.none");
+        paragraph.Formatting.ShadingColorHex.Should().BeNull();
         paragraph.Formatting.ShadingPattern.Should().Be(ShadingPattern.Clear);
     }
 

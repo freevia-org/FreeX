@@ -38,6 +38,25 @@ internal static class FreeWAvaloniaRibbonDefinition
             .Select(fc => new RibbonMenuItem(fc.Label, new RibbonCommandId(fc.CommandId)))
             .ToArray());
 
+    private static RibbonMenu BuildParagraphShadingMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Yellow", new RibbonCommandId("freew.para-shading.yellow")),
+            new("Green", new RibbonCommandId("freew.para-shading.green")),
+            new("Cyan", new RibbonCommandId("freew.para-shading.cyan")),
+            new("Gold", new RibbonCommandId("freew.para-shading.gold")),
+            new("Red", new RibbonCommandId("freew.para-shading.red")),
+            new("Gray", new RibbonCommandId("freew.para-shading.gray")),
+            new("Light Gray", new RibbonCommandId("freew.para-shading.light-gray")),
+            new("Light Yellow", new RibbonCommandId("freew.para-shading.light-yellow")),
+            new("Light Blue", new RibbonCommandId("freew.para-shading.light-blue")),
+            new("Light Green", new RibbonCommandId("freew.para-shading.light-green")),
+            new("Light Peach", new RibbonCommandId("freew.para-shading.light-peach")),
+            new("Very Light Gray", new RibbonCommandId("freew.para-shading.very-light-gray")),
+            RibbonMenuItem.Separator(),
+            new("No Color", new RibbonCommandId("freew.para-shading.none")),
+        });
+
     private static RibbonMenu BuildDisplayForReviewMenu() =>
         new(new RibbonMenuItem[]
         {
@@ -546,7 +565,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.LineSpacing),
                         Width = 52
                     });
-                    g.Button("freew.para-shading", "Shading", b => b with
+                    g.Dropdown("freew.para-shading", "Shading", BuildParagraphShadingMenu(), d => d with
                     {
                         PreferredLayout = RibbonCommandLayoutKind.Small,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill)

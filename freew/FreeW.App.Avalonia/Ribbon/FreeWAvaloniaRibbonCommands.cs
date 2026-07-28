@@ -207,7 +207,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.keep-lines", new ActionRibbonCommand(editor.ToggleKeepLinesTogether));
         r.Register("freew.widow-control", new ActionRibbonCommand(editor.ToggleWidowControl));
         r.Register("freew.para-border", new ActionRibbonCommand(() => editor.ToggleParagraphBorder()));
-        r.Register("freew.para-shading", new ActionRibbonCommand(() => editor.ToggleParagraphShading()));
+        r.Register("freew.para-shading", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        RegisterParagraphShadingPalette(r, editor);
         r.Register("freew.borders-shading", new ActionRibbonCommand(callbacks.OpenBordersAndShadingDialog ?? (() => { })));
         r.Register("freew.tabs-dialog", new ActionRibbonCommand(callbacks.OpenTabsDialog ?? (() => { })));
         r.Register("freew.sort", new ActionRibbonCommand(() => ExecuteSortCommand(editor, callbacks)));
@@ -899,6 +900,30 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.font-color.dark-blue", "#00008B");
         Add(r, editor, "freew.font-color.purple",    "#7030A0");
         Add(r, editor, "freew.font-color.white",     "#FFFFFF");
+    }
+
+    /// <summary>
+    /// Registers the WPF-authority paragraph shading palette. The top-level command only opens
+    /// the ribbon menu; formatting changes happen only after an explicit swatch or No Color choice.
+    /// </summary>
+    private static void RegisterParagraphShadingPalette(RibbonCommandRegistry r, DocumentView editor)
+    {
+        static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
+            reg.Register(id, new ActionRibbonCommand(() => ed.SetParagraphShading(hex)));
+
+        Add(r, editor, "freew.para-shading.yellow", "#FFFF00");
+        Add(r, editor, "freew.para-shading.green", "#92D050");
+        Add(r, editor, "freew.para-shading.cyan", "#00B0F0");
+        Add(r, editor, "freew.para-shading.gold", "#FFC000");
+        Add(r, editor, "freew.para-shading.red", "#FF0000");
+        Add(r, editor, "freew.para-shading.gray", "#D9D9D9");
+        Add(r, editor, "freew.para-shading.light-gray", "#A6A6A6");
+        Add(r, editor, "freew.para-shading.light-yellow", "#FFF2CC");
+        Add(r, editor, "freew.para-shading.light-blue", "#DEEBF7");
+        Add(r, editor, "freew.para-shading.light-green", "#E2EFDA");
+        Add(r, editor, "freew.para-shading.light-peach", "#FCE4D6");
+        Add(r, editor, "freew.para-shading.very-light-gray", "#EDEDED");
+        Add(r, editor, "freew.para-shading.none", null);
     }
 
     /// <summary>
