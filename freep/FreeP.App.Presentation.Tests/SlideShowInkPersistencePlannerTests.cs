@@ -143,8 +143,12 @@ public sealed class SlideShowInkPersistencePlannerTests
         var slidePlan = first.Slides.Single();
         slidePlan.InkPartPath.Should().Be("ppt/ink/freepInk_s1_2.xml");
         slidePlan.ContentPartXml.Should().Contain("p:contentPart");
+        slidePlan.ContentPartXml.Should().Contain("p14:nvContentPartPr");
         slidePlan.ContentPartXml.Should().Contain("rIdFreePInk2");
         slidePlan.InkXml.Should().Contain("stable-stroke");
+        slidePlan.InkXml.Should().Contain("inkml:definitions");
+        slidePlan.InkXml.Should().Contain("contextRef=\"#ctx0\"");
+        slidePlan.InkXml.Should().Contain("brushRef=\"#br0\"");
         slidePlan.InkXml.Should().Contain("freep:pointerMode=\"Highlighter\"");
         slidePlan.InkXml.Should().Contain("freep:color=\"#FFEE00\"");
         slidePlan.InkXml.Should().Contain("freep:thicknessDip=\"8.25\"");
@@ -176,7 +180,7 @@ public sealed class SlideShowInkPersistencePlannerTests
                 .And.Contain("../ink/freepInk_s1_2.xml");
             ReadEntry(zip, "[Content_Types].xml")
                 .Should().Contain("PartName=\"/ppt/ink/freepInk_s1_2.xml\"")
-                .And.Contain("ContentType=\"application/xml\"");
+                .And.Contain("ContentType=\"application/inkml+xml\"");
 
             var inkXml = ReadEntry(zip, persistence.Plan.Slides.Single().InkPartPath);
             inkXml.Should().Contain("package-stroke");

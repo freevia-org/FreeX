@@ -47,6 +47,10 @@ namespace FreeP.RenderCompare;
 ///   --generate-corpus &lt;outDir&gt;
 ///       Author four deterministic test decks via PowerPoint COM and save them to
 ///       outDir as *.pptx.  Also exports PowerPoint's own PNGs next to each deck.
+///
+///   --generate-presenter-ink-probe &lt;output.pptx&gt;
+///       Generate one deterministic presenter-ink deck through the shared persistence
+///       planner for PowerPoint COM open/export validation.
 /// </summary>
 internal static class Program
 {
@@ -88,6 +92,7 @@ internal static class Program
                 "--corpus-summary"    => RunCorpusSummary(args[1..]),
                 "--powerpoint-corpus-validate" => RunPowerPointCorpusValidation(args[1..]),
                 "--generate-corpus"           => RunGenerateCorpus(args[1..]),
+                "--generate-presenter-ink-probe" => RunGeneratePresenterInkProbe(args[1..]),
                 "--patch-chart-labels-19"     => RunPatchChartLabels19(args[1..]),
                 "--generate-smartart-fixture" => RunGenerateSmartArtFixture(args[1..]),
                 _                             => PrintUsageAndError($"Unknown mode: {args[0]}")
@@ -584,6 +589,20 @@ internal static class Program
     }
 
     // -----------------------------------------------------------------------
+    // Mode: --generate-presenter-ink-probe
+    // -----------------------------------------------------------------------
+    private static int RunGeneratePresenterInkProbe(string[] args)
+    {
+        if (args.Length < 1)
+        {
+            Console.Error.WriteLine("usage: --generate-presenter-ink-probe <output.pptx>");
+            return 2;
+        }
+
+        return PresenterInkProbe.Generate(args[0]);
+    }
+
+    // -----------------------------------------------------------------------
     // Mode: --corpus-summary
     // -----------------------------------------------------------------------
     private static int RunCorpusSummary(string[] args)
@@ -805,6 +824,9 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("  --generate-corpus <outDir>");
         Console.WriteLine("      Author test .pptx decks via PowerPoint COM.");
+        Console.WriteLine();
+        Console.WriteLine("  --generate-presenter-ink-probe <output.pptx>");
+        Console.WriteLine("      Generate a deterministic shared-planner presenter-ink deck for COM validation.");
         Console.WriteLine();
         Console.WriteLine("  --generate-smartart-fixture <outPath.pptx>");
         Console.WriteLine("      Generate 14-smartart-live.pptx (4 slides: Process/Hierarchy/Cycle/List).");

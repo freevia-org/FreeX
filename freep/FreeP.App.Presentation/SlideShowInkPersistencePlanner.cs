@@ -43,9 +43,9 @@ public sealed record SlideShowInkPersistenceResult(
 public static class SlideShowInkPersistencePlanner
 {
     public const string GeneratedInkRelationshipType =
-        "http://schemas.microsoft.com/office/2016/05/19/relationships/ink";
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
 
-    public const string GeneratedInkContentType = "application/xml";
+    public const string GeneratedInkContentType = "application/inkml+xml";
 
     private static readonly XNamespace P =
         "http://schemas.openxmlformats.org/presentationml/2006/main";
@@ -55,6 +55,9 @@ public static class SlideShowInkPersistencePlanner
 
     private static readonly XNamespace R =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+    private static readonly XNamespace P14 =
+        "http://schemas.microsoft.com/office/powerpoint/2010/main";
 
     private static readonly XNamespace InkMl = "http://www.w3.org/2003/InkML";
 
@@ -175,7 +178,8 @@ public static class SlideShowInkPersistencePlanner
                 shapeName,
                 relationshipId,
                 presentation.SlideSizeCxEmu,
-                presentation.SlideSizeCyEmu);
+                presentation.SlideSizeCyEmu,
+                strokes);
             var sourceSlideId = string.IsNullOrWhiteSpace(slide.Id)
                 ? string.Empty
                 : slide.Id.Trim();
@@ -290,26 +294,43 @@ public static class SlideShowInkPersistencePlanner
         string shapeName,
         string relationshipId,
         long slideCxEmu,
-        long slideCyEmu)
+        long slideCyEmu,
+        IReadOnlyList<SlideShowInkPersistenceStrokePlan> strokes)
     {
+        const double emuPerDip = 914400d / 96d;
+        const double paddingDip = 8;
+        var points = strokes.SelectMany(stroke => stroke.Points).ToArray();
+        var minX = points.Length == 0 ? 0 : points.Min(point => point.X) - paddingDip;
+        var minY = points.Length == 0 ? 0 : points.Min(point => point.Y) - paddingDip;
+        var maxX = points.Length == 0 ? slideCxEmu / emuPerDip : points.Max(point => point.X) + paddingDip;
+        var maxY = points.Length == 0 ? slideCyEmu / emuPerDip : points.Max(point => point.Y) + paddingDip;
+        var offX = Math.Clamp((long)Math.Round(minX * emuPerDip), 0, Math.Max(0, slideCxEmu - 1));
+        var offY = Math.Clamp((long)Math.Round(minY * emuPerDip), 0, Math.Max(0, slideCyEmu - 1));
+        var right = Math.Clamp((long)Math.Round(maxX * emuPerDip), offX + 1, Math.Max(offX + 1, slideCxEmu));
+        var bottom = Math.Clamp((long)Math.Round(maxY * emuPerDip), offY + 1, Math.Max(offY + 1, slideCyEmu));
+        var extentCx = Math.Max(1, right - offX);
+        var extentCy = Math.Max(1, bottom - offY);
+
         var el = new XElement(P + "contentPart",
             new XAttribute(XNamespace.Xmlns + "p", P.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "p14", P14.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+            new XAttribute(P14 + "bwMode", "auto"),
             new XAttribute(R + "id", relationshipId),
-            new XElement(P + "nvContentPartPr",
-                new XElement(P + "cNvPr",
+            new XElement(P14 + "nvContentPartPr",
+                new XElement(P14 + "cNvPr",
                     new XAttribute("id", shapeId.ToString(CultureInfo.InvariantCulture)),
                     new XAttribute("name", shapeName)),
-                new XElement(P + "cNvContentPartPr"),
-                new XElement(P + "nvPr")),
-            new XElement(P + "xfrm",
+                new XElement(P14 + "cNvContentPartPr"),
+                new XElement(P14 + "nvPr")),
+            new XElement(P14 + "xfrm",
                 new XElement(A + "off",
-                    new XAttribute("x", "0"),
-                    new XAttribute("y", "0")),
+                    new XAttribute("x", offX.ToString(CultureInfo.InvariantCulture)),
+                    new XAttribute("y", offY.ToString(CultureInfo.InvariantCulture))),
                 new XElement(A + "ext",
-                    new XAttribute("cx", Math.Max(1, slideCxEmu).ToString(CultureInfo.InvariantCulture)),
-                    new XAttribute("cy", Math.Max(1, slideCyEmu).ToString(CultureInfo.InvariantCulture)))));
+                    new XAttribute("cx", extentCx.ToString(CultureInfo.InvariantCulture)),
+                    new XAttribute("cy", extentCy.ToString(CultureInfo.InvariantCulture)))));
 
         return el.ToString(SaveOptions.DisableFormatting);
     }
@@ -345,18 +366,39 @@ public static class SlideShowInkPersistencePlanner
             attributes.Add(new XAttribute(FreePInk + "customShowName", customShowName.Trim()));
         }
 
+        var traceFormat = new XElement(InkMl + "traceFormat",
+            new XElement(InkMl + "channel",
+                new XAttribute("name", "X"),
+                new XAttribute("type", "decimal"),
+                new XAttribute("units", "cm")),
+            new XElement(InkMl + "channel",
+                new XAttribute("name", "Y"),
+                new XAttribute("type", "decimal"),
+                new XAttribute("units", "cm")));
+        var inkSource = new XElement(InkMl + "inkSource",
+            new XAttribute(XNamespace.Xml + "id", "inkSrc0"),
+            traceFormat);
+        var context = new XElement(InkMl + "context",
+            new XAttribute(XNamespace.Xml + "id", "ctx0"),
+            inkSource);
         var doc = new XDocument(
             new XDeclaration("1.0", "utf-8", "yes"),
             new XElement(InkMl + "ink",
                 attributes,
+                new XElement(InkMl + "definitions",
+                    context,
+                    strokes.Select((stroke, index) => BuildBrush(stroke, index))),
                 strokes.Select((stroke, index) =>
                     new XElement(InkMl + "trace",
                         new XAttribute("id", StableStrokeId(stroke.StrokeId, index)),
+                        new XAttribute("contextRef", "#ctx0"),
+                        new XAttribute("brushRef", $"#br{index}"),
                         new XAttribute(FreePInk + "pointerMode", stroke.PointerMode.ToString()),
                         new XAttribute(FreePInk + "color", stroke.ColorHex),
                         new XAttribute(FreePInk + "thicknessDip", FormatDouble(stroke.ThicknessDip)),
                         new XAttribute(FreePInk + "opacity", FormatDouble(stroke.Opacity)),
-                        string.Join(" ", stroke.Points.Select(FormatPoint))))));
+                        new XAttribute(FreePInk + "points", string.Join(" ", stroke.Points.Select(FormatPoint))),
+                        FormatInkTrace(stroke.Points)))));
 
         return doc.ToString(SaveOptions.None);
     }
@@ -366,6 +408,44 @@ public static class SlideShowInkPersistencePlanner
 
     private static string FormatPoint(SlideShowInkPoint point) =>
         $"{FormatDouble(point.X)},{FormatDouble(point.Y)}";
+
+    private static string FormatInkTrace(IReadOnlyList<SlideShowInkPoint> points) =>
+        string.Join(", ", points.Select(point =>
+            $"{FormatDouble(DipToCm(point.X))} {FormatDouble(DipToCm(point.Y))}"));
+
+    private static XElement BuildBrush(
+        SlideShowInkPersistenceStrokePlan stroke,
+        int index) =>
+        new(InkMl + "brush",
+            new XAttribute(XNamespace.Xml + "id", $"br{index}"),
+            new XElement(InkMl + "brushProperty",
+                new XAttribute("name", "width"),
+                new XAttribute("value", FormatDouble(ThicknessDipToCm(stroke))),
+                new XAttribute("units", "cm")),
+            new XElement(InkMl + "brushProperty",
+                new XAttribute("name", "height"),
+                new XAttribute("value", FormatDouble(ThicknessDipToCm(stroke))),
+                new XAttribute("units", "cm")),
+            new XElement(InkMl + "brushProperty",
+                new XAttribute("name", "color"),
+                new XAttribute("value", stroke.ColorHex)),
+            new XElement(InkMl + "brushProperty",
+                new XAttribute("name", "transparency"),
+                new XAttribute("value", TransparencyByte(stroke.Opacity))),
+            new XElement(InkMl + "brushProperty",
+                new XAttribute("name", "antiAliased"),
+                new XAttribute("value", "1")),
+            new XElement(InkMl + "brushProperty",
+                new XAttribute("name", "fitToCurve"),
+                new XAttribute("value", "0")));
+
+    private static double DipToCm(double dip) => dip * 2.54 / 96;
+
+    private static double ThicknessDipToCm(SlideShowInkPersistenceStrokePlan stroke) =>
+        Math.Max(0.001, stroke.ThicknessDip * 2.54 / 96);
+
+    private static int TransparencyByte(double opacity) =>
+        (int)Math.Clamp(Math.Round((1 - Math.Clamp(opacity, 0, 1)) * 255), 0, 255);
 
     private static string FormatDouble(double value) =>
         value.ToString("0.###", CultureInfo.InvariantCulture);

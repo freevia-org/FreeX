@@ -1633,16 +1633,20 @@ public static class PptxPackageReader
     {
         // Extract cNvPr from nvContentPartPr if present
         var cNvPr = contentPartEl
-            .Element(P + "nvContentPartPr")
-            ?.Element(P + "cNvPr");
+            .Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "nvContentPartPr")
+            ?.Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "cNvPr");
 
         // Get xfrm from p:xfrm with a:off/a:ext
-        var xfrmEl = contentPartEl.Element(P + "xfrm")
-                  ?? contentPartEl.Descendants(A + "xfrm").FirstOrDefault();
-        long offX  = ParseLong(xfrmEl?.Element(A + "off")?.Attribute("x")?.Value);
-        long offY  = ParseLong(xfrmEl?.Element(A + "off")?.Attribute("y")?.Value);
-        long extCx = ParseLong(xfrmEl?.Element(A + "ext")?.Attribute("cx")?.Value);
-        long extCy = ParseLong(xfrmEl?.Element(A + "ext")?.Attribute("cy")?.Value);
+        var xfrmEl = contentPartEl.Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "xfrm")
+                  ?? contentPartEl.Descendants()
+                      .FirstOrDefault(element => element.Name.LocalName == "xfrm");
+        long offX  = ParseLong(xfrmEl?.Elements().FirstOrDefault(element => element.Name.LocalName == "off")?.Attribute("x")?.Value);
+        long offY  = ParseLong(xfrmEl?.Elements().FirstOrDefault(element => element.Name.LocalName == "off")?.Attribute("y")?.Value);
+        long extCx = ParseLong(xfrmEl?.Elements().FirstOrDefault(element => element.Name.LocalName == "ext")?.Attribute("cx")?.Value);
+        long extCy = ParseLong(xfrmEl?.Elements().FirstOrDefault(element => element.Name.LocalName == "ext")?.Attribute("cy")?.Value);
 
         var slideRels2 = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
 
