@@ -1387,7 +1387,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "bendingProcess now uses the bounded shared process live-layout path for parsed ordered-stage nodes as renderer-neutral left-to-right stage boxes with shared connector ops. Exact PowerPoint bending/turning geometry, polygon contours, overlap, spacing, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+            RemainingWork: "bendingProcess now keeps every parsed ordered-stage node on the shared two-track live-layout path; larger inputs no longer fall back solely because of item count. Exact PowerPoint bending/turning geometry, polygon contours, overlap, spacing, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
         new(
             EvidenceId: "freep.smartart.alternating-process",
             Area: "SmartArt alternatingProcess live layout",
