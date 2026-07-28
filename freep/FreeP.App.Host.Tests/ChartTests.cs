@@ -228,12 +228,22 @@ public sealed class ChartTests : IDisposable
     public void SlideCloner_ChartPreservesSeriesAndPointAuthoredPayload()
     {
         var chart = BuildColumnChart();
+        chart.ValueAxis.NumberFormatCode = "0.00%";
+        chart.ValueAxis.NumberFormatSourceLinked = false;
         var series = chart.Series[0];
         series.Fill = new ShapeFill.Pattern(
             "diagStripe",
             new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0x33)),
             new ThemeAwareColor(new SrgbColor(0xEE, 0xDD, 0xCC)));
         series.SmoothLine = true;
+        series.Trendline = new ChartTrendline
+        {
+            Type = ChartTrendlineType.Polynomial,
+            PolynomialOrder = 3,
+            Forward = 1.25,
+            DisplayEquation = true,
+            DisplayRSquared = true,
+        };
         series.FormulaReferences.SeriesName = "Sheet1!$B$1";
         series.FormulaReferences.Category = "Sheet1!$A$2:$A$4";
         series.FormulaReferences.Values = "Sheet1!$B$2:$B$4";
@@ -261,6 +271,10 @@ public sealed class ChartTests : IDisposable
 
         clonedSeries.Fill.Should().BeOfType<ShapeFill.Pattern>();
         clonedSeries.SmoothLine.Should().BeTrue();
+        clonedSeries.Trendline.Should().NotBeSameAs(series.Trendline);
+        clonedSeries.Trendline!.Type.Should().Be(ChartTrendlineType.Polynomial);
+        clonedSeries.Trendline.PolynomialOrder.Should().Be(3);
+        clonedSeries.Trendline.DisplayEquation.Should().BeTrue();
         clonedSeries.FormulaReferences.SeriesName.Should().Be("Sheet1!$B$1");
         clonedSeries.FormulaReferences.Category.Should().Be("Sheet1!$A$2:$A$4");
         clonedSeries.FormulaReferences.Values.Should().Be("Sheet1!$B$2:$B$4");
@@ -270,6 +284,8 @@ public sealed class ChartTests : IDisposable
         clonedPoint.DataLabels.ShowValue.Should().BeTrue();
         clonedPoint.DataLabels.NumberFormat.Should().Be("0.0%");
         clonedPoint.Marker!.Fill.Should().BeOfType<ShapeFill.Solid>();
+        clone.ValueAxis.NumberFormatCode.Should().Be("0.00%");
+        clone.ValueAxis.NumberFormatSourceLinked.Should().BeFalse();
     }
 
     [Fact]

@@ -231,6 +231,7 @@ public static class SlideCloner
                 OnSecondaryAxis   = s.OnSecondaryAxis,
                 DataLabels        = CloneChartDataLabels(s.DataLabels),
                 ErrorBars         = CloneChartErrorBars(s.ErrorBars),
+                Trendline         = CloneChartTrendline(s.Trendline),
                 OverrideChartType = s.OverrideChartType,
             };
             foreach (var v in s.Values)
@@ -311,6 +312,19 @@ public static class SlideCloner
             NoEndCap = bars.NoEndCap,
         };
 
+    private static ChartTrendline? CloneChartTrendline(ChartTrendline? trendline) => trendline is null
+        ? null
+        : new ChartTrendline
+        {
+            Type = trendline.Type,
+            PolynomialOrder = trendline.PolynomialOrder,
+            MovingAveragePeriod = trendline.MovingAveragePeriod,
+            Forward = trendline.Forward,
+            Backward = trendline.Backward,
+            DisplayEquation = trendline.DisplayEquation,
+            DisplayRSquared = trendline.DisplayRSquared,
+        };
+
     private static ChartTextStyle? CloneChartTextStyle(ChartTextStyle? style) =>
         style is null
             ? null
@@ -366,6 +380,8 @@ public static class SlideCloner
     private static ChartAxis CloneChartAxis(ChartAxis a) => new()
     {
         Title             = a.Title,
+        NumberFormatCode  = a.NumberFormatCode,
+        NumberFormatSourceLinked = a.NumberFormatSourceLinked,
         Min               = a.Min,
         Max               = a.Max,
         MajorUnit         = a.MajorUnit,
