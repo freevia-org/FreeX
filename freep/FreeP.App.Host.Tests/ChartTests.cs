@@ -242,8 +242,14 @@ public sealed class ChartTests : IDisposable
             Fill = new ShapeFill.Solid(new SrgbColor(0xAA, 0xBB, 0xCC)),
             DataLabels = new ChartDataLabels
             {
+                Delete = true,
                 ShowValue = true,
                 NumberFormat = "0.0%",
+            },
+            Marker = new ChartMarkerStyle
+            {
+                Symbol = ChartMarkerSymbol.Diamond,
+                Fill = new ShapeFill.Solid(new SrgbColor(0x12, 0x34, 0x56)),
             },
         };
 
@@ -260,8 +266,10 @@ public sealed class ChartTests : IDisposable
         clonedSeries.FormulaReferences.Values.Should().Be("Sheet1!$B$2:$B$4");
         clonedPoint.Fill.Should().BeOfType<ShapeFill.Solid>();
         clonedPoint.DataLabels.Should().NotBeSameAs(series.PointStyles[1].DataLabels);
-        clonedPoint.DataLabels!.ShowValue.Should().BeTrue();
+        clonedPoint.DataLabels!.Delete.Should().BeTrue();
+        clonedPoint.DataLabels.ShowValue.Should().BeTrue();
         clonedPoint.DataLabels.NumberFormat.Should().Be("0.0%");
+        clonedPoint.Marker!.Fill.Should().BeOfType<ShapeFill.Solid>();
     }
 
     [Fact]

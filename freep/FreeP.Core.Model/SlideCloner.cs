@@ -287,6 +287,7 @@ public static class SlideCloner
             ? null
             : new ChartDataLabels
             {
+                Delete = labels.Delete,
                 ShowValue = labels.ShowValue,
                 ShowPercent = labels.ShowPercent,
                 ShowCategoryName = labels.ShowCategoryName,
@@ -342,6 +343,7 @@ public static class SlideCloner
                 Symbol        = style.Symbol,
                 SizePt        = style.SizePt,
                 FillColor     = style.FillColor,
+                Fill          = style.Fill,
                 StrokeColor   = style.StrokeColor,
                 StrokeWidthPt = style.StrokeWidthPt,
                 NoFill        = style.NoFill,
