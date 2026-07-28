@@ -33,6 +33,13 @@ public sealed class SmartArtTests : IDisposable
         return path;
     }
 
+    private static void RemoveZipEntries(string path, params string[] entryPaths)
+    {
+        using var archive = ZipFile.Open(path, ZipArchiveMode.Update);
+        foreach (var entryPath in entryPaths)
+            archive.GetEntry(entryPath)?.Delete();
+    }
+
     /// <summary>
     /// Builds a minimal but self-consistent in-memory .pptx archive with one SmartArt shape.
     /// Writes it to disk and returns the path.
@@ -676,6 +683,61 @@ public sealed class SmartArtTests : IDisposable
         reopenedSmartArt.Data!.Nodes.Select(node => node.Picture)
             .Should().OnlyContain(picture => picture == null);
         reopenedSmartArt.FallbackShapes.Select(shape => shape.PlainText).Should().Contain("Add picture");
+    }
+
+    [Fact]
+    public void EditingSession_SmartArtEdit_RecreatesMissingDrawingCacheAndRoundTrips()
+    {
+        var sourcePath = MakeSmartArtPptxWithNodeTree(
+            "urn:microsoft.com/office/officeart/2005/8/layout/basicProcess",
+            [("n1", "Alpha"), ("n2", "Beta")],
+            [("n1", "n2")]);
+        RemoveZipEntries(sourcePath, "ppt/diagrams/drawing1.xml", "ppt/diagrams/_rels/drawing1.xml.rels");
+
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var shape = presentation.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt);
+        var smartArt = shape.SmartArt!;
+        smartArt.DrawingPartPath.Should().Be("ppt/diagrams/drawing1.xml");
+        smartArt.Parts.Should().NotContainKey(smartArt.DrawingPartPath);
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        session.EditSmartArt(shape.Id, candidate =>
+        {
+            var edit = SmartArtEditingPlanner.Apply(
+                candidate.Data,
+                SmartArtNodeEditIntent.ChangeText(candidate.Data!.Nodes[0].ModelId, "Alpha revised"));
+            edit.Applied.Should().BeTrue(edit.Message);
+            var dataRewrite = SmartArtEditingPlanner.RewriteDataPart(candidate);
+            dataRewrite.Applied.Should().BeTrue(dataRewrite.Message);
+            var cacheRefresh = SmartArtEditingPlanner.RegenerateDrawingCache(
+                candidate,
+                shape.OffsetXEmu,
+                shape.OffsetYEmu,
+                shape.ExtentCxEmu,
+                shape.ExtentCyEmu,
+                presentation.Theme);
+            cacheRefresh.Applied.Should().BeTrue(cacheRefresh.Message);
+            return true;
+        }).Should().BeTrue();
+
+        var updated = presentation.Slides[0].Shapes.First(s => s.Id == shape.Id).SmartArt!;
+        updated.Parts.Should().ContainKey("ppt/diagrams/drawing1.xml");
+        updated.FallbackShapes.Should().NotBeEmpty();
+
+        session.Bus.Undo();
+        presentation.Slides[0].Shapes.First(s => s.Id == shape.Id).SmartArt!
+            .Parts.Should().NotContainKey("ppt/diagrams/drawing1.xml");
+        session.Bus.Redo();
+        presentation.Slides[0].Shapes.First(s => s.Id == shape.Id).SmartArt!
+            .Parts.Should().ContainKey("ppt/diagrams/drawing1.xml");
+
+        var roundTripPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(roundTripPath);
+        var reopenedSmartArt = reopened.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        reopenedSmartArt.DrawingPartPath.Should().Be("ppt/diagrams/drawing1.xml");
+        reopenedSmartArt.FallbackShapes.Should().NotBeEmpty();
     }
 
     [Fact]

@@ -166,17 +166,28 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
-    public void ApplySmartArtLayout_WhenCacheRefreshFails_DoesNotCommitPartialEdit()
+    public void ApplySmartArtLayout_WhenDrawingCacheIsMissing_RecreatesAndRemainsUndoable()
     {
         var (session, _) = MakeSmartArtSession();
         var smartArt = session.CurrentSlide!.Shapes.Single().SmartArt!;
         var originalLayout = smartArt.Data!.LayoutUniqueId;
         smartArt.Parts.Remove("ppt/diagrams/drawing1.xml");
 
-        session.ApplySmartArtLayout(7, SmartArtLayoutPreset.BasicCycle).Should().BeFalse();
+        session.ApplySmartArtLayout(7, SmartArtLayoutPreset.BasicCycle).Should().BeTrue();
 
-        smartArt.Data.LayoutUniqueId.Should().Be(originalLayout);
-        session.Bus.CanUndo.Should().BeFalse();
+        var updated = session.CurrentSlide.Shapes.Single().SmartArt!;
+        updated.Data!.LayoutUniqueId.Should().EndWith("/layout/basicCycle");
+        updated.Parts.Should().ContainKey("ppt/diagrams/drawing1.xml");
+        updated.FallbackShapes.Should().NotBeEmpty();
+        session.Bus.CanUndo.Should().BeTrue();
+
+        session.Undo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.Data!.LayoutUniqueId.Should().Be(originalLayout);
+        session.CurrentSlide.Shapes.Single().SmartArt!.Parts.Should()
+            .NotContainKey("ppt/diagrams/drawing1.xml");
+        session.Redo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.Parts.Should()
+            .ContainKey("ppt/diagrams/drawing1.xml");
     }
 
     [Fact]
