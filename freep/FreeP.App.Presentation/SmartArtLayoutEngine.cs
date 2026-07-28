@@ -2112,7 +2112,7 @@ public static class SmartArtLayoutEngine
         SmartArtStylePlan stylePlan)
     {
         var shapes = new List<SlideShape>();
-        if (nodes.Count == 0 || nodes.Count > 8) return null;
+        if (nodes.Count == 0) return null;
 
         long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
         long padY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);
