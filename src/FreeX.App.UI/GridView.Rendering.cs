@@ -276,6 +276,8 @@ public partial class GridView
 
         if (style is not null && HasVisibleCellBorder(style))
         {
+            var borderPixelsPerDip = GetBorderEffectivePixelsPerDip();
+
             // Shared-edge precedence (finding 1): resolve each edge against the ACTUAL
             // neighboring cell's opposing border via the same heaviest-wins rule the main pass
             // uses (RenderCells' borderStyleLookup + ResolveBorderEdgeWinner), instead of always
@@ -287,34 +289,34 @@ public partial class GridView
                 ? splitAboveStyle.BorderBottom
                 : default;
             var topWinner = ResolveBorderEdgeWinner(style.BorderTop, neighborBottom);
-            DrawBorderEdge(dc, topWinner, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, topWinner, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), _brushCache, _borderPenCache, borderPixelsPerDip);
 
             var neighborTop = borderStyleLookup is not null &&
                 borderStyleLookup.TryGetValue((cell.Row + 1, cell.Col), out var splitBelowStyle)
                 ? splitBelowStyle.BorderTop
                 : default;
             var bottomWinner = ResolveBorderEdgeWinner(style.BorderBottom, neighborTop);
-            DrawBorderEdge(dc, bottomWinner, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, bottomWinner, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache, borderPixelsPerDip);
 
             var neighborRight = borderStyleLookup is not null &&
                 borderStyleLookup.TryGetValue((cell.Row, cell.Col - 1), out var splitLeftStyle)
                 ? splitLeftStyle.BorderRight
                 : default;
             var leftWinner = ResolveBorderEdgeWinner(style.BorderLeft, neighborRight);
-            DrawBorderEdge(dc, leftWinner, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, leftWinner, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), _brushCache, _borderPenCache, borderPixelsPerDip);
 
             var neighborLeft = borderStyleLookup is not null &&
                 borderStyleLookup.TryGetValue((cell.Row, cell.Col + 1), out var splitRightStyle)
                 ? splitRightStyle.BorderLeft
                 : default;
             var rightWinner = ResolveBorderEdgeWinner(style.BorderRight, neighborLeft);
-            DrawBorderEdge(dc, rightWinner, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, rightWinner, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache, borderPixelsPerDip);
 
             // Diagonal borders: drawn across cell interior (not edge-aligned), so no pen cache — these are rare
             if (style.BorderDiagonalDown.Style != BorderStyle.None)
-                DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache);
+                DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, null, borderPixelsPerDip);
             if (style.BorderDiagonalUp.Style != BorderStyle.None)
-                DrawBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top), _brushCache);
+                DrawBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top), _brushCache, null, borderPixelsPerDip);
         }
 
         if (cell.HasComment)
@@ -633,6 +635,7 @@ public partial class GridView
         // adjacent-edge conflicts (finding 2-4) and merge-membership (finding 2-3) can be
         // resolved from the actual neighboring style rather than from draw order.
         var borderStyleLookup = BuildBorderStyleLookup(viewport.Cells);
+        var borderPixelsPerDip = GetBorderEffectivePixelsPerDip();
 
         foreach (var cell in viewport.Cells)
         {
@@ -665,7 +668,7 @@ public partial class GridView
                     ? aboveStyle.BorderBottom
                     : default;
                 var winner = ResolveBorderEdgeWinner(style.BorderTop, neighborBottom);
-                DrawBorderEdge(dc, winner, new Point(x, y), new Point(x + w, y), _brushCache, _borderPenCache);
+                DrawBorderEdge(dc, winner, new Point(x, y), new Point(x + w, y), _brushCache, _borderPenCache, borderPixelsPerDip);
             }
             if (!suppressBottom)
             {
@@ -674,7 +677,7 @@ public partial class GridView
                     ? belowStyle.BorderTop
                     : default;
                 var winner = ResolveBorderEdgeWinner(style.BorderBottom, neighborTop);
-                DrawBorderEdge(dc, winner, new Point(x, y + h), new Point(x + w, y + h), _brushCache, _borderPenCache);
+                DrawBorderEdge(dc, winner, new Point(x, y + h), new Point(x + w, y + h), _brushCache, _borderPenCache, borderPixelsPerDip);
             }
             if (!suppressLeft)
             {
@@ -683,7 +686,7 @@ public partial class GridView
                     ? leftStyle.BorderRight
                     : default;
                 var winner = ResolveBorderEdgeWinner(style.BorderLeft, neighborRight);
-                DrawBorderEdge(dc, winner, new Point(x, y), new Point(x, y + h), _brushCache, _borderPenCache);
+                DrawBorderEdge(dc, winner, new Point(x, y), new Point(x, y + h), _brushCache, _borderPenCache, borderPixelsPerDip);
             }
             if (!suppressRight)
             {
@@ -692,7 +695,7 @@ public partial class GridView
                     ? rightStyle.BorderLeft
                     : default;
                 var winner = ResolveBorderEdgeWinner(style.BorderRight, neighborLeft);
-                DrawBorderEdge(dc, winner, new Point(x + w, y), new Point(x + w, y + h), _brushCache, _borderPenCache);
+                DrawBorderEdge(dc, winner, new Point(x + w, y), new Point(x + w, y + h), _brushCache, _borderPenCache, borderPixelsPerDip);
             }
             if (style.BorderDiagonalDown.Style != BorderStyle.None || style.BorderDiagonalUp.Style != BorderStyle.None)
             {
@@ -715,9 +718,9 @@ public partial class GridView
                     }
 
                     if (style.BorderDiagonalDown.Style != BorderStyle.None)
-                        DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(x, y), new Point(x + diagonalW, y + diagonalH), _brushCache);
+                        DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(x, y), new Point(x + diagonalW, y + diagonalH), _brushCache, null, borderPixelsPerDip);
                     if (style.BorderDiagonalUp.Style != BorderStyle.None)
-                        DrawBorderEdge(dc, style.BorderDiagonalUp, new Point(x, y + diagonalH), new Point(x + diagonalW, y), _brushCache);
+                        DrawBorderEdge(dc, style.BorderDiagonalUp, new Point(x, y + diagonalH), new Point(x + diagonalW, y), _brushCache, null, borderPixelsPerDip);
                 }
             }
         }
@@ -752,22 +755,22 @@ public partial class GridView
                 if (edges.Top is { } topEdge && (fringeMerge is not { } mTop || fringeRow == mTop.Start.Row))
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderTop ?? default, topEdge);
-                    DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx + fw, fy), _brushCache, _borderPenCache);
+                    DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx + fw, fy), _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
                 if (edges.Bottom is { } bottomEdge && (fringeMerge is not { } mBottom || fringeRow == mBottom.End.Row))
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderBottom ?? default, bottomEdge);
-                    DrawBorderEdge(dc, winner, new Point(fx, fy + fh), new Point(fx + fw, fy + fh), _brushCache, _borderPenCache);
+                    DrawBorderEdge(dc, winner, new Point(fx, fy + fh), new Point(fx + fw, fy + fh), _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
                 if (edges.Left is { } leftEdge && (fringeMerge is not { } mLeft || fringeCol == mLeft.Start.Col))
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderLeft ?? default, leftEdge);
-                    DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx, fy + fh), _brushCache, _borderPenCache);
+                    DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx, fy + fh), _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
                 if (edges.Right is { } rightEdge && (fringeMerge is not { } mRight || fringeCol == mRight.End.Col))
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderRight ?? default, rightEdge);
-                    DrawBorderEdge(dc, winner, new Point(fx + fw, fy), new Point(fx + fw, fy + fh), _brushCache, _borderPenCache);
+                    DrawBorderEdge(dc, winner, new Point(fx + fw, fy), new Point(fx + fw, fy + fh), _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
             }
         }
@@ -1345,13 +1348,14 @@ public partial class GridView
     /// eliminating the per-frame allocation spike from unconditional Clear() calls.
     /// </summary>
     /// <remarks>
-    /// Invalidation analysis — none of these caches need theme or zoom invalidation:
+    /// Invalidation analysis — most of these caches do not need theme or zoom invalidation:
     /// <list type="bullet">
     /// <item><description><c>_brushCache</c>: keyed by <c>CellColor</c> (ARGB value type). Color IS the key,
     ///   so a different color yields a different entry. Theme changes alter which colors appear
     ///   in the spreadsheet but do not make existing brush entries stale.</description></item>
-    /// <item><description><c>_borderPenCache</c>: keyed by <c>CellBorder</c> (style + color value type).
-    ///   Same argument — the key fully determines the pen.</description></item>
+    /// <item><description><c>_borderPenCache</c>: keyed by <c>CellBorder</c>. The snapped pen thickness
+    ///   also depends on effective render scale, so <c>DrawBorderEdge</c> validates the cached
+    ///   thickness before reuse and replaces stale entries after zoom/DPI changes.</description></item>
     /// <item><description><c>_fillPatternPenCache</c>: keyed by <c>CellColor</c>. Same as brush cache.</description></item>
     /// <item><description><c>_typefaceCache</c>: keyed by <c>CellTypefaceKey</c> (font name/weight/style).
     ///   Zoom only affects <c>fontSize</c> which is passed to <c>FormattedText</c>, not to <c>Typeface</c>.

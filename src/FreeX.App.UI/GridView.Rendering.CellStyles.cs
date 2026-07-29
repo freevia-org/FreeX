@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.Rendering;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 using System.Linq;
@@ -11,6 +12,12 @@ namespace FreeX.App.UI;
 public partial class GridView
 {
     private readonly record struct CellTypefaceKey(string FontName, FontStretch Stretch, bool Italic, bool Bold);
+
+    private double GetBorderEffectivePixelsPerDip()
+    {
+        var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
+        return BorderStrokePixelSnapper.NormalizePixelsPerDip(VisualTreeHelper.GetDpi(this).PixelsPerDip * zoom);
+    }
 
     private static string? GetAptosNarrowCloudFontDir()
     {
@@ -67,26 +74,23 @@ public partial class GridView
         Point p1,
         Point p2,
         Dictionary<CellColor, SolidColorBrush>? brushCache = null,
-        Dictionary<CellBorder, Pen>? borderPenCache = null)
+        Dictionary<CellBorder, Pen>? borderPenCache = null,
+        double effectivePixelsPerDip = 1.0)
     {
         if (border.Style == BorderStyle.None) return;
 
+        var rawThickness = GetBorderThickness(border.Style);
+        var thickness = BorderStrokePixelSnapper.SnapThickness(rawThickness, effectivePixelsPerDip);
+
         Pen pen;
-        if (borderPenCache is not null && borderPenCache.TryGetValue(border, out var cachedPen))
+        if (borderPenCache is not null &&
+            borderPenCache.TryGetValue(border, out var cachedPen) &&
+            Math.Abs(cachedPen.Thickness - thickness) < 0.0001)
         {
             pen = cachedPen;
         }
         else
         {
-            double thickness = border.Style switch
-            {
-                BorderStyle.Hair => 0.25,
-                BorderStyle.Thin => 0.5,
-                BorderStyle.Medium or BorderStyle.MediumDashed or BorderStyle.MediumDashDot or BorderStyle.MediumDashDotDot or BorderStyle.SlantDashDot => 1.5,
-                BorderStyle.Thick => 2.5,
-                _ => 0.5
-            };
-
             DashStyle dash = border.Style switch
             {
                 BorderStyle.Dashed or BorderStyle.MediumDashed => DashStyles.Dash,
@@ -101,16 +105,48 @@ public partial class GridView
             pen = new Pen(BrushForCellColor(border.Color, brushCache), thickness) { DashStyle = dash };
             if (pen.CanFreeze)
                 pen.Freeze();
-            borderPenCache?.Add(border, pen);
+            if (borderPenCache is not null)
+                borderPenCache[border] = pen;
         }
 
         if (border.Style == BorderStyle.Double)
         {
-            DrawDoubleBorderLines(dc, pen, p1, p2);
+            DrawDoubleBorderLines(dc, pen, p1, p2, rawThickness, effectivePixelsPerDip);
             return;
         }
 
-        dc.DrawLine(pen, p1, p2);
+        var (start, end) = SnapAxisAlignedBorderLine(p1, p2, pen.Thickness, effectivePixelsPerDip);
+        dc.DrawLine(pen, start, end);
+    }
+
+    private static double GetBorderThickness(BorderStyle style) => style switch
+    {
+        BorderStyle.Hair => 0.25,
+        BorderStyle.Thin => 0.5,
+        BorderStyle.Medium or BorderStyle.MediumDashed or BorderStyle.MediumDashDot or BorderStyle.MediumDashDotDot or BorderStyle.SlantDashDot => 1.5,
+        BorderStyle.Thick => 2.5,
+        _ => 0.5
+    };
+
+    private static (Point Start, Point End) SnapAxisAlignedBorderLine(
+        Point p1,
+        Point p2,
+        double snappedThickness,
+        double effectivePixelsPerDip)
+    {
+        if (Math.Abs(p1.Y - p2.Y) < 0.0001)
+        {
+            var y = BorderStrokePixelSnapper.SnapCenter(p1.Y, snappedThickness, effectivePixelsPerDip);
+            return (new Point(p1.X, y), new Point(p2.X, y));
+        }
+
+        if (Math.Abs(p1.X - p2.X) < 0.0001)
+        {
+            var x = BorderStrokePixelSnapper.SnapCenter(p1.X, snappedThickness, effectivePixelsPerDip);
+            return (new Point(x, p1.Y), new Point(x, p2.Y));
+        }
+
+        return (p1, p2);
     }
 
     /// <summary>
@@ -120,8 +156,17 @@ public partial class GridView
     /// the same helper serves <see cref="BorderStyle.Double"/> top/bottom/left/right edges as
     /// well as diagonal borders.
     /// </summary>
-    private static void DrawDoubleBorderLines(DrawingContext dc, Pen pen, Point p1, Point p2)
+    private static void DrawDoubleBorderLines(
+        DrawingContext dc,
+        Pen pen,
+        Point p1,
+        Point p2,
+        double rawThickness,
+        double effectivePixelsPerDip)
     {
+        if (TryDrawAxisAlignedDoubleBorderLines(dc, pen, p1, p2, rawThickness, effectivePixelsPerDip))
+            return;
+
         const double gap = 1.0; // DIPs between the centerlines of the two strokes
 
         var dx = p2.X - p1.X;
@@ -140,6 +185,44 @@ public partial class GridView
         dc.DrawLine(pen, new Point(p1.X + offsetX, p1.Y + offsetY), new Point(p2.X + offsetX, p2.Y + offsetY));
         dc.DrawLine(pen, new Point(p1.X - offsetX, p1.Y - offsetY), new Point(p2.X - offsetX, p2.Y - offsetY));
     }
+
+    private static bool TryDrawAxisAlignedDoubleBorderLines(
+        DrawingContext dc,
+        Pen pen,
+        Point p1,
+        Point p2,
+        double rawThickness,
+        double effectivePixelsPerDip)
+    {
+        var scale = BorderStrokePixelSnapper.NormalizePixelsPerDip(effectivePixelsPerDip);
+        var linePixels = BorderStrokePixelSnapper.SnapThicknessToDevicePixels(rawThickness, scale);
+        if (linePixels <= 0)
+            return false;
+
+        var gapPixels = Math.Max(1, (int)Math.Round(CellBorderDoubleGap * scale, MidpointRounding.AwayFromZero));
+        var totalThickness = ((linePixels * 2.0) + gapPixels) / scale;
+        var offset = (linePixels + gapPixels) / (2.0 * scale);
+
+        if (Math.Abs(p1.Y - p2.Y) < 0.0001)
+        {
+            var center = BorderStrokePixelSnapper.SnapCenter(p1.Y, totalThickness, scale);
+            dc.DrawLine(pen, new Point(p1.X, center - offset), new Point(p2.X, center - offset));
+            dc.DrawLine(pen, new Point(p1.X, center + offset), new Point(p2.X, center + offset));
+            return true;
+        }
+
+        if (Math.Abs(p1.X - p2.X) < 0.0001)
+        {
+            var center = BorderStrokePixelSnapper.SnapCenter(p1.X, totalThickness, scale);
+            dc.DrawLine(pen, new Point(center - offset, p1.Y), new Point(center - offset, p2.Y));
+            dc.DrawLine(pen, new Point(center + offset, p1.Y), new Point(center + offset, p2.Y));
+            return true;
+        }
+
+        return false;
+    }
+
+    private const double CellBorderDoubleGap = 1.0;
 
     private static bool HasVisibleCellBorder(CellStyle style) =>
         style.BorderTop.Style != BorderStyle.None ||

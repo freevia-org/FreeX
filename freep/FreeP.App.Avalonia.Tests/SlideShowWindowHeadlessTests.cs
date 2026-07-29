@@ -127,6 +127,55 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_animation_route_starts_at_selected_trigger_animation()
+    {
+        uint[]? firstStepShapeIds = null;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = Presentation.CreateEmpty();
+            var slide = pres.Slides[0];
+            slide.Animations.Add(new ShapeAnimation
+            {
+                ShapeId = 1,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Appear,
+                Trigger = AnimationTrigger.OnClick,
+                DurationMs = 500,
+            });
+            slide.Animations.Add(new ShapeAnimation
+            {
+                ShapeId = 20,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Fade,
+                Trigger = AnimationTrigger.OnClick,
+                TriggerShapeId = 99u,
+                DurationMs = 500,
+            });
+            slide.Animations.Add(new ShapeAnimation
+            {
+                ShapeId = 21,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.FlyIn,
+                Trigger = AnimationTrigger.WithPrevious,
+                TriggerShapeId = 99u,
+                DurationMs = 500,
+            });
+
+            var route = SlideShowCustomShowPlanner
+                .BuildFullPresentationRoute(pres)
+                .WithAnimationStartIndex(1);
+            var window = new SlideShowWindow(pres, route);
+            firstStepShapeIds = window.Controller.CurrentSteps[0].Animations
+                .Select(animation => animation.ShapeId)
+                .ToArray();
+            window.Close();
+        });
+
+        if (!ran) return;
+        firstStepShapeIds.Should().Equal(20u, 21u);
+    }
+
+    [Fact]
     public async Task SlideShowWindow_custom_playback_route_uses_ordered_slides()
     {
         string? currentTitle = null;
