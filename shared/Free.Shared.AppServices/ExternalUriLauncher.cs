@@ -29,7 +29,7 @@ public static class ExternalUriLauncher
     /// <summary>Schemes safe to hand to a platform launcher (mirrors the hyperlink allowlist).</summary>
     private static readonly HashSet<string> AllowedSchemes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "http", "https", "mailto", "ftp"
+        "http", "https", "mailto", "ftp", "file"
     };
 
     public static ExternalUriLaunchResult Open(string target, Action<Uri>? launch)
@@ -81,7 +81,11 @@ public static class ExternalUriLauncher
 
         var normalizedTarget = target.Trim();
         if (!Uri.TryCreate(normalizedTarget, UriKind.Absolute, out var candidate) ||
-            !AllowedSchemes.Contains(candidate.Scheme))
+            !AllowedSchemes.Contains(candidate.Scheme) ||
+            candidate.Scheme.Equals("file", StringComparison.OrdinalIgnoreCase) &&
+            (!candidate.IsFile ||
+             !string.IsNullOrWhiteSpace(candidate.Host) &&
+             !candidate.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)))
         {
             return false;
         }
