@@ -255,6 +255,11 @@ try {
     if (-not [string]::IsNullOrWhiteSpace($PublishDir)) {
         $startArguments += @("-PublishDir", $PublishDir)
     }
+    if ($App -eq "FreeP") {
+        # This must be present on the application container, not only on the probe
+        # docker exec process, so the opt-in fixture hook can seed the live app.
+        $startArguments += @("-AppEnvironment", "FREEP_PHYSICAL_ANIMATION_PANE_SEED=1")
+    }
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
@@ -285,7 +290,6 @@ try {
         "--env", "FAMILY_TAB_KEY=$($probeParameters.RibbonTabKey)",
         "--env", "FAMILY_FILE_KEY=$($probeParameters.FileKey)",
         "--env", "FAMILY_FILE_SURFACE=$($probeParameters.FileSurface)",
-        "--env", "FREEP_PHYSICAL_ANIMATION_PANE_SEED=$(if ($App -eq 'FreeP') { '1' } else { '0' })",
         [string]$session.containerName, "bash", "/work/family-input-probes.sh", "/work/family-validation"
     )
     Push-Location $repoRoot

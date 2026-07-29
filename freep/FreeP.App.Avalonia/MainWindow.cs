@@ -864,8 +864,6 @@ public sealed partial class MainWindow : Window
             LoadPresentationAsSaved(_presentation, path: null);
         }
 
-        SeedPhysicalAnimationPaneFixtureIfRequested();
-
         Content = windowFrame.Root;
         UpdateStatus();
         if (startupOpenError is not null)
@@ -899,10 +897,10 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var shape = Editor.CurrentSlide.Shapes.FirstOrDefault() ??
-            Editor.InsertTextBox("Animation Pane sample");
-        Editor.AddAnimation(shape.Id, new ShapeAnimation
+        var shape = Editor.InsertTextBox("Animation Pane sample");
+        Editor.CurrentSlide.Animations.Add(new ShapeAnimation
         {
+            ShapeId = shape.Id,
             Kind = AnimationKind.Entrance,
             Preset = AnimationPreset.Fade,
             Trigger = AnimationTrigger.OnClick,
@@ -5375,6 +5373,7 @@ public sealed partial class MainWindow : Window
 
     private void OnAnimationPaneRequested(PresentationAnimationCommandPlan plan)
     {
+        SeedPhysicalAnimationPaneFixtureIfRequested();
         _ = plan;
         if (IsAnimationPaneVisible)
             HideAnimationPane();
@@ -5739,6 +5738,11 @@ public sealed partial class MainWindow : Window
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Auto },
             },
+        };
+        innerGrid.PointerPressed += (_, e) =>
+        {
+            SelectAnimationPaneItem(item.Index);
+            e.Handled = true;
         };
         var orderLabel = new TextBlock
         {
