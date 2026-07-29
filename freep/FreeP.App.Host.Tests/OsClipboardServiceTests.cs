@@ -588,6 +588,27 @@ public sealed class OsClipboardServiceTests
     }
 
     [StaFact]
+    public void Paste_ExternalRtfObject_UsesVisibleResultText()
+    {
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi Before {\object{\*\objclass Word.Document.12}{\*\objdata 010203}{\objresult Embedded result}} After}");
+        var fake = new FakeOsClipboard { RtfBytes = rtf };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        editor.CurrentSlide!.Shapes.Should().ContainSingle();
+        editor.CurrentSlide.Shapes.Single().TextBody!.Paragraphs.Single().Runs
+            .Select(run => run.Text)
+            .Should().ContainSingle()
+            .Which.Should().Be("Before Embedded result After");
+    }
+
+    [StaFact]
     public void Paste_XamlPackageTable_InsertsNativeEditableTable()
     {
         const string xaml = """

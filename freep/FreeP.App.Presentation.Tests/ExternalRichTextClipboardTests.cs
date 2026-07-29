@@ -149,6 +149,21 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfObject_PreservesVisibleResultAndSuppressesObjectMetadata()
+    {
+        const string rtf =
+            @"{\rtf1\ansi Before {\object{\*\objclass Word.Document.12}{\*\objdata 010203}{\result Embedded result}} After}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("Before Embedded result After");
+        payload.Body.Paragraphs.Single().Runs
+            .Select(run => run.Text)
+            .Should().NotContain(text => text.Contains("Word.Document", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void UnsupportedAndMalformedRtf_IsBoundedAndNeverThrows()
     {
         var partial = ExternalRichTextClipboardPlanner.TryParseRtf(

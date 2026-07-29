@@ -44,6 +44,7 @@ public static class ExternalRichTextClipboardPlanner
             ListOverrideTable,
             ListLevelText,
             FieldInstruction,
+            Object,
             Picture,
             Skip,
         }
@@ -545,13 +546,27 @@ public static class ExternalRichTextClipboardPlanner
                     break;
                 case "stylesheet":
                 case "info":
-                case "object":
                 case "filetbl":
                 case "generator":
                 case "listtext":
                 case "pntext":
                     _state.Destination = Destination.Skip;
                     _state.SkipOutput = true;
+                    break;
+                case "object":
+                    _state.Destination = Destination.Object;
+                    _state.SkipOutput = true;
+                    break;
+                case "result":
+                case "objresult":
+                    // OLE payloads are not editable here, but Word/Office RTF commonly
+                    // carries a visible fallback result. Preserve that projection while
+                    // continuing to ignore the binary object data and class metadata.
+                    if (_state.Destination == Destination.Object)
+                    {
+                        _state.Destination = Destination.Body;
+                        _state.SkipOutput = false;
+                    }
                     break;
                 case "pict":
                     if (!_pictureCaptureStarted && _pictureBytes.Count == 0)
