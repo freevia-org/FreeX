@@ -1730,15 +1730,31 @@ public sealed class SmartArtLayoutTests
         }
     }
 
-    [Fact]
-    public void BasicVenn_MoreThanFourNodes_ReturnsNullForCachedFallback()
+    [Theory]
+    [InlineData(5)]
+    [InlineData(8)]
+    public void BasicVenn_MoreThanFourNodes_ContinuesWithLiveOverlappingEllipses(int nodeCount)
     {
-        var data = MakeData(SmartArtFamily.Relationship, "A", "B", "C", "D", "E");
+        var data = MakeData(
+            SmartArtFamily.Relationship,
+            Enumerable.Range(0, nodeCount).Select(index => $"Node {index + 1}").ToArray());
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicVenn";
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        result.Should().BeNull("the bounded basicVenn planner owns only readable two-to-four node relationship diagrams");
+        result.Should().NotBeNull("basicVenn should remain live when the authored node count grows");
+        result!.Should().HaveCount(nodeCount);
+        result.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse);
+        result.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(index => $"Node {index}"));
+
+        foreach (var ellipse in result)
+        {
+            ellipse.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            ellipse.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (ellipse.OffsetXEmu + ellipse.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (ellipse.OffsetYEmu + ellipse.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
     }
 
     [Fact]
