@@ -685,6 +685,24 @@
   <data name="Ribbon_Command_ShapeSoftEdgeStrong_KeyTip" xml:space="preserve">
     <value>SEH</value>
   </data>
+  <data name="Ribbon_Command_ShapeBevelNone_Label" xml:space="preserve">
+    <value>No Shape Bevel</value>
+  </data>
+  <data name="Ribbon_Command_ShapeBevelNone_KeyTip" xml:space="preserve">
+    <value>SBN</value>
+  </data>
+  <data name="Ribbon_Command_ShapeBevelSubtle_Label" xml:space="preserve">
+    <value>Subtle Shape Bevel</value>
+  </data>
+  <data name="Ribbon_Command_ShapeBevelSubtle_KeyTip" xml:space="preserve">
+    <value>SBS</value>
+  </data>
+  <data name="Ribbon_Command_ShapeBevelStrong_Label" xml:space="preserve">
+    <value>Strong Shape Bevel</value>
+  </data>
+  <data name="Ribbon_Command_ShapeBevelStrong_KeyTip" xml:space="preserve">
+    <value>SBH</value>
+  </data>
   <data name="Ribbon_Command_Picture_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>

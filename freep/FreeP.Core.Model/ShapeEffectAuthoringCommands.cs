@@ -42,6 +42,20 @@ public readonly record struct ShapeSoftEdgeValues(
         RadiusEmu: 0);
 }
 
+/// <summary>Authoritative top-and-bottom bevel values used by the shape-effects authoring command.</summary>
+public readonly record struct ShapeBevelValues(
+    bool Enabled,
+    string PresetName,
+    long WidthEmu,
+    long HeightEmu)
+{
+    public static ShapeBevelValues None { get; } = new(
+        Enabled: false,
+        PresetName: string.Empty,
+        WidthEmu: 0,
+        HeightEmu: 0);
+}
+
 /// <summary>Changes only a shape's outer shadow, preserving every other effect layer.</summary>
 public sealed class SetShapeShadowCommand : IPresentationCommand
 {
@@ -292,6 +306,115 @@ public sealed class SetShapeSoftEdgeCommand : IPresentationCommand
     private static ShapeSoftEdgeValues ReadValues(ShapeEffects? effects) => effects is null
         ? ShapeSoftEdgeValues.None
         : new(effects.HasSoftEdge, effects.SoftEdgeRadEmu);
+
+    private SlideShape? FindShape(Presentation presentation)
+    {
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return null;
+
+        return presentation.Slides[_slideIndex].Shapes.FirstOrDefault(shape => shape.Id == _shapeId);
+    }
+
+    private static bool HasAnyEffects(ShapeEffects effects) =>
+        effects.HasOuterShadow ||
+        effects.HasInnerShadow ||
+        effects.HasGlow ||
+        effects.HasSoftEdge ||
+        effects.BevelTop is not null ||
+        effects.BevelBottom is not null ||
+        effects.ExtrusionHeightEmu != 0 ||
+        effects.ContourWidthEmu != 0 ||
+        effects.Scene3d is not null ||
+        !string.IsNullOrWhiteSpace(effects.PrstMaterial) ||
+        effects.ExtrusionColor is not null ||
+        effects.ContourColor is not null;
+}
+
+/// <summary>Changes both faces of a shape's bevel, preserving every other effect layer.</summary>
+public sealed class SetShapeBevelCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly ShapeBevelValues _values;
+    private bool _captured;
+    private ShapeEffects? _oldEffects;
+
+    public SetShapeBevelCommand(int slideIndex, uint shapeId, ShapeBevelValues values)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _values = values;
+    }
+
+    public string Label => "Shape Bevel";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        return shape is not null && !Matches(shape.Effects);
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        if (shape is null)
+            return;
+
+        if (!_captured)
+        {
+            _captured = true;
+            _oldEffects = PresentationModelCloneHelper.CloneShapeEffects(shape.Effects);
+        }
+
+        if (!_values.Enabled && shape.Effects is null)
+            return;
+
+        if (shape.Effects is null)
+            shape.Effects = new ShapeEffects();
+
+        shape.Effects.BevelTop = _values.Enabled
+            ? new BevelInfo
+            {
+                PresetName = _values.PresetName,
+                WidthEmu = _values.WidthEmu,
+                HeightEmu = _values.HeightEmu,
+            }
+            : null;
+        shape.Effects.BevelBottom = _values.Enabled
+            ? new BevelInfo
+            {
+                PresetName = _values.PresetName,
+                WidthEmu = _values.WidthEmu,
+                HeightEmu = _values.HeightEmu,
+            }
+            : null;
+
+        if (!HasAnyEffects(shape.Effects))
+            shape.Effects = null;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        if (shape is null || !_captured)
+            return;
+
+        shape.Effects = PresentationModelCloneHelper.CloneShapeEffects(_oldEffects);
+    }
+
+    private bool Matches(ShapeEffects? effects)
+    {
+        if (!_values.Enabled)
+            return effects?.BevelTop is null && effects?.BevelBottom is null;
+
+        return Matches(effects?.BevelTop) && Matches(effects?.BevelBottom);
+
+        bool Matches(BevelInfo? bevel) =>
+            bevel is not null &&
+            bevel.PresetName == _values.PresetName &&
+            bevel.WidthEmu == _values.WidthEmu &&
+            bevel.HeightEmu == _values.HeightEmu;
+    }
 
     private SlideShape? FindShape(Presentation presentation)
     {

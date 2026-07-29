@@ -24,6 +24,13 @@ public enum ShapeSoftEdgePreset
     Strong,
 }
 
+public enum ShapeBevelPreset
+{
+    None,
+    Subtle,
+    Strong,
+}
+
 /// <summary>PowerPoint-style shape shadow presets backed by the shared effect model.</summary>
 public static class ShapeEffectAuthoringPlanner
 {
@@ -36,6 +43,9 @@ public static class ShapeEffectAuthoringPlanner
     public const string SoftEdgeNoneCommandId = "freep.shape.soft-edge.none";
     public const string SoftEdgeSubtleCommandId = "freep.shape.soft-edge.subtle";
     public const string SoftEdgeStrongCommandId = "freep.shape.soft-edge.strong";
+    public const string BevelNoneCommandId = "freep.shape.bevel.none";
+    public const string BevelSubtleCommandId = "freep.shape.bevel.subtle";
+    public const string BevelStrongCommandId = "freep.shape.bevel.strong";
 
     public static ShapeShadowValues None() => Resolve(ShapeShadowPreset.None);
     public static ShapeShadowValues Subtle() => Resolve(ShapeShadowPreset.Subtle);
@@ -46,6 +56,9 @@ public static class ShapeEffectAuthoringPlanner
     public static ShapeSoftEdgeValues SoftEdgeNone() => ResolveSoftEdge(ShapeSoftEdgePreset.None);
     public static ShapeSoftEdgeValues SoftEdgeSubtle() => ResolveSoftEdge(ShapeSoftEdgePreset.Subtle);
     public static ShapeSoftEdgeValues SoftEdgeStrong() => ResolveSoftEdge(ShapeSoftEdgePreset.Strong);
+    public static ShapeBevelValues BevelNone() => ResolveBevel(ShapeBevelPreset.None);
+    public static ShapeBevelValues BevelSubtle() => ResolveBevel(ShapeBevelPreset.Subtle);
+    public static ShapeBevelValues BevelStrong() => ResolveBevel(ShapeBevelPreset.Strong);
 
     public static ShapeShadowValues Resolve(ShapeShadowPreset preset) => preset switch
     {
@@ -69,6 +82,14 @@ public static class ShapeEffectAuthoringPlanner
         ShapeSoftEdgePreset.Subtle => new(true, PointsToEmu(4)),
         ShapeSoftEdgePreset.Strong => new(true, PointsToEmu(8)),
         _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, "Unknown shape soft-edge preset."),
+    };
+
+    public static ShapeBevelValues ResolveBevel(ShapeBevelPreset preset) => preset switch
+    {
+        ShapeBevelPreset.None => ShapeBevelValues.None,
+        ShapeBevelPreset.Subtle => new(true, "circle", PointsToEmu(1), PointsToEmu(1)),
+        ShapeBevelPreset.Strong => new(true, "relaxedInset", PointsToEmu(3), PointsToEmu(3)),
+        _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, "Unknown shape bevel preset."),
     };
 
     private static ShapeShadowValues Create(byte alpha, double blurPt, double distancePt) => new(
