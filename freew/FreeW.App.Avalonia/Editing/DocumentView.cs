@@ -6022,6 +6022,7 @@ public sealed class DocumentView : Control
             FillBrush = fillBrush,
             OutlinePen = outlinePen,
             Text = plan.Text?.Text,
+            TextDirection = plan.Text?.Direction ?? ShapeTextDirection.Horizontal,
             RotationAngle = plan.RotationAngle,
             FlipH = plan.FlipH,
             FlipV = plan.FlipV,
@@ -7368,14 +7369,37 @@ public sealed class DocumentView : Control
             {
                 const double TextInset = 4.0; // matches WPF Margin(4) on TextBlock
                 var textFmt = new RunFormatting { FontSizePt = 9 };
-                var insetWidth = Math.Max(1, rect.Width - 2 * TextInset);
+                var isRotated = sd.TextDirection is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270;
+                var textRect = isRotated
+                    ? new Rect(rect.X, rect.Y, rect.Height, rect.Width)
+                    : rect;
+                var insetWidth = Math.Max(1, textRect.Width - 2 * TextInset);
                 var ft = Build(sd.Text, textFmt);
                 ft.MaxTextWidth = insetWidth; // enables word wrapping (FormattedText clips+wraps at this width)
-                // Top-anchor: place text at the top of the shape with the inset offset.
-                var tx = rect.X + TextInset;
-                var ty = rect.Y + TextInset;
                 using var _ = context.PushClip(rect);
-                context.DrawText(ft, new Point(tx, ty));
+                if (!isRotated)
+                {
+                    // Top-anchor: place text at the top of the shape with the inset offset.
+                    context.DrawText(ft, new Point(rect.X + TextInset, rect.Y + TextInset));
+                }
+                else
+                {
+                    // WPF applies LayoutTransform to the text block, leaving the shape itself
+                    // axis-aligned. Rotate the fitted text around the shape centre only.
+                    var angle = sd.TextDirection == ShapeTextDirection.Rotate90
+                        ? Math.PI / 2
+                        : -Math.PI / 2;
+                    var textWidth = Math.Max(1, ft.WidthIncludingTrailingWhitespace);
+                    var textHeight = Math.Max(1, ft.Height);
+                    var textX = rect.X + (rect.Width - textWidth) / 2;
+                    var textY = rect.Y + (rect.Height - textHeight) / 2;
+                    var center = new Point(cx, cy);
+                    using var rotated = context.PushTransform(
+                        Matrix.CreateTranslation(-center.X, -center.Y)
+                        * Matrix.CreateRotation(angle)
+                        * Matrix.CreateTranslation(center.X, center.Y));
+                    context.DrawText(ft, new Point(textX, textY));
+                }
             }
         }
         finally
@@ -8975,6 +8999,24 @@ public sealed class DocumentView : Control
         _bus.Execute(new SetShapeExtendedFillCommand(sel.BlockIndex, sel.RunIndex, fill));
         InvalidateLayoutAndVisual();
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// Set the text direction on the selected text-box shape through the shared undoable model
+    /// command. This mirrors the WPF Drawing Format &gt; Text Direction route; non-text shapes are
+    /// intentionally ignored by the shared command's shape guard.
+    /// </summary>
+    public void SetSelectedShapeTextDirection(ShapeTextDirection direction)
+    {
+        if (SelectedFloatingShapeLocation() is not { } selected)
+            return;
+
+        _bus.Execute(new SetShapeTextDirectionCommand(
+            selected.BlockIndex,
+            selected.RunIndex,
+            direction));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
     }
 
     /// <summary>
@@ -17597,6 +17639,7 @@ public sealed class DocumentView : Control
 
         // Text (optional)
         public string? Text;               // plain text to centre inside the shape
+        public ShapeTextDirection TextDirection;
 
         // Rotation / flip (in degrees; 0 → no rotation)
         public double RotationAngle;

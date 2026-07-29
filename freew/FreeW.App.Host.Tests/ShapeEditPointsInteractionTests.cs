@@ -7,6 +7,30 @@ namespace FreeW.App.Host.Tests;
 public sealed class ShapeEditPointsInteractionTests
 {
     [StaFact]
+    public void SetSelectedShapeTextDirection_updates_text_box_model_for_wpf_route()
+    {
+        var shape = Shape.TextBoxWith("Rotate me", widthPt: 120, heightPt: 60);
+        var document = TextDocument.CreateEmpty();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromShape(shape));
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var container = view.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(item => item.Inlines)
+            .OfType<InlineUIContainer>()
+            .Single();
+        view.Selection.Select(container.ElementStart, container.ElementEnd);
+        view.CaretPosition = container.ElementStart;
+
+        view.SetSelectedShapeTextDirection(ShapeTextDirection.Rotate90);
+
+        shape.TextDirection.Should().Be(ShapeTextDirection.Rotate90);
+    }
+
+    [StaFact]
     public void BeginShapeEditPoints_ConvertsAndMovesTheSelectedVertexThroughTheCommandBus()
     {
         var shape = new Shape(ShapeKind.Rectangle, 120, 60);

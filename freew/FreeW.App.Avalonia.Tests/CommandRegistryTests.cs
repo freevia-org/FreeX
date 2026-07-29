@@ -86,6 +86,23 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
+    public void Drawing_text_direction_commands_are_registered_for_all_wpf_modes()
+    {
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
+
+        foreach (var id in new[]
+        {
+            "freew.shape-text-horizontal",
+            "freew.shape-text-rotate90",
+            "freew.shape-text-rotate270",
+        })
+        {
+            registry.TryGet(new RibbonCommandId(id), out _)
+                .Should().BeTrue($"Avalonia must register the WPF text-direction command '{id}'");
+        }
+    }
+
+    [Fact]
     public void Registry_contains_all_wave_a1_new_commands()
     {
         var view = new DocumentView();
