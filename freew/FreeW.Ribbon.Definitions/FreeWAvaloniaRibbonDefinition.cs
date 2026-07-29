@@ -231,6 +231,60 @@ internal static class FreeWAvaloniaRibbonDefinition
                 new RibbonCommandId($"freew.{preset.Id}")))
             .ToArray());
 
+    private static RibbonMenu BuildShapeChangeMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Rectangle", new RibbonCommandId("freew.shape-change-rectangle")),
+            new("Rounded Rectangle", new RibbonCommandId("freew.shape-change-rounded")),
+            new("Ellipse", new RibbonCommandId("freew.shape-change-ellipse")),
+        });
+
+    private static RibbonMenu BuildShapeEditMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Convert to Freeform", new RibbonCommandId("freew.shape-convert-freeform")),
+            new("Edit Points", new RibbonCommandId("freew.shape-edit-points")),
+        });
+
+    private static RibbonMenu BuildShapeFillMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("No Fill", new RibbonCommandId("freew.shape-fill-no-fill")),
+            RibbonMenuItem.Separator(),
+            new("Gradient Blue", new RibbonCommandId("freew.shape-fill-gradient-blue")),
+            new("Gradient Orange", new RibbonCommandId("freew.shape-fill-gradient-orange")),
+            new("Pattern Diagonal", new RibbonCommandId("freew.shape-fill-pattern-diag")),
+        });
+
+    private static RibbonMenu BuildShapeOutlineMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("No Outline", new RibbonCommandId("freew.shape-outline-no-outline")),
+            new("Solid", new RibbonCommandId("freew.shape-outline-solid")),
+            new("Dash", new RibbonCommandId("freew.shape-outline-dash")),
+            new("Dot", new RibbonCommandId("freew.shape-outline-dot")),
+        });
+
+    private static RibbonMenu BuildShapeEffectsMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("None", new RibbonCommandId("freew.shape-effects-none")),
+            RibbonMenuItem.Separator(),
+            new("Shadow", new RibbonCommandId("freew.shape-effect-shadow")),
+            new("Glow", new RibbonCommandId("freew.shape-effect-glow")),
+            new("Soft Edges", new RibbonCommandId("freew.shape-effect-soft-edge")),
+            new("Reflection", new RibbonCommandId("freew.shape-effect-reflection")),
+            new("Bevel", new RibbonCommandId("freew.shape-effect-bevel")),
+        });
+
+    private static RibbonMenu BuildShapeTextDirectionMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Horizontal", new RibbonCommandId("freew.shape-text-horizontal")),
+            new("Rotate 90°", new RibbonCommandId("freew.shape-text-rotate90")),
+            new("Rotate 270°", new RibbonCommandId("freew.shape-text-rotate270")),
+        });
+
     private static RibbonMenu BuildTableBordersMenu() =>
         new(new RibbonMenuItem[]
         {
@@ -1431,8 +1485,12 @@ internal static class FreeWAvaloniaRibbonDefinition
                     tab.Group("drawing-styles", "Shape Styles", null, 100, g =>
                     {
                         g.Dropdown("freew.shape-styles-gallery", "Shape Styles", BuildShapeStylesMenu());
-                        g.Button("freew.shape-fill",    "Shape Fill");
-                        g.Button("freew.shape-outline", "Shape Outline");
+                        g.Dropdown("freew.shape-fill", "Shape Fill", BuildShapeFillMenu());
+                        g.Dropdown("freew.shape-outline", "Shape Outline", BuildShapeOutlineMenu());
+                        g.Dropdown("freew.shape-effects", "Shape Effects", BuildShapeEffectsMenu());
+                        g.Dropdown("freew.shape-change", "Change Shape", BuildShapeChangeMenu());
+                        g.Dropdown("freew.shape-edit-shape", "Edit Shape", BuildShapeEditMenu());
+                        g.Dropdown("freew.shape-text-direction", "Text Direction", BuildShapeTextDirectionMenu());
                     });
                     tab.Group("drawing-arrange", "Arrange", null, 90, g =>
                     {

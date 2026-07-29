@@ -8978,6 +8978,36 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Change the geometry of the selected floating shape through the shared undoable model
+    /// command. This is the Avalonia counterpart of WPF's Drawing Format &gt; Change Shape route.
+    /// </summary>
+    public void SetSelectedShapeKind(ShapeKind kind)
+    {
+        if (SelectedFloatingShapeLocation() is not { } selected)
+            return;
+
+        _bus.Execute(new SetShapeKindCommand(selected.BlockIndex, selected.RunIndex, kind));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+    }
+
+    /// <summary>
+    /// Set or clear the selected shape's effects through the shared undoable model command.
+    /// </summary>
+    public void SetSelectedShapeEffects(ShapeEffectLst? effects)
+    {
+        if (SelectedFloatingShapeLocation() is not { } selected)
+            return;
+
+        _bus.Execute(new SetShapeEffectsCommand(
+            selected.BlockIndex,
+            selected.RunIndex,
+            effects));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+    }
+
+    /// <summary>
     /// Set the solid fill color of the selected floating shape/text box. Pass null to remove fill.
     /// Undoable. No-op when the selected drawing object is not a shape.
     /// </summary>
