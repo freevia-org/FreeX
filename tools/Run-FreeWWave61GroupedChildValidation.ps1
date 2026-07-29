@@ -45,7 +45,8 @@ try {
     $before = Read-Geometry $fixturePath
 
     & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") `
-        -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath -Replace
+        -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath `
+        -Replace
     $started = $true
 
     $session = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json

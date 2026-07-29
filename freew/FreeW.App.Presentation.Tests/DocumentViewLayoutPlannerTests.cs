@@ -1099,6 +1099,28 @@ public sealed class DocumentViewLayoutPlannerTests
         resized.HeightDip.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void GroupChildBodyHit_UsesForwardRenderedPolygon()
+    {
+        var groupRect = new DocumentFloatRect(472, 400, 280, 173.333333);
+        var childRect = new DocumentFloatRect(618.666667, 473.333333, 86.666667, 46.666667);
+        var visibleCenter = DocumentViewLayoutPlanner.TransformPoint(
+            new DocumentFloatPoint(childRect.CenterXDip, childRect.CenterYDip),
+            groupRect,
+            25,
+            flipH: true,
+            flipV: false);
+
+        DocumentViewLayoutPlanner.ContainsFloatingGroupChildPoint(
+            groupRect,
+            childRect,
+            visibleCenter,
+            childRotationAngle: 15,
+            childFlipV: true,
+            groupRotationAngle: 25,
+            groupFlipH: true).Should().BeTrue();
+    }
+
     private static Paragraph BuildAllFloatingKindsParagraph()
     {
         var paragraph = new Paragraph();

@@ -2011,6 +2011,47 @@ public static class DocumentViewLayoutPlanner
             hitPaddingDip, childRotationAngle, childFlipH, childFlipV);
     }
 
+    /// <summary>Tests a pointer against the visible child polygon using the group render transforms.</summary>
+    public static bool ContainsFloatingGroupChildPoint(
+        DocumentFloatRect groupRect,
+        DocumentFloatRect childRect,
+        DocumentFloatPoint point,
+        double childRotationAngle = 0,
+        bool childFlipH = false,
+        bool childFlipV = false,
+        double groupRotationAngle = 0,
+        bool groupFlipH = false,
+        bool groupFlipV = false)
+    {
+        var corners = new[]
+        {
+            new DocumentFloatPoint(childRect.LeftDip, childRect.TopDip),
+            new DocumentFloatPoint(childRect.RightDip, childRect.TopDip),
+            new DocumentFloatPoint(childRect.RightDip, childRect.BottomDip),
+            new DocumentFloatPoint(childRect.LeftDip, childRect.BottomDip)
+        }
+        .Select(corner => TransformPoint(corner, childRect,
+            childRotationAngle, childFlipH, childFlipV))
+        .Select(corner => TransformPoint(corner, groupRect,
+            groupRotationAngle, groupFlipH, groupFlipV))
+        .ToArray();
+
+        var inside = false;
+        for (var index = 0; index < corners.Length; index++)
+        {
+            var next = corners[(index + 1) % corners.Length];
+            var crosses = (corners[index].YDip > point.YDip) != (next.YDip > point.YDip);
+            if (crosses
+                && point.XDip < (next.XDip - corners[index].XDip)
+                    * (point.YDip - corners[index].YDip)
+                    / (next.YDip - corners[index].YDip)
+                    + corners[index].XDip)
+                inside = !inside;
+        }
+
+        return inside;
+    }
+
     public static DocumentFloatRect BuildFloatingGroupChildMoveRect(
         DocumentFloatRect groupRect,
         DocumentFloatRect childRect,

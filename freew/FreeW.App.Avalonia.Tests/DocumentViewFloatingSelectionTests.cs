@@ -637,9 +637,18 @@ public sealed class DocumentViewFloatingSelectionTests
             view.LoadDocument(doc);
             view.Measure(new Size(800, 2000));
 
+            view.SelectFloating(0, 1);
             var childRect = view.FloatingGroupChildRectsForTest(0, 1)
                 .Single(child => child.ChildIndex == 1).Rect;
-            view.SelectFloatingGroupChildForTest(childRect.Center).Should().BeTrue();
+            var groupRect = view.SelectedFloatingInfo!.Value.Rect;
+            var visibleChildCenter = DocumentViewLayoutPlanner.TransformPoint(
+                new DocumentFloatPoint(childRect.Center.X, childRect.Center.Y),
+                new DocumentFloatRect(groupRect.X, groupRect.Y, groupRect.Width, groupRect.Height),
+                group.RotationAngle,
+                group.FlipH,
+                group.FlipV);
+            view.SelectFloatingGroupChildForTest(
+                new Point(visibleChildCenter.XDip, visibleChildCenter.YDip)).Should().BeTrue();
             var selected = view.SelectedFloatingGroupChildInfo;
             selected.Should().NotBeNull();
             selectedChildIndex = selected!.Value.ChildIndex;
@@ -689,6 +698,62 @@ public sealed class DocumentViewFloatingSelectionTests
         Assert.True(childWidthAfter > childWidthBefore,
             $"transformed child resize should grow the child: {childWidthBefore} -> {childWidthAfter}");
         Assert.Equal(groupWidthBefore, groupWidthAfter);
+    }
+
+    [Fact]
+    public async Task Page_anchored_group_child_hit_uses_visible_transformed_center()
+    {
+        bool selected = false;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = new TextDocument();
+            doc.Blocks.Clear();
+            var group = new DrawingGroup
+            {
+                WidthPt = 210,
+                HeightPt = 130,
+                RotationAngle = 25,
+                FlipH = true,
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.Square,
+                    HorizontalAnchor = HorizontalAnchor.Page,
+                    VerticalAnchor = VerticalAnchor.Page,
+                    HorizontalOffsetPt = 180,
+                    VerticalOffsetPt = 150,
+                    ZOrderIndex = 5
+                }
+            };
+            group.Children.Add(new Shape(ShapeKind.Rectangle, 70, 40));
+            group.Children.Add(new Shape(ShapeKind.Ellipse, 65, 35)
+            {
+                RotationAngle = 15,
+                FlipV = true
+            });
+            group.ChildOffsets.Add((20, 20));
+            group.ChildOffsets.Add((110, 55));
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromDrawingGroup(group));
+            doc.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(1280, 2000));
+            view.SelectFloating(0, 0);
+            var groupRect = view.SelectedFloatingInfo!.Value.Rect;
+            var childRect = view.FloatingGroupChildRectsForTest(0, 0)
+                .Single(child => child.ChildIndex == 1).Rect;
+            var visibleCenter = DocumentViewLayoutPlanner.TransformPoint(
+                new DocumentFloatPoint(childRect.Center.X, childRect.Center.Y),
+                new DocumentFloatRect(groupRect.X, groupRect.Y, groupRect.Width, groupRect.Height),
+                group.RotationAngle,
+                group.FlipH,
+                group.FlipV);
+            selected = view.SelectFloatingGroupChildForTest(
+                new Point(visibleCenter.XDip, visibleCenter.YDip));
+        });
+        if (!ran) return;
+        Assert.True(selected, "the visible child center should enter child selection");
     }
 
     [Fact]

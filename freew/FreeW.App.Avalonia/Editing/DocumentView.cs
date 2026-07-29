@@ -7218,11 +7218,11 @@ public sealed class DocumentView : Control
                 selChild.BlockIndex, selChild.RunIndex, selChild.ChildIndex);
             if (TryGetFloatingGroupData(selChild.BlockIndex, selChild.RunIndex, out var ownerGroup))
             {
-                using (context.PushTransform(BuildFloatingGroupTransform(ownerGroup)))
-                {
-                    DrawFloatingSelection(context, selChild.Rect, transform.Angle,
-                        transform.FlipH, transform.FlipV);
-                }
+                var currentChildRect = ownerGroup.Children
+                    .FirstOrDefault(item => item.ChildIndex == selChild.ChildIndex)?.Rect
+                    ?? selChild.Rect;
+                DrawFloatingGroupChildSelection(context, ownerGroup, currentChildRect,
+                    transform.Angle, transform.FlipH, transform.FlipV);
             }
         }
         else if (_selectedFloating is { } selFl)
@@ -8292,11 +8292,14 @@ public sealed class DocumentView : Control
         if (_selectedFloatingGroupChild is { } child
             && TryGetFloatingGroupData(child.BlockIndex, child.RunIndex, out var groupData))
         {
+            var currentChildRect = groupData.Children
+                .FirstOrDefault(item => item.ChildIndex == child.ChildIndex)?.Rect
+                ?? child.Rect;
             var childTransform = GetFloatingGroupChildRotation(
                 child.BlockIndex, child.RunIndex, child.ChildIndex);
             foreach (var handle in DocumentViewLayoutPlanner.BuildFloatingGroupChildHandleRects(
                          ToPlannerRect(groupData.Rect),
-                         ToPlannerRect(child.Rect),
+                         ToPlannerRect(currentChildRect),
                          FloatHandleSize,
                          childTransform.Angle,
                          childTransform.FlipH,
@@ -8330,11 +8333,14 @@ public sealed class DocumentView : Control
         if (_selectedFloatingGroupChild is { } child
             && TryGetFloatingGroupData(child.BlockIndex, child.RunIndex, out var groupData))
         {
+            var currentChildRect = groupData.Children
+                .FirstOrDefault(item => item.ChildIndex == child.ChildIndex)?.Rect
+                ?? child.Rect;
             var childTransform = GetFloatingGroupChildRotation(
                 child.BlockIndex, child.RunIndex, child.ChildIndex);
-            return FromPlannerHandle(DocumentViewLayoutPlanner.HitTestFloatingGroupChildHandle(
+            var resolved = FromPlannerHandle(DocumentViewLayoutPlanner.HitTestFloatingGroupChildHandle(
                 ToPlannerRect(groupData.Rect),
-                ToPlannerRect(child.Rect),
+                ToPlannerRect(currentChildRect),
                 ToPlannerPoint(point),
                 FloatHandleSize,
                 hitPaddingDip: 2,
@@ -8344,6 +8350,7 @@ public sealed class DocumentView : Control
                 groupData.RotationAngle,
                 groupData.FlipH,
                 groupData.FlipV));
+            return resolved;
         }
 
         if (_selectedFloating is not { } sel) return FloatHandle.None;
@@ -8792,15 +8799,22 @@ public sealed class DocumentView : Control
             .ThenByDescending(group => group.BlockIndex)
             .ThenByDescending(group => group.RunIndex))
         {
-            var groupLocalPoint = UntransformPoint(point, group.Rect,
-                group.RotationAngle, group.FlipH, group.FlipV);
-
             // Children are painted in list order, so the last matching child is in front.
             foreach (var child in group.Children.AsEnumerable().Reverse())
             {
                 var (angle, flipH, flipV) = GetFloatingGroupChildRotation(
                     group.BlockIndex, group.RunIndex, child.ChildIndex);
-                if (!ContainsTransformedPoint(groupLocalPoint, child.Rect, angle, flipH, flipV))
+                var contains = DocumentViewLayoutPlanner.ContainsFloatingGroupChildPoint(
+                        ToPlannerRect(group.Rect),
+                        ToPlannerRect(child.Rect),
+                        ToPlannerPoint(point),
+                        angle,
+                        flipH,
+                        flipV,
+                        group.RotationAngle,
+                        group.FlipH,
+                        group.FlipV);
+                if (!contains)
                     continue;
 
                 hit = (group.BlockIndex, group.RunIndex, child.ChildIndex,
@@ -8810,6 +8824,50 @@ public sealed class DocumentView : Control
         }
 
         return false;
+    }
+
+    private static void DrawFloatingGroupChildSelection(
+        DrawingContext context,
+        FloatingGroupData group,
+        Rect childRect,
+        double childAngle,
+        bool childFlipH,
+        bool childFlipV)
+    {
+        var groupPlanRect = ToPlannerRect(group.Rect);
+        var childPlanRect = ToPlannerRect(childRect);
+        var corners = new[]
+        {
+            new DocumentFloatPoint(childPlanRect.LeftDip, childPlanRect.TopDip),
+            new DocumentFloatPoint(childPlanRect.RightDip, childPlanRect.TopDip),
+            new DocumentFloatPoint(childPlanRect.RightDip, childPlanRect.BottomDip),
+            new DocumentFloatPoint(childPlanRect.LeftDip, childPlanRect.BottomDip)
+        }
+        .Select(corner => DocumentViewLayoutPlanner.TransformPoint(corner, childPlanRect,
+            childAngle, childFlipH, childFlipV))
+        .Select(corner => DocumentViewLayoutPlanner.TransformPoint(corner, groupPlanRect,
+            group.RotationAngle, group.FlipH, group.FlipV))
+        .Select(corner => new Point(corner.XDip, corner.YDip))
+        .ToArray();
+
+        for (var index = 0; index < corners.Length; index++)
+            context.DrawLine(FloatSelectionPen, corners[index], corners[(index + 1) % corners.Length]);
+
+        foreach (var handle in DocumentViewLayoutPlanner.BuildFloatingGroupChildHandleRects(
+                     groupPlanRect,
+                     childPlanRect,
+                     FloatHandleSize,
+                     childAngle,
+                     childFlipH,
+                     childFlipV,
+                     group.RotationAngle,
+                     group.FlipH,
+                     group.FlipV))
+        {
+            var rect = ToAvaloniaRect(handle.Rect);
+            context.FillRectangle(FloatHandleFill, rect);
+            context.DrawRectangle(null, FloatHandlePen, rect);
+        }
     }
 
     private static bool ContainsTransformedPoint(
