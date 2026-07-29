@@ -6948,8 +6948,14 @@ public sealed class DocumentView : Control
         {
             var transform = GetFloatingGroupChildRotation(
                 selChild.BlockIndex, selChild.RunIndex, selChild.ChildIndex);
-            DrawFloatingSelection(context, selChild.Rect, transform.Angle,
-                transform.FlipH, transform.FlipV);
+            if (TryGetFloatingGroupData(selChild.BlockIndex, selChild.RunIndex, out var ownerGroup))
+            {
+                using (context.PushTransform(BuildFloatingGroupTransform(ownerGroup)))
+                {
+                    DrawFloatingSelection(context, selChild.Rect, transform.Angle,
+                        transform.FlipH, transform.FlipV);
+                }
+            }
         }
         else if (_selectedFloating is { } selFl)
         {
@@ -18978,20 +18984,9 @@ public sealed class DocumentView : Control
     /// </summary>
     private void DrawFloatingGroup(DrawingContext context, FloatingGroupData gd)
     {
-        var centerX = gd.Rect.X + gd.Rect.Width / 2;
-        var centerY = gd.Rect.Y + gd.Rect.Height / 2;
         IDisposable? transformState = null;
         if (gd.RotationAngle != 0 || gd.FlipH || gd.FlipV)
-        {
-            var matrix = Matrix.Identity;
-            matrix = matrix * Matrix.CreateTranslation(-centerX, -centerY);
-            if (gd.FlipH) matrix = matrix * new Matrix(-1, 0, 0, 1, 0, 0);
-            if (gd.FlipV) matrix = matrix * new Matrix(1, 0, 0, -1, 0, 0);
-            if (gd.RotationAngle != 0)
-                matrix = matrix * Matrix.CreateRotation(gd.RotationAngle * Math.PI / 180.0);
-            matrix = matrix * Matrix.CreateTranslation(centerX, centerY);
-            transformState = context.PushTransform(matrix);
-        }
+            transformState = context.PushTransform(BuildFloatingGroupTransform(gd));
 
         try
         {
@@ -19035,5 +19030,18 @@ public sealed class DocumentView : Control
         {
             transformState?.Dispose();
         }
+    }
+
+    private static Matrix BuildFloatingGroupTransform(FloatingGroupData group)
+    {
+        var centerX = group.Rect.X + group.Rect.Width / 2;
+        var centerY = group.Rect.Y + group.Rect.Height / 2;
+        var matrix = Matrix.Identity;
+        matrix *= Matrix.CreateTranslation(-centerX, -centerY);
+        if (group.FlipH) matrix *= new Matrix(-1, 0, 0, 1, 0, 0);
+        if (group.FlipV) matrix *= new Matrix(1, 0, 0, -1, 0, 0);
+        if (group.RotationAngle != 0)
+            matrix *= Matrix.CreateRotation(group.RotationAngle * Math.PI / 180.0);
+        return matrix * Matrix.CreateTranslation(centerX, centerY);
     }
 }
