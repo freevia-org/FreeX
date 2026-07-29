@@ -1178,6 +1178,24 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_section_headers_expose_wpf_equivalent_automation_names()
+    {
+        string?[] automationNames = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.AddSectionAtSlide(0, "Intro");
+            automationNames = window.SlidePaneSectionHeaderAutomationNamesForTests.ToArray();
+        });
+
+        if (!ran) return;
+        automationNames.Should().ContainSingle()
+            .Which.Should().Be("Section Intro  (2), expanded");
+    }
+
+    [Fact]
     public async Task SlidePane_section_context_actions_route_through_shared_execution_planner()
     {
         var added = false;

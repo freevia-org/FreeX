@@ -381,6 +381,11 @@ public sealed partial class MainWindow : Window
     internal ListBoxItem? SelectedSlidePaneItemForTests => GetCurrentSlidePaneItem();
     internal IReadOnlyList<SlidePaneThumbnailVisualPlan> SlidePaneRenderedThumbnailPlans => _slidePaneRenderedThumbnailPlans;
     internal IReadOnlyList<SlidePaneSectionHeaderVisualPlan> SlidePaneRenderedSectionHeaderPlans => _slidePaneRenderedSectionHeaderPlans;
+    internal IReadOnlyList<string?> SlidePaneSectionHeaderAutomationNamesForTests => _slidePaneList.Items
+        .OfType<ListBoxItem>()
+        .Where(item => item.Tag is SlidePaneSectionHeaderTag)
+        .Select(AutomationProperties.GetName)
+        .ToArray();
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
     internal bool IsCloseDecisionPendingForTests => _closeCoordinator.IsClosePending;
@@ -7828,6 +7833,7 @@ public sealed partial class MainWindow : Window
             ContextMenu = BuildSlidePaneSectionContextMenu(entry),
         };
         ToolTip.SetTip(item, plan.ToolTipText);
+        AutomationProperties.SetName(item, plan.AccessibleName);
         WireContextMenuLifecycle(item);
         item.PointerEntered += (_, _) => headerChrome.Background = hoverBackground;
         item.PointerExited += (_, _) => headerChrome.Background = normalBackground;
