@@ -131,6 +131,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var dialog = new ChartDisplayOptionsDialog(sess);
         dialog.SetTitleOverlayForTests(true);
         dialog.SetPlotVisibleOnlyForTests(false);
+        dialog.SetRoundedCornersForTests(true);
         dialog.SetVaryColorsForTests(true);
         dialog.SetLegendOverlayForTests(true);
         dialog.SetHighLowLinesForTests(false);
@@ -143,6 +144,7 @@ public sealed class ChartDataDialogTests : IDisposable
         options.Title.Should().Be("Existing");
         options.TitleOverlay.Should().BeTrue();
         options.PlotVisibleOnly.Should().BeFalse();
+        options.RoundedCorners.Should().BeTrue();
         options.Legend.Should().Be(LegendPosition.Right);
         options.DisplayBlanksAs.Should().BeNull();
         options.VaryColors.Should().BeTrue();

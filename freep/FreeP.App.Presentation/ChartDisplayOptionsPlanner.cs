@@ -15,6 +15,7 @@ public sealed record ChartDisplayOptionsSurfacePlan(
     string ChartTitleLabel,
     string TitleOverlayLabel,
     string PlotVisibleOnlyLabel,
+    string RoundedCornersLabel,
     string ChartStyleLabel,
     string LegendLabel,
     string ValueLabelsLabel,
@@ -56,6 +57,7 @@ public sealed class ChartDisplayOptionsPlanner
     public const string ChartTitleLabel = "Chart Title";
     public const string TitleOverlayLabel = "Overlay title on plot";
     public const string PlotVisibleOnlyLabel = "Plot visible cells only";
+    public const string RoundedCornersLabel = "Rounded chart corners";
     public const string ChartStyleLabel = "Chart Style";
     public const string LegendLabel = "Legend";
     public const string ValueLabelsLabel = "Value Labels";
@@ -122,6 +124,8 @@ public sealed class ChartDisplayOptionsPlanner
     private bool _titleOverlayChanged;
     private bool _plotVisibleOnly;
     private bool _plotVisibleOnlyChanged;
+    private bool _roundedCorners;
+    private bool _roundedCornersChanged;
     private int? _styleId;
     private LegendPosition? _legend;
     private bool _showValueLabels;
@@ -156,6 +160,7 @@ public sealed class ChartDisplayOptionsPlanner
         _title = chart.Title ?? string.Empty;
         _titleOverlay = chart.TitleOverlay == true;
         _plotVisibleOnly = chart.PlotVisibleOnly != false;
+        _roundedCorners = chart.RoundedCorners == true;
         _styleId = chart.StyleId;
         _availableStyleOptions = StyleOptionsFor(chart.StyleId);
         _legend = chart.Legend;
@@ -193,6 +198,7 @@ public sealed class ChartDisplayOptionsPlanner
             ChartTitleLabel,
             TitleOverlayLabel,
             PlotVisibleOnlyLabel,
+            RoundedCornersLabel,
             ChartStyleLabel,
             LegendLabel,
             ValueLabelsLabel,
@@ -232,6 +238,7 @@ public sealed class ChartDisplayOptionsPlanner
     public string Title => _title;
     public bool TitleOverlay => _titleOverlay;
     public bool PlotVisibleOnly => _plotVisibleOnly;
+    public bool RoundedCorners => _roundedCorners;
     public int? StyleId => _styleId;
     public IReadOnlyList<ChartDisplayStyleOption> AvailableStyleOptions => _availableStyleOptions;
 
@@ -287,6 +294,11 @@ public sealed class ChartDisplayOptionsPlanner
     {
         _plotVisibleOnly = value;
         _plotVisibleOnlyChanged = true;
+    }
+    public void SetRoundedCorners(bool value)
+    {
+        _roundedCorners = value;
+        _roundedCornersChanged = true;
     }
     public void SetStyleId(int? styleId)
     {
@@ -348,7 +360,8 @@ public sealed class ChartDisplayOptionsPlanner
         _styleId,
         _showLeaderLines,
         _titleOverlayChanged ? _titleOverlay : null,
-        _plotVisibleOnlyChanged ? _plotVisibleOnly : null);
+        _plotVisibleOnlyChanged ? _plotVisibleOnly : null,
+        _roundedCornersChanged ? _roundedCorners : null);
 
     private ChartTextStyle? BuildLabelTextStyle()
     {

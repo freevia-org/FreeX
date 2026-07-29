@@ -982,12 +982,14 @@ public sealed class ChartDataCommandTests
                 },
                 ShowBubbleSize: true,
                 TitleOverlay: true,
-                PlotVisibleOnly: false)));
+                PlotVisibleOnly: false,
+                RoundedCorners: true)));
 
         chart.Title.Should().Be("Revenue");
         chart.HasAutomaticTitle.Should().BeFalse();
         chart.TitleOverlay.Should().BeTrue();
         chart.PlotVisibleOnly.Should().BeFalse();
+        chart.RoundedCorners.Should().BeTrue();
         chart.Legend.Should().Be(LegendPosition.Bottom);
         chart.DataLabels!.ShowCategoryName.Should().BeTrue("existing label components are preserved");
         chart.DataLabels.ShowValue.Should().BeTrue();
@@ -1021,6 +1023,7 @@ public sealed class ChartDataCommandTests
         roundTripped.Title.Should().Be("Revenue");
         roundTripped.TitleOverlay.Should().BeTrue();
         roundTripped.PlotVisibleOnly.Should().BeFalse();
+        roundTripped.RoundedCorners.Should().BeTrue();
         roundTripped.Legend.Should().Be(LegendPosition.Bottom);
         roundTripped.DataLabels!.ShowValue.Should().BeTrue();
         roundTripped.DataLabels.ShowPercent.Should().BeTrue();
@@ -1049,6 +1052,7 @@ public sealed class ChartDataCommandTests
         chart.HasAutomaticTitle.Should().BeTrue();
         chart.TitleOverlay.Should().BeNull();
         chart.PlotVisibleOnly.Should().BeNull();
+        chart.RoundedCorners.Should().BeNull();
         chart.Legend.Should().Be(LegendPosition.Right);
         chart.DataLabels!.ShowValue.Should().BeFalse();
         chart.DataLabels.ShowCategoryName.Should().BeTrue();
