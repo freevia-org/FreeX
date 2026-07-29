@@ -22,6 +22,7 @@ public sealed class R55_FormulaPointWholeAreaTests
         rowMethod.IndexOf("TryAppendDisjointFormulaReference(range)", StringComparison.Ordinal)
             .Should().BeLessThan(rowMethod.IndexOf("TryApplyFormulaRangeSelection", StringComparison.Ordinal));
         source.Should().Contain("private bool TryAppendDisjointFormulaReference(GridRange range)");
+        source.Should().NotContain("ApplyWholeRowOrColumnFormulaReferenceShorthand");
     }
 
     private static string ExtractMethod(string source, string signature)
