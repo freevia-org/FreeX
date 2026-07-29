@@ -27,7 +27,7 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("_slidePaneProjection");
         source.Should().Contain("_slidePaneRenderedSectionHeaderPlans.Add(plan)");
         source.Should().Contain("SlidePaneEntryKind.SectionHeader");
-        source.Should().Contain("BuildSlidePaneSectionHeader(entry)");
+        source.Should().Contain("BuildSlidePaneSectionHeader(entry,");
         source.Should().Contain("Text              = plan.LabelText");
         source.Should().Contain("Text              = plan.DisclosureText");
         source.Should().Contain("Foreground        = BrushFromHex(plan.ForegroundHex)");
