@@ -40,7 +40,9 @@ public sealed class LinuxFreeXInteractionValidationToolTests
             "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
 
         script.Should().Contain("run-freex-input-probes.sh");
-        script.Should().Contain("docker exec --env DISPLAY=:99");
+        script.Should().Contain("\"DISPLAY=:99\"");
+        script.Should().Contain("\"FREEX_X11_PROBE_SELECTOR=$PhysicalProbeSelector\"");
+        script.Should().Contain("& docker exec @($probeEnvironment | ForEach-Object { \"--env\"; $_ })");
         script.Should().Contain("Physical X11 manifest does not satisfy schema v2");
         script.Should().Contain("x11-validation/x11-input-results.json");
     }

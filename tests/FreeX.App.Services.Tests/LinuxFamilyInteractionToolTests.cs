@@ -176,7 +176,7 @@ public sealed class LinuxFamilyInteractionToolTests
         runner.Should().Contain("Length -le 0");
         runner.Should().Contain("exhaustive -ne $false");
         runner.Should().Contain("Run-FreeXLinuxInteractionValidation.ps1");
-        runner.Should().Contain("$expectedResultCount = if ($App -eq \"FreeP\") { 23 } else { 37 }");
+        runner.Should().Contain("$expectedResultCount = if ($App -eq \"FreeP\") { 24 } else { 37 }");
         runner.Should().Contain("if ($App -eq \"FreeW\") { $startArguments += \"-CupsDryRun\" }");
         foreach (var id in new[]
         {
@@ -225,8 +225,8 @@ public sealed class LinuxFamilyInteractionToolTests
         root.GetProperty("properties").GetProperty("results").GetProperty("minItems").GetInt32()
             .Should().BeGreaterThanOrEqualTo(8);
         var freePContract = root.GetProperty("allOf")[0].GetProperty("then").GetProperty("properties").GetProperty("results");
-        freePContract.GetProperty("minItems").GetInt32().Should().Be(23);
-        freePContract.GetProperty("maxItems").GetInt32().Should().Be(23);
+        freePContract.GetProperty("minItems").GetInt32().Should().Be(24);
+        freePContract.GetProperty("maxItems").GetInt32().Should().Be(24);
         var freeWContract = root.GetProperty("allOf")[1].GetProperty("then").GetProperty("properties").GetProperty("results");
         freeWContract.GetProperty("minItems").GetInt32().Should().Be(37);
         freeWContract.GetProperty("maxItems").GetInt32().Should().Be(37);
@@ -246,8 +246,9 @@ public sealed class LinuxFamilyInteractionToolTests
         doc.Should().Contain("FreePBackstageOverlay");
         doc.Should().Contain("contractValidation");
         doc.Should().Contain("Run-FamilyLinuxInteractionValidation.ps1");
-        doc.Should().Contain("exact twenty-three-row contract");
+        doc.Should().Contain("exact twenty-four-row contract");
         doc.Should().Contain("exact thirty-seven-row contract");
+        doc.Should().Contain("animation-pane-physical-workflow");
         doc.Should().Contain("file-new-shortcut-discard-creates-clean");
         doc.Should().Contain("slide-pane-new-slide-create");
         doc.Should().Contain("slide-pane-delete-undo");
