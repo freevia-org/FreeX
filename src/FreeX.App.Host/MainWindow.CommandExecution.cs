@@ -44,7 +44,11 @@ public partial class MainWindow
     /// FreeX.App.Services.WorkbookSession's RefreshLinkedPicturesForEditedCells/
     /// RefreshLinkedPictureCells (the equivalent refresh already performed by the Avalonia shell)
     /// so both shells keep a linked picture's rendered content live. Called from every successful
-    /// edit-affecting command outcome in this file so no cell-edit path can miss it.
+    /// edit-affecting command outcome in this file (with <see cref="CommandOutcome.AffectedCells"/>)
+    /// AND from <see cref="RecalculateIfAutomatic"/> (MainWindow.WorkbookUiState.cs, with the
+    /// RecalcEngine's own cascaded <c>RecalcReport.RecalculatedCells</c>) so a formula cell inside a
+    /// linked picture's source range that only changes because some other, out-of-range cell it
+    /// depends on was edited also keeps the picture live (R91-print-twin-two-tier-synthetic-sweep-3).
     /// </summary>
     private void RefreshLinkedPicturesAffectedBy(IReadOnlyList<CellAddress>? affectedCells)
     {

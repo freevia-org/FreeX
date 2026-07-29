@@ -8,16 +8,23 @@ public sealed class SetCommentCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly CellAddress _address;
     private readonly string _comment;
+    private readonly string _author;
     private bool _hadPrevious;
     private string? _previousComment;
+    private bool _hadPreviousAuthor;
+    private string? _previousAuthor;
 
     public string Label => "Set Comment";
 
-    public SetCommentCommand(SheetId sheetId, CellAddress address, string comment)
+    // R91-render-comment-ui-5-3: default author mirrors SetThreadedCommentCommand's own "FreeX"
+    // default for a brand-new threaded comment, so a note created via the same production path
+    // (WorkbookSession.SetActiveCellNote) is attributed exactly like its threaded-comment sibling.
+    public SetCommentCommand(SheetId sheetId, CellAddress address, string comment, string author = "FreeX")
     {
         _sheetId = sheetId;
         _address = address;
         _comment = comment;
+        _author = author;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -28,6 +35,18 @@ public sealed class SetCommentCommand : IWorkbookCommand
 
         _hadPrevious = sheet.Comments.TryGetValue(_address, out _previousComment);
         sheet.Comments[_address] = _comment;
+
+        // A brand-new note (no comment previously existed at this address) is auto-attributed to
+        // the author, matching real Excel's auto-filled <authors> entry for a freshly inserted
+        // legacy note -- both the Notes list and a printed "at end of sheet" comment summary
+        // otherwise show a blank author for every note the user creates inside FreeX. Editing an
+        // EXISTING note's text must not touch its already-recorded author.
+        if (!_hadPrevious)
+        {
+            _hadPreviousAuthor = sheet.CommentAuthors.TryGetValue(_address, out _previousAuthor);
+            sheet.CommentAuthors[_address] = _author;
+        }
+
         return new CommandOutcome(true, AffectedCells: [_address]);
     }
 
@@ -38,6 +57,14 @@ public sealed class SetCommentCommand : IWorkbookCommand
             sheet.Comments[_address] = _previousComment;
         else
             sheet.Comments.Remove(_address);
+
+        if (!_hadPrevious)
+        {
+            if (_hadPreviousAuthor && _previousAuthor is not null)
+                sheet.CommentAuthors[_address] = _previousAuthor;
+            else
+                sheet.CommentAuthors.Remove(_address);
+        }
     }
 }
 

@@ -427,6 +427,15 @@ public static class PasteCommandFactory
             extraCommands.Add(new PasteMergedRegionsCommand(targetSheetId, sourceRange, destination, transpose: false));
         if (carriesFormatting && ShouldCarryComments(sourceSheet, sourceRange, targetSheet, pasteFootprint))
             extraCommands.AddRange(BuildCommentCarryCommands(targetSheetId, sourceRange, destination, pasteFootprint, transpose: false));
+        // R91-io-clipboard-image-formats-5-2: a plain Ctrl+V (mode All, no Paste Special options)
+        // must bring along any picture anchored inside the copied range, exactly as it brings along
+        // the cell values/formats themselves -- matching real Excel.
+        if (carriesFormatting)
+        {
+            var picturesToCarry = FindPicturesAnchoredIn(sourceSheet, sourceRange);
+            if (picturesToCarry.Count > 0)
+                extraCommands.Add(new PastePicturesCommand(targetSheetId, sourceRange, destination, picturesToCarry, transpose: false));
+        }
 
         return extraCommands.Count == 0
             ? pasteAllCommand
@@ -716,6 +725,21 @@ public static class PasteCommandFactory
                     tiledFootprint,
                     options.Transpose));
             }
+
+            // R91-io-clipboard-image-formats-5-2: tiled counterpart of the non-tiled picture carry
+            // above -- a picture anchored inside the copied source range is re-created at every
+            // whole repeated tile of the destination selection, mirroring how merged regions and
+            // comments are already tiled just above.
+            var tiledPicturesToCarry = FindPicturesAnchoredIn(sourceSheet, sourceRange);
+            if (tiledPicturesToCarry.Count > 0)
+            {
+                tiledExtraCommands.Add(new PastePicturesCommand(
+                    targetSheetId,
+                    sourceRange,
+                    tiledFootprint,
+                    tiledPicturesToCarry,
+                    options.Transpose));
+            }
         }
 
         return tiledExtraCommands.Count == 0
@@ -797,6 +821,17 @@ public static class PasteCommandFactory
 
     private static bool HasAnyComments(Sheet? sheet) =>
         sheet is not null && (sheet.Comments.Count > 0 || sheet.ThreadedComments.Count > 0);
+
+    /// <summary>
+    /// R91-io-clipboard-image-formats-5-2: the pictures whose <see cref="PictureModel.Anchor"/>
+    /// falls inside <paramref name="sourceRange"/> -- i.e. the pictures a plain Ctrl+V paste must
+    /// carry along with the copied cells/formats, matching real Excel's "copy the object anchored
+    /// in the selection" behavior.
+    /// </summary>
+    private static List<PictureModel> FindPicturesAnchoredIn(Sheet? sheet, GridRange sourceRange) =>
+        sheet is null
+            ? []
+            : sheet.Pictures.Where(picture => sourceRange.Contains(picture.Anchor)).ToList();
 
     /// <summary>
     /// Builds the command pair that makes a plain paste's destination comment/note state exactly

@@ -92,6 +92,12 @@ public sealed class FilterCommand : IWorkbookCommand
                 ? null
                 : new WorksheetAutoFilterColumnModel((int)_filterColOffset, _allowedValues));
 
+        // R91-meta-3: a filter can hide/show rows without moving any data, so a banded structured
+        // table's stripes must re-flow around the newly-hidden rows exactly like they already do
+        // after an Insert or a Sort (StructuredTableStyleService.RebandTable) — otherwise the
+        // remaining visible rows keep their stale pre-filter stripe.
+        StructuredTableBandingReflow.ReflowIfMatched(ctx.Workbook, sheet, _range);
+
         return new CommandOutcome(true);
     }
 
@@ -204,6 +210,10 @@ public sealed class FilterCommand : IWorkbookCommand
             sheet.StructuredTables[tableIndex] = StructuredTableDesignCommandHelpers.CopyTable(
                 table, filterColumns: _previousTableFilterColumns);
         }
+
+        // R91-meta-3: undoing a filter restores the previous hidden-row set, which just as much
+        // changes which rows are visible as applying it did — re-flow banding here too.
+        StructuredTableBandingReflow.ReflowIfMatched(ctx.Workbook, sheet, _range);
     }
 }
 
@@ -532,6 +542,36 @@ internal struct FilterUndoSnapshot
         {
             foreach (var (col, ownedRows) in _columnFilterOwnedRows)
                 sheet.ColumnFilterOwnedRows[col] = [.. ownedRows];
+        }
+    }
+}
+
+/// <summary>
+/// R91-meta-3: re-flows a structured table's row banding (<see cref="StructuredTableStyleService.RebandTable"/>)
+/// whenever a filter apply/clear changes which of the table's rows are visible — mirrors how
+/// <c>InsertDeleteRowsCommand</c> and <see cref="SortCommand"/> already re-flow banding after a
+/// mutation that changes physical row order (R90). A filter never moves data, but the row-banding
+/// alternation is keyed to VISIBLE row position, so hiding/showing rows is just as much a "the
+/// physical layout a table's data occupies changed" event as an insert or a sort, and left the
+/// remaining visible rows with a stale stripe otherwise.
+/// </summary>
+internal static class StructuredTableBandingReflow
+{
+    /// <summary>
+    /// Rebands the structured table whose <see cref="StructuredTableModel.Range"/> exactly matches
+    /// <paramref name="range"/> — the shape a table's own header-cell filter dropdown always passes
+    /// (mirrors <see cref="FilterCommand.ApplyToStructuredTableIfMatched"/>'s lookup). A no-op when
+    /// <paramref name="range"/> is a plain worksheet AutoFilter range with no owning table.
+    /// </summary>
+    public static void ReflowIfMatched(Workbook workbook, Sheet sheet, GridRange range)
+    {
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (table.Range.Equals(range))
+            {
+                StructuredTableStyleService.RebandTable(workbook, sheet, table);
+                return;
+            }
         }
     }
 }

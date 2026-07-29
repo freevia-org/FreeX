@@ -292,7 +292,8 @@ public static class DrawingObjectViewportPlanner
         new(
             textBox.GetEffectiveFillColor(theme, CellColor.White),
             textBox.GetEffectiveOutlineColor(theme, new CellColor(89, 89, 89)),
-            textBox.HasFill);
+            textBox.HasFill,
+            !textBox.OutlineHasNoFill);
 
     public static string CreateObjectPlaceholderLabel(string objectType, string? objectName, int index)
     {

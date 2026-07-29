@@ -12,16 +12,16 @@ namespace FreeX.App.Presentation.PageLayout;
 /// </summary>
 public static class PageTextBoxLayoutPlanner
 {
-    /// <summary>Minimum printed text-box width in device-independent units, matching the WPF print renderer.</summary>
+    /// <summary>Minimum printed text-box width in device-independent units, matching the desktop print renderer.</summary>
     public const double MinimumWidth = TextBoxFrameLayoutPlanner.MinimumWidth;
 
-    /// <summary>Minimum printed text-box height in device-independent units, matching the WPF print renderer.</summary>
+    /// <summary>Minimum printed text-box height in device-independent units, matching the desktop print renderer.</summary>
     public const double MinimumHeight = TextBoxFrameLayoutPlanner.MinimumHeight;
 
     /// <summary>Inset between a printed text-box border and its text content.</summary>
     public const double TextInset = TextBoxFrameLayoutPlanner.TextInset;
 
-    /// <summary>Alpha used for text-box fills by the source WPF print renderer.</summary>
+    /// <summary>Alpha used for text-box fills by the source desktop print renderer.</summary>
     public const byte FillAlpha = 242;
 
     public static IReadOnlyList<PageTextBoxBlock> Build(
@@ -69,7 +69,9 @@ public static class PageTextBoxLayoutPlanner
                 textBox.Text,
                 fill is { } fillColor ? PresentationRgb.FromCellColor(fillColor) : null,
                 FillAlpha,
-                PresentationRgb.FromCellColor(outline),
+                // R91-commands-insert-object-5-1: an explicitly line-suppressed text box (e.g.
+                // Excel's Insert > Text Box default) must print with no border, not the fallback gray.
+                textBox.OutlineHasNoFill ? null : PresentationRgb.FromCellColor(outline),
                 OutlineThickness: 1,
                 new PageTextFont(
                     PageContentRenderModelBuilder.PrintFontFamily,

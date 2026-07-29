@@ -1210,6 +1210,8 @@ public sealed partial class NativeJsonAdapter
         public int? RefreshedVersion { get; set; }
         public string? RefreshedBy { get; set; }
         public string? RefreshedDateIso { get; set; }
+        /// <summary>See <see cref="PivotCacheModel.RawRecordsXml"/>.</summary>
+        public string? RawRecordsXml { get; set; }
         public List<PivotCacheFieldDto> Fields { get; set; } = [];
     }
 

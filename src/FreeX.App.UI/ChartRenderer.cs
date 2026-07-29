@@ -355,7 +355,8 @@ public static partial class ChartRenderer
                     LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4),
                     YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null
                 };
-                ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
+                var seriesFormat = GetSeriesFormat(chart, seriesIndex);
+                ApplyRectangleBarFormat(series, seriesFormat, theme);
                 ApplyNativeDataLabelStyle(series, chart, theme);
                 var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
                 var colHalfWidth = ColumnBarHalfWidth(chart);
@@ -376,6 +377,13 @@ public static partial class ChartRenderer
                             ChartStylePlanner.ResolveVaryColorsPointFill(chart, seriesIndex, i, clusteredColumnCount, theme, varyColorsPalette ??= ChartStylePlanner.BuildExcelSeriesPalette(theme)) is { } varyColor)
                         {
                             columnBarItem.Color = OxyColor.FromRgb(varyColor.R, varyColor.G, varyColor.B);
+                        }
+                        // R91-render-chart-series-format-5-2: "Invert if negative" takes precedence
+                        // over vary-by-point for this bar -- it is Excel's stronger, value-specific
+                        // visual cue for a negative point, distinct from the per-point palette color.
+                        if (ResolveInvertIfNegativeItemColor(seriesFormat, v) is { } invertColor)
+                        {
+                            columnBarItem.Color = invertColor;
                         }
                         series.Items.Add(columnBarItem);
                         trendPoints?.Add(new DataPoint(i, v));
@@ -671,7 +679,8 @@ public static partial class ChartRenderer
                     Title = IsLegendEntryDeleted(chart, seriesData.SeriesIndex) ? "" : seriesName,
                     LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4)
                 };
-                ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesData.SeriesIndex), theme);
+                var seriesFormat = GetSeriesFormat(chart, seriesData.SeriesIndex);
+                ApplyRectangleBarFormat(series, seriesFormat, theme);
                 ApplyNativeDataLabelStyle(series, chart, theme);
                 var colHalfWidth = ColumnBarHalfWidth(chart);
                 for (var i = 0; i < seriesData.Values.Count; i++)
@@ -679,7 +688,14 @@ public static partial class ChartRenderer
                     var v = seriesData.Values[i];
                     if (v.HasValue)
                     {
-                        series.Items.Add(new RectangleBarItem(i - colHalfWidth, Math.Min(0, v.Value), i + colHalfWidth, Math.Max(0, v.Value)));
+                        var embeddedColumnBarItem = new RectangleBarItem(i - colHalfWidth, Math.Min(0, v.Value), i + colHalfWidth, Math.Max(0, v.Value));
+                        // R91-render-chart-series-format-5-2: same "Invert if negative" wiring as the
+                        // live cell-lookup path above.
+                        if (ResolveInvertIfNegativeItemColor(seriesFormat, v.Value) is { } invertColor)
+                        {
+                            embeddedColumnBarItem.Color = invertColor;
+                        }
+                        series.Items.Add(embeddedColumnBarItem);
                         if (ShouldUseAnnotationLabels(chart))
                             AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesData.SeriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, v.Value, v.Value);
                     }

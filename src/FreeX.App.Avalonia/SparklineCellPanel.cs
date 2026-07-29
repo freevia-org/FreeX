@@ -163,7 +163,10 @@ internal sealed class SparklineCellPanel : Panel
         var lineWeightDip = PointsToDip(_sparkline.LineWeight ?? DefaultLineWeightPt);
         var stroke = BrushForColor(seriesColor);
 
-        var layout = SparklineLayoutEngine.CalculateLineLayout(_values, rect, _overrideMin, _overrideMax);
+        // R91-meta-2: use the SparklineModel-deriving overload so the group's "Plot Data
+        // Right-to-Left" option is always honored — the RTL-less overload is easy to silently
+        // omit (see round 90's WPF-only fix that missed this shell's separate renderer).
+        var layout = SparklineLayoutEngine.CalculateLineLayout(_sparkline, _values, rect, _overrideMin, _overrideMax);
 
         if (layout.SinglePoint is { } single)
         {
@@ -206,7 +209,8 @@ internal sealed class SparklineCellPanel : Panel
         if (_values.Count == 0)
             return;
 
-        var points = SparklineLayoutEngine.GetLinePoints(_values, rect, _overrideMin, _overrideMax);
+        // R91-meta-2: model-deriving overload — see BuildLine's CalculateLineLayout call above.
+        var points = SparklineLayoutEngine.GetLinePoints(_sparkline, _values, rect, _overrideMin, _overrideMax);
         if (points.Count == 0)
             return;
 
@@ -282,9 +286,10 @@ internal sealed class SparklineCellPanel : Panel
     {
         var positiveFill = BrushForColor(seriesColor);
         var negativeFill = BrushForColor(negativeColor);
-        var winLoss = _sparkline.Kind == SparklineKind.WinLoss;
 
-        var layout = SparklineLayoutEngine.CalculateColumnLayout(_values, rect, winLoss, _overrideMaxAbs);
+        // R91-meta-2: model-deriving overload — derives both Kind (winLoss) and RightToLeft from
+        // the sparkline itself; see BuildLine's CalculateLineLayout call above for the rationale.
+        var layout = SparklineLayoutEngine.CalculateColumnLayout(_sparkline, _values, rect, _overrideMaxAbs);
         foreach (var bar in layout.Bars)
         {
             Children.Add(new AvaloniaRectangle

@@ -303,6 +303,33 @@ public partial class GridView
         TryGetCellRect(viewport, row, col, FindMerge(row, col), out rect);
 
     /// <summary>
+    /// Split-pane-aware counterpart to <see cref="TryGetCellRect(ViewportModel?, uint, uint, out Rect)"/>.
+    /// When the viewport is split (<see cref="ViewportModel.SplitPanes"/> is set) the cell's on-screen
+    /// rect depends on which pane it is scrolled into, so this walks
+    /// <see cref="CalculateSplitPaneCellLayouts"/> first -- exactly as the transient hover preview
+    /// (<see cref="TryGetCommentPreviewAt"/>/<see cref="TryGetCommentPreviewForCell"/>) already does --
+    /// before falling back to the flat single-pane rect. Used for the PINNED ("Show Comment") note
+    /// box so it lands in the correct pane instead of always assuming the flat viewport layout.
+    /// See R91-render-comment-ui-5-1.
+    /// </summary>
+    private bool TryGetPinnedNoteCellRect(ViewportModel? viewport, uint row, uint col, out Rect rect)
+    {
+        if (viewport is { SplitPanes: not null })
+        {
+            foreach (var layout in CalculateSplitPaneCellLayouts(viewport, MergedRegions, EditingCell))
+            {
+                if (layout.Cell.Row == row && layout.Cell.Col == col)
+                {
+                    rect = layout.Rect;
+                    return true;
+                }
+            }
+        }
+
+        return TryGetCellRect(viewport, row, col, out rect);
+    }
+
+    /// <summary>
     /// Computes the on-screen rect for the cell at (row, col). When <paramref name="merge"/> is a
     /// merged range anchored at (row, col), the rect is expanded to the full merged footprint (the
     /// same geometry the render passes use in GridView.Rendering.cs) so hover/selection popups and
@@ -455,7 +482,7 @@ public partial class GridView
         foreach (var key in _pinnedNoteBorders.Keys)
         {
             if (pinned is null || !pinned.Contains(key) ||
-                !TryGetCellRect(viewport, key.Row, key.Col, out _))
+                !TryGetPinnedNoteCellRect(viewport, key.Row, key.Col, out _))
             {
                 toRemove.Add(key);
             }
@@ -477,7 +504,7 @@ public partial class GridView
         // Add/update borders for pinned addresses that are on-screen.
         foreach (var (row, col) in pinned)
         {
-            if (!TryGetCellRect(viewport, row, col, out var cellRect))
+            if (!TryGetPinnedNoteCellRect(viewport, row, col, out var cellRect))
                 continue;
 
             // Get display content — walk viewport cells for the comment text.
@@ -1237,17 +1264,53 @@ public partial class GridView
         return normalized.Length <= 60 ? normalized : normalized[..57] + "...";
     }
 
-    private static string FormatMessageHeading(string author, DateTimeOffset? createdAtUtc)
+    internal static string FormatMessageHeading(string author, DateTimeOffset? createdAtUtc) =>
+        FormatMessageHeading(author, createdAtUtc, DateTimeOffset.Now);
+
+    /// <summary>
+    /// R91-render-comment-ui-5-2: real Excel always shows comment/note timestamps converted to the
+    /// viewer's LOCAL time zone, with relative phrasing for recent activity ("2m", "Today, 9:00 AM",
+    /// "Yesterday, ..."), never a bare absolute UTC stamp. <paramref name="now"/> is threaded through
+    /// (defaulting to <see cref="DateTimeOffset.Now"/> at the single-arg call sites) purely so tests
+    /// can pin "the current moment" instead of racing the real clock.
+    /// </summary>
+    internal static string FormatMessageHeading(string author, DateTimeOffset? createdAtUtc, DateTimeOffset now)
     {
         var label = author.Trim();
         if (createdAtUtc is null)
             return label;
 
-        var formatted = createdAtUtc.Value
-            .ToUniversalTime()
-            .ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+        var formatted = FormatCommentTimestamp(createdAtUtc.Value, now);
         return string.IsNullOrWhiteSpace(label)
             ? formatted
             : $"{label} - {formatted}";
+    }
+
+    /// <summary>
+    /// Formats <paramref name="createdAtUtc"/> (a UTC instant) relative to <paramref name="now"/>,
+    /// converted to the viewer's local time zone first -- mirroring Excel's own comment/note
+    /// timestamp display: "Xm"/"Xh" for the last hour, "Today, h:mm tt" / "Yesterday, h:mm tt" for the
+    /// last two calendar days (in local time), and a plain local absolute date/time otherwise.
+    /// </summary>
+    private static string FormatCommentTimestamp(DateTimeOffset createdAtUtc, DateTimeOffset now)
+    {
+        var local = createdAtUtc.ToLocalTime();
+        var nowLocal = now.ToLocalTime();
+        var age = nowLocal - local;
+        if (age < TimeSpan.Zero)
+            age = TimeSpan.Zero; // Clock skew / future-dated cache: treat as "just now" rather than negative.
+
+        if (age < TimeSpan.FromMinutes(1))
+            return "Just now";
+        if (age < TimeSpan.FromHours(1))
+            return $"{(int)age.TotalMinutes}m";
+
+        var timeOfDay = local.ToString("h:mm tt", CultureInfo.InvariantCulture);
+        if (local.Date == nowLocal.Date)
+            return $"Today, {timeOfDay}";
+        if (local.Date == nowLocal.Date.AddDays(-1))
+            return $"Yesterday, {timeOfDay}";
+
+        return local.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
     }
 }

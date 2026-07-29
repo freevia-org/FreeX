@@ -596,6 +596,36 @@ public static class SparklineLayoutEngine
         double? overrideMax,
         bool rightToLeft = false)
     {
+        return GetLinePointsCore(values, rect, overrideMin, overrideMax, rightToLeft);
+    }
+
+    /// <summary>
+    /// Returns the per-point Y positions for a line sparkline, deriving the "Plot Data
+    /// Right-to-Left" option directly from <paramref name="sparkline"/> instead of requiring the
+    /// caller to thread a separate <c>rightToLeft</c> argument. This is the recommended entry point
+    /// for any caller that already has the <see cref="SparklineModel"/> in hand: unlike the
+    /// <c>rightToLeft</c>-parameter overload above (whose default value of <c>false</c> a caller can
+    /// silently keep and so miss the option), this overload makes it impossible to plot marker
+    /// positions without honoring the group's own setting.
+    /// </summary>
+    public static IReadOnlyList<(int Index, LayoutPoint Point)> GetLinePoints(
+        SparklineModel sparkline,
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        double? overrideMin,
+        double? overrideMax)
+    {
+        ArgumentNullException.ThrowIfNull(sparkline);
+        return GetLinePointsCore(values, rect, overrideMin, overrideMax, sparkline.RightToLeft);
+    }
+
+    private static IReadOnlyList<(int Index, LayoutPoint Point)> GetLinePointsCore(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        double? overrideMin,
+        double? overrideMax,
+        bool rightToLeft)
+    {
         if (values.Count == 0 || rect.Width <= 0 || rect.Height <= 0)
             return [];
 

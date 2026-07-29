@@ -587,6 +587,10 @@ public partial class MainWindow
         SheetGrid.RowPageBreaks = sheet?.RowPageBreaks;
         SheetGrid.ColumnPageBreaks = sheet?.ColumnPageBreaks;
         SheetGrid.PrintArea = sheet?.PrintArea;
+        // R91-render-frozen-print-titles-5-2: also bind the FULL print-area list so the Page Break
+        // Preview / Page Layout overlay (GridView.Overlays.cs) can paginate/un-mask every configured
+        // _xlnm.Print_Area region, not just the first (sheet?.PrintArea above).
+        SheetGrid.PrintAreas = sheet?.PrintAreas;
         SheetGrid.PagePreviewRange = CalculatePagePreviewRange(sheet, viewport);
         // Split is this window's own state too (R89-freeze-split-per-window-1), same reasoning
         // as Gridlines/Headings/Rulers above.

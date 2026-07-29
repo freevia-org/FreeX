@@ -411,6 +411,26 @@ public partial class MainWindow
             };
             EditOverlay.Children.Insert(0, newBorder);
             _formulaReferenceGridOverlayPool.Insert(0, newBorder);
+            _formulaReferenceGridOverlayHighlights.Insert(0, null);
+
+            // R91-formula-editing-assist-5-3: a small hit-testable resize grip at the highlight's
+            // bottom-right corner, so the reference it represents can be dragged to resize --
+            // unlike the border itself (IsHitTestVisible = false, so mouse clicks fall through to
+            // the grid underneath for "pick an entirely new range" point-mode selection). Inserted
+            // right after its border (index 0) so it stays on top of that border but still behind
+            // every non-pooled overlay child added earlier.
+            var newGrip = new System.Windows.Shapes.Rectangle
+            {
+                Width = FormulaReferenceGripSize,
+                Height = FormulaReferenceGripSize,
+                Cursor = System.Windows.Input.Cursors.SizeNWSE,
+                Visibility = Visibility.Collapsed
+            };
+            newGrip.MouseLeftButtonDown += FormulaReferenceGrip_MouseLeftButtonDown;
+            newGrip.MouseMove += FormulaReferenceGrip_MouseMove;
+            newGrip.MouseLeftButtonUp += FormulaReferenceGrip_MouseLeftButtonUp;
+            EditOverlay.Children.Insert(1, newGrip);
+            _formulaReferenceGridOverlayGripPool.Insert(0, newGrip);
         }
 
         // Second pass: assign geometry and show the required pool slots.
@@ -437,11 +457,21 @@ public partial class MainWindow
             System.Windows.Controls.Canvas.SetLeft(border, rect.Value.Left);
             System.Windows.Controls.Canvas.SetTop(border, rect.Value.Top);
             border.Visibility = Visibility.Visible;
+
+            var grip = _formulaReferenceGridOverlayGripPool[poolIndex];
+            grip.Fill = brush;
+            System.Windows.Controls.Canvas.SetLeft(grip, rect.Value.Right - FormulaReferenceGripSize / 2);
+            System.Windows.Controls.Canvas.SetTop(grip, rect.Value.Bottom - FormulaReferenceGripSize / 2);
+            grip.Visibility = Visibility.Visible;
+            _formulaReferenceGridOverlayHighlights[poolIndex] = highlight;
+
             poolIndex++;
         }
 
         _formulaReferenceGridOverlayActiveCount = poolIndex;
     }
+
+    private const double FormulaReferenceGripSize = 6.0;
 
     private void ClearFormulaReferenceGridOverlays()
     {
@@ -451,9 +481,123 @@ public partial class MainWindow
     private void HideFormulaReferenceGridOverlayPool()
     {
         for (var i = 0; i < _formulaReferenceGridOverlayActiveCount; i++)
+        {
             _formulaReferenceGridOverlayPool[i].Visibility = Visibility.Collapsed;
+            _formulaReferenceGridOverlayGripPool[i].Visibility = Visibility.Collapsed;
+            _formulaReferenceGridOverlayHighlights[i] = null;
+        }
 
         _formulaReferenceGridOverlayActiveCount = 0;
+    }
+
+    // ── R91-formula-editing-assist-5-3: drag a reference highlight's corner grip to resize it ──
+
+    private void FormulaReferenceGrip_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not System.Windows.Shapes.Rectangle grip)
+            return;
+
+        var poolIndex = _formulaReferenceGridOverlayGripPool.IndexOf(grip);
+        if (poolIndex < 0 || poolIndex >= _formulaReferenceGridOverlayHighlights.Count ||
+            _formulaReferenceGridOverlayHighlights[poolIndex] is not { Range: { } } highlight)
+            return;
+
+        var editor = GetFormulaReferenceHighlightEditor();
+        if (editor is null)
+            return;
+
+        _formulaReferenceDragHighlight = highlight;
+        _formulaReferenceDragEditor = editor;
+        _formulaReferenceDragActive = true;
+        grip.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void FormulaReferenceGrip_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (!_formulaReferenceDragActive ||
+            sender is not System.Windows.Shapes.Rectangle grip ||
+            _formulaReferenceDragHighlight?.Range is not { } originalRange ||
+            SheetGrid.Viewport is null)
+            return;
+
+        if (TryResolveDragTargetCell(e.GetPosition(EditOverlay), originalRange.Start.Sheet, out var targetCell))
+        {
+            var previewRange = FormulaReferenceDragResizePlanner.ComputeResizedRange(originalRange.Start, targetCell);
+            var rect = FreeX.App.UI.GridView.CalculateVisibleSelectionRect(
+                SheetGrid.Viewport, previewRange, SheetGrid.ActualRowHeaderWidth, FreeX.App.UI.GridView.ColHeaderHeight);
+            if (rect is { } previewRect)
+            {
+                var poolIndex = _formulaReferenceGridOverlayGripPool.IndexOf(grip);
+                if (poolIndex >= 0 && poolIndex < _formulaReferenceGridOverlayPool.Count)
+                {
+                    var border = _formulaReferenceGridOverlayPool[poolIndex];
+                    border.Width = previewRect.Width;
+                    border.Height = previewRect.Height;
+                    System.Windows.Controls.Canvas.SetLeft(border, previewRect.Left);
+                    System.Windows.Controls.Canvas.SetTop(border, previewRect.Top);
+                }
+                System.Windows.Controls.Canvas.SetLeft(grip, previewRect.Right - FormulaReferenceGripSize / 2);
+                System.Windows.Controls.Canvas.SetTop(grip, previewRect.Bottom - FormulaReferenceGripSize / 2);
+            }
+        }
+
+        e.Handled = true;
+    }
+
+    private void FormulaReferenceGrip_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (!_formulaReferenceDragActive || sender is not System.Windows.Shapes.Rectangle grip)
+            return;
+
+        grip.ReleaseMouseCapture();
+        _formulaReferenceDragActive = false;
+
+        var highlight = _formulaReferenceDragHighlight;
+        var editor = _formulaReferenceDragEditor;
+        _formulaReferenceDragHighlight = null;
+        _formulaReferenceDragEditor = null;
+
+        if (highlight?.Range is not { } originalRange || editor is null)
+            return;
+
+        if (TryResolveDragTargetCell(e.GetPosition(EditOverlay), originalRange.Start.Sheet, out var targetCell))
+        {
+            var newRange = FormulaReferenceDragResizePlanner.ComputeResizedRange(originalRange.Start, targetCell);
+            var (newText, caretIndex) = FormulaReferenceDragResizePlanner.ApplyResize(
+                editor.Text, highlight!.TextStart, highlight.TextLength, newRange, _options.UseR1C1ReferenceStyle);
+
+            ApplyTextEdit(editor, new ExcelTextEdit(newText, caretIndex, 0));
+            if (ReferenceEquals(editor, _inlineEditor))
+                FormulaBar.Text = newText;
+            else if (_inlineEditor?.IsVisible == true)
+                _inlineEditor.Text = newText;
+        }
+
+        // Whether or not the drag actually changed anything, rebuild the overlays from the (possibly
+        // now-changed) text -- a no-op drag left the pool's live-preview geometry pointing at the
+        // preview rect rather than the committed one.
+        RefreshFormulaReferenceHighlights();
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Converts an EditOverlay-relative drag point into the worksheet cell under it. EditOverlay is
+    /// unscaled (see ShowInlineEditor's own cx/cy zoom multiplication), so the point is divided by
+    /// the current zoom level before hit-testing against the (unzoomed) viewport metrics.
+    /// </summary>
+    private bool TryResolveDragTargetCell(System.Windows.Point overlayPoint, SheetId sheet, out CellAddress targetCell)
+    {
+        targetCell = default;
+        if (SheetGrid.Viewport is null || _zoomLevel <= 0)
+            return false;
+
+        var unzoomedPoint = new System.Windows.Point(overlayPoint.X / _zoomLevel, overlayPoint.Y / _zoomLevel);
+        if (FreeX.App.UI.GridView.HitTestViewportCell(SheetGrid.Viewport, sheet, unzoomedPoint) is not { } hit)
+            return false;
+
+        targetCell = hit;
+        return true;
     }
 
     private static Brush CreateFormulaReferenceFill(Brush brush)

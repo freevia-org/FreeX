@@ -132,7 +132,10 @@ public sealed record PageTextBoxBlock(
     string Text,
     PresentationRgb? Fill,
     byte FillAlpha,
-    PresentationRgb Outline,
+    // R91-commands-insert-object-5-1: null when the text box's line is explicitly suppressed
+    // (TextBoxModel.OutlineHasNoFill) -- mirrors Fill's "no paint" convention instead of forcing a
+    // border Excel never drew.
+    PresentationRgb? Outline,
     double OutlineThickness,
     PageTextFont Font);
 

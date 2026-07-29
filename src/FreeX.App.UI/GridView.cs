@@ -1064,10 +1064,11 @@ public partial class GridView : FrameworkElement
 
     private static Pen MakePageBreakPen()
     {
-        var pen = new Pen(new SolidColorBrush(Color.FromRgb(0, 103, 192)), 2)
-        {
-            DashStyle = new DashStyle([6.0, 4.0], 0)
-        };
+        // R91-render-frozen-print-titles-5-1: real Excel draws a MANUAL page break as a thick SOLID
+        // line, reserving dashed strokes for AUTOMATIC breaks (MakePageBreakAutomaticPen below) -- the
+        // opposite convention from what this pen used to apply -- so a manual break stays visually
+        // distinct from one Excel inserted on its own.
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(0, 103, 192)), 2);
         pen.Freeze();
         return pen;
     }

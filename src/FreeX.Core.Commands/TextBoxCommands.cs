@@ -25,7 +25,14 @@ public sealed class AddTextBoxCommand : IWorkbookCommand
             Anchor = anchor,
             Text = text,
             Width = width,
-            Height = height
+            Height = height,
+            // R91-commands-insert-object-5-1: Excel's Insert > Text Box always creates a
+            // transparent, borderless box (No Fill, No Line) until the user explicitly adds one --
+            // override TextBoxModel's safe (always-bordered) class defaults here, at the one
+            // new-insert choke point, instead of changing them globally and affecting every
+            // loaded/imported text box that never goes through this constructor.
+            HasFill = false,
+            OutlineHasNoFill = true
         };
     }
 

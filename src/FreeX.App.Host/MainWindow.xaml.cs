@@ -157,6 +157,12 @@ public partial class MainWindow : Window, IWorkbookWindow
     private FreeXOptions _options;
     // _currentFilePath is declared as a delegating property in the dirty/save-state cluster above.
     private XlsxFeatureReport? _currentXlsxFeatureReport;
+    // Snapshot of _currentFilePath's on-disk write time taken at open (OpenWorkbookResult.
+    // SourceLastWriteTimeUtc), threaded into SaveWorkbookWriter.SaveAsync's expectedLastWriteTimeUtc
+    // so a save detects the file having been changed externally since open and warns instead of
+    // silently overwriting (WorkbookExternallyModifiedException). Null disables the guard (new/
+    // recovery-opened workbooks that have no meaningful "loaded from disk at time T" to compare).
+    private DateTime? _currentFileSourceLastWriteTimeUtc;
     // Set after OpenFileAsync prompts on a workbook.FileSharing.ReadOnlyRecommended/ReservationPassword
     // file and the user accepts opening it read-only (see ApplyReadOnlyRecommendedPromptIfNeeded in
     // MainWindow.Backstage.cs). ResolveExistingSaveTarget (MainWindow.WorkbookLifecycle.cs) reads this
@@ -286,6 +292,16 @@ public partial class MainWindow : Window, IWorkbookWindow
     // tracks how many pool entries are currently visible.
     private readonly List<System.Windows.Controls.Border> _formulaReferenceGridOverlayPool = [];
     private int _formulaReferenceGridOverlayActiveCount;
+    // R91-formula-editing-assist-5-3: parallel pool for each highlight overlay's drag-resize grip,
+    // plus the FormulaReferenceHighlight each active pool slot currently represents -- a grip's own
+    // MouseDown handler looks this up (by the grip's index in the pool) to know which reference
+    // (text span + GridRange) its drag should resize. Grown/hidden in lockstep with
+    // _formulaReferenceGridOverlayPool in RefreshFormulaReferenceGridOverlays.
+    private readonly List<System.Windows.Shapes.Rectangle> _formulaReferenceGridOverlayGripPool = [];
+    private readonly List<FormulaReferenceHighlight?> _formulaReferenceGridOverlayHighlights = [];
+    private FormulaReferenceHighlight? _formulaReferenceDragHighlight;
+    private System.Windows.Controls.TextBox? _formulaReferenceDragEditor;
+    private bool _formulaReferenceDragActive;
     private WatchWindowDialog? _watchWindowDialog;
     private bool _suppressValidationDropdownCommit;
     private GridResizePreviewSnapshot? _columnResizeSnapshot;
@@ -477,6 +493,13 @@ public partial class MainWindow : Window, IWorkbookWindow
                 _suppressNextCellValueAutoCompleteSuggestion = false;
                 if (!suppressed)
                     ApplyCellValueAutoCompleteSuggestion(FormulaBar);
+
+                // R91-formula-editing-assist-5-1/5-2: same function-name AutoComplete popup and
+                // live signature tooltip as the inline in-cell editor, for the "clicked straight
+                // into the Formula Bar" edit path where the inline editor never shows (see
+                // EditActiveCellInFormulaBar in MainWindow.Editing.cs).
+                RefreshFormulaFunctionAutocomplete(FormulaBar);
+                RefreshFormulaSignatureHelp(FormulaBar);
             }
         };
         

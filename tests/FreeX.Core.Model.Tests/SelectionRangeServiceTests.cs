@@ -53,11 +53,29 @@ public class SelectionRangeServiceTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void GetCurrentRegion_ReturnsNullForBlankActiveCell()
+    public void GetCurrentRegion_ReturnsJustTheCellForIsolatedBlankActiveCellFarFromData()
     {
+        // Real Excel's CurrentRegion never returns "nothing" -- an active cell with no
+        // content and no adjacent content on any side is its own current region (a 1x1
+        // range), just like Range("Z100").CurrentRegion in VBA on an empty sheet area.
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A"));
+
+        var region = SelectionRangeService.GetCurrentRegion(
+            sheet,
+            new CellAddress(sheet.Id, 5, 5));
+
+        region.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 5, 5),
+            new CellAddress(sheet.Id, 5, 5)));
+    }
+
+    [Fact]
+    public void GetCurrentRegion_ReturnsNullForCompletelyEmptySheet()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
 
         var region = SelectionRangeService.GetCurrentRegion(
             sheet,

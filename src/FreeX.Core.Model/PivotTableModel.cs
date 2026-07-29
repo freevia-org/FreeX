@@ -21,6 +21,14 @@ public sealed class PivotCacheModel
     public int? RefreshedVersion { get; set; }
     public string? RefreshedBy { get; set; }
     public string? RefreshedDateIso { get; set; }
+    /// <summary>
+    /// Verbatim &lt;pivotCacheRecords&gt; XML captured from the original package, kept only for cache
+    /// sources (External/Consolidation/Scenario) that have no live worksheet range the writer can
+    /// re-derive records from. Preserved as passthrough so an offline-cached query/consolidation
+    /// result is never silently truncated to an empty records part on re-save (data-loss risk).
+    /// Null for ordinary worksheet/table caches, whose records are always regenerated live.
+    /// </summary>
+    public string? RawRecordsXml { get; set; }
     public List<PivotCacheFieldModel> Fields { get; } = [];
 }
 

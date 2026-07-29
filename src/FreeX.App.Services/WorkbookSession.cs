@@ -1,6 +1,7 @@
 using FreeX.App.Presentation.Editing;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using CommandHistoryEntry = Free.Shared.Commands.CommandHistoryEntry;
@@ -2417,7 +2418,18 @@ public sealed class WorkbookSession
 
         var address = FormulaEditAddress ?? ActiveCell;
 
-        var cell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle, Workbook);
+        Cell cell;
+        try
+        {
+            cell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle, Workbook);
+        }
+        catch (FormulaParseException ex)
+        {
+            // Matches Excel's own refusal to commit a genuinely malformed formula (e.g. an
+            // unbalanced "=SUM(A1"): reject the entry instead of silently persisting broken
+            // formula text (R91-formula-editing-assist-5-4).
+            return new WorkbookCellEditResult(false, ex.Message, [], RecalcReport: null);
+        }
 
         // Enforce data validation the same way the WPF host's TryCreateCellFromEntryText does: a
         // Stop-alert rule blocks the entry outright, while a Warning/Information ("AskToContinue")

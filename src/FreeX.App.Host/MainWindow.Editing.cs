@@ -28,6 +28,21 @@ public partial class MainWindow
     // where Delete/Backspace reject the suggestion instead of re-triggering it.
     private bool _suppressNextCellValueAutoCompleteSuggestion;
 
+    // R91-formula-editing-assist-5-1/5-2: the function-name AutoComplete popup and the live
+    // argument-signature tooltip, lazily created the first time either is needed (mirroring
+    // _inlineEditor's own lazy construction). Both are driven by the portable planners in
+    // FreeX.App.Presentation.FormulaBar (FormulaFunctionAutocompletePlanner /
+    // FormulaSignatureHelpPlanner); this file only adapts WPF text/caret state into and out of them.
+    private System.Windows.Controls.Primitives.Popup? _functionAutocompletePopup;
+    private System.Windows.Controls.ListBox? _functionAutocompleteListBox;
+    private IReadOnlyList<string> _functionAutocompleteCandidates = [];
+    private int _functionAutocompleteTokenStart;
+    private int _functionAutocompleteTokenLength;
+    private System.Windows.Controls.Primitives.Popup? _signatureHelpPopup;
+    private System.Windows.Controls.TextBlock? _signatureHelpTextBlock;
+
+    private bool FunctionAutocompleteIsOpen => _functionAutocompletePopup?.IsOpen == true;
+
     private void EnterEditMode(double? clickX = null)
     {
         if (_selectionAnchor.HasValue)
@@ -143,6 +158,9 @@ public partial class MainWindow
                 _suppressNextCellValueAutoCompleteSuggestion = false;
                 if (!suppressed)
                     ApplyCellValueAutoCompleteSuggestion();
+
+                RefreshFormulaFunctionAutocomplete(_inlineEditor);
+                RefreshFormulaSignatureHelp(_inlineEditor);
             };
             _inlineFormulaReferenceOverlay = new System.Windows.Controls.TextBlock
             {
@@ -311,6 +329,200 @@ public partial class MainWindow
         {
             _applyingCellValueAutoCompleteSuggestion = false;
         }
+    }
+
+    // ── R91-formula-editing-assist-5-1: function-name AutoComplete popup ───────────────────────
+
+    /// <summary>
+    /// Recomputes and shows/hides the function-name AutoComplete popup for the given formula editor
+    /// (the inline in-cell editor or the Formula Bar), driven entirely by
+    /// <see cref="FormulaFunctionAutocompletePlanner"/>. Called on every formula-editor TextChanged
+    /// pass alongside the existing reference-highlight refresh.
+    /// </summary>
+    private void RefreshFormulaFunctionAutocomplete(System.Windows.Controls.TextBox editor)
+    {
+        if (!FormulaFunctionAutocompletePlanner.ShouldShowAutocomplete(
+                editor.Text, editor.CaretIndex, out var tokenStart, out var tokenLength, out var prefix))
+        {
+            HideFormulaFunctionAutocomplete();
+            return;
+        }
+
+        var candidates = FormulaFunctionAutocompletePlanner.BuildCandidates(
+            prefix,
+            BuiltInFunctions.Names,
+            _workbook.NamedRanges.Keys,
+            _workbook.Sheets.SelectMany(s => s.StructuredTables).Select(t => t.Name));
+
+        if (candidates.Count == 0)
+        {
+            HideFormulaFunctionAutocomplete();
+            return;
+        }
+
+        _functionAutocompleteCandidates = candidates;
+        _functionAutocompleteTokenStart = tokenStart;
+        _functionAutocompleteTokenLength = tokenLength;
+        ShowFormulaFunctionAutocomplete(editor, candidates);
+    }
+
+    private void ShowFormulaFunctionAutocomplete(System.Windows.Controls.TextBox editor, IReadOnlyList<string> candidates)
+    {
+        EnsureFunctionAutocompletePopup();
+        _functionAutocompleteListBox!.ItemsSource = candidates;
+        _functionAutocompleteListBox.SelectedIndex = 0;
+
+        var caretRect = editor.GetRectFromCharacterIndex(editor.CaretIndex);
+        _functionAutocompletePopup!.PlacementTarget = editor;
+        _functionAutocompletePopup.Placement = System.Windows.Controls.Primitives.PlacementMode.RelativePoint;
+        _functionAutocompletePopup.HorizontalOffset = caretRect.Left;
+        _functionAutocompletePopup.VerticalOffset = caretRect.Bottom;
+        _functionAutocompletePopup.IsOpen = true;
+    }
+
+    private void HideFormulaFunctionAutocomplete()
+    {
+        if (_functionAutocompletePopup is not null)
+            _functionAutocompletePopup.IsOpen = false;
+        _functionAutocompleteCandidates = [];
+    }
+
+    private void EnsureFunctionAutocompletePopup()
+    {
+        if (_functionAutocompletePopup is not null)
+            return;
+
+        _functionAutocompleteListBox = new System.Windows.Controls.ListBox
+        {
+            MaxHeight = 220,
+            Focusable = false,
+        };
+        _functionAutocompletePopup = new System.Windows.Controls.Primitives.Popup
+        {
+            Child = new System.Windows.Controls.Border
+            {
+                Background = System.Windows.Media.Brushes.White,
+                BorderBrush = System.Windows.Media.Brushes.Gray,
+                BorderThickness = new Thickness(1),
+                Child = _functionAutocompleteListBox
+            },
+            StaysOpen = true,
+            AllowsTransparency = true,
+        };
+    }
+
+    /// <summary>
+    /// Handles Up/Down/Tab/Enter/Escape while the function AutoComplete popup is open. Returns true
+    /// when the key was consumed by the popup, so the caller (InlineEditor_KeyDown) skips its normal
+    /// formula-editing handling for that key.
+    /// </summary>
+    private bool HandleFunctionAutocompleteKeyDown(System.Windows.Controls.TextBox editor, Key key)
+    {
+        if (!FunctionAutocompleteIsOpen)
+            return false;
+
+        switch (key)
+        {
+            case Key.Down:
+            case Key.Up:
+                _functionAutocompleteListBox!.SelectedIndex = FormulaFunctionAutocompletePlanner.MoveSelection(
+                    _functionAutocompleteListBox.SelectedIndex,
+                    _functionAutocompleteCandidates.Count,
+                    key == Key.Down ? 1 : -1);
+                return true;
+
+            case Key.Tab:
+            case Key.Enter:
+                if (_functionAutocompleteListBox!.SelectedItem is string chosen)
+                    CommitFunctionAutocomplete(editor, chosen);
+                return true;
+
+            case Key.Escape:
+                HideFormulaFunctionAutocomplete();
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    private void CommitFunctionAutocomplete(System.Windows.Controls.TextBox editor, string chosenName)
+    {
+        var (text, caretIndex) = FormulaFunctionAutocompletePlanner.Commit(
+            editor.Text, _functionAutocompleteTokenStart, _functionAutocompleteTokenLength, chosenName);
+        HideFormulaFunctionAutocomplete();
+        ApplyTextEdit(editor, new ExcelTextEdit(text, caretIndex, 0));
+        if (ReferenceEquals(editor, _inlineEditor))
+            FormulaBar.Text = text;
+        else if (_inlineEditor?.IsVisible == true)
+            _inlineEditor.Text = text;
+    }
+
+    // ── R91-formula-editing-assist-5-2: live argument-signature tooltip ────────────────────────
+
+    /// <summary>
+    /// Recomputes and shows/hides the live argument-signature tooltip for the given formula editor,
+    /// driven entirely by <see cref="FormulaSignatureHelpPlanner"/>. The current argument (the one
+    /// the caret sits inside) is rendered bold, matching Excel's own function ScreenTip.
+    /// </summary>
+    private void RefreshFormulaSignatureHelp(System.Windows.Controls.TextBox editor)
+    {
+        var info = FormulaSignatureHelpPlanner.Resolve(editor.Text, editor.CaretIndex);
+        if (info is null)
+        {
+            if (_signatureHelpPopup is not null)
+                _signatureHelpPopup.IsOpen = false;
+            return;
+        }
+
+        EnsureSignatureHelpPopup();
+        _signatureHelpTextBlock!.Inlines.Clear();
+        _signatureHelpTextBlock.Inlines.Add(new System.Windows.Documents.Run(info.FunctionName + "("));
+        for (var i = 0; i < info.Arguments.Count; i++)
+        {
+            if (i > 0)
+                _signatureHelpTextBlock.Inlines.Add(new System.Windows.Documents.Run(", "));
+
+            var argument = info.Arguments[i];
+            var displayName = argument.Optional ? $"[{argument.Name}]" : argument.Name;
+            var run = new System.Windows.Documents.Run(displayName)
+            {
+                FontWeight = argument.IsCurrent ? FontWeights.Bold : FontWeights.Normal
+            };
+            _signatureHelpTextBlock.Inlines.Add(run);
+        }
+        _signatureHelpTextBlock.Inlines.Add(new System.Windows.Documents.Run(")"));
+
+        var caretRect = editor.GetRectFromCharacterIndex(editor.CaretIndex);
+        _signatureHelpPopup!.PlacementTarget = editor;
+        _signatureHelpPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.RelativePoint;
+        _signatureHelpPopup.HorizontalOffset = caretRect.Left;
+        _signatureHelpPopup.VerticalOffset = caretRect.Top - 24;
+        _signatureHelpPopup.IsOpen = true;
+    }
+
+    private void EnsureSignatureHelpPopup()
+    {
+        if (_signatureHelpPopup is not null)
+            return;
+
+        _signatureHelpTextBlock = new System.Windows.Controls.TextBlock
+        {
+            Padding = new Thickness(4, 2, 4, 2),
+        };
+        _signatureHelpPopup = new System.Windows.Controls.Primitives.Popup
+        {
+            Child = new System.Windows.Controls.Border
+            {
+                Background = System.Windows.Media.Brushes.LightYellow,
+                BorderBrush = System.Windows.Media.Brushes.Gray,
+                BorderThickness = new Thickness(1),
+                Child = _signatureHelpTextBlock
+            },
+            StaysOpen = true,
+            AllowsTransparency = true,
+            IsHitTestVisible = false,
+        };
     }
 
     /// <summary>
@@ -541,6 +753,9 @@ public partial class MainWindow
             _inlineEditorChrome.Visibility = Visibility.Collapsed;
         _inlineEditorChromeBaseRect = null;
         SheetGrid.EditingCell = null;
+        HideFormulaFunctionAutocomplete();
+        if (_signatureHelpPopup is not null)
+            _signatureHelpPopup.IsOpen = false;
         FormulaReferenceTextOverlay.Clear(_inlineFormulaReferenceOverlay);
         ClearFormulaReferenceGridOverlays();
         if (_textBoxInlineEditor?.IsVisible != true &&
@@ -552,6 +767,16 @@ public partial class MainWindow
 
     private void InlineEditor_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        // R91-formula-editing-assist-5-1: while the function-name AutoComplete popup is open, Up/
+        // Down/Tab/Enter/Escape drive the popup instead of their normal formula-editing meaning
+        // (moving the caret, cycling a reference, committing the edit). Checked first, before any
+        // other key handling below, exactly as Excel's own popup takes priority over those keys.
+        if (_inlineEditor is not null && HandleFunctionAutocompleteKeyDown(_inlineEditor, e.Key))
+        {
+            e.Handled = true;
+            return;
+        }
+
         // R83-app-flashfill-autocomplete-5-2: Backspace/Delete reject a live AutoComplete
         // suggestion (Excel behavior) rather than instantly re-offering the same completion the
         // deletion just removed. The key itself is left unhandled so it still performs its normal
@@ -1333,7 +1558,25 @@ public partial class MainWindow
 
     private bool TryCreateCellFromEntryText(CellAddress addr, string text, out Cell newCell)
     {
-        newCell = CellEntryParser.CreateCell(text, addr, _options.UseR1C1ReferenceStyle, _workbook);
+        try
+        {
+            newCell = CellEntryParser.CreateCell(text, addr, _options.UseR1C1ReferenceStyle, _workbook);
+        }
+        catch (FormulaParseException)
+        {
+            // Matches Excel's own "we found an error in this formula" refusal to leave edit mode
+            // for genuinely malformed formula syntax (e.g. an unbalanced "=SUM(A1") -- reject the
+            // entry outright instead of silently committing broken formula text that would
+            // otherwise only ever surface as a #VALUE! error later, during recalculation
+            // (R91-formula-editing-assist-5-4).
+            newCell = null!;
+            ShowOwnedMessage(
+                "Microsoft Excel found an error in this formula. Please check the formula and try again.",
+                "Microsoft Excel",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return false;
+        }
 
         var validationSheet = _workbook.GetSheet(_currentSheetId);
         if (validationSheet != null)

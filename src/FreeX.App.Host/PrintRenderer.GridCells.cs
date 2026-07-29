@@ -26,6 +26,11 @@ public static partial class PrintRenderer
     // grayscale print preview.
     private static readonly Pen BlackAndWhiteGridlinePen = new(Brushes.Black, 0.5);
 
+    // Matches GridView.cs's ValidationCirclePen (red 226,28,33 @ 1.5pt) exactly, so the printed
+    // circle is visually identical to the on-screen Circle Invalid Data overlay.
+    private static readonly Pen PrintedValidationCirclePen =
+        new(new SolidColorBrush(Color.FromRgb(226, 28, 33)), 1.5);
+
     private static void DrawPrintedGridCells(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
@@ -269,6 +274,67 @@ public static partial class PrintRenderer
         if (sheet is { Sparklines.Count: > 0 })
         {
             DrawPrintedSparklines(dc, sheet, measurement, pageRows, pageColumns, gridLeft, gridTop);
+        }
+
+        // Data > Data Validation > Circle Invalid Data is a screen-only overlay drawn above the
+        // grid (GridView.Overlays.cs RenderValidationCircles) that reads a shell-side
+        // DependencyProperty the interactive grid instance owns -- Sheet.ValidationCircleCells is
+        // the sheet/session-level mirror of that same circled-cell set specifically so a headless
+        // consumer like this print path can read it too. Without this call Print/Print
+        // Preview/PDF/XPS silently omitted every circle while still printing the cell's plain
+        // value/fill/borders (R91-print-twin-two-tier-sweep-1), just like the sparkline gap above.
+        if (sheet is { ValidationCircleCells.Count: > 0 })
+        {
+            DrawPrintedValidationCircles(dc, sheet.ValidationCircleCells, measurement, pageRows, pageColumns, gridLeft, gridTop);
+        }
+    }
+
+    /// <summary>
+    /// Mirrors GridView.Overlays.cs's RenderValidationCircles geometry (same 0.38/0.32
+    /// width/height-fraction radii, same red ellipse stroke) but against the printed page's own
+    /// row/column measurement instead of the interactive viewport's on-screen row/column offsets,
+    /// so a printed/PDF page shows the identical red validation-circle ovals the user sees live.
+    /// </summary>
+    private static void DrawPrintedValidationCircles(
+        DrawingContext dc,
+        IReadOnlyList<CellAddress> circledCells,
+        PrintGridMeasurement measurement,
+        IReadOnlyList<uint> pageRows,
+        IReadOnlyList<uint> pageColumns,
+        double gridLeft,
+        double gridTop)
+    {
+        var rowIndexLookup = new Dictionary<uint, int>(pageRows.Count);
+        for (var i = 0; i < pageRows.Count; i++)
+            rowIndexLookup[pageRows[i]] = i;
+
+        var colIndexLookup = new Dictionary<uint, int>(pageColumns.Count);
+        for (var i = 0; i < pageColumns.Count; i++)
+            colIndexLookup[pageColumns[i]] = i;
+
+        foreach (var cell in circledCells)
+        {
+            if (!rowIndexLookup.TryGetValue(cell.Row, out var rowIndex) ||
+                !colIndexLookup.TryGetValue(cell.Col, out var colIndex))
+            {
+                continue;
+            }
+
+            var colWidth = measurement.ColumnWidthAt(colIndex);
+            var rowHeight = measurement.RowHeightAt(rowIndex);
+            if (colWidth <= 0 || rowHeight <= 0)
+                continue;
+
+            var rect = new Rect(
+                gridLeft + measurement.ColumnOffset(colIndex),
+                gridTop + measurement.RowOffset(rowIndex),
+                colWidth,
+                rowHeight);
+
+            var radiusX = Math.Max(2.0, rect.Width * 0.38);
+            var radiusY = Math.Max(2.0, rect.Height * 0.32);
+            var center = new Point(rect.Left + rect.Width / 2.0, rect.Top + rect.Height / 2.0);
+            dc.DrawEllipse(null, PrintedValidationCirclePen, center, radiusX, radiusY);
         }
     }
 

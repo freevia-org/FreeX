@@ -702,7 +702,11 @@ public static class WorkbookPdfContentBuilder
             if (textBox.Fill is { } fill)
                 AddFillRect(ops, textBox.Bounds, fill, pageHeightPoints, scaleX, scaleY, textBox.FillAlpha / 255d);
 
-            AddStrokeRect(ops, textBox.Bounds, textBox.Outline, textBox.OutlineThickness, pageHeightPoints, scaleX, scaleY);
+            // R91-commands-insert-object-5-1: Outline is null when the text box's line is
+            // explicitly suppressed (TextBoxModel.OutlineHasNoFill) -- emit no stroke rather than
+            // always forcing one.
+            if (textBox.Outline is { } outline)
+                AddStrokeRect(ops, textBox.Bounds, outline, textBox.OutlineThickness, pageHeightPoints, scaleX, scaleY);
 
             if (!string.IsNullOrWhiteSpace(textBox.Text))
             {

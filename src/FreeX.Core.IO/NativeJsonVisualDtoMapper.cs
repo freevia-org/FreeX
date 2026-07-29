@@ -127,6 +127,11 @@ internal static class NativeJsonVisualDtoMapper
         OutlineColor = textBox.OutlineColor is { } outline ? FormatColor(outline) : null,
         FillThemeColor = FromThemeColorReference(textBox.FillThemeColor),
         OutlineThemeColor = FromThemeColorReference(textBox.OutlineThemeColor),
+        // R91-commands-insert-object-5-1: round-trip explicit line suppression (e.g. a freshly
+        // inserted text box, which now defaults to No Line) through the native format too --
+        // mirrors DrawingShapeDto.OutlineHasNoFill. Defaults false so pre-existing .fxl files
+        // without this field keep their prior always-bordered rendering.
+        OutlineHasNoFill = textBox.OutlineHasNoFill,
         Title = textBox.Title,
         AltText = textBox.AltText,
         TextFontFamily = textBox.TextFontFamily,
@@ -166,6 +171,7 @@ internal static class NativeJsonVisualDtoMapper
                 OutlineColor = textBoxDto.OutlineColor is { } outline ? ParseColor(outline) : null,
                 FillThemeColor = ToThemeColorReference(textBoxDto.FillThemeColor),
                 OutlineThemeColor = ToThemeColorReference(textBoxDto.OutlineThemeColor),
+                OutlineHasNoFill = textBoxDto.OutlineHasNoFill,
                 Title = textBoxDto.Title,
                 AltText = textBoxDto.AltText,
                 TextFontFamily = textBoxDto.TextFontFamily,
@@ -413,6 +419,9 @@ internal class TextBoxDto
     public string? OutlineColor { get; set; }
     public ThemeColorReferenceDto? FillThemeColor { get; set; }
     public ThemeColorReferenceDto? OutlineThemeColor { get; set; }
+    // R91-commands-insert-object-5-1: mirrors DrawingShapeDto.OutlineHasNoFill; defaults false so
+    // pre-existing .fxl files (saved before this field existed) keep drawing a border.
+    public bool OutlineHasNoFill { get; set; }
     public string? Title { get; set; }
     public string? AltText { get; set; }
     // ── Text formatting (txBody) — mirrors DrawingShapeDto's ShapeText* fields ──────────────

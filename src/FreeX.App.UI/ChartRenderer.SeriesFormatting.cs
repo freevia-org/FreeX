@@ -330,7 +330,32 @@ public static partial class ChartRenderer
         }
         if (!format.NoLine && format.StrokeThickness is { } thickness)
             series.StrokeThickness = thickness;
+        // R91-render-chart-series-format-5-2: "Invert if negative" (<c:invertIfNegative>) was parsed
+        // and re-serialized but never consumed at render time. BarSeries (the horizontal Bar/ThreeDBar
+        // renderer) has a built-in NegativeFillColor OxyPlot honors per-item against BaseValue, so
+        // wiring it here is the single choke point for both the cell-lookup and embedded-data render
+        // paths that call ApplyBarFormat. No distinct "invert color" is modeled/round-tripped
+        // separately from the flag, so this mirrors Excel's own default alternate fill (white) for a
+        // freshly-checked "Invert if negative" box with no further customization.
+        series.NegativeFillColor = format.InvertIfNegative == true && !format.NoFill
+            ? OxyColors.White
+            : OxyColors.Automatic;
     }
+
+    /// <summary>
+    /// Returns the fill color a single bar/column ITEM should use when Excel's "Invert if negative"
+    /// (<see cref="ChartSeriesFormat.InvertIfNegative"/>) applies to it -- i.e. the item's own value
+    /// is negative and the series has the flag set -- or null when the normal series/point fill
+    /// should be used instead (value non-negative, flag unset/false, or the series is fully
+    /// transparent via NoFill). Used for <see cref="RectangleBarSeries"/> (Column/ThreeDColumn),
+    /// which -- unlike <see cref="BarSeries"/> -- has no built-in negative-fill property, so the
+    /// inversion must be applied per <c>RectangleBarItem.Color</c> at the point the item is created.
+    /// See R91-render-chart-series-format-5-2.
+    /// </summary>
+    internal static OxyColor? ResolveInvertIfNegativeItemColor(ChartSeriesFormat? format, double value) =>
+        format?.InvertIfNegative == true && value < 0 && !format.NoFill
+            ? OxyColors.White
+            : null;
 
     private static void ApplyPieFormat(PieSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {

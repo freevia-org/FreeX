@@ -29,9 +29,11 @@ public static class SelectionRangeService
 
     public static GridRange? GetCurrentRegion(Sheet sheet, CellAddress activeCell)
     {
-        if (!HasCellContent(sheet.GetCell(activeCell)))
-            return null;
-
+        // Excel's Current Region is a purely geometric notion -- "the range bounded by any
+        // combination of blank rows and blank columns" -- and does NOT require the active cell
+        // itself to contain data. A blank cell nested inside a solid data block (a "hole") still
+        // expands to the surrounding block, exactly like a filled cell would. Only a sheet with
+        // no content anywhere (no used range at all) has no region to expand into.
         var usedRange = sheet.GetUsedRange();
         if (usedRange is null)
             return null;

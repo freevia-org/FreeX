@@ -492,6 +492,26 @@ public class ProtectionGuardCoverageTests
                     transpose: false);
             },
 
+            // R91-io-clipboard-image-formats-5-2: pasting a floating picture anchored inside the
+            // copied range is EditObjects-gated, mirroring InsertPictureCommand/PasteMergedRegionsCommand.
+            ["PastePicturesCommand"] = (wb, sheet) =>
+            {
+                var anchor = new CellAddress(sheet.Id, 1, 1);
+                var picture = new PictureModel
+                {
+                    Anchor = anchor,
+                    Kind = PictureKind.Image,
+                    ImageBytes = [1, 2, 3],
+                    ContentType = "image/png"
+                };
+                return new PastePicturesCommand(
+                    sheet.Id,
+                    new GridRange(anchor, anchor),
+                    new CellAddress(sheet.Id, 5, 5),
+                    [picture],
+                    transpose: false);
+            },
+
             // ---- Goal Seek ----
             ["GoalSeekCommand"] = (wb, sheet) =>
                 new GoalSeekCommand(new CellAddress(sheet.Id, 1, 1), 42.0),
@@ -636,6 +656,24 @@ public class ProtectionGuardCoverageTests
                     new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
                     new CellAddress(sheet.Id, 1, 2),
                     SparklineKind.Line),
+
+            // R91: duplicating a drawing object is governed by the EditObjects protection bit
+            // (DrawingShapeCommandGuards/ChartCommandGuards.RejectIfEditObjectsBlocked). The command
+            // resolves the source object BEFORE the guard runs, so seed a real shape to duplicate.
+            ["DuplicateDrawingObjectCommand"] = (wb, sheet) =>
+            {
+                var source = new DrawingShapeModel
+                {
+                    Anchor = new CellAddress(sheet.Id, 2, 2),
+                    Kind = DrawingShapeKind.Rectangle
+                };
+                sheet.DrawingShapes.Add(source);
+                return new DuplicateDrawingObjectCommand(
+                    sheet.Id,
+                    sheet.Id,
+                    SelectionPaneObjectKind.Shape,
+                    source.Id);
+            },
 
             ["ConfigureSparklineCommand"] = (wb, sheet) =>
             {

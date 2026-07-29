@@ -169,7 +169,11 @@ internal static class DuplicateSheetDrawingCloner
             IsSourceLoaded = false
         };
 
-    private static DrawingShapeModel CloneDrawingShape(DrawingShapeModel shape, SheetId copyId) =>
+    /// <summary>
+    /// Also used by <c>DuplicateDrawingObjectCommand</c> (single-object Ctrl+C/Ctrl+V) --
+    /// R91-io-clipboard-image-formats-5-1. See <see cref="CloneChart"/> for why this is internal.
+    /// </summary>
+    internal static DrawingShapeModel CloneDrawingShape(DrawingShapeModel shape, SheetId copyId) =>
         new()
         {
             Name = shape.Name,
@@ -278,6 +282,11 @@ internal static class DuplicateSheetDrawingCloner
             LinkedImageTarget = picture.LinkedImageTarget,
             Title = picture.Title,
             AltText = picture.AltText,
+            // R91-print-twin-two-tier-synthetic-sweep-2: preserve the r90 "Mark as decorative" flag
+            // on the clone -- without it, a duplicated decorative picture reverts to the default
+            // false and falsely fails AccessibilityCheckerService's missing-alt-text rule even
+            // though real Excel keeps the decorative marking across Move-or-Copy/Duplicate Sheet.
+            IsDecorative = picture.IsDecorative,
             Width = picture.Width,
             Height = picture.Height,
             LockAspectRatio = picture.LockAspectRatio,
@@ -307,7 +316,12 @@ internal static class DuplicateSheetDrawingCloner
         return copiedPicture;
     }
 
-    private static ChartModel CloneChart(ChartModel chart, SheetId sourceSheetId, SheetId copyId) =>
+    /// <summary>
+    /// Also used by <c>DuplicateDrawingObjectCommand</c> (single-object Ctrl+C/Ctrl+V, not just
+    /// whole-sheet Duplicate Sheet) -- R91-io-clipboard-image-formats-5-1. Bumped from private to
+    /// internal for that reuse rather than duplicating this ~250-property clone list a second time.
+    /// </summary>
+    internal static ChartModel CloneChart(ChartModel chart, SheetId sourceSheetId, SheetId copyId) =>
         new()
         {
             Name = chart.Name,

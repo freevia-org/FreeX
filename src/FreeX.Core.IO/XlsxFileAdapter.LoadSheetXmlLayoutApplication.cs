@@ -178,6 +178,9 @@ public sealed partial class XlsxFileAdapter
                 HasFill = textBoxPart.HasFill,
                 FillColor = textBoxPart.FillColor,
                 OutlineColor = textBoxPart.OutlineColor,
+                // R91-commands-insert-object-5-1: preserve an authored <a:ln><a:noFill/> so a loaded
+                // borderless text box doesn't regain the fallback gray border on render or re-save.
+                OutlineHasNoFill = textBoxPart.OutlineHasNoFill,
                 FillThemeColor = textBoxPart.FillThemeColor,
                 OutlineThemeColor = textBoxPart.OutlineThemeColor,
                 // backlog textbox-6-2: populate the txBody text-formatting fields read in

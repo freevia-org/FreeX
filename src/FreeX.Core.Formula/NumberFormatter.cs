@@ -522,6 +522,17 @@ public static partial class NumberFormatter
         if (string.IsNullOrEmpty(format) || IsGeneralFormat(format))
             return FormatNumberGeneral(value, targetWidthCharacters);
 
+        // A "General" keyword DECORATED with plain literal text and/or a sign character (e.g.
+        // "-General" as the negative section of "General;-General", or a quoted-prefixed
+        // "\"Value: \"General") is not itself a numeric pattern -- Excel renders the value's
+        // General-format text with the surrounding literals applied verbatim, exactly like the
+        // exact "General" case just above. This must run before the generic pipeline below,
+        // since without any 0/#/? placeholder that pipeline falls through to .NET's custom
+        // numeric formatter, which treats the whole string (including the word "General") as
+        // literal characters and ignores the value entirely.
+        if (TryFormatDecoratedGeneral(value, format, out var decoratedGeneralText))
+            return NativeDigits(decoratedGeneralText);
+
         if (TryResolveSpecialDateTimeLocaleToken(format, out var specialDateTimeToken))
         {
             try
@@ -587,9 +598,19 @@ public static partial class NumberFormatter
             if (value < 0)
                 return BuildInvalidDateTimeIndicator(format, targetWidthCharacters);
 
+            // A serial past the representable date range (e.g. year > 9999) is just as
+            // fundamentally invalid for a calendar date/time format as a negative one -- Excel
+            // shows the same all-hash invalid-value indicator, not the raw number. Use the
+            // bounds-checked TrySerialToDate (already relied on elsewhere, e.g.
+            // ExcelDateSystem.TrySerialToDate's own callers) instead of catching the
+            // ArgumentOutOfRangeException that the unchecked SerialToDate throws here, since that
+            // exception was being swallowed by the catch-all below and replaced with the plain
+            // numeric text.
+            if (!ExcelDateSystem.TrySerialToDate(value, uses1904DateSystem, out var dt))
+                return BuildInvalidDateTimeIndicator(format, targetWidthCharacters);
+
             try
             {
-                var dt = ExcelDateSystem.SerialToDate(value, uses1904DateSystem);
                 return NativeDigits(FormatDateTimeValue(dt, format, dateTimeFormat));
             }
             catch { return value.ToString(CultureInfo.InvariantCulture); }
@@ -908,6 +929,42 @@ public static partial class NumberFormatter
 
     private static bool IsGeneralFormat(string format) =>
         string.Equals(format, "General", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Recognizes a "General" keyword that is DECORATED with surrounding plain literal text
+    /// and/or a sign character -- e.g. "-General" (the negative section of the common
+    /// "General;-General" negative-coloring trick) or "\"Value: \"General" -- and renders it as
+    /// the value's General-format text with those literals applied verbatim. Mirrors the
+    /// CJK/DBNum path's analogous <see cref="TrySplitNativeGeneralAffixes"/>, which only fires
+    /// when a "[DBNum..]"/"[NatNum..]" bracket is present; this covers the ordinary (non-CJK)
+    /// case those brackets don't cover. Any leading "[Color]" bracket has already been stripped
+    /// out by <see cref="ParseSection"/> by the time a section's format text reaches here, so
+    /// only quoted/escaped literal text and bare literal characters remain to split around.
+    /// </summary>
+    private static bool TryFormatDecoratedGeneral(double value, string format, out string text)
+    {
+        text = "";
+        var visible = UnquoteNativeNumberFormatText(format);
+
+        // Any numeric/fraction placeholder means this is a real custom numeric pattern, not a
+        // decorated General keyword -- leave it to the normal formatting pipeline.
+        if (visible.IndexOfAny(['0', '#', '?']) >= 0)
+            return false;
+
+        foreach (var token in NativeGeneralFormatTokens)
+        {
+            var index = visible.IndexOf(token, StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+                continue;
+
+            var prefix = visible[..index];
+            var suffix = visible[(index + token.Length)..];
+            text = prefix + FormatNumberGeneral(value) + suffix;
+            return true;
+        }
+
+        return false;
+    }
 
     // ── Date/time formatting ──────────────────────────────────────────────────
 

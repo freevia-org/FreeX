@@ -41,7 +41,8 @@ public sealed class OpenWorkbookLoader
             result.FeatureReport,
             result.DisplayName,
             result.OpenedAsTemplate,
-            result.LoadWarnings);
+            result.LoadWarnings,
+            result.SourceLastWriteTimeUtc);
     }
 
     private static OpenProgressUpdate ToHostProgressUpdate(WorkbookOpenProgressUpdate update) =>
@@ -58,4 +59,10 @@ public sealed record OpenWorkbookResult(
     XlsxFeatureReport? FeatureReport,
     string DisplayName,
     bool OpenedAsTemplate,
-    IReadOnlyList<string>? LoadWarnings = null);
+    IReadOnlyList<string>? LoadWarnings = null,
+    // Snapshot of the source file's on-disk write time taken at open (see
+    // WorkbookOpenResult.SourceLastWriteTimeUtc). The host stashes this alongside
+    // _currentFilePath and threads it into SaveWorkbookWriter.SaveAsync so a save that would
+    // silently overwrite a concurrent external edit is caught instead
+    // (WorkbookExternallyModifiedException).
+    DateTime? SourceLastWriteTimeUtc = null);
