@@ -5,6 +5,8 @@ param(
     [switch]$HiddenWord
 )
 
+$ErrorActionPreference = 'Stop'
+
 $word = $null
 $document = $null
 $ownsWord = $false
