@@ -63,6 +63,8 @@ public enum SmartArtLayoutPreset
 {
     BasicProcess,
     AccentProcess,
+    AscendingProcess,
+    DescendingProcess,
     BasicTimeline,
     PhasedProcess,
     CircleAccentTimeline,
@@ -198,6 +200,8 @@ public static class SmartArtAuthoringPlanner
     public const string SmartArtColorsGalleryCommandId = "freep.smartart.colors.gallery";
     public const string BasicProcessLayoutCommandId = "freep.smartart.layout.basic-process";
     public const string AccentProcessLayoutCommandId = "freep.smartart.layout.accent-process";
+    public const string AscendingProcessLayoutCommandId = "freep.smartart.layout.ascending-process";
+    public const string DescendingProcessLayoutCommandId = "freep.smartart.layout.descending-process";
     public const string BasicTimelineLayoutCommandId = "freep.smartart.layout.basic-timeline";
     public const string CircleAccentTimelineLayoutCommandId = "freep.smartart.layout.circle-accent-timeline";
     public const string PhasedProcessLayoutCommandId = "freep.smartart.layout.phased-process";
@@ -485,6 +489,10 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.AccentProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/accentProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.AscendingProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/ascendingProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.DescendingProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/descendingProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.BasicTimeline =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicTimeline", SmartArtFamily.Process),
             SmartArtLayoutPreset.PhasedProcess =>

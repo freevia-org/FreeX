@@ -234,6 +234,10 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicProcess)));
         registry.Register(SmartArtAuthoringPlanner.AccentProcessLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.AccentProcess)));
+        registry.Register(SmartArtAuthoringPlanner.AscendingProcessLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.AscendingProcess)));
+        registry.Register(SmartArtAuthoringPlanner.DescendingProcessLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.DescendingProcess)));
         registry.Register(SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicTimeline)));
         registry.Register(SmartArtAuthoringPlanner.CircleAccentTimelineLayoutCommandId,

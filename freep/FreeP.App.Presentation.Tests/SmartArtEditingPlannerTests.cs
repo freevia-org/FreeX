@@ -17,6 +17,8 @@ public sealed class SmartArtEditingPlannerTests
     [Theory]
     [InlineData(SmartArtLayoutPreset.BasicProcess, "basicProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.AccentProcess, "accentProcess", SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.AscendingProcess, "ascendingProcess", SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.DescendingProcess, "descendingProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.BasicTimeline, "basicTimeline", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.PhasedProcess, "phasedProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.CircleAccentTimeline, "circleAccentTimeline", SmartArtFamily.Process)]

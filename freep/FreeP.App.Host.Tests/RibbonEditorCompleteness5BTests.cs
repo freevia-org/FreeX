@@ -206,6 +206,8 @@ public class RibbonEditorCompleteness5BTests
         var expected = new Dictionary<string, SmartArtLayoutPreset>
         {
             [SmartArtAuthoringPlanner.AccentProcessLayoutCommandId] = SmartArtLayoutPreset.AccentProcess,
+            [SmartArtAuthoringPlanner.AscendingProcessLayoutCommandId] = SmartArtLayoutPreset.AscendingProcess,
+            [SmartArtAuthoringPlanner.DescendingProcessLayoutCommandId] = SmartArtLayoutPreset.DescendingProcess,
             [SmartArtAuthoringPlanner.SegmentedProcessLayoutCommandId] = SmartArtLayoutPreset.SegmentedProcess,
             [SmartArtAuthoringPlanner.CircleAccentTimelineLayoutCommandId] = SmartArtLayoutPreset.CircleAccentTimeline,
             [SmartArtAuthoringPlanner.ChevronProcessLayoutCommandId] = SmartArtLayoutPreset.ChevronProcess,
