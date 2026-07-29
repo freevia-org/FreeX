@@ -59,6 +59,135 @@ public sealed class DrawingObjectVisualPlannerTests
     }
 
     [Fact]
+    public void RichShapeTextLayout_PreservesRunsParagraphBreaksAndCaretStops()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 120, 80);
+        var first = new Paragraph { Formatting = ParagraphFormatting.Default with { Alignment = TextAlignment.Center } };
+        first.Runs.Add(new Run("Bold", RunFormatting.Default with
+        {
+            FontFamily = "Arial",
+            FontSizePt = 14,
+            Bold = true,
+            Italic = true,
+            Underline = true,
+            Strikethrough = true,
+            ColorHex = "#C00000"
+        }));
+        first.Runs.Add(new Run(" plain", RunFormatting.Default));
+        var second = new Paragraph();
+        second.Runs.Add(new Run("next", RunFormatting.Default with { FontSizePt = 10 }));
+        shape.TextParagraphs.Add(first);
+        shape.TextParagraphs.Add(second);
+
+        var textPlan = DrawingObjectTextLayoutPlanner.BuildTextPlan(shape);
+        var layout = DrawingObjectTextLayoutPlanner.LayoutPlan(
+            textPlan,
+            120,
+            80,
+            (text, formatting) => (formatting.FontSizePt ?? 9) * (formatting.Bold ? 2 : 1),
+            formatting => formatting.FontSizePt ?? 9);
+
+        textPlan.Paragraphs.Should().HaveCount(2);
+        layout.Glyphs.Should().Contain(glyph => glyph.Character == 'B'
+            && glyph.ParagraphIndex == 0
+            && glyph.RunIndex == 0
+            && glyph.Formatting.FontFamily == "Arial"
+            && glyph.Formatting.Bold
+            && glyph.Formatting.Underline
+            && glyph.Formatting.Strikethrough
+            && glyph.Formatting.ColorHex == "#C00000");
+        layout.Glyphs.Should().Contain(glyph => glyph.Character == 'p' && glyph.ParagraphIndex == 0 && glyph.RunIndex == 1);
+        layout.Glyphs.Should().Contain(glyph => glyph.Character == 'n' && glyph.ParagraphIndex == 1);
+        layout.Glyphs.Single(glyph => glyph.Character == 'n' && glyph.ParagraphIndex == 1)
+            .Y.Should().BeGreaterThan(layout.Glyphs.Single(glyph => glyph.Character == 'B').Y);
+        layout.CaretStops.Should().Contain(stop => stop.ParagraphIndex == 0 && stop.RunIndex == 0 && stop.Offset == 4);
+        layout.CaretStops.Should().Contain(stop => stop.ParagraphIndex == 1 && stop.RunIndex == 0 && stop.Offset == 0);
+    }
+
+    [Fact]
+    public void TextLayout_UsesMonotonicLineIndexesAcrossHardBreaks()
+    {
+        var layout = DrawingObjectTextLayoutPlanner.LayoutPlan(
+            new DrawingObjectTextPlan("A\nB", ShapeTextDirection.Horizontal),
+            widthDip: 80,
+            heightDip: 40,
+            (text, _) => 8,
+            _ => 10);
+
+        layout.Glyphs.Single(glyph => glyph.Character == 'A').LineIndex.Should().Be(0);
+        layout.Glyphs.Single(glyph => glyph.Character == 'B').LineIndex.Should().Be(1);
+        layout.Glyphs.Select(glyph => glyph.LineIndex).Distinct().Should().Equal(0, 1);
+    }
+
+    [Fact]
+    public void TextLayout_TreatsCrLfAsOneHardBreak()
+    {
+        var layout = DrawingObjectTextLayoutPlanner.LayoutPlan(
+            new DrawingObjectTextPlan("A\r\nB", ShapeTextDirection.Horizontal),
+            widthDip: 80,
+            heightDip: 40,
+            (text, _) => 8,
+            _ => 10);
+
+        layout.Glyphs.Select(glyph => glyph.Character).Should().Equal('A', 'B');
+        layout.Glyphs.Single(glyph => glyph.Character == 'B').LineIndex.Should().Be(1);
+        layout.Glyphs.Should().OnlyContain(glyph => glyph.LineIndex == 0 || glyph.LineIndex == 1);
+        layout.CaretStops.Should().Contain(stop => stop.Offset == 3 && stop.LineIndex == 1);
+    }
+
+    [Fact]
+    public void TextLayout_WrapsAtFittingWordBoundariesAndFallsBackToCharacters()
+    {
+        var wordWrapped = DrawingObjectTextLayoutPlanner.LayoutPlan(
+            new DrawingObjectTextPlan("one two", ShapeTextDirection.Horizontal),
+            widthDip: 48,
+            heightDip: 40,
+            (text, _) => 8,
+            _ => 10);
+
+        wordWrapped.Glyphs.Where(glyph => glyph.LineIndex == 0)
+            .Select(glyph => glyph.Character).Should().Equal('o', 'n', 'e', ' ');
+        wordWrapped.Glyphs.Where(glyph => glyph.LineIndex == 1)
+            .Select(glyph => glyph.Character).Should().Equal('t', 'w', 'o');
+
+        var characterFallback = DrawingObjectTextLayoutPlanner.LayoutPlan(
+            new DrawingObjectTextPlan("abcdef", ShapeTextDirection.Horizontal),
+            widthDip: 48,
+            heightDip: 40,
+            (text, _) => 10,
+            _ => 10);
+
+        characterFallback.Glyphs.Where(glyph => glyph.LineIndex == 0)
+            .Select(glyph => glyph.Character).Should().Equal('a', 'b', 'c', 'd');
+        characterFallback.Glyphs.Where(glyph => glyph.LineIndex == 1)
+            .Select(glyph => glyph.Character).Should().Equal('e', 'f');
+
+        var richOverlongWord = new DrawingObjectTextPlan("", ShapeTextDirection.Horizontal)
+        {
+            Paragraphs =
+            [
+                new DrawingObjectTextParagraphPlan(
+                    TextAlignment.Left,
+                    [
+                        new DrawingObjectTextRunPlan("fo", RunFormatting.Default with { Bold = true }, 0, 0),
+                        new DrawingObjectTextRunPlan("obar", RunFormatting.Default, 0, 1)
+                    ])
+            ]
+        };
+        var richFallback = DrawingObjectTextLayoutPlanner.LayoutPlan(
+            richOverlongWord,
+            widthDip: 40,
+            heightDip: 40,
+            (text, _) => 8,
+            _ => 10);
+
+        richFallback.Glyphs.Where(glyph => glyph.LineIndex == 0)
+            .Select(glyph => glyph.Character).Should().Equal('f', 'o', 'o', 'b');
+        richFallback.Glyphs.Where(glyph => glyph.LineIndex == 1)
+            .Select(glyph => glyph.Character).Should().Equal('a', 'r');
+    }
+
+    [Fact]
     public void WordArtPlan_UsesTheWordArtCentreTransform()
     {
         var wordArt = new WordArt("Transform", WordArtStyle.GlowBlue, 36)

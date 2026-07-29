@@ -146,6 +146,35 @@ public sealed class CommonDialogChromeParityTests
     }
 
     [Fact]
+    public void Shared_button_row_factory_matches_WPF_order_and_automation_contract()
+    {
+        var accepted = false;
+        var cancelled = false;
+
+        var row = AvaloniaDialogButtonRowFactory.CreateOkCancel(
+            () => accepted = true,
+            () => cancelled = true,
+            buttonWidth: 72,
+            rowMargin: new Thickness(2, 3, 4, 5));
+        var buttons = row.Children.OfType<Button>().ToArray();
+
+        buttons.Should().HaveCount(2);
+        buttons[0].Content.Should().Be(Free.Shared.Shell.ShellStrings.Current.Ok);
+        buttons[0].IsDefault.Should().BeTrue();
+        buttons[0].IsCancel.Should().BeFalse();
+        buttons[1].Content.Should().Be(Free.Shared.Shell.ShellStrings.Current.Cancel);
+        buttons[1].IsDefault.Should().BeFalse();
+        buttons[1].IsCancel.Should().BeTrue();
+        buttons.Should().OnlyContain(button => button.MinWidth == 72);
+        buttons.Should().OnlyContain(button =>
+            !string.IsNullOrWhiteSpace(global::Avalonia.Automation.AutomationProperties.GetName(button)));
+        row.Spacing.Should().Be(AvaloniaCompactDialogChrome.WindowsStyle.ActionSpacing);
+        row.Margin.Should().Be(new Thickness(2, 3, 4, 5));
+        accepted.Should().BeFalse();
+        cancelled.Should().BeFalse();
+    }
+
+    [Fact]
     public void Classic_tabs_are_contiguous_and_idempotent()
     {
         var tabs = new TabControl();

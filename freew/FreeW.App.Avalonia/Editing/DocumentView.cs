@@ -209,6 +209,10 @@ public sealed class DocumentView : Control
     private (int BlockIndex, int RunIndex, string Kind, Rect Rect)? _selectedFloating;
     // AV-SHAPETEXT: bounded one-paragraph caret for the selected floating text box.
     private (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? _shapeCaret;
+    // AV-SHAPETEXTSEL: the fixed end of a drag selection inside the active text box. This is deliberately
+    // separate from the body _selectionAnchor so a shape-text selection can never leak into document text.
+    private (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? _shapeSelectionAnchor;
+    private (Point PointerDown, IPointer? Pointer)? _shapeTextSelectionDragState;
     // Multi-select set for object arrange and nested-group commands. Valid DrawingGroups are
     // groupable members just like the concrete floating object runs they contain.
     private readonly List<(int BlockIndex, int RunIndex, string Kind)> _selectedFloatingObjects = [];
@@ -511,6 +515,8 @@ public sealed class DocumentView : Control
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
         _selectedFloatingGroupChild = null;
         _shapeCaret = null;
+        _shapeSelectionAnchor = null;
+        _shapeTextSelectionDragState = null;
         _selectedFloatingObjects.Clear();
         _floatDragState   = null;
         _shapeEditPointsTarget = null;
@@ -2674,6 +2680,22 @@ public sealed class DocumentView : Control
                                sd.FillBrush is not null,
                                sd.OutlinePen is not null,
                                sd.Text))
+                .ToList();
+        }
+    }
+
+    /// <summary>Test-facing view of the shared rich floating-shape glyph layout.</summary>
+    internal IReadOnlyList<(char Character, int ParagraphIndex, int RunIndex, int Offset,
+        double X, double Y, double Width, double Height, RunFormatting Formatting)>
+        FloatingShapeTextGlyphsForTest
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingShapes
+                .SelectMany(sd => sd.TextLayout?.Glyphs ?? [])
+                .Select(glyph => (glyph.Character, glyph.ParagraphIndex, glyph.RunIndex, glyph.Offset,
+                    glyph.X, glyph.Y, glyph.Width, glyph.Height, glyph.Formatting))
                 .ToList();
         }
     }
@@ -5953,11 +5975,13 @@ public sealed class DocumentView : Control
                     break;
 
                 case DocumentFloatingObjectKind.Shape when run.Shape is { IsFloating: true } shape:
-                    _floatingShapes.Add(BuildFloatingShapeData(
+                    var shapeData = BuildFloatingShapeData(
                         DrawingObjectVisualPlanner.BuildVisualPlan(shape, snapshot),
                         snapshot.BlockIndex,
-                        snapshot.RunIndex));
-                    BuildShapeTextCaretStops(shape, rect, snapshot.BlockIndex, snapshot.RunIndex);
+                        snapshot.RunIndex);
+                    shapeData.TextLayout = BuildFloatingShapeTextLayout(shapeData, rect);
+                    _floatingShapes.Add(shapeData);
+                    BuildShapeTextCaretStops(shapeData);
                     break;
 
                 case DocumentFloatingObjectKind.Chart when run.Chart is { IsFloating: true } chart:
@@ -5991,102 +6015,58 @@ public sealed class DocumentView : Control
         }
     }
 
-    /// <summary>
-    /// Builds pointer-addressable caret stops for a floating text box. The renderer uses the same 9pt text
-    /// treatment for the shape body, so measuring each character with that treatment keeps the hit map
-    /// aligned with the visible text while preserving the model's paragraph/run identity. Rotated text
-    /// boxes keep their text layout in the renderer's pre-transform coordinate space; the matching rotation
-    /// metadata lets pointer hit-testing apply the inverse transform before resolving a caret.
-    /// </summary>
-    private void BuildShapeTextCaretStops(Shape shape, Rect rect, int blockIndex, int runIndex)
+    private DrawingObjectTextLayoutPlan? BuildFloatingShapeTextLayout(FloatingShapeData shapeData, Rect rect)
     {
-        if (shape.TextParagraphs.Count == 0)
+        if (shapeData.TextPlan is not { } plan)
+            return null;
+
+        var isRotated = plan.Direction is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270;
+        var layoutWidth = isRotated ? rect.Height : rect.Width;
+        var layoutHeight = isRotated ? rect.Width : rect.Height;
+        return DrawingObjectTextLayoutPlanner.LayoutPlan(
+            plan,
+            layoutWidth,
+            layoutHeight,
+            (value, formatting) => Build(value, formatting).WidthIncludingTrailingWhitespace,
+            formatting => Build("Ag", formatting).Height);
+    }
+
+    /// <summary>
+    /// Builds pointer-addressable caret stops from the shared floating-text layout. The renderer, hit-test,
+    /// drag-selection, and selection paint all consume the same run-aware positions and font metrics.
+    /// </summary>
+    private void BuildShapeTextCaretStops(FloatingShapeData shapeData)
+    {
+        if (shapeData.TextLayout is not { } layout)
             return;
 
-        const double TextInset = 4.0;
-        var format = new RunFormatting { FontSizePt = 9 };
-        var isRotated = shape.TextDirection is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270;
-        var rotationRadians = shape.TextDirection == ShapeTextDirection.Rotate90
+        var rotationRadians = shapeData.TextDirection == ShapeTextDirection.Rotate90
             ? Math.PI / 2
-            : shape.TextDirection == ShapeTextDirection.Rotate270
+            : shapeData.TextDirection == ShapeTextDirection.Rotate270
                 ? -Math.PI / 2
                 : 0;
+        var rect = shapeData.Rect;
         var rotationCenter = new Point(rect.Center.X, rect.Center.Y);
-        var textRect = isRotated
-            ? new Rect(rect.X, rect.Y, rect.Height, rect.Width)
-            : rect;
-        var insetWidth = Math.Max(1, textRect.Width - 2 * TextInset);
-        var fittedText = Build(shape.PlainText, format);
-        fittedText.MaxTextWidth = insetWidth;
-        var lineHeight = Math.Max(1, Build("Ag", format).Height);
-        var lineStartX = isRotated
-            ? rect.X + (rect.Width - Math.Max(1, fittedText.WidthIncludingTrailingWhitespace)) / 2
-            : rect.X + TextInset;
-        var lineStartY = isRotated
-            ? rect.Y + (rect.Height - Math.Max(1, fittedText.Height)) / 2
-            : rect.Y + TextInset;
-        var maxX = isRotated
-            ? Math.Max(lineStartX + 1, lineStartX + insetWidth)
-            : Math.Max(lineStartX + 1, rect.Right - TextInset);
-        var x = lineStartX;
-        var y = lineStartY;
+        var origin = ShapeTextLayoutOrigin(rect, layout);
 
-        for (var paragraphIndex = 0; paragraphIndex < shape.TextParagraphs.Count; paragraphIndex++)
+        foreach (var stop in layout.CaretStops)
         {
-            var paragraph = shape.TextParagraphs[paragraphIndex];
-            var addedStopForParagraph = false;
-
-            foreach (var (textRun, textRunIndex) in paragraph.Runs.Select((run, index) => (run, index)))
-            {
-                var text = textRun.Text ?? string.Empty;
-                if (text.Length == 0)
-                {
-                    AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
-                        0, x, y, lineHeight, rotationRadians, rotationCenter);
-                    addedStopForParagraph = true;
-                    continue;
-                }
-
-                for (var offset = 0; offset < text.Length; offset++)
-                {
-                    var character = text[offset];
-                    if (character == '\n' || character == '\r')
-                    {
-                        AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
-                            offset, x, y, lineHeight, rotationRadians, rotationCenter);
-                        x = lineStartX;
-                        y += lineHeight;
-                        addedStopForParagraph = true;
-                        continue;
-                    }
-
-                    var glyph = Build(character.ToString(), format);
-                    var glyphWidth = Math.Max(1, glyph.WidthIncludingTrailingWhitespace);
-                    if (x > lineStartX && x + glyphWidth > maxX)
-                    {
-                        x = lineStartX;
-                        y += lineHeight;
-                    }
-
-                    AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
-                        offset, x, y, lineHeight, rotationRadians, rotationCenter);
-                    x += glyphWidth;
-                    addedStopForParagraph = true;
-                }
-
-                AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
-                    text.Length, x, y, lineHeight, rotationRadians, rotationCenter);
-            }
-
-            if (!addedStopForParagraph)
-                AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, 0, 0, x, y, lineHeight,
-                    rotationRadians, rotationCenter);
-
-            // A paragraph break is represented by the next line in the shape text body.
-            x = lineStartX;
-            y += lineHeight;
+            AddShapeTextCaretStop(
+                shapeData.BlockIndex,
+                shapeData.RunIndex,
+                stop.ParagraphIndex,
+                stop.RunIndex,
+                stop.Offset,
+                origin.X + stop.X,
+                origin.Y + stop.Y,
+                stop.Height,
+                rotationRadians,
+                rotationCenter);
         }
     }
+
+    private static Point ShapeTextLayoutOrigin(Rect rect, DrawingObjectTextLayoutPlan layout) =>
+        new(rect.Center.X - layout.Width / 2, rect.Center.Y - layout.Height / 2);
 
     private void AddShapeTextCaretStop(
         int blockIndex,
@@ -6146,6 +6126,7 @@ public sealed class DocumentView : Control
             FillBrush = fillBrush,
             OutlinePen = outlinePen,
             Text = plan.Text?.Text,
+            TextPlan = plan.Text,
             TextDirection = plan.Text?.Direction ?? ShapeTextDirection.Horizontal,
             RotationAngle = plan.RotationAngle,
             FlipH = plan.FlipH,
@@ -7383,6 +7364,56 @@ public sealed class DocumentView : Control
             : 0;
     }
 
+    private void DrawShapeTextSelection(
+        DrawingContext context,
+        FloatingShapeData shapeData,
+        Rect rect,
+        DrawingObjectTextLayoutPlan layout,
+        Point origin,
+        Point center)
+    {
+        if (ShapeTextSelectionInfo is not { } selection
+            || selection.Start.BlockIndex != shapeData.BlockIndex
+            || selection.Start.RunIndex != shapeData.RunIndex
+            || !TryGetRun(shapeData.BlockIndex, shapeData.RunIndex, out var ownerRun)
+            || ownerRun.Shape is not { } shape)
+            return;
+
+        IDisposable? rotation = null;
+        if (shapeData.TextDirection is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270)
+        {
+            var angle = shapeData.TextDirection == ShapeTextDirection.Rotate90
+                ? Math.PI / 2
+                : -Math.PI / 2;
+            rotation = context.PushTransform(
+                Matrix.CreateTranslation(-center.X, -center.Y)
+                * Matrix.CreateRotation(angle)
+                * Matrix.CreateTranslation(center.X, center.Y));
+        }
+
+        try
+        {
+            foreach (var glyph in layout.Glyphs)
+            {
+                var position = (shapeData.BlockIndex, shapeData.RunIndex, glyph.ParagraphIndex,
+                    glyph.RunIndex, glyph.Offset);
+                if (CompareShapeTextPositions(position, selection.Start) < 0
+                    || CompareShapeTextPositions(position, selection.End) >= 0)
+                    continue;
+
+                context.FillRectangle(SelectionBrush, new Rect(
+                    origin.X + glyph.X,
+                    origin.Y + glyph.Y,
+                    Math.Max(1, glyph.Width),
+                    Math.Max(1, glyph.Height)));
+            }
+        }
+        finally
+        {
+            rotation?.Dispose();
+        }
+    }
+
     /// <summary>
     /// Renders a single floating shape from its pre-computed <see cref="FloatingShapeData"/>.
     /// Applies rotation/flip transforms around the shape centre when present, then draws
@@ -7504,44 +7535,41 @@ public sealed class DocumentView : Control
             }
 
             // ── Draw shape text (UU3 fix) ──────────────────────────────────────────
-            // WPF reference (BuildShapeRun ~8319-8324): TextBlock with Margin=4, TextWrapping.Wrap,
-            // VerticalAlignment.Top. Avalonia previously centred a single non-wrapping line.
-            // Fix: set MaxTextWidth to the inset shape width to enable wrapping; top-anchor with 4px inset.
-            if (!string.IsNullOrEmpty(sd.Text))
+            // Draw the shared run-aware layout. Rotated text is laid out in the swapped text box
+            // dimensions and then rotated around the shape centre; the outer clip remains unchanged.
+            if (sd.TextLayout is { } textLayout)
             {
-                const double TextInset = 4.0; // matches WPF Margin(4) on TextBlock
-                var textFmt = new RunFormatting { FontSizePt = 9 };
-                var isRotated = sd.TextDirection is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270;
-                var textRect = isRotated
-                    ? new Rect(rect.X, rect.Y, rect.Height, rect.Width)
-                    : rect;
-                var insetWidth = Math.Max(1, textRect.Width - 2 * TextInset);
-                var ft = Build(sd.Text, textFmt);
-                ft.MaxTextWidth = insetWidth; // enables word wrapping (FormattedText clips+wraps at this width)
-                using var _ = context.PushClip(rect);
-                if (!isRotated)
+                var origin = ShapeTextLayoutOrigin(rect, textLayout);
+                using var clip = context.PushClip(rect);
+                DrawShapeTextSelection(context, sd, rect, textLayout, origin, new Point(cx, cy));
+                IDisposable? rotation = null;
+                if (sd.TextDirection is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270)
                 {
-                    // Top-anchor: place text at the top of the shape with the inset offset.
-                    context.DrawText(ft, new Point(rect.X + TextInset, rect.Y + TextInset));
-                }
-                else
-                {
-                    // WPF applies LayoutTransform to the text block, leaving the shape itself
-                    // axis-aligned. Rotate the fitted text around the shape centre only.
                     var angle = sd.TextDirection == ShapeTextDirection.Rotate90
                         ? Math.PI / 2
                         : -Math.PI / 2;
-                    var textWidth = Math.Max(1, ft.WidthIncludingTrailingWhitespace);
-                    var textHeight = Math.Max(1, ft.Height);
-                    var textX = rect.X + (rect.Width - textWidth) / 2;
-                    var textY = rect.Y + (rect.Height - textHeight) / 2;
                     var center = new Point(cx, cy);
-                    using var rotated = context.PushTransform(
+                    rotation = context.PushTransform(
                         Matrix.CreateTranslation(-center.X, -center.Y)
                         * Matrix.CreateRotation(angle)
                         * Matrix.CreateTranslation(center.X, center.Y));
-                    context.DrawText(ft, new Point(textX, textY));
                 }
+                foreach (var glyph in textLayout.Glyphs)
+                {
+                    var point = new Point(origin.X + glyph.X, origin.Y + glyph.Y);
+                    context.DrawText(Build(glyph.Character.ToString(), glyph.Formatting), point);
+                    var decorationPen = new Pen(BrushFor(glyph.Formatting.ColorHex),
+                        Math.Max(1, glyph.Height / 14));
+                    if (glyph.Formatting.Underline)
+                        context.DrawLine(decorationPen,
+                            new Point(point.X, point.Y + glyph.Height * 0.82),
+                            new Point(point.X + glyph.Width, point.Y + glyph.Height * 0.82));
+                    if (glyph.Formatting.Strikethrough)
+                        context.DrawLine(decorationPen,
+                            new Point(point.X, point.Y + glyph.Height * 0.5),
+                            new Point(point.X + glyph.Width, point.Y + glyph.Height * 0.5));
+                }
+                rotation?.Dispose();
             }
         }
         finally
@@ -8698,6 +8726,7 @@ public sealed class DocumentView : Control
             return false;
 
         _shapeCaret = (selected.BlockIndex, selected.RunIndex, 0, 0, run.Text.Length);
+        _shapeSelectionAnchor = _shapeCaret;
         Focus();
         InvalidateVisual();
         CaretMoved?.Invoke();
@@ -8709,9 +8738,11 @@ public sealed class DocumentView : Control
     /// This mirrors the WPF RichTextBox pointer contract while keeping the existing floating-object
     /// selection and drag routes intact when the shape is not already being edited.
     /// </summary>
-    private bool TryPlaceShapeTextCaret(Point point,
-        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) active)
+    private bool TryResolveShapeTextCaret(Point point,
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) active,
+        out (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) resolved)
     {
+        resolved = default;
         if (!TryHitTestFloat(point, out var floatHit)
             || floatHit.BlockIndex != active.BlockIndex
             || floatHit.RunIndex != active.RunIndex
@@ -8735,16 +8766,72 @@ public sealed class DocumentView : Control
             .ThenBy(candidate => Math.Abs(localPoint.X - candidate.X))
             .First();
 
-        _shapeCaret = (
+        resolved = (
             stop.BlockIndex,
             stop.RunIndex,
             stop.TextParagraphIndex,
             stop.TextRunIndex,
             stop.Offset);
+        return true;
+    }
+
+    private bool TryPlaceShapeTextCaret(Point point,
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) active)
+    {
+        if (!TryResolveShapeTextCaret(point, active, out var resolved))
+            return false;
+
+        _shapeCaret = resolved;
+        _shapeSelectionAnchor = resolved;
         Focus();
         InvalidateVisual();
         CaretMoved?.Invoke();
         return true;
+    }
+
+    private bool BeginShapeTextSelectionDrag(
+        Point point,
+        bool extend,
+        IPointer? pointer,
+        out (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) resolved)
+    {
+        resolved = default;
+        if (_shapeCaret is not { } active
+            || !TryResolveShapeTextCaret(point, active, out resolved))
+            return false;
+
+        if (!extend || _shapeSelectionAnchor is null)
+            _shapeSelectionAnchor = resolved;
+        _shapeCaret = resolved;
+        _shapeTextSelectionDragState = (point, pointer);
+        pointer?.Capture(this);
+        Focus();
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+        return true;
+    }
+
+    private void UpdateShapeTextSelectionDrag(Point point)
+    {
+        if (_shapeTextSelectionDragState is null || _shapeCaret is not { } active
+            || !TryResolveShapeTextCaret(point, active, out var resolved))
+            return;
+
+        _shapeCaret = resolved;
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    private void FinishShapeTextSelectionDrag(bool releasePointerCapture)
+    {
+        if (_shapeTextSelectionDragState is not { } drag)
+            return;
+
+        _shapeTextSelectionDragState = null;
+        if (releasePointerCapture)
+            drag.Pointer?.Capture(null);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
     }
 
     private static double VerticalDistance(double pointY, double lineY, double lineHeight) =>
@@ -8769,6 +8856,315 @@ public sealed class DocumentView : Control
     internal bool PlaceShapeTextCaretForTest(Point point) =>
         _shapeCaret is { } active && TryPlaceShapeTextCaret(point, active);
 
+    /// <summary>Test seam for the real pointer drag-selection path inside the active text box.</summary>
+    internal bool BeginShapeTextSelectionForTest(Point point)
+    {
+        return BeginShapeTextSelectionDrag(point, extend: false, pointer: null, out _);
+    }
+
+    /// <summary>Test seam for moving the active shape-text selection endpoint.</summary>
+    internal void UpdateShapeTextSelectionForTest(Point point) => UpdateShapeTextSelectionDrag(point);
+
+    /// <summary>Test seam for releasing the active shape-text selection.</summary>
+    internal void EndShapeTextSelectionForTest(Point point)
+    {
+        UpdateShapeTextSelectionDrag(point);
+        FinishShapeTextSelectionDrag(releasePointerCapture: false);
+    }
+
+    /// <summary>Test seam for deterministic range-formatting and paint assertions.</summary>
+    internal bool SelectShapeTextRangeForTest(int paragraphIndex, int startOffset, int endOffset)
+    {
+        if (_shapeCaret is not { } caret
+            || !TryGetRun(caret.BlockIndex, caret.RunIndex, out var ownerRun)
+            || ownerRun.Shape is not { } shape
+            || paragraphIndex < 0
+            || paragraphIndex >= shape.TextParagraphs.Count)
+            return false;
+
+        _shapeSelectionAnchor = ShapeTextPositionAtOffset(
+            shape, caret.BlockIndex, caret.RunIndex, paragraphIndex, startOffset);
+        _shapeCaret = ShapeTextPositionAtOffset(
+            shape, caret.BlockIndex, caret.RunIndex, paragraphIndex, endOffset);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+        return ShapeTextSelectionInfo is not null;
+    }
+
+    /// <summary>Current shape-text selection endpoints in document order, or null when collapsed.</summary>
+    internal ((int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) Start,
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) End)? ShapeTextSelectionInfo
+    {
+        get
+        {
+            if (_shapeSelectionAnchor is not { } anchor || _shapeCaret is not { } caret
+                || CompareShapeTextPositions(anchor, caret) == 0)
+                return null;
+            return CompareShapeTextPositions(anchor, caret) <= 0
+                ? (anchor, caret)
+                : (caret, anchor);
+        }
+    }
+
+    private static int CompareShapeTextPositions(
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) left,
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) right)
+    {
+        var result = left.BlockIndex.CompareTo(right.BlockIndex);
+        if (result != 0) return result;
+        result = left.RunIndex.CompareTo(right.RunIndex);
+        if (result != 0) return result;
+        result = left.TextParagraphIndex.CompareTo(right.TextParagraphIndex);
+        if (result != 0) return result;
+        result = left.TextRunIndex.CompareTo(right.TextRunIndex);
+        return result != 0 ? result : left.Offset.CompareTo(right.Offset);
+    }
+
+    private static bool IsValidShapeTextPosition(
+        Shape shape,
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) position)
+    {
+        if (position.TextParagraphIndex < 0 || position.TextParagraphIndex >= shape.TextParagraphs.Count)
+            return false;
+
+        var paragraph = shape.TextParagraphs[position.TextParagraphIndex];
+        if (paragraph.Runs.Count == 0)
+            return position.TextRunIndex == 0 && position.Offset == 0;
+        return position.TextRunIndex >= 0
+            && position.TextRunIndex < paragraph.Runs.Count
+            && position.Offset >= 0
+            && position.Offset <= paragraph.Runs[position.TextRunIndex].Text.Length;
+    }
+
+    private static bool IsValidShapeTextSelection(
+        Shape shape,
+        ((int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) Start,
+         (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) End) selection,
+        int blockIndex,
+        int runIndex) =>
+        selection.Start.BlockIndex == blockIndex
+        && selection.Start.RunIndex == runIndex
+        && selection.End.BlockIndex == blockIndex
+        && selection.End.RunIndex == runIndex
+        && CompareShapeTextPositions(selection.Start, selection.End) <= 0
+        && IsValidShapeTextPosition(shape, selection.Start)
+        && IsValidShapeTextPosition(shape, selection.End);
+
+    private static int ShapeTextOffset(
+        Shape shape,
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) position)
+    {
+        if (position.TextParagraphIndex < 0 || position.TextParagraphIndex >= shape.TextParagraphs.Count)
+            return 0;
+        var paragraph = shape.TextParagraphs[position.TextParagraphIndex];
+        var offset = 0;
+        for (var index = 0; index < paragraph.Runs.Count && index < position.TextRunIndex; index++)
+            offset += paragraph.Runs[index].Text.Length;
+        return offset + Math.Clamp(position.Offset, 0,
+            position.TextRunIndex >= 0 && position.TextRunIndex < paragraph.Runs.Count
+                ? paragraph.Runs[position.TextRunIndex].Text.Length
+                : 0);
+    }
+
+    private static (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)
+        ShapeTextPositionAtOffset(Shape shape, int blockIndex, int runIndex, int paragraphIndex, int offset)
+    {
+        if (shape.TextParagraphs.Count == 0)
+            return (blockIndex, runIndex, 0, 0, 0);
+
+        paragraphIndex = Math.Clamp(paragraphIndex, 0, shape.TextParagraphs.Count - 1);
+        var paragraph = shape.TextParagraphs[paragraphIndex];
+        var remaining = Math.Clamp(offset, 0, paragraph.PlainText.Length);
+        for (var runIndexInParagraph = 0; runIndexInParagraph < paragraph.Runs.Count; runIndexInParagraph++)
+        {
+            var length = paragraph.Runs[runIndexInParagraph].Text.Length;
+            if (remaining <= length || runIndexInParagraph == paragraph.Runs.Count - 1)
+                return (blockIndex, runIndex, paragraphIndex, runIndexInParagraph, Math.Min(remaining, length));
+            remaining -= length;
+        }
+
+        return (blockIndex, runIndex, paragraphIndex, 0, 0);
+    }
+
+    private static Paragraph CloneShapeParagraphWithRange(
+        Paragraph source,
+        int start,
+        int end,
+        Func<RunFormatting, RunFormatting>? selectedFormatting = null)
+    {
+        var clone = (Paragraph)DocumentMerge.CloneBlock(source);
+        clone.Runs.Clear();
+        var lo = Math.Clamp(Math.Min(start, end), 0, source.PlainText.Length);
+        var hi = Math.Clamp(Math.Max(start, end), lo, source.PlainText.Length);
+        var position = 0;
+
+        foreach (var sourceRun in source.Runs)
+        {
+            var length = sourceRun.Text.Length;
+            var runStart = position;
+            var runEnd = runStart + length;
+            position = runEnd;
+
+            if (selectedFormatting is not null)
+            {
+                if (length == 0 || runEnd <= lo || runStart >= hi)
+                {
+                    clone.Runs.Add(RevisionEditPlanner.CloneRunWithText(sourceRun, sourceRun.Text));
+                    continue;
+                }
+
+                var selectedStart = Math.Max(lo, runStart);
+                var selectedEnd = Math.Min(hi, runEnd);
+                if (selectedStart > runStart)
+                    clone.Runs.Add(RevisionEditPlanner.CloneRunWithText(
+                        sourceRun, sourceRun.Text[..(selectedStart - runStart)]));
+
+                var selected = RevisionEditPlanner.CloneRunWithText(
+                    sourceRun, sourceRun.Text[(selectedStart - runStart)..(selectedEnd - runStart)]);
+                selected.Formatting = selectedFormatting(sourceRun.Formatting);
+                clone.Runs.Add(selected);
+
+                if (selectedEnd < runEnd)
+                    clone.Runs.Add(RevisionEditPlanner.CloneRunWithText(
+                        sourceRun, sourceRun.Text[(selectedEnd - runStart)..]));
+                continue;
+            }
+
+            var overlapStart = Math.Max(lo, runStart);
+            var overlapEnd = Math.Min(hi, runEnd);
+            if (overlapEnd <= overlapStart)
+                continue;
+            clone.Runs.Add(RevisionEditPlanner.CloneRunWithText(
+                sourceRun, sourceRun.Text[(overlapStart - runStart)..(overlapEnd - runStart)]));
+        }
+
+        if (clone.Runs.Count == 0)
+            clone.Runs.Add(new Run(string.Empty,
+                source.Runs.FirstOrDefault()?.Formatting ?? RunFormatting.Default));
+        return clone;
+    }
+
+    private static void AppendShapeTextRun(Paragraph paragraph, string text, RunFormatting formatting)
+    {
+        if (!string.IsNullOrEmpty(text))
+            paragraph.Runs.Add(new Run(text, formatting));
+    }
+
+    private static void AppendShapeParagraphRuns(Paragraph target, Paragraph fragment)
+    {
+        foreach (var run in fragment.Runs)
+            target.Runs.Add(RevisionEditPlanner.CloneRunWithText(run, run.Text));
+    }
+
+    private static void EnsureShapeParagraphRun(Paragraph paragraph)
+    {
+        if (paragraph.Runs.Count == 0)
+            paragraph.Runs.Add(new Run(string.Empty));
+    }
+
+    private (List<Paragraph> Paragraphs,
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) Caret)
+        BuildShapeTextReplacement(Shape shape,
+            ((int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) Start,
+             (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) End) selection,
+            string replacement)
+    {
+        var startParagraph = selection.Start.TextParagraphIndex;
+        var endParagraph = selection.End.TextParagraphIndex;
+        var startOffset = ShapeTextOffset(shape, selection.Start);
+        var endOffset = ShapeTextOffset(shape, selection.End);
+        var result = new List<Paragraph>();
+
+        for (var index = 0; index < startParagraph; index++)
+            result.Add((Paragraph)DocumentMerge.CloneBlock(shape.TextParagraphs[index]));
+
+        var start = shape.TextParagraphs[startParagraph];
+        var end = shape.TextParagraphs[endParagraph];
+        var merged = (Paragraph)DocumentMerge.CloneBlock(start);
+        merged.Runs.Clear();
+
+        var prefixEnd = Math.Clamp(startOffset, 0, start.PlainText.Length);
+        var prefix = start.PlainText[..prefixEnd];
+        var insertionFormatting = RevisionEditPlanner.FormattingAtOffset(start, startOffset);
+        AppendShapeParagraphRuns(merged, CloneShapeParagraphWithRange(start, 0, prefixEnd));
+        AppendShapeTextRun(merged, replacement, insertionFormatting);
+        AppendShapeParagraphRuns(merged, CloneShapeParagraphWithRange(
+            end, Math.Clamp(endOffset, 0, end.PlainText.Length), end.PlainText.Length));
+        EnsureShapeParagraphRun(merged);
+        result.Add(merged);
+
+        for (var index = endParagraph + 1; index < shape.TextParagraphs.Count; index++)
+            result.Add((Paragraph)DocumentMerge.CloneBlock(shape.TextParagraphs[index]));
+
+        var caretParagraphIndex = startParagraph;
+        var caretOffset = prefix.Length + replacement.Length;
+        var caret = ShapeTextPositionAtOffset(shape, selection.Start.BlockIndex, selection.Start.RunIndex,
+            caretParagraphIndex, caretOffset);
+        // Map against the rebuilt paragraph list, whose first edited paragraph may have fewer/more runs.
+        var rebuiltShape = new Shape();
+        rebuiltShape.TextParagraphs.AddRange(result);
+        caret = ShapeTextPositionAtOffset(rebuiltShape, selection.Start.BlockIndex, selection.Start.RunIndex,
+            caretParagraphIndex, caretOffset);
+        return (result, caret);
+    }
+
+    private void ReplaceShapeTextSelection(string replacement)
+    {
+        if (ShapeTextSelectionInfo is not { } selection
+            || _shapeCaret is not { } current
+            || !TryGetRun(current.BlockIndex, current.RunIndex, out var ownerRun)
+            || ownerRun.Shape is not { } shape
+            || !IsValidShapeTextSelection(shape, selection, current.BlockIndex, current.RunIndex))
+            return;
+
+        var plan = BuildShapeTextReplacement(shape, selection, replacement);
+        _bus.Execute(new ReplaceShapeTextParagraphsCommand(
+            current.BlockIndex, current.RunIndex, plan.Paragraphs));
+        _shapeCaret = plan.Caret;
+        _shapeSelectionAnchor = plan.Caret;
+        InvalidateLayoutAndVisual();
+        CaretMoved?.Invoke();
+    }
+
+    private void ApplyShapeTextFormatting(Func<RunFormatting, RunFormatting> transform)
+    {
+        if (ShapeTextSelectionInfo is not { } selection
+            || _shapeCaret is not { } current
+            || !TryGetRun(current.BlockIndex, current.RunIndex, out var ownerRun)
+            || ownerRun.Shape is not { } shape
+            || !IsValidShapeTextSelection(shape, selection, current.BlockIndex, current.RunIndex))
+            return;
+
+        var startParagraphIndex = selection.Start.TextParagraphIndex;
+        var endParagraphIndex = selection.End.TextParagraphIndex;
+        var startOffset = ShapeTextOffset(shape, selection.Start);
+        var endOffset = ShapeTextOffset(shape, selection.End);
+        var paragraphs = new List<Paragraph>();
+        for (var index = 0; index < shape.TextParagraphs.Count; index++)
+        {
+            var source = shape.TextParagraphs[index];
+            if (index < startParagraphIndex || index > endParagraphIndex)
+            {
+                paragraphs.Add((Paragraph)DocumentMerge.CloneBlock(source));
+                continue;
+            }
+
+            var from = index == startParagraphIndex ? startOffset : 0;
+            var to = index == endParagraphIndex ? endOffset : source.PlainText.Length;
+            paragraphs.Add(CloneShapeParagraphWithRange(source, from, to, transform));
+        }
+
+        _bus.Execute(new ReplaceShapeTextParagraphsCommand(current.BlockIndex, current.RunIndex, paragraphs));
+        var rebuiltShape = new Shape();
+        rebuiltShape.TextParagraphs.AddRange(paragraphs);
+        _shapeSelectionAnchor = ShapeTextPositionAtOffset(rebuiltShape, current.BlockIndex, current.RunIndex,
+            startParagraphIndex, startOffset);
+        _shapeCaret = ShapeTextPositionAtOffset(rebuiltShape, current.BlockIndex, current.RunIndex,
+            endParagraphIndex, endOffset);
+        InvalidateLayoutAndVisual();
+        CaretMoved?.Invoke();
+    }
+
     /// <summary>Insert a real paragraph break at the active text-box caret.</summary>
     public void InsertShapeTextParagraphBreak()
     {
@@ -8789,6 +9185,7 @@ public sealed class DocumentView : Control
             TextRunIndex = 0,
             Offset = 0
         };
+        _shapeSelectionAnchor = _shapeCaret;
         InvalidateLayoutAndVisual();
         CaretMoved?.Invoke();
     }
@@ -8797,7 +9194,9 @@ public sealed class DocumentView : Control
     public void ExitShapeTextEditing()
     {
         if (_shapeCaret is null) return;
+        FinishShapeTextSelectionDrag(releasePointerCapture: true);
         _shapeCaret = null;
+        _shapeSelectionAnchor = null;
         InvalidateVisual();
         CaretMoved?.Invoke();
     }
@@ -8806,7 +9205,9 @@ public sealed class DocumentView : Control
     public void DeselectFloating()
     {
         if (_selectedFloating is null && _selectedFloatingObjects.Count == 0) return;
+        FinishShapeTextSelectionDrag(releasePointerCapture: true);
         _shapeCaret = null;
+        _shapeSelectionAnchor = null;
         _selectedFloating = null;
         _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
@@ -8843,7 +9244,9 @@ public sealed class DocumentView : Control
 
     private void SelectFloatingCore(int blockIndex, int runIndex, string kind, bool addToMultiSelect)
     {
+        FinishShapeTextSelectionDrag(releasePointerCapture: true);
         _shapeCaret = null;
+        _shapeSelectionAnchor = null;
         _selectedFloatingGroupChild = null;
         _shapeEditPointsTarget = null;
         _shapeEditPointDragState = null;
@@ -10288,11 +10691,12 @@ public sealed class DocumentView : Control
             return;
         }
 
-        // AV-SHAPETEXT2: once a text box is in edit mode, a click inside its body moves the caret to
-        // the nearest paragraph/run/offset stop. Before edit mode the same click continues through the
-        // normal floating-object selection and drag path.
-        if (!shift && _shapeCaret is { } activeShapeCaret
-            && TryPlaceShapeTextCaret(point, activeShapeCaret))
+        // AV-SHAPETEXT3: once a text box is in edit mode, a left-button press inside its body starts a
+        // text-range drag. The active end uses the same pointer caret-stop map as a click, while the
+        // floating-object move/resize route remains available before text-edit mode is entered.
+        if (updateKind == PointerUpdateKind.LeftButtonPressed
+            && _shapeCaret is not null
+            && BeginShapeTextSelectionDrag(point, shift, e.Pointer, out _))
         {
             e.Handled = true;
             return;
@@ -10430,6 +10834,13 @@ public sealed class DocumentView : Control
         base.OnPointerMoved(e);
         var point = e.GetPosition(this);
 
+        if (_shapeTextSelectionDragState is not null)
+        {
+            UpdateShapeTextSelectionDrag(point);
+            e.Handled = true;
+            return;
+        }
+
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             // AV-HANDLES: with the button up, update the hover cursor over the selection so handles
@@ -10506,6 +10917,8 @@ public sealed class DocumentView : Control
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         base.OnPointerCaptureLost(e);
+        if (_shapeTextSelectionDragState is not null)
+            FinishShapeTextSelectionDrag(releasePointerCapture: false);
         if (_shapeEditPointDragState is null)
             return;
 
@@ -10519,6 +10932,13 @@ public sealed class DocumentView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (_shapeTextSelectionDragState is not null)
+        {
+            UpdateShapeTextSelectionDrag(e.GetPosition(this));
+            FinishShapeTextSelectionDrag(releasePointerCapture: true);
+            e.Handled = true;
+            return;
+        }
         if (_shapeEditPointDragState is not null)
         {
             FinishShapeEditPointDrag(releasePointerCapture: true);
@@ -10937,6 +11357,12 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
+        if (ShapeTextSelectionInfo is not null)
+        {
+            ReplaceShapeTextSelection(text);
+            return;
+        }
+
         if (_shapeCaret is { } shapeCaret)
         {
             InsertShapeText(shapeCaret, text);
@@ -11092,6 +11518,7 @@ public sealed class DocumentView : Control
             caret.TextRunIndex,
             run.Text.Insert(offset, text)));
         SetShapeTextCaretOffset(offset + text.Length);
+        _shapeSelectionAnchor = _shapeCaret;
         InvalidateLayoutAndVisual();
     }
 
@@ -11114,12 +11541,19 @@ public sealed class DocumentView : Control
             return;
 
         _shapeCaret = caret with { Offset = Math.Clamp(offset, 0, run.Text.Length) };
+        _shapeSelectionAnchor = _shapeCaret;
         InvalidateVisual();
         CaretMoved?.Invoke();
     }
 
     private void DeleteShapeText(bool backward)
     {
+        if (ShapeTextSelectionInfo is not null)
+        {
+            ReplaceShapeTextSelection(string.Empty);
+            return;
+        }
+
         if (_shapeCaret is not { } caret
             || !TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, caret.TextParagraphIndex, caret.TextRunIndex, out var run))
             return;
@@ -11141,6 +11575,7 @@ public sealed class DocumentView : Control
                     TextRunIndex = 0,
                     Offset = previousRun.Text.Length
                 };
+                _shapeSelectionAnchor = _shapeCaret;
             }
 
             InvalidateLayoutAndVisual();
@@ -11158,6 +11593,7 @@ public sealed class DocumentView : Control
             caret.TextRunIndex,
             run.Text.Remove(deleteAt, 1)));
         SetShapeTextCaretOffset(backward ? deleteAt : offset);
+        _shapeSelectionAnchor = _shapeCaret;
         InvalidateLayoutAndVisual();
     }
 
@@ -16335,6 +16771,12 @@ public sealed class DocumentView : Control
 
     private void ApplyRunFormatting(Func<RunFormatting, RunFormatting> transform)
     {
+        if (ShapeTextSelectionInfo is not null)
+        {
+            ApplyShapeTextFormatting(transform);
+            return;
+        }
+
         var sel = NormalizedSelection();
         if (sel is { } s && s.Start.Block == s.End.Block)
         {
@@ -16365,6 +16807,45 @@ public sealed class DocumentView : Control
 
     private void ToggleRunFlag(Func<RunFormatting, bool> get, Func<RunFormatting, bool, RunFormatting> set)
     {
+        if (ShapeTextSelectionInfo is { } shapeSelection)
+        {
+            if (_shapeCaret is not { } shapeCaret
+                || !TryGetRun(shapeCaret.BlockIndex, shapeCaret.RunIndex, out var ownerRun)
+                || ownerRun.Shape is not { } shape
+                || !IsValidShapeTextSelection(shape, shapeSelection, shapeCaret.BlockIndex, shapeCaret.RunIndex))
+                return;
+
+            var allSet = true;
+            var sawText = false;
+            for (var paragraphIndex = shapeSelection.Start.TextParagraphIndex;
+                 paragraphIndex <= shapeSelection.End.TextParagraphIndex && paragraphIndex < shape.TextParagraphs.Count;
+                 paragraphIndex++)
+            {
+                var paragraph = shape.TextParagraphs[paragraphIndex];
+                var from = paragraphIndex == shapeSelection.Start.TextParagraphIndex
+                    ? ShapeTextOffset(shape, shapeSelection.Start) : 0;
+                var to = paragraphIndex == shapeSelection.End.TextParagraphIndex
+                    ? ShapeTextOffset(shape, shapeSelection.End) : paragraph.PlainText.Length;
+                var position = 0;
+                foreach (var run in paragraph.Runs)
+                {
+                    var runStart = position;
+                    var runEnd = position + run.Text.Length;
+                    position = runEnd;
+                    var overlap = Math.Min(to, runEnd) - Math.Max(from, runStart);
+                    if (overlap <= 0)
+                        continue;
+                    sawText = true;
+                    if (!get(run.Formatting))
+                        allSet = false;
+                }
+            }
+
+            if (sawText)
+                ApplyShapeTextFormatting(formatting => set(formatting, !allSet));
+            return;
+        }
+
         var sel = NormalizedSelection();
         if (sel is { } s && s.Start.Block == s.End.Block)
         {
@@ -18159,7 +18640,9 @@ public sealed class DocumentView : Control
         public Pen? OutlinePen;             // null → no stroke
 
         // Text (optional)
-        public string? Text;               // plain text to centre inside the shape
+        public string? Text;               // plain text retained for diagnostics and selection metadata
+        public DrawingObjectTextPlan? TextPlan;
+        public DrawingObjectTextLayoutPlan? TextLayout;
         public ShapeTextDirection TextDirection;
 
         // Rotation / flip (in degrees; 0 → no rotation)

@@ -20,7 +20,7 @@ public sealed class ExternalUriLauncherTests
     [InlineData("javascript:alert(1)")]
     [InlineData("data:text/html,<h1>hi</h1>")]
     [InlineData("vbscript:MsgBox(1)")]
-    [InlineData("file:///tmp/book.xlsx")]
+    [InlineData("file://server/share/book.xlsx")]
     [InlineData("relative/path/file.xlsx")]
     [InlineData("")]
     public void Open_DisallowedUri_DoesNotLaunch(string target)
@@ -31,6 +31,18 @@ public sealed class ExternalUriLauncherTests
 
         result.Should().Be(ExternalUriLaunchResult.BlockedScheme);
         launched.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Open_LocalFileUri_LaunchesNormalizedUri()
+    {
+        var launched = new List<Uri>();
+
+        var result = ExternalUriLauncher.Open(" file:///tmp/book.xlsx ", launched.Add);
+
+        result.Should().Be(ExternalUriLaunchResult.Launched);
+        launched.Should().ContainSingle()
+            .Which.AbsoluteUri.Should().Be("file:///tmp/book.xlsx");
     }
 
     [Fact]

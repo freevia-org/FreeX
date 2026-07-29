@@ -9,7 +9,7 @@ namespace FreeP.App.Host;
 /// Modal dialog for inserting or editing a hyperlink on the selected shape (Wave 11A).
 ///
 /// The dialog lets the user choose between:
-///  • External URL (http/https/mailto)  — typed into the URL box
+///  • External URL (http/https/mailto/local file)  — typed into the URL box
 ///  • Internal slide jump               — selected from the slide list
 ///
 /// An optional tooltip field is always visible.

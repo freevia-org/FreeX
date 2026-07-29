@@ -4,7 +4,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq \
     && apt-get install -y -qq --no-install-recommends \
+        at-spi2-core \
         dbus-x11 \
+        libglib2.0-bin \
+        python3-dbus \
+        python3-gi \
+        python3-pyatspi \
         espeak-ng \
         ffmpeg \
         fonts-dejavu \
@@ -46,9 +51,11 @@ RUN apt-get update -qq \
 
 COPY entrypoint.sh /usr/local/bin/freex-linux-interactive
 COPY refresh-after-vnc.sh /usr/local/bin/freex-refresh-after-vnc
+COPY run-freep-accessibility-probe.sh /usr/local/bin/freep-accessibility-probe
 RUN chmod 0755 \
         /usr/local/bin/freex-linux-interactive \
-        /usr/local/bin/freex-refresh-after-vnc
+        /usr/local/bin/freex-refresh-after-vnc \
+        /usr/local/bin/freep-accessibility-probe
 
 EXPOSE 6080
 

@@ -14,7 +14,7 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 internal sealed class OptionsDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly FreeWOptions _seed;
     private readonly OptionsDialogSurfaceSpec _surface;

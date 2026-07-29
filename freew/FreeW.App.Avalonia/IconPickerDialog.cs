@@ -16,7 +16,7 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 internal sealed class IconPickerDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly IReadOnlyList<IconPickerEntry> _entries;
     private readonly ComboBox _category;
     private readonly TextBox _search;

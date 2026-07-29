@@ -208,7 +208,12 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step))");
         source.Should().Contain("_lastAnimationFramePlan = SlideShowPlaybackFramePlanner.PlanFrame(plan, 0, _slideDipW, _slideDipH);");
         source.Should().Contain("PlayShapeAnimation(element, plan);");
-        source.Should().Contain("PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));");
+        source.Should().Contain("PlayFallbackAnimation(anim, plan.DelayMs, plan.DurationMs);");
+        source.Should().Contain("var visibilityPlan = SlideShowPlaybackPlanner.PlanFallbackVisibility(animation);");
+        source.Should().Contain("if (visibilityPlan.SuppressAtStart || visibilityPlan.SuppressAtCompletion)");
+        source.Should().Contain("_slideCanvas.SuppressedShapeIds.Add(animation.ShapeId);");
+        source.Should().Contain("RevealShape(animation.ShapeId);");
+        source.Should().Contain("SlideShowPlaybackPlanner.PlanFallbackAnimation(animation, delayMs)");
         source.Should().Contain("private static void ApplyRepeatTiming(");
         source.Should().Contain("RepeatBehavior.Forever");
         source.Should().Contain("timeline.RepeatBehavior = repeatBehavior;");

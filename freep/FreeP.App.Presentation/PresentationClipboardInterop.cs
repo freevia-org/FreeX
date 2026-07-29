@@ -24,12 +24,13 @@ public sealed record PresentationClipboardContent(
     string? Text = null,
     string? OwnerToken = null,
     byte[]? RichTextBytes = null,
-    byte[]? XamlPackageBytes = null)
+    byte[]? XamlPackageBytes = null,
+    byte[]? RtfBytes = null)
 {
     public bool HasSelection => SelectionBytes is { Length: > 0 };
     public bool HasImage => PngBytes is { Length: > 0 };
     public bool HasText => !string.IsNullOrEmpty(Text);
-    public bool HasRichText => RichTextBytes is { Length: > 0 };
+    public bool HasRichText => RichTextBytes is { Length: > 0 } || RtfBytes is { Length: > 0 };
     public bool HasXamlPackage => XamlPackageBytes is { Length: > 0 };
     public bool IsEmpty => !HasSelection && !HasImage && !HasText && !HasRichText && !HasXamlPackage;
 }

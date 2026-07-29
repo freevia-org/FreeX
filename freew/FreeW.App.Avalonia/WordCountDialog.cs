@@ -15,7 +15,7 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 internal sealed class WordCountDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     public WordCountDialog(DocumentStatistics stats)
     {

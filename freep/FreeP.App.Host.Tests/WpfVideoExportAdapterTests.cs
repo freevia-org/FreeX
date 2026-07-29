@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
+using FreeP.App.Recording;
 using FreeP.App.Recording.Windows;
 
 namespace FreeP.App.Host.Tests;
@@ -34,12 +35,34 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
             return;
 
         var capability = WpfVideoEncoderCapabilityDetector.Detect();
+        var devices = new WindowsRecordingDeviceCatalog().EnumerateDevices();
 
         capability.ExecutablePath.Should().Be(WindowsNativeVideoExportAdapter.ExecutablePath);
-        capability.CanCaptureNarration.Should().BeTrue();
-        capability.CanCaptureCameraAndMedia.Should().BeTrue();
+        capability.CanCaptureNarration.Should().Be(devices.Any(device =>
+            device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone && device.IsAvailable));
+        capability.CanCaptureCameraAndMedia.Should().Be(devices.Any(device =>
+            device.Kind == SlideShowRecordingCaptureDeviceKind.Camera && device.IsAvailable));
         capability.Reason.Should().Contain("narration");
-        capability.Reason.Should().Contain("camera");
+    }
+
+    [Fact]
+    public void WindowsNativeCapability_ReportsOnlyInjectedCaptureDevices()
+    {
+        var capability = WpfVideoEncoderCapabilityDetector.DetectWindowsCaptureCapability(
+            new FakeRecordingDeviceCatalog(
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Microphone,
+                    "mic-0",
+                    "Studio microphone",
+                    IsDefault: true,
+                    IsAvailable: true,
+                    "audio/wav")));
+
+        capability.CanEncodeMp4.Should().BeTrue();
+        capability.CanCaptureNarration.Should().BeTrue();
+        capability.CanCaptureCameraAndMedia.Should().BeFalse();
+        capability.Reason.Should().Contain("narration capture");
+        capability.Reason.Should().Contain("no camera device");
     }
 
     [Fact]
@@ -208,5 +231,11 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
             File.WriteAllText(outputPath, "not an mp4");
             return Task.FromResult(new WpfVideoProcessResult(0, string.Empty, string.Empty, false));
         }
+    }
+
+    private sealed class FakeRecordingDeviceCatalog(
+        params SlideShowRecordingCaptureDeviceDescriptor[] devices) : IWindowsRecordingDeviceCatalog
+    {
+        public IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> EnumerateDevices() => devices;
     }
 }

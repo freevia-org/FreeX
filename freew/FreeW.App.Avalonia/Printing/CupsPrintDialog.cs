@@ -156,14 +156,14 @@ internal sealed class CupsPrintDialog : FreeWDialogWindow
     private static ComboBox Choice(IEnumerable<string> items, int selectedIndex)
     {
         var combo = new ComboBox { ItemsSource = items.ToArray(), SelectedIndex = selectedIndex, MinWidth = 220 };
-        AvaloniaCompactDialogChrome.ApplyComboBox(combo, new AvaloniaCompactDialogChromeStyle(FontFamily.Default));
+        AvaloniaCompactDialogChrome.ApplyComboBox(combo, AvaloniaCompactDialogChrome.WindowsStyle);
         return combo;
     }
 
     private static TextBox Text(string value)
     {
         var box = new TextBox { Text = value, MinWidth = 90 };
-        AvaloniaCompactDialogChrome.ApplyTextBox(box, new AvaloniaCompactDialogChromeStyle(FontFamily.Default));
+        AvaloniaCompactDialogChrome.ApplyTextBox(box, AvaloniaCompactDialogChrome.WindowsStyle);
         return box;
     }
 

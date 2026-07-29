@@ -395,7 +395,7 @@ public sealed partial class MainWindow
 
     private bool TryHandleFocusedEditorShortcut(KeyEventArgs args)
     {
-        if (args.Key is not (Key.Escape or Key.F4 or Key.Enter) ||
+        if (args.Key is not (Key.Escape or Key.F4 or Key.F8 or Key.Enter) ||
             args.Key == Key.Enter && args.KeyModifiers != KeyModifiers.Alt)
         {
             return false;

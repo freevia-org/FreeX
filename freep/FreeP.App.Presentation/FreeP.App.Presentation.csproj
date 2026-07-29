@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="FreeP.App.Presentation.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FreeP.App.Localization\FreeP.App.Localization.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />

@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -55,7 +56,7 @@ public static class HyperlinkDialogPlanner
     public const string MissingUrlMessage =
         "Please enter a URL (e.g. https://example.com).";
     public const string UnsupportedUrlMessage =
-        "Only http, https, and mailto URLs are supported.";
+        "Only http, https, mailto, and local file URLs are supported.";
     public const string MissingSlideMessage =
         "Please select a target slide.";
 
@@ -146,8 +147,8 @@ public static class HyperlinkDialogPlanner
 
     public static bool IsSupportedExternalUrl(string url)
     {
-        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
-            && uri.Scheme is "http" or "https" or "mailto";
+        return ExternalUriLauncher.TryCreateAllowedUri(url, out var uri)
+            && uri.Scheme is "http" or "https" or "mailto" or "file";
     }
 
     public static int SelectedSlideIndex(

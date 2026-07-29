@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FreeP Linux AT-SPI accessibility validation",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schemaVersion", "suite", "platform", "shell", "app", "evidenceLevel", "status", "observations", "limitation"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "suite": { "const": "freep-atspi-accessibility" },
+    "platform": { "const": "linux" },
+    "shell": { "const": "avalonia" },
+    "app": { "const": "FreeP" },
+    "evidenceLevel": { "const": "os-atspi-x11" },
+    "status": { "enum": ["passed", "not-proven"] },
+    "observations": { "type": "array" },
+    "limitation": { "type": "string", "minLength": 1 }
+  }
+}

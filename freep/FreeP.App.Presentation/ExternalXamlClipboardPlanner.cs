@@ -41,7 +41,7 @@ public static class ExternalXamlClipboardPlanner
                 using var stream = entry.Open();
                 using var reader = new StreamReader(stream, detectEncodingFromByteOrderMarks: true);
                 var xml = reader.ReadToEnd();
-                var payload = TryParseXaml(xml);
+                var payload = TryParseXaml(xml, source => ResolveImage(package, entry, source));
                 if (payload is not null)
                     return payload;
             }
@@ -54,7 +54,9 @@ public static class ExternalXamlClipboardPlanner
         return null;
     }
 
-    internal static InCanvasRichClipboardPayload? TryParseXaml(string? xml)
+    internal static InCanvasRichClipboardPayload? TryParseXaml(
+        string? xml,
+        Func<string, (byte[]? Bytes, string? ContentType)>? resolveImage = null)
     {
         if (string.IsNullOrWhiteSpace(xml) || xml.Length > MaxXmlBytes)
             return null;
@@ -62,6 +64,13 @@ public static class ExternalXamlClipboardPlanner
         try
         {
             var document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+            var image = document
+                .Descendants()
+                .Where(element => element.Name.LocalName.Equals("Image", StringComparison.OrdinalIgnoreCase))
+                .Select(element => AttributeValue(element, "Source"))
+                .Where(static source => !string.IsNullOrWhiteSpace(source))
+                .Select(source => resolveImage?.Invoke(source!) ?? (null, null))
+                .FirstOrDefault(static result => result.Bytes is { Length: > 0 });
             var blockElements = document
                 .Descendants()
                 .Where(element => element.Name.LocalName == "Table"
@@ -69,11 +78,12 @@ public static class ExternalXamlClipboardPlanner
                     : element.Name.LocalName == "Paragraph"
                         && !element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "Table"))
                 .ToArray();
-            if (blockElements.Length == 0)
+            if (blockElements.Length == 0 && image.Bytes is not { Length: > 0 })
                 return null;
 
             var body = new TextBody();
             var outputCharacters = 0;
+            bool containsTable = blockElements.Any(element => element.Name.LocalName == "Table");
             foreach (var element in blockElements)
             {
                 if (element.Name.LocalName == "Table")
@@ -85,12 +95,16 @@ public static class ExternalXamlClipboardPlanner
                     return null;
             }
 
-            if (body.Paragraphs.All(static paragraph => paragraph.Runs.Count == 0))
+            if (body.Paragraphs.All(static paragraph => paragraph.Runs.Count == 0)
+                && image.Bytes is not { Length: > 0 })
                 return null;
 
             return new InCanvasRichClipboardPayload(
                 body,
-                InCanvasTextEditPlanner.ExtractPlainText(body));
+                InCanvasTextEditPlanner.ExtractPlainText(body),
+                ImageBytes: image.Bytes,
+                ImageContentType: image.ContentType,
+                ContainsTable: containsTable);
         }
         catch
         {
@@ -378,6 +392,76 @@ public static class ExternalXamlClipboardPlanner
 
         return false;
     }
+
+    private static (byte[]? Bytes, string? ContentType) ResolveImage(
+        ZipArchive package,
+        ZipArchiveEntry xamlEntry,
+        string source)
+    {
+        if (source.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            var comma = source.IndexOf(',');
+            if (comma > 5
+                && source[..comma].Contains(";base64", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    return (Convert.FromBase64String(source[(comma + 1)..]),
+                        source[5..comma].Trim().ToLowerInvariant());
+                }
+                catch (FormatException)
+                {
+                    return (null, null);
+                }
+            }
+
+            return (null, null);
+        }
+
+        var normalized = source.Trim();
+        if (Uri.TryCreate(normalized, UriKind.Absolute, out var absolute))
+            normalized = absolute.AbsolutePath;
+        var marker = normalized.IndexOf(",,,", StringComparison.Ordinal);
+        if (marker >= 0)
+            normalized = normalized[(marker + 3)..];
+        normalized = normalized.Split('?', '#')[0]
+            .Replace('\\', '/')
+            .TrimStart('/');
+        if (Uri.TryCreate(normalized, UriKind.RelativeOrAbsolute, out var decodedUri))
+            normalized = Uri.UnescapeDataString(decodedUri.ToString());
+
+        var xamlDirectory = Path.GetDirectoryName(xamlEntry.FullName)?.Replace('\\', '/');
+        var candidates = new List<string> { normalized };
+        if (!string.IsNullOrEmpty(xamlDirectory))
+            candidates.Add($"{xamlDirectory}/{normalized}".Trim('/'));
+
+        var fileName = Path.GetFileName(normalized);
+        if (!string.IsNullOrEmpty(fileName))
+            candidates.Add(fileName);
+
+        var entry = package.Entries.FirstOrDefault(candidate =>
+            candidates.Any(path => string.Equals(
+                candidate.FullName.TrimStart('/'),
+                path,
+                StringComparison.OrdinalIgnoreCase)));
+        if (entry is null || entry.Length <= 0 || entry.Length > MaxXmlBytes)
+            return (null, null);
+
+        using var stream = entry.Open();
+        using var memory = new MemoryStream((int)entry.Length);
+        stream.CopyTo(memory);
+        return (memory.ToArray(), ContentTypeFor(entry.FullName));
+    }
+
+    private static string ContentTypeFor(string path) =>
+        Path.GetExtension(path).ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".bmp" => "image/bmp",
+            ".tif" or ".tiff" => "image/tiff",
+            _ => "image/png",
+        };
 
     private readonly record struct XamlTextStyle(
         string? FontFamily,

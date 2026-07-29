@@ -123,8 +123,16 @@ public partial class MainWindow
             TextOptions.SetTextHintingMode(_inlineEditor, TextHintingMode.Fixed);
             _inlineEditor.PreviewKeyDown += InlineEditor_KeyDown;
             _inlineEditor.LostFocus  += InlineEditor_LostFocus;
+            _inlineEditor.SelectionChanged += (_, _) =>
+            {
+                if (!_isApplyingFormulaEditorText && _inlineEditor is { } inlineEditor)
+                    ClearFormulaReferenceEntrySpanIfCaretLeftReference(inlineEditor);
+            };
             _inlineEditor.TextChanged += (_, _) =>
             {
+                if (_isApplyingFormulaEditorText)
+                    return;
+
                 SyncFormulaBarTextFromInlineEditor();
                 UpdateFormulaRangeEntryStateAfterTextChanged(_inlineEditor);
                 RefreshInlineEditorTextSurface();
@@ -551,6 +559,12 @@ public partial class MainWindow
         if (e.Key == Key.Back || e.Key == Key.Delete)
             _suppressNextCellValueAutoCompleteSuggestion = true;
 
+        if (TryToggleFormulaRangeEntrySelectionMode(e.Key, Keyboard.Modifiers))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.F2 && Keyboard.Modifiers == ModifierKeys.None && _inlineEditor is not null)
         {
             var togglePlan = FormulaEditInteractionPlanner.BuildPointModeTogglePlan(_inlineEditor.Text, _formulaRangeEntryMode);
@@ -570,7 +584,6 @@ public partial class MainWindow
         {
             if (TryCycleFormulaReference(_inlineEditor))
             {
-                FormulaBar.Text = _inlineEditor.Text;
                 e.Handled = true;
             }
             return;
@@ -583,8 +596,9 @@ public partial class MainWindow
             var addr = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
             if (addr.HasValue)
             {
-                var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
+                var cell = _workbook.GetSheet(addr.Value.Sheet)?.GetCell(addr.Value);
                 FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
+                RestoreFormulaEditCellSelection(addr.Value);
             }
             ClearFormulaRangeEntryState();
             RefreshStatusBar();
@@ -620,9 +634,11 @@ public partial class MainWindow
                 pageSize,
                 colPageSize) is { } formulaReferenceShortcutTarget)
         {
-            if (TryApplyFormulaRangeSelection(
+            if (TryApplyFormulaRangeEntryKeyboardSelection(
+                    formulaReferenceCurrent,
                     formulaReferenceShortcutTarget,
-                    extendSelection: wpfModifiers.HasFlag(ModifierKeys.Shift)))
+                    extendSelection: _formulaRangeEntrySelectionMode == ExcelSelectionMode.Extend ||
+                        wpfModifiers.HasFlag(ModifierKeys.Shift)))
             {
                 EnsureCellVisible(formulaReferenceShortcutTarget);
                 e.Handled = true;
@@ -664,7 +680,11 @@ public partial class MainWindow
 
         if (intent.Action == ExcelEditKeyAction.SelectFormulaReference && intent.Target is { } referenceTarget)
         {
-            if (TryApplyFormulaRangeSelection(referenceTarget, extendSelection: wpfModifiers.HasFlag(ModifierKeys.Shift)))
+            if (TryApplyFormulaRangeEntryKeyboardSelection(
+                    formulaReferenceCurrent,
+                    referenceTarget,
+                    extendSelection: _formulaRangeEntrySelectionMode == ExcelSelectionMode.Extend ||
+                        wpfModifiers.HasFlag(ModifierKeys.Shift)))
             {
                 EnsureCellVisible(referenceTarget);
                 e.Handled = true;
@@ -868,6 +888,12 @@ public partial class MainWindow
         if (e.Key == Key.Back || e.Key == Key.Delete)
             _suppressNextCellValueAutoCompleteSuggestion = true;
 
+        if (TryToggleFormulaRangeEntrySelectionMode(e.Key, e.KeyboardDevice.Modifiers))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.F2 && e.KeyboardDevice.Modifiers == ModifierKeys.None)
         {
             var togglePlan = FormulaEditInteractionPlanner.BuildPointModeTogglePlan(FormulaBar.Text, _formulaRangeEntryMode);
@@ -891,8 +917,9 @@ public partial class MainWindow
             var addr = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
             if (addr.HasValue)
             {
-                var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
+                var cell = _workbook.GetSheet(addr.Value.Sheet)?.GetCell(addr.Value);
                 FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
+                RestoreFormulaEditCellSelection(addr.Value);
             }
             HideInlineEditor(commit: false);
             ClearFormulaRangeEntryState();
@@ -923,9 +950,11 @@ public partial class MainWindow
                     pageSize,
                     colPageSize) is { } formulaReferenceShortcutTarget)
             {
-                if (TryApplyFormulaRangeSelection(
+                if (TryApplyFormulaRangeEntryKeyboardSelection(
+                        formulaReferenceCurrent,
                         formulaReferenceShortcutTarget,
-                        extendSelection: wpfModifiers.HasFlag(ModifierKeys.Shift)))
+                        extendSelection: _formulaRangeEntrySelectionMode == ExcelSelectionMode.Extend ||
+                            wpfModifiers.HasFlag(ModifierKeys.Shift)))
                 {
                     EnsureCellVisible(formulaReferenceShortcutTarget);
                     e.Handled = true;
@@ -960,7 +989,11 @@ public partial class MainWindow
             }
             else if (intent.Action == ExcelEditKeyAction.SelectFormulaReference && intent.Target is { } referenceTarget)
             {
-                if (TryApplyFormulaRangeSelection(referenceTarget, extendSelection: wpfModifiers.HasFlag(ModifierKeys.Shift)))
+                if (TryApplyFormulaRangeEntryKeyboardSelection(
+                        formulaReferenceCurrent,
+                        referenceTarget,
+                        extendSelection: _formulaRangeEntrySelectionMode == ExcelSelectionMode.Extend ||
+                            wpfModifiers.HasFlag(ModifierKeys.Shift)))
                 {
                     EnsureCellVisible(referenceTarget);
                     e.Handled = true;
@@ -987,8 +1020,9 @@ public partial class MainWindow
         var addr = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
         if (addr.HasValue)
         {
-            var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
+            var cell = _workbook.GetSheet(addr.Value.Sheet)?.GetCell(addr.Value);
             FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
+            RestoreFormulaEditCellSelection(addr.Value);
         }
 
         HideInlineEditor(commit: false);
@@ -1202,8 +1236,27 @@ public partial class MainWindow
                 editor.Text, caretIndex, anchor, _options.UseR1C1ReferenceStyle, out var edit))
             return false;
 
-        ApplyTextEdit(editor, edit);
+        ApplyFormulaEditorTextEdit(editor, edit);
+        _formulaReferenceStart = edit.SelectionStart;
+        _formulaReferenceLength = edit.SelectionLength;
         return true;
+    }
+
+    private void ApplyFormulaEditorTextEdit(System.Windows.Controls.TextBox editor, ExcelTextEdit edit)
+    {
+        _isApplyingFormulaEditorText = true;
+        try
+        {
+            ApplyTextEdit(editor, edit);
+            if (!ReferenceEquals(editor, FormulaBar))
+                FormulaBar.Text = editor.Text;
+            else if (_inlineEditor?.IsVisible == true)
+                _inlineEditor.Text = editor.Text;
+        }
+        finally
+        {
+            _isApplyingFormulaEditorText = false;
+        }
     }
 
     private static void ApplyTextEdit(System.Windows.Controls.TextBox editor, ExcelTextEdit edit)

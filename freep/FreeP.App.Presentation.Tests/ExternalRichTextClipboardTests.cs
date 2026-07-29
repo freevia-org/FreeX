@@ -118,6 +118,37 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfPict_PreservesPngPayloadAlongsideText()
+    {
+        var png = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi Before {\pict\pngblip " + Convert.ToHexString(png) + @"} After}");
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(rtf);
+
+        payload.Should().NotBeNull();
+        payload!.HasImage.Should().BeTrue();
+        payload.ImageContentType.Should().Be("image/png");
+        payload.ImageBytes.Should().Equal(png);
+        payload.PlainText.Should().Be("Before  After");
+    }
+
+    [Fact]
+    public void RtfPict_RecognizesJpegSignature()
+    {
+        byte[] jpeg = [0xFF, 0xD8, 0xFF, 0xD9];
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi{\pict\jpegblip " + Convert.ToHexString(jpeg) + "}}");
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(rtf);
+
+        payload.Should().NotBeNull();
+        payload!.ImageContentType.Should().Be("image/jpeg");
+        payload.ImageBytes.Should().Equal(jpeg);
+    }
+
+    [Fact]
     public void UnsupportedAndMalformedRtf_IsBoundedAndNeverThrows()
     {
         var partial = ExternalRichTextClipboardPlanner.TryParseRtf(
@@ -131,6 +162,20 @@ public sealed class ExternalRichTextClipboardTests
         var oversized = Encoding.ASCII.GetBytes(
             "{\\rtf1\\ansi " + new string('x', ExternalRichTextClipboardPlanner.MaxOutputCharacters + 1));
         ExternalRichTextClipboardPlanner.TryParseRtf(oversized).Should().BeNull();
+    }
+
+    [Fact]
+    public void RtfCharacterDirection_RtlchAndLtrch_PreserveMixedRunOverrides()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\rtlpar\rtlch\u1488?\u1489?\u1490?\ltrch LTR}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Should().Contain(run => run.Text == "\u05D0\u05D1\u05D2" && run.RightToLeft == true);
+        runs.Should().Contain(run => run.Text == "LTR" && run.RightToLeft == false);
     }
 
     [Fact]
@@ -213,10 +258,37 @@ Left\cell{\ul Right}\ul0\cell\row}";
 
         payload.Should().NotBeNull();
         payload!.PlainText.Should().Be("Header\tValue\nLeft\tRight");
+        payload.TableColumnWidthsEmu.Should().Equal(914400L, 914400L);
         payload.Body.Paragraphs.Should().HaveCount(2);
         payload.Body.Paragraphs[0].Runs.Should().Contain(run => run.Text == "Header" && run.Bold);
         payload.Body.Paragraphs[0].Runs.Should().Contain(run => run.Text == "Value" && run.Italic);
         payload.Body.Paragraphs[1].Runs.Should().Contain(run => run.Text == "Right" && run.Underline);
+    }
+
+    [Fact]
+    public void WordTableCellStyles_PreserveSolidFillAndCommonBorders()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\colortbl;\red255\green255\blue0;\red31\green78\blue121;}
+\trowd\clcbpat1\clvertalc\clpadl120\clpadr240\clpadt60\clpadb180\clbrdrl\brdrs\brdrw10\brdrcf2\cellx1440\cellx2880
+Header\cell Value\cell\row}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.TableCellStyles.Should().HaveCount(2);
+        payload.TableCellStyles![0].FillRgb.Should().Be(0xFFFF00);
+        var left = payload.TableCellStyles[0].Left;
+        left.Should().NotBeNull();
+        left!.ColorRgb.Should().Be(0x1F4E79);
+        left.WidthPt.Should().Be(0.5);
+        payload.TableCellStyles[0].Anchor.Should().Be(TableCellAnchor.Middle);
+        payload.TableCellStyles[0].InsetLeftPt.Should().Be(6);
+        payload.TableCellStyles[0].InsetRightPt.Should().Be(12);
+        payload.TableCellStyles[0].InsetTopPt.Should().Be(3);
+        payload.TableCellStyles[0].InsetBottomPt.Should().Be(9);
+        payload.TableCellStyles[1].FillRgb.Should().BeNull();
     }
 
     [Fact]
@@ -263,6 +335,49 @@ Three\cell Four\cell\row}";
         payload.Body.Paragraphs.Single().Runs
             .Single(run => run.Text.Contains("Unsafe", StringComparison.Ordinal))
             .Hyperlink.Should().BeNull();
+    }
+
+    [Fact]
+    public void HyperlinkField_PreservesLocalFileTargetAndRejectsRemoteFileHost()
+    {
+        const string rtf =
+            @"{\rtf1\ansi {\field{\*\fldinst HYPERLINK ""file:///C:/Reports/budget.xlsx""}{\fldrslt Open workbook}} "
+            + @"{\field{\*\fldinst HYPERLINK ""file://server/share/budget.xlsx""}{\fldrslt Remote workbook}}}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Select(run => run.Text).Should().Contain("Open workbook");
+        runs.Single(run => run.Text == "Open workbook").Hyperlink!.Url
+            .Should().Be("file:///C:/Reports/budget.xlsx");
+        runs.Single(run => run.Text.Contains("Remote workbook", StringComparison.Ordinal))
+            .Hyperlink.Should().BeNull();
+    }
+
+    [Fact]
+    public void RtfField_PreservesNonHyperlinkTypeCachedResultAndClipboardRoundTrip()
+    {
+        const string rtf =
+            @"{\rtf1\ansi Before {\field{\*\fldinst PAGE \\* MERGEFORMAT}{\fldrslt 2}} After}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var fieldRun = payload!.Body.Paragraphs.Single().Runs
+            .Single(run => run.Text == "2");
+        fieldRun.Field.Should().NotBeNull();
+        fieldRun.Field!.FieldType.Should().Be("PAGE");
+        fieldRun.Field.CachedText.Should().Be("2");
+        fieldRun.Hyperlink.Should().BeNull();
+
+        var restored = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        restored.Should().NotBeNull();
+        var restoredField = restored!.Body.Paragraphs.Single().Runs
+            .Single(run => run.Text == "2");
+        restoredField.Field!.FieldType.Should().Be("PAGE");
+        restoredField.Field.CachedText.Should().Be("2");
     }
 
     [Fact]

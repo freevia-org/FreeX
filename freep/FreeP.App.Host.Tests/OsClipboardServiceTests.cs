@@ -39,6 +39,7 @@ public sealed class OsClipboardServiceTests
         public byte[]? SelectionBytes { get; set; }
         public byte[]? RichTextBytes { get; set; }
         public byte[]? XamlPackageBytes { get; set; }
+        public byte[]? RtfBytes { get; set; }
         public string? OwnerToken { get; set; }
         public bool ThrowOnRead { get; set; }
         public bool ThrowOnWrite { get; set; }
@@ -63,7 +64,8 @@ public sealed class OsClipboardServiceTests
                 Text: HasText ? Text : null,
                 OwnerToken: OwnerToken,
                 RichTextBytes: RichTextBytes,
-                XamlPackageBytes: XamlPackageBytes);
+                XamlPackageBytes: XamlPackageBytes,
+                RtfBytes: RtfBytes);
         }
 
         public bool ContainsImage() => HasImage;
@@ -352,6 +354,19 @@ public sealed class OsClipboardServiceTests
         content.OwnerToken.Should().Be("legacy-owner");
     }
 
+    [StaFact]
+    public void WpfDataObject_ReadsNativeRtfPayload()
+    {
+        var rtf = Encoding.ASCII.GetBytes(@"{\rtf1\ansi Native RTF}");
+        var dataObject = new DataObject();
+        dataObject.SetData(DataFormats.Rtf, new MemoryStream(rtf, writable: false), false);
+
+        var content = WpfOsClipboard.ReadDataObject(dataObject);
+
+        content.RtfBytes.Should().Equal(rtf);
+        content.HasRichText.Should().BeTrue();
+    }
+
     private static byte[] ReadComHGlobal(DataObject dataObject, string format)
     {
         var formatEtc = new FORMATETC
@@ -528,7 +543,52 @@ public sealed class OsClipboardServiceTests
     }
 
     [StaFact]
-    public void Paste_XamlPackageTable_InsertsProjectedTextBox()
+    public void Paste_ExternalRtfPayload_InsertsFormattedTextBox()
+    {
+        var fake = new FakeOsClipboard
+        {
+            RtfBytes = Encoding.ASCII.GetBytes(
+                @"{\rtf1\ansi{\fonttbl{\f0 Calibri;}}\pard\f0\fs24 Before \b bold\b0\par After}"),
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        var body = editor.CurrentSlide!.Shapes.Single().TextBody!;
+        body.Paragraphs.Should().HaveCount(2);
+        body.Paragraphs[0].Runs.Select(run => run.Text).Should().ContainInOrder("Before ", "bold");
+        body.Paragraphs[0].Runs.Single(run => run.Text == "bold").Bold.Should().BeTrue();
+        body.Paragraphs[1].Runs.Single().Text.Should().Be("After");
+    }
+
+    [StaFact]
+    public void Paste_ExternalRtfPicture_InsertsPictureAndRetainsText()
+    {
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi Caption {\pict\pngblip " + Convert.ToHexString(_minPng) + @"} After}");
+        var fake = new FakeOsClipboard { RtfBytes = rtf };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        editor.CurrentSlide.Shapes[0].Kind.Should().Be(SlideShapeKind.Picture);
+        editor.CurrentSlide.Shapes[0].Picture!.Bytes.Should().Equal(_minPng);
+        editor.CurrentSlide.Shapes[0].Picture!.ContentType.Should().Be("image/png");
+        editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
+            .Should().Contain(run => run.Text.Contains("Caption ", StringComparison.Ordinal));
+    }
+
+    [StaFact]
+    public void Paste_XamlPackageTable_InsertsNativeEditableTable()
     {
         const string xaml = """
             <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
@@ -552,9 +612,96 @@ public sealed class OsClipboardServiceTests
         var result = service.PasteWithResult(editor);
 
         result.Should().Be(PresentationClipboardPasteSource.XamlPackage);
-        var body = editor.CurrentSlide!.Shapes.Single().TextBody!;
-        body.Paragraphs.Single().Runs.Select(run => run.Text).Should().ContainInOrder("Q1", "\t", "42");
-        body.Paragraphs.Single().Runs.Single(run => run.Text == "Q1").Bold.Should().BeTrue();
+        var shape = editor.CurrentSlide!.Shapes.Single();
+        shape.Kind.Should().Be(SlideShapeKind.Table);
+        shape.Table.Should().NotBeNull();
+        shape.Table!.Rows.Should().ContainSingle();
+        shape.Table.ColumnWidthsEmu.Should().HaveCount(2);
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
+            .Single().Text.Should().Be("Q1");
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
+            .Single().Bold.Should().BeTrue();
+        shape.Table.Rows[0].Cells[1].TextBody!.Paragraphs.Single().Runs
+            .Single().Text.Should().Be("42");
+    }
+
+    [StaFact]
+    public void Paste_ExternalRtfTable_InsertsNativeEditableTable()
+    {
+        var fake = new FakeOsClipboard
+        {
+            RtfBytes = Encoding.ASCII.GetBytes(
+                @"{\rtf1\ansi\trowd\cellx1440\cellx2880{\b Header}\cell{\i Value}\cell\row}"),
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        var shape = editor.CurrentSlide!.Shapes.Single();
+        shape.Kind.Should().Be(SlideShapeKind.Table);
+        shape.Table!.ColumnWidthsEmu.Should().Equal(914400L, 914400L);
+        shape.Table.Rows.Single().Cells[0].TextBody!.Paragraphs.Single().Runs
+            .Single().Bold.Should().BeTrue();
+        shape.Table.Rows.Single().Cells[1].TextBody!.Paragraphs.Single().Runs
+            .Single().Italic.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void Paste_ExternalRtfTable_PreservesSolidCellFillAndBorder()
+    {
+        var fake = new FakeOsClipboard
+        {
+            RtfBytes = Encoding.ASCII.GetBytes(
+                @"{\rtf1\ansi
+{\colortbl;\red255\green255\blue0;\red31\green78\blue121;}
+\trowd\clcbpat1\clvertalc\clpadl120\clpadr240\clpadt60\clpadb180\clbrdrl\brdrs\brdrw10\brdrcf2\cellx1440\cellx2880
+Header\cell Value\cell\row}"),
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        service.PasteWithResult(editor).Should().Be(PresentationClipboardPasteSource.RichText);
+        var cell = editor.CurrentSlide!.Shapes.Single().Table!.Rows.Single().Cells[0];
+        ((ShapeFill.Solid)cell.Fill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFF00));
+        ((ShapeOutline.Visible)cell.Borders!.Left!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        cell.Anchor.Should().Be(TableCellAnchor.Middle);
+        cell.InsetLeftPt.Should().Be(6);
+        cell.InsetRightPt.Should().Be(12);
+        cell.InsetTopPt.Should().Be(3);
+        cell.InsetBottomPt.Should().Be(9);
+        ((ShapeOutline.Visible)cell.Borders.Left).WidthPt.Should().Be(0.5);
+    }
+
+    [StaFact]
+    public void Paste_XamlPackageImage_InsertsPictureFromPackageResource()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <BlockUIContainer><Image Source="Images/pasted.png" /></BlockUIContainer>
+            </FlowDocument>
+            """;
+        var fake = new FakeOsClipboard
+        {
+            XamlPackageBytes = CreateXamlPackage(xaml, ("Images/pasted.png", _minPng)),
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.XamlPackage);
+        var picture = editor.CurrentSlide!.Shapes.Single();
+        picture.Kind.Should().Be(SlideShapeKind.Picture);
+        picture.Picture!.ContentType.Should().Be("image/png");
+        picture.Picture.Bytes.Should().Equal(_minPng);
     }
 
     [StaFact]
@@ -901,12 +1048,24 @@ public sealed class OsClipboardServiceTests
             "Y9: empty OS text should not insert a textbox");
     }
 
-    private static byte[] CreateXamlPackage(string xaml)
+    private static byte[] CreateXamlPackage(
+        string xaml,
+        params (string Name, byte[] Bytes)[] resources)
     {
         using var output = new MemoryStream();
         using (var package = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
-        using (var writer = new StreamWriter(package.CreateEntry("Xaml/Document.xaml").Open(), Encoding.UTF8))
+        {
+            foreach (var resource in resources)
+            {
+                var entry = package.CreateEntry(resource.Name);
+                using var stream = entry.Open();
+                stream.Write(resource.Bytes);
+            }
+
+            var xamlEntry = package.CreateEntry("Xaml/Document.xaml");
+            using var writer = new StreamWriter(xamlEntry.Open(), Encoding.UTF8);
             writer.Write(xaml);
+        }
         return output.ToArray();
     }
 

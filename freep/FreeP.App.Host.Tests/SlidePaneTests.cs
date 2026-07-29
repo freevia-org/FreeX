@@ -161,6 +161,50 @@ public sealed class SlidePaneTests
             "non-selected item must have the normal 1-px border");
     }
 
+    [StaFact]
+    public void SlidePane_ThumbnailItems_ExposeLiveSharedAutomationNames()
+    {
+        var (pane, editor) = MakePaneWithSlides(2);
+        editor.SetSlideTitle(0, "Opening");
+        editor.SetSlideTitle(1, "Agenda");
+
+        pane.SlidePaneThumbnailAutomationNamesForTests.Should().Equal(
+            "Slide 1: Opening, 1 object",
+            "Slide 2: Agenda, 1 object");
+
+        editor.SelectSlide(1);
+        pane.SlidePaneThumbnailAutomationNamesForTests.Should().Equal(
+            "Slide 1: Opening, 1 object",
+            "Slide 2: Agenda, 1 object");
+
+        editor.MoveSlide(1, 0);
+        pane.SlidePaneThumbnailAutomationNamesForTests.Should().Equal(
+            "Slide 1: Agenda, 1 object",
+            "Slide 2: Opening, 1 object");
+    }
+
+    [StaFact]
+    public void SlidePane_SectionHeaders_ExposeLiveSharedAutomationNames()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide1", Title = "Opening" });
+        presentation.Slides.Add(new Slide { Id = "slide2", Title = "Agenda" });
+        var section = new PresentationSection { Id = "intro", Name = "Intro" };
+        section.SlideIds.Add("slide1");
+        section.SlideIds.Add("slide2");
+        presentation.Sections.Add(section);
+
+        var pane = new SlidePane(new EditingSession(
+            presentation,
+            new PresentationCommandBus(presentation)));
+
+        pane.SlidePaneSectionHeaderAutomationNamesForTests.Should()
+            .ContainSingle().Which.Should().Be("Section Intro  (2), expanded");
+        pane.ToggleSectionForTests(0).Should().BeTrue();
+        pane.SlidePaneSectionHeaderAutomationNamesForTests.Should()
+            .ContainSingle().Which.Should().Be("Section Intro  (2), collapsed");
+    }
+
     // ── Structural changes ────────────────────────────────────────────────────────
 
     [StaFact]

@@ -1,4 +1,5 @@
 using System.Text;
+using Free.Shared.AppServices;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -43,6 +44,7 @@ public static class ExternalRichTextClipboardPlanner
             ListOverrideTable,
             ListLevelText,
             FieldInstruction,
+            Picture,
             Skip,
         }
 
@@ -77,6 +79,101 @@ public static class ExternalRichTextClipboardPlanner
             public bool StartSpecified { get; set; }
         }
 
+        private sealed class CellStyleDraft
+        {
+            private TableCellBorderSide? _borderSide;
+            private bool _borderDefined;
+            private bool _borderNone;
+            private int _borderColorRgb;
+            private double _borderWidthPt = 0.75;
+
+            public int? FillRgb { get; set; }
+            public InCanvasRichClipboardTableBorder? Left { get; private set; }
+            public InCanvasRichClipboardTableBorder? Right { get; private set; }
+            public InCanvasRichClipboardTableBorder? Top { get; private set; }
+            public InCanvasRichClipboardTableBorder? Bottom { get; private set; }
+            public TableCellAnchor? Anchor { get; set; }
+            public double? InsetLeftPt { get; set; }
+            public double? InsetRightPt { get; set; }
+            public double? InsetTopPt { get; set; }
+            public double? InsetBottomPt { get; set; }
+
+            public void BeginBorder(TableCellBorderSide side)
+            {
+                CommitBorder();
+                _borderSide = side;
+                _borderDefined = false;
+                _borderNone = false;
+                _borderColorRgb = 0;
+                _borderWidthPt = 0.75;
+            }
+
+            public void SetSolid() => _borderDefined = true;
+
+            public void SetNone()
+            {
+                _borderDefined = true;
+                _borderNone = true;
+            }
+
+            public void SetColor(int rgb) => _borderColorRgb = rgb;
+
+            public void SetWidth(double widthPt) => _borderWidthPt = widthPt;
+
+            public InCanvasRichClipboardTableCellStyle Snapshot()
+            {
+                CommitBorder();
+                return new(
+                    FillRgb,
+                    Left,
+                    Right,
+                    Top,
+                    Bottom,
+                    Anchor,
+                    InsetLeftPt,
+                    InsetRightPt,
+                    InsetTopPt,
+                    InsetBottomPt);
+            }
+
+            public void Reset()
+            {
+                FillRgb = null;
+                Left = null;
+                Right = null;
+                Top = null;
+                Bottom = null;
+                _borderSide = null;
+                _borderDefined = false;
+                Anchor = null;
+                InsetLeftPt = null;
+                InsetRightPt = null;
+                InsetTopPt = null;
+                InsetBottomPt = null;
+            }
+
+            private void CommitBorder()
+            {
+                if (_borderSide is not { } side || !_borderDefined)
+                    return;
+
+                var border = new InCanvasRichClipboardTableBorder(
+                    _borderColorRgb,
+                    _borderWidthPt,
+                    _borderNone);
+                switch (side)
+                {
+                    case TableCellBorderSide.Left: Left = border; break;
+                    case TableCellBorderSide.Right: Right = border; break;
+                    case TableCellBorderSide.Top: Top = border; break;
+                    case TableCellBorderSide.Bottom: Bottom = border; break;
+                }
+
+                _borderSide = null;
+                _borderDefined = false;
+            }
+        }
+
         private sealed class State
         {
             public Destination Destination;
@@ -90,6 +187,7 @@ public static class ExternalRichTextClipboardPlanner
             public bool ItalicSet;
             public bool Underline;
             public bool Strikethrough;
+            public bool? RunRightToLeft;
             public int ColorIndex;
             public int UnicodeSkip = 1;
             public int UnicodeFallbackRemaining;
@@ -122,10 +220,12 @@ public static class ExternalRichTextClipboardPlanner
             bool Italic,
             bool Underline,
             bool Strikethrough,
+            bool? RunRightToLeft,
             SrgbColor? Color,
             bool BoldSet,
             bool ItalicSet,
-            Hyperlink? Hyperlink);
+            Hyperlink? Hyperlink,
+            string? FieldType);
 
         private readonly byte[] _bytes;
         private readonly Dictionary<int, string> _fonts = new();
@@ -141,6 +241,11 @@ public static class ExternalRichTextClipboardPlanner
         private int _outputCharacters;
         private bool _tableRowActive;
         private int _tableCellCount;
+        private bool _containsTable;
+        private readonly List<long> _tableCellRightEdgesTwips = new();
+        private IReadOnlyList<long>? _tableColumnWidthsEmu;
+        private readonly List<InCanvasRichClipboardTableCellStyle> _tableCellStyles = new();
+        private readonly CellStyleDraft _pendingCellStyle = new();
         private bool _sawRtfHeader;
         private bool _lastWasParagraphBreak;
         private Paragraph? _activeParagraph;
@@ -154,6 +259,9 @@ public static class ExternalRichTextClipboardPlanner
         private int _currentListOverrideId;
         private LegacyListDefinition? _legacyList;
         private readonly HashSet<(int ListId, int Level)> _seenListLevels = new();
+        private readonly List<byte> _pictureBytes = new();
+        private int _picturePendingNibble = -1;
+        private bool _pictureCaptureStarted;
 
         public RtfReader(byte[] bytes) => _bytes = bytes;
 
@@ -182,9 +290,15 @@ public static class ExternalRichTextClipboardPlanner
             }
 
             EnsureParagraph();
+            var picture = TryGetPicturePayload();
             return new InCanvasRichClipboardPayload(
                 _body,
-                InCanvasTextEditPlanner.ExtractPlainText(_body));
+                InCanvasTextEditPlanner.ExtractPlainText(_body),
+                ImageBytes: picture.Bytes,
+                ImageContentType: picture.ContentType,
+                ContainsTable: _containsTable,
+                TableColumnWidthsEmu: _tableColumnWidthsEmu,
+                TableCellStyles: _tableCellStyles.Count == 0 ? null : _tableCellStyles);
         }
 
         private bool ReadNext()
@@ -224,7 +338,10 @@ public static class ExternalRichTextClipboardPlanner
                         _position = _bytes.Length;
                         return true;
                     }
-                    _state = _states.Pop();
+                    State restoredState = _states.Pop();
+                    if (_hasActiveStyle && !SameStyle(_activeStyle, CurrentStyle(restoredState)))
+                        FlushActiveRun();
+                    _state = restoredState;
                     _depth--;
                     _position++;
                     return true;
@@ -428,7 +545,6 @@ public static class ExternalRichTextClipboardPlanner
                     break;
                 case "stylesheet":
                 case "info":
-                case "pict":
                 case "object":
                 case "filetbl":
                 case "generator":
@@ -436,6 +552,24 @@ public static class ExternalRichTextClipboardPlanner
                 case "pntext":
                     _state.Destination = Destination.Skip;
                     _state.SkipOutput = true;
+                    break;
+                case "pict":
+                    if (!_pictureCaptureStarted && _pictureBytes.Count == 0)
+                    {
+                        _pictureCaptureStarted = true;
+                        _picturePendingNibble = -1;
+                        _state.Destination = Destination.Picture;
+                        _state.SkipOutput = true;
+                    }
+                    else
+                    {
+                        _state.Destination = Destination.Skip;
+                        _state.SkipOutput = true;
+                    }
+                    break;
+                case "pngblip":
+                    break;
+                case "jpegblip":
                     break;
 
                 case "f":
@@ -461,6 +595,8 @@ public static class ExternalRichTextClipboardPlanner
                 case "strike":
                 case "striked": _state.Strikethrough = value != 0; break;
                 case "strike0": _state.Strikethrough = false; break;
+                case "rtlch": _state.RunRightToLeft = true; break;
+                case "ltrch": _state.RunRightToLeft = false; break;
                 case "cf": _state.ColorIndex = Math.Max(0, value); break;
                 case "plain": ResetCharacterFormatting(); break;
                 case "pard": ResetParagraphFormatting(); break;
@@ -478,7 +614,12 @@ public static class ExternalRichTextClipboardPlanner
                 case "tab": AppendText("\t"); break;
                 case "bin":
                     if (parameter is { } count && count > 0)
-                        _position = Math.Min(_bytes.Length, _position + count);
+                    {
+                        if (_state.Destination == Destination.Picture)
+                            ReadPictureBinary(count);
+                        else
+                            _position = Math.Min(_bytes.Length, _position + count);
+                    }
                     break;
                 case "red": _state.Red = Math.Clamp(value, 0, 255); break;
                 case "green": _state.Green = Math.Clamp(value, 0, 255); break;
@@ -550,15 +691,49 @@ public static class ExternalRichTextClipboardPlanner
                 case "pnf":
                 case "pnfs":
                 case "cellx":
+                    if (_tableRowActive)
+                    {
+                        CaptureTableCellStyle();
+                        if (parameter is > 0
+                            && _tableCellRightEdgesTwips.Count < MaxTableCellsPerRow)
+                        {
+                            _tableCellRightEdgesTwips.Add(parameter.Value);
+                        }
+                    }
+                    break;
+                case "clcbpat":
+                    _pendingCellStyle.FillRgb = ResolveColorRgb(value);
+                    break;
+                case "clbrdrl": _pendingCellStyle.BeginBorder(TableCellBorderSide.Left); break;
+                case "clbrdrr": _pendingCellStyle.BeginBorder(TableCellBorderSide.Right); break;
+                case "clbrdrt": _pendingCellStyle.BeginBorder(TableCellBorderSide.Top); break;
+                case "clbrdrb": _pendingCellStyle.BeginBorder(TableCellBorderSide.Bottom); break;
+                case "brdrs": _pendingCellStyle.SetSolid(); break;
+                case "brdrnil":
+                case "brdrnone": _pendingCellStyle.SetNone(); break;
+                case "brdrw":
+                    _pendingCellStyle.SetWidth(Math.Clamp(value / 20.0, 0.05, 72.0));
+                    break;
+                case "brdrcf":
+                    _pendingCellStyle.SetColor(ResolveColorRgb(value) ?? 0);
+                    break;
+                case "clvertalt": _pendingCellStyle.Anchor = TableCellAnchor.Top; break;
+                case "clvertalc": _pendingCellStyle.Anchor = TableCellAnchor.Middle; break;
+                case "clvertalb": _pendingCellStyle.Anchor = TableCellAnchor.Bottom; break;
+                case "clpadl": _pendingCellStyle.InsetLeftPt = ToCellInsetPoints(value); break;
+                case "clpadr": _pendingCellStyle.InsetRightPt = ToCellInsetPoints(value); break;
+                case "clpadt": _pendingCellStyle.InsetTopPt = ToCellInsetPoints(value); break;
+                case "clpadb": _pendingCellStyle.InsetBottomPt = ToCellInsetPoints(value); break;
                 case "trleft":
                 case "trgaph":
                 case "trrh":
                 case "trqc":
                 case "trql":
                 case "trqr":
-                case "clvertalt":
-                case "clvertalc":
-                case "clvertalb":
+                case "clpadfl":
+                case "clpadfr":
+                case "clpadft":
+                case "clpadfb":
                 case "cltxlrtb":
                 case "cltxtbrl":
                 case "clshdrawnil":
@@ -568,6 +743,12 @@ public static class ExternalRichTextClipboardPlanner
 
         private void AppendByte(byte value)
         {
+            if (_state.Destination == Destination.Picture)
+            {
+                AppendPictureHex(value);
+                return;
+            }
+
             if (_state.Destination == Destination.FontTable)
             {
                 if (value == (byte)';')
@@ -605,6 +786,66 @@ public static class ExternalRichTextClipboardPlanner
                 return;
 
             AppendText(DecodeByte(value).ToString());
+        }
+
+        private void AppendPictureHex(byte value)
+        {
+            if (value is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
+                return;
+
+            int nibble = HexValue(value);
+            if (nibble < 0)
+                return;
+
+            if (_picturePendingNibble < 0)
+            {
+                _picturePendingNibble = nibble;
+                return;
+            }
+
+            if (_pictureBytes.Count >= MaxRtfBytes)
+                throw new InvalidDataException("RTF picture limit exceeded.");
+
+            _pictureBytes.Add((byte)((_picturePendingNibble << 4) | nibble));
+            _picturePendingNibble = -1;
+        }
+
+        private void ReadPictureBinary(int count)
+        {
+            int end = Math.Min(_bytes.Length, _position + count);
+            if (end - _position > MaxRtfBytes - _pictureBytes.Count)
+                throw new InvalidDataException("RTF picture limit exceeded.");
+
+            for (; _position < end; _position++)
+                _pictureBytes.Add(_bytes[_position]);
+        }
+
+        private (byte[]? Bytes, string? ContentType) TryGetPicturePayload()
+        {
+            if (_pictureBytes.Count == 0)
+                return (null, null);
+
+            byte[] payload = _pictureBytes.ToArray();
+            if (HasPrefix(payload, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))
+                return (payload, "image/png");
+            if (HasPrefix(payload, [0xFF, 0xD8, 0xFF]))
+                return (payload, "image/jpeg");
+
+            return (null, null);
+        }
+
+        private static bool HasPrefix(byte[] value, byte[] prefix)
+        {
+            if (value.Length < prefix.Length)
+                return false;
+
+            for (int i = 0; i < prefix.Length; i++)
+            {
+                if (value[i] != prefix[i])
+                    return false;
+            }
+
+            return true;
         }
 
         private void AppendText(string text)
@@ -658,8 +899,12 @@ public static class ExternalRichTextClipboardPlanner
                 return;
 
             FlushActiveRun();
+            if (_tableRowActive)
+                CaptureTableColumnWidths();
             _tableRowActive = true;
             _tableCellCount = 0;
+            _tableCellRightEdgesTwips.Clear();
+            _containsTable = true;
             _state.InTable = true;
         }
 
@@ -696,8 +941,35 @@ public static class ExternalRichTextClipboardPlanner
             if (!_lastWasParagraphBreak)
                 AppendParagraphBreak();
 
+            CaptureTableColumnWidths();
             _tableRowActive = false;
             _tableCellCount = 0;
+            _tableCellRightEdgesTwips.Clear();
+        }
+
+        private void CaptureTableCellStyle()
+        {
+            _tableCellStyles.Add(_pendingCellStyle.Snapshot());
+            _pendingCellStyle.Reset();
+        }
+
+        private void CaptureTableColumnWidths()
+        {
+            if (_tableColumnWidthsEmu is not null || _tableCellRightEdgesTwips.Count < 2)
+                return;
+
+            long previousTwips = 0;
+            var widths = new List<long>(_tableCellRightEdgesTwips.Count);
+            foreach (long rightEdgeTwips in _tableCellRightEdgesTwips)
+            {
+                if (rightEdgeTwips <= previousTwips)
+                    return;
+
+                widths.Add((rightEdgeTwips - previousTwips) * 635L);
+                previousTwips = rightEdgeTwips;
+            }
+
+            _tableColumnWidthsEmu = widths;
         }
 
         private void RemoveTrailingTableDelimiter()
@@ -716,29 +988,40 @@ public static class ExternalRichTextClipboardPlanner
                 paragraph.Runs.Remove(run);
         }
 
-        private CharacterStyle CurrentStyle()
+        private CharacterStyle CurrentStyle(State? state = null)
         {
+            state ??= _state;
             string? fontFamily = null;
-            int fontIndex = _state.FontIndex >= 0 ? _state.FontIndex : _state.DefaultFontIndex;
+            int fontIndex = state.FontIndex >= 0 ? state.FontIndex : state.DefaultFontIndex;
             if (fontIndex >= 0)
                 _fonts.TryGetValue(fontIndex, out fontFamily);
 
             SrgbColor? color = null;
-            if (_state.ColorIndex > 0 && _state.ColorIndex < _colors.Count)
-                color = _colors[_state.ColorIndex];
+            if (state.ColorIndex > 0 && state.ColorIndex < _colors.Count)
+                color = _colors[state.ColorIndex];
 
             return new CharacterStyle(
                 fontFamily,
-                _state.FontSizePt,
-                _state.Bold,
-                _state.Italic,
-                _state.Underline,
-                _state.Strikethrough,
+                state.FontSizePt,
+                state.Bold,
+                state.Italic,
+                state.Underline,
+                state.Strikethrough,
+                state.RunRightToLeft,
                 color,
-                _state.BoldSet,
-                _state.ItalicSet,
-                _state.Hyperlink);
+                state.BoldSet,
+                state.ItalicSet,
+                state.Hyperlink,
+                TryReadExternalFieldType(state.Field?.Instruction.ToString()));
         }
+
+        private int? ResolveColorRgb(int colorIndex) =>
+            colorIndex > 0 && colorIndex < _colors.Count && _colors[colorIndex] is { } color
+                ? (color.R << 16) | (color.G << 8) | color.B
+                : null;
+
+        private static double ToCellInsetPoints(int twips) =>
+            Math.Clamp(twips / 20.0, 0.0, 72.0);
 
         private void FlushActiveRun()
         {
@@ -761,8 +1044,21 @@ public static class ExternalRichTextClipboardPlanner
                 ItalicSet = _activeStyle.ItalicSet,
                 Underline = _activeStyle.Underline,
                 Strikethrough = _activeStyle.Strikethrough,
+                RightToLeft = _activeStyle.RunRightToLeft,
                 Color = _activeStyle.Color is { } color ? new ThemeAwareColor(color) : null,
                 Hyperlink = _activeStyle.Hyperlink,
+                Field = _activeStyle.FieldType is { } fieldType
+                    ? new FieldRun
+                    {
+                        FieldType = fieldType,
+                        CachedText = _activeText.ToString(),
+                        FontFamily = _activeStyle.FontFamily,
+                        FontSizePt = _activeStyle.FontSizePt,
+                        Bold = _activeStyle.Bold,
+                        Italic = _activeStyle.Italic,
+                        Color = _activeStyle.Color,
+                    }
+                    : null,
             });
             _activeParagraph = null;
             _hasActiveStyle = false;
@@ -776,10 +1072,12 @@ public static class ExternalRichTextClipboardPlanner
             && left.Italic == right.Italic
             && left.Underline == right.Underline
             && left.Strikethrough == right.Strikethrough
+            && left.RunRightToLeft == right.RunRightToLeft
             && Nullable.Equals(left.Color, right.Color)
             && left.BoldSet == right.BoldSet
             && left.ItalicSet == right.ItalicSet
-            && SameHyperlink(left.Hyperlink, right.Hyperlink);
+            && SameHyperlink(left.Hyperlink, right.Hyperlink)
+            && string.Equals(left.FieldType, right.FieldType, StringComparison.Ordinal);
 
         private void ResetCharacterFormatting()
         {
@@ -791,6 +1089,7 @@ public static class ExternalRichTextClipboardPlanner
             _state.ItalicSet = true;
             _state.Underline = false;
             _state.Strikethrough = false;
+            _state.RunRightToLeft = null;
             _state.ColorIndex = 0;
         }
 
@@ -882,11 +1181,38 @@ public static class ExternalRichTextClipboardPlanner
                 return null;
 
             string url = value[1..endQuote];
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
-                || uri.Scheme is not ("http" or "https" or "mailto"))
+            if (!ExternalUriLauncher.TryCreateAllowedUri(url, out var uri)
+                || uri.Scheme is not ("http" or "https" or "mailto" or "file"))
                 return null;
 
             return new Hyperlink { Url = uri.AbsoluteUri };
+        }
+
+        private static string? TryReadExternalFieldType(string? instruction)
+        {
+            if (string.IsNullOrWhiteSpace(instruction))
+                return null;
+
+            string value = instruction.Trim();
+            int end = 0;
+            while (end < value.Length
+                && !char.IsWhiteSpace(value[end])
+                && value[end] != '\\'
+                && value[end] != '"')
+            {
+                end++;
+            }
+
+            if (end == 0)
+                return null;
+
+            string fieldType = value[..end];
+            // Hyperlinks retain their dedicated URI policy and must not be emitted as
+            // generic field runs, otherwise the PPTX writer would lose hlinkClick metadata.
+            if (fieldType.Equals("HYPERLINK", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            return fieldType.Length <= 64 ? fieldType : null;
         }
 
         private static bool SameHyperlink(Hyperlink? left, Hyperlink? right) =>

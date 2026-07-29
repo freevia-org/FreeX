@@ -10,17 +10,26 @@ namespace FreeP.App.Host;
 internal sealed class SelectionPane : Border
 {
     private EditingSession _editor;
+    private readonly Action? _onAccessibilityChanged;
     private readonly StackPanel _items = new();
     private readonly TextBlock _message = new();
 
-    public SelectionPane(EditingSession editor)
+    internal IReadOnlyList<FrameworkElement> AccessibilityItemsForTests =>
+        _items.Children.OfType<FrameworkElement>().ToArray();
+
+    public SelectionPane(EditingSession editor, Action? onAccessibilityChanged = null)
     {
         _editor = editor;
+        _onAccessibilityChanged = onAccessibilityChanged;
         Width = 320;
         Visibility = Visibility.Collapsed;
         Background = Brushes.White;
         BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0));
         BorderThickness = new Thickness(1, 0, 0, 0);
+        PresentationPaneAccessibilityAdapter.ApplyPaneMetadata(
+            this,
+            PresentationPaneAccessibilityPlanner.SelectionPaneId,
+            isVisible: false);
 
         var heading = new TextBlock
         {
@@ -62,12 +71,19 @@ internal sealed class SelectionPane : Border
             ? $"Slide {plan.SlideIndex + 1} ({plan.Items.Count} objects)"
             : PresentationSelectionPanePlanner.EmptyMessage;
         _items.Children.Clear();
-        foreach (var item in plan.Items)
-            _items.Children.Add(BuildItem(item));
+        for (var index = 0; index < plan.Items.Count; index++)
+            _items.Children.Add(BuildItem(plan.Items[index], index));
+        PresentationPaneAccessibilityAdapter.ApplyPaneMetadata(
+            this,
+            PresentationPaneAccessibilityPlanner.SelectionPaneId,
+            IsVisible,
+            plan.Items.Count,
+            Array.FindIndex(plan.Items.ToArray(), item => item.IsSelected));
+        _onAccessibilityChanged?.Invoke();
         return plan;
     }
 
-    private UIElement BuildItem(PresentationSelectionPaneItemPlan item)
+    private UIElement BuildItem(PresentationSelectionPaneItemPlan item, int index)
     {
         var select = new Button
         {
@@ -158,6 +174,12 @@ internal sealed class SelectionPane : Border
         row.Children.Add(moveUp);
         row.Children.Add(rename);
         row.Children.Add(select);
+        PresentationPaneAccessibilityAdapter.ApplyItem(
+            row,
+            PresentationPaneAccessibilityPlanner.SelectionPaneId,
+            index,
+            item.ShapeName,
+            item.IsSelected ? "Selected" : "Not selected");
         return row;
     }
 

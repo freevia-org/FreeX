@@ -112,6 +112,7 @@ public sealed class HyperlinkDialogPlannerTests
     [InlineData("https://example.test/path")]
     [InlineData("http://example.test")]
     [InlineData("mailto:person@example.test")]
+    [InlineData("file:///C:/Reports/budget.xlsx")]
     public void BuildResult_AcceptsSupportedExternalUrls(string url)
     {
         var plan = HyperlinkDialogPlanner.BuildResult(
@@ -145,7 +146,7 @@ public sealed class HyperlinkDialogPlannerTests
     }
 
     [Theory]
-    [InlineData("file:///C:/secret.txt")]
+    [InlineData("file://server/share/secret.txt")]
     [InlineData("ftp://example.test/file")]
     [InlineData("not a url %%")]
     public void BuildResult_RejectsUnsupportedUrl(string url)

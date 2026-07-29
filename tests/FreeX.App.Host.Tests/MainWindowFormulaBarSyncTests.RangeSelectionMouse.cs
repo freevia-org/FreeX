@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -75,6 +76,23 @@ public sealed partial class MainWindowFormulaBarSyncTests
             harness.FormulaBarText.Should().Be("=SUM(A3");
             harness.FormulaBarFocused.Should().BeTrue();
             harness.CellFormula(1, 1).Should().BeNull();
+        });
+    }
+
+    [Fact]
+    public void FormulaBarShiftF8_AddMode_AppendsKeyboardCreatedAreas()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            BeginFormulaEdit(harness, "formulaBar");
+            harness.ToggleFormulaRangeEntrySelectionMode(ModifierKeys.Shift);
+
+            harness.PressFormulaBarKey(Key.Right).Should().BeTrue();
+            harness.FormulaBarText.Should().Be("=SUM(B1");
+            harness.PressFormulaBarKey(Key.Down).Should().BeTrue();
+            harness.FormulaBarText.Should().Be("=SUM(B1,B2");
         });
     }
 

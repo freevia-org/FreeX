@@ -283,6 +283,112 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void FloatingRichShapeText_UsesSharedRunLayoutAndWpfDecorations()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 150, 80, "#FFFFFF")
+        {
+            Placement = new FloatingPlacement { Wrapping = ImageWrapping.InFront }
+        };
+        var first = new Paragraph();
+        first.Runs.Add(new Run("Rich", RunFormatting.Default with
+        {
+            FontFamily = "Arial",
+            FontSizePt = 14,
+            Bold = true,
+            Italic = true,
+            Underline = true,
+            Strikethrough = true,
+            ColorHex = "#C00000"
+        }));
+        var second = new Paragraph();
+        second.Runs.Add(new Run("next", RunFormatting.Default with { FontFamily = "Courier New" }));
+        shape.TextParagraphs.Add(first);
+        shape.TextParagraphs.Add(second);
+
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Border>().Single();
+        var textCanvas = LogicalDescendants<Canvas>(root).Single();
+        var glyphs = textCanvas.Children.OfType<TextBlock>().ToArray();
+        glyphs.Select(glyph => glyph.Text).Should().ContainInOrder("R", "i", "c", "h", "n", "e", "x", "t");
+        var richGlyph = glyphs[0];
+        richGlyph.FontFamily.Source.Should().Be("Arial");
+        richGlyph.FontSize.Should().BeApproximately(14 * 96.0 / 72.0, 0.01);
+        richGlyph.FontWeight.Should().Be(FontWeights.Bold);
+        richGlyph.FontStyle.Should().Be(FontStyles.Italic);
+        richGlyph.Foreground.Should().BeOfType<SolidColorBrush>().Which.Color.Should()
+            .Be(Color.FromRgb(0xC0, 0x00, 0x00));
+        richGlyph.TextDecorations.Should().Contain(decoration => decoration.Location == TextDecorationLocation.Underline);
+        richGlyph.TextDecorations.Should().Contain(decoration => decoration.Location == TextDecorationLocation.Strikethrough);
+        Canvas.GetTop(glyphs[4]).Should().BeGreaterThan(Canvas.GetTop(glyphs[0]),
+            "the second paragraph must use a shared hard-break line");
+    }
+
+    [StaTheory]
+    [InlineData(ShapeTextDirection.Rotate90)]
+    [InlineData(ShapeTextDirection.Rotate270)]
+    public void FloatingRotatedShapeText_ArrangesSwappedCanvasCenteredAndClipped(ShapeTextDirection direction)
+    {
+        var shape = Shape.TextBoxWith("Rotate", widthPt: 150, heightPt: 80);
+        shape.TextDirection = direction;
+        shape.Effects = new ShapeEffectLst
+        {
+            HasShadow = true,
+            ShadowColorHex = "000000",
+            ShadowAlpha = 35000,
+            ShadowBlurRad = 50800,
+            ShadowDist = 38100,
+            ShadowDir = 2700000
+        };
+        shape.Placement = new FloatingPlacement { Wrapping = ImageWrapping.InFront };
+
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Border>().Single();
+        var textViewport = LogicalDescendants<Border>(root).Single(border => border.Child is Canvas);
+        var textCanvas = LogicalDescendants<Canvas>(root).Single();
+        root.Measure(new Size(root.Width, root.Height));
+        root.Arrange(new Rect(0, 0, root.Width, root.Height));
+        root.UpdateLayout();
+
+        var effect = root.Effect.Should().BeOfType<DropShadowEffect>().Subject;
+        root.Clip.Should().BeNull("the effect-bearing shape border must leave room for its outer shadow");
+        canvas.ClipToBounds.Should().BeFalse();
+        effect.BlurRadius.Should().BeGreaterThan(0);
+        effect.ShadowDepth.Should().BeGreaterThan(0);
+        textViewport.ActualWidth.Should().BeApproximately(root.ActualWidth, 0.01);
+        textViewport.ActualHeight.Should().BeApproximately(root.ActualHeight, 0.01);
+        textCanvas.ActualWidth.Should().BeApproximately(root.ActualHeight, 0.01);
+        textCanvas.ActualHeight.Should().BeApproximately(root.ActualWidth, 0.01);
+        var transformedBounds = textCanvas.TransformToAncestor(textViewport)
+            .TransformBounds(new Rect(0, 0, textCanvas.ActualWidth, textCanvas.ActualHeight));
+        transformedBounds.Left.Should().BeGreaterThanOrEqualTo(-0.01);
+        transformedBounds.Top.Should().BeGreaterThanOrEqualTo(-0.01);
+        transformedBounds.Right.Should().BeLessThanOrEqualTo(textViewport.ActualWidth + 0.01);
+        transformedBounds.Bottom.Should().BeLessThanOrEqualTo(textViewport.ActualHeight + 0.01);
+        textViewport.Clip.Should().BeOfType<RectangleGeometry>()
+            .Which.Bounds.Size.Should().Be(new Size(root.ActualWidth, root.ActualHeight));
+        textCanvas.Clip.Should().BeOfType<RectangleGeometry>()
+            .Which.Bounds.Size.Should().Be(new Size(textCanvas.ActualWidth, textCanvas.ActualHeight));
+    }
+
+    [StaFact]
     public void FloatingOverlay_RendersShapeFromSharedPlanWithActualGeometryFillOutlineAndEffect()
     {
         var shape = new Shape(ShapeKind.Ellipse, 72, 36, "#FF0000")

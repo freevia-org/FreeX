@@ -15,6 +15,74 @@ public static class FormulaRangeEntryPlanner
             ? cursor
             : selectedRange.Start;
 
+    public static bool TryToggleKeyboardSelectionMode(
+        FormulaEditorKey key,
+        FormulaEditorModifiers modifiers,
+        ExcelSelectionMode current,
+        out ExcelSelectionMode next)
+    {
+        next = current;
+        if (key != FormulaEditorKey.F8)
+            return false;
+
+        if (modifiers == FormulaEditorModifiers.None)
+        {
+            next = current == ExcelSelectionMode.Extend
+                ? ExcelSelectionMode.Normal
+                : ExcelSelectionMode.Extend;
+            return true;
+        }
+
+        if (modifiers == FormulaEditorModifiers.Shift)
+        {
+            next = current == ExcelSelectionMode.Add
+                ? ExcelSelectionMode.Normal
+                : ExcelSelectionMode.Add;
+            return true;
+        }
+
+        return false;
+    }
+
+    public static GridRange GetKeyboardDisjointRange(
+        CellAddress current,
+        CellAddress target,
+        bool extendSelection)
+    {
+        if (!extendSelection || current.Sheet != target.Sheet)
+            return new GridRange(target, target);
+
+        return new GridRange(
+            new CellAddress(target.Sheet, Math.Min(current.Row, target.Row), Math.Min(current.Col, target.Col)),
+            new CellAddress(target.Sheet, Math.Max(current.Row, target.Row), Math.Max(current.Col, target.Col)));
+    }
+
+    public static bool TryAppendKeyboardRangeSelection(
+        string text,
+        int? previousReferenceStart,
+        int? previousReferenceLength,
+        CellAddress current,
+        CellAddress target,
+        bool extendSelection,
+        CellAddress formulaCell,
+        bool useR1C1ReferenceStyle,
+        out FormulaRangeEntryEdit edit,
+        string? selectedSheetName = null,
+        FormulaSheetSpanEntryState? sheetSpan = null)
+    {
+        var range = GetKeyboardDisjointRange(current, target, extendSelection);
+        return TryAppendDisjointRangeSelection(
+            text,
+            previousReferenceStart,
+            previousReferenceLength,
+            range,
+            formulaCell,
+            useR1C1ReferenceStyle,
+            out edit,
+            selectedSheetName,
+            sheetSpan);
+    }
+
     public static CellAddress? GetKeyboardSelectionTarget(
         FormulaEditorKey key,
         FormulaEditorKey systemKey,
@@ -74,13 +142,15 @@ public static class FormulaRangeEntryPlanner
         CellAddress formulaCell,
         bool useR1C1ReferenceStyle,
         out FormulaRangeEntryEdit edit,
-        string? selectedSheetName = null)
+        string? selectedSheetName = null,
+        FormulaSheetSpanEntryState? sheetSpan = null)
     {
         var referenceText = FormatRangeReference(
             selectedRange,
             formulaCell,
             useR1C1ReferenceStyle,
-            selectedSheetName);
+            selectedSheetName,
+            sheetSpan);
 
         return TryApplySelectionText(
             text,
@@ -100,7 +170,8 @@ public static class FormulaRangeEntryPlanner
         CellAddress formulaCell,
         bool useR1C1ReferenceStyle,
         out FormulaRangeEntryEdit edit,
-        string? selectedSheetName = null)
+        string? selectedSheetName = null,
+        FormulaSheetSpanEntryState? sheetSpan = null)
     {
         var safeCaret = text.Length;
         edit = new FormulaRangeEntryEdit(new ExcelTextEdit(text, safeCaret, 0), safeCaret, 0);
@@ -118,7 +189,8 @@ public static class FormulaRangeEntryPlanner
             selectedRange,
             formulaCell,
             useR1C1ReferenceStyle,
-            selectedSheetName);
+            selectedSheetName,
+            sheetSpan);
         var insertAt = start + length;
         var insertionText = "," + referenceText;
         var updatedText = text.Insert(insertAt, insertionText);
@@ -176,7 +248,8 @@ public static class FormulaRangeEntryPlanner
         GridRange selectedRange,
         CellAddress formulaCell,
         bool useR1C1ReferenceStyle,
-        string? selectedSheetName)
+        string? selectedSheetName,
+        FormulaSheetSpanEntryState? sheetSpan)
     {
         var shorthand = useR1C1ReferenceStyle
             ? null
@@ -186,6 +259,9 @@ public static class FormulaRangeEntryPlanner
                     selectedRange.Start,
                     selectedRange.End,
                     useR1C1ReferenceStyle);
+        if (sheetSpan is { HasSpan: true })
+            return $"{FormulaSheetSpanEntryPlanner.FormatSheetQualifier(sheetSpan.Value)}!{cellReferenceText}";
+
         return selectedRange.Start.Sheet == formulaCell.Sheet || selectedSheetName is null
             ? cellReferenceText
             : $"{SheetNameFormatter.QuoteIfNeeded(selectedSheetName)}!{cellReferenceText}";

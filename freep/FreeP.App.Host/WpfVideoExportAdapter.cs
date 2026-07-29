@@ -86,13 +86,7 @@ internal static class WpfVideoEncoderCapabilityDetector
     {
         if (OperatingSystem.IsWindows())
         {
-            return new WpfVideoEncoderCapability(
-                true,
-                WindowsNativeVideoExportAdapter.ExecutablePath,
-                "Windows MediaComposition",
-                "Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available.",
-                CanCaptureNarration: true,
-                CanCaptureCameraAndMedia: true);
+            return DetectWindowsCaptureCapability(new WindowsRecordingDeviceCatalog());
         }
 
         var executable = FindExecutable("ffmpeg");
@@ -143,6 +137,48 @@ internal static class WpfVideoEncoderCapabilityDetector
                 $"ffmpeg encoder discovery failed: {ex.Message}");
         }
     }
+
+    internal static WpfVideoEncoderCapability DetectWindowsCaptureCapability(
+        IWindowsRecordingDeviceCatalog deviceCatalog)
+    {
+        ArgumentNullException.ThrowIfNull(deviceCatalog);
+
+        try
+        {
+            var devices = deviceCatalog.EnumerateDevices();
+            var hasMicrophone = devices.Any(device =>
+                device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone &&
+                device.IsAvailable);
+            var hasCamera = devices.Any(device =>
+                device.Kind == SlideShowRecordingCaptureDeviceKind.Camera &&
+                device.IsAvailable);
+
+            return new WpfVideoEncoderCapability(
+                true,
+                WindowsNativeVideoExportAdapter.ExecutablePath,
+                "Windows MediaComposition",
+                BuildWindowsCapabilityReason(hasMicrophone, hasCamera),
+                CanCaptureNarration: hasMicrophone,
+                CanCaptureCameraAndMedia: hasCamera);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return new WpfVideoEncoderCapability(
+                true,
+                WindowsNativeVideoExportAdapter.ExecutablePath,
+                "Windows MediaComposition",
+                $"Windows MediaComposition video export is available, but recording device detection failed: {ex.Message}");
+        }
+    }
+
+    private static string BuildWindowsCapabilityReason(bool hasMicrophone, bool hasCamera) =>
+        (hasMicrophone, hasCamera) switch
+        {
+            (true, true) => "Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available.",
+            (true, false) => "Windows MediaComposition video export and narration capture are available; no camera device is currently available for camera PIP.",
+            (false, true) => "Windows MediaComposition video export and camera PIP are available; no microphone device is currently available for narration.",
+            _ => "Windows MediaComposition video export is available; no microphone device is currently available for narration, and no camera device is currently available for camera PIP."
+        };
 
     internal static string? SelectSoftwareEncoder(string output)
     {

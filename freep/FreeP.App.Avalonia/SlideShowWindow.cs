@@ -692,7 +692,7 @@ public sealed class SlideShowWindow : Window
     }
 
     /// <summary>
-    /// Activates a hyperlink: external → open URL (http/https/mailto only);
+    /// Activates a hyperlink: external → open URL or local file;
     /// internal → navigate to the target slide.
     /// </summary>
     internal void ActivateHyperlink(Hyperlink hlink)

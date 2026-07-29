@@ -1239,6 +1239,27 @@ public sealed class EditingSession
         return commands.Length;
     }
 
+    /// <summary>Sets the number of text columns on all selected text shapes as one undo step.</summary>
+    public int SetTextColumnCountOnSelection(int columnCount)
+    {
+        if (CurrentSlide is null || columnCount < 1)
+            return 0;
+
+        var commands = _selectedShapeIds
+            .Where(id => CurrentSlide.Shapes.FirstOrDefault(shape => shape.Id == id)?.TextBody is not null)
+            .Select(id => (IPresentationCommand)new SetShapeTextColumnCountCommand(
+                _currentSlideIndex,
+                id,
+                columnCount))
+            .ToArray();
+
+        if (commands.Length == 0)
+            return 0;
+
+        Bus.Execute(new BatchCommand("Set Text Columns", commands));
+        return commands.Length;
+    }
+
     // ── Notes operations ─────────────────────────────────────────────────────────
 
     /// <summary>
@@ -1880,6 +1901,41 @@ public sealed class EditingSession
             Table       = table
         };
 
+        AddShape(shape);
+        return shape;
+    }
+
+    /// <summary>
+    /// Inserts a native editable table when a standalone external clipboard payload is a
+    /// tab-delimited table. Returns null for mixed prose or unsupported one-column projections,
+    /// allowing the caller to retain the existing textbox fallback.
+    /// </summary>
+    public SlideShape? InsertTableFromClipboard(
+        TextBody body,
+        IReadOnlyList<long>? columnWidthsEmu = null,
+        IReadOnlyList<InCanvasRichClipboardTableCellStyle>? cellStyles = null)
+    {
+        if (CurrentSlide is null
+            || !ClipboardTablePlanner.TryBuildStandaloneTable(
+                body,
+                columnWidthsEmu,
+                cellStyles,
+                out var table))
+            return null;
+
+        long cx = table.ColumnWidthsEmu.Sum();
+        long cy = table.Rows.Sum(row => row.HeightEmu);
+        var shape = new SlideShape
+        {
+            Id = NextShapeId(),
+            Name = "Pasted Table",
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = (Presentation.SlideSizeCxEmu - cx) / 2,
+            OffsetYEmu = (Presentation.SlideSizeCyEmu - cy) / 2,
+            ExtentCxEmu = cx,
+            ExtentCyEmu = cy,
+            Table = table,
+        };
         AddShape(shape);
         return shape;
     }

@@ -2129,6 +2129,63 @@ public sealed class SetShapeTextRunCommand(
 }
 
 /// <summary>
+/// Replaces the paragraph list inside an inline text-box shape, keeping the owning drawing run's plain-text
+/// mirror synchronized and restoring the exact prior paragraph graph on undo. Avalonia uses this command for
+/// text-box range replacement and range formatting so those edits share the same model/undo path as WPF shape
+/// editing rather than mutating the shape directly from the renderer.
+/// </summary>
+public sealed class ReplaceShapeTextParagraphsCommand(
+    int paragraphIndex,
+    int runIndex,
+    IReadOnlyList<Paragraph> replacement) : IDocumentCommand
+{
+    private List<Paragraph>? _previous;
+    private List<Paragraph>? _next;
+
+    public string Label => "Edit Shape Text";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetShape(context, out var owner, out var shape))
+            return;
+
+        if (_previous is null)
+        {
+            _previous = shape.TextParagraphs.ToList();
+            _next = replacement.ToList();
+        }
+
+        shape.TextParagraphs.Clear();
+        shape.TextParagraphs.AddRange(_next!);
+        owner.Text = shape.PlainText;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null || !TryGetShape(context, out var owner, out var shape))
+            return;
+
+        shape.TextParagraphs.Clear();
+        shape.TextParagraphs.AddRange(_previous);
+        owner.Text = shape.PlainText;
+    }
+
+    private bool TryGetShape(IDocumentCommandContext context, out Run owner, out Shape shape)
+    {
+        owner = null!;
+        shape = null!;
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
+            || runIndex < 0 || runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[runIndex].Shape is not { } found)
+            return false;
+
+        owner = paragraph.Runs[runIndex];
+        shape = found;
+        return true;
+    }
+}
+
+/// <summary>
 /// Inserts a real paragraph break inside an inline text-box body. The command replaces the affected
 /// shape paragraph list as one undoable operation and keeps the outer drawing run's plain-text mirror
 /// aligned with the shape content.

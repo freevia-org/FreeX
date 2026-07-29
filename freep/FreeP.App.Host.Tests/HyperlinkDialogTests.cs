@@ -37,7 +37,7 @@ public sealed class HyperlinkDialogTests
         source.Should().Contain("public static class HyperlinkDialogPlanner");
         source.Should().Contain("BuildDialogRequest(");
         source.Should().Contain("BuildSlideOptions(");
-        source.Should().Contain("Uri.TryCreate");
+        source.Should().Contain("ExternalUriLauncher.TryCreateAllowedUri");
         source.Should().Contain("new Hyperlink");
     }
 

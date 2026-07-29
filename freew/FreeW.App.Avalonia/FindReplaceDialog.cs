@@ -31,7 +31,7 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 public sealed class FindReplaceDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     // ── Editor reference ──────────────────────────────────────────────────────
 

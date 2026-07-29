@@ -12,7 +12,7 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class PageNumberFormatDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly ComboBox _formatBox = new() { MinWidth = 190 };
     private readonly CheckBox _includeChapterBox = new()

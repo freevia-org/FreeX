@@ -2053,6 +2053,23 @@ public sealed class SlideShowPlaybackPlannerTests
             startDelayMs: 0).Should().BeNull();
     }
 
+    [Theory]
+    [InlineData(AnimationKind.Entrance, true, false)]
+    [InlineData(AnimationKind.Motion, true, false)]
+    [InlineData(AnimationKind.Exit, false, true)]
+    [InlineData(AnimationKind.Emphasis, false, false)]
+    public void PlanFallbackVisibility_PreservesShapeStepSemantics(
+        AnimationKind kind,
+        bool suppressAtStart,
+        bool suppressAtCompletion)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanFallbackVisibility(
+            new ShapeAnimation { ShapeId = 7, Kind = kind });
+
+        plan.SuppressAtStart.Should().Be(suppressAtStart);
+        plan.SuppressAtCompletion.Should().Be(suppressAtCompletion);
+    }
+
     [Fact]
     public void PlanFrame_ProjectsTranslateAndMotionPathEvidenceInSlideCoordinates()
     {

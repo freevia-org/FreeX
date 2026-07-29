@@ -47,7 +47,7 @@ public sealed class DialogChromeDedupSourceGuardTests
             ("InsertDialogs.cs",
             [
                 "using Free.Shared.Shell.Avalonia;",
-                "public static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = new(FontFamily.Default);",
+                "public static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;",
                 "AvaloniaCompactDialogChrome.ApplyTextBox(_displayBox, InsertDialogLayout.ChromeStyle);",
                 "AvaloniaCompactDialogChrome.ApplyButton(btn, ChromeStyle, minWidth: 84);",
                 "AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(14, 12, 14, 12));",
@@ -94,8 +94,7 @@ public sealed class DialogChromeDedupSourceGuardTests
                 "using Free.Shared.Shell.Avalonia;",
                 "AvaloniaCompactDialogChrome.ApplyTextBox(box, style ?? Style);",
                 "AvaloniaCompactDialogChrome.ApplyComboBox(combo, style ?? Style);",
-                "AvaloniaCompactDialogChrome.ApplyButton(ok, style, minWidth: buttonWidth, isDefault: true);",
-                "AvaloniaCompactDialogChrome.CreateActionRow([ok, cancelButton]",
+                "AvaloniaDialogButtonRowFactory.CreateOkCancel(",
             ]),
             ("WordCountDialog.cs",
             [
@@ -131,6 +130,26 @@ public sealed class DialogChromeDedupSourceGuardTests
         source.Should().Contain("TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)");
         source.Should().Contain("Layoutable.MinHeightProperty, style.ControlHeight");
         source.Should().Contain("TabItem.PaddingProperty, new Thickness(6, 2)");
+    }
+
+    [Fact]
+    public void FreeW_dialog_chrome_uses_the_shared_Windows_authority_font()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var sourceRoot = Path.Combine(root, "freew", "FreeW.App.Avalonia");
+        var dialogSources = Directory
+            .GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains(
+                Path.DirectorySeparatorChar + "Editing" + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase))
+            .Select(File.ReadAllText)
+            .ToArray();
+
+        dialogSources.Should().NotBeEmpty();
+        dialogSources.Should().OnlyContain(source =>
+            !source.Contains("new(FontFamily.Default)", StringComparison.Ordinal)
+            && !source.Contains("new(global::Avalonia.Media.FontFamily.Default)", StringComparison.Ordinal),
+            "dialog chrome must use AvaloniaCompactDialogChrome.WindowsStyle so Linux resolves the WPF-authority font family");
     }
 
     private static void AssertNoLocalCompactChrome(string source, string fileName)

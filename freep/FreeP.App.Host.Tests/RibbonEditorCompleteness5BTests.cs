@@ -948,6 +948,22 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_TextColumns_WithSelectedValue_RoutesToShapeAndUndo()
+    {
+        var (ed, pres) = MakeSession();
+        ed.InsertDefaultTextBox();
+        var shape = pres.Slides[0].Shapes.Last();
+        ed.Select(shape.Id);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.text-columns", RibbonCommandContext.ForSelectedValue("3"));
+
+        Assert.Equal(3, shape.TextBody!.ColumnCount);
+        ed.Undo();
+        Assert.Equal(1, shape.TextBody.ColumnCount);
+    }
+
+    [Fact]
     public void Cmd_TextDirection_WithActiveTableCell_RoutesToCell()
     {
         var (ed, pres) = MakeSession();
@@ -1340,6 +1356,7 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.font-size")]
     [InlineData("freep.font-color")]
     [InlineData("freep.text-autofit")]
+    [InlineData("freep.text-columns")]
     [InlineData("freep.table-cell-fill")]
     [InlineData("freep.table-cell-anchor")]
     [InlineData("freep.table-cell-border")]

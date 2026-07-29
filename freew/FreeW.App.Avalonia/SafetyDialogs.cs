@@ -11,7 +11,7 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class RestrictEditingDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly ProtectionSettings _currentProtection;
     private readonly RestrictEditingDialogPlan _plan;
     private readonly RadioButton[] _radios;
@@ -210,7 +210,7 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
 
 internal sealed class DocumentInspectorDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly CheckBox _comments;
     private readonly CheckBox _revisions;
     private readonly CheckBox _properties;
@@ -294,7 +294,7 @@ internal sealed class DocumentInspectorDialog : FreeWDialogWindow
 
 internal sealed class AccessibilityReportDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     public AccessibilityReportDialog(AccessibilityReport report)
     {

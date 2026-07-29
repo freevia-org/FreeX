@@ -34,9 +34,15 @@ public sealed class PageLayoutDialogParityTests
     public void Shared_chrome_owns_default_cancel_escape_and_null_close()
     {
         var source = ReadSource("PageLayoutDialogs.cs");
+        var sharedFactory = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaDialogButtonRowFactory.cs"));
 
-        source.Should().Contain("IsDefault = true");
-        source.Should().Contain("IsCancel = true");
+        source.Should().Contain("AvaloniaDialogButtonRowFactory.CreateOkCancel(");
+        sharedFactory.Should().Contain("IsDefault = isDefault");
+        sharedFactory.Should().Contain("IsCancel = isCancel");
         source.Should().Contain("e.Key != Key.Escape");
         source.Should().Contain("window.Close(default(TResult))");
         source.Should().Contain("Close(null)");

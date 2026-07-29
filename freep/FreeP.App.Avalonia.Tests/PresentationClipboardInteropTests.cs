@@ -215,6 +215,28 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task Avalonia_data_transfer_reads_external_rtf_platform_format()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var rtf = Encoding.ASCII.GetBytes(@"{\rtf1\ansi Native RTF}");
+            var item = new DataTransferItem();
+            item.Set(
+                OperatingSystem.IsWindows()
+                    ? AvaloniaPresentationSystemClipboard.ExternalRtfWindowsFormat
+                    : AvaloniaPresentationSystemClipboard.ExternalRtfLinuxFormat,
+                rtf);
+            using var transfer = new DataTransfer();
+            transfer.Add(item);
+
+            var content = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+
+            content.RtfBytes.Should().Equal(rtf);
+            content.HasRichText.Should().BeTrue();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Avalonia_data_transfer_falls_back_when_public_platform_format_cannot_be_read()
     {
         using var transfer = new ThrowingPlatformAliasTransfer();
@@ -371,7 +393,51 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
-    public async Task XamlPackage_table_is_projected_into_formatted_text_box()
+    public async Task External_Rtf_is_pasted_as_formatted_text_box()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                RtfBytes: Encoding.ASCII.GetBytes(
+                    @"{\rtf1\ansi{\fonttbl{\f0 Calibri;}}\pard\f0\fs24 Before \b bold\b0\par After}")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        var result = await service.PasteAsync(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        var body = editor.CurrentSlide!.Shapes.Single().TextBody!;
+        body.Paragraphs.Should().HaveCount(2);
+        body.Paragraphs[0].Runs.Single(run => run.Text == "bold").Bold.Should().BeTrue();
+        body.Paragraphs[1].Runs.Single().Text.Should().Be("After");
+    }
+
+    [Fact]
+    public async Task External_Rtf_picture_is_pasted_as_picture_and_text_box()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                RtfBytes: Encoding.ASCII.GetBytes(
+                    @"{\rtf1\ansi Caption {\pict\pngblip " + Convert.ToHexString(Png) + @"} After}")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        var result = await service.PasteAsync(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        editor.CurrentSlide.Shapes[0].Kind.Should().Be(SlideShapeKind.Picture);
+        editor.CurrentSlide.Shapes[0].Picture!.Bytes.Should().Equal(Png);
+        editor.CurrentSlide.Shapes[0].Picture!.ContentType.Should().Be("image/png");
+        editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
+            .Should().Contain(run => run.Text.Contains("Caption ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task XamlPackage_table_is_pasted_as_native_editable_table()
     {
         var clipboard = new FakeSystemClipboard
         {
@@ -392,9 +458,68 @@ public sealed class PresentationClipboardInteropTests
         var result = await service.PasteAsync(editor);
 
         result.Should().Be(PresentationClipboardPasteSource.XamlPackage);
-        var paragraph = editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Single();
-        paragraph.Runs.Select(run => run.Text).Should().ContainInOrder("Q1", "\t", "42");
-        paragraph.Runs.Single(run => run.Text == "Q1").Italic.Should().BeTrue();
+        var shape = editor.CurrentSlide!.Shapes.Single();
+        shape.Kind.Should().Be(SlideShapeKind.Table);
+        shape.Table.Should().NotBeNull();
+        shape.Table!.Rows.Should().ContainSingle();
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
+            .Single().Text.Should().Be("Q1");
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
+            .Single().Italic.Should().BeTrue();
+        shape.Table.Rows[0].Cells[1].TextBody!.Paragraphs.Single().Runs
+            .Single().Text.Should().Be("42");
+    }
+
+    [Fact]
+    public async Task External_Rtf_table_preserves_solid_cell_style()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                RtfBytes: Encoding.ASCII.GetBytes(
+                    @"{\rtf1\ansi
+{\colortbl;\red255\green255\blue0;\red31\green78\blue121;}
+\trowd\clcbpat1\clvertalc\clpadl120\clpadr240\clpadt60\clpadb180\clbrdrl\brdrs\brdrw10\brdrcf2\cellx1440\cellx2880
+Header\cell Value\cell\row}")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.RichText);
+        var cell = editor.CurrentSlide!.Shapes.Single().Table!.Rows.Single().Cells[0];
+        ((ShapeFill.Solid)cell.Fill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFF00));
+        ((ShapeOutline.Visible)cell.Borders!.Left!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        cell.Anchor.Should().Be(TableCellAnchor.Middle);
+        cell.InsetLeftPt.Should().Be(6);
+        cell.InsetRightPt.Should().Be(12);
+    }
+
+    [Fact]
+    public async Task XamlPackage_image_is_pasted_as_picture()
+    {
+        var imageBytes = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage(
+                    """
+                    <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                      <BlockUIContainer><Image Source="Images/pasted.png" /></BlockUIContainer>
+                    </FlowDocument>
+                    """,
+                    ("Images/pasted.png", imageBytes))),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        var result = await service.PasteAsync(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.XamlPackage);
+        var picture = editor.CurrentSlide!.Shapes.Single();
+        picture.Kind.Should().Be(SlideShapeKind.Picture);
+        picture.Picture!.ContentType.Should().Be("image/png");
+        picture.Picture.Bytes.Should().Equal(imageBytes);
     }
 
     [Fact]
@@ -627,12 +752,24 @@ public sealed class PresentationClipboardInteropTests
         return body;
     }
 
-    private static byte[] CreateXamlPackage(string xaml)
+    private static byte[] CreateXamlPackage(
+        string xaml,
+        params (string Name, byte[] Bytes)[] resources)
     {
         using var output = new MemoryStream();
         using (var package = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
-        using (var writer = new StreamWriter(package.CreateEntry("Xaml/Document.xaml").Open(), Encoding.UTF8))
+        {
+            foreach (var resource in resources)
+            {
+                var entry = package.CreateEntry(resource.Name);
+                using var stream = entry.Open();
+                stream.Write(resource.Bytes);
+            }
+
+            var xamlEntry = package.CreateEntry("Xaml/Document.xaml");
+            using var writer = new StreamWriter(xamlEntry.Open(), Encoding.UTF8);
             writer.Write(xaml);
+        }
         return output.ToArray();
     }
 

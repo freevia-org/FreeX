@@ -604,6 +604,17 @@ internal static class FreePRibbonCommands
                 editor.SetTextVerticalTypeOnSelection(verticalType);
             }));
 
+        registry.Register("freep.text-columns",
+            new ContextRibbonCommand(ctx =>
+            {
+                if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                    value is not string selection ||
+                    !TextColumnCountOptionParser.TryParse(selection, out var count))
+                    return;
+
+                editor.SetTextColumnCountOnSelection(count);
+            }));
+
         registry.Register("freep.table-cell-fill",
             new ContextRibbonCommand(ctx =>
             {
