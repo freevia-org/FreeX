@@ -181,25 +181,11 @@ public sealed class R52_SelectionFormulaAndOverlayTests
     [Fact]
     public void FormatWholeRowOrColumnReferenceShorthand_PlainRectangularRange_ReturnsNull()
     {
-        StaTestRunner.Run(() =>
-        {
-            var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
-            try
-            {
-                var sheetId = workbook.GetSheetAt(0).Id;
-                var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)); // A1:C3
+        var sheetId = new SheetId(Guid.NewGuid());
+        var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)); // A1:C3
 
-                var shorthand = R49MainWindowTestHarness.Invoke(
-                    window, "FormatWholeRowOrColumnReferenceShorthand", range);
-
-                shorthand.Should().BeNull(
-                    "a genuine rectangular multi-cell range has no whole-row/column shorthand in Excel");
-            }
-            finally
-            {
-                R49MainWindowTestHarness.Close(window);
-            }
-        });
+        FormulaRangeEntryPlanner.FormatWholeRowOrColumnReferenceShorthand(range).Should().BeNull(
+            "a genuine rectangular multi-cell range has no whole-row/column shorthand in Excel");
     }
 
     // Sibling no-regression: a whole-SHEET selection (both a full row band and a full column band
@@ -207,26 +193,13 @@ public sealed class R52_SelectionFormulaAndOverlayTests
     [Fact]
     public void FormatWholeRowOrColumnReferenceShorthand_WholeSheetSelection_ReturnsNull()
     {
-        StaTestRunner.Run(() =>
-        {
-            var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
-            try
-            {
-                var sheetId = workbook.GetSheetAt(0).Id;
-                var range = new GridRange(
-                    new CellAddress(sheetId, 1, 1),
-                    new CellAddress(sheetId, CellAddress.MaxRow, CellAddress.MaxCol));
+        var sheetId = new SheetId(Guid.NewGuid());
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, CellAddress.MaxRow, CellAddress.MaxCol));
 
-                var shorthand = R49MainWindowTestHarness.Invoke(
-                    window, "FormatWholeRowOrColumnReferenceShorthand", range);
-
-                shorthand.Should().BeNull("Excel has no bare shorthand for a whole-sheet selection");
-            }
-            finally
-            {
-                R49MainWindowTestHarness.Close(window);
-            }
-        });
+        FormulaRangeEntryPlanner.FormatWholeRowOrColumnReferenceShorthand(range).Should().BeNull(
+            "Excel has no bare shorthand for a whole-sheet selection");
     }
 
     // ── R52-render-formula-bar-ref-3-3 ──────────────────────────────────────

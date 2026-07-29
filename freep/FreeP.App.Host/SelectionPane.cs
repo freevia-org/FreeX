@@ -75,7 +75,7 @@ internal sealed class SelectionPane : Border
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Padding = new Thickness(8, 5, 8, 5),
             Margin = new Thickness(8 + (item.NestingDepth * 16), 1, 4, 1),
-            ToolTip = $"Select {item.ShapeTypeLabel}",
+            ToolTip = item.SelectToolTipText,
         };
         select.Click += (_, _) => _editor.Select(item.ShapeId);
 
@@ -85,7 +85,7 @@ internal sealed class SelectionPane : Border
             MinWidth = 170,
             Padding = new Thickness(4, 3, 4, 3),
             Margin = new Thickness(0, 1, 4, 1),
-            ToolTip = "Rename object",
+            ToolTip = PresentationSelectionPaneItemPlan.RenameToolTipText,
         };
         var committed = false;
         void CommitName()
@@ -118,7 +118,7 @@ internal sealed class SelectionPane : Border
             MinWidth = 50,
             Padding = new Thickness(5, 3, 5, 3),
             Margin = new Thickness(0, 1, 8, 1),
-            ToolTip = item.IsHidden ? "Show object" : "Hide object",
+            ToolTip = item.VisibilityToolTipText,
         };
         visibility.Click += (_, _) =>
         {
@@ -133,7 +133,7 @@ internal sealed class SelectionPane : Border
             Padding = new Thickness(0),
             Margin = new Thickness(0, 1, 2, 1),
             IsEnabled = item.CanMoveUp,
-            ToolTip = "Move toward front",
+            ToolTip = PresentationSelectionPaneItemPlan.MoveUpToolTipText,
         };
         moveUp.Click += (_, _) => MoveItem(item, offset: 1);
 
@@ -144,7 +144,7 @@ internal sealed class SelectionPane : Border
             Padding = new Thickness(0),
             Margin = new Thickness(0, 1, 2, 1),
             IsEnabled = item.CanMoveDown,
-            ToolTip = "Move toward back",
+            ToolTip = PresentationSelectionPaneItemPlan.MoveDownToolTipText,
         };
         moveDown.Click += (_, _) => MoveItem(item, offset: -1);
 

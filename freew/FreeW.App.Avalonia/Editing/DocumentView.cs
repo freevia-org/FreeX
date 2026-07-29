@@ -5992,24 +5992,44 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// Builds pointer-addressable caret stops for a horizontal floating text box. The renderer currently
-    /// uses the same 9pt text treatment for the shape body, so measuring each character with that treatment
-    /// keeps the hit map aligned with the visible text while preserving the model's paragraph/run identity.
-    /// Rotated text boxes remain keyboard-editable and are intentionally left as a follow-up because their
-    /// visible coordinate transform needs a separate vertical-layout map.
+    /// Builds pointer-addressable caret stops for a floating text box. The renderer uses the same 9pt text
+    /// treatment for the shape body, so measuring each character with that treatment keeps the hit map
+    /// aligned with the visible text while preserving the model's paragraph/run identity. Rotated text
+    /// boxes keep their text layout in the renderer's pre-transform coordinate space; the matching rotation
+    /// metadata lets pointer hit-testing apply the inverse transform before resolving a caret.
     /// </summary>
     private void BuildShapeTextCaretStops(Shape shape, Rect rect, int blockIndex, int runIndex)
     {
-        if (shape.TextDirection != ShapeTextDirection.Horizontal || shape.TextParagraphs.Count == 0)
+        if (shape.TextParagraphs.Count == 0)
             return;
 
         const double TextInset = 4.0;
         var format = new RunFormatting { FontSizePt = 9 };
+        var isRotated = shape.TextDirection is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270;
+        var rotationRadians = shape.TextDirection == ShapeTextDirection.Rotate90
+            ? Math.PI / 2
+            : shape.TextDirection == ShapeTextDirection.Rotate270
+                ? -Math.PI / 2
+                : 0;
+        var rotationCenter = new Point(rect.Center.X, rect.Center.Y);
+        var textRect = isRotated
+            ? new Rect(rect.X, rect.Y, rect.Height, rect.Width)
+            : rect;
+        var insetWidth = Math.Max(1, textRect.Width - 2 * TextInset);
+        var fittedText = Build(shape.PlainText, format);
+        fittedText.MaxTextWidth = insetWidth;
         var lineHeight = Math.Max(1, Build("Ag", format).Height);
-        var lineStartX = rect.X + TextInset;
-        var maxX = Math.Max(lineStartX + 1, rect.Right - TextInset);
+        var lineStartX = isRotated
+            ? rect.X + (rect.Width - Math.Max(1, fittedText.WidthIncludingTrailingWhitespace)) / 2
+            : rect.X + TextInset;
+        var lineStartY = isRotated
+            ? rect.Y + (rect.Height - Math.Max(1, fittedText.Height)) / 2
+            : rect.Y + TextInset;
+        var maxX = isRotated
+            ? Math.Max(lineStartX + 1, lineStartX + insetWidth)
+            : Math.Max(lineStartX + 1, rect.Right - TextInset);
         var x = lineStartX;
-        var y = rect.Y + TextInset;
+        var y = lineStartY;
 
         for (var paragraphIndex = 0; paragraphIndex < shape.TextParagraphs.Count; paragraphIndex++)
         {
@@ -6022,7 +6042,7 @@ public sealed class DocumentView : Control
                 if (text.Length == 0)
                 {
                     AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
-                        0, x, y, lineHeight);
+                        0, x, y, lineHeight, rotationRadians, rotationCenter);
                     addedStopForParagraph = true;
                     continue;
                 }
@@ -6033,7 +6053,7 @@ public sealed class DocumentView : Control
                     if (character == '\n' || character == '\r')
                     {
                         AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
-                            offset, x, y, lineHeight);
+                            offset, x, y, lineHeight, rotationRadians, rotationCenter);
                         x = lineStartX;
                         y += lineHeight;
                         addedStopForParagraph = true;
@@ -6049,17 +6069,18 @@ public sealed class DocumentView : Control
                     }
 
                     AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
-                        offset, x, y, lineHeight);
+                        offset, x, y, lineHeight, rotationRadians, rotationCenter);
                     x += glyphWidth;
                     addedStopForParagraph = true;
                 }
 
                 AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
-                    text.Length, x, y, lineHeight);
+                    text.Length, x, y, lineHeight, rotationRadians, rotationCenter);
             }
 
             if (!addedStopForParagraph)
-                AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, 0, 0, x, y, lineHeight);
+                AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, 0, 0, x, y, lineHeight,
+                    rotationRadians, rotationCenter);
 
             // A paragraph break is represented by the next line in the shape text body.
             x = lineStartX;
@@ -6075,9 +6096,12 @@ public sealed class DocumentView : Control
         int offset,
         double x,
         double y,
-        double height) =>
+        double height,
+        double rotationRadians,
+        Point rotationCenter) =>
         _shapeTextCaretStops.Add(new ShapeTextCaretStop(
-            blockIndex, runIndex, paragraphIndex, textRunIndex, offset, x, y, height));
+            blockIndex, runIndex, paragraphIndex, textRunIndex, offset, x, y, height,
+            rotationRadians, rotationCenter.X, rotationCenter.Y));
 
     private static FloatingShapeData BuildFloatingShapeData(
         DrawingObjectVisualPlan plan,
@@ -8694,14 +8718,22 @@ public sealed class DocumentView : Control
             || floatHit.Kind != "Shape")
             return false;
 
-        var stop = _shapeTextCaretStops
+        var stops = _shapeTextCaretStops
             .Where(candidate => candidate.BlockIndex == active.BlockIndex
                 && candidate.RunIndex == active.RunIndex)
-            .OrderBy(candidate => VerticalDistance(point.Y, candidate.Y, candidate.Height))
-            .ThenBy(candidate => Math.Abs(point.X - candidate.X))
-            .FirstOrDefault();
-        if (stop is null)
+            .ToArray();
+        if (stops.Length == 0)
             return false;
+
+        var first = stops[0];
+        var localPoint = RotateAround(
+            point,
+            new Point(first.RotationCenterX, first.RotationCenterY),
+            -first.RotationRadians);
+        var stop = stops
+            .OrderBy(candidate => VerticalDistance(localPoint.Y, candidate.Y, candidate.Height))
+            .ThenBy(candidate => Math.Abs(localPoint.X - candidate.X))
+            .First();
 
         _shapeCaret = (
             stop.BlockIndex,
@@ -8721,6 +8753,17 @@ public sealed class DocumentView : Control
             : pointY > lineY + lineHeight
                 ? pointY - (lineY + lineHeight)
                 : 0;
+
+    private static Point RotateAround(Point point, Point center, double radians)
+    {
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        var dx = point.X - center.X;
+        var dy = point.Y - center.Y;
+        return new Point(
+            center.X + dx * cos - dy * sin,
+            center.Y + dx * sin + dy * cos);
+    }
 
     /// <summary>Test hook for the pointer-to-shape-caret parity path.</summary>
     internal bool PlaceShapeTextCaretForTest(Point point) =>
@@ -18091,7 +18134,10 @@ public sealed class DocumentView : Control
         int Offset,
         double X,
         double Y,
-        double Height);
+        double Height,
+        double RotationRadians,
+        double RotationCenterX,
+        double RotationCenterY);
 
     private sealed class FloatingShapeData
     {

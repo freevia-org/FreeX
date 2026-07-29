@@ -86,6 +86,42 @@ public sealed class R53_CrossSheetFormulaPointModeTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task CtrlColumnHeaderPointing_AppendsWholeColumnAreaWithoutCommittingEdit()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sourceSheet = window.Session.ActiveSheet;
+                var source = new CellAddress(sourceSheet.Id, 1, 1);
+                var formulaBox = GetField<global::Avalonia.Controls.TextBox>(window, "_formulaBox");
+
+                window.BeginFormulaEditForTest(source, "=");
+                window.SetFormulaBoxSelectionForTest(1, 0);
+                Invoke<bool>(window, "TryInsertFormulaPointReference", new CellAddress(sourceSheet.Id, 2, 1))
+                    .Should().BeTrue();
+
+                typeof(MainWindow)
+                    .GetMethod("AddAdditionalColumnSelection", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(window, [(uint)5]);
+
+                formulaBox.Text.Should().Be("=A2,E:E");
+                window.Session.FormulaEditAddress.Should().Be(source);
+                window.Session.SelectedRange.Should().Be(new GridRange(
+                    new CellAddress(sourceSheet.Id, 1, 5),
+                    new CellAddress(sourceSheet.Id, CellAddress.MaxRow, 5)));
+                sourceSheet.GetCell(source)!.HasFormula.Should().BeFalse(
+                    "header pointing must not commit the formula edit");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static T GetField<T>(MainWindow window, string name) where T : class =>
         typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window) as T
         ?? throw new InvalidOperationException($"Missing field {name}.");

@@ -76,7 +76,7 @@ internal sealed class SelectionPane : Border
             Padding = new Thickness(8, 5),
             Margin = new Thickness(8 + (item.NestingDepth * 16), 1, 4, 1),
         };
-        ToolTip.SetTip(select, $"Select {item.ShapeTypeLabel}");
+        ToolTip.SetTip(select, item.SelectToolTipText);
         select.Click += (_, _) => _editor.Select(item.ShapeId);
 
         var rename = new TextBox
@@ -86,6 +86,7 @@ internal sealed class SelectionPane : Border
             Padding = new Thickness(4, 3),
             Margin = new Thickness(0, 1, 4, 1),
         };
+        ToolTip.SetTip(rename, PresentationSelectionPaneItemPlan.RenameToolTipText);
         var committed = false;
         void CommitName()
         {
@@ -118,7 +119,7 @@ internal sealed class SelectionPane : Border
             Padding = new Thickness(5, 3),
             Margin = new Thickness(0, 1, 8, 1),
         };
-        ToolTip.SetTip(visibility, item.IsHidden ? "Show object" : "Hide object");
+        ToolTip.SetTip(visibility, item.VisibilityToolTipText);
         visibility.Click += (_, _) =>
         {
             if (_editor.ToggleShapeHidden(item.ShapeId))
@@ -133,7 +134,7 @@ internal sealed class SelectionPane : Border
             Margin = new Thickness(0, 1, 2, 1),
             IsEnabled = item.CanMoveUp,
         };
-        ToolTip.SetTip(moveUp, "Move toward front");
+        ToolTip.SetTip(moveUp, PresentationSelectionPaneItemPlan.MoveUpToolTipText);
         moveUp.Click += (_, _) => MoveItem(item, offset: 1);
 
         var moveDown = new Button
@@ -144,7 +145,7 @@ internal sealed class SelectionPane : Border
             Margin = new Thickness(0, 1, 2, 1),
             IsEnabled = item.CanMoveDown,
         };
-        ToolTip.SetTip(moveDown, "Move toward back");
+        ToolTip.SetTip(moveDown, PresentationSelectionPaneItemPlan.MoveDownToolTipText);
         moveDown.Click += (_, _) => MoveItem(item, offset: -1);
 
         var row = new DockPanel();
@@ -159,6 +160,13 @@ internal sealed class SelectionPane : Border
         row.Children.Add(select);
         return row;
     }
+
+    internal IReadOnlyList<string?> RenameToolTipsForTests =>
+        _items.Children
+            .OfType<DockPanel>()
+            .Select(row => row.Children.OfType<TextBox>().SingleOrDefault())
+            .Select(textBox => textBox is null ? null : ToolTip.GetTip(textBox)?.ToString())
+            .ToArray();
 
     private void MoveItem(PresentationSelectionPaneItemPlan item, int offset)
     {

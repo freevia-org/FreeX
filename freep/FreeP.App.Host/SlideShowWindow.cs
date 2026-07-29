@@ -1191,6 +1191,19 @@ public sealed class SlideShowWindow : Window
     // ── Transition sound playback ─────────────────────────────────────────────────
 
     private System.Windows.Media.MediaPlayer? _transitionSoundPlayer;
+    private string? _transitionSoundTempPath;
+
+    private void StopTransitionSound()
+    {
+        var player = _transitionSoundPlayer;
+        _transitionSoundPlayer = null;
+        try { player?.Stop(); player?.Close(); } catch { /* ignore */ }
+
+        var path = _transitionSoundTempPath;
+        _transitionSoundTempPath = null;
+        if (path is not null)
+            TransitionSoundTempFile.Delete(path);
+    }
 
     /// <summary>
     /// Plays the transition sound (if any) using WPF MediaPlayer on a temp file.
@@ -1202,29 +1215,18 @@ public sealed class SlideShowWindow : Window
 
         try
         {
-            // Stop any previous transition sound.
-            _transitionSoundPlayer?.Stop();
-            _transitionSoundPlayer?.Close();
-            _transitionSoundPlayer = null;
+            // Stop any previous transition sound and release its owned file.
+            StopTransitionSound();
 
             // Write audio to a temp file (MediaPlayer requires a URI/file path).
             var sound = t.Sound;
-            var ext   = sound.ContentType switch
-            {
-                "audio/mpeg" or "audio/mp3" => ".mp3",
-                "audio/wav"                 => ".wav",
-                "audio/ogg"                 => ".ogg",
-                "audio/aac"                 => ".aac",
-                "audio/x-ms-wma"            => ".wma",
-                _                           => ".mp3"
-            };
-            var tmpPath = System.IO.Path.GetTempFileName() + ext;
-            System.IO.File.WriteAllBytes(tmpPath, sound.AudioBytes);
+            var tmpPath = TransitionSoundTempFile.Write(sound.AudioBytes, sound.ContentType);
+            _transitionSoundTempPath = tmpPath;
 
             var player = new System.Windows.Media.MediaPlayer();
+            _transitionSoundPlayer = player;
             player.Open(new Uri(tmpPath, UriKind.Absolute));
             player.Play();
-            _transitionSoundPlayer = player;
 
             // Restart looping transition sounds; otherwise clean up after playback.
             player.MediaEnded += (_, _) =>
@@ -1237,11 +1239,18 @@ public sealed class SlideShowWindow : Window
                 }
 
                 player.Close();
-                try { System.IO.File.Delete(tmpPath); } catch { /* ignore */ }
+                if (ReferenceEquals(_transitionSoundPlayer, player))
+                {
+                    _transitionSoundPlayer = null;
+                    if (_transitionSoundTempPath == tmpPath)
+                        _transitionSoundTempPath = null;
+                }
+                TransitionSoundTempFile.Delete(tmpPath);
             };
         }
         catch
         {
+            StopTransitionSound();
             // Never crash the slideshow over audio.
         }
     }
@@ -5742,6 +5751,7 @@ public sealed class SlideShowWindow : Window
     {
         _presenterViewWindow?.Close();
         _presenterViewWindow = null;
+        StopTransitionSound();
         if (_session.IsClosed)
         {
             return;
@@ -5755,10 +5765,6 @@ public sealed class SlideShowWindow : Window
             try { sb.Stop(); } catch { /* ignore */ }
         }
         _pendingStoryboards.Clear();
-
-        // Stop transition sound player.
-        try { _transitionSoundPlayer?.Stop(); _transitionSoundPlayer?.Close(); } catch { /* ignore */ }
-        _transitionSoundPlayer = null;
 
         // Stop all media players and delete temp files.
         _mediaController.Teardown();

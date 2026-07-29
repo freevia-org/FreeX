@@ -377,6 +377,7 @@ public sealed partial class MainWindow : Window
     internal string? SlidePaneNewSlideButtonText => _slidePaneNewSlideButton.Content?.ToString();
     internal string? SlidePaneNewSlideButtonAutomationName => AutomationProperties.GetName(_slidePaneNewSlideButton);
     internal Button SlidePaneNewSlideButtonForTests => _slidePaneNewSlideButton;
+    internal IReadOnlyList<string?> SelectionPaneRenameToolTipsForTests => _selectionPane.RenameToolTipsForTests;
     internal bool IsShellShortcutTargetForTests(Control? focused) => IsShellShortcutTarget(focused);
     internal ListBoxItem? SelectedSlidePaneItemForTests => GetCurrentSlidePaneItem();
     internal IReadOnlyList<SlidePaneThumbnailVisualPlan> SlidePaneRenderedThumbnailPlans => _slidePaneRenderedThumbnailPlans;
