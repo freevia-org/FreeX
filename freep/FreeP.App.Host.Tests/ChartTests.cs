@@ -359,6 +359,7 @@ public sealed class ChartTests : IDisposable
         chart.ValueAxis.CrossesAt = 12.5;
         chart.ValueAxis.MajorUnit = 5;
         chart.ValueAxis.MinorUnit = 1;
+        chart.ValueAxis.DisplayUnit = ChartAxisDisplayUnit.Millions;
         chart.ValueAxis.HasMinorGridlines = true;
         chart.CategoryAxis.ReverseOrder = true;
         chart.ValueAxis.ReverseOrder = true;
@@ -381,9 +382,24 @@ public sealed class ChartTests : IDisposable
         roundTripped.ValueAxis.CrossesAt.Should().Be(12.5);
         roundTripped.ValueAxis.MajorUnit.Should().Be(5);
         roundTripped.ValueAxis.MinorUnit.Should().Be(1);
+        roundTripped.ValueAxis.DisplayUnit.Should().Be(ChartAxisDisplayUnit.Millions);
         roundTripped.ValueAxis.HasMinorGridlines.Should().BeTrue();
         roundTripped.CategoryAxis.ReverseOrder.Should().BeTrue();
         roundTripped.ValueAxis.ReverseOrder.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RoundTrip_Chart_AxisUnknownDisplayUnitToken_IsRetained()
+    {
+        var chart = BuildColumnChart();
+        chart.ValueAxis.DisplayUnit = ChartAxisDisplayUnit.Unsupported;
+        chart.ValueAxis.RawDisplayUnitToken = "customPowerUnit";
+
+        var reloaded = PptxPackageReader.Read(WriteToPptx(BuildPresWithChart(chart)));
+        var axis = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!.ValueAxis;
+
+        axis.DisplayUnit.Should().Be(ChartAxisDisplayUnit.Unsupported);
+        axis.RawDisplayUnitToken.Should().Be("customPowerUnit");
     }
 
     [Fact]

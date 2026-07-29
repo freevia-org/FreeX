@@ -119,6 +119,22 @@ public sealed class ChartErrorBars
 /// <summary>Authored axis crossing mode from <c>c:crosses/@val</c>.</summary>
 public enum ChartAxisCrossing { AutoZero, Min, Max }
 
+/// <summary>Built-in value-axis display-unit choices from <c>c:dispUnits</c>.</summary>
+public enum ChartAxisDisplayUnit
+{
+    None,
+    Hundreds,
+    Thousands,
+    TenThousands,
+    HundredThousands,
+    Millions,
+    TenMillions,
+    HundredMillions,
+    Billions,
+    Trillions,
+    Unsupported,
+}
+
 /// <summary>Authored classic 3-D chart family read from OOXML chart-type elements.</summary>
 public enum ChartThreeDStyle { None, Pie, Line, Area, Column, Bar }
 
@@ -504,6 +520,12 @@ public sealed class ChartAxis
 
     /// <summary>Authored axis label source-linked state from <c>c:numFmt/@sourceLinked</c>. Null means unspecified.</summary>
     public bool? NumberFormatSourceLinked { get; set; }
+
+    /// <summary>Authored built-in display unit from <c>c:dispUnits/c:builtInUnit</c>.</summary>
+    public ChartAxisDisplayUnit DisplayUnit { get; set; }
+
+    /// <summary>Unknown <c>c:builtInUnit/@val</c> token retained losslessly.</summary>
+    public string? RawDisplayUnitToken { get; set; }
 
     /// <summary>Explicit minimum scale value. Null = auto.</summary>
     public double? Min { get; set; }

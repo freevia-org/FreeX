@@ -31,4 +31,6 @@ public sealed record ChartAxisOptions(
     bool? AutoCrossing = null,
     bool ReverseOrder = false,
     bool MinorGridlines = false,
-    ChartTextStyle? TitleStyle = null);
+    ChartTextStyle? TitleStyle = null,
+    ChartAxisDisplayUnit DisplayUnit = ChartAxisDisplayUnit.None,
+    string? RawDisplayUnitToken = null);

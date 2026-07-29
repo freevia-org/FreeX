@@ -175,6 +175,21 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartAxisOptions_DisplayUnit_IsUndoable()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.ValueAxis.DisplayUnit.Should().Be(ChartAxisDisplayUnit.None);
+
+        sess.ApplyChartAxisOptions(new ChartAxisOptions(
+            ChartAxisKind.Value, null, null, null, null, null, null, true,
+            DisplayUnit: ChartAxisDisplayUnit.Millions));
+
+        sess.SelectedChart.ValueAxis.DisplayUnit.Should().Be(ChartAxisDisplayUnit.Millions);
+        sess.Undo();
+        sess.SelectedChart.ValueAxis.DisplayUnit.Should().Be(ChartAxisDisplayUnit.None);
+    }
+
+    [StaFact]
     public void ChartSeriesOptionsDialog_ConstructsAndUsesSharedPlanner()
     {
         var (sess, _) = MakeSession();

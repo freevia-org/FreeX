@@ -24,6 +24,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _majorUnitBox;
     private readonly TextBox _minorUnitBox;
     private readonly TextBox _numberFormatBox;
+    private readonly ComboBox _displayUnitCombo;
     private readonly CheckBox _majorGridlinesCheck;
     private readonly CheckBox _minorGridlinesCheck;
     private readonly ComboBox _majorTickMarkCombo;
@@ -79,6 +80,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _majorUnitBox = new TextBox { MinWidth = 120 };
         _minorUnitBox = new TextBox { MinWidth = 120 };
         _numberFormatBox = new TextBox { MinWidth = 180 };
+        _displayUnitCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.DisplayUnitOptions);
         _majorGridlinesCheck = new CheckBox { Content = surface.MajorGridlinesLabel };
         _minorGridlinesCheck = new CheckBox { Content = surface.MinorGridlinesLabel };
         _majorTickMarkCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickMarkOptions);
@@ -121,6 +123,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         content.Children.Add(MakeRow(surface.MajorUnitLabel, _majorUnitBox));
         content.Children.Add(MakeRow(surface.MinorUnitLabel, _minorUnitBox));
         content.Children.Add(MakeRow(surface.NumberFormatLabel, _numberFormatBox));
+        content.Children.Add(MakeRow(surface.DisplayUnitLabel, _displayUnitCombo));
         content.Children.Add(new TextBlock { Text = surface.AutoHint, Margin = new Thickness(150, -4, 0, 8), Opacity = 0.7 });
         content.Children.Add(_majorGridlinesCheck);
         content.Children.Add(_minorGridlinesCheck);
@@ -172,6 +175,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _majorUnitBox.Text = Format(_planner.MajorUnit);
         _minorUnitBox.Text = Format(_planner.MinorUnit);
         _numberFormatBox.Text = _planner.NumberFormatCode;
+        _displayUnitCombo.SelectedItem = ChartAxisOptionsPlanner.DisplayUnitOptions.FirstOrDefault(x => x.Value == _planner.DisplayUnit);
         _majorGridlinesCheck.IsChecked = _planner.MajorGridlines;
         _minorGridlinesCheck.IsChecked = _planner.MinorGridlines;
         _majorTickMarkCombo.SelectedItem = ChartAxisOptionsPlanner.TickMarkOptions.FirstOrDefault(x => x.Value == _planner.MajorTickMark);
@@ -201,6 +205,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _planner.SetMajorUnit(ParseOptional(_majorUnitBox.Text, "Major unit"));
         _planner.SetMinorUnit(ParseOptional(_minorUnitBox.Text, "Minor unit"));
         _planner.SetNumberFormatCode(_numberFormatBox.Text);
+        _planner.SetDisplayUnit(((ChartAxisDisplayUnitOption)_displayUnitCombo.SelectedItem).Value);
         _planner.SetMajorGridlines(_majorGridlinesCheck.IsChecked == true);
         _planner.SetMinorGridlines(_minorGridlinesCheck.IsChecked == true);
         _planner.SetMajorTickMark(((ChartTickMarkOption)_majorTickMarkCombo.SelectedItem).Value);

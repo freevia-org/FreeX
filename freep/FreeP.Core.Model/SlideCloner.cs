@@ -392,6 +392,8 @@ public static class SlideCloner
         TitleStyle        = CloneChartTextStyle(a.TitleStyle),
         NumberFormatCode  = a.NumberFormatCode,
         NumberFormatSourceLinked = a.NumberFormatSourceLinked,
+        DisplayUnit       = a.DisplayUnit,
+        RawDisplayUnitToken = a.RawDisplayUnitToken,
         Min               = a.Min,
         Max               = a.Max,
         MajorUnit         = a.MajorUnit,
