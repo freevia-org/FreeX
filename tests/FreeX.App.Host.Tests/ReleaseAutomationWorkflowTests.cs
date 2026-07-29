@@ -245,6 +245,36 @@ public sealed class ReleaseAutomationWorkflowTests
     }
 
     [Fact]
+    public void AppTesterReleaseWorkflow_UsesOneAppVersionTagAndIndependentPlatformPackages()
+    {
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "app-tester-release.yml");
+        var publisher = WorkspaceFileLocator.ReadAllText("tools", "Publish-SisterAppTesterPackages.ps1");
+
+        workflow.Should().Contain("name: App Tester Release");
+        workflow.Should().Contain("- all");
+        workflow.Should().Contain("- FreeX");
+        workflow.Should().Contain("- FreeW");
+        workflow.Should().Contain("- FreeP");
+        workflow.Should().Contain("- windows");
+        workflow.Should().Contain("- linux");
+        workflow.Should().Contain("- macos");
+        workflow.Should().Contain("needs: [prepare, verify]");
+        workflow.Should().Contain("fromJSON(needs.prepare.outputs.package_matrix)");
+        workflow.Should().Contain("FullyQualifiedName~ReleaseAutomationWorkflowTests");
+        workflow.Should().Contain("-Runtimes \"${{ matrix.runtime }}\"");
+        workflow.Should().Contain("-WindowsPackageMode SingleFile");
+        workflow.Should().Contain("$tag = \"$($app.ToLowerInvariant())-v$version\"");
+        workflow.Should().Contain("Windows uses a self-contained single-file executable.");
+
+        publisher.Should().Contain("[ValidateSet(\"FreeX\", \"FreeW\", \"FreeP\")]");
+        publisher.Should().Contain("[ValidateSet(\"SingleFile\", \"FolderZip\")]");
+        publisher.Should().Contain("-p:IncludeNativeLibrariesForSelfExtract=true");
+        publisher.Should().Contain("-p:IncludeAllContentForSelfExtract=true");
+        publisher.Should().Contain("Single-file Windows publish produced runtime sidecars");
+        publisher.Should().Contain("$packageName = \"$App-v$Version-$runtime$packageExtension\"");
+    }
+
+    [Fact]
     public void ReleaseProgressJson_DefinesAutomaticTesterVersionBand()
     {
         using var document = JsonDocument.Parse(WorkspaceFileLocator.ReadAllText("release", "progress.json"));

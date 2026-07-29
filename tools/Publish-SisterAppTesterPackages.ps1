@@ -1,12 +1,13 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Publish tester zip packages for FreeW or FreeP across the current tester runtimes.
+    Publish tester packages for FreeX, FreeW, or FreeP across the current tester runtimes.
 
 .DESCRIPTION
     This is the explicit fallback lane for the sister apps while their hosted
     GitHub release publishers are being promoted to the same maturity as FreeX.
-    Windows uses the WPF host. Linux and macOS use the Avalonia host.
+    Windows uses the WPF host and a self-contained single-file executable.
+    Linux and macOS use the Avalonia host and self-contained zip packages.
 
 .EXAMPLE
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Publish-SisterAppTesterPackages.ps1 -App FreeW -Version 0.8.149
@@ -14,13 +15,16 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("FreeW", "FreeP")]
+    [ValidateSet("FreeX", "FreeW", "FreeP")]
     [string]$App,
 
     [Parameter(Mandatory = $true)]
     [string]$Version,
 
     [string[]]$Runtimes = @("win-x64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64"),
+
+    [ValidateSet("SingleFile", "FolderZip")]
+    [string]$WindowsPackageMode = "SingleFile",
 
     [string]$Configuration = "Release",
 
@@ -29,6 +33,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+
+# `powershell -File ... -Runtimes linux-x64,linux-arm64` reaches a string[]
+# parameter as one comma-delimited value. Normalize both that invocation shape
+# and ordinary PowerShell array binding before publishing any runtime.
+$Runtimes = @(
+    $Runtimes |
+        ForEach-Object { $_ -split "," } |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+)
+if ($Runtimes.Count -eq 0) {
+    throw "At least one runtime is required."
+}
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
@@ -42,6 +59,14 @@ if (-not $shortSha) {
 }
 
 $config = switch ($App) {
+    "FreeX" {
+        @{
+            WpfProject = "src\FreeX.App.Host\FreeX.App.Host.csproj"
+            AvaloniaProject = "src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj"
+            WpfHost = "FreeX.App.Host"
+            AvaloniaHost = "FreeX"
+        }
+    }
     "FreeW" {
         @{
             WpfProject = "freew\FreeW.App.Host\FreeW.App.Host.csproj"
@@ -62,27 +87,30 @@ $config = switch ($App) {
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 $manifestRows = New-Object System.Collections.Generic.List[string]
-$manifestRows.Add("app,version,commit,runtime,host,package,sha256")
+$manifestRows.Add("app,version,commit,runtime,host,package_type,package,sha256")
 
 foreach ($runtime in $Runtimes) {
-    $isWindows = $runtime -like "win-*"
-    $hostKind = if ($isWindows) { "wpf" } else { "avalonia" }
-    $projectRelative = if ($isWindows) { $config.WpfProject } else { $config.AvaloniaProject }
-    $hostName = if ($isWindows) { $config.WpfHost } else { $config.AvaloniaHost }
+    $isWindowsRuntime = $runtime -like "win-*"
+    $isWindowsSingleFile = $isWindowsRuntime -and $WindowsPackageMode -eq "SingleFile"
+    $hostKind = if ($isWindowsRuntime) { "wpf" } else { "avalonia" }
+    $projectRelative = if ($isWindowsRuntime) { $config.WpfProject } else { $config.AvaloniaProject }
+    $hostName = if ($isWindowsRuntime) { $config.WpfHost } else { $config.AvaloniaHost }
     $project = Join-Path $repoRoot $projectRelative
     if (-not (Test-Path -LiteralPath $project)) {
         throw "Could not find project '$project'."
     }
 
     $publishDir = Join-Path $OutputDir "publish\$App-$runtime-$hostKind"
-    $zipName = "$App-$Version-$runtime-$hostKind-$shortSha.zip"
-    $zipPath = Join-Path $OutputDir $zipName
+    $packageType = if ($isWindowsSingleFile) { "singlefile-exe" } else { "zip" }
+    $packageExtension = if ($isWindowsSingleFile) { ".exe" } else { ".zip" }
+    $packageName = "$App-v$Version-$runtime$packageExtension"
+    $packagePath = Join-Path $OutputDir $packageName
 
     if (Test-Path -LiteralPath $publishDir) {
         Remove-Item -LiteralPath $publishDir -Recurse -Force
     }
-    if (Test-Path -LiteralPath $zipPath) {
-        Remove-Item -LiteralPath $zipPath -Force
+    if (Test-Path -LiteralPath $packagePath) {
+        Remove-Item -LiteralPath $packagePath -Force
     }
     New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
 
@@ -92,12 +120,18 @@ foreach ($runtime in $Runtimes) {
         "--runtime", $runtime,
         "--self-contained", "true",
         "-p:UseAppHost=true",
-        "-p:PublishSingleFile=false",
+        "-p:PublishSingleFile=$($isWindowsSingleFile.ToString().ToLowerInvariant())",
         "-p:Version=$Version",
         "-p:InformationalVersion=$Version+$shortSha",
         "--output", $publishDir
     )
-    if (-not $isWindows) {
+    if ($isWindowsSingleFile) {
+        $publishArgs += @(
+            "-p:IncludeNativeLibrariesForSelfExtract=true",
+            "-p:IncludeAllContentForSelfExtract=true"
+        )
+    }
+    if (-not $isWindowsRuntime) {
         $publishArgs = @(
             "publish", $project,
             "--configuration", $Configuration,
@@ -123,17 +157,32 @@ foreach ($runtime in $Runtimes) {
         throw "dotnet publish failed for $App $runtime with exit code $LASTEXITCODE."
     }
 
-    $expectedExe = if ($isWindows) { Join-Path $publishDir "$hostName.exe" } else { Join-Path $publishDir $hostName }
-    if (-not (Test-Path -LiteralPath $expectedExe)) {
-        throw "Publish output missing expected apphost '$expectedExe'."
+    $expectedAppHost = if ($isWindowsRuntime) { Join-Path $publishDir "$hostName.exe" } else { Join-Path $publishDir $hostName }
+    if (-not (Test-Path -LiteralPath $expectedAppHost)) {
+        throw "Publish output missing expected apphost '$expectedAppHost'."
+    }
+    $expectedExe = (Resolve-Path -LiteralPath $expectedAppHost).Path
+
+    if ($isWindowsSingleFile) {
+        $unexpectedPublishFiles = @(
+            Get-ChildItem -LiteralPath $publishDir -File |
+                Where-Object { $_.FullName -ne $expectedExe -and $_.Extension -ne ".pdb" }
+        )
+        if ($unexpectedPublishFiles.Count -gt 0) {
+            $unexpectedNames = ($unexpectedPublishFiles | ForEach-Object { $_.Name }) -join ", "
+            throw "Single-file Windows publish produced runtime sidecars: $unexpectedNames"
+        }
+
+        Copy-Item -LiteralPath $expectedExe -Destination $packagePath -Force
+    } else {
+        Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $packagePath -Force
     }
 
-    Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $zipPath -Force
-    $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    $shaPath = "$zipPath.sha256"
-    "$hash  $zipName" | Set-Content -LiteralPath $shaPath -NoNewline -Encoding ascii
-    $manifestRows.Add("$App,$Version,$shortSha,$runtime,$hostKind,$zipName,$hash")
-    Write-Host "Produced $zipName"
+    $hash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $shaPath = "$packagePath.sha256"
+    "$hash  $packageName" | Set-Content -LiteralPath $shaPath -NoNewline -Encoding ascii
+    $manifestRows.Add("$App,$Version,$shortSha,$runtime,$hostKind,$packageType,$packageName,$hash")
+    Write-Host "Produced $packageName"
 }
 
 $manifestPath = Join-Path $OutputDir "$App-$Version-$shortSha-manifest.csv"

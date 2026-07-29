@@ -20,7 +20,7 @@ public sealed class DesignDialogEvidenceTests
 
         var script = File.ReadAllText(RepositoryFile("tools", "Generate-FreeWDesignDialogParityEvidence.ps1"));
         script.Should().Contain("[switch]$Check");
-        script.Should().Contain("Get-FileHash -LiteralPath $resolved -Algorithm SHA256");
+        script.Should().Contain("Get-ToolFileSha256Hash -LiteralPath $resolved");
         script.Should().Contain("Stale evidence");
     }
 

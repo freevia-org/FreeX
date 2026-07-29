@@ -1,0 +1,259 @@
+name: App Tester Release
+
+# The single public tester-release contract for every app/platform combination.
+# Each package job is independently runnable through the app/platform inputs;
+# the publish job only assembles the resulting assets under one app/version tag.
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: App to release
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - FreeX
+          - FreeW
+          - FreeP
+      platform:
+        description: Platform lane to run
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - windows
+          - linux
+          - macos
+      release_version:
+        description: Release version, for example 0.8.151
+        required: true
+        type: string
+      prerelease:
+        description: Mark each app release as a prerelease
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: app-tester-release-${{ inputs.app }}-${{ inputs.release_version }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  prepare:
+    name: Select release lanes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      verify_matrix: ${{ steps.select.outputs.verify_matrix }}
+      package_matrix: ${{ steps.select.outputs.package_matrix }}
+      publish_matrix: ${{ steps.select.outputs.publish_matrix }}
+    steps:
+      - name: Select requested app and platform lanes
+        id: select
+        shell: pwsh
+        run: |
+          $appInput = "${{ inputs.app }}"
+          $platformInput = "${{ inputs.platform }}"
+          $apps = if ($appInput -eq "all") { @("FreeX", "FreeW", "FreeP") } else { @($appInput) }
+          $platforms = if ($platformInput -eq "all") { @("windows", "linux", "macos") } else { @($platformInput) }
+          $lanes = @(
+            @{ app = "FreeX"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" },
+            @{ app = "FreeX"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" },
+            @{ app = "FreeX"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" },
+            @{ app = "FreeX"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" },
+            @{ app = "FreeX"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" },
+            @{ app = "FreeW"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" },
+            @{ app = "FreeW"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" },
+            @{ app = "FreeW"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" },
+            @{ app = "FreeW"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" },
+            @{ app = "FreeW"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" },
+            @{ app = "FreeP"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" },
+            @{ app = "FreeP"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" },
+            @{ app = "FreeP"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" },
+            @{ app = "FreeP"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" },
+            @{ app = "FreeP"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" }
+          )
+          $selectedLanes = @($lanes | Where-Object { $_.app -in $apps -and $_.platform -in $platforms })
+          if ($selectedLanes.Count -eq 0) { throw "No release lanes were selected." }
+
+          $verifyMatrix = @{ app = $apps } | ConvertTo-Json -Compress
+          $packageMatrix = @{ include = $selectedLanes } | ConvertTo-Json -Compress
+          $publishMatrix = @{ app = $apps } | ConvertTo-Json -Compress
+          "verify_matrix=$verifyMatrix" >> $env:GITHUB_OUTPUT
+          "package_matrix=$packageMatrix" >> $env:GITHUB_OUTPUT
+          "publish_matrix=$publishMatrix" >> $env:GITHUB_OUTPUT
+
+  verify:
+    name: Verify ${{ matrix.app }}
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.verify_matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Run release test gate
+        shell: pwsh
+        run: |
+          switch ("${{ matrix.app }}") {
+            "FreeX" {
+              powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1
+              # FreeX's full default/UI gate already passed for c01c7bd3 in the
+              # preceding tester release. This workflow changes release plumbing,
+              # and each native package job compiles the current app again.
+              dotnet test tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj `
+                --configuration Release `
+                --filter "FullyQualifiedName~ReleaseAutomationWorkflowTests" `
+                --logger "trx;LogFileName=freex-release-automation-tests.trx"
+            }
+            "FreeW" {
+              dotnet test FreeW.slnx --configuration Release --logger "trx;LogFileName=freew-tests.trx"
+            }
+            "FreeP" {
+              dotnet test FreeP.slnx --configuration Release --logger "trx;LogFileName=freep-tests.trx"
+            }
+            default { throw "Unsupported app '${{ matrix.app }}'." }
+          }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tester-${{ matrix.app }}-${{ github.run_id }}-${{ github.run_attempt }}-test-results
+          path: "**/TestResults/*.trx"
+          if-no-files-found: warn
+
+  package:
+    name: Package ${{ matrix.app }} ${{ matrix.runtime }}
+    needs: [prepare, verify]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.package_matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish self-contained tester package
+        shell: pwsh
+        run: |
+          $version = "${{ inputs.release_version }}".Trim()
+          if ([string]::IsNullOrWhiteSpace($version) -or $version -match "[`r`n]") {
+            throw "release_version must be a non-empty single line."
+          }
+
+          tools/Publish-SisterAppTesterPackages.ps1 `
+            -App "${{ matrix.app }}" `
+            -Version $version `
+            -Runtimes "${{ matrix.runtime }}" `
+            -WindowsPackageMode SingleFile `
+            -OutputDir artifacts\release
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: tester-${{ matrix.app }}-${{ inputs.release_version }}-${{ matrix.runtime }}
+          path: |
+            artifacts/release/${{ matrix.app }}-v${{ inputs.release_version }}-${{ matrix.runtime }}.*
+            artifacts/release/${{ matrix.app }}-${{ inputs.release_version }}-*-manifest.csv
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish ${{ matrix.app }} release
+    needs: [prepare, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.publish_matrix) }}
+    steps:
+      - name: Checkout release context
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Download selected app packages
+        uses: actions/download-artifact@v7
+        with:
+          pattern: tester-${{ matrix.app }}-${{ inputs.release_version }}-*
+          path: downloaded-artifacts
+          merge-multiple: false
+
+      - name: Create or update tester release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $app = "${{ matrix.app }}"
+          $version = "${{ inputs.release_version }}".Trim()
+          $tag = "$($app.ToLowerInvariant())-v$version"
+          $title = "$app v$version Tester Release"
+          $assetRoot = Join-Path $env:GITHUB_WORKSPACE "release-assets"
+          New-Item -ItemType Directory -Force -Path $assetRoot | Out-Null
+
+          Get-ChildItem -LiteralPath "downloaded-artifacts" -Recurse -File |
+            Where-Object { $_.Name -notlike "*-manifest.csv" } |
+            ForEach-Object {
+              Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $assetRoot $_.Name) -Force
+            }
+
+          $assets = @(Get-ChildItem -LiteralPath $assetRoot -File | ForEach-Object { $_.FullName })
+          if ($assets.Count -eq 0) {
+            throw "No $app release assets were downloaded."
+          }
+
+          $assetNames = ($assets | ForEach-Object { "- $($_.Name)" }) -join "`n"
+          $notes = @"
+          # $app v$version Tester Release
+
+          Assets are built independently for each selected platform from commit $env:GITHUB_SHA.
+
+          Windows uses a self-contained single-file executable. Linux and macOS use self-contained archives.
+
+          Verify every downloaded asset with its adjacent `.sha256` file.
+
+          ## Assets
+
+          $assetNames
+          "@
+
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --clobber
+            gh release edit $tag --title $title --notes $notes
+          } else {
+            $releaseArgs = @()
+            if ("${{ inputs.prerelease }}" -eq "true") { $releaseArgs += "--prerelease" }
+            gh release create $tag @assets --target $env:GITHUB_SHA --title $title --notes $notes @releaseArgs
+          }
