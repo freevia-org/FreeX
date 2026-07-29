@@ -517,6 +517,26 @@ public sealed class ChartTests : IDisposable
         rt.PlotVisibleOnly.Should().Be(visibleOnly);
     }
 
+    [Theory]
+    [InlineData(true, "1")]
+    [InlineData(false, "0")]
+    public void RoundTrip_Chart_RoundedCorners_PreservesPackageAndModel(bool roundedCorners, string xmlValue)
+    {
+        var chart = BuildColumnChart();
+        chart.RoundedCorners = roundedCorners;
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            chartDoc.Root!.Element(ChartNs + "roundedCorners")?.Attribute("val")?.Value.Should().Be(xmlValue);
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.RoundedCorners.Should().Be(roundedCorners);
+    }
+
     [Fact]
     public void RoundTrip_ChartLevelMetadata_DefaultsStayAbsentAndNull()
     {
@@ -527,12 +547,14 @@ public sealed class ChartTests : IDisposable
             var chartDoc = LoadChartXml(archive, chartIndex: 1);
             var chartEl = chartDoc.Root!.Element(ChartNs + "chart")!;
             chartEl.Element(ChartNs + "dispBlanksAs").Should().BeNull();
+            chartDoc.Root!.Element(ChartNs + "roundedCorners").Should().BeNull();
             chartEl.Element(ChartNs + "showDLblsOverMax").Should().BeNull();
         }
 
         var reloaded = PptxPackageReader.Read(path);
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.DisplayBlanksAs.Should().BeNull();
+        rt.RoundedCorners.Should().BeNull();
         rt.ShowDataLabelsOverMaximum.Should().BeNull();
     }
 

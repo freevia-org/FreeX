@@ -677,6 +677,12 @@ public sealed class ChartShape
     /// </summary>
     public bool? PlotVisibleOnly { get; set; }
 
+    /// <summary>
+    /// Authored chart-level <c>c:roundedCorners</c> flag. Null means the source omitted the
+    /// token and the host default applies.
+    /// </summary>
+    public bool? RoundedCorners { get; set; }
+
     /// <summary>Authored chart-level <c>c:showDLblsOverMax</c> flag. Null means unspecified.</summary>
     public bool? ShowDataLabelsOverMaximum { get; set; }
 

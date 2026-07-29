@@ -48,6 +48,7 @@ internal static class PptxChartReader
         var shape = new ChartShape
         {
             StyleId = ReadStyleId(chartSpace),
+            RoundedCorners = ParseNullableBoolElement(chartSpace.Element(C + "roundedCorners")),
             PreservedChartSpaceExtensionsXml = chartSpace.Element(C + "extLst")
                 ?.ToString(SaveOptions.DisableFormatting)
         };
