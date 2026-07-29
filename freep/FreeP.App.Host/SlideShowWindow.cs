@@ -3868,9 +3868,11 @@ public sealed class SlideShowWindow : Window
             var anim = plan.Animation;
             if (!_animElements.TryGetValue(anim.ShapeId, out var element))
             {
-                // Shapes without a renderable overlay retain the coarse fallback rather than
-                // guessing a direction or clip geometry.
-                PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));
+                // Keep the logical visibility transition even when a shape cannot be
+                // rasterized into an overlay.  This is deliberately geometry-neutral: the
+                // shape is shown/hidden at the authored timing without inventing a motion
+                // path or clip for a visual we could not render safely.
+                PlayFallbackAnimation(anim, plan.DelayMs, plan.DurationMs);
                 continue;
             }
 
@@ -5720,10 +5722,50 @@ public sealed class SlideShowWindow : Window
     }
 
     /// <summary>
-    /// Best-effort fallback for shapes without an overlay element (emphasis, exit, or
-    /// entrance shapes that failed to render into the overlay).
-    /// Applies a brief opacity flash on the main SlideCanvas (coarse but visible).
+    /// Best-effort fallback for shapes without an overlay element.  Entrance and motion
+    /// shapes stay suppressed until their step completes; exit shapes are suppressed at
+    /// completion.  Emphasis retains the existing slide-wide flash because there is no
+    /// shape surface on which to paint the effect.
     /// </summary>
+    private void PlayFallbackAnimation(ShapeAnimation animation, int delayMs, int durationMs)
+    {
+        var visibilityPlan = SlideShowPlaybackPlanner.PlanFallbackVisibility(animation);
+        if (visibilityPlan.SuppressAtStart || visibilityPlan.SuppressAtCompletion)
+        {
+            if (visibilityPlan.SuppressAtStart)
+            {
+                _slideCanvas.SuppressedShapeIds.Add(animation.ShapeId);
+                _slideCanvas.Refresh();
+            }
+
+            var visibility = new Storyboard();
+            var hold = new DoubleAnimation(
+                1,
+                1,
+                new Duration(TimeSpan.FromMilliseconds(Math.Max(0, durationMs))))
+            {
+                BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, delayMs))
+            };
+            Storyboard.SetTarget(hold, _slideCanvas);
+            Storyboard.SetTargetProperty(hold, new PropertyPath(OpacityProperty));
+            visibility.Children.Add(hold);
+            visibility.Completed += (_, _) =>
+            {
+                if (visibilityPlan.SuppressAtCompletion)
+                    _slideCanvas.SuppressedShapeIds.Add(animation.ShapeId);
+                else
+                    RevealShape(animation.ShapeId);
+                _slideCanvas.Refresh();
+            };
+            _pendingStoryboards.Add(visibility);
+            visibility.Begin(_slideCanvas, isControllable: true);
+            return;
+        }
+
+        PlayFallbackAnimation(
+            SlideShowPlaybackPlanner.PlanFallbackAnimation(animation, delayMs));
+    }
+
     private void PlayFallbackAnimation(SlideShowFallbackAnimationPlaybackPlan? plan)
     {
         if (plan is null) return;
