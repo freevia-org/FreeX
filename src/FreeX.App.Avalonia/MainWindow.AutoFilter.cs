@@ -465,11 +465,10 @@ public sealed partial class MainWindow
                 ? "Count"
                 : option.RequiresValue ? "Value" : string.Empty;
             valueBox.IsEnabled = option.RequiresValue;
-            criteriaBox.Text = secondValueBox.IsVisible
-                ? AutoFilterDialogCriteriaPlanner.BuildBetweenCriteriaText(option, valueBox.Text, secondValueBox.Text)
-                : AutoFilterMenuPlanner.RequiresCountCriteriaValue(option)
-                    ? AutoFilterDialogCriteriaPlanner.BuildTopBottomCriteriaText(option, valueBox.Text)
-                    : AutoFilterMenuPlanner.BuildCriteriaText(option, valueBox.Text);
+            criteriaBox.Text = AutoFilterMenuPlanner.BuildCompletedCriteriaText(
+                option,
+                valueBox.Text,
+                secondValueBox.Text);
         }
 
         selector.SelectionChanged += (_, _) =>

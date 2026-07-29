@@ -196,6 +196,20 @@ public sealed class AutoFilterMenuPlannerTests
     }
 
     [Fact]
+    public void BuildCompletedCriteriaText_LeavesUntouchedValueCriteriaEmpty()
+    {
+        var equals = new AutoFilterCriteriaOption("Equals", "text=", RequiresValue: true);
+        var blanks = new AutoFilterCriteriaOption("Blanks", "blank", RequiresValue: false);
+        var between = new AutoFilterCriteriaOption("Between", "between:", RequiresValue: true);
+
+        AutoFilterMenuPlanner.BuildCompletedCriteriaText(equals, null).Should().BeEmpty();
+        AutoFilterMenuPlanner.BuildCompletedCriteriaText(equals, "North").Should().Be("text=North");
+        AutoFilterMenuPlanner.BuildCompletedCriteriaText(blanks, null).Should().Be("blank");
+        AutoFilterMenuPlanner.BuildCompletedCriteriaText(between, "10", null).Should().BeEmpty();
+        AutoFilterMenuPlanner.BuildCompletedCriteriaText(between, "10", "20").Should().Be("between:10:20");
+    }
+
+    [Fact]
     public void FlyoutCommandRows_RenderSharedIconColumnFromMenuPlan()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs"));

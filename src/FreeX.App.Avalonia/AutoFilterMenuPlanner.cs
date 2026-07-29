@@ -108,6 +108,26 @@ internal static class AutoFilterMenuPlanner
     public static string BuildCriteriaText(AutoFilterCriteriaOption option, string? value) =>
         AutoFilterDialogCriteriaPlanner.BuildCriteriaText(option, value);
 
+    public static string BuildCompletedCriteriaText(
+        AutoFilterCriteriaOption option,
+        string? value,
+        string? secondValue = null)
+    {
+        if (option.RequiresValue && string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        if (RequiresSecondCriteriaValue(option))
+        {
+            return string.IsNullOrWhiteSpace(secondValue)
+                ? string.Empty
+                : AutoFilterDialogCriteriaPlanner.BuildBetweenCriteriaText(option, value, secondValue);
+        }
+
+        return RequiresCountCriteriaValue(option)
+            ? AutoFilterDialogCriteriaPlanner.BuildTopBottomCriteriaText(option, value)
+            : BuildCriteriaText(option, value);
+    }
+
     public static bool RequiresSecondCriteriaValue(AutoFilterCriteriaOption option) =>
         AutoFilterDialogCriteriaPlanner.IsBetweenOption(option);
 

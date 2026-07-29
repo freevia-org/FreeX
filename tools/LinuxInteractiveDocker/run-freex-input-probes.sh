@@ -431,6 +431,15 @@ open_autofilter_menu() {
     send_key alt+Down
 }
 
+click_autofilter_control() {
+    local x_offset="$1" y_offset="$2"
+    xdotool_mousemove_sync "$((a1_x + x_offset))" "$((a1_y + y_offset))"
+    xdotool mousedown 1
+    sleep 0.12
+    xdotool mouseup 1
+    sleep "$settle_seconds"
+}
+
 select_cell() {
     local column_offset="$1" row_offset="$2" address="$3"
     local expected_x expected_y center_x center_y
@@ -640,7 +649,7 @@ probe_pivot_field_list() {
 
 probe_autofilter_recalculation() {
     local initial_value north_value south_value cleared_value
-    local artifacts="autofilter-recalculation-before.png;autofilter-recalculation-north.png;autofilter-recalculation-south.png;autofilter-recalculation-cleared.png;autofilter-recalculation-postcondition.txt"
+    local artifacts="autofilter-recalculation-before.png;autofilter-recalculation-menu-open.png;autofilter-recalculation-north-checked.png;autofilter-recalculation-north-committed.png;autofilter-recalculation-north.png;autofilter-recalculation-south-checked.png;autofilter-recalculation-south-committed.png;autofilter-recalculation-south.png;autofilter-recalculation-cleared.png;autofilter-recalculation-postcondition.txt"
     local passed=false
 
     # Seed a compact, deterministic worksheet without saving it back to the caller's CSV.
@@ -662,37 +671,37 @@ probe_autofilter_recalculation() {
     send_key ctrl+shift+l
     select_cell 0 0 A1
 
-    # The text filter flyout initially focuses Sort A-Z. Its tab order reaches Select All, then
-    # the North and South checklist entries. Leave North selected and uncheck South.
+    # The harness is fixed at 96 DPI. Click the checklist and command controls relative to the
+    # calibrated A1 header so criteria controls cannot make this probe depend on incidental tab order.
     open_autofilter_menu 0
     capture "autofilter-recalculation-menu-open.png"
-    for _ in $(seq 1 9); do send_key Tab; done
-    send_key space
-    send_key Tab
-    send_key Return
+    click_autofilter_control 29 366
+    capture "autofilter-recalculation-north-checked.png"
+    click_autofilter_control 246 395
+    capture "autofilter-recalculation-north-committed.png"
     sleep "$settle_seconds"
-    north_value="$(copy_cell_display 1 3 B4 || true)"
+    # One filtered data row is hidden, so B4 occupies the third visible worksheet row.
+    north_value="$(copy_cell_display 1 2 B4-filtered-north || true)"
     capture "autofilter-recalculation-north.png"
 
     # Change the active checklist from North to South, preserving the same formula cell.
     select_cell 0 0 A1
     open_autofilter_menu 0
-    for _ in $(seq 1 8); do send_key Tab; done
-    send_key space
-    for _ in $(seq 1 2); do send_key Tab; done
-    send_key Return
+    click_autofilter_control 29 348
+    click_autofilter_control 29 366
+    capture "autofilter-recalculation-south-checked.png"
+    click_autofilter_control 246 395
+    capture "autofilter-recalculation-south-committed.png"
     sleep "$settle_seconds"
-    south_value="$(copy_cell_display 1 3 B4 || true)"
+    south_value="$(copy_cell_display 1 2 B4-filtered-south || true)"
     capture "autofilter-recalculation-south.png"
 
-    # Clear the active Region filter from the same production flyout. Clear Filter is the third
-    # focusable action after the two sort commands.
+    # Clear the active Region filter from the same production flyout.
     select_cell 0 0 A1
     open_autofilter_menu 0
-    for _ in $(seq 1 2); do send_key Tab; done
-    send_key Return
+    click_autofilter_control 151 121
     sleep "$settle_seconds"
-    cleared_value="$(copy_cell_display 1 3 B4 || true)"
+    cleared_value="$(copy_cell_display 1 3 B4-cleared || true)"
     capture "autofilter-recalculation-cleared.png"
 
     write_artifact "autofilter-recalculation-postcondition.txt" \
