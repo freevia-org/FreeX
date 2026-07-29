@@ -474,6 +474,43 @@ public sealed class DocumentViewFloatingShapeTests
     }
 
     [Fact]
+    public async Task Pointer_caret_placement_applies_the_shape_text_rotation_transform()
+    {
+        var offsets = new Dictionary<ShapeTextDirection, int>();
+
+        var ran = await OnUiThread(() =>
+        {
+            foreach (var direction in new[] { ShapeTextDirection.Rotate90, ShapeTextDirection.Rotate270 })
+            {
+                var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
+                    hOffsetPt: 0, vOffsetPt: 0,
+                    fillColorHex: "#FFFFFF",
+                    shapeWidthPt: 144,
+                    shapeHeightPt: 108,
+                    text: "ABCD");
+                var shape = ((Paragraph)doc.Blocks[0]).Runs[1].Shape!;
+                shape.TextDirection = direction;
+
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+                view.Measure(new Size(816, 2000));
+                view.SelectFloating(0, 1);
+                view.EnterSelectedShapeTextEditing().Should().BeTrue();
+
+                var rect = view.FloatingShapeRects.Should().ContainSingle().Which.Rect;
+                view.PlaceShapeTextCaretForTest(new Point(rect.Center.X, rect.Y + 5)).Should().BeTrue();
+                offsets[direction] = view.ShapeTextCaretInfo!.Value.Offset;
+            }
+        });
+
+        if (!ran) return;
+        offsets[ShapeTextDirection.Rotate90].Should().Be(0,
+            "the top of a clockwise-rotated text box maps to the beginning of the unrotated text");
+        offsets[ShapeTextDirection.Rotate270].Should().Be(4,
+            "the top of a counter-clockwise-rotated text box maps to the end of the unrotated text");
+    }
+
+    [Fact]
     public async Task Selected_floating_text_box_supports_paragraph_break_merge_and_outer_text_sync()
     {
         int paragraphCountAfterBreak = -1;
