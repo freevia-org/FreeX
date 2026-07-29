@@ -431,6 +431,57 @@ public sealed class DocumentViewFloatingShapeTests
     }
 
     [Fact]
+    public async Task Selected_floating_text_box_supports_paragraph_break_merge_and_outer_text_sync()
+    {
+        int paragraphCountAfterBreak = -1;
+        int paragraphCountAfterUndo = -1;
+        int paragraphCountAfterRedo = -1;
+        string? textAfterTyping = null;
+        string? outerRunTextAfterTyping = null;
+        string? textAfterMerge = null;
+        string? outerRunTextAfterMerge = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
+                hOffsetPt: 0, vOffsetPt: 0,
+                fillColorHex: "#FFFFFF",
+                text: "First line");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            view.SelectFloating(0, 1);
+
+            view.EnterSelectedShapeTextEditing().Should().BeTrue();
+            view.InsertShapeTextParagraphBreak();
+            paragraphCountAfterBreak = view.SelectedFloatingShape()!.TextParagraphs.Count;
+            view.InsertText("Second line");
+            textAfterTyping = view.SelectedFloatingShape()!.PlainText;
+            outerRunTextAfterTyping = ((Paragraph)doc.Blocks[0]).Runs[1].Text;
+
+            view.Undo();
+            paragraphCountAfterUndo = view.SelectedFloatingShape()!.TextParagraphs.Count;
+            view.Redo();
+            paragraphCountAfterRedo = view.SelectedFloatingShape()!.TextParagraphs.Count;
+
+            // The caret is at the start of the second paragraph immediately after a break.
+            view.Undo();
+            view.BackspacePublic();
+            textAfterMerge = view.SelectedFloatingShape()!.PlainText;
+            outerRunTextAfterMerge = ((Paragraph)doc.Blocks[0]).Runs[1].Text;
+        });
+
+        if (!ran) return;
+        paragraphCountAfterBreak.Should().Be(2);
+        textAfterTyping.Should().Be("First line\nSecond line");
+        outerRunTextAfterTyping.Should().Be("First line\nSecond line");
+        paragraphCountAfterUndo.Should().Be(2, "undoing the typed run must keep the paragraph break");
+        paragraphCountAfterRedo.Should().Be(2);
+        textAfterMerge.Should().Be("First line");
+        outerRunTextAfterMerge.Should().Be("First line");
+    }
+
+    [Fact]
     public async Task Selected_floating_text_box_text_direction_uses_shared_undo_command()
     {
         ShapeTextDirection? afterRotate = null;
