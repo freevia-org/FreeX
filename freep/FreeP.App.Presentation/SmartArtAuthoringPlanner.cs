@@ -81,6 +81,7 @@ public enum SmartArtLayoutPreset
     VerticalChevronList,
     VerticalBulletList,
     HorizontalBulletList,
+    HorizontalBlockList,
     BasicCycle,
     ContinuousCycle,
     GearCycle,
@@ -214,6 +215,7 @@ public static class SmartArtAuthoringPlanner
     public const string VerticalChevronListLayoutCommandId = "freep.smartart.layout.vertical-chevron-list";
     public const string VerticalBulletListLayoutCommandId = "freep.smartart.layout.vertical-bullet-list";
     public const string HorizontalBulletListLayoutCommandId = "freep.smartart.layout.horizontal-bullet-list";
+    public const string HorizontalBlockListLayoutCommandId = "freep.smartart.layout.horizontal-block-list";
     public const string BasicCycleLayoutCommandId = "freep.smartart.layout.basic-cycle";
     public const string ContinuousCycleLayoutCommandId = "freep.smartart.layout.continuous-cycle";
     public const string GearCycleLayoutCommandId = "freep.smartart.layout.gear-cycle";
@@ -517,6 +519,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.HorizontalBulletList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBulletList", SmartArtFamily.List),
+            SmartArtLayoutPreset.HorizontalBlockList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.ContinuousCycle =>

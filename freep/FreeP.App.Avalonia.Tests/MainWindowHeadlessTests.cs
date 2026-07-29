@@ -5756,6 +5756,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
                 SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
+                SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.StackedListLayoutCommandId,
                 SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,
