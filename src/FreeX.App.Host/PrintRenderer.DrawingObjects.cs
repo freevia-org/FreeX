@@ -118,8 +118,15 @@ public static partial class PrintRenderer
         {
             var rect = ToRect(textBox.Bounds);
             var fillBrush = textBox.Fill is { } fill ? CreateFrozenBrush(fill, textBox.FillAlpha) : null;
-            var outlinePen = new Pen(CreateFrozenBrush(textBox.Outline), textBox.OutlineThickness);
-            outlinePen.Freeze();
+            // R91-commands-insert-object-5-1: Outline is null when the text box's line is
+            // explicitly suppressed (TextBoxModel.OutlineHasNoFill) -- print no border rather than
+            // always forcing one.
+            Pen? outlinePen = null;
+            if (textBox.Outline is { } outlineColor)
+            {
+                outlinePen = new Pen(CreateFrozenBrush(outlineColor), textBox.OutlineThickness);
+                outlinePen.Freeze();
+            }
             dc.DrawRectangle(fillBrush, outlinePen, rect);
 
             if (string.IsNullOrEmpty(textBox.Text))

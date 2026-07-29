@@ -193,7 +193,8 @@ if (-not $SkipEvidenceRender) {
         $wpfRenderArgs += "--software-fallback"
     }
     Invoke-DotNetRunNoBuild $fidelityRenderProject $wpfRenderArgs -Configuration $Configuration
-    Invoke-DotNetRun $pageLayoutShotProject @($avaloniaDir) -Configuration $Configuration
+    $avaloniaRenderArgs = @($avaloniaDir, "--fixtures-dir", $fixtureDir)
+    Invoke-DotNetRun $pageLayoutShotProject $avaloniaRenderArgs -Configuration $Configuration
 }
 
 $wpfManifest = Join-Path $wpfDir "freew_visual_evidence_manifest.json"

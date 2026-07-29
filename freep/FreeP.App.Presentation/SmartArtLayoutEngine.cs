@@ -249,12 +249,19 @@ public static class SmartArtLayoutEngine
         DrawingShapeKind shapeKind = DrawingShapeKind.RoundedRectangle,
         double? geometryAdjustment = null)
     {
-        var run = new Run { Text = text, Color = style.Text, Bold = true, FontSizePt = fontSizePt };
-        var para = new Paragraph();
-        para.Runs.Add(run);
-        para.Align = TextAlign.Center;
         var body = new TextBody();
-        body.Paragraphs.Add(para);
+        foreach (var line in NormalizeSmartArtText(text).Split('\n'))
+        {
+            var paragraph = new Paragraph { Align = TextAlign.Center };
+            paragraph.Runs.Add(new Run
+            {
+                Text = line,
+                Color = style.Text,
+                Bold = true,
+                FontSizePt = fontSizePt,
+            });
+            body.Paragraphs.Add(paragraph);
+        }
         body.Anchor = VerticalAnchor.Middle;
         body.Wrap   = true;
 
@@ -279,6 +286,9 @@ public static class SmartArtLayoutEngine
         return shape;
     }
 
+    private static string NormalizeSmartArtText(string? text) =>
+        (text ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+
     private static SlideShape MakeBulletListBox(
         uint id, SmartArtNode node, SmartArtNodeStyle style,
         long x, long y, long cx, long cy)
@@ -301,14 +311,6 @@ public static class SmartArtLayoutEngine
         bool isAssistant,
         double fontSizePt = NodeFontSizePt)
     {
-        var paragraph = new Paragraph { Align = TextAlign.Center };
-        paragraph.Runs.Add(new Run
-        {
-            Text = text,
-            Color = style.Text,
-            Bold = true,
-            FontSizePt = fontSizePt,
-        });
         var body = new TextBody
         {
             Anchor = VerticalAnchor.Middle,
@@ -318,7 +320,18 @@ public static class SmartArtLayoutEngine
             InsetLeftPt = 5,
             InsetRightPt = 5,
         };
-        body.Paragraphs.Add(paragraph);
+        foreach (var line in NormalizeSmartArtText(text).Split('\n'))
+        {
+            var paragraph = new Paragraph { Align = TextAlign.Center };
+            paragraph.Runs.Add(new Run
+            {
+                Text = line,
+                Color = style.Text,
+                Bold = true,
+                FontSizePt = fontSizePt,
+            });
+            body.Paragraphs.Add(paragraph);
+        }
 
         return new SlideShape
         {

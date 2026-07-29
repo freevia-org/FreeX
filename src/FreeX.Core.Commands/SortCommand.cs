@@ -318,6 +318,23 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                             return aError ? -1 : 1;
                         continue; // both blank, or both error — equal on this key, try next
                     }
+
+                    // R91-commands-sort-customlist-5-1: a custom list's "member always precedes
+                    // non-member" rule is a fixed property of the list itself, not of the sort
+                    // direction — Excel's Sort dialog doesn't even let a user combine Descending
+                    // with a custom list (choosing "Custom List..." replaces the A-to-Z/Z-to-A
+                    // choice entirely). FreeX's Ascending toggle and custom-list picker are two
+                    // independent controls that both land on the same SortKey, so guard the
+                    // membership precedence here, before the shared ascending/descending negation
+                    // below, so Descending only reverses the WITHIN-list order (e.g. Wed, Tue,
+                    // Mon) and never lets a non-member value jump ahead of every list member.
+                    if (customOrder is not null)
+                    {
+                        bool aMember = a.Payloads[index].Cell?.Value is TextValue taMember && customOrder.IndexOf(taMember.Value) >= 0;
+                        bool bMember = b.Payloads[index].Cell?.Value is TextValue tbMember && customOrder.IndexOf(tbMember.Value) >= 0;
+                        if (aMember != bMember)
+                            return aMember ? -1 : 1; // list members precede non-members, regardless of direction
+                    }
                 }
                 else if ((sortOn == SortOn.CellColor || sortOn == SortOn.FontColor) && targetColor is null)
                 {
@@ -506,6 +523,17 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                         if (aError != bError)
                             return aError ? -1 : 1;
                         continue; // both blank, or both error — equal on this key, try next
+                    }
+
+                    // R91-commands-sort-customlist-5-1: mirrors the guard in Apply's top-to-bottom
+                    // comparator above — a custom list's "member always precedes non-member" rule
+                    // must not be inverted by the Descending direction toggle.
+                    if (customOrder is not null)
+                    {
+                        bool aMember = a.Payloads[index].Cell?.Value is TextValue taMember && customOrder.IndexOf(taMember.Value) >= 0;
+                        bool bMember = b.Payloads[index].Cell?.Value is TextValue tbMember && customOrder.IndexOf(tbMember.Value) >= 0;
+                        if (aMember != bMember)
+                            return aMember ? -1 : 1; // list members precede non-members, regardless of direction
                     }
                 }
                 else if ((sortOn == SortOn.CellColor || sortOn == SortOn.FontColor) && targetColor is null)

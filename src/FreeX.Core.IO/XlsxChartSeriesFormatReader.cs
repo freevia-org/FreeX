@@ -21,10 +21,34 @@ internal static class XlsxChartSeriesFormatReader
         var solidFill = shapeProperties?.Element(DrawingNs + "solidFill");
         CellColor? fillColor = null;
         WorkbookThemeColorReference? fillThemeColor = null;
+        double? fillAlpha = null;
         if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
+        {
             fillThemeColor = themeColor;
+            // R91-render-chart-series-format-5-4: <a:alpha> is lost on round-trip if never parsed.
+            fillAlpha = XlsxDrawingColorReader.TryReadFillAlpha(solidFill, DrawingNs);
+        }
         else if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+        {
             fillColor = color;
+            fillAlpha = XlsxDrawingColorReader.TryReadFillAlpha(solidFill, DrawingNs);
+        }
+
+        // R91-render-chart-series-format-5-1: a series fill of type <a:gradFill>/<a:pattFill> has
+        // no dedicated model representation (only noFill/solidFill are modeled above). Rather than
+        // silently dropping it (the whole <c:spPr> is destroyed on the next FreeX-triggered save —
+        // see XlsxChartXmlWriter.Series.cs ToSeriesShapeProperties), preserve the authored element
+        // verbatim so a gradient- or pattern-filled series survives a round trip. Picture fills
+        // (<a:blipFill>) additionally need their embedded-image relationship/media re-plumbed
+        // through the chart part's own .rels on write — out of scope here; still tracked as a gap.
+        string? rawFillXml = null;
+        if (!hasNoFill && solidFill is null)
+        {
+            var unmodeledFill = shapeProperties?.Element(DrawingNs + "gradFill")
+                ?? shapeProperties?.Element(DrawingNs + "pattFill");
+            if (unmodeledFill is not null)
+                rawFillXml = unmodeledFill.ToString(SaveOptions.DisableFormatting);
+        }
 
         var line = shapeProperties?.Element(DrawingNs + "ln");
         // An explicit <a:ln><a:noFill/> means the bar outline must NOT be drawn (e.g. a transparent
@@ -55,7 +79,9 @@ internal static class XlsxChartSeriesFormatReader
             strokeThemeColor is null &&
             strokeThickness is null &&
             dashStyle is null &&
-            invertIfNegative is null)
+            invertIfNegative is null &&
+            rawFillXml is null &&
+            fillAlpha is null)
         {
             return false;
         }
@@ -70,7 +96,9 @@ internal static class XlsxChartSeriesFormatReader
             StrokeThemeColor: strokeThemeColor,
             InvertIfNegative: invertIfNegative,
             NoFill: hasNoFill,
-            NoLine: hasNoLine);
+            NoLine: hasNoLine,
+            RawFillXml: rawFillXml,
+            FillAlpha: fillAlpha);
         return true;
     }
 

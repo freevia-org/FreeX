@@ -755,61 +755,8 @@ public partial class MainWindow
         if (TryHandleFocusedStatusBarKeyboardNavigation(e))
             return;
 
-        if (KeyboardShortcutMatcher.TryGetFontToggleShortcut(e.Key, Keyboard.Modifiers, out var fontToggleShortcut))
-        {
-            ApplyFontToggleShortcut(fontToggleShortcut);
-            e.Handled = true;
+        if (TryHandleWholeCellKeyboardShortcuts(sender, e, Keyboard.Modifiers))
             return;
-        }
-
-        if (KeyboardShortcutMatcher.IsPasteSpecialShortcut(e.Key, e.SystemKey, Keyboard.Modifiers))
-        {
-            PasteSpecialBtn_Click(sender, e);
-            e.Handled = true;
-            return;
-        }
-        if (KeyboardShortcutMatcher.TryGetSelectionShortcut(e.Key, Keyboard.Modifiers, out var selectionShortcut))
-        {
-            switch (selectionShortcut)
-            {
-                case KeyboardSelectionShortcut.SelectAll:
-                    SelectAll();
-                    break;
-                case KeyboardSelectionShortcut.SelectCurrentRegion:
-                    SelectCurrentRegionOnly();
-                    break;
-                case KeyboardSelectionShortcut.SelectWholeColumns:
-                    SelectWholeColumnsFromSelection();
-                    break;
-                case KeyboardSelectionShortcut.SelectWholeRows:
-                    SelectWholeRowsFromSelection();
-                    break;
-            }
-
-            e.Handled = true;
-            return;
-        }
-        if (KeyboardShortcutMatcher.TryGetGridShortcut(e.Key, Keyboard.Modifiers, out var gridShortcut))
-        {
-            switch (gridShortcut)
-            {
-                case KeyboardGridShortcut.HideRows:
-                    ExecuteRowsHidden(hidden: true);
-                    break;
-                case KeyboardGridShortcut.UnhideRows:
-                    ExecuteRowsHidden(hidden: false);
-                    break;
-                case KeyboardGridShortcut.HideColumns:
-                    ExecuteColumnsHidden(hidden: true);
-                    break;
-                case KeyboardGridShortcut.UnhideColumns:
-                    ExecuteColumnsHidden(hidden: false);
-                    break;
-            }
-
-            e.Handled = true;
-            return;
-        }
 
         if (SheetGrid.SelectedRange == null) return;
 
@@ -969,6 +916,88 @@ public partial class MainWindow
 
         EnsureCellVisible(target.Value);
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// R91-app-keyboard-routing-5-1: dispatches the whole-cell/whole-selection keyboard shortcuts
+    /// (Ctrl+B/I/U/5 font toggles, Ctrl+Shift+V Paste Special, Ctrl+Space/Shift+Space/Ctrl+Shift+Space
+    /// selection, Ctrl+9/Ctrl+0 hide rows/columns) -- but ONLY when the in-place cell editor (or a
+    /// ComboBox) does NOT have focus. While editing, Ctrl+B/I/U/5 must not silently mutate the whole
+    /// cell's style mid-edit (Excel applies them to the selected text run inside the editor, or
+    /// defers to the pending entry -- never a bulk style command while unrelated uncommitted text is
+    /// still open), and the rest are equally meaningless (or actively destructive) mid-edit. Returning
+    /// false leaves the key unhandled so falls through to the focused TextBox's own default handling
+    /// (e.g. Ctrl+A selects the in-box text) instead. Mirrors the Avalonia shell's
+    /// IsTextEditingEventSource gate (MainWindow.KeyboardParity.cs) that already suppresses the
+    /// equivalent WorkbookShortcutRoute dispatch while its inline cell editor is focused.
+    ///
+    /// <paramref name="modifiers"/> is threaded explicitly (rather than reading the static
+    /// <see cref="Keyboard.Modifiers"/> internally) so this dispatch decision is unit-testable
+    /// without depending on real OS-level keyboard state -- only <see cref="Keyboard.FocusedElement"/>
+    /// (ordinary WPF logical focus, fully controllable in a test) gates the block.
+    /// </summary>
+    private bool TryHandleWholeCellKeyboardShortcuts(object sender, System.Windows.Input.KeyEventArgs e, ModifierKeys modifiers)
+    {
+        if (Keyboard.FocusedElement is TextBox or ComboBox)
+            return false;
+
+        if (KeyboardShortcutMatcher.TryGetFontToggleShortcut(e.Key, modifiers, out var fontToggleShortcut))
+        {
+            ApplyFontToggleShortcut(fontToggleShortcut);
+            e.Handled = true;
+            return true;
+        }
+
+        if (KeyboardShortcutMatcher.IsPasteSpecialShortcut(e.Key, e.SystemKey, modifiers))
+        {
+            PasteSpecialBtn_Click(sender, e);
+            e.Handled = true;
+            return true;
+        }
+        if (KeyboardShortcutMatcher.TryGetSelectionShortcut(e.Key, modifiers, out var selectionShortcut))
+        {
+            switch (selectionShortcut)
+            {
+                case KeyboardSelectionShortcut.SelectAll:
+                    SelectAll();
+                    break;
+                case KeyboardSelectionShortcut.SelectCurrentRegion:
+                    SelectCurrentRegionOnly();
+                    break;
+                case KeyboardSelectionShortcut.SelectWholeColumns:
+                    SelectWholeColumnsFromSelection();
+                    break;
+                case KeyboardSelectionShortcut.SelectWholeRows:
+                    SelectWholeRowsFromSelection();
+                    break;
+            }
+
+            e.Handled = true;
+            return true;
+        }
+        if (KeyboardShortcutMatcher.TryGetGridShortcut(e.Key, modifiers, out var gridShortcut))
+        {
+            switch (gridShortcut)
+            {
+                case KeyboardGridShortcut.HideRows:
+                    ExecuteRowsHidden(hidden: true);
+                    break;
+                case KeyboardGridShortcut.UnhideRows:
+                    ExecuteRowsHidden(hidden: false);
+                    break;
+                case KeyboardGridShortcut.HideColumns:
+                    ExecuteColumnsHidden(hidden: true);
+                    break;
+                case KeyboardGridShortcut.UnhideColumns:
+                    ExecuteColumnsHidden(hidden: false);
+                    break;
+            }
+
+            e.Handled = true;
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -1340,16 +1369,99 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// R91-calc-selection-semantics-5-2: Shift+Space (whole row(s)) inside a structured Table must
+    /// scope to the table FIRST -- Excel's 1st press selects just the table row(s) (the table's own
+    /// column span, not the whole sheet row), and only a 2nd press on the already-table-scoped
+    /// selection escalates to the entire worksheet row(s). Unlike columns there is no header/totals
+    /// dimension to step through for rows, so this is a two-step (table row, then sheet row), not
+    /// three-step like <see cref="SelectWholeColumnsFromSelection"/>.
+    /// </summary>
     private void SelectWholeRowsFromSelection()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is not null && TryGetTableForSelection(sheet, range, out var table))
+        {
+            var tableRowRange = new GridRange(
+                new CellAddress(range.Start.Sheet, range.Start.Row, table.Range.Start.Col),
+                new CellAddress(range.Start.Sheet, range.End.Row, table.Range.End.Col));
+
+            if (range != tableRowRange)
+            {
+                SetSelectionRange(tableRowRange, range.Start);
+                return;
+            }
+        }
+
         SetSelectionRange(SelectionRangeService.GetWholeRows(range), range.Start);
     }
 
+    /// <summary>
+    /// R91-calc-selection-semantics-5-2: Ctrl+Space (whole column(s)) inside a structured Table must
+    /// scope to the table FIRST, matching Excel's documented three-press escalation: 1st press
+    /// selects just the table column's DATA cells (excluding the header row(s) and totals row); 2nd
+    /// press extends to the whole table column including the header; only a 3rd press escalates to
+    /// the entire worksheet column. Previously this jumped straight to the whole sheet column on the
+    /// very first press, sweeping in unrelated data below/above the table.
+    /// </summary>
     private void SelectWholeColumnsFromSelection()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is not null && TryGetTableForSelection(sheet, range, out var table))
+        {
+            var tableRowCount = (int)table.Range.RowCount;
+            var headerRows = (uint)Math.Clamp(table.HeaderRowCount.GetValueOrDefault(1), 0, tableRowCount);
+            var totalsRows = (uint)Math.Clamp(table.TotalsRowCount ?? (table.TotalsRowShown ? 1 : 0), 0, tableRowCount);
+            var dataStartRow = table.Range.Start.Row + headerRows;
+            var dataEndRow = table.Range.End.Row - totalsRows;
+
+            if (dataStartRow <= dataEndRow)
+            {
+                var dataRange = new GridRange(
+                    new CellAddress(range.Start.Sheet, dataStartRow, range.Start.Col),
+                    new CellAddress(range.Start.Sheet, dataEndRow, range.End.Col));
+                var fullTableColumnRange = new GridRange(
+                    new CellAddress(range.Start.Sheet, table.Range.Start.Row, range.Start.Col),
+                    new CellAddress(range.Start.Sheet, table.Range.End.Row, range.End.Col));
+
+                if (range == fullTableColumnRange)
+                {
+                    SetSelectionRange(SelectionRangeService.GetWholeColumns(range), range.Start);
+                    return;
+                }
+
+                if (range != dataRange)
+                {
+                    SetSelectionRange(dataRange, range.Start);
+                    return;
+                }
+
+                SetSelectionRange(fullTableColumnRange, range.Start);
+                return;
+            }
+        }
+
         SetSelectionRange(SelectionRangeService.GetWholeColumns(range), range.Start);
+    }
+
+    /// <summary>Finds the structured Table that fully contains <paramref name="range"/> (both
+    /// corners), if any -- used to scope Ctrl+Space/Shift+Space's first press(es) to the table
+    /// before escalating to the whole sheet column/row.</summary>
+    private static bool TryGetTableForSelection(Sheet sheet, GridRange range, out StructuredTableModel table)
+    {
+        foreach (var candidate in sheet.StructuredTables)
+        {
+            if (candidate.Range.Contains(range.Start) && candidate.Range.Contains(range.End))
+            {
+                table = candidate;
+                return true;
+            }
+        }
+
+        table = null!;
+        return false;
     }
 
     private void SetSelectionRange(GridRange range, CellAddress activeCell)

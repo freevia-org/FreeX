@@ -42,14 +42,35 @@ public sealed class SortOptionsDialog : Window
         };
         body.Children.Add(_caseSensitiveBox);
 
+        // R91-commands-sort-customlist-5-3: real Excel's "First key sort order" combo also accepts an
+        // arbitrary user-authored Custom List (Data > Sort > Options > Custom List..., or File >
+        // Options > Advanced > Edit Custom Lists), not just the 4 built-in day/month lists below --
+        // and CustomSortOrder.TryParse/Compare already fully supports an arbitrary comma-separated
+        // list, it was only ever unreachable because nothing in the UI could produce one. FreeX has
+        // no persisted named-custom-lists registry to populate a full "Custom List..." picker from
+        // (grepped repo-wide -- confirmed absent), so short of building that whole subsystem, making
+        // this combo directly editable is the smallest correct fix that actually unblocks the everyday
+        // workflow: the user types their own list (e.g. "Low, Medium, High, Critical") right into the
+        // box and it flows through unchanged to SortDialogOptions.FirstKeySortOrder -> SortCommand ->
+        // CustomSortOrder exactly like a built-in choice does.
         _firstKeySortOrderBox = new ComboBox
         {
             ItemsSource = CreateFirstKeySortOrders(),
             DisplayMemberPath = nameof(FirstKeySortOrderChoice.Label),
             SelectedValuePath = nameof(FirstKeySortOrderChoice.Value),
-            SelectedValue = NormalizeFirstKeySortOrder(current.FirstKeySortOrder),
+            IsEditable = true,
+            IsTextSearchEnabled = true,
             Margin = new Thickness(0, 0, 0, 10)
         };
+        var initialFirstKeySortOrder = NormalizeFirstKeySortOrder(current.FirstKeySortOrder);
+        _firstKeySortOrderBox.SelectedValue = initialFirstKeySortOrder;
+        if (_firstKeySortOrderBox.SelectedValue is null)
+        {
+            // Not one of the 4 built-ins (and not "Normal") -- a previously-authored custom list
+            // (e.g. round-tripped from WorksheetSortStateModel.CustomList). Show its literal text
+            // directly in the editable box instead of silently reverting the choice to "Normal".
+            _firstKeySortOrderBox.Text = initialFirstKeySortOrder;
+        }
         body.Children.Add(new Label
         {
             Content = UiText.Get("SortOptions_FirstKeySortOrderLabel"),
@@ -80,10 +101,18 @@ public sealed class SortOptionsDialog : Window
 
         var buttons = DialogButtonRowFactory.Create(() =>
         {
+            // SelectedValue is non-null only when one of the predefined items (Normal or a built-in
+            // day/month list) is actually chosen; a typed custom list clears SelectedValue (WPF
+            // editable-combo behavior once the text no longer matches any item), so fall back to the
+            // raw typed Text in that case -- the user's own custom list.
+            var firstKeySortOrder = _firstKeySortOrderBox.SelectedValue as string
+                ?? (string.IsNullOrWhiteSpace(_firstKeySortOrderBox.Text)
+                    ? NormalFirstKeySortOrder
+                    : _firstKeySortOrderBox.Text.Trim());
             Result = new SortDialogOptions(
                 CaseSensitive: _caseSensitiveBox.IsChecked == true,
                 LeftToRight: _leftToRightButton.IsChecked == true,
-                FirstKeySortOrder: _firstKeySortOrderBox.SelectedValue as string ?? NormalFirstKeySortOrder);
+                FirstKeySortOrder: firstKeySortOrder);
             DialogResult = true;
         }, buttonWidth: 72);
         buttons.VerticalAlignment = VerticalAlignment.Bottom;
@@ -113,7 +142,11 @@ public sealed class SortOptionsDialog : Window
             }
         }
 
-        return NormalFirstKeySortOrder;
+        // R91-commands-sort-customlist-5-3: a value that isn't one of the 4 built-ins is now a
+        // legitimate user-authored custom list (e.g. round-tripped from
+        // WorksheetSortStateModel.CustomList, or re-opening this dialog after typing one in) --
+        // preserve it verbatim instead of silently discarding the user's choice back to "Normal".
+        return string.IsNullOrWhiteSpace(value) ? NormalFirstKeySortOrder : value;
     }
 
     private void FocusInitialKeyboardTarget()

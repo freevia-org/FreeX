@@ -1726,6 +1726,19 @@ public static class SmartArtEditingPlanner
 
     private static XElement BuildPointTextElement(SmartArtNode node, XElement? authoredText)
     {
+        // An outline edit rewrites every point, but unchanged nodes still own the
+        // application's rich text payload. Keep that payload byte-for-byte at the
+        // element level so additional runs, hyperlinks, and run properties survive
+        // a sibling edit instead of collapsing to the first run's formatting.
+        if (authoredText is not null
+            && string.Equals(
+                NormalizeText(ReadAuthoredText(authoredText)),
+                NormalizeText(node.Text),
+                StringComparison.Ordinal))
+        {
+            return new XElement(authoredText);
+        }
+
         var authoredParagraphs = authoredText?.Elements(A + "p").ToArray() ?? [];
         var fallbackParagraph = authoredParagraphs.FirstOrDefault();
         var result = new XElement(
@@ -1759,6 +1772,32 @@ public static class SmartArtEditingPlanner
         }
 
         return result;
+    }
+
+    private static string ReadAuthoredText(XElement textElement)
+    {
+        var paragraphs = textElement.Elements(A + "p").ToArray();
+        if (paragraphs.Length == 0)
+            return string.Concat(textElement.Descendants(A + "t").Select(element => element.Value));
+
+        var values = paragraphs.Select(paragraph =>
+        {
+            var builder = new StringBuilder();
+            foreach (var node in paragraph.DescendantNodes())
+            {
+                if (node is not XElement element)
+                    continue;
+
+                if (element.Name == A + "t")
+                    builder.Append(element.Value);
+                else if (element.Name == A + "br")
+                    builder.Append('\n');
+            }
+
+            return builder.ToString();
+        });
+
+        return string.Join("\n", values);
     }
 
     private static string GetNodeId(

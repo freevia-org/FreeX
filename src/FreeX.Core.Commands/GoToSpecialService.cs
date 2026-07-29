@@ -38,7 +38,11 @@ public sealed record GoToSpecialOptions(
     // both Conditional Formats and Data Validation. When true, only cells governed by the
     // SAME specific rule(s) as the active cell are matched, rather than every rule overlapping
     // the search range.
-    bool MatchActiveCellRuleOnly = false);
+    bool MatchActiveCellRuleOnly = false,
+    // Excel's Go To Special dialog offers "Direct Only" (default) vs. "All Levels" sub-options
+    // for both Precedents and Dependents. When true, the trace is transitive: precedents-of-
+    // precedents (or dependents-of-dependents) are included too, not just the one direct hop.
+    bool AllLevels = false);
 
 public static class GoToSpecialService
 {
@@ -80,10 +84,10 @@ public static class GoToSpecialService
             return FindObjects(sheet, range);
 
         if (kind == GoToSpecialKind.Precedents)
-            return workbook is null ? [] : FindPrecedents(workbook, sheet, range);
+            return workbook is null ? [] : FindPrecedents(workbook, sheet, range, options.AllLevels);
 
         if (kind == GoToSpecialKind.Dependents)
-            return workbook is null ? [] : FindDependents(workbook, sheet, range);
+            return workbook is null ? [] : FindDependents(workbook, sheet, range, options.AllLevels);
 
         var result = new List<CellAddress>();
         if (kind == GoToSpecialKind.RowDifferences)
@@ -502,25 +506,70 @@ public static class GoToSpecialService
             new CellAddress(anchor.Sheet, anchor.Row + rows - 1, anchor.Col + cols - 1)));
     }
 
-    private static IReadOnlyList<CellAddress> FindPrecedents(Workbook workbook, Sheet sheet, GridRange range)
+    /// <summary>
+    /// Excel's Go To Special > Precedents "Direct Only" (default) vs. "All Levels" sub-option:
+    /// when <paramref name="allLevels"/> is false, only cells directly referenced by a formula
+    /// in <paramref name="range"/> are matched. When true, the trace is transitive -- precedents
+    /// of precedents are followed until no new cells are discovered (a formula chain A1 &lt;- B1 &lt;-
+    /// C1 selected from C1 selects both B1 and A1).
+    /// </summary>
+    private static IReadOnlyList<CellAddress> FindPrecedents(Workbook workbook, Sheet sheet, GridRange range, bool allLevels)
     {
         var result = new List<CellAddress>();
+        var visited = new HashSet<CellAddress>();
+        var queue = new Queue<CellAddress>();
         foreach (var address in range.AllCells())
         {
-            foreach (var precedent in FormulaAuditingService.GetDirectPrecedents(workbook, address))
+            if (visited.Add(address))
+                queue.Enqueue(address);
+        }
+
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            foreach (var precedent in FormulaAuditingService.GetDirectPrecedents(workbook, current))
+            {
                 if (precedent.Sheet == sheet.Id && !result.Contains(precedent))
                     result.Add(precedent);
+
+                // Only follow the chain further when "All Levels" was requested; otherwise the
+                // queue holds nothing beyond the original range cells and drains after one hop.
+                if (allLevels && visited.Add(precedent))
+                    queue.Enqueue(precedent);
+            }
         }
 
         return result;
     }
 
-    private static IReadOnlyList<CellAddress> FindDependents(Workbook workbook, Sheet sheet, GridRange range)
+    /// <summary>
+    /// Excel's Go To Special > Dependents "Direct Only" (default) vs. "All Levels" sub-option:
+    /// when <paramref name="allLevels"/> is false, only cells whose formula directly references
+    /// a cell in <paramref name="range"/> are matched. When true, the trace is transitive --
+    /// dependents of dependents are followed until no new cells are discovered.
+    /// </summary>
+    private static IReadOnlyList<CellAddress> FindDependents(Workbook workbook, Sheet sheet, GridRange range, bool allLevels)
     {
         var result = new List<CellAddress>();
-        foreach (var dependent in FormulaAuditingService.GetDirectDependents(workbook, range))
-            if (dependent.Sheet == sheet.Id)
-                result.Add(dependent);
+        var visited = new HashSet<CellAddress>();
+        var queue = new Queue<GridRange>();
+        queue.Enqueue(range);
+
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            foreach (var dependent in FormulaAuditingService.GetDirectDependents(workbook, current))
+            {
+                if (dependent.Sheet == sheet.Id && !result.Contains(dependent))
+                    result.Add(dependent);
+
+                if (allLevels && visited.Add(dependent))
+                    queue.Enqueue(new GridRange(dependent, dependent));
+            }
+
+            if (!allLevels)
+                break;
+        }
 
         return result;
     }

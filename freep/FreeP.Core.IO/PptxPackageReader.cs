@@ -2478,31 +2478,21 @@ public static class PptxPackageReader
             var modelId = pt.Attribute("modelId")?.Value ?? string.Empty;
             var type    = pt.Attribute("type")?.Value ?? "node";
 
-            // Extract text from dgm:t/a:p/a:r/a:t  (multiple paragraphs → join with newline)
+            // Extract text from dgm:t/a:p/a:r/a:t while preserving paragraph and break
+            // boundaries. SmartArt name-and-title nodes commonly use two authored a:p
+            // elements; flattening them into a space loses editing and layout semantics.
             var tEl = pt.Element(dgmNsData + "t");
-            var sb  = new System.Text.StringBuilder();
-            if (tEl is not null)
-            {
-                foreach (var p in tEl.Elements())
-                {
-                    // Any namespace p element — extract inner a:r/a:t
-                    foreach (var r in p.Descendants())
-                    {
-                        if (r.Name.LocalName == "t")
-                        {
-                            var txt = r.Value;
-                            if (!string.IsNullOrEmpty(txt))
-                            {
-                                if (sb.Length > 0) sb.Append(' ');
-                                sb.Append(txt);
-                            }
-                        }
-                    }
-                }
-            }
+            var paragraphTexts = tEl?.Elements(aNsData + "p")
+                .Select(ReadSmartArtParagraphText)
+                .ToArray() ?? [];
+            var text = paragraphTexts.Length > 0
+                ? string.Join("\n", paragraphTexts)
+                : tEl is null
+                    ? string.Empty
+                    : string.Concat(tEl.Descendants(aNsData + "t").Select(element => element.Value));
 
             if (!string.IsNullOrWhiteSpace(modelId))
-                points[modelId] = (type, sb.ToString(), type == "asst");
+                points[modelId] = (type, text, type == "asst");
         }
 
         // Build parent→children map from cxnLst parOf connections
@@ -2571,6 +2561,23 @@ public static class PptxPackageReader
             data.Nodes.Add(BuildNode(rootId, 0));
 
         return data;
+
+        string ReadSmartArtParagraphText(XElement paragraph)
+        {
+            var text = new System.Text.StringBuilder();
+            foreach (var node in paragraph.DescendantNodes())
+            {
+                if (node is not XElement element)
+                    continue;
+
+                if (element.Name == aNsData + "t")
+                    text.Append(element.Value);
+                else if (element.Name == aNsData + "br")
+                    text.Append('\n');
+            }
+
+            return text.ToString();
+        }
     }
 
     private static void TryAttachPictureNodePictures(SmartArtShape smart, ZipArchive archive)

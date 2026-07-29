@@ -87,7 +87,11 @@ public sealed class GridViewPageLayoutTests
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Overlays.cs");
 
-        source.Should().Contain("PrintArea ?? PagePreviewRange");
+        // R91-render-frozen-print-titles-5-2: the single-range PrintArea/PagePreviewRange fallback
+        // (used when no multi-area PrintAreas list is configured) now lives inside the extracted
+        // ResolvePageBreakPreviewRanges helper rather than inline here.
+        source.Should().Contain("printArea ?? pagePreviewRange");
+        source.Should().Contain("ResolvePageBreakPreviewRanges(PrintAreas, PrintArea, PagePreviewRange)");
         source.Should().Contain("PageBreakPreviewLayoutPlanner.Calculate");
         source.Should().Contain("RenderPageBreakPreviewLayout(dc, layout)");
         source.Should().Contain("DrawPageBreakWatermark");

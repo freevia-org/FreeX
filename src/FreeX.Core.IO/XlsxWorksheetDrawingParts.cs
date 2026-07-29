@@ -85,7 +85,11 @@ internal sealed record XlsxTextBoxPackagePart(
     CellColor? TextColor = null,
     WorkbookThemeColorReference? TextThemeColor = null,
     DrawingShapeTextHAlign TextHAlign = DrawingShapeTextHAlign.Left,
-    DrawingShapeTextVAnchor TextVAnchor = DrawingShapeTextVAnchor.Top);
+    DrawingShapeTextVAnchor TextVAnchor = DrawingShapeTextVAnchor.Top,
+    // R91-commands-insert-object-5-1: true when &lt;a:ln&gt;&lt;a:noFill/&gt; is present -- explicitly
+    // no border. Mirrors XlsxShapePackagePart.OutlineHasNoFill; without this an authored borderless
+    // text box always regained a gray border on load (and permanently baked it in on re-save).
+    bool OutlineHasNoFill = false);
 
 internal sealed record XlsxShapePackagePart(
     DrawingShapeKind Kind,
@@ -654,7 +658,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 txBoxColor,
                 txBoxThemeColor,
                 txBoxHAlign,
-                txBoxVAnchor));
+                txBoxVAnchor,
+                outlineHasNoFill));
             return;
         }
 

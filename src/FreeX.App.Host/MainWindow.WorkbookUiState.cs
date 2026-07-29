@@ -108,7 +108,7 @@ public partial class MainWindow
     {
         if (_workbook.CalculationMode is WorkbookCalculationMode.Automatic or WorkbookCalculationMode.AutomaticExceptDataTables)
         {
-            _recalcEngine.Recalculate(_workbook, changedCells);
+            var report = _recalcEngine.Recalculate(_workbook, changedCells);
             InvalidateNavigationCaches();
             // R88-app-formula-auditing-5-1: this is the choke point every ordinary automatic-mode
             // cell edit recalculates through (TryExecuteEditCells callers invoke this after the
@@ -116,6 +116,20 @@ public partial class MainWindow
             // the live value while editing elsewhere" promise. See RecalculateWorkbook above for the
             // re-entrancy note.
             _watchWindowDialog?.Refresh();
+            // R91-print-twin-two-tier-synthetic-sweep-3: a linked/Camera picture (Paste Special >
+            // Linked Picture) must stay live for cells the RecalcEngine cascades INTO its source
+            // range, not just the cells the triggering command directly edited. TryExecuteCommand
+            // (MainWindow.CommandExecution.cs) already refreshes linked pictures from
+            // outcome.AffectedCells, but a formula cell inside the picture's source range that only
+            // changes because some OTHER, out-of-range cell it depends on was edited never appears
+            // in that set -- it only shows up in this recalc's own RecalculatedCells. This is the
+            // one choke point every automatic-mode edit recalculates through (every
+            // RecalculateIfAutomatic caller across the shell), so feeding RecalculatedCells back into
+            // RefreshLinkedPicturesAffectedBy here covers all of them without a per-call-site patch.
+            // Mirrors FreeX.App.Services.WorkbookSession.RefreshLinkedPicturesForEditedCells, which
+            // unions result.AffectedCells with result.RecalcReport.RecalculatedCells for the same
+            // reason.
+            RefreshLinkedPicturesAffectedBy(report.RecalculatedCells);
         }
     }
 
@@ -275,7 +289,14 @@ public partial class MainWindow
             InvalidateToolbarVisualState();
             return;
         }
-        var styleId = sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default;
+        // R91-app-ribbon-state-5-1: read the TRUE active/anchor cell (SheetGrid.ActiveCell), not
+        // SelectedRange's normalized top-left Start -- those differ whenever the selection was
+        // extended upward or leftward (e.g. click C3 then Shift+click A1). Excel's Home-tab toggles
+        // (Bold/Italic/Underline/alignment/Wrap Text) always reflect the active cell, matching the
+        // same ActiveCell-over-Start correction already applied to Backspace/Clear Contents
+        // (R76-meta-1; see MainWindow.ClipboardCommands.cs's ExecuteClearActiveCell).
+        var activeCell = SheetGrid.ActiveCell ?? range.Start;
+        var styleId = sheet.GetCell(activeCell)?.StyleId ?? StyleId.Default;
         var state = _toolbarVisualStateCache.TryGet(_workbook.Id, styleId, out var cachedState)
             ? cachedState
             : _toolbarVisualStateCache.AddOrUpdate(
@@ -327,7 +348,8 @@ public partial class MainWindow
         if (sheet is null)
             return _lastToolbarVisualState is null;
 
-        var styleId = sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default;
+        var activeCell = SheetGrid.ActiveCell ?? range.Start;
+        var styleId = sheet.GetCell(activeCell)?.StyleId ?? StyleId.Default;
         return _toolbarVisualStateCache.TryGetCurrent(_workbook.Id, styleId, out var state) &&
             state == _lastToolbarVisualState;
     }

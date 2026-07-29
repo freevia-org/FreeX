@@ -32,11 +32,26 @@ internal static partial class XlsxPivotTableWriter
             if (!string.IsNullOrWhiteSpace(cache.SourceReference))
                 source.SetAttributeValue("ref", cache.SourceReference);
         }
+        // R91-io-external-data-model-5-1: per CT_CacheSource's ST_SourceType (ECMA-376 18.10.1.11),
+        // Consolidation and Scenario are their own distinct @type values, not "worksheet" -- silently
+        // collapsing them to "worksheet" while emitting an attribute-less <worksheetSource/> child (no
+        // @name/@sheet/@ref, since none of those apply to those source kinds) produced a schema-invalid
+        // element that also lost the original source classification entirely. Only a true worksheet/
+        // table cache gets a <worksheetSource> child; external/consolidation/scenario caches carry no
+        // child element FreeX can author (their real child content -- <consolidation>, connection
+        // properties -- isn't modeled), so @type + @connectionId is all that is safely preserved here.
+        var cacheSourceType = cache.SourceType switch
+        {
+            PivotCacheSourceType.External => "external",
+            PivotCacheSourceType.Consolidation => "consolidation",
+            PivotCacheSourceType.Scenario => "scenario",
+            _ => "worksheet"
+        };
         var cacheSource = new XElement(
             workbookNs + "cacheSource",
-            new XAttribute("type", cache.SourceType == PivotCacheSourceType.External ? "external" : "worksheet"),
+            new XAttribute("type", cacheSourceType),
             cache.ConnectionId is { } connectionId ? new XAttribute("connectionId", connectionId.ToString(CultureInfo.InvariantCulture)) : null);
-        if (cache.SourceType != PivotCacheSourceType.External)
+        if (cacheSourceType == "worksheet")
             cacheSource.Add(source);
 
         return new XDocument(new XElement(
@@ -274,8 +289,20 @@ internal static partial class XlsxPivotTableWriter
         Workbook workbook,
         XNamespace workbookNs)
     {
+        var hasSourceRange = TryGetPivotCacheSourceRange(cache, workbook, out var sourceSheet, out var sourceRange);
+        if (!hasSourceRange && TryGetPreservedPivotCacheRecordsXml(cache, workbookNs, out var preserved))
+        {
+            // R91-io-external-data-model-5-1: External/Consolidation/Scenario cache sources have no
+            // live worksheet range to re-derive records from -- previously this fell straight through
+            // to the empty-records path below, silently destroying an offline-cached query/
+            // consolidation result on every save that goes through this modeled writer (native .fxl
+            // round-trip, legacy .xls export). Use the verbatim original records captured at load time
+            // instead of authoring an empty <pivotCacheRecords count="0"/>.
+            return preserved;
+        }
+
         var records = new List<XElement>();
-        if (TryGetPivotCacheSourceRange(cache, workbook, out var sourceSheet, out var sourceRange) &&
+        if (hasSourceRange &&
             sourceRange.RowCount > 1 &&
             cache.Fields.Count > 0)
         {
@@ -378,6 +405,37 @@ internal static partial class XlsxPivotTableWriter
                 MinValue = minValue,
                 MaxValue = maxValue,
             };
+        }
+    }
+
+    // Passthrough for cache sources TryGetPivotCacheSourceRange can never resolve (External/
+    // Consolidation/Scenario): reuses the verbatim <pivotCacheRecords> XML captured at load time
+    // (XlsxPivotCacheReader) instead of authoring an empty records part. See
+    // R91-io-external-data-model-5-1.
+    private static bool TryGetPreservedPivotCacheRecordsXml(
+        PivotCacheModel cache,
+        XNamespace workbookNs,
+        out (XDocument Document, int RecordCount) preserved)
+    {
+        preserved = default;
+        if (string.IsNullOrWhiteSpace(cache.RawRecordsXml))
+            return false;
+
+        try
+        {
+            var document = XDocument.Parse(cache.RawRecordsXml);
+            if (document.Root is null)
+                return false;
+
+            var recordCount = document.Root.Elements(workbookNs + "r").Count();
+            preserved = (document, recordCount);
+            return true;
+        }
+        catch (System.Xml.XmlException)
+        {
+            // Malformed preserved XML (should not happen for content we captured ourselves) --
+            // fall back to the normal empty/regenerated-records path rather than propagating.
+            return false;
         }
     }
 

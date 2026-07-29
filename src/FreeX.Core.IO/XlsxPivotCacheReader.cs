@@ -6,6 +6,8 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxPivotCacheReader
 {
+    private const string PivotCacheRecordsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
+
     public static List<PivotCacheModel> Load(
         ZipArchive archive,
         XDocument workbookXml,
@@ -45,10 +47,11 @@ internal static class XlsxPivotCacheReader
             // FreeX persists preserveSourceSortFilter / the ISO refreshed date in an extLst extension
             // (they have no base-schema attribute home). Prefer the extension, then any legacy attribute.
             var freeXProps = ReadFreeXCacheProps(root, workbookNs);
+            var sourceType = GetSourceType(cacheSource, worksheetSource);
             var cache = new PivotCacheModel
             {
                 CacheId = cacheIdAttribute.Value,
-                SourceType = GetSourceType(cacheSource, worksheetSource),
+                SourceType = sourceType,
                 SourceSheetName = worksheetSource?.Attribute("sheet")?.Value,
                 SourceReference = worksheetSource?.Attribute("ref")?.Value,
                 SourceTableName = worksheetSource?.Attribute("name")?.Value,
@@ -67,7 +70,13 @@ internal static class XlsxPivotCacheReader
                 MinRefreshableVersion = XlsxXmlAttributeReader.ReadIntAttribute(root, "minRefreshableVersion"),
                 RefreshedVersion = XlsxXmlAttributeReader.ReadIntAttribute(root, "refreshedVersion"),
                 RefreshedBy = root.Attribute("refreshedBy")?.Value,
-                RefreshedDateIso = freeXProps?.Attribute("refreshedDateIso")?.Value ?? root.Attribute("refreshedDateIso")?.Value
+                RefreshedDateIso = freeXProps?.Attribute("refreshedDateIso")?.Value ?? root.Attribute("refreshedDateIso")?.Value,
+                // External/Consolidation/Scenario caches have no live worksheet range the writer can
+                // regenerate <r> records from on re-save, so capture the original cached rows verbatim
+                // here to hand back as passthrough (R91-io-external-data-model-5-1).
+                RawRecordsXml = sourceType is PivotCacheSourceType.External or PivotCacheSourceType.Consolidation or PivotCacheSourceType.Scenario
+                    ? TryReadRawPivotCacheRecordsXml(archive, cachePath)
+                    : null
             };
 
             foreach (var field in root
@@ -115,6 +124,27 @@ internal static class XlsxPivotCacheReader
     private static XDocument LoadXml(ZipArchiveEntry entry)
     {
         return XlsxPackageXmlEditor.LoadXml(entry);
+    }
+
+    // Reads the raw pivotCacheRecordsN.xml part referenced by a pivotCacheDefinition part, verbatim,
+    // so callers with no live worksheet range to re-derive records from (External/Consolidation/
+    // Scenario cache sources) can preserve the original cached rows as passthrough on re-save.
+    private static string? TryReadRawPivotCacheRecordsXml(ZipArchive archive, string cacheDefinitionPath)
+    {
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(cacheDefinitionPath);
+        var relationships = OpcRelationships.LoadTargets(archive, relsPath, ignoreMalformed: true);
+        var recordsTarget = OpcRelationships.FirstTargetByType(relationships, PivotCacheRecordsRelationshipType);
+        if (string.IsNullOrWhiteSpace(recordsTarget))
+            return null;
+
+        var recordsPath = XlsxPackagePath.ResolveRelationshipTarget(cacheDefinitionPath, recordsTarget);
+        var recordsEntry = archive.GetEntry(recordsPath);
+        if (recordsEntry is null)
+            return null;
+
+        using var stream = recordsEntry.Open();
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 
     private static IReadOnlyList<string> ReadSharedItemValues(XElement sharedItems, XNamespace workbookNs) =>

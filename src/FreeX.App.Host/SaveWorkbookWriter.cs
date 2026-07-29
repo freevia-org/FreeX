@@ -14,7 +14,8 @@ public sealed class SaveWorkbookWriter
         IFileAdapter adapter,
         Workbook workbook,
         IProgress<SaveProgressUpdate> progress,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        DateTime? expectedLastWriteTimeUtc = null)
     {
         ArgumentNullException.ThrowIfNull(progress);
         return await _saveService.SaveAsync(
@@ -23,7 +24,8 @@ public sealed class SaveWorkbookWriter
             workbook,
             new Progress<WorkbookSaveProgressUpdate>(
                 update => progress.Report(ToHostProgressUpdate(update))),
-            cancellationToken);
+            cancellationToken,
+            expectedLastWriteTimeUtc);
     }
 
     private static SaveProgressUpdate ToHostProgressUpdate(WorkbookSaveProgressUpdate update) =>

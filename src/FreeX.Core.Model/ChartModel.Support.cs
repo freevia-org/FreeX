@@ -415,7 +415,18 @@ public sealed record ChartSeriesFormat(
     double? MarkerBorderThickness = null,
     bool? InvertIfNegative = null,
     bool NoFill = false,
-    bool NoLine = false)
+    bool NoLine = false,
+    // R91-render-chart-series-format-5-1: verbatim passthrough of an authored series fill
+    // (<a:gradFill>/<a:pattFill>) that has no dedicated model representation. When set, the
+    // writer re-emits this element as-is instead of synthesizing a fill from FillColor/
+    // FillThemeColor/NoFill, so a gradient or pattern fill survives a FreeX save intact instead
+    // of collapsing to the theme-palette solid default.
+    string? RawFillXml = null,
+    // R91-render-chart-series-format-5-4: the <a:alpha> transparency child of the series fill's
+    // color element (<a:srgbClr>/<a:schemeClr>), as a 0..1 opacity fraction (1 = fully opaque,
+    // the implicit default when no <a:alpha> is authored). CellColor itself has no alpha channel,
+    // so this rides alongside FillColor/FillThemeColor rather than inside them.
+    double? FillAlpha = null)
 {
     public CellColor? ResolveFillColor(WorkbookTheme theme) =>
         FillThemeColor?.Resolve(theme) ?? FillColor;

@@ -19709,7 +19709,7 @@ public sealed class DocumentView : Control
         using (context.PushClip(rect))
         {
             if (wd.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
-                DrawWarpedWordArtText(context, displayText, textFmt, rect, wd.Warp, warpedTextOffset, warpedTextVerticalScale, warpedTextFitWidthRatio, fillWarpedTextWidth);
+                DrawWarpedWordArtText(context, displayText, textFmt, rect, wd.Warp, warpedTextOffset, warpedTextVerticalScale, warpedTextFitWidthRatio, fillWarpedTextWidth, isPrimaryGlowBlueStress);
             else
             {
                 var ft = Build(displayText, textFmt);
@@ -19726,7 +19726,7 @@ public sealed class DocumentView : Control
             using (context.PushClip(rect))
             {
                 if (wd.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
-                    DrawWarpedWordArtText(context, displayText, outlineFmt, rect, wd.Warp, warpedTextOffset + new Vector(1, 1), warpedTextVerticalScale, warpedTextFitWidthRatio, fillWarpedTextWidth);
+                    DrawWarpedWordArtText(context, displayText, outlineFmt, rect, wd.Warp, warpedTextOffset + new Vector(1, 1), warpedTextVerticalScale, warpedTextFitWidthRatio, fillWarpedTextWidth, isPrimaryGlowBlueStress);
                 else
                 {
                     var outlineFt = Build(displayText, outlineFmt);
@@ -19752,7 +19752,8 @@ public sealed class DocumentView : Control
         Vector offset = default,
         double verticalScale = 1.0,
         double fitWidthRatio = 0.80,
-        bool fillWidth = false)
+        bool fillWidth = false,
+        bool usePrimaryGlowBlueWaveCalibration = false)
     {
         var glyphs = BuildFittedWordArtGlyphs(text, format, rect, fitWidthRatio, fillWidth);
         var placements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
@@ -19760,6 +19761,14 @@ public sealed class DocumentView : Control
             glyphs.Select(glyph => glyph.WidthIncludingTrailingWhitespace).ToList(),
             rect.Width,
             rect.Height).Glyphs;
+        if (usePrimaryGlowBlueWaveCalibration)
+        {
+            placements = placements.Select(placement => placement with
+            {
+                CenterYNormalized = 0.5 + (0.5 - placement.CenterYNormalized) * 1.35,
+                RotationRadians = -placement.RotationRadians * 0.4
+            }).ToList();
+        }
 
         for (var index = 0; index < glyphs.Count; index++)
         {

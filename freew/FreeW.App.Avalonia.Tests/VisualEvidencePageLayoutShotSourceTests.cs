@@ -235,6 +235,17 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_CalibratesImportedGlowBlueWave1PhaseLocally()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("bool usePrimaryGlowBlueWaveCalibration = false");
+        source.Should().Contain("CenterYNormalized = 0.5 + (0.5 - placement.CenterYNormalized) * 1.35");
+        source.Should().Contain("RotationRadians = -placement.RotationRadians * 0.4");
+        source.Should().Contain("fillWarpedTextWidth, isPrimaryGlowBlueStress");
+    }
+
+    [Fact]
     public void AvaloniaDocumentView_RegistersPageBorderStrokeInsideSerializedInset()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));

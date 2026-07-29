@@ -24,7 +24,7 @@ public sealed record SymbolPickerSymbolListPlan(
     bool HasResults);
 
 /// <summary>
-/// Portable catalog and selection policy for Insert Symbol. WPF owns the visuals; this planner owns
+/// Portable catalog and selection policy for Insert Symbol. The shell owns the visuals; this planner owns
 /// the Unicode subsets, default/recent symbols, filtering, character-code parsing, and selected result
 /// state so other shells can render the same picker without cloning catalog logic.
 /// </summary>
@@ -81,6 +81,28 @@ public static class SymbolPickerCatalogPlanner
         "Wingdings 3",
         "Webdings"
     ];
+
+    // R91-commands-insert-object-5-3: these are the "Symbol charset" dingbat fonts whose glyphs
+    // are not part of the Unicode symbol tables above -- choosing one of them must swap the
+    // catalog to that font's own glyph set rather than leave the fixed Unicode table on screen.
+    // "Symbol" itself is deliberately excluded: it is also used as GenericSymbolName for unknown
+    // Unicode code points elsewhere in this class, and its glyphs mostly already exist as ordinary
+    // Unicode (Greek/math) code points in the tables above, unlike the four private-use dingbat fonts.
+    private static readonly string[] SymbolFontChoicesValue =
+    [
+        "Wingdings",
+        "Wingdings 2",
+        "Wingdings 3",
+        "Webdings"
+    ];
+
+    // Windows maps a "Symbol charset" TrueType font's raw byte codes (0x20-0xFF) into the Basic
+    // Multilingual Plane's Private Use Area starting at U+F000 so the glyphs can round-trip as
+    // ordinary Unicode text tagged with that font (this is also how Excel/OOXML <rFont>-tagged
+    // runs for Wingdings/Webdings persist their characters, e.g. U+F0FC for a Wingdings check mark).
+    private const int SymbolFontPrivateUseBase = 0xF000;
+    private const int SymbolFontCodeRangeStart = 0x20;
+    private const int SymbolFontCodeRangeEnd = 0xFF;
 
     private static readonly string[] DefaultRecentSymbolsValue =
     [
@@ -242,18 +264,73 @@ public static class SymbolPickerCatalogPlanner
             .ToArray();
     }
 
-    public static SymbolPickerSymbolListPlan PlanSymbolList(string? subset, string? searchText, string? selectedSymbol)
+    /// <summary>
+    /// True when <paramref name="fontName"/> is a "Symbol charset" dingbat font (Wingdings/Webdings
+    /// family) whose glyph set is not part of the Unicode subset tables and must replace them in
+    /// the catalog rather than merely change the display typeface.
+    /// </summary>
+    public static bool IsSymbolFont(string? fontName) =>
+        !string.IsNullOrWhiteSpace(fontName) &&
+        SymbolFontChoicesValue.Contains(fontName.Trim(), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Builds the full glyph-code catalog for a Symbol-charset dingbat font (see
+    /// <see cref="IsSymbolFont"/>), using the same Private Use Area codepoints Windows/OOXML use
+    /// to represent that font's characters as Unicode text. Empty when <paramref name="fontName"/>
+    /// is not a recognized symbol font.
+    /// </summary>
+    public static IReadOnlyList<SymbolPickerCatalogEntry> GetSymbolFontEntries(string? fontName)
+    {
+        if (!IsSymbolFont(fontName))
+            return [];
+
+        var name = fontName!.Trim();
+        var entries = new List<SymbolPickerCatalogEntry>(SymbolFontCodeRangeEnd - SymbolFontCodeRangeStart + 1);
+        for (var rawCode = SymbolFontCodeRangeStart; rawCode <= SymbolFontCodeRangeEnd; rawCode++)
+        {
+            var codePoint = SymbolFontPrivateUseBase + rawCode;
+            var symbol = char.ConvertFromUtf32(codePoint);
+            var codeText = codePoint.ToString("X4", CultureInfo.InvariantCulture);
+            entries.Add(new SymbolPickerCatalogEntry(symbol, $"{name} Character 0x{rawCode:X2}", name, codeText));
+        }
+
+        return entries;
+    }
+
+    public static SymbolPickerSymbolListPlan PlanSymbolList(string? subset, string? searchText, string? selectedSymbol, string? fontName = null)
     {
         var query = searchText?.Trim() ?? "";
-        var entries = query.Length == 0
-            ? GetSymbolEntriesForSubset(subset)
-            : SearchSymbolEntries(query);
+        IReadOnlyList<SymbolPickerCatalogEntry> entries;
+        if (IsSymbolFont(fontName))
+        {
+            var fontEntries = GetSymbolFontEntries(fontName);
+            entries = query.Length == 0 ? fontEntries : FilterEntries(fontEntries, query);
+        }
+        else
+        {
+            entries = query.Length == 0
+                ? GetSymbolEntriesForSubset(subset)
+                : SearchSymbolEntries(query);
+        }
 
         var selectedEntry = FindEntry(entries, selectedSymbol);
         if (selectedEntry is null && entries.Count > 0)
             selectedEntry = entries[0];
 
         return new SymbolPickerSymbolListPlan(entries, selectedEntry, entries.Count > 0);
+    }
+
+    private static IReadOnlyList<SymbolPickerCatalogEntry> FilterEntries(
+        IReadOnlyList<SymbolPickerCatalogEntry> entries,
+        string query)
+    {
+        var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (terms.Length == 0)
+            return entries;
+
+        return entries
+            .Where(symbol => terms.All(term => symbol.SearchText.Contains(term, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
     }
 
     public static SymbolPickerSelectionPlan CreateDefaultSelection() =>

@@ -507,6 +507,20 @@ public partial class GridView
         set => SetValue(PrintAreaProperty, value);
     }
 
+    // R91-render-frozen-print-titles-5-2: the FULL configured print-area list (Excel's multi-area
+    // _xlnm.Print_Area, e.g. "A1:D10,F1:H10"), distinct from the single-range PrintArea above (which
+    // only ever carries the FIRST configured area, per Sheet.PrintArea). The Page Break Preview / Page
+    // Layout overlay needs every area so it doesn't dim/exclude later print regions that WILL appear
+    // in the real print/PDF output.
+    public static readonly DependencyProperty PrintAreasProperty =
+        DependencyProperty.Register(nameof(PrintAreas), typeof(IReadOnlyList<GridRange>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<GridRange>? PrintAreas
+    {
+        get => (IReadOnlyList<GridRange>?)GetValue(PrintAreasProperty);
+        set => SetValue(PrintAreasProperty, value);
+    }
+
     public static readonly DependencyProperty PagePreviewRangeProperty =
         DependencyProperty.Register(nameof(PagePreviewRange), typeof(GridRange?), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));

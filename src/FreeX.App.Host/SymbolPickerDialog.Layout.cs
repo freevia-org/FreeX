@@ -119,7 +119,8 @@ public sealed partial class SymbolPickerDialog
             var plan = SymbolPickerCatalogPlanner.PlanSymbolList(
                 subsetBox.SelectedItem as string,
                 searchBox.Text,
-                SelectedSymbol);
+                SelectedSymbol,
+                fontBox.SelectedItem as string);
 
             symbolItems.Clear();
             foreach (var entry in plan.Entries)
@@ -144,6 +145,11 @@ public sealed partial class SymbolPickerDialog
         {
             if (fontBox.SelectedItem is string fontName)
                 ApplySymbolFont(fontName);
+
+            // R91-commands-insert-object-5-3: picking a Symbol-charset font (Wingdings/Webdings/etc.)
+            // must swap the catalog itself to that font's glyph set, not just re-font the existing
+            // fixed Unicode table (which produced garbage glyphs, not the chosen dingbat icons).
+            RefreshSymbols();
         };
         subsetBox.SelectionChanged += (_, _) => RefreshSymbols();
         searchBox.TextChanged += (_, _) => RefreshSymbols();

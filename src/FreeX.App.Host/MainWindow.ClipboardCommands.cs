@@ -30,10 +30,21 @@ public partial class MainWindow
         string? Token = null);
     private InternalClipboard? _internalClipboard;
 
+    // R91-io-clipboard-image-formats-5-1: a selected chart/shape (SheetGrid.SelectedObjectKind/
+    // SelectedObjectId, set by SelectInsertedChart/SelectInsertedDrawingObject in
+    // MainWindow.ChartCommands.cs/MainWindow.Drawing.cs) leaves SheetGrid.SelectedRange as whatever
+    // single-cell range sits under/near the object's anchor -- ExecuteCopy used to only ever look at
+    // SelectedRange, so Ctrl+C on a selected chart/shape silently copied that underlying CELL and
+    // Ctrl+V never duplicated the object at all. This tracks a pending object copy separately from
+    // the cell-range clipboard above.
+    private sealed record InternalObjectClipboard(SheetId SourceSheetId, SelectionPaneObjectKind Kind, Guid ObjectId);
+    private InternalObjectClipboard? _internalObjectClipboard;
+
     private void CancelCopyAndTransientModes()
     {
         ClearClipboardVisualState();
         _internalClipboard = null;
+        _internalObjectClipboard = null;
         CancelFormatPainter();
         _borderDrawMode = BorderDrawMode.None;
         SetSelectionMode(ExcelSelectionMode.Normal);
@@ -78,6 +89,15 @@ public partial class MainWindow
 
     private void ExecuteCopy(bool isCut = false)
     {
+        // R91-io-clipboard-image-formats-5-1: route a selected chart/shape through its own object
+        // clipboard instead of falling into the cell-range copy below (which would silently copy
+        // whatever cell happens to sit under the object's anchor). Only for Copy -- Cut of a
+        // selected object still falls through to the pre-existing range-based behavior unchanged;
+        // true cut/move semantics for objects are a separate follow-up (see round summary).
+        _internalObjectClipboard = null;
+        if (!isCut && TryCopySelectedDrawingObject())
+            return;
+
         if (SheetGrid.SelectedRange is not { } range) return;
         var viewport = SheetGrid.Viewport;
         if (viewport == null) return;
@@ -157,6 +177,19 @@ public partial class MainWindow
         if (!string.IsNullOrEmpty(csv))
             data.SetData(System.Windows.DataFormats.CommaSeparatedValue, csv);
 
+        // R91-io-clipboard-image-formats-5-3: real Excel places a rendered picture (CF_ENHMETAFILE /
+        // CF_BITMAP) on the clipboard alongside Text/HTML/CSV on EVERY plain range copy, so a
+        // destination that only accepts an image (Paint, an image well in another app, an image-only
+        // paste target) still gets something instead of nothing. FreeX had no picture flavor at all on
+        // a normal copy and no "Copy as Picture" command. A full "Copy as Picture" ribbon dropdown
+        // (Appearance: as-shown-on-screen vs as-printed, x Format: vector Picture/EMF vs raster Bitmap)
+        // is a larger follow-up (see round summary); this renders a simple bordered-grid Bitmap of the
+        // copied cells' own display text and places it under DataFormats.Bitmap, so the "at minimum
+        // offer a picture flavour" bar is met for every copy without depending on the shared
+        // print/grid rendering pipeline other in-flight work is currently touching.
+        if (TryRenderClipboardRangeBitmap(ClipboardSerializer.Deserialize(text)) is { } clipboardBitmap)
+            data.SetImage(clipboardBitmap);
+
         SetClipboardDataWithRetry(data, text);
 
         // Show marching ants around the copied range(s). ClipboardRange stays the bounding box (used
@@ -211,6 +244,78 @@ public partial class MainWindow
             isCut,
             areas.Count > 1 ? areas : null,
             clipboardToken);
+    }
+
+    /// <summary>
+    /// R91-io-clipboard-image-formats-5-1: captures a selected chart/shape into
+    /// <see cref="_internalObjectClipboard"/> instead of the cell-range clipboard, when
+    /// SheetGrid currently has an object (not a plain cell) selected. Returns false (leaving both
+    /// clipboards untouched) for any other selection kind -- Picture/TextBox included, since those
+    /// aren't wired to <see cref="DuplicateDrawingObjectCommand"/> yet (see round summary) and must
+    /// keep falling through to the pre-existing cell-range copy behavior unchanged.
+    /// </summary>
+    private bool TryCopySelectedDrawingObject()
+    {
+        SelectionPaneObjectKind? kind = SheetGrid.SelectedObjectKind switch
+        {
+            FreeX.App.UI.ObjectKind.Chart => SelectionPaneObjectKind.Chart,
+            FreeX.App.UI.ObjectKind.Shape => SelectionPaneObjectKind.Shape,
+            _ => null
+        };
+        if (kind is null || SheetGrid.SelectedObjectId == Guid.Empty)
+            return false;
+
+        _internalClipboard = null;
+        ClearClipboardVisualState();
+        _internalObjectClipboard = new InternalObjectClipboard(_currentSheetId, kind.Value, SheetGrid.SelectedObjectId);
+        return true;
+    }
+
+    /// <summary>
+    /// R91-io-clipboard-image-formats-5-1: the Ctrl+V side of <see cref="TryCopySelectedDrawingObject"/> --
+    /// duplicates the copied chart/shape onto the CURRENT sheet (which may be a different sheet than
+    /// the one it was copied from, if the user switched sheets between Ctrl+C and Ctrl+V) via
+    /// <see cref="DuplicateDrawingObjectCommand"/>, then selects the new duplicate exactly like
+    /// freshly inserting one does (SelectInsertedChart/SelectInsertedDrawingObject).
+    /// </summary>
+    private void PasteClipboardObject(InternalObjectClipboard objectClip)
+    {
+        var destinationSheetId = _currentSheetId;
+        DuplicateDrawingObjectCommand? command = null;
+        IWorkbookCommand CreateCommand()
+        {
+            command = new DuplicateDrawingObjectCommand(
+                objectClip.SourceSheetId,
+                destinationSheetId,
+                objectClip.Kind,
+                objectClip.ObjectId);
+            return command;
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Paste");
+            return;
+        }
+
+        if (command?.NewObjectId is { } newObjectId)
+        {
+            if (objectClip.Kind == SelectionPaneObjectKind.Chart)
+            {
+                SelectInsertedChart(newObjectId);
+            }
+            else if (objectClip.Kind == SelectionPaneObjectKind.Shape)
+            {
+                var newAnchor = _workbook.GetSheet(destinationSheetId)?.DrawingShapes
+                    .Find(shape => shape.Id == newObjectId)?.Anchor
+                    ?? new CellAddress(destinationSheetId, 1, 1);
+                SelectInsertedDrawingObject(newObjectId, FreeX.App.UI.ObjectKind.Shape, newAnchor);
+            }
+        }
+
+        UpdateViewport();
+        RefreshToolbar();
     }
 
     /// <summary>Matches the phrasing of WorkbookSession's (Avalonia-facing) identical
@@ -460,6 +565,15 @@ public partial class MainWindow
         bool keepColumnWidths = false,
         bool externalTextAsText = false)
     {
+        // R91-io-clipboard-image-formats-5-1: the Ctrl+V side of a chart/shape Ctrl+C (see
+        // TryCopySelectedDrawingObject) -- duplicate the copied object instead of falling through to
+        // the cell-range paste logic below, which has no concept of an object clipboard at all.
+        if (_internalObjectClipboard is { } objectClip)
+        {
+            PasteClipboardObject(objectClip);
+            return;
+        }
+
         if (SheetGrid.SelectedRange is not { } range) return;
 
         string? currentClipboardText = null;
@@ -740,6 +854,56 @@ public partial class MainWindow
         try { return System.Windows.Clipboard.ContainsImage(); }
         catch { return false; }
     }
+
+    /// <summary>
+    /// R91-io-clipboard-image-formats-5-4: looks for a raw, alpha-preserving "PNG" (or "image/png")
+    /// clipboard entry alongside the flattened CF_DIB/CF_BITMAP one that <see cref="System.Windows.Clipboard.GetImage"/>
+    /// always resolves to. Chrome/Edge and many image editors place both when copying a
+    /// transparent-background image; returns the raw PNG bytes (with alpha intact) when found, or
+    /// null when no such format is present/readable so the caller falls back to the flattened image.
+    /// </summary>
+    private static byte[]? TryGetClipboardPngFormatBytes()
+    {
+        try
+        {
+            var dataObject = System.Windows.Clipboard.GetDataObject();
+            if (dataObject is null)
+                return null;
+
+            foreach (var formatName in PngClipboardFormatNames)
+            {
+                if (!dataObject.GetDataPresent(formatName))
+                    continue;
+
+                var raw = dataObject.GetData(formatName);
+                switch (raw)
+                {
+                    case byte[] bytes when bytes.Length > 0:
+                        return bytes;
+                    case System.IO.MemoryStream memoryStream:
+                        return memoryStream.ToArray();
+                    case System.IO.Stream stream:
+                        using (stream)
+                        {
+                            using var buffer = new System.IO.MemoryStream();
+                            stream.CopyTo(buffer);
+                            if (buffer.Length > 0)
+                                return buffer.ToArray();
+                        }
+                        break;
+                }
+            }
+        }
+        catch
+        {
+            // Fall back to the flattened DIB/Bitmap path below -- a transient clipboard-provider
+            // failure on the richer format must not fail the whole paste.
+        }
+
+        return null;
+    }
+
+    private static readonly string[] PngClipboardFormatNames = ["PNG", "image/png"];
 
     /// <summary>Reads the CF_HTML clipboard payload (header + fragment), or null when absent/unreadable.</summary>
     private static string? TryGetClipboardHtml()
@@ -1321,17 +1485,38 @@ public partial class MainWindow
             if (!System.Windows.Clipboard.ContainsImage())
                 return false;
 
-            var image = System.Windows.Clipboard.GetImage();
-            if (image is null)
-                return false;
+            // R91-io-clipboard-image-formats-5-4: prefer an alpha-preserving raw "PNG" clipboard
+            // format when the source app placed one (Chrome/Edge and many image editors place both a
+            // flattened CF_DIB/CF_BITMAP entry AND a separate "PNG" entry with the real alpha channel
+            // intact). WPF's Clipboard.GetImage()/ContainsImage() resolve exclusively to the
+            // DIB/Bitmap entry, which has no alpha -- using it unconditionally silently bakes a solid
+            // matte over a transparent-background PNG on every paste. Only fall back to GetImage()
+            // (opaque) when no richer format is present.
+            if (TryGetClipboardPngFormatBytes() is { } pngFormatBytes)
+            {
+                var decoder = System.Windows.Media.Imaging.BitmapDecoder.Create(
+                    new System.IO.MemoryStream(pngFormatBytes),
+                    System.Windows.Media.Imaging.BitmapCreateOptions.None,
+                    System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+                var frame = decoder.Frames[0];
+                imageBytes = pngFormatBytes;
+                pixelWidth = frame.PixelWidth;
+                pixelHeight = frame.PixelHeight;
+            }
+            else
+            {
+                var image = System.Windows.Clipboard.GetImage();
+                if (image is null)
+                    return false;
 
-            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
-            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
-            using var stream = new System.IO.MemoryStream();
-            encoder.Save(stream);
-            imageBytes = stream.ToArray();
-            pixelWidth = image.PixelWidth;
-            pixelHeight = image.PixelHeight;
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
+                using var stream = new System.IO.MemoryStream();
+                encoder.Save(stream);
+                imageBytes = stream.ToArray();
+                pixelWidth = image.PixelWidth;
+                pixelHeight = image.PixelHeight;
+            }
         }
         catch (Exception ex)
         {
@@ -1817,5 +2002,88 @@ public partial class MainWindow
         }
 
         sb.Append('"');
+    }
+
+    /// <summary>
+    /// R91-io-clipboard-image-formats-5-3: renders a simple bordered-grid Bitmap of a copied range's
+    /// display text so a normal copy always carries a picture clipboard flavor (see ExecuteCopy) --
+    /// the smallest correct stand-in for a full "as shown on screen" render, deliberately independent
+    /// of the shared print/grid drawing pipeline. Returns null (never throws) for anything that would
+    /// make an unreasonable bitmap: empty content, or a huge cell count.
+    /// </summary>
+    private static System.Windows.Media.Imaging.BitmapSource? TryRenderClipboardRangeBitmap(string[][] rows)
+    {
+        const double cellWidth = 80;
+        const double cellHeight = 20;
+        const int maxCells = 2000;
+
+        try
+        {
+            if (rows.Length == 0)
+                return null;
+
+            var colCount = rows.Max(row => row.Length);
+            if (colCount == 0)
+                return null;
+
+            var rowCount = rows.Length;
+            if ((long)rowCount * colCount > maxCells)
+                return null;
+
+            var width = colCount * cellWidth;
+            var height = rowCount * cellHeight;
+
+            var visual = new System.Windows.Media.DrawingVisual();
+            using (var dc = visual.RenderOpen())
+            {
+                dc.DrawRectangle(System.Windows.Media.Brushes.White, null, new Rect(0, 0, width, height));
+
+                var gridPen = new System.Windows.Media.Pen(System.Windows.Media.Brushes.LightGray, 1);
+                var typeface = new System.Windows.Media.Typeface("Segoe UI");
+                for (var r = 0; r < rowCount; r++)
+                {
+                    var row = rows[r];
+                    for (var c = 0; c < colCount; c++)
+                    {
+                        var cellRect = new Rect(c * cellWidth, r * cellHeight, cellWidth, cellHeight);
+                        dc.DrawRectangle(null, gridPen, cellRect);
+
+                        var cellText = c < row.Length ? row[c] : string.Empty;
+                        if (string.IsNullOrEmpty(cellText))
+                            continue;
+
+                        var formatted = new System.Windows.Media.FormattedText(
+                            cellText,
+                            System.Globalization.CultureInfo.CurrentCulture,
+                            FlowDirection.LeftToRight,
+                            typeface,
+                            12,
+                            System.Windows.Media.Brushes.Black,
+                            1.0)
+                        {
+                            MaxTextWidth = Math.Max(1, cellWidth - 4),
+                            MaxTextHeight = Math.Max(1, cellHeight - 2),
+                            Trimming = TextTrimming.CharacterEllipsis
+                        };
+                        dc.DrawText(formatted, new Point(cellRect.Left + 2, cellRect.Top + 1));
+                    }
+                }
+            }
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                Math.Max(1, (int)Math.Ceiling(width)),
+                Math.Max(1, (int)Math.Ceiling(height)),
+                96,
+                96,
+                System.Windows.Media.PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            bitmap.Freeze();
+            return bitmap;
+        }
+        catch
+        {
+            // Best-effort extra clipboard flavor -- never let a rendering hiccup fail the copy itself.
+            return null;
+        }
     }
 }

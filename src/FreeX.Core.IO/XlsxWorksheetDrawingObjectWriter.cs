@@ -755,7 +755,11 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     textBox.OutlineThemeColor,
                     textBox.OutlineColor,
                     spreadsheetDrawingNs,
-                    drawingNs),
+                    drawingNs,
+                    // R91-commands-insert-object-5-1: round-trip an explicitly line-suppressed text
+                    // box (loaded or freshly inserted) as <a:ln><a:noFill/> instead of silently
+                    // baking in a border Excel/the user never authored.
+                    outlineHasNoFill: textBox.OutlineHasNoFill),
                 ToTextBoxTxBody(textBox, drawingNs, spreadsheetDrawingNs)),
             new XElement(spreadsheetDrawingNs + "clientData"));
 

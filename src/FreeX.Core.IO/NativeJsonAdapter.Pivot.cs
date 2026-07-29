@@ -32,7 +32,8 @@ public sealed partial class NativeJsonAdapter
                 MinRefreshableVersion = dto.MinRefreshableVersion,
                 RefreshedVersion = dto.RefreshedVersion,
                 RefreshedBy = TrimToNull(dto.RefreshedBy),
-                RefreshedDateIso = TrimToNull(dto.RefreshedDateIso)
+                RefreshedDateIso = TrimToNull(dto.RefreshedDateIso),
+                RawRecordsXml = TrimToNull(dto.RawRecordsXml)
             };
 
             foreach (var field in (dto.Fields ?? []).Select(ToPivotCacheField).OfType<PivotCacheFieldModel>())
@@ -319,6 +320,7 @@ public sealed partial class NativeJsonAdapter
             RefreshedVersion = cache.RefreshedVersion,
             RefreshedBy = cache.RefreshedBy,
             RefreshedDateIso = cache.RefreshedDateIso,
+            RawRecordsXml = cache.RawRecordsXml,
             Fields = cache.Fields.OfType<PivotCacheFieldModel>().Select(FromPivotCacheField).ToList()
         };
 

@@ -33,6 +33,18 @@ public sealed class TextBoxModel
     public CellColor? OutlineColor { get; set; }
     public WorkbookThemeColorReference? FillThemeColor { get; set; }
     public WorkbookThemeColorReference? OutlineThemeColor { get; set; }
+
+    /// <summary>
+    /// True when the text box's line is explicitly suppressed (OOXML <c>&lt;a:ln&gt;&lt;a:noFill/&gt;</c>),
+    /// mirroring <c>DrawingShapeModel.OutlineHasNoFill</c>. Defaults to <see langword="false"/> (line shown)
+    /// so every existing construction path -- the xlsx/legacy-xls/native-json loaders and any other code
+    /// that doesn't set this explicitly -- keeps its prior always-bordered rendering unchanged. A freshly
+    /// inserted text box is the one deliberate exception: Excel's Insert &gt; Text Box defaults to No Fill,
+    /// No Line, so <c>AddTextBoxCommand</c> (FreeX.Core.Commands) explicitly sets both this and
+    /// <see cref="HasFill"/> to match, instead of this field's own safe default.
+    /// </summary>
+    public bool OutlineHasNoFill { get; set; }
+
     public bool IsSourceLoaded { get; set; }
 
     // ── Text formatting (txBody) ────────────────────────────────────────────

@@ -576,6 +576,7 @@ public partial class MainWindow
         _currentSheetId = wb.Sheets[0].Id;
         InvalidateNavigationCaches();
         _currentFilePath = null;
+        _currentFileSourceLastWriteTimeUtc = null;
         _currentXlsxFeatureReport = null;
         _isWorkbookReadOnly = false;
         UpdateTitleBar();
@@ -698,6 +699,7 @@ public partial class MainWindow
             _currentSheetId = plan.ActiveSheetId;
             InvalidateNavigationCaches();
             _currentFilePath = plan.CurrentFilePath;
+            _currentFileSourceLastWriteTimeUtc = result.SourceLastWriteTimeUtc;
             UpdateTitleBar();
             MarkWorkbookSaved();
             // Document-scoped broadcast: after a detach there are no same-document siblings,
@@ -1233,6 +1235,20 @@ public partial class MainWindow
         if (ext == ".xlsx" && !ConfirmUnsupportedXlsxFeatureSave())
             return false;
 
+        // Detect a concurrent second writer before doing any work: if this save targets the same
+        // path this window loaded from, and the on-disk write time no longer matches what was
+        // captured at open, someone else (another FreeX/Excel instance, a colleague on a shared
+        // drive) has changed the file since -- writing over it here would silently discard their
+        // changes. Ask before clobbering, matching Excel's own behavior for this scenario.
+        if (string.Equals(target.Path, _currentFilePath, StringComparison.OrdinalIgnoreCase) &&
+            _currentFileSourceLastWriteTimeUtc is { } expectedWriteTimeUtc &&
+            System.IO.File.Exists(target.Path) &&
+            System.IO.File.GetLastWriteTimeUtc(target.Path) != expectedWriteTimeUtc &&
+            !ConfirmExternallyModifiedFileOverwrite(target.Path))
+        {
+            return false;
+        }
+
         // Save-As to a plain/single-sheet lossy format (CSV/TXT/PRN/SLK/DIF/DBF, ...) has no gate at
         // all otherwise: a multi-sheet workbook or one with charts would write silently, dropping
         // every sheet but the current one plus any charts, with no warning the .xlsx path already
@@ -1269,7 +1285,10 @@ public partial class MainWindow
                 target.Adapter,
                 _workbook,
                 progress,
-                operationCancellation.Token);
+                operationCancellation.Token,
+                string.Equals(target.Path, _currentFilePath, StringComparison.OrdinalIgnoreCase)
+                    ? _currentFileSourceLastWriteTimeUtc
+                    : null);
             operationCancellation.Token.ThrowIfCancellationRequested();
 
             var plan = SaveCompletionPlanner.Plan(
@@ -1283,6 +1302,15 @@ public partial class MainWindow
                 _currentFilePath = fileContext.Path;
                 _workbook.Name = fileContext.DisplayName;
                 RecentFileRegistrationService.RegisterIfNeeded(ReloadRecentFilesStore, fileContext.RecentFileRegistration);
+            }
+            if (plan.ApplyFileContext)
+            {
+                // The save just wrote target.Path, so refresh our "known good" write-time snapshot
+                // to the file's new on-disk timestamp -- otherwise the very next save would think
+                // ITS OWN prior write was an external modification and warn spuriously.
+                _currentFileSourceLastWriteTimeUtc = System.IO.File.Exists(target.Path)
+                    ? System.IO.File.GetLastWriteTimeUtc(target.Path)
+                    : null;
             }
 
             if (plan.MarkSaved)
@@ -1312,6 +1340,24 @@ public partial class MainWindow
                 ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
                 ["format"] = target.Adapter.FormatName
             });
+            return false;
+        }
+        catch (WorkbookExternallyModifiedException)
+        {
+            // Belt-and-suspenders: the proactive check above already covers the common case, but
+            // the file could still have changed in the (check-then-act) gap between that check and
+            // WorkbookSaveService actually writing. Surface the same warning rather than silently
+            // failing or (worse) letting a stale exception type escape as an unhandled save error.
+            RecordDiagnosticEvent("workbook_save_externally_modified", new Dictionary<string, string?>
+            {
+                ["extension"] = ext,
+                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                ["format"] = target.Adapter.FormatName
+            });
+            ShowOwnedMessage(
+                UiText.Format("MainWindowMessage_ExternallyModifiedFileBody", System.IO.Path.GetFileName(target.Path)),
+                UiText.Get("MainWindowMessage_ExternallyModifiedFileTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         catch (Exception ex)
@@ -1355,6 +1401,17 @@ public partial class MainWindow
     private void HideSaveProgress()
     {
         HideOperationFooterProgress();
+    }
+
+    private bool ConfirmExternallyModifiedFileOverwrite(string path)
+    {
+        var result = ShowOwnedMessage(
+            UiText.Format("MainWindowMessage_ExternallyModifiedFileBody", System.IO.Path.GetFileName(path)),
+            UiText.Get("MainWindowMessage_ExternallyModifiedFileTitle"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        return result == MessageBoxResult.Yes;
     }
 
     private bool ConfirmUnsupportedXlsxFeatureSave()

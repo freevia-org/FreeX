@@ -117,16 +117,28 @@ public static class StructuredTableStyleService
                 ? CaptureBodyFillState(workbook, sheet, dataStartRow, dataEndRow, range.Start.Col, range.End.Col)
                 : null;
 
+            // R91-meta-3: Excel's dynamic row banding alternates across VISIBLE rows only — a row
+            // hidden by AutoFilter (or a manual/group hide) does not consume a stripe slot, so the
+            // rows that remain visible after a filter re-flow their parity around the gap instead of
+            // keeping whatever parity their unchanged PHYSICAL row offset would give them. Track a
+            // separate running counter that only advances for rows that are currently visible; a
+            // hidden row is painted with its still-pending parity (irrelevant, since it isn't
+            // rendered) without consuming a slot, so the next visible row lands on the correct stripe.
+            // When nothing is hidden this counter is identical to the old physical-offset formula, so
+            // Insert/Sort's already-correct "purely positional" behavior (R90) is unaffected.
+            var visibleRowIndex = 0u;
             for (var row = dataStartRow; row <= dataEndRow; row++)
             {
-                // Match Excel's (and the table-creation command's) banding parity: the first data row
-                // is the "even" (typically unfilled) stripe, the next is the "odd" (tinted) stripe.
-                var rowOffset = row - dataStartRow;
+                // Match Excel's (and the table-creation command's) banding parity: the first
+                // (visible) data row is the "even" (typically unfilled) stripe, the next is the
+                // "odd" (tinted) stripe.
                 var rowStyle = table.ShowRowStripes
-                    ? (rowOffset % 2 == 0 ? evenFill : oddFill)
+                    ? (visibleRowIndex % 2 == 0 ? evenFill : oddFill)
                     : bodyFill;
                 for (var col = range.Start.Col; col <= range.End.Col; col++)
                     styledAny |= MergeStyleOntoCell(workbook, sheet, row, col, rowStyle, isHeaderOrTotals: false, banding: banding, forceFill: forceReband);
+                if (!sheet.IsRowEffectivelyHidden(row))
+                    visibleRowIndex++;
             }
 
             // ── Column stripes (overrides row fill per column, mirrors StructuredTableCommand) ──

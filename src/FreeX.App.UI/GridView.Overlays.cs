@@ -352,13 +352,32 @@ public partial class GridView
             dc.DrawEllipse(null, FormulaTraceArrowPen, point, radius + 3, radius + 3);
     }
 
+    /// <summary>
+    /// Resolves the FULL set of print-area ranges the Page Break Preview / Page Layout overlay should
+    /// paginate/un-mask, preferring the multi-area <paramref name="printAreas"/> list over the
+    /// single-range <paramref name="printArea"/>/<paramref name="pagePreviewRange"/> fallbacks -- so a
+    /// sheet with more than one configured <c>_xlnm.Print_Area</c> region gets every area covered here,
+    /// matching both the real print/PDF export (<c>WorkbookExportPrintPlanner</c>) and the Avalonia
+    /// shell's overlay, instead of only the first (<see cref="GridRange"/> <paramref name="printArea"/>
+    /// only ever carries <c>Sheet.PrintArea</c>, itself just the first of <c>Sheet.PrintAreas</c>).
+    /// See R91-render-frozen-print-titles-5-2.
+    /// </summary>
+    internal static IReadOnlyList<GridRange>? ResolvePageBreakPreviewRanges(
+        IReadOnlyList<GridRange>? printAreas, GridRange? printArea, GridRange? pagePreviewRange) =>
+        printAreas is { Count: > 0 } areas
+            ? areas
+            : (printArea ?? pagePreviewRange) is { } single
+                ? [single]
+                : null;
+
     private void RenderWorksheetViewOverlay(DrawingContext dc)
     {
         if (Viewport == null) return;
 
-        // Excel draws the manual (dashed blue) page-break lines in every view mode, including
-        // Normal, once the sheet has at least one manual break - not just in Page Layout /
-        // Page Break Preview. The page/margin chrome below is specific to those two views.
+        // Excel draws the manual (solid blue -- see MakePageBreakPen, R91-render-frozen-print-titles-5-1)
+        // page-break lines in every view mode, including Normal, once the sheet has at least one
+        // manual break - not just in Page Layout / Page Break Preview. The page/margin chrome below
+        // is specific to those two views.
         if (WorksheetViewMode == WorksheetViewMode.Normal)
         {
             RenderManualPageBreaks(dc);
@@ -367,11 +386,16 @@ public partial class GridView
 
         var logicalWidth = GetLogicalViewportWidth();
         var logicalHeight = GetLogicalViewportHeight();
-        var previewRange = PrintArea ?? PagePreviewRange;
-        var layout = previewRange is { } range
+        IReadOnlyList<GridRange>? previewRanges = ResolvePageBreakPreviewRanges(PrintAreas, PrintArea, PagePreviewRange);
+        // The print-area boundary rectangle/margin guides below still only ever draw the FIRST area
+        // (RenderPrintAreaBoundary/RenderPageMarginGuides are single-range helpers) -- a narrower,
+        // purely cosmetic remnant of the same gap, left for a follow-up since widening those two
+        // helpers to a per-area loop is separate scope from the masking/pagination fixed here.
+        var previewRange = previewRanges is { Count: > 0 } ? previewRanges[0] : (GridRange?)null;
+        var layout = previewRanges is { Count: > 0 }
             ? ToWpfLayout(PageBreakPreviewLayoutPlanner.Calculate(
                 Viewport,
-                range,
+                previewRanges,
                 RowPageBreaks,
                 ColumnPageBreaks,
                 PageOrder,

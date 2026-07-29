@@ -31,6 +31,18 @@ public static class CellEntryParser
             if (useR1C1ReferenceStyle)
                 formula = FormulaReferenceStyleService.ToA1(formula, address);
 
+            // Real Excel refuses to leave edit mode for genuinely malformed formula syntax (e.g.
+            // an unbalanced "=SUM(A1"), offering its "we found an error in this formula" correction
+            // prompt instead of committing the broken text. Validate the syntax up front so a
+            // parse failure rejects the entry outright (FormulaParseException propagates to the
+            // caller, matching the DataValidation-block contract those callers already implement)
+            // rather than silently committing unparseable formula text that would otherwise only
+            // ever surface as a #VALUE! error later, during recalculation -- RecalcEngine.cs's own
+            // FormulaParseException catches exist for the DIFFERENT case of a cell whose formula
+            // text was already committed (e.g. loaded from a file whose formula this parser can't
+            // handle, such as an external-workbook reference), not for a fresh interactive entry.
+            FormulaEvaluator.ParseFormula(formula);
+
             return Cell.FromFormula(formula);
         }
 

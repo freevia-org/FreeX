@@ -217,16 +217,26 @@ public sealed partial class MainWindow
 
         void RefreshSymbols()
         {
+            var selectedFontName = fontBox.SelectedItem as string;
             var plan = SymbolPickerCatalogPlanner.PlanSymbolList(
                 subsetBox.SelectedItem as string,
                 searchBox.Text,
-                selectedSymbol);
+                selectedSymbol,
+                selectedFontName);
+
+            // R91-commands-insert-object-5-3: Wingdings/Webdings/etc. glyphs live in the font's own
+            // Private Use Area mapping, not in "Segoe UI Symbol" -- the grid and the big preview
+            // must render in the chosen dingbat font itself or the correct codepoints show as tofu.
+            var cellFontFamily = SymbolPickerCatalogPlanner.IsSymbolFont(selectedFontName)
+                ? new FontFamily(selectedFontName!)
+                : new FontFamily("Segoe UI Symbol");
+            preview.FontFamily = cellFontFamily;
 
             symbolCells.Clear();
             symbolGrid.Children.Clear();
             foreach (var entry in plan.Entries)
             {
-                var cell = CreateSymbolCell(entry, SelectCatalogEntry, AcceptAndClose);
+                var cell = CreateSymbolCell(entry, SelectCatalogEntry, AcceptAndClose, fontFamily: cellFontFamily);
                 symbolCells.Add((cell, entry.Symbol));
                 symbolGrid.Children.Add(cell);
             }
@@ -238,6 +248,7 @@ public sealed partial class MainWindow
                 HighlightSelectedCell(selectedSymbol);
         }
 
+        fontBox.SelectionChanged += (_, _) => RefreshSymbols();
         subsetBox.SelectionChanged += (_, _) => RefreshSymbols();
         searchBox.TextChanged += (_, _) => RefreshSymbols();
 
@@ -344,7 +355,8 @@ public sealed partial class MainWindow
         SymbolPickerCatalogEntry entry,
         Action<SymbolPickerCatalogEntry> select,
         Action close,
-        bool compact = false)
+        bool compact = false,
+        FontFamily? fontFamily = null)
     {
         var button = new Button
         {
@@ -354,7 +366,7 @@ public sealed partial class MainWindow
             Padding = new Thickness(0),
             Margin = new Thickness(0),
             FontSize = compact ? 14 : 15,
-            FontFamily = new FontFamily("Segoe UI Symbol"),
+            FontFamily = fontFamily ?? new FontFamily("Segoe UI Symbol"),
             Background = Brushes.Transparent,
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(1),

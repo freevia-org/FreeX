@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -894,8 +895,24 @@ internal static partial class XlsxChartXmlWriter
         if (format is null)
             return null;
 
-        var solidFill = ToSolidFill(format.FillThemeColor, format.FillColor, drawingNs);
-        var fill = solidFill ?? (format.NoFill ? new XElement(drawingNs + "noFill") : null);
+        // R91-render-chart-series-format-5-1: an authored gradient/pattern fill was captured
+        // verbatim (no dedicated model representation) — re-emit it as-is instead of synthesizing
+        // a fill from FillColor/FillThemeColor/NoFill, which would drop it entirely.
+        XElement? fill;
+        if (format.RawFillXml is { Length: > 0 } rawFillXml)
+        {
+            fill = XElement.Parse(rawFillXml);
+        }
+        else
+        {
+            var solidFill = ToSolidFill(format.FillThemeColor, format.FillColor, drawingNs);
+            // R91-render-chart-series-format-5-4: re-apply the authored <a:alpha> transparency to
+            // the solid fill's color element so it survives the round trip.
+            if (solidFill is not null && format.FillAlpha is { } fillAlpha)
+                XlsxDrawingColorAlpha.ApplyTo(solidFill.Elements().First(), fillAlpha, drawingNs);
+            fill = solidFill ?? (format.NoFill ? new XElement(drawingNs + "noFill") : null);
+        }
+
         var lineFill = ToSolidFill(format.StrokeThemeColor, format.StrokeColor, drawingNs);
         var hasLineFormatting = lineFill is not null ||
             format.StrokeThickness is not null ||

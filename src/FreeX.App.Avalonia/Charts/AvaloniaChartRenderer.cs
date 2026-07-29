@@ -388,7 +388,7 @@ public sealed class AvaloniaChartRenderer
         // F19: honor the series' persisted StrokeThickness, falling back to 2 only when unset.
         var strokeThickness = format?.StrokeThickness ?? DefaultSeriesStrokeThickness;
         AddPolyline(canvas, series.Points, stroke, dashStyle, strokeThickness);
-        AddMarkers(canvas, series.Points, SeriesFill(series.SeriesIndex), stroke, markerStyle);
+        AddMarkers(canvas, series.Points, series.SeriesIndex, SeriesFill(series.SeriesIndex), stroke, markerStyle);
     }
 
     private void RenderArea(Canvas canvas, SeriesLayout series)
@@ -413,7 +413,7 @@ public sealed class AvaloniaChartRenderer
         };
         canvas.Children.Add(polygon);
         // Area series show no markers by default (matches WPF/OxyPlot's AreaSeries default and Excel).
-        AddMarkers(canvas, series.Points, fill, stroke, format?.MarkerStyle ?? ChartMarkerStyle.None);
+        AddMarkers(canvas, series.Points, series.SeriesIndex, fill, stroke, format?.MarkerStyle ?? ChartMarkerStyle.None);
     }
 
     private void RenderScatter(Canvas canvas, SeriesLayout series)
@@ -422,6 +422,7 @@ public sealed class AvaloniaChartRenderer
         AddMarkers(
             canvas,
             series.Points,
+            series.SeriesIndex,
             SeriesFill(series.SeriesIndex),
             SeriesStroke(series.SeriesIndex),
             format?.MarkerStyle ?? ChartMarkerStyle.Circle);
@@ -501,7 +502,7 @@ public sealed class AvaloniaChartRenderer
             Points = points,
         });
 
-        AddMarkers(canvas, series.Points, SeriesFill(series.SeriesIndex), stroke, format?.MarkerStyle ?? ChartMarkerStyle.Circle);
+        AddMarkers(canvas, series.Points, series.SeriesIndex, SeriesFill(series.SeriesIndex), stroke, format?.MarkerStyle ?? ChartMarkerStyle.Circle);
     }
 
     private void RenderStock(Canvas canvas, SeriesLayout series)
@@ -858,33 +859,67 @@ public sealed class AvaloniaChartRenderer
     }
 
     // Fix 5: marker shapes — honor ChartMarkerStyle to produce non-circle geometries.
-    private static void AddMarkers(
+    // R91-render-chart-series-format-5-3: per-point overrides (symbol/size/fill/border) from a
+    // <c:dPt>'s <c:marker> — read into ChartModel.PointMarkerFormats by
+    // XlsxChartSeriesFormatReader.ApplyPointMarkerOverride — take priority over the series-level
+    // style/fill/stroke for that one point, matching Excel's Format Data Point > Marker Options. A
+    // per-point style override can turn markers on for a single point even when the series itself
+    // shows none; a point with no override simply falls back to the series-level style/fill/stroke.
+    private void AddMarkers(
         Canvas canvas,
         IReadOnlyList<SeriesPoint> seriesPoints,
+        int seriesIndex,
         IBrush fill,
         IBrush stroke,
         ChartMarkerStyle markerStyle = ChartMarkerStyle.Circle)
     {
-        if (markerStyle == ChartMarkerStyle.None)
-            return;
-
         foreach (var p in seriesPoints)
         {
+            var pointFormat = FindPointMarkerFormat(seriesIndex, p.PointIndex);
+            var style = pointFormat?.MarkerStyle ?? markerStyle;
+            if (style == ChartMarkerStyle.None)
+                continue;
+
+            var pointFill = pointFormat?.ResolveFillColor(_theme) is { } fillOverride
+                ? SolidBrush(fillOverride)
+                : fill;
+            var pointStroke = pointFormat?.ResolveBorderColor(_theme) is { } borderOverride
+                ? SolidBrush(borderOverride)
+                : stroke;
+            var radius = pointFormat?.MarkerSize ?? MarkerRadius;
+
             var cx = p.Position.X;
             var cy = p.Position.Y;
-            var control = BuildMarker(markerStyle, cx, cy, fill, stroke);
+            var control = BuildMarker(style, cx, cy, pointFill, pointStroke, radius);
             if (control is not null)
                 canvas.Children.Add(control);
         }
     }
 
     /// <summary>
+    /// Finds the per-point marker override (<see cref="ChartModel.PointMarkerFormats"/>) for a series
+    /// index/point index pair, last-match-wins like <see cref="ChartStylePlanner.FindSeriesFormat"/>.
+    /// </summary>
+    private ChartPointMarkerFormat? FindPointMarkerFormat(int seriesIndex, int pointIndex)
+    {
+        var formats = _chart.PointMarkerFormats;
+        for (var i = formats.Count - 1; i >= 0; i--)
+        {
+            var format = formats[i];
+            if (format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex)
+                return format;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Builds a single marker control at (cx, cy). Returns null for <see cref="ChartMarkerStyle.None"/>.
     /// Circle is an Ellipse; Square is a Rectangle; Diamond/Triangle/X/Plus/Star use a Path.
     /// </summary>
-    internal static Control? BuildMarker(ChartMarkerStyle style, double cx, double cy, IBrush fill, IBrush stroke)
+    internal static Control? BuildMarker(ChartMarkerStyle style, double cx, double cy, IBrush fill, IBrush stroke, double radius = MarkerRadius)
     {
-        const double r = MarkerRadius;
+        var r = radius;
         switch (style)
         {
             case ChartMarkerStyle.None:

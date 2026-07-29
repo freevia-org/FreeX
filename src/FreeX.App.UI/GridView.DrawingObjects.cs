@@ -277,7 +277,11 @@ public partial class GridView
         var colors = new DrawingObjectColors(metadata.Paint.Fill, metadata.Paint.Outline);
         DrawTextBoxThemeEffect(dc, rect, themeEffect);
         var fillBrush = metadata.Paint.HasFill ? GetDrawingObjectBrush(242, colors.Fill) : null;
-        var borderPen = GetDrawingObjectPen(255, colors.Outline, 1);
+        // R91-commands-insert-object-5-1: a text box's line can be explicitly suppressed
+        // (TextBoxModel.OutlineHasNoFill, e.g. Excel's Insert > Text Box default) -- draw no
+        // border pen at all rather than always forcing one, mirroring RenderDrawingShape's
+        // GetDrawingShapeOutlinePen null-for-no-outline behavior.
+        var borderPen = metadata.Paint.HasOutline ? GetDrawingObjectPen(255, colors.Outline, 1) : null;
         dc.DrawRectangle(fillBrush, borderPen, rect);
         DrawTextBoxThemeInnerShadow(dc, rect, themeEffect);
         if (EditingTextBoxId is { } editingTextBoxId && editingTextBoxId == textBox.Id)

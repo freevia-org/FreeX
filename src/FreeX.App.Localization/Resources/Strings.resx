@@ -5467,6 +5467,12 @@ Use Show Calculation Steps to trace the formula, Ignore Error to suppress this i
   <data name="MainWindowMessage_SaveErrorTitle" xml:space="preserve">
     <value>Save Error</value>
   </data>
+  <data name="MainWindowMessage_ExternallyModifiedFileTitle" xml:space="preserve">
+    <value>File Changed</value>
+  </data>
+  <data name="MainWindowMessage_ExternallyModifiedFileBody" xml:space="preserve">
+    <value>'{0}' has been changed by another program since you opened it. Do you want to overwrite those changes with your version?</value>
+  </data>
   <data name="MainWindow_TooltipDescription_CycleTheCurrentChartDataLabelBorderColorAndWeight" xml:space="preserve">
     <value>Cycle the current chart data-label border color and weight.</value>
   </data>
