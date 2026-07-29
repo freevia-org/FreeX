@@ -1616,7 +1616,7 @@ public static class SmartArtLayoutEngine
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan)
     {
-        if (nodes.Count is < 2 or > 4)
+        if (nodes.Count < 2)
             return null;
 
         long outerPadX = (long)(fcx * OuterPaddingFrac);
@@ -1624,15 +1624,22 @@ public static class SmartArtLayoutEngine
         long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
         long innerH = Math.Max(fcy - 2 * outerPadY, 1L);
         long arrowW = Math.Max((long)(innerW * 0.38), 1L);
-        long arrowH = Math.Max((long)(innerH * 0.28), 1L);
-        long rowGap = Math.Max((long)(innerH * 0.08), 1L);
-        long totalH = arrowH * 2 + rowGap;
-        long firstY = fy + outerPadY + Math.Max((innerH - totalH) / 2, 0L);
         long leftX = fx + outerPadX;
         long rightX = fx + fcx - outerPadX - arrowW;
 
         int leftCount = (nodes.Count + 1) / 2;
         int rightCount = nodes.Count - leftCount;
+        int maxRows = Math.Max(leftCount, rightCount);
+        long rowGap = Math.Max(
+            (long)(innerH * 0.08 * Math.Min(1.0, 2.0 / maxRows)),
+            1L);
+        long arrowH = Math.Max(
+            Math.Min(
+                (long)(innerH * 0.28),
+                (innerH - rowGap * Math.Max(maxRows - 1, 0)) / maxRows),
+            1L);
+        long totalH = arrowH * maxRows + rowGap * Math.Max(maxRows - 1, 0);
+        long firstY = fy + outerPadY + Math.Max((innerH - totalH) / 2, 0L);
         var shapes = new List<SlideShape>(nodes.Count);
         uint idCounter = 535;
         for (int i = 0; i < nodes.Count; i++)
@@ -1713,7 +1720,7 @@ public static class SmartArtLayoutEngine
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan)
     {
-        if (nodes.Count is < 2 or > 3)
+        if (nodes.Count < 2)
             return null;
 
         long outerPadX = (long)(fcx * OuterPaddingFrac);
