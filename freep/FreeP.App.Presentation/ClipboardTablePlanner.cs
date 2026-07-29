@@ -85,6 +85,11 @@ public static class ClipboardTablePlanner
     {
         if (style.FillRgb is { } fillRgb)
             cell.Fill = new ShapeFill.Solid(SrgbColor.FromRgb(fillRgb));
+        cell.Anchor = style.Anchor;
+        cell.InsetLeftPt = style.InsetLeftPt;
+        cell.InsetRightPt = style.InsetRightPt;
+        cell.InsetTopPt = style.InsetTopPt;
+        cell.InsetBottomPt = style.InsetBottomPt;
 
         TableCellBorders? borders = null;
         borders = AssignBorder(borders, style.Left, TableCellBorderSide.Left);

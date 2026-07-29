@@ -13,7 +13,12 @@ public sealed record InCanvasRichClipboardTableCellStyle(
     InCanvasRichClipboardTableBorder? Left = null,
     InCanvasRichClipboardTableBorder? Right = null,
     InCanvasRichClipboardTableBorder? Top = null,
-    InCanvasRichClipboardTableBorder? Bottom = null);
+    InCanvasRichClipboardTableBorder? Bottom = null,
+    TableCellAnchor? Anchor = null,
+    double? InsetLeftPt = null,
+    double? InsetRightPt = null,
+    double? InsetTopPt = null,
+    double? InsetBottomPt = null);
 
 /// <summary>
 /// Renderer-neutral rich clipboard payload used by both desktop editors. The model fragment is

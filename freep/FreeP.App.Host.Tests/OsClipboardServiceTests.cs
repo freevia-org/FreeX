@@ -658,7 +658,7 @@ public sealed class OsClipboardServiceTests
             RtfBytes = Encoding.ASCII.GetBytes(
                 @"{\rtf1\ansi
 {\colortbl;\red255\green255\blue0;\red31\green78\blue121;}
-\trowd\clcbpat1\clbrdrl\brdrs\brdrw10\brdrcf2\cellx1440\cellx2880
+\trowd\clcbpat1\clvertalc\clpadl120\clpadr240\clpadt60\clpadb180\clbrdrl\brdrs\brdrw10\brdrcf2\cellx1440\cellx2880
 Header\cell Value\cell\row}"),
         };
         var presentation = Presentation.CreateEmpty();
@@ -670,6 +670,11 @@ Header\cell Value\cell\row}"),
         var cell = editor.CurrentSlide!.Shapes.Single().Table!.Rows.Single().Cells[0];
         ((ShapeFill.Solid)cell.Fill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFF00));
         ((ShapeOutline.Visible)cell.Borders!.Left!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        cell.Anchor.Should().Be(TableCellAnchor.Middle);
+        cell.InsetLeftPt.Should().Be(6);
+        cell.InsetRightPt.Should().Be(12);
+        cell.InsetTopPt.Should().Be(3);
+        cell.InsetBottomPt.Should().Be(9);
         ((ShapeOutline.Visible)cell.Borders.Left).WidthPt.Should().Be(0.5);
     }
 
