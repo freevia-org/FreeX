@@ -1754,7 +1754,7 @@ public static class SmartArtLayoutEngine
         SmartArtStylePlan stylePlan)
     {
         int n = nodes.Count;
-        if (n is 0 or > 4)
+        if (n == 0)
             return null;
 
         var shapes = new List<SlideShape>();
