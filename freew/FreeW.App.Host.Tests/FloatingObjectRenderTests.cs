@@ -283,6 +283,56 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void FloatingRichShapeText_UsesSharedRunLayoutAndWpfDecorations()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 150, 80, "#FFFFFF")
+        {
+            Placement = new FloatingPlacement { Wrapping = ImageWrapping.InFront }
+        };
+        var first = new Paragraph();
+        first.Runs.Add(new Run("Rich", RunFormatting.Default with
+        {
+            FontFamily = "Arial",
+            FontSizePt = 14,
+            Bold = true,
+            Italic = true,
+            Underline = true,
+            Strikethrough = true,
+            ColorHex = "#C00000"
+        }));
+        var second = new Paragraph();
+        second.Runs.Add(new Run("next", RunFormatting.Default with { FontFamily = "Courier New" }));
+        shape.TextParagraphs.Add(first);
+        shape.TextParagraphs.Add(second);
+
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Border>().Single();
+        var textCanvas = LogicalDescendants<Canvas>(root).Single();
+        var glyphs = textCanvas.Children.OfType<TextBlock>().ToArray();
+        glyphs.Select(glyph => glyph.Text).Should().ContainInOrder("R", "i", "c", "h", "n", "e", "x", "t");
+        var richGlyph = glyphs[0];
+        richGlyph.FontFamily.Source.Should().Be("Arial");
+        richGlyph.FontSize.Should().BeApproximately(14 * 96.0 / 72.0, 0.01);
+        richGlyph.FontWeight.Should().Be(FontWeights.Bold);
+        richGlyph.FontStyle.Should().Be(FontStyles.Italic);
+        richGlyph.Foreground.Should().BeOfType<SolidColorBrush>().Which.Color.Should()
+            .Be(Color.FromRgb(0xC0, 0x00, 0x00));
+        richGlyph.TextDecorations.Should().Contain(decoration => decoration.Location == TextDecorationLocation.Underline);
+        richGlyph.TextDecorations.Should().Contain(decoration => decoration.Location == TextDecorationLocation.Strikethrough);
+        Canvas.GetTop(glyphs[4]).Should().BeGreaterThan(Canvas.GetTop(glyphs[0]),
+            "the second paragraph must use a shared hard-break line");
+    }
+
+    [StaFact]
     public void FloatingOverlay_RendersShapeFromSharedPlanWithActualGeometryFillOutlineAndEffect()
     {
         var shape = new Shape(ShapeKind.Ellipse, 72, 36, "#FF0000")

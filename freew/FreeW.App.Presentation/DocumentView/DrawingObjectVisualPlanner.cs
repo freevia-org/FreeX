@@ -79,9 +79,262 @@ public sealed record DrawingObjectOutlinePlan(
     double WidthDip,
     string? DashStyle);
 
+public sealed record DrawingObjectTextRunPlan(
+    string Text,
+    RunFormatting Formatting,
+    int ParagraphIndex,
+    int RunIndex);
+
+public sealed record DrawingObjectTextParagraphPlan(
+    TextAlignment Alignment,
+    IReadOnlyList<DrawingObjectTextRunPlan> Runs);
+
 public sealed record DrawingObjectTextPlan(
     string Text,
-    ShapeTextDirection Direction);
+    ShapeTextDirection Direction)
+{
+    public IReadOnlyList<DrawingObjectTextParagraphPlan> Paragraphs { get; init; } = [];
+
+    public bool IsRich => Paragraphs
+        .SelectMany(paragraph => paragraph.Runs)
+        .Any(run => run.Formatting != RunFormatting.Default);
+}
+
+public sealed record DrawingObjectTextGlyphPlan(
+    char Character,
+    int ParagraphIndex,
+    int RunIndex,
+    int Offset,
+    int LineIndex,
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    RunFormatting Formatting);
+
+public sealed record DrawingObjectTextCaretStopPlan(
+    int ParagraphIndex,
+    int RunIndex,
+    int Offset,
+    int LineIndex,
+    double X,
+    double Y,
+    double Height);
+
+public sealed record DrawingObjectTextLayoutPlan(
+    double Width,
+    double Height,
+    IReadOnlyList<DrawingObjectTextGlyphPlan> Glyphs,
+    IReadOnlyList<DrawingObjectTextCaretStopPlan> CaretStops);
+
+/// <summary>
+/// Shared line breaking and glyph-position contract for floating shape text. Hosts supply only font
+/// measurement; both renderers, caret maps, and selection highlights consume the resulting positions.
+/// </summary>
+public static class DrawingObjectTextLayoutPlanner
+{
+    public const double TextInsetDip = 4.0;
+
+    public static DrawingObjectTextPlan BuildTextPlan(Shape shape)
+    {
+        ArgumentNullException.ThrowIfNull(shape);
+        var paragraphs = shape.TextParagraphs
+            .Select((paragraph, paragraphIndex) => new DrawingObjectTextParagraphPlan(
+                paragraph.Formatting.Alignment,
+                paragraph.Runs
+                    .Select((run, runIndex) => new DrawingObjectTextRunPlan(
+                        run.Text ?? string.Empty,
+                        run.Formatting,
+                        paragraphIndex,
+                        runIndex))
+                    .ToArray()))
+            .ToArray();
+        var isCompactPlainText = paragraphs is [{ Runs: [{ } run] }]
+            && run.Formatting == RunFormatting.Default
+            && run.Text == shape.PlainText
+            && shape.TextParagraphs[0].Formatting == ParagraphFormatting.Default;
+        return new DrawingObjectTextPlan(shape.PlainText, shape.TextDirection)
+        {
+            Paragraphs = isCompactPlainText ? [] : paragraphs
+        };
+    }
+
+    public static IReadOnlyList<DrawingObjectTextGlyphPlan> Layout(
+        DrawingObjectTextPlan plan,
+        double widthDip,
+        double heightDip,
+        Func<string, RunFormatting, double> measure,
+        Func<RunFormatting, double> lineHeight)
+        => LayoutPlan(plan, widthDip, heightDip, measure, lineHeight).Glyphs;
+
+    public static DrawingObjectTextLayoutPlan LayoutPlan(
+        DrawingObjectTextPlan plan,
+        double widthDip,
+        double heightDip,
+        Func<string, RunFormatting, double> measure,
+        Func<RunFormatting, double> lineHeight)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(measure);
+        ArgumentNullException.ThrowIfNull(lineHeight);
+
+        if (plan.Paragraphs.Count == 0)
+        {
+            plan = plan with
+            {
+                Paragraphs = [new DrawingObjectTextParagraphPlan(
+                    TextAlignment.Left,
+                    [new DrawingObjectTextRunPlan(plan.Text, RunFormatting.Default, 0, 0)])]
+            };
+        }
+
+        var contentWidth = Math.Max(1, widthDip - TextInsetDip * 2);
+        var lines = new List<TextLayoutLine>();
+        var current = new TextLayoutLine(0, lineHeight(RunFormatting.Default), TextAlignment.Left);
+        lines.Add(current);
+        var lineIndex = 0;
+
+        void StartLine(TextAlignment alignment)
+        {
+            current = new TextLayoutLine(lineIndex++, lineHeight(RunFormatting.Default), alignment);
+            lines.Add(current);
+        }
+
+        void FinishLine()
+        {
+            // The current line remains in the list; StartLine replaces it after a hard break.
+        }
+
+        for (var paragraphIndex = 0; paragraphIndex < plan.Paragraphs.Count; paragraphIndex++)
+        {
+            var paragraph = plan.Paragraphs[paragraphIndex];
+            current.Alignment = paragraph.Alignment;
+            var hasRun = false;
+            foreach (var run in paragraph.Runs)
+            {
+                var text = run.Text ?? string.Empty;
+                hasRun = true;
+                current.CaretStops.Add(new TextLayoutCaret(
+                    run.ParagraphIndex, run.RunIndex, 0, current.Width, run.Formatting));
+                for (var offset = 0; offset < text.Length; offset++)
+                {
+                    var character = text[offset];
+                    if (character is '\r' or '\n')
+                    {
+                        current.CaretStops.Add(new TextLayoutCaret(
+                            run.ParagraphIndex, run.RunIndex, offset, current.Width, run.Formatting));
+                        FinishLine();
+                        StartLine(paragraph.Alignment);
+                        current.CaretStops.Add(new TextLayoutCaret(
+                            run.ParagraphIndex, run.RunIndex, offset + 1, current.Width, run.Formatting));
+                        continue;
+                    }
+
+                    var glyphWidth = Math.Max(1, measure(character.ToString(), run.Formatting));
+                    if (current.Width > 0 && current.Width + glyphWidth > contentWidth)
+                    {
+                        FinishLine();
+                        StartLine(paragraph.Alignment);
+                        current.CaretStops.Add(new TextLayoutCaret(
+                            run.ParagraphIndex, run.RunIndex, offset, current.Width, run.Formatting));
+                    }
+
+                    var glyphHeight = Math.Max(1, lineHeight(run.Formatting));
+                    current.LineHeight = Math.Max(current.LineHeight, glyphHeight);
+                    current.Glyphs.Add(new TextLayoutGlyph(
+                        character, run.ParagraphIndex, run.RunIndex, offset,
+                        current.Width, glyphWidth, glyphHeight, run.Formatting));
+                    current.Width += glyphWidth;
+                    current.CaretStops.Add(new TextLayoutCaret(
+                        run.ParagraphIndex, run.RunIndex, offset + 1, current.Width, run.Formatting));
+                }
+            }
+
+            if (!hasRun)
+                current.CaretStops.Add(new TextLayoutCaret(paragraphIndex, 0, 0, current.Width, RunFormatting.Default));
+
+            // Paragraphs are hard line breaks even when the final run is empty. Keep the final line so
+            // its caret stop remains addressable, but do not add a phantom line after the last paragraph.
+            if (paragraphIndex < plan.Paragraphs.Count - 1)
+            {
+                FinishLine();
+                StartLine(TextAlignment.Left);
+            }
+        }
+
+        var glyphs = new List<DrawingObjectTextGlyphPlan>();
+        var carets = new List<DrawingObjectTextCaretStopPlan>();
+        var y = 0d;
+        foreach (var line in lines)
+        {
+            var alignmentOffset = line.Alignment switch
+            {
+                TextAlignment.Center => Math.Max(0, (contentWidth - line.Width) / 2),
+                TextAlignment.Right => Math.Max(0, contentWidth - line.Width),
+                _ => 0
+            };
+            foreach (var glyph in line.Glyphs)
+            {
+                if (y >= heightDip)
+                    continue;
+                glyphs.Add(new DrawingObjectTextGlyphPlan(
+                    glyph.Character,
+                    glyph.ParagraphIndex,
+                    glyph.RunIndex,
+                    glyph.Offset,
+                    line.Index,
+                    TextInsetDip + alignmentOffset + glyph.X,
+                    TextInsetDip + y,
+                    glyph.Width,
+                    glyph.Height,
+                    glyph.Formatting));
+            }
+            foreach (var caret in line.CaretStops)
+            {
+                if (y >= heightDip)
+                    continue;
+                carets.Add(new DrawingObjectTextCaretStopPlan(
+                    caret.ParagraphIndex,
+                    caret.RunIndex,
+                    caret.Offset,
+                    line.Index,
+                    TextInsetDip + alignmentOffset + caret.X,
+                    TextInsetDip + y,
+                    line.LineHeight));
+            }
+            y += line.LineHeight;
+        }
+
+        return new DrawingObjectTextLayoutPlan(widthDip, heightDip, glyphs, carets);
+    }
+
+    private sealed class TextLayoutLine(int index, double lineHeight, TextAlignment alignment)
+    {
+        public int Index { get; } = index;
+        public double Width { get; set; }
+        public double LineHeight { get; set; } = Math.Max(1, lineHeight);
+        public TextAlignment Alignment { get; set; } = alignment;
+        public List<TextLayoutGlyph> Glyphs { get; } = [];
+        public List<TextLayoutCaret> CaretStops { get; } = [];
+    }
+
+    private sealed record TextLayoutGlyph(
+        char Character,
+        int ParagraphIndex,
+        int RunIndex,
+        int Offset,
+        double X,
+        double Width,
+        double Height,
+        RunFormatting Formatting);
+
+    private sealed record TextLayoutCaret(
+        int ParagraphIndex,
+        int RunIndex,
+        int Offset,
+        double X,
+        RunFormatting Formatting);
+}
 
 public sealed record DrawingObjectEffectsPlan(
     bool HasShadow,
@@ -238,7 +491,7 @@ public static class DrawingObjectVisualPlanner
             shape.HasCustomGeometry ? shape.CustomGeometry : null,
             BuildFillPlan(shape),
             BuildOutlinePlan(shape),
-            shape.HasText ? new DrawingObjectTextPlan(shape.PlainText, shape.TextDirection) : null,
+            shape.HasText ? DrawingObjectTextLayoutPlanner.BuildTextPlan(shape) : null,
             WordArt: null,
             Effects: BuildEffectsPlan(shape.Effects),
             GroupChildren: [],

@@ -383,6 +383,67 @@ public sealed class DocumentViewFloatingShapeTests
         capturedText.Should().Be("Hello shape", "shape text from TextParagraphs must be captured in FloatingShapeRects");
     }
 
+    [Fact]
+    public async Task Rich_floating_shape_text_uses_shared_glyph_layout_for_render_and_pointer_editing()
+    {
+        IReadOnlyList<(char Character, int ParagraphIndex, int RunIndex, int Offset,
+            double X, double Y, double Width, double Height, RunFormatting Formatting)> glyphs = [];
+        int selectionEndParagraph = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
+                hOffsetPt: 0, vOffsetPt: 0,
+                fillColorHex: "#FFFFFF", shapeWidthPt: 150, shapeHeightPt: 80,
+                text: "ignored");
+            var shape = ((Paragraph)doc.Blocks[0]).Runs[1].Shape!;
+            shape.TextParagraphs.Clear();
+            var first = new Paragraph();
+            first.Runs.Add(new Run("Rich", RunFormatting.Default with
+            {
+                FontFamily = "Arial",
+                FontSizePt = 14,
+                Bold = true,
+                Italic = true,
+                Underline = true,
+                Strikethrough = true,
+                ColorHex = "#C00000"
+            }));
+            var second = new Paragraph();
+            second.Runs.Add(new Run("next", RunFormatting.Default with { FontFamily = "Courier New" }));
+            shape.TextParagraphs.Add(first);
+            shape.TextParagraphs.Add(second);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            glyphs = view.FloatingShapeTextGlyphsForTest;
+            view.SelectFloating(0, 1);
+            view.EnterSelectedShapeTextEditing().Should().BeTrue();
+            var rect = view.FloatingShapeRects.Should().ContainSingle().Which.Rect;
+            view.BeginShapeTextSelectionForTest(new Point(rect.X + 5, rect.Y + 6)).Should().BeTrue();
+            view.EndShapeTextSelectionForTest(new Point(rect.Right - 5, rect.Bottom - 5));
+            selectionEndParagraph = view.ShapeTextSelectionInfo?.End.TextParagraphIndex ?? -1;
+        });
+
+        if (!ran) return;
+        glyphs.Should().Contain(glyph => glyph.Character == 'R'
+            && glyph.ParagraphIndex == 0
+            && glyph.RunIndex == 0
+            && glyph.Formatting.FontFamily == "Arial"
+            && glyph.Formatting.FontSizePt == 14
+            && glyph.Formatting.Bold
+            && glyph.Formatting.Italic
+            && glyph.Formatting.Underline
+            && glyph.Formatting.Strikethrough
+            && glyph.Formatting.ColorHex == "#C00000");
+        glyphs.Should().Contain(glyph => glyph.Character == 'n' && glyph.ParagraphIndex == 1);
+        glyphs.Single(glyph => glyph.Character == 'n').Y.Should()
+            .BeGreaterThan(glyphs.Single(glyph => glyph.Character == 'R').Y);
+        selectionEndParagraph.Should().Be(1,
+            "pointer drag must resolve against the same run-aware caret layout");
+    }
+
     // ── Test 12: multiple shapes — count and both present ────────────────────────────────────────
 
     [Fact]

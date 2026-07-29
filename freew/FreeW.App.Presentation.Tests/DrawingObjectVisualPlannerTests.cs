@@ -59,6 +59,52 @@ public sealed class DrawingObjectVisualPlannerTests
     }
 
     [Fact]
+    public void RichShapeTextLayout_PreservesRunsParagraphBreaksAndCaretStops()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 120, 80);
+        var first = new Paragraph { Formatting = ParagraphFormatting.Default with { Alignment = TextAlignment.Center } };
+        first.Runs.Add(new Run("Bold", RunFormatting.Default with
+        {
+            FontFamily = "Arial",
+            FontSizePt = 14,
+            Bold = true,
+            Italic = true,
+            Underline = true,
+            Strikethrough = true,
+            ColorHex = "#C00000"
+        }));
+        first.Runs.Add(new Run(" plain", RunFormatting.Default));
+        var second = new Paragraph();
+        second.Runs.Add(new Run("next", RunFormatting.Default with { FontSizePt = 10 }));
+        shape.TextParagraphs.Add(first);
+        shape.TextParagraphs.Add(second);
+
+        var textPlan = DrawingObjectTextLayoutPlanner.BuildTextPlan(shape);
+        var layout = DrawingObjectTextLayoutPlanner.LayoutPlan(
+            textPlan,
+            120,
+            80,
+            (text, formatting) => (formatting.FontSizePt ?? 9) * (formatting.Bold ? 2 : 1),
+            formatting => formatting.FontSizePt ?? 9);
+
+        textPlan.Paragraphs.Should().HaveCount(2);
+        layout.Glyphs.Should().Contain(glyph => glyph.Character == 'B'
+            && glyph.ParagraphIndex == 0
+            && glyph.RunIndex == 0
+            && glyph.Formatting.FontFamily == "Arial"
+            && glyph.Formatting.Bold
+            && glyph.Formatting.Underline
+            && glyph.Formatting.Strikethrough
+            && glyph.Formatting.ColorHex == "#C00000");
+        layout.Glyphs.Should().Contain(glyph => glyph.Character == 'p' && glyph.ParagraphIndex == 0 && glyph.RunIndex == 1);
+        layout.Glyphs.Should().Contain(glyph => glyph.Character == 'n' && glyph.ParagraphIndex == 1);
+        layout.Glyphs.Single(glyph => glyph.Character == 'n' && glyph.ParagraphIndex == 1)
+            .Y.Should().BeGreaterThan(layout.Glyphs.Single(glyph => glyph.Character == 'B').Y);
+        layout.CaretStops.Should().Contain(stop => stop.ParagraphIndex == 0 && stop.RunIndex == 0 && stop.Offset == 4);
+        layout.CaretStops.Should().Contain(stop => stop.ParagraphIndex == 1 && stop.RunIndex == 0 && stop.Offset == 0);
+    }
+
+    [Fact]
     public void WordArtPlan_UsesTheWordArtCentreTransform()
     {
         var wordArt = new WordArt("Transform", WordArtStyle.GlowBlue, 36)
