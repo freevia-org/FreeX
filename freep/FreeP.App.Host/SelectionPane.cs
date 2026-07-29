@@ -10,15 +10,17 @@ namespace FreeP.App.Host;
 internal sealed class SelectionPane : Border
 {
     private EditingSession _editor;
+    private readonly Action? _onAccessibilityChanged;
     private readonly StackPanel _items = new();
     private readonly TextBlock _message = new();
 
     internal IReadOnlyList<FrameworkElement> AccessibilityItemsForTests =>
         _items.Children.OfType<FrameworkElement>().ToArray();
 
-    public SelectionPane(EditingSession editor)
+    public SelectionPane(EditingSession editor, Action? onAccessibilityChanged = null)
     {
         _editor = editor;
+        _onAccessibilityChanged = onAccessibilityChanged;
         Width = 320;
         Visibility = Visibility.Collapsed;
         Background = Brushes.White;
@@ -77,6 +79,7 @@ internal sealed class SelectionPane : Border
             IsVisible,
             plan.Items.Count,
             Array.FindIndex(plan.Items.ToArray(), item => item.IsSelected));
+        _onAccessibilityChanged?.Invoke();
         return plan;
     }
 

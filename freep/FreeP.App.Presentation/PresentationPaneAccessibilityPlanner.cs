@@ -43,13 +43,17 @@ public static class PresentationPaneAccessibilityPlanner
         string paneId,
         int index,
         string name,
-        string? state = null)
+        string? state = null,
+        string? stableKey = null)
     {
         var descriptor = Get(paneId);
+        var key = string.IsNullOrWhiteSpace(stableKey)
+            ? (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : stableKey;
         return new(
-            $"{descriptor.AutomationId}Item{index + 1}",
+            $"{descriptor.AutomationId}Item{key}",
             name,
-            $"{descriptor.Name} item {index + 1}.",
+            $"{descriptor.Name} item {key}.",
             index,
             state ?? string.Empty);
     }

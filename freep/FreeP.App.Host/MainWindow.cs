@@ -360,10 +360,27 @@ public sealed partial class MainWindow : Window
     internal Border? AnimPaneHostForTest => _animPaneHost;
     internal IReadOnlyList<PresentationPaneAccessibilitySnapshotEntry> PaneAccessibilitySnapshotForTests =>
         _paneAccessibility.BuildSnapshot();
+    internal string PaneAccessibilitySnapshotSerializationForTests =>
+        _paneAccessibility.SerializeSnapshot();
     internal TextBox NotesPaneForAccessibilityTests => _notesBox;
     internal Border CommentsPaneForAccessibilityTests => _commentListHost;
+    internal IReadOnlyList<FrameworkElement> CommentsPaneItemsForAccessibilityTests =>
+        _commentListPanel is null
+            ? Array.Empty<FrameworkElement>()
+            : _commentListPanel.Children
+                .OfType<FrameworkElement>()
+                .Where(item => AutomationProperties.GetAutomationId(item)
+                    .StartsWith("FreePCommentsPaneItem", StringComparison.Ordinal))
+                .ToArray();
     internal SelectionPane SelectionPaneForAccessibilityTests => _selectionPane;
+    internal IReadOnlyList<FrameworkElement> SelectionPaneItemsForAccessibilityTests =>
+        _selectionPane?.AccessibilityItemsForTests ?? Array.Empty<FrameworkElement>();
     internal AnimationPane? AnimationPaneForAccessibilityTests => _animPane;
+    internal IReadOnlyList<FrameworkElement> AnimationPaneItemsForAccessibilityTests =>
+        _animPane?.AccessibilityItemsForTests ?? Array.Empty<FrameworkElement>();
+    internal IReadOnlyList<FrameworkElement> SlidePaneItemsForAccessibilityTests =>
+        (SlidePaneHost.Child as SlidePane)?.AccessibilityItemsForTests
+        ?? Array.Empty<FrameworkElement>();
     // 16B SEAM END
 
     // ── Constructors ──────────────────────────────────────────────────────────────
@@ -550,8 +567,8 @@ public sealed partial class MainWindow : Window
         Editor  = new EditingSession(_presentation, bus);
         _selectionPane?.SetEditor(Editor);
 
-        Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); RefreshNotesPane(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); _selectionPane?.Refresh(); };
-        Editor.CurrentSlideChanged += (_, _) => { _reviewWorkflowSession.SelectedCommentIndex = null; _selectedMediaCaptionTrackIndex = null; RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); RefreshVisibleMediaCaptionPaneFromFields(); _selectionPane?.Refresh(); };
+        Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); RefreshNotesPane(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); _selectionPane?.Refresh(); RefreshPaneAccessibilityMetadata(); };
+        Editor.CurrentSlideChanged += (_, _) => { _reviewWorkflowSession.SelectedCommentIndex = null; _selectedMediaCaptionTrackIndex = null; RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); RefreshVisibleMediaCaptionPaneFromFields(); _selectionPane?.Refresh(); RefreshPaneAccessibilityMetadata(); };
         Editor.SelectionChanged += (_, _) =>
         {
             RefreshAltTextRequestPlan();
@@ -562,6 +579,7 @@ public sealed partial class MainWindow : Window
                 ShowSmartArtTextPane();
             RefreshVisibleMediaCaptionPaneFromFields();
             _selectionPane?.Refresh();
+            RefreshPaneAccessibilityMetadata();
         };
 
         // Re-attach editing layer whenever the editor is rebuilt (file open/new).
@@ -922,7 +940,7 @@ public sealed partial class MainWindow : Window
         // END 16B SEAM
 
         _readingOrderPaneHost = BuildReadingOrderPaneHost();
-        _selectionPane = new SelectionPane(Editor);
+        _selectionPane = new SelectionPane(Editor, RefreshPaneAccessibilityMetadata);
         _selectionPane.Refresh();
         _proofingPaneHost = BuildProofingPaneHost();
         _mediaCaptionPaneHost = BuildMediaCaptionPaneHost();
@@ -967,7 +985,11 @@ public sealed partial class MainWindow : Window
 
     private void RefreshPaneAccessibilityMetadata()
     {
-        if (SlidePaneHost is null || _notesBox is null || _commentListHost is null)
+        if (SlidePaneHost is null || _notesBox is null || _commentListHost is null
+            || _accessibilityCheckerPaneHost is null || _altTextPaneHost is null
+            || _readingOrderPaneHost is null || _proofingPaneHost is null
+            || _mediaCaptionPaneHost is null || _smartArtTextPaneHost is null
+            || _selectionPane is null || _animPaneHost is null)
             return;
 
         var commentPlan = LastCommentPanePlan;
@@ -3889,7 +3911,10 @@ public sealed partial class MainWindow : Window
             // Lazy construction: create the pane against the current Editor.
             if (_animPane is null || _animPaneHost.Child is null)
             {
-                _animPane = new AnimationPane(Editor, onPreview: StartAnimationPanePreview);
+                _animPane = new AnimationPane(
+                    Editor,
+                    onPreview: StartAnimationPanePreview,
+                    onAccessibilityChanged: RefreshPaneAccessibilityMetadata);
                 _animPaneHost.Child = _animPane;
             }
             _animPaneHost.Visibility = Visibility.Visible;
@@ -3904,8 +3929,12 @@ public sealed partial class MainWindow : Window
     private void RebuildAnimationPaneIfVisible()
     {
         if (_animPaneHost is null || _animPaneHost.Visibility != Visibility.Visible) return;
-        _animPane = new AnimationPane(Editor, onPreview: StartAnimationPanePreview);
+        _animPane = new AnimationPane(
+            Editor,
+            onPreview: StartAnimationPanePreview,
+            onAccessibilityChanged: RefreshPaneAccessibilityMetadata);
         _animPaneHost.Child = _animPane;
+        RefreshPaneAccessibilityMetadata();
     }
 
     private void StartAnimationPanePreview(AnimationPanePlaybackSessionPlan session)

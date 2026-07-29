@@ -53,6 +53,7 @@ public sealed class AnimationPane : Border
 
     private readonly EditingSession _editor;
     private readonly Action<AnimationPanePlaybackSessionPlan>? _onPreview;
+    private readonly Action? _onAccessibilityChanged;
 
     private readonly StackPanel _listPanel;
     private readonly StackPanel _playbackControlsPanel;
@@ -87,10 +88,12 @@ public sealed class AnimationPane : Border
     /// </param>
     public AnimationPane(
         EditingSession editor,
-        Action<AnimationPanePlaybackSessionPlan>? onPreview = null)
+        Action<AnimationPanePlaybackSessionPlan>? onPreview = null,
+        Action? onAccessibilityChanged = null)
     {
         _editor    = editor    ?? throw new ArgumentNullException(nameof(editor));
         _onPreview = onPreview;
+        _onAccessibilityChanged = onAccessibilityChanged;
 
         Background      = BackBrush;
         BorderBrush     = RowBorder;
@@ -186,6 +189,7 @@ public sealed class AnimationPane : Border
                 Margin     = new Thickness(10, 12, 10, 12),
                 TextWrapping = TextWrapping.Wrap,
             });
+            _onAccessibilityChanged?.Invoke();
             return;
         }
 
@@ -196,6 +200,8 @@ public sealed class AnimationPane : Border
             var row = BuildRow(item);
             _listPanel.Children.Add(row);
         }
+
+        _onAccessibilityChanged?.Invoke();
     }
 
     private void RenderPlaybackControls(AnimationPaneTimelinePlan plan)

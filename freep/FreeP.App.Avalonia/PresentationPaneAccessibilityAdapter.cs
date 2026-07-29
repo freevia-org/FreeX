@@ -34,9 +34,10 @@ internal sealed class PresentationPaneAccessibilityAdapter
         string paneId,
         int index,
         string name,
-        string? state = null)
+        string? state = null,
+        string? stableKey = null)
     {
-        var item = PresentationPaneAccessibilityPlanner.Item(paneId, index, name, state);
+        var item = PresentationPaneAccessibilityPlanner.Item(paneId, index, name, state, stableKey);
         AutomationProperties.SetAutomationId(control, item.AutomationId);
         AutomationProperties.SetName(control, item.Name);
         AutomationProperties.SetHelpText(control, item.HelpText);
@@ -45,6 +46,9 @@ internal sealed class PresentationPaneAccessibilityAdapter
 
     public IReadOnlyList<PresentationPaneAccessibilitySnapshotEntry> BuildSnapshot() =>
         PresentationPaneAccessibilityPlanner.BuildSnapshot(_states.Values);
+
+    public string SerializeSnapshot() =>
+        PresentationPaneAccessibilityPlanner.SerializeSnapshot(_states.Values);
 
     private static string FormatStatus(bool isVisible, int order) =>
         $"{(isVisible ? "Visible" : "Hidden")}; Order {order + 1}";
