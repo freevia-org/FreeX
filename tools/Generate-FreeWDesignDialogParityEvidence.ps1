@@ -7,6 +7,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Resolve-RepoPath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
@@ -27,7 +28,7 @@ function Get-SourceHashes {
     $hashes = [ordered]@{}
     foreach ($relativePath in ($RelativePaths | Sort-Object -Unique)) {
         $resolved = Resolve-RepoPath $relativePath
-        $hashes[$relativePath.Replace('\', '/')] = (Get-FileHash -LiteralPath $resolved -Algorithm SHA256).Hash.ToLowerInvariant()
+        $hashes[$relativePath.Replace('\', '/')] = Get-ToolFileSha256Hash -LiteralPath $resolved
     }
     $hashes
 }

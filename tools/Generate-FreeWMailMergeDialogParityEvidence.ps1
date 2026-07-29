@@ -4,6 +4,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $jsonPath = Join-Path $repo 'docs\parity\freew-mail-merge-dialog-parity-20260720.json'
 $markdownPath = Join-Path $repo 'docs\parity\freew-mail-merge-dialog-parity-20260720.md'
 
@@ -46,7 +47,7 @@ $hashes = [ordered]@{}
 foreach ($relative in $sourceFiles) {
     $path = Join-Path $repo ($relative -replace '/', '\')
     if (-not (Test-Path -LiteralPath $path)) { throw "Missing evidence input: $relative" }
-    $hashes[$relative] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hashes[$relative] = Get-ToolFileSha256Hash -LiteralPath $path
 }
 
 $evidence = [ordered]@{

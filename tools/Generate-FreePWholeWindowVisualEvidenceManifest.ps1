@@ -59,7 +59,7 @@ function Test-RecordedImage {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) {
             throw "$Label image is missing or empty: $relativePath"
         }
-        $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        $actualHash = Get-ToolFileSha256Hash -LiteralPath $path
         if ($actualHash -ne $expectedHash) {
             throw "$Label hash is stale for '$relativePath': expected $expectedHash, actual $actualHash."
         }
@@ -105,7 +105,7 @@ foreach ($comparison in $summary.comparisons) {
         @($comparison.avaloniaClientImagePath, $comparison.pixelMetrics.avaloniaImageSha256, "Avalonia client"),
         @($comparison.pixelMetrics.heatmapPath, $comparison.pixelMetrics.heatmapSha256, "heatmap"))) {
         $path = Get-EvidencePath -RelativePath $metricPath[0]
-        $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        $actualHash = Get-ToolFileSha256Hash -LiteralPath $path
         if ($actualHash -ne $metricPath[1]) {
             throw "$($metricPath[2]) hash is stale for '$scenarioId'."
         }
@@ -149,7 +149,7 @@ $files = Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File |
         [ordered]@{
             path = Get-RelativePath -Path $_.FullName
             bytes = $_.Length
-            sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            sha256 = Get-ToolFileSha256Hash -LiteralPath $_.FullName
         }
     }
 

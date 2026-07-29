@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $wpfRoot = Join-Path $root 'freew/FreeW.App.Host'
 $avaloniaRoot = Join-Path $root 'freew/FreeW.App.Avalonia'
 $outRoot = Join-Path $root 'docs/parity'
@@ -44,8 +45,8 @@ $items = foreach ($route in $routes) {
         status = $status
         shellWired = [bool]$route.wired
         followUp = $route.followUp
-        wpfSha256 = if ($wpfExists) { (Get-FileHash -Algorithm SHA256 -LiteralPath $wpfPath).Hash } else { $null }
-        avaloniaSha256 = if ($avaloniaExists) { (Get-FileHash -Algorithm SHA256 -LiteralPath $avaloniaPath).Hash } else { $null }
+        wpfSha256 = if ($wpfExists) { Get-ToolFileSha256Hash -LiteralPath $wpfPath } else { $null }
+        avaloniaSha256 = if ($avaloniaExists) { Get-ToolFileSha256Hash -LiteralPath $avaloniaPath } else { $null }
     }
 }
 

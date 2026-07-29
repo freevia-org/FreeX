@@ -48,6 +48,24 @@ function Resolve-ToolRepoPath {
     return Resolve-ToolFullPath -Path $Path -BasePath $fullRepoRoot
 }
 
+function Get-ToolFileSha256Hash {
+    param([Parameter(Mandatory = $true)][string]$LiteralPath)
+
+    $stream = [IO.File]::OpenRead($LiteralPath)
+    try {
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        try {
+            return ([BitConverter]::ToString($sha256.ComputeHash($stream)).Replace("-", "")).ToLowerInvariant()
+        }
+        finally {
+            $sha256.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 function Invoke-ToolProcess {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
