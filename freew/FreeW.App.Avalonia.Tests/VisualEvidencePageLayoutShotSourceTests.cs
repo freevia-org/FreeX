@@ -196,6 +196,11 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().NotContain("effects.GlowOpacity * 0.18");
         source.Should().NotContain("DashStyle([3, 3], 0)");
         source.Should().NotContain("$\"~{wd.Warp}\"");
+        source.Should().Contain("Text: \"FreeW CONFIDENTIAL\"");
+        source.Should().Contain("Style: WordArtStyle.GlowBlue");
+        source.Should().Contain("Warp: WordArtWarp.Wave1");
+        source.Should().Contain("OffsetAndInflate(rect, 0, 0, radius * 0.55)");
+        source.Should().Contain("EffectBrush(glowColor, effects.GlowOpacity * 0.36)");
     }
 
     [Fact]
