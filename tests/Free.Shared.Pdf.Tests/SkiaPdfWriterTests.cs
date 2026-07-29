@@ -109,6 +109,21 @@ public sealed class SkiaPdfWriterTests
     }
 
     [Fact]
+    public void WriteToBytes_EmbedsFontForNonWinAnsiText()
+    {
+        var page = new PdfContentPage(240, 120, new PdfDrawOp[]
+        {
+            new PdfText(12, 80, 18, PdfFontFace.Regular, new PdfColor(0, 0, 0), "Привет 世界 Καλημέρα"),
+        });
+
+        var bytes = SkiaPdfWriter.WriteToBytes(new PdfContentDocument(new[] { page }));
+
+        bytes.Should().StartWith("%PDF-"u8.ToArray());
+        bytes.Should().Contain("/Font"u8.ToArray());
+        bytes.Length.Should().BeGreaterThan(1000);
+    }
+
+    [Fact]
     public void Write_AcceptsLinearGradientShapeAndPathOps()
     {
         var gradient = new PdfLinearGradient(

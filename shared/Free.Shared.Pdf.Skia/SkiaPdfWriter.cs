@@ -17,6 +17,32 @@ namespace Free.Shared.Pdf.Skia;
 /// </summary>
 public static class SkiaPdfWriter
 {
+    /// <summary>Serializes the shared content document to an embedded-font PDF.</summary>
+    public static byte[] WriteToBytes(PdfContentDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        using var stream = new MemoryStream();
+        Write(document, stream);
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Uses the Unicode-capable Skia backend when its native asset is available and retains the
+    /// dependency-free writer as a platform fallback when Skia cannot initialize.
+    /// </summary>
+    public static byte[] WriteToBytesWithPortableFallback(PdfContentDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        try
+        {
+            return WriteToBytes(document);
+        }
+        catch (Exception ex) when (SkiaPdfAvailabilityHelper.IsSkiaUnavailable(ex))
+        {
+            return PortablePdfWriter.WriteToBytes(document);
+        }
+    }
+
     public static IReadOnlyList<byte[]> RenderPagesToPng(PdfContentDocument document, int dpi = 96)
     {
         ArgumentNullException.ThrowIfNull(document);
