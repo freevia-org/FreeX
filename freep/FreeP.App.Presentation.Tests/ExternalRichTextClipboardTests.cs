@@ -266,6 +266,27 @@ Left\cell{\ul Right}\ul0\cell\row}";
     }
 
     [Fact]
+    public void WordTableCellStyles_PreserveSolidFillAndCommonBorders()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\colortbl;\red255\green255\blue0;\red31\green78\blue121;}
+\trowd\clcbpat1\clbrdrl\brdrs\brdrw10\brdrcf2\cellx1440\cellx2880
+Header\cell Value\cell\row}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.TableCellStyles.Should().HaveCount(2);
+        payload.TableCellStyles![0].FillRgb.Should().Be(0xFFFF00);
+        var left = payload.TableCellStyles[0].Left;
+        left.Should().NotBeNull();
+        left!.ColorRgb.Should().Be(0x1F4E79);
+        left.WidthPt.Should().Be(0.5);
+        payload.TableCellStyles[1].FillRgb.Should().BeNull();
+    }
+
+    [Fact]
     public void NestedTableGroups_UseSameBoundedCellAndRowProjection()
     {
         const string rtf =

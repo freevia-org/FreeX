@@ -1891,10 +1891,15 @@ public sealed class EditingSession
     /// </summary>
     public SlideShape? InsertTableFromClipboard(
         TextBody body,
-        IReadOnlyList<long>? columnWidthsEmu = null)
+        IReadOnlyList<long>? columnWidthsEmu = null,
+        IReadOnlyList<InCanvasRichClipboardTableCellStyle>? cellStyles = null)
     {
         if (CurrentSlide is null
-            || !ClipboardTablePlanner.TryBuildStandaloneTable(body, columnWidthsEmu, out var table))
+            || !ClipboardTablePlanner.TryBuildStandaloneTable(
+                body,
+                columnWidthsEmu,
+                cellStyles,
+                out var table))
             return null;
 
         long cx = table.ColumnWidthsEmu.Sum();
