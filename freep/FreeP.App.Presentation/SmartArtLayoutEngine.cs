@@ -78,6 +78,9 @@ public static class SmartArtLayoutEngine
 
         var stylePlan = SmartArtStylePlanner.Build(data.Family, quickStyle, colors, theme, effectiveClrMap);
 
+        if (IsVerticalBulletListLayout(data.LayoutUniqueId))
+            return LayoutVerticalBulletList(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsPictureCaptionListLayout(data.LayoutUniqueId))
             return LayoutPictureCaptionList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -224,6 +227,17 @@ public static class SmartArtLayoutEngine
             CollectPreOrder(child, output);
     }
 
+    private static List<SmartArtNode> FlattenVisibleHierarchyNodes(SmartArtData data)
+    {
+        var all = new List<SmartArtNode>();
+        foreach (var root in data.Nodes)
+            CollectPreOrder(root, all);
+
+        return all
+            .Where(node => !string.IsNullOrWhiteSpace(node.Text))
+            .ToList();
+    }
+
     // ── Color palette ──────────────────────────────────────────────────────────────────────────
 
     // ── Shape builder helpers ──────────────────────────────────────────────────────────────────
@@ -262,6 +276,22 @@ public static class SmartArtLayoutEngine
         if (geometryAdjustment is double adjustment)
             shape.PresetGeometryAdjustments["adj"] = adjustment;
 
+        return shape;
+    }
+
+    private static SlideShape MakeBulletListBox(
+        uint id, SmartArtNode node, SmartArtNodeStyle style,
+        long x, long y, long cx, long cy)
+    {
+        var shape = MakeBox(id, node.Text, style, x, y, cx, cy, NodeFontSizePt, DrawingShapeKind.Rectangle);
+        var paragraph = shape.TextBody!.Paragraphs[0];
+        paragraph.Align = TextAlign.Left;
+        paragraph.BulletKind = BulletKind.Char;
+        paragraph.BulletChar = "•";
+        paragraph.BulletColor = style.Text;
+        paragraph.BulletSizePt = NodeFontSizePt;
+        paragraph.MarginLeftEmu = EmuPerDip * (16 + Math.Max(node.Level, 0) * 18);
+        paragraph.IndentEmu = -EmuPerDip * 10;
         return shape;
     }
 
@@ -1019,6 +1049,42 @@ public static class SmartArtLayoutEngine
         {
             var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
             shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, leftX, curY, boxW, boxH));
+            curY += boxH + gapY;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Vertical Bullet List geometry: flatten the authored hierarchy into an ordered
+    /// stack of independently editable bullet paragraphs. PowerPoint treats this
+    /// layout as a list, not an org-chart tree, so no parent-child connectors are emitted.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutVerticalBulletList(
+        SmartArtData data,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var nodes = FlattenVisibleHierarchyNodes(data);
+        var shapes = new List<SlideShape>(nodes.Count);
+        if (nodes.Count == 0)
+            return shapes;
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapY = Math.Max((long)(fcy * GapFrac), 1L);
+        long boxW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long availableH = Math.Max(fcy - 2 * outerPadY - (nodes.Count - 1) * gapY, 1L);
+        long boxH = Math.Max(availableH / nodes.Count, 1L);
+        long curY = fy + outerPadY;
+
+        for (var index = 0; index < nodes.Count; index++)
+        {
+            var node = nodes[index];
+            var style = stylePlan.GetNodeStyle(index, node.Level, SmartArtFamily.List);
+            shapes.Add(MakeBulletListBox(
+                (uint)(290 + index), node, style,
+                fx + outerPadX, curY, boxW, boxH));
             curY += boxH + gapY;
         }
 
@@ -3092,6 +3158,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "verticalchevronlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsVerticalBulletListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "verticalbulletlist", StringComparison.Ordinal);
     }
 
     private static bool IsHorizontalBulletListLayout(string uniqueId)
