@@ -911,6 +911,8 @@ public sealed partial class MainWindow : Window
             LoadPresentationAsSaved(_presentation, path: null);
         }
 
+        SeedPhysicalHyperlinkFixtureIfRequested();
+
         Content = windowFrame.Root;
         UpdateStatus();
         if (startupOpenError is not null)
@@ -954,6 +956,58 @@ public sealed partial class MainWindow : Window
             DurationMs = 500,
         });
         RefreshCanvas();
+    }
+
+    private void SeedPhysicalHyperlinkFixtureIfRequested()
+    {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("FREEP_PHYSICAL_HYPERLINK_SEED"),
+                "1",
+                StringComparison.Ordinal) ||
+            _presentation.Slides.Count != 1)
+        {
+            return;
+        }
+
+        var firstSlide = Editor.CurrentSlide ?? _presentation.Slides[0];
+        var shapeWidth = DrawingMlCoordinateUnits.EmuPerInch * 4;
+        var shapeHeight = DrawingMlCoordinateUnits.EmuPerInch * 2;
+        var linkShape = new SlideShape
+        {
+            Id = 9001,
+            Name = "Physical internal-slide hyperlink target",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = (_presentation.SlideSizeCxEmu - shapeWidth) / 2,
+            OffsetYEmu = (_presentation.SlideSizeCyEmu - shapeHeight) / 2,
+            ExtentCxEmu = shapeWidth,
+            ExtentCyEmu = shapeHeight,
+            Fill = new ShapeFill.Solid(new SrgbColor(0x44, 0x72, 0xC3)),
+            TextBody = new TextBody
+            {
+                Wrap = true,
+                Paragraphs = { new Paragraph { Runs = { new Run { Text = "CLICK LINK TO SLIDE 2" } } } },
+            },
+        };
+        Editor.AddShape(linkShape);
+        if (linkShape.ExtentCxEmu <= 0 || linkShape.ExtentCyEmu <= 0 ||
+            !firstSlide.Shapes.Any(shape => shape.Id == linkShape.Id))
+        {
+            throw new InvalidOperationException("Physical hyperlink fixture did not create a visible slide-1 rectangle.");
+        }
+        Editor.InsertSlide();
+        Editor.InsertTextBox("TARGET SLIDE 2");
+        Editor.SelectSlide(0);
+        Editor.Select(linkShape.Id);
+        RefreshCanvas();
+        var fixturePostconditionPath = Environment.GetEnvironmentVariable("FREEP_PHYSICAL_HYPERLINK_FIXTURE_POSTCONDITION");
+        if (!string.IsNullOrWhiteSpace(fixturePostconditionPath))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(fixturePostconditionPath)!);
+            File.WriteAllText(
+                fixturePostconditionPath,
+                $"slide1Id={firstSlide.Id}\nslide2Id={_presentation.Slides[1].Id}\ncurrentSlideIndex={Editor.CurrentSlideIndex}\nshapeOffsetXEmu={linkShape.OffsetXEmu}\nshapeOffsetYEmu={linkShape.OffsetYEmu}\nshapeExtentCxEmu={linkShape.ExtentCxEmu}\nshapeExtentCyEmu={linkShape.ExtentCyEmu}\nslideSizeCxEmu={_presentation.SlideSizeCxEmu}\nslideSizeCyEmu={_presentation.SlideSizeCyEmu}\n");
+        }
     }
 
     private void ApplyWindowIcon()
@@ -3814,7 +3868,15 @@ public sealed partial class MainWindow : Window
                 Tooltip = applyPlan.Tooltip,
             };
             if (!editsSelectedRun || _textEditor?.TryApplySelectedShapeRunHyperlink(hyperlink) != true)
+            {
                 Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip);
+                var authoringPostconditionPath = Environment.GetEnvironmentVariable("FREEP_PHYSICAL_HYPERLINK_AUTHORING_POSTCONDITION");
+                if (!string.IsNullOrWhiteSpace(authoringPostconditionPath))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(authoringPostconditionPath)!);
+                    File.WriteAllText(authoringPostconditionPath, $"selectedShapeId={Editor.SelectedShapeIds.SingleOrDefault()}\ntargetSlideId={applyPlan.TargetSlideId}\n");
+                }
+            }
         }
 
         return applyPlan;
