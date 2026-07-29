@@ -30,6 +30,8 @@ public sealed class AccessibilityValidationSourceTests
         source.Should().Contain("AutomationProperties.GetName(control)");
         source.Should().Contain("AutomationProperties.GetItemStatus(control)");
         source.Should().Contain("control.GetType().Name");
+        source.Should().Contain("FocusRepresentativePanesForAccessibilityValidation");
+        source.Should().Contain("atspi-ready.json");
         source.Should().Contain("atspi-result.json");
     }
 
@@ -46,10 +48,28 @@ public sealed class AccessibilityValidationSourceTests
         probe.Should().Contain("role_name in contract[\"roles\"]");
         probe.Should().Contain("getRoleName()");
         probe.Should().Contain("queryValue()");
+        probe.Should().Contain("object:state-changed:focused");
+        probe.Should().Contain("xdotool");
+        probe.Should().Contain("focusTraversal");
+        probe.Should().Contain("focusable");
+        probe.Should().Contain("Labels are excluded by role matching");
         probe.Should().Contain("not-proven");
-        probe.Should().Contain("contained a FreeP-titled window");
+        probe.Should().Contain("uniquely identified FreeP window");
         dockerfile.Should().Contain("at-spi2-core");
         dockerfile.Should().Contain("python3-pyatspi");
+    }
+
+    [Fact]
+    public void Focus_evidence_schema_requires_the_event_trail_contract()
+    {
+        var schema = File.ReadAllText(RepoFile("tools/LinuxInteractiveDocker/freep-atspi-validation.schema.json"));
+
+        schema.Should().Contain("\"schemaVersion\": { \"const\": 2 }");
+        schema.Should().Contain("os-atspi-x11-focus-events");
+        schema.Should().Contain("focusEvents");
+        schema.Should().Contain("expectedFocusOrder");
+        schema.Should().Contain("keyboardTraversal");
+        schema.Should().Contain("focusEventCount");
     }
 
     [Fact]
@@ -61,6 +81,9 @@ public sealed class AccessibilityValidationSourceTests
         runner.Should().Contain("run-freep-accessibility-probe.sh");
         runner.Should().Contain("/tmp/freep-accessibility-probe.sh");
         runner.Should().Contain("/bin/bash /tmp/freep-accessibility-probe.sh");
+        runner.Should().Contain("os-atspi-x11-focus-events");
+        runner.Should().Contain("expectedFocusOrder");
+        runner.Should().Contain("wave59-report");
     }
 
     private static string RepoFile(string relativePath) =>

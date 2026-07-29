@@ -615,6 +615,10 @@ public sealed partial class MainWindow : Window
     internal bool IsPrintOptionsPaneVisible => _printOptionsPaneHost?.IsVisible == true;
     internal IReadOnlyList<PresentationPaneAccessibilitySnapshotEntry> PaneAccessibilitySnapshotForTests =>
         _paneAccessibility.BuildSnapshot();
+    internal void FocusRepresentativePanesForAccessibilityValidation()
+    {
+        _slidePaneList.Focus();
+    }
     internal string PaneAccessibilitySnapshotSerializationForTests =>
         _paneAccessibility.SerializeSnapshot();
     internal TextBox NotesPaneForAccessibilityTests => _notesBox;
