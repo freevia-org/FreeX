@@ -778,6 +778,119 @@ set_cell_text_without_save() {
     [[ "$(copy_cell_formula "$column_offset" "$row_offset" "$address" || true)" == "$value" ]]
 }
 
+select_sheet_tab() {
+    local index="$1" tab_y="$(sheet_tab_y)" tab_x
+    tab_x="$(sheet_tab_center_x "$index")"
+    focus_app
+    xdotool_mousemove_sync "$tab_x" "$tab_y" click 1
+    sleep "$settle_seconds"
+}
+
+select_sheet_tab_range_end() {
+    local index="$1" tab_y="$(sheet_tab_y)" tab_x
+    tab_x="$(sheet_tab_center_x "$index")"
+    focus_app
+    # Excel-style 3-D point selection extends the sheet span with Shift-click;
+    # typing a literal colon produces the invalid Sheet2!B2:Sheet3!B2 form.
+    xdotool keydown --window "$window_id" Shift_L
+    xdotool_mousemove_sync "$tab_x" "$tab_y" click 1
+    xdotool keyup --window "$window_id" Shift_L
+    sleep "$settle_seconds"
+}
+
+normalize_formula() {
+    printf '%s' "$1" | tr -d "'\$ " | tr '[:lower:]' '[:upper:]'
+}
+
+probe_formula_bar_point_mode_3d() {
+    local tab_y first_tab_x plus_x created_count
+    local source_first="" source_last="" committed_formula="" committed_display=""
+    local normalized_formula="" formula_passed=false result_passed=false formula_status=false result_status=false
+    local artifacts="formula-3d-create-before.png;formula-3d-create-after.png;formula-3d-sheet2-seeded.png;formula-3d-sheet3-seeded.png;formula-3d-point-start.png;formula-3d-sheet2-point.png;formula-3d-sheet3-point.png;formula-3d-committed-sheet3.png;formula-3d-committed.png;formula-3d-postcondition.txt"
+
+    tab_y="$(sheet_tab_y)"
+    first_tab_x="$(sheet_tab_center_x 0)"
+    capture_sheet_tab_strip "formula-3d-create-before.png"
+    for created_count in 0 1; do
+        plus_x="$(sheet_plus_center_x "$created_count")"
+        focus_app
+        xdotool_mousemove_sync "$plus_x" "$tab_y" click 1
+        sleep "$settle_seconds"
+    done
+    capture_sheet_tab_strip "formula-3d-create-after.png"
+
+    # Return to the original worksheet before seeding the two physically created sources.
+    focus_app
+    xdotool_mousemove_sync "$first_tab_x" "$tab_y" click 1
+    sleep "$settle_seconds"
+    if ! select_sheet_tab 1 || ! set_cell_text_without_save 1 1 B2 10; then
+        write_artifact "formula-3d-postcondition.txt" "created-sheets=2\nseed-sheet2=false\nseed-sheet3=false\n"
+        record "formula-bar-point-mode-3d-sheet-range" "failed" "formula-3d-create-before.png; formula-3d-create-after.png; formula-3d-postcondition.txt" "Could not physically create/select Sheet2 and seed its B2 source value." "$artifacts"
+        return
+    fi
+    capture_sheet_tab_strip "formula-3d-sheet2-seeded.png"
+    source_first="$(copy_cell_formula 1 1 B2 || true)"
+
+    if ! select_sheet_tab 2 || ! set_cell_text_without_save 1 1 B2 20; then
+        write_artifact "formula-3d-postcondition.txt" "created-sheets=2\nseed-sheet2=$source_first\nseed-sheet3=false\n"
+        record "formula-bar-point-mode-3d-sheet-range" "failed" "formula-3d-sheet2-seeded.png; formula-3d-postcondition.txt" "Sheet2 was seeded, but Sheet3 could not be physically selected and seeded." "$artifacts"
+        return
+    fi
+    capture_sheet_tab_strip "formula-3d-sheet3-seeded.png"
+    source_last="$(copy_cell_formula 1 1 B2 || true)"
+
+    # Enter a real 3-D range through the formula bar. The sheet-tab and cell clicks are
+    # physical X11 point-mode input; Shift-click makes the second sheet extend the span.
+    select_sheet_tab 0
+    if select_cell 6 9 G10; then
+        send_key ctrl+F2
+        send_key ctrl+a
+        type_text "=SUM("
+        send_key F2
+        send_key F2
+        capture "formula-3d-point-start.png"
+
+        # A 3-D point range is formed by choosing the first and last sheet before
+        # choosing the shared cell. Selecting Sheet2!B2 first would create a normal
+        # single-sheet reference and append a second reference to it.
+        select_sheet_tab 1
+        capture "formula-3d-sheet2-point.png"
+        select_sheet_tab_range_end 2
+        if select_cell 1 1 B2; then
+            capture "formula-3d-sheet3-point.png"
+            type_text ")"
+            send_key Return
+            # Commit leaves Sheet3 active. Retain that state, then return to the
+            # destination worksheet before reading G10 so the clipboard assertion
+            # cannot accidentally read Sheet3!G10.
+            capture "formula-3d-committed-sheet3.png"
+            select_sheet_tab 0
+            committed_formula="$(copy_cell_formula 6 9 G10 || true)"
+            committed_display="$(copy_cell_display 6 9 G10 || true)"
+            select_cell 0 0 A1 || true
+            capture "formula-3d-committed.png"
+        fi
+    fi
+
+    normalized_formula="$(normalize_formula "$committed_formula")"
+    if [[ "$normalized_formula" == "=SUM(SHEET2:SHEET3!B2)" ]]; then
+        formula_passed=true
+    fi
+    if [[ "$committed_display" =~ ^30([.]0+)?$ ]]; then
+        result_passed=true
+    fi
+    formula_status=$([[ "$formula_passed" == true ]] && printf true || printf false)
+    result_status=$([[ "$result_passed" == true ]] && printf true || printf false)
+    write_artifact "formula-3d-postcondition.txt" \
+        "created-sheets=2\nsource-sheet2-b2=$source_first\nsource-sheet3-b2=$source_last\ncommit-visible-sheet=Sheet3\nformula-read-sheet=Sheet1\ncommitted-formula=$committed_formula\nnormalized-formula=$normalized_formula\ncommitted-display=$committed_display\nformula-3d-reference=$formula_status\ncalculated-result=$result_status\n"
+    if [[ "$source_first" == "10" && "$source_last" == "20" && "$formula_passed" == true && "$result_passed" == true ]]; then
+        record "formula-bar-point-mode-3d-sheet-range" "passed" "formula-3d-point-start.png; formula-3d-sheet2-point.png; formula-3d-sheet3-point.png; formula-3d-committed.png; formula=$committed_formula; result=$committed_display" "Two real worksheets were created and selected through X11 while formula-bar point mode committed and evaluated a 3-D Sheet2:Sheet3 B2 reference." "$artifacts"
+    else
+        record "formula-bar-point-mode-3d-sheet-range" "failed" "formula-3d-point-start.png; formula-3d-sheet2-point.png; formula-3d-sheet3-point.png; formula-3d-committed.png; formula-3d-postcondition.txt" "The physical cross-sheet point sequence did not prove Sheet2:Sheet3 B2 or the expected result 30 (formula='$committed_formula', result='$committed_display')." "$artifacts"
+    fi
+    dismiss_overlays
+}
+
 probe_sheet_tabs() {
     local tab_y left_nav_x right_nav_x first_tab_x sheet2_x sheet3_x top
     local before_value right_value left_value before_second before_third after_second after_third
@@ -1384,6 +1497,19 @@ if [[ "$probe_selector" == "autofilter-recalculation" ]]; then
     probe_autofilter_recalculation
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused AutoFilter recalculation probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "formula-3d-point" ]]; then
+    # Focused iteration mode for the physical multi-sheet formula point-entry slice.
+    probe_formula_bar_point_mode_3d
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused 3-D formula point probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
