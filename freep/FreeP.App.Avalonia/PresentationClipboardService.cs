@@ -414,8 +414,8 @@ internal sealed class AvaloniaPresentationClipboardService(
                 ?? ExternalRichTextClipboardPlanner.TryParseRtf(content.RtfBytes);
             if (payload is not null)
             {
-                if (payload.HasImage)
-                    request.Editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
+                foreach (var image in payload.GetImagePayloads())
+                    request.Editor.InsertPicture(image.Bytes, image.ContentType);
                 var table = payload.ContainsTable
                     ? request.Editor.InsertTableFromClipboard(
                         payload.Body,
@@ -442,8 +442,8 @@ internal sealed class AvaloniaPresentationClipboardService(
             var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(content.XamlPackageBytes);
             if (payload is not null)
             {
-                if (payload.HasImage)
-                    request.Editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
+                foreach (var image in payload.GetImagePayloads())
+                    request.Editor.InsertPicture(image.Bytes, image.ContentType);
                 var table = payload.ContainsTable
                     ? request.Editor.InsertTableFromClipboard(
                         payload.Body,

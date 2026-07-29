@@ -261,6 +261,7 @@ public static class ExternalRichTextClipboardPlanner
         private LegacyListDefinition? _legacyList;
         private readonly HashSet<(int ListId, int Level)> _seenListLevels = new();
         private readonly List<byte> _pictureBytes = new();
+        private readonly List<InCanvasRichClipboardImage> _picturePayloads = new();
         private int _picturePendingNibble = -1;
         private bool _pictureCaptureStarted;
 
@@ -291,15 +292,17 @@ public static class ExternalRichTextClipboardPlanner
             }
 
             EnsureParagraph();
-            var picture = TryGetPicturePayload();
+            FinalizePictureCapture();
+            var firstPicture = _picturePayloads.FirstOrDefault();
             return new InCanvasRichClipboardPayload(
                 _body,
                 InCanvasTextEditPlanner.ExtractPlainText(_body),
-                ImageBytes: picture.Bytes,
-                ImageContentType: picture.ContentType,
+                ImageBytes: firstPicture?.Bytes,
+                ImageContentType: firstPicture?.ContentType,
                 ContainsTable: _containsTable,
                 TableColumnWidthsEmu: _tableColumnWidthsEmu,
-                TableCellStyles: _tableCellStyles.Count == 0 ? null : _tableCellStyles);
+                TableCellStyles: _tableCellStyles.Count == 0 ? null : _tableCellStyles,
+                ImagePayloads: _picturePayloads.Count == 0 ? null : _picturePayloads.ToArray());
         }
 
         private bool ReadNext()
@@ -569,18 +572,11 @@ public static class ExternalRichTextClipboardPlanner
                     }
                     break;
                 case "pict":
-                    if (!_pictureCaptureStarted && _pictureBytes.Count == 0)
-                    {
-                        _pictureCaptureStarted = true;
-                        _picturePendingNibble = -1;
-                        _state.Destination = Destination.Picture;
-                        _state.SkipOutput = true;
-                    }
-                    else
-                    {
-                        _state.Destination = Destination.Skip;
-                        _state.SkipOutput = true;
-                    }
+                    FinalizePictureCapture();
+                    _pictureCaptureStarted = true;
+                    _picturePendingNibble = -1;
+                    _state.Destination = Destination.Picture;
+                    _state.SkipOutput = true;
                     break;
                 case "pngblip":
                     break;
@@ -835,18 +831,20 @@ public static class ExternalRichTextClipboardPlanner
                 _pictureBytes.Add(_bytes[_position]);
         }
 
-        private (byte[]? Bytes, string? ContentType) TryGetPicturePayload()
+        private void FinalizePictureCapture()
         {
-            if (_pictureBytes.Count == 0)
-                return (null, null);
+            if (!_pictureCaptureStarted)
+                return;
 
             byte[] payload = _pictureBytes.ToArray();
             if (HasPrefix(payload, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))
-                return (payload, "image/png");
-            if (HasPrefix(payload, [0xFF, 0xD8, 0xFF]))
-                return (payload, "image/jpeg");
+                _picturePayloads.Add(new InCanvasRichClipboardImage(payload, "image/png"));
+            else if (HasPrefix(payload, [0xFF, 0xD8, 0xFF]))
+                _picturePayloads.Add(new InCanvasRichClipboardImage(payload, "image/jpeg"));
 
-            return (null, null);
+            _pictureBytes.Clear();
+            _picturePendingNibble = -1;
+            _pictureCaptureStarted = false;
         }
 
         private static bool HasPrefix(byte[] value, byte[] prefix)

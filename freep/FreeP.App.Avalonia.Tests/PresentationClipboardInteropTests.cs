@@ -437,6 +437,30 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task External_Rtf_multiple_pictures_are_all_pasted_as_editable_shapes()
+    {
+        var jpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 };
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                RtfBytes: Encoding.ASCII.GetBytes(
+                    @"{\rtf1\ansi Before {\pict\pngblip " + Convert.ToHexString(Png)
+                    + @"} middle {\pict\jpegblip " + Convert.ToHexString(jpeg) + @"} After}")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.RichText);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(3);
+        editor.CurrentSlide.Shapes[0].Picture!.Bytes.Should().Equal(Png);
+        editor.CurrentSlide.Shapes[1].Picture!.Bytes.Should().Equal(jpeg);
+        editor.CurrentSlide.Shapes[1].Picture!.ContentType.Should().Be("image/jpeg");
+        editor.CurrentSlide.Shapes[2].TextBody!.Paragraphs.Single().Runs
+            .Select(run => run.Text)
+            .Should().Contain(text => text.Contains("Before ", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task XamlPackage_table_is_pasted_as_native_editable_table()
     {
         var clipboard = new FakeSystemClipboard
