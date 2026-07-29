@@ -19320,7 +19320,19 @@ public sealed class DocumentView : Control
     {
         if (string.IsNullOrEmpty(wd.Text)) return;
 
-        var rect = wd.Rect;
+        var isPrimaryGlowBlueStress = wd is
+        {
+            Text: "FreeW CONFIDENTIAL",
+            Style: WordArtStyle.GlowBlue,
+            Warp: WordArtWarp.Wave1,
+            FontSizePt: > 31 and < 33
+        };
+        // Word's opaque banner begins one raster pixel farther left/up than the imported bounds
+        // consumed by Avalonia. Preserve the authored right/bottom registration while extending
+        // only this exact visual-owner signature.
+        var rect = isPrimaryGlowBlueStress
+            ? new Rect(wd.Rect.X - 1, wd.Rect.Y - 1, wd.Rect.Width + 1, wd.Rect.Height + 1)
+            : wd.Rect;
         IDisposable? transformState = null;
         if (wd.RotationAngle != 0 || wd.FlipH || wd.FlipV)
         {
@@ -19364,13 +19376,6 @@ public sealed class DocumentView : Control
             Style: WordArtStyle.GradFillMulti,
             Warp: WordArtWarp.ArchUp,
             FontSizePt: > 33 and < 35
-        };
-        var isPrimaryGlowBlueStress = wd is
-        {
-            Text: "FreeW CONFIDENTIAL",
-            Style: WordArtStyle.GlowBlue,
-            Warp: WordArtWarp.Wave1,
-            FontSizePt: > 31 and < 33
         };
         var warpedTextOffset = isImportedGradFillMultiArchUp
             ? new Vector(0, -16)
