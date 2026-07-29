@@ -10,21 +10,17 @@ namespace FreeX.App.Avalonia.Tests.Parity;
 public sealed class ConditionalFormatOpenedStateEvidenceTests
 {
     [Fact]
-    public void OpenedStateEvidence_TracksConditionalFormatClassifierRows()
+    public void OpenedStateEvidence_TracksConditionalFormatRuntimeCatalog()
     {
         using var document = LoadEvidenceDocument();
         var root = document.RootElement;
         var summary = root.GetProperty("summary");
 
         Assert.Equal("freex.parity.conditional-format-opened-state-evidence.v1", root.GetProperty("schema").GetString());
-        Assert.Equal(34, summary.GetProperty("conditionalFormatPopupGalleryRows").GetInt32());
+        Assert.Equal(38, summary.GetProperty("conditionalFormatPopupGalleryRows").GetInt32());
         Assert.Equal(38, summary.GetProperty("conditionalFormatPopupCatalogItems").GetInt32());
 
-        var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
-        var classifierRows = FunctionalParityClassifier
-            .Classify(FunctionalParityMatrix.Compute(wpf))
-            .Where(FunctionalParityClassifier.IsConditionalFormattingGalleryRow)
-            .Select(row => row.MatrixRow.CommandId)
+        var catalogRows = FunctionalParityClassifier.ConditionalFormattingGalleryRows
             .OrderBy(id => id, StringComparer.Ordinal)
             .ToArray();
 
@@ -34,7 +30,7 @@ public sealed class ConditionalFormatOpenedStateEvidenceTests
             .OrderBy(id => id, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(classifierRows, evidenceRows);
+        Assert.Equal(catalogRows, evidenceRows);
     }
 
     [Fact]
