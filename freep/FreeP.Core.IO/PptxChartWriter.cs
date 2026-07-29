@@ -304,27 +304,19 @@ internal static class PptxChartWriter
         if (layout is null)
             return null;
 
-        bool hasUnsupportedMode =
-            layout.XMode == ChartManualLayoutMode.Unsupported ||
-            layout.YMode == ChartManualLayoutMode.Unsupported ||
-            layout.WidthMode == ChartManualLayoutMode.Unsupported ||
-            layout.HeightMode == ChartManualLayoutMode.Unsupported;
         var manualLayout = new XElement(C + "manualLayout");
         if (!string.IsNullOrWhiteSpace(layout.LayoutTarget))
             manualLayout.Add(new XElement(C + "layoutTarget", new XAttribute("val", layout.LayoutTarget)));
 
-        if (!hasUnsupportedMode)
-        {
-            manualLayout.Add(
-                new XElement(C + "xMode", new XAttribute("val", ToManualLayoutModeValue(layout.XMode))),
-                new XElement(C + "yMode", new XAttribute("val", ToManualLayoutModeValue(layout.YMode))),
-                new XElement(C + "wMode", new XAttribute("val", ToManualLayoutModeValue(layout.WidthMode))),
-                new XElement(C + "hMode", new XAttribute("val", ToManualLayoutModeValue(layout.HeightMode))),
-                ManualLayoutValueEl("x", layout.X),
-                ManualLayoutValueEl("y", layout.Y),
-                ManualLayoutValueEl("w", layout.Width),
-                ManualLayoutValueEl("h", layout.Height));
-        }
+        manualLayout.Add(
+            new XElement(C + "xMode", new XAttribute("val", ToManualLayoutModeValue(layout.XMode, layout.RawXModeToken))),
+            new XElement(C + "yMode", new XAttribute("val", ToManualLayoutModeValue(layout.YMode, layout.RawYModeToken))),
+            new XElement(C + "wMode", new XAttribute("val", ToManualLayoutModeValue(layout.WidthMode, layout.RawWidthModeToken))),
+            new XElement(C + "hMode", new XAttribute("val", ToManualLayoutModeValue(layout.HeightMode, layout.RawHeightModeToken))),
+            ManualLayoutValueEl("x", layout.X),
+            ManualLayoutValueEl("y", layout.Y),
+            ManualLayoutValueEl("w", layout.Width),
+            ManualLayoutValueEl("h", layout.Height));
 
         return manualLayout.HasElements
             ? new XElement(C + "layout", manualLayout)
@@ -336,8 +328,10 @@ internal static class PptxChartWriter
             ? new XElement(C + localName, new XAttribute("val", value.Value.ToString("G", CultureInfo.InvariantCulture)))
             : null;
 
-    private static string ToManualLayoutModeValue(ChartManualLayoutMode mode) =>
-        mode == ChartManualLayoutMode.Edge ? "edge" : "factor";
+    private static string ToManualLayoutModeValue(ChartManualLayoutMode mode, string? rawToken) =>
+        mode == ChartManualLayoutMode.Unsupported && !string.IsNullOrWhiteSpace(rawToken)
+            ? rawToken
+            : mode == ChartManualLayoutMode.Edge ? "edge" : "factor";
 
     /// <summary>Dispatches to the correct chart-type builder using the given axId pair.</summary>
     private static XElement? BuildChartTypeEl(

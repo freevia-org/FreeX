@@ -1474,6 +1474,60 @@ public sealed class PptxPackageRetentionTests
     }
 
     [Fact]
+    public void ReadWriteRead_UnknownChartManualLayoutMode_PreservesTokenAndCoordinates()
+    {
+        using var source = BuildPptxWithChartManualLayoutAndLegendOverlay();
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var chartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            var manualLayout = chartXml.Root!
+                .Element(ChartNs + "chart")!
+                .Element(ChartNs + "plotArea")!
+                .Element(ChartNs + "layout")!
+                .Element(ChartNs + "manualLayout")!;
+            manualLayout.Element(ChartNs + "xMode")!.SetAttributeValue("val", "futureMode");
+            WriteXml(archive, "ppt/charts/chart1.xml", chartXml);
+        }
+
+        source.Position = 0;
+        var loaded = PptxPackageReader.Read(source);
+        var layout = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart)
+            .Chart!.PlotAreaManualLayout!;
+
+        layout.XMode.Should().Be(ChartManualLayoutMode.Unsupported);
+        layout.RawXModeToken.Should().Be("futureMode");
+        layout.YMode.Should().Be(ChartManualLayoutMode.Factor);
+        layout.X.Should().BeApproximately(0.12, 0.0001);
+        layout.Y.Should().BeApproximately(0.18, 0.0001);
+        layout.Width.Should().BeApproximately(0.68, 0.0001);
+        layout.Height.Should().BeApproximately(0.62, 0.0001);
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        using (var savedArchive = new ZipArchive(new MemoryStream(saved.ToArray()), ZipArchiveMode.Read))
+        {
+            var savedManualLayout = LoadXml(savedArchive, "ppt/charts/chart1.xml")
+                .Root!
+                .Element(ChartNs + "chart")!
+                .Element(ChartNs + "plotArea")!
+                .Element(ChartNs + "layout")!
+                .Element(ChartNs + "manualLayout")!;
+            savedManualLayout.Element(ChartNs + "xMode")!.Attribute("val")!.Value.Should().Be("futureMode");
+            savedManualLayout.Element(ChartNs + "yMode")!.Attribute("val")!.Value.Should().Be("factor");
+            savedManualLayout.Element(ChartNs + "x")!.Attribute("val")!.Value.Should().Be("0.12");
+            savedManualLayout.Element(ChartNs + "h")!.Attribute("val")!.Value.Should().Be("0.62");
+        }
+
+        saved.Position = 0;
+        var reloaded = PptxPackageReader.Read(saved);
+        var reloadedLayout = reloaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart)
+            .Chart!.PlotAreaManualLayout!;
+        reloadedLayout.XMode.Should().Be(ChartManualLayoutMode.Unsupported);
+        reloadedLayout.RawXModeToken.Should().Be("futureMode");
+        reloadedLayout.X.Should().BeApproximately(0.12, 0.0001);
+    }
+
+    [Fact]
     public void ReadWriteRead_LineChartSmoothSeriesDecision_RoundTrips()
     {
         using var source = BuildPptxWithLineChartSmoothDecision(smooth: true);
