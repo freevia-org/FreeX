@@ -4839,8 +4839,10 @@ public sealed class MainWindowHeadlessTests
         var visibleAfterRemove = false;
         var visibleAfterClosedRefresh = true;
         PresentationCommentPanePlan? emptyPlan = null;
-        PresentationCommentPanePlan? addedPlan = null;
-        PresentationCommentPanePlan? removedPlan = null;
+        PresentationCommentMutationPlan? addMutationPlan = null;
+        PresentationCommentPanePlan? addedPanePlan = null;
+        PresentationCommentMutationPlan? removeMutationPlan = null;
+        PresentationCommentPanePlan? removedPanePlan = null;
 
         var ran = await OnUiThread(() =>
         {
@@ -4857,10 +4859,12 @@ public sealed class MainWindowHeadlessTests
             window.ShowReviewCommentsPane();
             visibleAfterReopen = window.IsReviewCommentsPaneVisible;
 
-            addedPlan = window.AddComment("Keep the review pane open.");
+            addMutationPlan = window.AddComment("Keep the review pane open.");
+            addedPanePlan = window.LastCommentPanePlan;
             visibleAfterAdd = window.IsReviewCommentsPaneVisible;
 
-            removedPlan = window.DeleteSelectedComment();
+            removeMutationPlan = window.DeleteSelectedComment();
+            removedPanePlan = window.LastCommentPanePlan;
             visibleAfterRemove = window.IsReviewCommentsPaneVisible;
         });
 
@@ -4871,11 +4875,15 @@ public sealed class MainWindowHeadlessTests
         visibleAfterClose.Should().BeFalse();
         visibleAfterClosedRefresh.Should().BeFalse();
         visibleAfterReopen.Should().BeTrue();
-        addedPlan.Should().NotBeNull();
-        addedPlan!.Comments.Should().ContainSingle();
+        addMutationPlan.Should().NotBeNull();
+        addMutationPlan!.ShouldApply.Should().BeTrue();
+        addedPanePlan.Should().NotBeNull();
+        addedPanePlan!.Comments.Should().ContainSingle();
         visibleAfterAdd.Should().BeTrue();
-        removedPlan.Should().NotBeNull();
-        removedPlan!.Comments.Should().BeEmpty();
+        removeMutationPlan.Should().NotBeNull();
+        removeMutationPlan!.ShouldApply.Should().BeTrue();
+        removedPanePlan.Should().NotBeNull();
+        removedPanePlan!.Comments.Should().BeEmpty();
         visibleAfterRemove.Should().BeTrue();
     }
 
