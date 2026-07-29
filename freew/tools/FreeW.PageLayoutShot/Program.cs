@@ -1157,6 +1157,7 @@ static DocumentNoteRegionPlan? BuildEvidenceNoteRegionPlan(
 }
 
 static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
+    string.Equals(scenarioId, "page-composition-columns", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "equation-structures", StringComparison.OrdinalIgnoreCase) ||
@@ -1639,6 +1640,14 @@ static class PageShotFixtureSource
 {
     private static string? FixtureDirectory;
 
+    private static readonly IReadOnlyDictionary<string, string> ScenarioFixtureAliases =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["page-composition-columns"] = "f2-columns",
+            ["page-composition-border-watermark"] = "f2-border-watermark",
+            ["page-composition-floating-image"] = "f2-01-float-wrap"
+        };
+
     public static void Configure(string directory)
     {
         FixtureDirectory = Path.GetFullPath(directory);
@@ -1650,7 +1659,10 @@ static class PageShotFixtureSource
         if (string.IsNullOrWhiteSpace(FixtureDirectory))
             return fallback();
 
-        var path = Path.Combine(FixtureDirectory, scenarioId + ".docx");
+        var fixtureId = ScenarioFixtureAliases.TryGetValue(scenarioId, out var alias)
+            ? alias
+            : scenarioId;
+        var path = Path.Combine(FixtureDirectory, fixtureId + ".docx");
         return File.Exists(path) ? DocxReader.Read(path) : fallback();
     }
 }
