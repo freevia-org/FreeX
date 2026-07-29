@@ -935,6 +935,19 @@ public sealed class EditingSession
         return count;
     }
 
+    /// <summary>Applies one bevel preset to every selected shape.</summary>
+    public int SetSelectedShapeBevel(ShapeBevelValues values)
+    {
+        var count = 0;
+        foreach (var id in _selectedShapeIds)
+        {
+            Bus.Execute(new SetShapeBevelCommand(_currentSlideIndex, id, values));
+            count++;
+        }
+
+        return count;
+    }
+
     /// <summary>Sets fill on all selected shapes.</summary>
     public void SetSelectedFill(ShapeFill? fill)
     {

@@ -547,6 +547,15 @@ public static class FreePRibbon
             group.Medium(ShapeEffectAuthoringPlanner.SoftEdgeStrongCommandId,
                 FreePRibbonText.ShapeSoftEdgeStrongCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.ShapeSoftEdgeStrongCommand.KeyTip);
+            group.Medium(ShapeEffectAuthoringPlanner.BevelNoneCommandId,
+                FreePRibbonText.ShapeBevelNoneCommand.Label, RibbonCommandIconKind.Delete,
+                FreePRibbonText.ShapeBevelNoneCommand.KeyTip);
+            group.Medium(ShapeEffectAuthoringPlanner.BevelSubtleCommandId,
+                FreePRibbonText.ShapeBevelSubtleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.ShapeBevelSubtleCommand.KeyTip);
+            group.Medium(ShapeEffectAuthoringPlanner.BevelStrongCommandId,
+                FreePRibbonText.ShapeBevelStrongCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.ShapeBevelStrongCommand.KeyTip);
             group.Medium(OleInsertionPlanner.InsertEmbeddedObjectCommandId,
                 FreePRibbonText.InsertEmbeddedObjectCommand.Label, RibbonCommandIconKind.RibbonShape,
                 FreePRibbonText.InsertEmbeddedObjectCommand.KeyTip);

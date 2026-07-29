@@ -190,4 +190,58 @@ public sealed class ShapeEffectAuthoringTests
         shape.Effects.HasGlow.Should().BeTrue();
         shape.Effects.HasOuterShadow.Should().BeTrue();
     }
+
+    [Fact]
+    public void Planner_UsesStablePowerPointBevelPresets()
+    {
+        var subtle = ShapeEffectAuthoringPlanner.ResolveBevel(ShapeBevelPreset.Subtle);
+        var strong = ShapeEffectAuthoringPlanner.ResolveBevel(ShapeBevelPreset.Strong);
+
+        subtle.Enabled.Should().BeTrue();
+        subtle.PresetName.Should().Be("circle");
+        subtle.WidthEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(1));
+        subtle.HeightEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(1));
+        strong.Enabled.Should().BeTrue();
+        strong.PresetName.Should().Be("relaxedInset");
+        strong.WidthEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(3));
+        strong.HeightEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(3));
+    }
+
+    [Fact]
+    public void SetShapeBevelCommand_PreservesOtherEffectsAndSupportsUndo()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var shape = new SlideShape
+        {
+            Id = 11,
+            Kind = SlideShapeKind.AutoShape,
+            Effects = new ShapeEffects
+            {
+                HasGlow = true,
+                GlowRadiusEmu = 321,
+                BevelTop = new BevelInfo { PresetName = "cross" },
+            },
+        };
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetShapeBevelCommand(
+            0,
+            shape.Id,
+            ShapeEffectAuthoringPlanner.ResolveBevel(ShapeBevelPreset.Strong)));
+
+        shape.Effects.Should().NotBeNull();
+        shape.Effects!.BevelTop.Should().NotBeNull();
+        shape.Effects.BevelTop!.PresetName.Should().Be("relaxedInset");
+        shape.Effects.BevelBottom.Should().NotBeNull();
+        shape.Effects.BevelBottom!.WidthEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(3));
+        shape.Effects.HasGlow.Should().BeTrue();
+
+        bus.Undo();
+
+        shape.Effects.Should().NotBeNull();
+        shape.Effects!.BevelTop!.PresetName.Should().Be("cross");
+        shape.Effects.BevelBottom.Should().BeNull();
+        shape.Effects.HasGlow.Should().BeTrue();
+    }
 }

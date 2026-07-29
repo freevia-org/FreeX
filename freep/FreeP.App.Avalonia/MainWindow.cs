@@ -2437,6 +2437,15 @@ public sealed partial class MainWindow : Window
         r.Register(
             ShapeEffectAuthoringPlanner.SoftEdgeStrongCommandId,
             new ActionRibbonCommand(() => Editor.SetSelectedShapeSoftEdge(ShapeEffectAuthoringPlanner.SoftEdgeStrong())));
+        r.Register(
+            ShapeEffectAuthoringPlanner.BevelNoneCommandId,
+            new ActionRibbonCommand(() => Editor.SetSelectedShapeBevel(ShapeEffectAuthoringPlanner.BevelNone())));
+        r.Register(
+            ShapeEffectAuthoringPlanner.BevelSubtleCommandId,
+            new ActionRibbonCommand(() => Editor.SetSelectedShapeBevel(ShapeEffectAuthoringPlanner.BevelSubtle())));
+        r.Register(
+            ShapeEffectAuthoringPlanner.BevelStrongCommandId,
+            new ActionRibbonCommand(() => Editor.SetSelectedShapeBevel(ShapeEffectAuthoringPlanner.BevelStrong())));
 
         r.Register(ChartDataDialogPlanner.EditDataCommandId, new ActionRibbonCommand(OpenChartDataDialog));
         r.Register(ChartDataDialogPlanner.ChangeChartTypeCommandId, new ActionRibbonCommand(OpenChartDataDialog));
