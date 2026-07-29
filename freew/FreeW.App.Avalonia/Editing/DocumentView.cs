@@ -8564,8 +8564,9 @@ public sealed class DocumentView : Control
         _shapeCaret;
 
     /// <summary>
-    /// Enter the bounded text-edit route for the selected floating text box. This intentionally edits
-    /// only its first paragraph/run; richer text-box editing remains a separate parity slice.
+    /// Enter the text-edit route for the selected floating text box. The caret starts at the end of
+    /// its first text run; Enter and paragraph-start Backspace route through the shared shape-text
+    /// paragraph commands so multiline text-box content remains editable and undoable.
     /// </summary>
     public bool EnterSelectedShapeTextEditing()
     {
@@ -8580,6 +8581,30 @@ public sealed class DocumentView : Control
         InvalidateVisual();
         CaretMoved?.Invoke();
         return true;
+    }
+
+    /// <summary>Insert a real paragraph break at the active text-box caret.</summary>
+    public void InsertShapeTextParagraphBreak()
+    {
+        if (IsEditingLocked || _shapeCaret is not { } caret
+            || !TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, caret.TextParagraphIndex,
+                caret.TextRunIndex, out _))
+            return;
+
+        _bus.Execute(new InsertShapeTextParagraphBreakCommand(
+            caret.BlockIndex,
+            caret.RunIndex,
+            caret.TextParagraphIndex,
+            caret.TextRunIndex,
+            caret.Offset));
+        _shapeCaret = caret with
+        {
+            TextParagraphIndex = caret.TextParagraphIndex + 1,
+            TextRunIndex = 0,
+            Offset = 0
+        };
+        InvalidateLayoutAndVisual();
+        CaretMoved?.Invoke();
     }
 
     /// <summary>Exit floating text-box editing while keeping the object selected.</summary>
@@ -10512,6 +10537,10 @@ public sealed class DocumentView : Control
                     SetShapeTextCaretOffset(GetShapeTextLength(shapeCaret));
                     e.Handled = true;
                     return;
+                case Key.Enter:
+                    InsertShapeTextParagraphBreak();
+                    e.Handled = true;
+                    return;
                 case Key.Back:
                     Backspace();
                     e.Handled = true;
@@ -10900,6 +10929,29 @@ public sealed class DocumentView : Control
             return;
 
         var offset = Math.Clamp(caret.Offset, 0, run.Text.Length);
+        if (backward && offset == 0 && caret.TextParagraphIndex > 0)
+        {
+            _bus.Execute(new MergeShapeTextParagraphWithPreviousCommand(
+                caret.BlockIndex,
+                caret.RunIndex,
+                caret.TextParagraphIndex));
+
+            var previousParagraphIndex = caret.TextParagraphIndex - 1;
+            if (TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, previousParagraphIndex, 0, out var previousRun))
+            {
+                _shapeCaret = caret with
+                {
+                    TextParagraphIndex = previousParagraphIndex,
+                    TextRunIndex = 0,
+                    Offset = previousRun.Text.Length
+                };
+            }
+
+            InvalidateLayoutAndVisual();
+            CaretMoved?.Invoke();
+            return;
+        }
+
         var deleteAt = backward ? offset - 1 : offset;
         if (deleteAt < 0 || deleteAt >= run.Text.Length) return;
 

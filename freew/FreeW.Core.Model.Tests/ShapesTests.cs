@@ -58,6 +58,37 @@ public class ShapesTests
         run.Text.Should().BeEmpty();
     }
 
+    [Fact]
+    public void ShapeTextCommands_split_merge_and_sync_the_outer_run_mirror()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        var shape = Shape.TextBoxWith("First line", 120, 60);
+        var owner = Run.FromShape(shape);
+        paragraph.Runs.Add(owner);
+        doc.Blocks.Add(paragraph);
+        var context = new ShapeTestContext(doc);
+
+        var split = new InsertShapeTextParagraphBreakCommand(0, 0, 0, 0, 5);
+        split.Apply(context);
+
+        shape.PlainText.Should().Be("First\n line");
+        owner.Text.Should().Be("First\n line");
+        shape.TextParagraphs.Should().HaveCount(2);
+
+        var merge = new MergeShapeTextParagraphWithPreviousCommand(0, 0, 1);
+        merge.Apply(context);
+        shape.PlainText.Should().Be("First line");
+        owner.Text.Should().Be("First line");
+
+        merge.Revert(context);
+        shape.PlainText.Should().Be("First\n line");
+        owner.Text.Should().Be("First\n line");
+        split.Revert(context);
+        shape.PlainText.Should().Be("First line");
+        owner.Text.Should().Be("First line");
+    }
+
     // ── W26: Body rotation / flip properties ─────────────────────────────────────────────────────
 
     [Fact]

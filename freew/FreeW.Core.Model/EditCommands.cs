@@ -2069,7 +2069,7 @@ public sealed class SetShapeTextDirectionCommand(int paragraphIndex, int runInde
 
 /// <summary>
 /// Replace one text run inside an inline text-box shape, snapshotting the prior value for undo.
-/// The editor uses this command for its bounded single-paragraph text-box caret route.
+/// The owning drawing run's plain-text mirror is kept synchronized with the edited shape body.
 /// </summary>
 public sealed class SetShapeTextRunCommand(
     int paragraphIndex,
@@ -2085,31 +2085,225 @@ public sealed class SetShapeTextRunCommand(
 
     public void Apply(IDocumentCommandContext context)
     {
-        if (ShapeTextRunAt(context) is not { } run) return;
+        if (!TryGetShapeTextRun(context, out var shape, out var run)) return;
         _previous = run.Text;
         run.Text = text;
+        SyncShapeRunText(context, shape);
         _applied = true;
     }
 
     public void Revert(IDocumentCommandContext context)
     {
-        if (!_applied || ShapeTextRunAt(context) is not { } run || _previous is null) return;
+        if (!_applied || !TryGetShapeTextRun(context, out var shape, out var run) || _previous is null) return;
         run.Text = _previous;
+        SyncShapeRunText(context, shape);
         _applied = false;
     }
 
-    private Run? ShapeTextRunAt(IDocumentCommandContext context)
+    private bool TryGetShapeTextRun(IDocumentCommandContext context, out Shape shape, out Run textRun)
     {
+        shape = null!;
+        textRun = null!;
         if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
             || runIndex < 0 || runIndex >= paragraph.Runs.Count
-            || paragraph.Runs[runIndex].Shape is not { } shape
-            || textParagraphIndex < 0 || textParagraphIndex >= shape.TextParagraphs.Count)
-            return null;
+            || paragraph.Runs[runIndex].Shape is not { } foundShape
+            || textParagraphIndex < 0 || textParagraphIndex >= foundShape.TextParagraphs.Count)
+            return false;
 
+        shape = foundShape;
         var textParagraph = shape.TextParagraphs[textParagraphIndex];
-        return textRunIndex >= 0 && textRunIndex < textParagraph.Runs.Count
-            ? textParagraph.Runs[textRunIndex]
-            : null;
+        if (textRunIndex < 0 || textRunIndex >= textParagraph.Runs.Count)
+            return false;
+
+        textRun = textParagraph.Runs[textRunIndex];
+        return true;
+    }
+
+    private void SyncShapeRunText(IDocumentCommandContext context, Shape shape)
+    {
+        if (context.Document.Blocks[paragraphIndex] is Paragraph paragraph
+            && runIndex >= 0 && runIndex < paragraph.Runs.Count
+            && ReferenceEquals(paragraph.Runs[runIndex].Shape, shape))
+            paragraph.Runs[runIndex].Text = shape.PlainText;
+    }
+}
+
+/// <summary>
+/// Inserts a real paragraph break inside an inline text-box body. The command replaces the affected
+/// shape paragraph list as one undoable operation and keeps the outer drawing run's plain-text mirror
+/// aligned with the shape content.
+/// </summary>
+public sealed class InsertShapeTextParagraphBreakCommand(
+    int paragraphIndex,
+    int runIndex,
+    int textParagraphIndex,
+    int textRunIndex,
+    int textRunOffset) : IDocumentCommand
+{
+    private List<Paragraph>? _previous;
+    private List<Paragraph>? _next;
+
+    public string Label => "Insert Shape Text Paragraph Break";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetShape(context, out var owner, out var shape)
+            || textParagraphIndex < 0 || textParagraphIndex >= shape.TextParagraphs.Count
+            || textRunIndex < 0 || textRunIndex >= shape.TextParagraphs[textParagraphIndex].Runs.Count)
+            return;
+
+        if (_previous is null)
+        {
+            _previous = shape.TextParagraphs.ToList();
+            _next = BuildSplitParagraphs(_previous, textParagraphIndex, textRunIndex, textRunOffset);
+        }
+
+        shape.TextParagraphs.Clear();
+        shape.TextParagraphs.AddRange(_next!);
+        owner.Text = shape.PlainText;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null || !TryGetShape(context, out var owner, out var shape))
+            return;
+
+        shape.TextParagraphs.Clear();
+        shape.TextParagraphs.AddRange(_previous);
+        owner.Text = shape.PlainText;
+    }
+
+    private bool TryGetShape(IDocumentCommandContext context, out Run owner, out Shape shape)
+    {
+        owner = null!;
+        shape = null!;
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
+            || runIndex < 0 || runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[runIndex].Shape is not { } found)
+            return false;
+
+        owner = paragraph.Runs[runIndex];
+        shape = found;
+        return true;
+    }
+
+    private static List<Paragraph> BuildSplitParagraphs(
+        IReadOnlyList<Paragraph> paragraphs,
+        int paragraphIndex,
+        int runIndex,
+        int runOffset)
+    {
+        var source = paragraphs[paragraphIndex];
+        var fullOffset = source.Runs.Take(runIndex).Sum(run => run.Text.Length)
+            + Math.Clamp(runOffset, 0, source.Runs[runIndex].Text.Length);
+        var prefix = CloneParagraphWithTextRange(source, 0, fullOffset);
+        var suffix = CloneParagraphWithTextRange(source, fullOffset, source.PlainText.Length);
+        var result = paragraphs.ToList();
+        result.RemoveAt(paragraphIndex);
+        result.InsertRange(paragraphIndex, [prefix, suffix]);
+        return result;
+    }
+
+    private static Paragraph CloneParagraphWithTextRange(Paragraph source, int start, int end)
+    {
+        var clone = (Paragraph)DocumentMerge.CloneBlock(source);
+        clone.Runs.Clear();
+
+        var position = 0;
+        foreach (var run in source.Runs)
+        {
+            var runStart = position;
+            var runEnd = position + run.Text.Length;
+            position = runEnd;
+            var overlapStart = Math.Max(start, runStart);
+            var overlapEnd = Math.Min(end, runEnd);
+            if (overlapEnd > overlapStart)
+            {
+                clone.Runs.Add(RevisionEditPlanner.CloneRunWithText(
+                    run,
+                    run.Text[(overlapStart - runStart)..(overlapEnd - runStart)]));
+            }
+        }
+
+        if (clone.Runs.Count == 0)
+        {
+            var formatting = source.Runs.FirstOrDefault()?.Formatting ?? RunFormatting.Default;
+            clone.Runs.Add(new Run(string.Empty, formatting));
+        }
+
+        return clone;
+    }
+}
+
+/// <summary>
+/// Joins a text-box paragraph with the paragraph before it when Backspace is pressed at column zero.
+/// The complete paragraph list is restored by undo, matching the WPF text-box editing contract.
+/// </summary>
+public sealed class MergeShapeTextParagraphWithPreviousCommand(
+    int ownerParagraphIndex,
+    int ownerRunIndex,
+    int textParagraphIndex) : IDocumentCommand
+{
+    private List<Paragraph>? _previous;
+    private List<Paragraph>? _next;
+
+    public string Label => "Merge Shape Text Paragraphs";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetShape(context, out var owner, out var shape)
+            || textParagraphIndex <= 0 || textParagraphIndex >= shape.TextParagraphs.Count)
+            return;
+
+        if (_previous is null)
+        {
+            _previous = shape.TextParagraphs.ToList();
+            _next = BuildMergedParagraphs(_previous, textParagraphIndex);
+        }
+
+        shape.TextParagraphs.Clear();
+        shape.TextParagraphs.AddRange(_next!);
+        owner.Text = shape.PlainText;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null || !TryGetShape(context, out var owner, out var shape))
+            return;
+
+        shape.TextParagraphs.Clear();
+        shape.TextParagraphs.AddRange(_previous);
+        owner.Text = shape.PlainText;
+    }
+
+    private bool TryGetShape(IDocumentCommandContext context, out Run owner, out Shape shape)
+    {
+        owner = null!;
+        shape = null!;
+        if (context.Document.Blocks[ownerParagraphIndex] is not Paragraph paragraph
+            || ownerRunIndex < 0 || ownerRunIndex >= paragraph.Runs.Count
+            || paragraph.Runs[ownerRunIndex].Shape is not { } found)
+            return false;
+
+        owner = paragraph.Runs[ownerRunIndex];
+        shape = found;
+        return true;
+    }
+
+    private static List<Paragraph> BuildMergedParagraphs(
+        IReadOnlyList<Paragraph> paragraphs,
+        int paragraphIndex)
+    {
+        var previous = paragraphs[paragraphIndex - 1];
+        var current = paragraphs[paragraphIndex];
+        var merged = (Paragraph)DocumentMerge.CloneBlock(previous);
+        foreach (var run in current.Runs)
+            merged.Runs.Add(RevisionEditPlanner.CloneRunWithText(run, run.Text));
+
+        var result = paragraphs.ToList();
+        result[paragraphIndex - 1] = merged;
+        result.RemoveAt(paragraphIndex);
+        return result;
     }
 }
 
