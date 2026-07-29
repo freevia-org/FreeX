@@ -10,7 +10,8 @@ param(
     [string]$FreePWholeWindowVisualEvidenceManifestScriptPath = "tools\Generate-FreePWholeWindowVisualEvidenceManifest.ps1",
     [string]$FreeWEditingReferenceParityEvidenceScriptPath = "tools\Generate-FreeWEditingReferenceParityEvidence.ps1",
     [string]$FreeWPageLayoutDialogParityEvidenceScriptPath = "tools\Generate-FreeWPageLayoutDialogParityEvidence.ps1",
-    [string]$FreeWCommandInventoryScriptPath = "tools\Generate-FreeWCommandInventory.ps1"
+    [string]$FreeWCommandInventoryScriptPath = "tools\Generate-FreeWCommandInventory.ps1",
+    [string]$CrossAppParityDashboardBehaviorScriptPath = "tools\Test-CrossAppParityDashboard.ps1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,5 +46,13 @@ Invoke-GeneratedDocsCheck -ScriptPath $FreePWholeWindowVisualEvidenceManifestScr
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWEditingReferenceParityEvidenceScriptPath -Label "FreeW editing/reference parity evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWPageLayoutDialogParityEvidenceScriptPath -Label "FreeW page-layout dialog parity evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWCommandInventoryScriptPath -Label "FreeW command inventory"
+
+$resolvedCrossAppParityDashboardBehaviorScriptPath = Resolve-ToolRepoPath -Path $CrossAppParityDashboardBehaviorScriptPath -RepoRoot $repoRoot
+if (-not (Test-Path -LiteralPath $resolvedCrossAppParityDashboardBehaviorScriptPath)) {
+    throw "Cross-app parity dashboard behavior guard was not found: $resolvedCrossAppParityDashboardBehaviorScriptPath"
+}
+
+Write-Host "Checking cross-app parity dashboard aggregation guards..."
+& $resolvedCrossAppParityDashboardBehaviorScriptPath
 
 Write-Host "Generated documentation checks passed."
