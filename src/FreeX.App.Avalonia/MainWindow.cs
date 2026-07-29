@@ -8177,11 +8177,20 @@ public sealed partial class MainWindow : Window
             var copyResult = _session.ExecuteReviewCommand(
                 new CopyRangeCommand(_session.ActiveSheet.Id, source, target.Start),
                 fallbackAddress: target.Start);
-            if (copyResult.Success)
-                _session.SelectRange(target);
-            RefreshShell(copyResult.Success
+            var copyStatus = copyResult.Success
                 ? UiText.Format("MainLoc_SelectedX", FormatRangeReference(target))
-                : copyResult.ErrorMessage ?? "Copy Cells failed.");
+                : copyResult.ErrorMessage ?? "Copy Cells failed.";
+            // ExecuteReviewCommand intentionally collapses the session selection to the first
+            // affected cell while applying a generic edit. Render that intermediate state, then
+            // restore the complete destination range and rebuild the grid once more. Without the
+            // second selection pass Avalonia can leave the visible marquee on the source range
+            // even though the copy payload and session active cell have reached the destination.
+            RefreshShell(copyStatus);
+            if (copyResult.Success)
+            {
+                _session.SelectRange(target);
+                RefreshShell(copyStatus);
+            }
             return;
         }
 

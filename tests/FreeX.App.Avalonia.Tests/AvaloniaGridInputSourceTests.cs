@@ -136,6 +136,27 @@ public sealed class AvaloniaGridInputSourceTests
         sessionSource.Should().Contain("new MoveRangeCommand(ActiveSheet.Id, sourceRange, targetRange.Start)");
     }
 
+    [Fact]
+    public void CtrlCopySelection_RebuildsAfterRestoringDestinationRange()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var copyStart = source.IndexOf("var copyResult = _session.ExecuteReviewCommand(", StringComparison.Ordinal);
+        var copyEnd = source.IndexOf("return;", copyStart, StringComparison.Ordinal);
+
+        copyStart.Should().BeGreaterThanOrEqualTo(0);
+        copyEnd.Should().BeGreaterThan(copyStart);
+        var copyBranch = source[copyStart..copyEnd];
+        var firstRefresh = copyBranch.IndexOf("RefreshShell(copyStatus);", StringComparison.Ordinal);
+        var restoreSelection = copyBranch.IndexOf("_session.SelectRange(target);", StringComparison.Ordinal);
+        var finalRefresh = copyBranch.LastIndexOf("RefreshShell(copyStatus);", StringComparison.Ordinal);
+
+        firstRefresh.Should().BeGreaterThanOrEqualTo(0);
+        restoreSelection.Should().BeGreaterThan(firstRefresh,
+            "the complete destination range must be restored after the generic edit refresh collapses selection");
+        finalRefresh.Should().BeGreaterThan(restoreSelection,
+            "the second grid rebuild must render the restored destination range");
+    }
+
     // ── R83-render-selection-fillhandle-5-2: fill-handle hover must use the crosshair, not Hand ──
 
     [Fact]
