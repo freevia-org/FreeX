@@ -1418,6 +1418,62 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void SmartArtDataRewrite_PreservesRichRunsOnUnchangedNodes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
+            nodes: [("root", "Leader"), ("manager", "Manager")],
+            parOfConnections: [("root", "manager")]);
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        var dataPart = smartArt.Parts.Values.Single(part =>
+            part.ContentType.Contains("diagramData", StringComparison.OrdinalIgnoreCase));
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        using var sourceStream = new MemoryStream(dataPart.Bytes, writable: false);
+        var source = XDocument.Load(sourceStream);
+        var rootText = source.Descendants(dgm + "pt")
+            .Single(point => (string?)point.Attribute("modelId") == "root")
+            .Element(dgm + "t")!;
+        var rootParagraph = rootText.Element(a + "p")!;
+        rootParagraph.Element(a + "r")!.ReplaceWith(
+            new XElement(a + "r",
+                new XElement(a + "rPr", new XAttribute("b", "1")),
+                new XElement(a + "t", "Lead")),
+            new XElement(a + "r",
+                new XElement(a + "rPr", new XAttribute("i", "1")),
+                new XElement(a + "t", "er")));
+        using (var rewrittenSourceStream = new MemoryStream())
+        {
+            source.Save(rewrittenSourceStream, SaveOptions.DisableFormatting);
+            dataPart.Bytes = rewrittenSourceStream.ToArray();
+        }
+
+        SmartArtEditingPlanner.Apply(
+            smartArt.Data,
+            SmartArtNodeEditIntent.ChangeText("manager", "Delivery Lead"))
+            .Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+
+        using var rewrittenStream = new MemoryStream(dataPart.Bytes, writable: false);
+        var rewritten = XDocument.Load(rewrittenStream);
+        var rewrittenRuns = rewritten.Descendants(dgm + "pt")
+            .Single(point => (string?)point.Attribute("modelId") == "root")
+            .Element(dgm + "t")!
+            .Element(a + "p")!
+            .Elements(a + "r")
+            .ToArray();
+
+        rewrittenRuns.Should().HaveCount(2);
+        rewrittenRuns[0].Element(a + "rPr")!.Attribute("b")?.Value.Should().Be("1");
+        rewrittenRuns[1].Element(a + "rPr")!.Attribute("i")?.Value.Should().Be("1");
+        rewrittenRuns.Select(run => run.Element(a + "t")!.Value)
+            .Should().Equal("Lead", "er");
+    }
+
+    [Fact]
     public void SmartArtDrawingCacheRegeneration_PreservesAuthoredShellMetadataAndExtensions()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
