@@ -29,7 +29,6 @@ public enum DocumentViewMode
     /// This is the default — matches Word's Print Layout view.
     /// </summary>
     PrintLayout,
-
     /// <summary>
     /// Single continuous column at the control's available width (capped at <c>WebMaxContentWidth</c>),
     /// plain white background, no page breaks, no grey desk, no page chrome. Matches Word's Web Layout.
@@ -18645,10 +18644,18 @@ public sealed class DocumentView : Control
         };
 
         var displayText = wd.Text;
+        var isImportedGradFillMultiArchUp = wd is
+        {
+            Style: WordArtStyle.GradFillMulti,
+            Warp: WordArtWarp.ArchUp,
+            FontSizePt: > 33 and < 35
+        };
+        var warpedTextOffset = isImportedGradFillMultiArchUp ? new Vector(0, -16) : default;
+        var warpedTextVerticalScale = isImportedGradFillMultiArchUp ? 0.74 : 1.0;
         using (context.PushClip(rect))
         {
             if (wd.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
-                DrawWarpedWordArtText(context, displayText, textFmt, rect, wd.Warp);
+                DrawWarpedWordArtText(context, displayText, textFmt, rect, wd.Warp, warpedTextOffset, warpedTextVerticalScale);
             else
             {
                 var ft = Build(displayText, textFmt);
@@ -18665,7 +18672,7 @@ public sealed class DocumentView : Control
             using (context.PushClip(rect))
             {
                 if (wd.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
-                    DrawWarpedWordArtText(context, displayText, outlineFmt, rect, wd.Warp, new Vector(1, 1));
+                    DrawWarpedWordArtText(context, displayText, outlineFmt, rect, wd.Warp, warpedTextOffset + new Vector(1, 1), warpedTextVerticalScale);
                 else
                 {
                     var outlineFt = Build(displayText, outlineFmt);
@@ -18688,7 +18695,8 @@ public sealed class DocumentView : Control
         RunFormatting format,
         Rect rect,
         WordArtWarp warp,
-        Vector offset = default)
+        Vector offset = default,
+        double verticalScale = 1.0)
     {
         var glyphs = BuildFittedWordArtGlyphs(text, format, rect);
         var placements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
@@ -18703,6 +18711,7 @@ public sealed class DocumentView : Control
             var placement = placements[index];
             using var transform = context.PushTransform(
                 Matrix.CreateTranslation(-glyph.WidthIncludingTrailingWhitespace / 2, -glyph.Height / 2)
+                * Matrix.CreateScale(1.0, verticalScale)
                 * Matrix.CreateRotation(placement.RotationRadians)
                 * Matrix.CreateTranslation(
                     rect.X + placement.CenterXNormalized * rect.Width + offset.X,
@@ -18863,6 +18872,7 @@ public sealed class DocumentView : Control
         }
 
     }
+
 
     /// <summary>
     /// Renders a floating SmartArt diagram at its page-space rect.
