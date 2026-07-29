@@ -39,7 +39,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);
         if (chart is null)
             return;
 
@@ -128,7 +128,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);
         if (chart is null)
             return;
 

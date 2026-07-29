@@ -19,7 +19,7 @@ public sealed class SetChartLayoutOptionsCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
 
         _oldLayout = CloneLayout(GetLayout(chart, _newOptions.Target));
@@ -29,7 +29,7 @@ public sealed class SetChartLayoutOptionsCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
 
         SetLayout(chart, _newOptions.Target, CloneLayout(_oldLayout));
