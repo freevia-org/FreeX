@@ -427,7 +427,8 @@ internal enum PowerPointExportFailureKind
 {
     None,
     ComUnavailable,
-    ExportFailed
+    ExportFailed,
+    TimedOut
 }
 
 internal sealed class PowerPointPrerequisiteException : InvalidOperationException
