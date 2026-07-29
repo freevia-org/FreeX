@@ -243,9 +243,9 @@ public sealed class HyperlinkTests : IDisposable
     [Fact]
     public void OpenExternalUrl_FileScheme_DoesNotThrow()
     {
-        // file:// is rejected silently (no Process.Start call), so no exception.
+        // The launcher may be unavailable in a test process, but a local-file link must not throw.
         var ex = Record.Exception(() => SlideShowWindow.OpenExternalUrl("file:///C:/secret"));
-        ex.Should().BeNull("scheme guard must silently ignore file:// without throwing");
+        ex.Should().BeNull("external-link activation must swallow launch failures");
     }
 
     [Fact]

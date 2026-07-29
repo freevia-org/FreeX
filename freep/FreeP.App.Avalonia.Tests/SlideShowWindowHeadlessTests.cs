@@ -1005,7 +1005,7 @@ public sealed class SlideShowWindowHeadlessTests
     [Fact]
     public void OpenExternalUrl_rejects_file_scheme()
     {
-        // Security guard: file:// must be silently rejected (no exception thrown).
+        // Local-file links may be accepted by the shared policy, but activation must not throw.
         var act = () => SlideShowWindow.OpenExternalUrl("file:///C:/secret.exe");
         act.Should().NotThrow();
     }
