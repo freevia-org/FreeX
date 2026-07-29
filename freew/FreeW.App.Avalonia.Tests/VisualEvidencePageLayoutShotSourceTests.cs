@@ -193,6 +193,16 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_UsesPixelCenteredOpaqueColumnRules()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("new Pen(new SolidColorBrush(Colors.Black), 1.0)");
+        source.Should().Contain("var pixelCenteredX = Math.Floor(gapCentreX) - 0.5");
+        source.Should().Contain("new Point(pixelCenteredX, ruleTop)");
+    }
+
+    [Fact]
     public void AvaloniaDocumentView_UsesWordArtFillAsFieldAndContrastingText()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
