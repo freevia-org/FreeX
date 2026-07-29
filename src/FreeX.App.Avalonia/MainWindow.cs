@@ -10212,24 +10212,25 @@ public sealed partial class MainWindow : Window
         if (start + length > editorText.Length)
             return false;
 
-        var reference = SpreadsheetDisplayFormatter.FormatRangeReference(
-            address,
-            address,
-            UseR1C1ReferenceStyle);
-        if (address.Sheet != formulaCell.Value.Sheet &&
-            _session.Workbook.GetSheet(address.Sheet)?.Name is { } sheetName)
+        var range = new GridRange(address, address);
+        if (!FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(
+                editorText,
+                start,
+                length,
+                range,
+                formulaCell.Value,
+                UseR1C1ReferenceStyle,
+                out var edit,
+                _session.Workbook.GetSheet(address.Sheet)?.Name))
         {
-            reference = $"{SheetNameFormatter.QuoteIfNeeded(sheetName)}!{reference}";
+            return false;
         }
 
-        var insertion = "," + reference;
-        var insertAt = start + length;
-        var updatedText = editorText.Insert(insertAt, insertion);
         _isApplyingFormulaBoxText = true;
         try
         {
-            ApplyTextBoxEdit(editor, new ExcelTextEdit(updatedText, insertAt + insertion.Length, 0));
-            SetInlineCellEditorSelection(editor, new ExcelTextEdit(updatedText, insertAt + insertion.Length, 0));
+            ApplyTextBoxEdit(editor, edit.TextEdit);
+            SetInlineCellEditorSelection(editor, edit.TextEdit);
             SynchronizeFormulaEditors(editor);
         }
         finally
@@ -10237,12 +10238,11 @@ public sealed partial class MainWindow : Window
             _isApplyingFormulaBoxText = false;
         }
 
-        var range = new GridRange(address, address);
         _session.SelectRangeForFormulaEdit(range, formulaCell.Value);
         _formulaRangeSelectionAnchor = address;
         _formulaRangeSelectionCursor = address;
-        _formulaReferenceStart = insertAt + 1;
-        _formulaReferenceLength = reference.Length;
+        _formulaReferenceStart = edit.ReferenceStart;
+        _formulaReferenceLength = edit.ReferenceLength;
         _cellAddressText.Text = FormatRangeReference(range);
         _selectionStatsText.Text = _session.SelectionStatsText;
         RefreshFormulaReferenceHighlights();
