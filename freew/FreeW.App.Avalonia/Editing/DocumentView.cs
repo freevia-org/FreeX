@@ -17607,7 +17607,16 @@ public sealed class DocumentView : Control
         // anchor render). Word keeps commented text fully editable. The textless comment-reference run has
         // empty text and contributes no cells, so it does not affect editability either.
         paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
-            && r.ComplexField is null && r.FootnoteId is null && r.EndnoteId is null && r.Control is null);
+            && r.ComplexField is null && r.FootnoteId is null && r.EndnoteId is null && r.Control is null
+            && !IsFloatingDrawingRun(r));
+
+    private static bool IsFloatingDrawingRun(Run run) =>
+        run.Image is { IsFloating: true }
+        || run.Shape is { IsFloating: true }
+        || run.Chart is { IsFloating: true }
+        || run.WordArt is { IsFloating: true }
+        || run.SmartArt is { IsFloating: true }
+        || run.DrawingGroup is { IsFloating: true };
 
     private static List<Cell> ParaCells(Paragraph paragraph)
     {
@@ -17616,6 +17625,10 @@ public sealed class DocumentView : Control
         {
             // AV-LINK: capture the run's hyperlink target so the link span survives the cell round-trip and
             // SetRuns can re-segment runs on a hyperlink boundary. null when the run carries no link.
+            // A floating drawing's fallback text belongs to its overlay, not the body flow.
+            if (IsFloatingDrawingRun(run))
+                continue;
+
             var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
                 ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
                 : (LinkInfo?)null;
@@ -17636,6 +17649,10 @@ public sealed class DocumentView : Control
         {
             // Non-editable paragraphs (including note references and fields) still need their
             // per-run display formatting. Flattening to PlainText loses superscript markers.
+            // A floating drawing's fallback text belongs to its overlay, not the body flow.
+            if (IsFloatingDrawingRun(run))
+                continue;
+
             var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
                 ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
                 : (LinkInfo?)null;
