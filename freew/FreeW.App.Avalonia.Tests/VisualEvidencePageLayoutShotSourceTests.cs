@@ -11,6 +11,10 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         var project = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "FreeW.PageLayoutShot.csproj"));
 
         source.Should().Contain("FreeWVisualEvidencePlanner.WriteManifest(outDir, evidence)");
+        source.Should().Contain("--scenario requires a scenario id.");
+        source.Should().Contain("PageShotScenarioSelection.Add(args[i]);");
+        source.Should().Contain("if (!PageShotScenarioSelection.Includes(scenarioId))");
+        source.Should().Contain("PageShotScenarioSelection.Includes(\"page-composition-floating-image\")");
         source.Should().Contain("AddAvaloniaEvidence(");
         source.Should().Contain("FreeWVisualEvidencePlanner.BuildEvidenceRow(");
         source.Should().Contain("FreeWVisualEvidencePlanner.EnsureTrusted(row)");

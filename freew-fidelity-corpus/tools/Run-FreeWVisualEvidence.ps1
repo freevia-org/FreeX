@@ -3684,24 +3684,38 @@ if ($IncludeWordBaseline) {
     }
 }
 
+$wpfFixtureDirForRender = $fixtureDir
+if ($effectiveScenarioIds.Count -gt 0) {
+    $selectedWpfFixtureDir = Join-Path $runRoot 'wpf-fixtures'
+    New-Item -ItemType Directory -Force $selectedWpfFixtureDir | Out-Null
+    foreach ($scenarioId in $effectiveScenarioIds) {
+        Copy-Item -LiteralPath (Join-Path $fixtureDir "$scenarioId.docx") -Destination $selectedWpfFixtureDir -Force
+    }
+    $wpfFixtureDirForRender = $selectedWpfFixtureDir
+}
+
 Invoke-DotNetStep 'Render WPF visual evidence (composite)' @(
     'run',
     '--project', $fidelityProject,
     '-c', $Configuration,
     '--',
-    $fixtureDir,
+    $wpfFixtureDirForRender,
     $wpfDir,
     ([Math]::Max(1, $MaxPages).ToString([Globalization.CultureInfo]::InvariantCulture)),
     '--composite'
 )
 
-Invoke-DotNetStep 'Render Avalonia page-layout evidence' @(
+$avaloniaRenderArgs = @(
     'run',
     '--project', $pageShotProject,
     '-c', $Configuration,
     '--',
     $avaloniaDir
 )
+foreach ($scenarioId in $effectiveScenarioIds) {
+    $avaloniaRenderArgs += @('--scenario', $scenarioId)
+}
+Invoke-DotNetStep 'Render Avalonia page-layout evidence' $avaloniaRenderArgs
 
 $wpfManifest = Join-Path $wpfDir 'freew_visual_evidence_manifest.json'
 $avaloniaManifest = Join-Path $avaloniaDir 'freew_visual_evidence_manifest.json'
