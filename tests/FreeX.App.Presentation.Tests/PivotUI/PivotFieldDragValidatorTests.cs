@@ -48,6 +48,79 @@ public sealed class PivotFieldDragValidatorTests
     }
 
     [Fact]
+    public void Validate_ReordersFieldWithinItsExistingBucket()
+    {
+        var pivot = BuildPivot();
+        pivot.RowFields.Add(new PivotFieldModel(1));
+
+        var result = new PivotFieldDragValidator().Validate(
+            pivot,
+            Headers,
+            new PivotFieldDropRequest(0, PivotFieldBucket.Rows, TargetIndex: 1));
+
+        result.IsAllowed.Should().BeTrue();
+        result.ResultingLayout!.Rows.Should().Equal(1, 0);
+        result.ResultingLayout.Columns.Should().Equal(2);
+        result.ResultingLayout.Values.Should().Equal(3);
+    }
+
+    [Fact]
+    public void Validate_InsertsAcrossBucketsAtTheRequestedPosition()
+    {
+        var pivot = BuildPivot();
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+
+        var result = new PivotFieldDragValidator().Validate(
+            pivot,
+            Headers,
+            new PivotFieldDropRequest(0, PivotFieldBucket.Columns, TargetIndex: 1));
+
+        result.IsAllowed.Should().BeTrue();
+        result.ResultingLayout!.Rows.Should().BeEmpty();
+        result.ResultingLayout.Columns.Should().Equal(2, 0, 1);
+    }
+
+    [Fact]
+    public void Validate_ReordersAnExactValuesFieldWithoutDuplicatingIt()
+    {
+        var pivot = BuildPivot();
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Quarter", "sum"));
+
+        var result = new PivotFieldDragValidator().Validate(
+            pivot,
+            Headers,
+            new PivotFieldDropRequest(
+                3,
+                PivotFieldBucket.Values,
+                TargetIndex: 1,
+                SourceBucket: PivotFieldBucket.Values,
+                SourceItemIndex: 0));
+
+        result.IsAllowed.Should().BeTrue();
+        result.ResultingLayout!.Values.Should().Equal(2, 3);
+    }
+
+    [Fact]
+    public void Validate_MovingAnExactValuesFieldToAnAxisRemovesItFromValues()
+    {
+        var pivot = BuildPivot();
+
+        var result = new PivotFieldDragValidator().Validate(
+            pivot,
+            Headers,
+            new PivotFieldDropRequest(
+                3,
+                PivotFieldBucket.Rows,
+                TargetIndex: 1,
+                SourceBucket: PivotFieldBucket.Values,
+                SourceItemIndex: 0));
+
+        result.IsAllowed.Should().BeTrue();
+        result.ResultingLayout!.Rows.Should().Equal(0, 3);
+        result.ResultingLayout.Values.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Validate_MovingFieldBetweenAxesRemovesItFromOldAxis()
     {
         // Column field index 2 -> rows. It should leave the columns area.

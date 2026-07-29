@@ -49,7 +49,7 @@ public sealed partial class MainWindow
 
     // The field currently being dragged within the pane (pointer-capture gesture), or null when idle.
     private PivotPaneDragItem? _pivotPaneDragItem;
-    private readonly List<(Border Bucket, PivotFieldBucket Kind)> _pivotDropZones = [];
+    private readonly List<PivotDropZone> _pivotDropZones = [];
 
     private Control BuildPivotFieldPaneChrome()
     {
@@ -190,7 +190,13 @@ public sealed partial class MainWindow
             foreach (var field in filtered)
                 body.Children.Add(BuildPivotFieldChip(pivot, headers, field, showMenu: false));
 
-        return BuildPivotBucketContainer(pivot, headers, UiText.Get("PivotLoc_ChooseFields"), PivotFieldBucket.Available, body);
+        return BuildPivotBucketContainer(
+            pivot,
+            headers,
+            UiText.Get("PivotLoc_ChooseFields"),
+            PivotFieldBucket.Available,
+            filtered,
+            body);
     }
 
     private Control BuildPivotBucket(
@@ -206,7 +212,7 @@ public sealed partial class MainWindow
             foreach (var field in bucket.Fields)
                 body.Children.Add(BuildPivotFieldChip(pivot, headers, field, showMenu: true));
 
-        return BuildPivotBucketContainer(pivot, headers, title, bucket.Bucket, body);
+        return BuildPivotBucketContainer(pivot, headers, title, bucket.Bucket, bucket.Fields, body);
     }
 
     private Border BuildPivotBucketContainer(
@@ -214,6 +220,7 @@ public sealed partial class MainWindow
         IReadOnlyList<string> headers,
         string title,
         PivotFieldBucket bucketKind,
+        IReadOnlyList<PivotFieldListItemModel> fields,
         StackPanel body)
     {
         var header = new TextBlock
@@ -236,7 +243,7 @@ public sealed partial class MainWindow
             Child = new StackPanel { Children = { header, body } },
         };
 
-        _pivotDropZones.Add((container, bucketKind));
+        _pivotDropZones.Add(new PivotDropZone(container, bucketKind, body.Children.ToList(), fields));
         return container;
     }
 
@@ -327,8 +334,8 @@ public sealed partial class MainWindow
             // PointerCaptureLost sees a null drag item and is a no-op.  No explicit Capture(null)
             // needed here — the capture is already gone by the time this handler fires.
             _pivotPaneDragItem = null;
-            foreach (var (bucket, _) in _pivotDropZones)
-                bucket.Background = PivotBucketBackground;
+            foreach (var zone in _pivotDropZones)
+                zone.Bucket.Background = PivotBucketBackground;
         };
         AttachPivotFieldContextMenu(chip, pivot, headers, field);
         return chip;
@@ -340,7 +347,7 @@ public sealed partial class MainWindow
         if (!e.GetCurrentPoint(null).Properties.IsLeftButtonPressed)
             return;
 
-        _pivotPaneDragItem = new PivotPaneDragItem(field.SourceFieldIndex, field.Bucket);
+        _pivotPaneDragItem = new PivotPaneDragItem(field.SourceFieldIndex, field.Bucket, field.DataFieldIndex);
         e.Pointer.Capture((IInputElement)e.Source!);
     }
 
@@ -349,10 +356,10 @@ public sealed partial class MainWindow
         if (_pivotPaneDragItem is null)
             return;
 
-        // Highlight the bucket the pointer currently hovers so the drop target is legible.
-        var hovered = ResolvePivotDropZone(e.GetPosition(_pivotFieldPaneHost));
-        foreach (var (bucket, _) in _pivotDropZones)
-            bucket.Background = ReferenceEquals(bucket, hovered) ? PivotDropHighlight : PivotBucketBackground;
+        // Highlight the bucket and insertion target the pointer currently hovers so the drop is legible.
+        var target = ResolvePivotDropTarget(e.GetPosition(_pivotFieldPaneHost));
+        foreach (var zone in _pivotDropZones)
+            zone.Bucket.Background = target?.Zone == zone ? PivotDropHighlight : PivotBucketBackground;
     }
 
     private void CompletePivotFieldDrag(
@@ -363,39 +370,75 @@ public sealed partial class MainWindow
         var drag = _pivotPaneDragItem;
         _pivotPaneDragItem = null;
         e.Pointer.Capture(null);
-        foreach (var (bucket, _) in _pivotDropZones)
-            bucket.Background = PivotBucketBackground;
+        foreach (var zone in _pivotDropZones)
+            zone.Bucket.Background = PivotBucketBackground;
 
         if (drag is null)
             return;
 
-        var target = ResolvePivotDropZoneKind(e.GetPosition(_pivotFieldPaneHost));
-        if (target is null || target == drag.SourceBucket)
+        var target = ResolvePivotDropTarget(e.GetPosition(_pivotFieldPaneHost));
+        if (target is null ||
+            (target.Zone.Kind == PivotFieldBucket.Available && drag.SourceBucket == PivotFieldBucket.Available))
             return;
 
-        ApplyPivotFieldDrop(pivot, headers, new PivotFieldDropRequest(drag.SourceFieldIndex, target.Value));
+        ApplyPivotFieldDrop(
+            pivot,
+            headers,
+            new PivotFieldDropRequest(
+                drag.SourceFieldIndex,
+                target.Zone.Kind,
+                AdjustPivotDropIndex(target, drag),
+                SourceBucket: drag.SourceBucket,
+                SourceItemIndex: drag.SourceItemIndex ?? -1));
     }
 
-    private Border? ResolvePivotDropZone(Point pointInPane)
+    private PivotDropTarget? ResolvePivotDropTarget(Point pointInPane)
     {
-        foreach (var (bucket, _) in _pivotDropZones)
+        foreach (var zone in _pivotDropZones)
         {
-            if (PivotZoneContains(bucket, pointInPane))
-                return bucket;
+            if (!PivotZoneContains(zone.Bucket, pointInPane))
+                continue;
+
+            return new PivotDropTarget(zone, ResolvePivotDropIndex(zone, pointInPane));
         }
 
         return null;
     }
 
-    private PivotFieldBucket? ResolvePivotDropZoneKind(Point pointInPane)
+    private int ResolvePivotDropIndex(PivotDropZone zone, Point pointInPane)
     {
-        foreach (var (bucket, kind) in _pivotDropZones)
+        for (var index = 0; index < zone.Items.Count; index++)
         {
-            if (PivotZoneContains(bucket, pointInPane))
-                return kind;
+            var topLeft = zone.Items[index].TranslatePoint(default, _pivotFieldPaneHost);
+            if (topLeft is not { } origin)
+                continue;
+
+            var midpoint = origin.Y + zone.Items[index].Bounds.Height / 2;
+            if (pointInPane.Y < midpoint)
+                return index;
         }
 
-        return null;
+        return zone.Fields.Count;
+    }
+
+    private static int AdjustPivotDropIndex(PivotDropTarget target, PivotPaneDragItem drag)
+    {
+        if (target.Zone.Kind == PivotFieldBucket.Available || target.Zone.Kind != drag.SourceBucket)
+            return target.TargetIndex;
+
+        var sourceIndex = -1;
+        for (var index = 0; index < target.Zone.Fields.Count; index++)
+        {
+            if (target.Zone.Fields[index].SourceFieldIndex == drag.SourceFieldIndex)
+            {
+                sourceIndex = index;
+                break;
+            }
+        }
+
+        return sourceIndex >= 0 && target.TargetIndex > sourceIndex
+            ? target.TargetIndex - 1
+            : target.TargetIndex;
     }
 
     private bool PivotZoneContains(Border bucket, Point pointInPane)
@@ -603,5 +646,16 @@ public sealed partial class MainWindow
         RefreshShell(command.Label);
     }
 
-    private sealed record PivotPaneDragItem(int SourceFieldIndex, PivotFieldBucket SourceBucket);
+    private sealed record PivotPaneDragItem(
+        int SourceFieldIndex,
+        PivotFieldBucket SourceBucket,
+        int? SourceItemIndex);
+
+    private sealed record PivotDropZone(
+        Border Bucket,
+        PivotFieldBucket Kind,
+        IReadOnlyList<Control> Items,
+        IReadOnlyList<PivotFieldListItemModel> Fields);
+
+    private sealed record PivotDropTarget(PivotDropZone Zone, int TargetIndex);
 }

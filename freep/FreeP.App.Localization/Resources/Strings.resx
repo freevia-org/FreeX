@@ -1228,6 +1228,12 @@
   <data name="Ribbon_Command_SmartArtBasicTimeline_KeyTip" xml:space="preserve">
     <value>T</value>
   </data>
+  <data name="Ribbon_Command_SmartArtCircleAccentTimeline_Label" xml:space="preserve">
+    <value>Circle Accent Timeline</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtCircleAccentTimeline_KeyTip" xml:space="preserve">
+    <value>CT</value>
+  </data>
   <data name="Ribbon_Command_SmartArtPhasedProcess_Label" xml:space="preserve">
     <value>Phased Process</value>
   </data>

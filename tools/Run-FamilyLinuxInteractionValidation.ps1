@@ -161,6 +161,7 @@ function Assert-ManifestContract {
         )
     } else {
         $requiredIds += @(
+            "nested-keytip-prefix-deferral",
             "slide-pane-new-slide-create",
             "slide-pane-new-slide-undo",
             "slide-pane-new-slide-redo",
@@ -182,7 +183,7 @@ function Assert-ManifestContract {
     if ($ids.Count -ne ($ids | Select-Object -Unique).Count) {
         throw "Manifest contains duplicate result IDs."
     }
-    $expectedResultCount = if ($App -eq "FreeP") { 22 } else { 37 }
+    $expectedResultCount = if ($App -eq "FreeP") { 23 } else { 37 }
     if ($results.Count -ne $expectedResultCount) {
         throw "$App family baseline must contain exactly $expectedResultCount result rows."
     }

@@ -6,12 +6,15 @@ namespace FreeX.App.Presentation.PivotUI;
 /// A request to move a source field into a target bucket at a given position. <see cref="TargetIndex"/>
 /// is the zero-based insertion position within the target bucket; a value at or past the bucket's current
 /// length (or a negative value) appends. Moving to <see cref="PivotFieldBucket.Available"/> removes the
-/// field from every layout area.
+/// field from every layout area. Avalonia supplies <see cref="SourceBucket"/> and <see cref="SourceItemIndex"/>
+/// for an exact Values-area drag; older callers may omit them and retain source-field matching behavior.
 /// </summary>
 public sealed record PivotFieldDropRequest(
     int SourceFieldIndex,
     PivotFieldBucket TargetBucket,
-    int TargetIndex = -1);
+    int TargetIndex = -1,
+    PivotFieldBucket? SourceBucket = null,
+    int SourceItemIndex = -1);
 
 /// <summary>
 /// The outcome of validating a <see cref="PivotFieldDropRequest"/>. When <see cref="IsAllowed"/> is true,
@@ -139,6 +142,9 @@ public sealed class PivotFieldDragValidator
         columns.Remove(index);
         filters.Remove(index);
 
+        if (request.SourceBucket == PivotFieldBucket.Values)
+            RemoveValueField(values, index, request.SourceItemIndex);
+
         switch (request.TargetBucket)
         {
             case PivotFieldBucket.Rows:
@@ -154,7 +160,8 @@ public sealed class PivotFieldDragValidator
                 Insert(values, index, request.TargetIndex);
                 break;
             case PivotFieldBucket.Available:
-                values.RemoveAll(value => value == index);
+                if (request.SourceBucket != PivotFieldBucket.Values)
+                    values.RemoveAll(value => value == index);
                 break;
         }
 
@@ -167,5 +174,18 @@ public sealed class PivotFieldDragValidator
             items.Add(item);
         else
             items.Insert(index, item);
+    }
+
+    private static void RemoveValueField(List<int> values, int sourceFieldIndex, int sourceItemIndex)
+    {
+        if ((uint)sourceItemIndex < (uint)values.Count && values[sourceItemIndex] == sourceFieldIndex)
+        {
+            values.RemoveAt(sourceItemIndex);
+            return;
+        }
+
+        var matchingIndex = values.IndexOf(sourceFieldIndex);
+        if (matchingIndex >= 0)
+            values.RemoveAt(matchingIndex);
     }
 }
