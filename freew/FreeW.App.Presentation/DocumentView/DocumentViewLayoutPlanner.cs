@@ -294,7 +294,8 @@ public sealed record DocumentFloatingHandleRect(
 
 public sealed record DocumentFloatingWrapExclusionZone(
     DocumentFloatRect Rect,
-    ImageWrapping Wrapping);
+    ImageWrapping Wrapping,
+    FloatingWrapTextSide WrapTextSide = FloatingWrapTextSide.BothSides);
 
 public sealed record DocumentFloatingWrapReservationPlan(
     DocumentFloatingObjectKind Kind,
@@ -305,6 +306,18 @@ public sealed record DocumentFloatingWrapReservationPlan(
 public sealed record DocumentFloatingLineExclusionPlan(
     double LeftDeltaDip,
     double RightShrinkDip);
+
+/// <summary>
+/// A left-to-right pair of usable text fragments around one square/tight float.
+/// The second start is relative to the owning column's left edge.
+/// </summary>
+public sealed record DocumentFloatingSplitLinePlan(
+    double FirstWidthDip,
+    double SecondStartDeltaDip,
+    double SecondWidthDip)
+{
+    public double EffectiveTextWidthDip => FirstWidthDip + SecondWidthDip;
+}
 
 public sealed record DocumentFloatingTextWrapLinePlan(
     double RequestedContentYDip,
@@ -317,12 +330,15 @@ public sealed record DocumentFloatingTextWrapLinePlan(
     double LeftDeltaDip,
     double RightShrinkDip,
     double EffectiveTextWidthDip,
-    double? TopAndBottomExclusionBottomDip)
+    double? TopAndBottomExclusionBottomDip,
+    DocumentFloatingSplitLinePlan? SplitLine = null)
 {
     public bool HasLateralExclusion => LeftDeltaDip > 0 || RightShrinkDip > 0;
 
     public bool HasTopAndBottomAdvance =>
         TopAndBottomExclusionBottomDip is not null && PlannedContentYDip > RequestedContentYDip;
+
+    public bool HasSplitTextFragments => SplitLine is not null;
 
     public double TextLeftDip(double leftInsetDip = 0) =>
         ColumnLeftDip + leftInsetDip + LeftDeltaDip;
@@ -351,7 +367,8 @@ public sealed record DocumentFloatingObjectSnapshot(
     ImageWrapping Wrapping,
     double RotationAngle = 0,
     bool FlipH = false,
-    bool FlipV = false)
+    bool FlipV = false,
+    FloatingWrapTextSide WrapTextSide = FloatingWrapTextSide.BothSides)
 {
     public string TypeTag => Kind switch
     {
@@ -1141,6 +1158,7 @@ public static class DocumentViewLayoutPlanner
                     defaultWidthPt: 120,
                     defaultHeightPt: 80,
                     image.Wrapping,
+                    image.WrapTextSide,
                     image.ZOrderIndex,
                     image.HorizontalAnchor,
                     image.HorizontalOffsetPt,
@@ -1323,7 +1341,7 @@ public static class DocumentViewLayoutPlanner
         ArgumentNullException.ThrowIfNull(snapshots);
 
         return snapshots
-            .Select(snapshot => BuildWrapExclusionZone(snapshot.Rect, snapshot.Wrapping))
+            .Select(snapshot => BuildWrapExclusionZone(snapshot.Rect, snapshot.Wrapping, snapshot.WrapTextSide))
             .OfType<DocumentFloatingWrapExclusionZone>()
             .ToList();
     }
@@ -1403,10 +1421,11 @@ public static class DocumentViewLayoutPlanner
 
     public static DocumentFloatingWrapExclusionZone? BuildWrapExclusionZone(
         DocumentFloatRect pageSpaceRect,
-        ImageWrapping wrapping)
+        ImageWrapping wrapping,
+        FloatingWrapTextSide wrapTextSide = FloatingWrapTextSide.BothSides)
     {
         return wrapping is ImageWrapping.Square or ImageWrapping.Tight or ImageWrapping.TopAndBottom
-            ? new DocumentFloatingWrapExclusionZone(pageSpaceRect, wrapping)
+            ? new DocumentFloatingWrapExclusionZone(pageSpaceRect, wrapping, wrapTextSide)
             : null;
     }
 
@@ -1557,7 +1576,21 @@ public static class DocumentViewLayoutPlanner
             if (freeLeftDip < minimumLineWidthDip && freeRightDip < minimumLineWidthDip)
                 continue;
 
-            if (freeLeftDip >= freeRightDip)
+            if (zone.WrapTextSide == FloatingWrapTextSide.Left)
+            {
+                var shrinkToDip = Math.Max(
+                    columnLeftDip + minimumLineWidthDip,
+                    rect.LeftDip - wrapGapDip);
+                maxRightShrinkDip = Math.Max(maxRightShrinkDip, columnRightDip - shrinkToDip);
+            }
+            else if (zone.WrapTextSide == FloatingWrapTextSide.Right)
+            {
+                var pushToDip = Math.Min(
+                    columnRightDip - minimumLineWidthDip,
+                    rect.RightDip + wrapGapDip);
+                maxLeftDeltaDip = Math.Max(maxLeftDeltaDip, pushToDip - columnLeftDip);
+            }
+            else if (freeLeftDip >= freeRightDip)
             {
                 var shrinkToDip = columnRightDip - Math.Max(
                     rect.LeftDip - wrapGapDip,
@@ -1583,6 +1616,47 @@ public static class DocumentViewLayoutPlanner
         }
 
         return new DocumentFloatingLineExclusionPlan(maxLeftDeltaDip, maxRightShrinkDip);
+    }
+
+    public static DocumentFloatingSplitLinePlan? BuildBothSidesSplitLinePlan(
+        IEnumerable<DocumentFloatingWrapExclusionZone> zones,
+        double lineTopDip,
+        double lineHeightDip,
+        double columnLeftDip,
+        double baseTextWidthDip,
+        double wrapGapDip = DefaultWrapGapDip,
+        double minimumLineWidthDip = DefaultMinimumLineWidthDip)
+    {
+        ArgumentNullException.ThrowIfNull(zones);
+
+        var columnRightDip = columnLeftDip + Math.Max(0, baseTextWidthDip);
+        var lineBottomDip = lineTopDip + Math.Max(1, lineHeightDip);
+        var active = zones
+            .Where(zone =>
+                zone.Wrapping is ImageWrapping.Square or ImageWrapping.Tight
+                && zone.Rect.BottomDip > lineTopDip
+                && zone.Rect.TopDip < lineBottomDip
+                && zone.Rect.RightDip > columnLeftDip
+                && zone.Rect.LeftDip < columnRightDip)
+            .ToList();
+
+        // Multiple contemporaneous exclusions need a full interval solver. Keep the established
+        // one-fragment behavior until that can be represented without dropping text.
+        if (active.Count != 1 || active[0].WrapTextSide != FloatingWrapTextSide.BothSides)
+            return null;
+
+        var rect = active[0].Rect;
+        var firstRightDip = Math.Clamp(rect.LeftDip - wrapGapDip, columnLeftDip, columnRightDip);
+        var secondLeftDip = Math.Clamp(rect.RightDip + wrapGapDip, columnLeftDip, columnRightDip);
+        var firstWidthDip = firstRightDip - columnLeftDip;
+        var secondWidthDip = columnRightDip - secondLeftDip;
+        if (firstWidthDip < minimumLineWidthDip || secondWidthDip < minimumLineWidthDip)
+            return null;
+
+        return new DocumentFloatingSplitLinePlan(
+            firstWidthDip,
+            secondLeftDip - columnLeftDip,
+            secondWidthDip);
     }
 
     public static DocumentFloatingTextWrapLinePlan BuildFloatingTextWrapLinePlan(
@@ -1666,6 +1740,14 @@ public static class DocumentViewLayoutPlanner
         var effectiveTextWidthDip = Math.Max(
             minimumWidthDip,
             safeBaseTextWidthDip - lateral.LeftDeltaDip - lateral.RightShrinkDip);
+        var splitLine = BuildBothSidesSplitLinePlan(
+            zoneList,
+            plannedPageSpaceYDip,
+            safeLineHeightDip,
+            columnLeftDip,
+            safeBaseTextWidthDip,
+            wrapGapDip,
+            minimumWidthDip);
 
         return new DocumentFloatingTextWrapLinePlan(
             requestedContentYDip,
@@ -1678,7 +1760,8 @@ public static class DocumentViewLayoutPlanner
             lateral.LeftDeltaDip,
             lateral.RightShrinkDip,
             effectiveTextWidthDip,
-            appliedTopAndBottomBottomDip);
+            appliedTopAndBottomBottomDip,
+            splitLine);
     }
 
     public static double? BuildTopAndBottomWrapExclusionBottom(
@@ -1992,6 +2075,7 @@ public static class DocumentViewLayoutPlanner
             defaultWidthPt,
             defaultHeightPt,
             placement.Wrapping,
+            placement.WrapTextSide,
             placement.ZOrderIndex,
             placement.HorizontalAnchor,
             placement.HorizontalOffsetPt,
@@ -2015,6 +2099,7 @@ public static class DocumentViewLayoutPlanner
         double defaultWidthPt,
         double defaultHeightPt,
         ImageWrapping wrapping,
+        FloatingWrapTextSide wrapTextSide,
         int zOrderIndex,
         HorizontalAnchor horizontalAnchor,
         double horizontalOffsetPt,
@@ -2045,7 +2130,8 @@ public static class DocumentViewLayoutPlanner
             wrapping,
             rotationAngle,
             flipH,
-            flipV));
+            flipV,
+            wrapTextSide));
     }
 
     private static double EstimateWordArtWidthPt(WordArt wordArt) =>

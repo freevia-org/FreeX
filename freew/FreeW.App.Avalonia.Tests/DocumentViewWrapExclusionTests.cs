@@ -170,6 +170,44 @@ public sealed class DocumentViewWrapExclusionTests
     // ── Test 3: Square right float — line right edge reduced ─────────────────────────────────────
 
     [Fact]
+    public async Task SquareFloat_bothSides_places_one_line_in_both_fragments()
+    {
+        double leftMost = -1;
+        double rightMost = -1;
+        double floatLeft = -1;
+        double floatRight = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var fi = MakeFloat(ImageWrapping.Square, hOffsetPt: 90, vOffsetPt: 0,
+                widthPt: 72, heightPt: 72);
+            fi.WrapTextSide = FloatingWrapTextSide.BothSides;
+            var doc = DocWithText(
+                "Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron.",
+                fi);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+
+            var zones = view.WrapExclusionZones;
+            floatLeft = zones[0].Rect.Left;
+            floatRight = zones[0].Rect.Right;
+            var placed = view.GetPlacedForBlock(0).Where(p => !char.IsWhiteSpace(p.Ch)).ToList();
+            var firstLineY = placed.Min(p => p.Y);
+            var firstLine = placed.Where(p => Math.Abs(p.Y - firstLineY) < 2).ToList();
+            leftMost = firstLine.Min(p => p.X);
+            rightMost = firstLine.Max(p => p.X);
+        });
+
+        if (!ran) return;
+
+        leftMost.Should().BeLessThan(floatLeft - 8,
+            "bothSides wrapping retains the left fragment before the float");
+        rightMost.Should().BeGreaterThan(floatRight + 8,
+            "the same line continues through the right fragment after the float");
+    }
+
+    [Fact]
     public async Task SquareFloat_right_reduces_line_available_width()
     {
         int exclusionCount = 0;
