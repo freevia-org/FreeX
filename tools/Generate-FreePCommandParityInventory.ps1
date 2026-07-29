@@ -1722,7 +1722,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "basicVenn now uses the bounded shared relationship-family live-layout path for two to four parsed nodes as overlapping translucent ellipse shapes. Unsupported relationship/Venn siblings and basicVenn diagrams with more than four parsed nodes remain on cached drawing fallback. Exact PowerPoint intersection blending, effects, text offsets, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
+            RemainingWork: "basicVenn now keeps every non-empty authored node list on the shared relationship-family live-layout path, scaling ellipse diameter and overlap to stay inside the frame. Unsupported relationship/Venn siblings remain on cached drawing fallback. Exact PowerPoint intersection blending, effects, text offsets, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.radial-venn",
@@ -1739,7 +1739,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "radialVenn now uses the bounded shared relationship-family live-layout path for three to five parsed nodes as translucent ellipses arranged around a shared center. Unsupported relationship/Venn siblings and radialVenn diagrams outside that node-count bound remain on cached drawing fallback. Exact PowerPoint intersection blending, effects, text offsets, region labeling, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
+            RemainingWork: "radialVenn now keeps every authored diagram with at least three nodes on the shared live-layout path, arranging translucent ellipses around a shared center. Unsupported relationship/Venn siblings and radialVenn diagrams below the minimum node count remain on cached drawing fallback. Exact PowerPoint intersection blending, effects, text offsets, region labeling, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.target-list",
@@ -1772,7 +1772,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "stackedVenn now uses the bounded shared relationship-family live-layout path for two to five parsed nodes as offset overlapping translucent ellipse shapes. Unsupported relationship siblings and stackedVenn diagrams outside that node-count bound remain on cached drawing fallback. Exact PowerPoint stacked region blending, effects, text offsets, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
+            RemainingWork: "stackedVenn now keeps every authored diagram with at least two nodes on the shared live-layout path, scaling its offset ellipse stack to the diagram frame. Unsupported relationship siblings and stackedVenn diagrams below the minimum node count remain on cached drawing fallback. Exact PowerPoint stacked region blending, effects, text offsets, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.vertical-bullet-list",
