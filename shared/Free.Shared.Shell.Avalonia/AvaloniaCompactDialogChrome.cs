@@ -100,6 +100,13 @@ public static class AvaloniaCompactDialogChrome
 
         foreach (var control in window.GetVisualDescendants().OfType<Control>())
         {
+            if (control is TextBlock textBlock)
+            {
+                textBlock.FontFamily = style.FontFamily;
+                textBlock.FontSize = style.FontSize;
+                textBlock.Foreground = DialogForegroundBrush;
+            }
+
             switch (control)
             {
                 case TextBox textBox:
@@ -267,6 +274,8 @@ public static class AvaloniaCompactDialogChrome
         comboBox.CornerRadius = new CornerRadius(0);
         comboBox.FontSize = style.FontSize;
         comboBox.FontFamily = style.FontFamily;
+        comboBox.Foreground = DialogForegroundBrush;
+        comboBox.HorizontalAlignment = HorizontalAlignment.Stretch;
         // Fluent's editable ComboBox template hosts the text presenter separately from
         // the arrow. Stretch the content slot so an editable field remains a full-width
         // WPF-style input instead of collapsing to the text's desired width.
@@ -285,7 +294,11 @@ public static class AvaloniaCompactDialogChrome
         });
         comboBox.Styles.Add(new Style(selector => selector.OfType<ContentPresenter>().Name("PART_ContentPresenter"))
         {
-            Setters = { new Setter(ContentPresenter.BackgroundProperty, comboBackground) },
+            Setters =
+            {
+                new Setter(ContentPresenter.BackgroundProperty, comboBackground),
+                new Setter(ContentPresenter.ForegroundProperty, DialogForegroundBrush),
+            },
         });
     }
 
@@ -296,6 +309,7 @@ public static class AvaloniaCompactDialogChrome
 
         checkBox.FontSize = style.FontSize;
         checkBox.FontFamily = style.FontFamily;
+        checkBox.Foreground = DialogForegroundBrush;
     }
 
     public static void ApplyCompactCheckBox(CheckBox checkBox, AvaloniaCompactDialogChromeStyle style)
@@ -335,6 +349,7 @@ public static class AvaloniaCompactDialogChrome
             var content = new ContentPresenter
             {
                 VerticalContentAlignment = VerticalAlignment.Center,
+                Foreground = DialogForegroundBrush,
             };
             content.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = control });
             content.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = control });
