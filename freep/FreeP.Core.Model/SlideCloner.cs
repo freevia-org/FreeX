@@ -226,6 +226,7 @@ public static class SlideCloner
             ChartObjectProtected = src.ChartObjectProtected,
             ChartDataProtected = src.ChartDataProtected,
             ChartFormattingProtected = src.ChartFormattingProtected,
+            ChartSelectionProtected = src.ChartSelectionProtected,
             PreservedChartSpaceExtensionsXml = src.PreservedChartSpaceExtensionsXml,
         };
 

@@ -159,6 +159,7 @@ public sealed class ChartTests : IDisposable
         chart.ChartObjectProtected = true;
         chart.ChartDataProtected = false;
         chart.ChartFormattingProtected = true;
+        chart.ChartSelectionProtected = true;
         slide.Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.Chart, Chart = chart });
 
         var clone = SlideCloner.CloneSlide(slide).Shapes.Single().Chart!;
@@ -190,6 +191,7 @@ public sealed class ChartTests : IDisposable
         clone.ChartObjectProtected.Should().BeTrue();
         clone.ChartDataProtected.Should().BeFalse();
         clone.ChartFormattingProtected.Should().BeTrue();
+        clone.ChartSelectionProtected.Should().BeTrue();
     }
 
     [Fact]
@@ -586,7 +588,7 @@ public sealed class ChartTests : IDisposable
         chart.ChartDate1904 = true;
         chart.ChartLanguage = "fr-FR";
         chart.PreservedChartProtectionXml =
-            "<c:protection xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" chartObject=\"1\" data=\"0\" formatting=\"1\" />";
+            "<c:protection xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" chartObject=\"1\" data=\"0\" formatting=\"1\" selection=\"1\" />";
         var path = WriteToPptx(BuildPresWithChart(chart));
 
         using (var archive = ZipFile.OpenRead(path))
@@ -598,6 +600,7 @@ public sealed class ChartTests : IDisposable
             root.Element(ChartNs + "lang")?.Attribute("val")?.Value.Should().Be("fr-FR");
             root.Element(ChartNs + "protection")?.Attribute("chartObject")?.Value.Should().Be("1");
             root.Element(ChartNs + "protection")?.Attribute("data")?.Value.Should().Be("0");
+            root.Element(ChartNs + "protection")?.Attribute("selection")?.Value.Should().Be("1");
         }
 
         var reloaded = PptxPackageReader.Read(path);
@@ -608,10 +611,12 @@ public sealed class ChartTests : IDisposable
         rt.ChartObjectProtected.Should().BeTrue();
         rt.ChartDataProtected.Should().BeFalse();
         rt.ChartFormattingProtected.Should().BeTrue();
+        rt.ChartSelectionProtected.Should().BeTrue();
 
         rt.ChartObjectProtected = false;
         rt.ChartDataProtected = true;
         rt.ChartFormattingProtected = false;
+        rt.ChartSelectionProtected = false;
         var editedPath = WriteToPptx(BuildPresWithChart(rt));
         using (var archive = ZipFile.OpenRead(editedPath))
         {
@@ -621,6 +626,7 @@ public sealed class ChartTests : IDisposable
             protection!.Attribute("chartObject")?.Value.Should().Be("0");
             protection.Attribute("data")?.Value.Should().Be("1");
             protection.Attribute("formatting")?.Value.Should().Be("0");
+            protection.Attribute("selection")?.Value.Should().Be("0");
         }
 
         var edited = PptxPackageReader.Read(editedPath);
@@ -628,6 +634,7 @@ public sealed class ChartTests : IDisposable
         editedChart.ChartObjectProtected.Should().BeFalse();
         editedChart.ChartDataProtected.Should().BeTrue();
         editedChart.ChartFormattingProtected.Should().BeFalse();
+        editedChart.ChartSelectionProtected.Should().BeFalse();
     }
 
     [Fact]

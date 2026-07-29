@@ -294,6 +294,25 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void EditingSession_ProtectedChart_CannotBeSelected()
+    {
+        var (p, bus) = Make();
+        var chart = MakeChart();
+        chart.Chart!.ChartSelectionProtected = true;
+        p.Slides[0].Shapes.Add(chart);
+        p.Slides[0].Shapes.Add(MakeShape(2));
+        var session = new EditingSession(p, bus);
+
+        session.Select(2);
+        session.Select(chart.Id);
+        session.SelectedShapeIds.Should().ContainSingle().Which.Should().Be(2);
+
+        session.ClearSelection();
+        session.SelectAll();
+        session.SelectedShapeIds.Should().ContainSingle().Which.Should().Be(2);
+    }
+
+    [Fact]
     public void MoveShapeCommand_Apply_TranslatesShape()
     {
         var (p, bus) = Make();

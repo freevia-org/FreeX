@@ -174,7 +174,8 @@ internal static class PptxChartWriter
         if (protection is null &&
             chart.ChartObjectProtected is null &&
             chart.ChartDataProtected is null &&
-            chart.ChartFormattingProtected is null)
+            chart.ChartFormattingProtected is null &&
+            chart.ChartSelectionProtected is null)
         {
             return null;
         }
@@ -183,6 +184,7 @@ internal static class PptxChartWriter
         SetProtectionAttribute(protection, "chartObject", chart.ChartObjectProtected);
         SetProtectionAttribute(protection, "data", chart.ChartDataProtected);
         SetProtectionAttribute(protection, "formatting", chart.ChartFormattingProtected);
+        SetProtectionAttribute(protection, "selection", chart.ChartSelectionProtected);
         return protection;
     }
 
