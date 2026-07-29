@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -145,6 +146,12 @@ public partial class MainWindow
     private void SheetTab_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
+        if (TryHandleFormulaSheetTabClick(tab.Id, Keyboard.Modifiers))
+        {
+            e.Handled = true;
+            return;
+        }
+
         var dragStart = e.GetPosition(SheetTabsControl);
         _currentSheetId = tab.Id;
         UpdateGroupedSheetsForClick(tab.Id);
@@ -377,9 +384,11 @@ public partial class MainWindow
     }
 
     private void UpdateGroupedSheetsForClick(SheetId clickedSheetId)
+        => UpdateGroupedSheetsForClick(clickedSheetId, Keyboard.Modifiers);
+
+    private void UpdateGroupedSheetsForClick(SheetId clickedSheetId, ModifierKeys modifiers)
     {
         var visibleSheetIds = GetVisibleSheetIds();
-        var modifiers = Keyboard.Modifiers;
         IReadOnlyList<SheetId> selected;
         if ((modifiers & ModifierKeys.Shift) != 0 && _sheetGroupAnchor.HasValue)
         {
@@ -401,6 +410,49 @@ public partial class MainWindow
             _groupedSheetIds.Add(id);
         if (_groupedSheetIds.Count == 0)
             _groupedSheetIds.Add(clickedSheetId);
+    }
+
+    private bool TryHandleFormulaSheetTabClick(SheetId sheetId, ModifierKeys modifiers)
+    {
+        var formulaEditor = GetFormulaRangeEntryEditor();
+        if (formulaEditor is null ||
+            _workbook.GetSheet(sheetId) is not { } clickedSheet ||
+            _workbook.GetSheet(_currentSheetId) is not { } activeSheet)
+        {
+            return false;
+        }
+
+        var formulaText = formulaEditor.Text;
+        var selectionStart = formulaEditor.SelectionStart;
+        var selectionLength = formulaEditor.SelectionLength;
+
+        _formulaSheetSpanEntryState = FormulaSheetSpanEntryPlanner.PlanTabSelection(
+            _formulaSheetSpanEntryState,
+            activeSheet.Name,
+            clickedSheet.Name,
+            (modifiers & ModifierKeys.Shift) != 0);
+        _currentSheetId = sheetId;
+        UpdateGroupedSheetsForClick(sheetId, modifiers);
+        UpdateViewport();
+        RefreshSheetTabs();
+        RestoreFormulaRangeEntryEditor(formulaEditor, formulaText, selectionStart, selectionLength);
+        UpdateTitleBar();
+        return true;
+    }
+
+    private void RestoreFormulaRangeEntryEditor(
+        System.Windows.Controls.TextBox editor,
+        string formulaText,
+        int selectionStart,
+        int selectionLength)
+    {
+        if (editor.Text != formulaText)
+            editor.Text = formulaText;
+
+        var safeSelectionStart = Math.Clamp(selectionStart, 0, editor.Text.Length);
+        var safeSelectionLength = Math.Clamp(selectionLength, 0, editor.Text.Length - safeSelectionStart);
+        editor.Select(safeSelectionStart, safeSelectionLength);
+        editor.Focus();
     }
 
     private void SheetNavLeftBtn_Click(object sender, RoutedEventArgs e)

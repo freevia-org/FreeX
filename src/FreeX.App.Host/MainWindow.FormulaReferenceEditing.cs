@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -12,6 +13,19 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private void RestoreFormulaEditCellSelection(CellAddress address)
+    {
+        if (_currentSheetId != address.Sheet)
+        {
+            _currentSheetId = address.Sheet;
+            SelectSingleSheetTab(address.Sheet);
+            UpdateViewport();
+            RefreshSheetTabs();
+        }
+
+        SetSelectionRange(new GridRange(address, address), address);
+    }
+
     private void CaptureFormulaEditCell()
     {
         if (_formulaEditCell is null && SheetGrid.SelectedRange?.Start is { } activeCell)
@@ -24,6 +38,7 @@ public partial class MainWindow
         _formulaRangeSelectionAnchor = null;
         _formulaRangeEntryMode = false;
         _formulaRangeEntrySelectionMode = ExcelSelectionMode.Normal;
+        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
         ClearFormulaReferenceEntrySpan();
         ClearFormulaReferenceHighlights();
     }
@@ -32,6 +47,7 @@ public partial class MainWindow
     {
         _formulaReferenceStart = null;
         _formulaReferenceLength = null;
+        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
     }
 
     private void UpdateFormulaRangeEntryStateAfterTextChanged(System.Windows.Controls.TextBox editor)
@@ -123,16 +139,13 @@ public partial class MainWindow
                 formulaCell.Value,
                 _options.UseR1C1ReferenceStyle,
                 out var edit,
-                _workbook.GetSheet(range.Start.Sheet)?.Name))
+                _workbook.GetSheet(range.Start.Sheet)?.Name,
+                _formulaSheetSpanEntryState))
         {
             return false;
         }
 
-        ApplyTextEdit(editor, edit.TextEdit);
-        if (!ReferenceEquals(editor, FormulaBar))
-            FormulaBar.Text = editor.Text;
-        else if (_inlineEditor?.IsVisible == true)
-            _inlineEditor.Text = editor.Text;
+        ApplyFormulaEditorTextEdit(editor, edit.TextEdit);
 
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;
@@ -239,7 +252,8 @@ public partial class MainWindow
                 formulaCell.Value,
                 _options.UseR1C1ReferenceStyle,
                 out edit,
-                _workbook.GetSheet(range.Start.Sheet)?.Name);
+                _workbook.GetSheet(range.Start.Sheet)?.Name,
+                _formulaSheetSpanEntryState);
 
         if (!applied)
         {
@@ -256,11 +270,7 @@ public partial class MainWindow
         CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
         RefreshStatusBar();
 
-        ApplyTextEdit(editor, edit.TextEdit);
-        if (!ReferenceEquals(editor, FormulaBar))
-            FormulaBar.Text = editor.Text;
-        else if (_inlineEditor?.IsVisible == true)
-            _inlineEditor.Text = editor.Text;
+        ApplyFormulaEditorTextEdit(editor, edit.TextEdit);
 
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;

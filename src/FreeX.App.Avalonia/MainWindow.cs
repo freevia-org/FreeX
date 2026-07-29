@@ -510,6 +510,7 @@ public sealed partial class MainWindow : Window
     private long _lastCellPointerPressTimestamp;
     private CellAddress? _formulaRangeSelectionAnchor;
     private CellAddress? _formulaRangeSelectionCursor;
+    private FormulaSheetSpanEntryState _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
     private bool _formulaRangeEntryMode;
     private ExcelSelectionMode _formulaRangeEntrySelectionMode = ExcelSelectionMode.Normal;
     private int? _formulaReferenceStart;
@@ -3432,6 +3433,16 @@ public sealed partial class MainWindow : Window
         _formulaBox.BorderThickness = new Thickness(1);
         _formulaBox.GotFocus += FormulaBox_GotFocus;
         _formulaBox.KeyDown += FormulaBox_KeyDown;
+        _formulaBox.PropertyChanged += (_, args) =>
+        {
+            if (_isApplyingFormulaBoxText ||
+                (args.Property != TextBox.SelectionStartProperty && args.Property != TextBox.SelectionEndProperty))
+            {
+                return;
+            }
+
+            ClearFormulaReferenceEntrySpanIfCaretLeftReference(_formulaBox);
+        };
         _formulaBox.TextChanged += FormulaBox_TextChanged;
         AutomationProperties.SetAutomationId(_formulaBox, "FormulaBox");
         AutomationProperties.SetName(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey));
@@ -9138,6 +9149,8 @@ public sealed partial class MainWindow : Window
 
             _inlineCellEditSelectionStart = editor.SelectionStart;
             _inlineCellEditSelectionEnd = editor.SelectionEnd;
+            if (!_isApplyingFormulaBoxText)
+                ClearFormulaReferenceEntrySpanIfCaretLeftReference(editor);
         };
         editor.TextChanged += (_, _) =>
         {
@@ -9498,6 +9511,34 @@ public sealed partial class MainWindow : Window
     {
         _formulaReferenceStart = null;
         _formulaReferenceLength = null;
+        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
+    }
+
+    private void ClearFormulaReferenceEntrySpanIfCaretLeftReference(TextBox editor)
+    {
+        if (_formulaReferenceStart is not { } start || _formulaReferenceLength is not { } length)
+            return;
+
+        var textLength = editor.Text?.Length ?? 0;
+        var end = start + length;
+        if (start < 0 || length < 0 || start > textLength || end > textLength)
+        {
+            ClearFormulaReferenceEntrySpan();
+            return;
+        }
+
+        var selectionStart = Math.Clamp(editor.SelectionStart, 0, textLength);
+        if (editor.SelectionStart != editor.SelectionEnd)
+        {
+            var selectionEnd = Math.Clamp(editor.SelectionEnd, selectionStart, textLength);
+            if (selectionStart < start || selectionEnd > end)
+                ClearFormulaReferenceEntrySpan();
+            return;
+        }
+
+        var caret = Math.Clamp(editor.CaretIndex, 0, textLength);
+        if (caret < start || caret > end)
+            ClearFormulaReferenceEntrySpan();
     }
 
     private void ClearFormulaRangeEntryState()
@@ -9506,6 +9547,7 @@ public sealed partial class MainWindow : Window
         _formulaRangeSelectionCursor = null;
         _formulaRangeEntryMode = false;
         _formulaRangeEntrySelectionMode = ExcelSelectionMode.Normal;
+        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
         ClearFormulaReferenceEntrySpan();
         ClearFormulaReferenceTextOverlay();
         ClearFormulaReferenceGridHighlights();
@@ -9581,6 +9623,9 @@ public sealed partial class MainWindow : Window
         {
             _isApplyingFormulaBoxText = false;
         }
+
+        _formulaReferenceStart = edit.SelectionStart;
+        _formulaReferenceLength = edit.SelectionLength;
 
         args.Handled = true;
         return true;
@@ -9669,7 +9714,8 @@ public sealed partial class MainWindow : Window
                 formulaCell.Value,
                 UseR1C1ReferenceStyle,
                 out var edit,
-                _session.Workbook.GetSheet(range.Start.Sheet)?.Name))
+                _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
+                _formulaSheetSpanEntryState))
         {
             return false;
         }
@@ -9752,7 +9798,8 @@ public sealed partial class MainWindow : Window
                 formulaCell.Value,
                 UseR1C1ReferenceStyle,
                 out var edit,
-                _session.ActiveSheet.Name))
+                _session.ActiveSheet.Name,
+                _formulaSheetSpanEntryState))
         {
             return false;
         }
