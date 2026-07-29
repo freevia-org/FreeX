@@ -181,6 +181,50 @@ public sealed class SlideShowControllerTests
     }
 
     [Fact]
+    public void Controller_AnimationStartIndex_StartsSelectedTriggerSequence()
+    {
+        var slide = SlideWithAnimations(
+            (AnimationTrigger.OnClick, AnimationPreset.Appear));
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 20,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Fade,
+            Trigger = AnimationTrigger.OnClick,
+            TriggerShapeId = 99u,
+            DurationMs = 500,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 21,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.FlyIn,
+            Trigger = AnimationTrigger.WithPrevious,
+            TriggerShapeId = 99u,
+            DurationMs = 500,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 22,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Zoom,
+            Trigger = AnimationTrigger.OnClick,
+            TriggerShapeId = 99u,
+            DurationMs = 500,
+        });
+
+        var ctrl = new SlideShowController(new[] { slide }, 0, animationStartIndex: 1);
+
+        ctrl.CurrentSteps.Should().HaveCount(2);
+        ctrl.CurrentSteps[0].Animations.Select(animation => animation.ShapeId)
+            .Should().Equal(20u, 21u);
+        ctrl.Advance().Should().BeOfType<AdvanceResult.PlayStep>();
+        ctrl.Advance().Should().BeOfType<AdvanceResult.PlayStep>()
+            .Which.Step.Animations.Should().ContainSingle()
+            .Which.ShapeId.Should().Be(22u);
+    }
+
+    [Fact]
     public void Controller_NoSlides_IndexIsMinusOne()
     {
         var empty = new SlideShowController(Array.Empty<Slide>(), 0);

@@ -137,9 +137,10 @@ public sealed class SlideShowController
     }
 
     /// <summary>
-    /// Starts the current slide's main animation sequence at a selected flat
-    /// animation entry. Trigger-only animations are not part of the main click
-    /// sequence and therefore leave the normal sequence untouched.
+    /// Starts the current slide's animation sequence at a selected flat animation
+    /// entry. Main-sequence entries trim the normal click chain. Trigger-only
+    /// entries build and trim their own trigger chain so Animation Pane playback
+    /// can start from an interactive animation without requiring a shape click.
     /// </summary>
     public bool StartAtAnimationIndex(int animationIndex)
     {
@@ -152,6 +153,42 @@ public sealed class SlideShowController
         }
 
         var selectedAnimation = slide.Animations[animationIndex];
+        if (selectedAnimation.TriggerShapeId is uint triggerShapeId)
+        {
+            var triggerSteps = BuildTriggerSteps(slide.Animations
+                .Where(animation => animation.TriggerShapeId == triggerShapeId)
+                .ToArray());
+
+            for (var stepIndex = 0; stepIndex < triggerSteps.Count; stepIndex++)
+            {
+                var step = triggerSteps[stepIndex];
+                var entryIndex = -1;
+                for (var i = 0; i < step.Entries.Count; i++)
+                {
+                    if (ReferenceEquals(step.Entries[i].Animation, selectedAnimation))
+                    {
+                        entryIndex = i;
+                        break;
+                    }
+                }
+
+                if (entryIndex < 0)
+                    continue;
+
+                var trimmedSteps = new List<AnimationStep>(triggerSteps.Count - stepIndex)
+                {
+                    new AnimationStep(step.Entries.Skip(entryIndex).ToArray())
+                };
+                trimmedSteps.AddRange(triggerSteps.Skip(stepIndex + 1));
+                _currentSteps = trimmedSteps;
+                PendingStepIndex = 0;
+                _triggerStepCursors.Clear();
+                return true;
+            }
+
+            return false;
+        }
+
         for (var stepIndex = 0; stepIndex < _currentSteps.Count; stepIndex++)
         {
             var step = _currentSteps[stepIndex];

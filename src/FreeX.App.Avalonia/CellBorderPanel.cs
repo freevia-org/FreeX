@@ -3,6 +3,7 @@ using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -48,12 +49,14 @@ internal sealed class CellBorderPanel : Panel
 {
     private readonly CellStyle _style;
     private readonly CellBorderNeighborEdges _neighbors;
+    private readonly double _zoomFactor;
     private Size _lastArrange = new(-1, -1);
 
-    public CellBorderPanel(CellStyle style, CellBorderNeighborEdges neighbors = default)
+    public CellBorderPanel(CellStyle style, CellBorderNeighborEdges neighbors = default, double zoomFactor = 1.0)
     {
         _style = style;
         _neighbors = neighbors;
+        _zoomFactor = double.IsFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1.0;
         IsHitTestVisible = false;
         ClipToBounds = false;
     }
@@ -113,7 +116,8 @@ internal sealed class CellBorderPanel : Panel
         if (border.Style == BorderStyle.None)
             return;
 
-        var thickness  = CellBorderGeometry.GetThickness(border.Style);
+        var renderScaling = GetRenderScaling();
+        var thickness  = GetDisplayThickness(border.Style, renderScaling);
         var dashArray  = CellBorderGeometry.GetDashArray(border.Style);
         var stroke     = ColorToBrush(border.Color);
         var halfThick  = thickness / 2.0;
@@ -125,25 +129,28 @@ internal sealed class CellBorderPanel : Panel
         {
             // Move the Y coordinate inward by half a stroke width so the line is fully within the cell.
             var y = p1.Y == 0 ? halfThick : p1.Y - halfThick;
+            y = BorderStrokePixelSnapper.SnapCenter(y, thickness, renderScaling);
             start = new Point(p1.X, y);
             end   = new Point(p2.X, y);
         }
         else
         {
             var x = p1.X == 0 ? halfThick : p1.X - halfThick;
+            x = BorderStrokePixelSnapper.SnapCenter(x, thickness, renderScaling);
             start = new Point(x, p1.Y);
             end   = new Point(x, p2.Y);
         }
 
-        AddLineOrDouble(border.Style, start, end, stroke, thickness, dashArray);
+        AddLineOrDouble(border.Style, start, end, stroke, thickness, dashArray, renderScaling);
     }
 
     private void AddDiagonal(CellBorder border, Point p1, Point p2)
     {
-        var thickness = CellBorderGeometry.GetThickness(border.Style);
+        var renderScaling = GetRenderScaling();
+        var thickness = GetDisplayThickness(border.Style, renderScaling);
         var dashArray = CellBorderGeometry.GetDashArray(border.Style);
         var stroke    = ColorToBrush(border.Color);
-        AddLineOrDouble(border.Style, p1, p2, stroke, thickness, dashArray);
+        AddLineOrDouble(border.Style, p1, p2, stroke, thickness, dashArray, renderScaling);
     }
 
     /// <summary>
@@ -153,10 +160,20 @@ internal sealed class CellBorderPanel : Panel
     /// pair (the WPF twin special-cases <c>BorderStyle.Double</c> the same way instead of drawing
     /// one solid line).
     /// </summary>
-    private void AddLineOrDouble(BorderStyle style, Point p1, Point p2, IBrush stroke, double thickness, double[]? dashArray)
+    private void AddLineOrDouble(
+        BorderStyle style,
+        Point p1,
+        Point p2,
+        IBrush stroke,
+        double thickness,
+        double[]? dashArray,
+        double renderScaling)
     {
         if (style == BorderStyle.Double)
         {
+            if (TryAddAxisAlignedDoubleBorderLines(p1, p2, stroke, thickness, renderScaling))
+                return;
+
             var (x1, y1, x2, y2, x3, y3, x4, y4) =
                 CellBorderGeometry.GetDoubleBorderLineOffsets(p1.X, p1.Y, p2.X, p2.Y);
             Children.Add(MakeLine(new Point(x1, y1), new Point(x2, y2), stroke, thickness, null));
@@ -166,6 +183,50 @@ internal sealed class CellBorderPanel : Panel
 
         Children.Add(MakeLine(p1, p2, stroke, thickness, dashArray));
     }
+
+    private bool TryAddAxisAlignedDoubleBorderLines(
+        Point p1,
+        Point p2,
+        IBrush stroke,
+        double thickness,
+        double renderScaling)
+    {
+        var scale = BorderStrokePixelSnapper.NormalizePixelsPerDip(renderScaling);
+        var linePixels = BorderStrokePixelSnapper.SnapThicknessToDevicePixels(thickness, scale);
+        if (linePixels <= 0)
+            return false;
+
+        var gapPixels = Math.Max(1, (int)Math.Round(CellBorderGeometry.DoubleBorderGap * scale, MidpointRounding.AwayFromZero));
+        var totalThickness = ((linePixels * 2.0) + gapPixels) / scale;
+        var offset = (linePixels + gapPixels) / (2.0 * scale);
+
+        if (Math.Abs(p1.Y - p2.Y) < 0.0001)
+        {
+            var center = BorderStrokePixelSnapper.SnapCenter(p1.Y, totalThickness, scale);
+            Children.Add(MakeLine(new Point(p1.X, center - offset), new Point(p2.X, center - offset), stroke, thickness, null));
+            Children.Add(MakeLine(new Point(p1.X, center + offset), new Point(p2.X, center + offset), stroke, thickness, null));
+            return true;
+        }
+
+        if (Math.Abs(p1.X - p2.X) < 0.0001)
+        {
+            var center = BorderStrokePixelSnapper.SnapCenter(p1.X, totalThickness, scale);
+            Children.Add(MakeLine(new Point(center - offset, p1.Y), new Point(center - offset, p2.Y), stroke, thickness, null));
+            Children.Add(MakeLine(new Point(center + offset, p1.Y), new Point(center + offset, p2.Y), stroke, thickness, null));
+            return true;
+        }
+
+        return false;
+    }
+
+    private double GetDisplayThickness(BorderStyle style, double renderScaling)
+    {
+        var displayThickness = CellBorderGeometry.GetThickness(style) * _zoomFactor;
+        return BorderStrokePixelSnapper.SnapThickness(displayThickness, renderScaling);
+    }
+
+    private double GetRenderScaling() =>
+        BorderStrokePixelSnapper.NormalizePixelsPerDip(TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0);
 
     private static Line MakeLine(Point start, Point end, IBrush stroke, double thickness, double[]? dashArray)
     {
