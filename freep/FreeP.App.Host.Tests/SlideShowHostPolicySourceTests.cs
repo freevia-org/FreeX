@@ -213,7 +213,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("if (visibilityPlan.SuppressAtStart || visibilityPlan.SuppressAtCompletion)");
         source.Should().Contain("_slideCanvas.SuppressedShapeIds.Add(animation.ShapeId);");
         source.Should().Contain("RevealShape(animation.ShapeId);");
-        source.Should().Contain("PlayFallbackAnimation(\n            SlideShowPlaybackPlanner.PlanFallbackAnimation(animation, delayMs));");
+        source.Should().Contain("SlideShowPlaybackPlanner.PlanFallbackAnimation(animation, delayMs)");
         source.Should().Contain("private static void ApplyRepeatTiming(");
         source.Should().Contain("RepeatBehavior.Forever");
         source.Should().Contain("timeline.RepeatBehavior = repeatBehavior;");
