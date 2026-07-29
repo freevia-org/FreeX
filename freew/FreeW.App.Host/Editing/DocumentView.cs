@@ -180,6 +180,9 @@ public sealed class DocumentView : RichTextBox
     // The floating non-image object currently selected on the overlay canvas (Shape/Chart/SmartArt/WordArt/DrawingGroup).
     // Null when the selected floating object is an InlineImage (use _selectedFloatingImage) or none.
     private object? _selectedFloatingObject;
+    // A direct child selection keeps the owning group active for group-level commands while the
+    // shared child geometry commands target the selected local child.
+    private (FreeW.Core.Model.DrawingGroup Group, int ChildIndex)? _selectedFloatingGroupChild;
 
     // Multi-select: the set of currently selected floating objects (each an InlineImage / Shape / Chart /
     // SmartArt / WordArt / FreeW.Core.Model.DrawingGroup). Populated by Shift/Ctrl-click; the single-select path keeps this
@@ -6656,6 +6659,17 @@ public sealed class DocumentView : RichTextBox
 
             Canvas.SetLeft(childElement, offsetX);
             Canvas.SetTop(childElement, offsetY);
+            if (enableSelection)
+            {
+                var childIndex = i;
+                childElement.MouseLeftButtonDown += (_, e) =>
+                {
+                    var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
+                    if (!addToMulti)
+                        SelectFloatingGroupChild(group, childIndex);
+                    e.Handled = true;
+                };
+            }
             innerCanvas.Children.Add(childElement);
         }
 
@@ -6780,6 +6794,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     internal void SelectFloatingObject(object obj, bool addToMultiSelect = false)
     {
+        _selectedFloatingGroupChild = null;
         if (addToMultiSelect)
         {
             if (_selectedFloatingObjects.Contains(obj))
@@ -6807,6 +6822,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     internal void SelectFloatingImage(InlineImage image, bool addToMultiSelect = false)
     {
+        _selectedFloatingGroupChild = null;
         if (addToMultiSelect)
         {
             if (_selectedFloatingObjects.Contains(image))
@@ -6827,8 +6843,91 @@ public sealed class DocumentView : RichTextBox
         RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, this));
     }
 
+    /// <summary>Select one direct child while retaining its owning group as the active selection.</summary>
+    internal void SelectFloatingGroupChild(FreeW.Core.Model.DrawingGroup group, int childIndex)
+    {
+        if (childIndex < 0 || childIndex >= group.Children.Count)
+            return;
+
+        _selectedFloatingGroupChild = (group, childIndex);
+        _selectedFloatingObjects.Clear();
+        _selectedFloatingObjects.Add(group);
+        _selectedFloatingObject = group;
+        _selectedFloatingImage = null;
+        SyncFloatingObjectsCanvas();
+        Focus();
+        RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, this));
+    }
+
+    /// <summary>Move the selected WPF group child in group-local points through the shared command.</summary>
+    internal bool MoveSelectedFloatingGroupChild(double dxPt, double dyPt)
+    {
+        if (_selectedFloatingGroupChild is not { } selected)
+            return false;
+
+        CommitToModel();
+        var (blockIndex, runIndex) = FindFloatingObjectLocation(selected.Group);
+        if (blockIndex < 0)
+            return false;
+
+        SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(selected.Group, selected.ChildIndex);
+        var offset = selected.Group.ChildOffsets[selected.ChildIndex];
+        _commands.Execute(new SetDrawingGroupChildPositionCommand(
+            blockIndex,
+            runIndex,
+            selected.ChildIndex,
+            offset.X + dxPt,
+            offset.Y + dyPt));
+        SyncFloatingObjectsCanvas();
+        return true;
+    }
+
+    /// <summary>Resize the selected WPF group child, optionally moving its local top-left anchor.</summary>
+    internal bool ResizeSelectedFloatingGroupChild(
+        double widthPt,
+        double heightPt,
+        double dxPt = 0,
+        double dyPt = 0)
+    {
+        if (_selectedFloatingGroupChild is not { } selected || widthPt <= 0 || heightPt <= 0)
+            return false;
+
+        CommitToModel();
+        var (blockIndex, runIndex) = FindFloatingObjectLocation(selected.Group);
+        if (blockIndex < 0)
+            return false;
+
+        var commands = new List<IDocumentCommand>
+        {
+            new SetDrawingGroupChildSizeCommand(
+                blockIndex,
+                runIndex,
+                selected.ChildIndex,
+                widthPt,
+                heightPt)
+        };
+        if (Math.Abs(dxPt) > 0.01 || Math.Abs(dyPt) > 0.01)
+        {
+            SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(selected.Group, selected.ChildIndex);
+            var offset = selected.Group.ChildOffsets[selected.ChildIndex];
+            commands.Add(new SetDrawingGroupChildPositionCommand(
+                blockIndex,
+                runIndex,
+                selected.ChildIndex,
+                offset.X + dxPt,
+                offset.Y + dyPt));
+        }
+
+        _commands.Execute(new CompositeDocumentCommand("Resize Group Child", commands));
+        SyncFloatingObjectsCanvas();
+        return true;
+    }
+
     /// <summary>Returns the current multi-select set as a read-only snapshot.</summary>
     internal IReadOnlyList<object> SelectedFloatingObjects => _selectedFloatingObjects.AsReadOnly();
+
+    /// <summary>Returns the selected direct child within a group, when child editing is active.</summary>
+    internal (FreeW.Core.Model.DrawingGroup Group, int ChildIndex)? SelectedFloatingGroupChild => _selectedFloatingGroupChild;
 
     /// <summary>Returns true when two or more floating objects are currently multi-selected.</summary>
     internal bool HasMultipleFloatingObjectsSelected => _selectedFloatingObjects.Count >= 2;
@@ -6889,6 +6988,7 @@ public sealed class DocumentView : RichTextBox
 
         _commands.Execute(new GroupFloatingObjectsCommand(members));
         _selectedFloatingObjects.Clear();
+        _selectedFloatingGroupChild = null;
         _selectedFloatingImage = null;
         _selectedFloatingObject = null;
         SyncFloatingObjectsCanvas();
@@ -6908,6 +7008,7 @@ public sealed class DocumentView : RichTextBox
 
         _commands.Execute(new UngroupFloatingObjectsCommand(bi, ri));
         _selectedFloatingObjects.Clear();
+        _selectedFloatingGroupChild = null;
         _selectedFloatingImage = null;
         _selectedFloatingObject = null;
         SyncFloatingObjectsCanvas();

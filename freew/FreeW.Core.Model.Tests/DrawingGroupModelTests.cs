@@ -155,6 +155,63 @@ public sealed class DrawingGroupModelTests
         second.FlipH.Should().BeFalse();
     }
 
+    [Fact]
+    public void SetDrawingGroupChildPositionCommand_PersistsLocalOffsetAndUndoes()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var group = new DrawingGroup();
+        group.Children.Add(new Shape(ShapeKind.Rectangle, 60, 30));
+        group.Children.Add(new Shape(ShapeKind.Ellipse, 72, 36));
+        group.ChildOffsets.Add((12, 18));
+        group.ChildOffsets.Add((72, 36));
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(group));
+        doc.Blocks.Add(paragraph);
+        var context = new TestCtx(doc);
+        var command = new SetDrawingGroupChildPositionCommand(0, 0, 1, 96, 54);
+
+        command.Apply(context);
+
+        group.ChildOffsets[0].Should().Be((12, 18));
+        group.ChildOffsets[1].Should().Be((96, 54));
+
+        command.Revert(context);
+
+        group.ChildOffsets[1].Should().Be((72, 36));
+    }
+
+    [Fact]
+    public void SetDrawingGroupChildSizeCommand_PersistsShapeSizeAndUndoesWithoutChangingGroup()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var group = new DrawingGroup { WidthPt = 180, HeightPt = 96 };
+        var first = new Shape(ShapeKind.Rectangle, 60, 30);
+        var second = new Shape(ShapeKind.Ellipse, 72, 36);
+        group.Children.Add(first);
+        group.Children.Add(second);
+        group.ChildOffsets.Add((0, 0));
+        group.ChildOffsets.Add((72, 36));
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(group));
+        doc.Blocks.Add(paragraph);
+        var context = new TestCtx(doc);
+        var command = new SetDrawingGroupChildSizeCommand(0, 0, 1, 108, 54);
+
+        command.Apply(context);
+
+        second.WidthPt.Should().Be(108);
+        second.HeightPt.Should().Be(54);
+        group.WidthPt.Should().Be(180);
+        group.HeightPt.Should().Be(96);
+
+        command.Revert(context);
+
+        second.WidthPt.Should().Be(72);
+        second.HeightPt.Should().Be(36);
+    }
+
     // ── GroupFloatingObjectsCommand ──────────────────────────────────────────────────────────────
 
     [Fact]

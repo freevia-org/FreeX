@@ -498,6 +498,29 @@ public sealed class DrawingGroupRoundTripTests
     }
 
     [Fact]
+    public void DrawingGroup_ChildEditGeometry_RoundTripsExactLocalOffsetAndSize()
+    {
+        var group = TwoMemberGroup();
+        group.RotationAngle = 37;
+        group.FlipH = true;
+        group.ChildOffsets[1] = (101.25, 42.75);
+        var shape = group.Children[1].Should().BeOfType<Shape>().Subject;
+        shape.WidthPt = 91.5;
+        shape.HeightPt = 44.25;
+
+        var recovered = RoundTrip(DocumentWith(group));
+        var read = ((Paragraph)recovered.Blocks[0]).Runs.Single().DrawingGroup!;
+        var readShape = read.Children[1].Should().BeOfType<Shape>().Subject;
+
+        read.RotationAngle.Should().BeApproximately(37, 0.001);
+        read.FlipH.Should().BeTrue();
+        read.ChildOffsets[1].X.Should().BeApproximately(101.25, 0.01);
+        read.ChildOffsets[1].Y.Should().BeApproximately(42.75, 0.01);
+        readShape.WidthPt.Should().BeApproximately(91.5, 0.01);
+        readShape.HeightPt.Should().BeApproximately(44.25, 0.01);
+    }
+
+    [Fact]
     public void DrawingGroup_Transform_RoundTripsAndEmitsGroupXfrmAttributes()
     {
         var group = TwoMemberGroup();

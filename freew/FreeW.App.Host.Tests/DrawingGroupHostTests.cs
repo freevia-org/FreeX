@@ -241,6 +241,40 @@ public sealed class DrawingGroupHostTests
         ((Paragraph)view.Model.Blocks[0]).Runs[0].DrawingGroup!.Children.Should().HaveCount(2);
     }
 
+    [StaFact]
+    public void SelectedGroupChild_MoveAndResizeUseSharedLocalCommands()
+    {
+        var doc = NestedGroupDoc(out var nested, out _);
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        view.SelectFloatingObject(nested);
+        view.SelectFloatingGroupChild(nested, 1);
+        view.SelectedFloatingGroupChild.Should().NotBeNull();
+        view.SelectedFloatingGroupChild!.Value.ChildIndex.Should().Be(1);
+
+        var child = nested.Children[1].Should().BeOfType<Shape>().Subject;
+        var groupWidthBefore = nested.WidthPt;
+        var groupHeightBefore = nested.HeightPt;
+        var offsetBefore = nested.ChildOffsets[1];
+        var widthBefore = child.WidthPt;
+
+        view.MoveSelectedFloatingGroupChild(18, 12).Should().BeTrue();
+        view.ResizeSelectedFloatingGroupChild(54, 30).Should().BeTrue();
+        view.CommitToModel();
+
+        nested.ChildOffsets[1].Should().Be((offsetBefore.X + 18, offsetBefore.Y + 12));
+        child.WidthPt.Should().Be(54);
+        child.HeightPt.Should().Be(30);
+        child.WidthPt.Should().NotBe(widthBefore);
+        nested.WidthPt.Should().Be(groupWidthBefore);
+        nested.HeightPt.Should().Be(groupHeightBefore);
+
+        view.Undo();
+        view.Undo();
+        nested.ChildOffsets[1].Should().Be(offsetBefore);
+        child.WidthPt.Should().Be(widthBefore);
+    }
+
     // ── IsGroupSelected ──────────────────────────────────────────────────────────────────────────
 
     [StaFact]

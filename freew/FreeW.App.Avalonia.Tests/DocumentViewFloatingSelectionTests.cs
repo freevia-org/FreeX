@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Input;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using SkiaSharp;
 using Xunit;
@@ -611,6 +612,83 @@ public sealed class DocumentViewFloatingSelectionTests
         Assert.Equal(45, childAngleAfter);
         Assert.Equal(0, groupAngleAfter);
         Assert.Equal(0, childAngleReverted);
+    }
+
+    [Fact]
+    public async Task Transformed_group_child_move_and_resize_use_local_geometry_and_keep_selection()
+    {
+        double offsetXBefore = 0, offsetYBefore = 0;
+        double offsetXAfterMove = 0, offsetYAfterMove = 0;
+        double childWidthBefore = 0, childWidthAfter = 0;
+        double groupWidthBefore = 0, groupWidthAfter = 0;
+        int selectedChildIndex = -1;
+        int handleCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = MakeDocWithNestedGroupAndShape();
+            var group = ((Paragraph)doc.Blocks[0]).Runs[1].DrawingGroup!;
+            group.RotationAngle = 90;
+            group.FlipV = true;
+            var childShape = group.Children[1].Should().BeOfType<Shape>().Subject;
+            childShape.RotationAngle = 30;
+            childShape.FlipH = true;
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+
+            var childRect = view.FloatingGroupChildRectsForTest(0, 1)
+                .Single(child => child.ChildIndex == 1).Rect;
+            view.SelectFloatingGroupChildForTest(childRect.Center).Should().BeTrue();
+            var selected = view.SelectedFloatingGroupChildInfo;
+            selected.Should().NotBeNull();
+            selectedChildIndex = selected!.Value.ChildIndex;
+            offsetXBefore = group.ChildOffsets[1].X;
+            offsetYBefore = group.ChildOffsets[1].Y;
+            childWidthBefore = childShape.WidthPt;
+            groupWidthBefore = group.WidthPt;
+
+            view.BeginFloatDrag(childRect.Center).Should().Be(FloatHandle.Body);
+            var screenDelta = new Vector(48, 24);
+            view.SimulateDragTo(childRect.Center + screenDelta);
+            view.EndFloatDrag(childRect.Center + screenDelta);
+
+            var localDelta = DocumentViewLayoutPlanner.UnTransformVector(
+                new DocumentFloatPoint(screenDelta.X, screenDelta.Y),
+                group.RotationAngle,
+                group.FlipH,
+                group.FlipV);
+            offsetXAfterMove = group.ChildOffsets[1].X;
+            offsetYAfterMove = group.ChildOffsets[1].Y;
+            offsetXAfterMove.Should().BeApproximately(
+                offsetXBefore + localDelta.XDip / PageLayout.PointsToDip(1), 0.1);
+            offsetYAfterMove.Should().BeApproximately(
+                offsetYBefore + localDelta.YDip / PageLayout.PointsToDip(1), 0.1);
+            group.WidthPt.Should().Be(groupWidthBefore);
+
+            var handles = view.HandleRectsForSelection();
+            handleCount = handles.Count;
+            var bottomRight = handles[FloatHandle.BottomRight].Center;
+            var outward = bottomRight - view.SelectedFloatingGroupChildInfo!.Value.Rect.Center;
+            var resizeTarget = bottomRight + outward * 0.5;
+            view.BeginFloatDrag(bottomRight).Should().Be(FloatHandle.BottomRight);
+            view.SimulateDragTo(resizeTarget);
+            view.EndFloatDrag(resizeTarget);
+
+            childWidthAfter = childShape.WidthPt;
+            groupWidthAfter = group.WidthPt;
+            view.SelectedFloatingGroupChildInfo.Should().NotBeNull();
+        });
+        if (!ran) return;
+
+        Assert.Equal(1, selectedChildIndex);
+        Assert.Equal(8, handleCount);
+        Assert.True(Math.Abs(offsetXAfterMove - offsetXBefore) > 0.1
+            || Math.Abs(offsetYAfterMove - offsetYBefore) > 0.1,
+            $"transformed child move should persist a local offset change: ({offsetXBefore},{offsetYBefore}) -> ({offsetXAfterMove},{offsetYAfterMove})");
+        Assert.True(childWidthAfter > childWidthBefore,
+            $"transformed child resize should grow the child: {childWidthBefore} -> {childWidthAfter}");
+        Assert.Equal(groupWidthBefore, groupWidthAfter);
     }
 
     [Fact]

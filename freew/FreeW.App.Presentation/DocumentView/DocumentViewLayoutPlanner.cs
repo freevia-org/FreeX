@@ -1894,6 +1894,17 @@ public static class DocumentViewLayoutPlanner
     /// model-space point. This is the exact inverse of <see cref="UnTransformPoint"/> and mirrors the
     /// matrix DrawFloatingShape builds: translate to centre, flip, rotate, translate back.
     /// </summary>
+    public static DocumentFloatPoint TransformPoint(
+        DocumentFloatPoint point,
+        DocumentFloatRect rect,
+        double rotationAngle,
+        bool flipH,
+        bool flipV)
+    {
+        var (x, y) = TransformPoint(point.XDip, point.YDip, rect, rotationAngle, flipH, flipV);
+        return new DocumentFloatPoint(x, y);
+    }
+
     private static (double X, double Y) TransformPoint(
         double xDip,
         double yDip,
@@ -1922,6 +1933,119 @@ public static class DocumentViewLayoutPlanner
         }
 
         return (x + cx, y + cy);
+    }
+
+    /// <summary>Maps a page-space delta into the local axes of a rotated/flipped object.</summary>
+    public static DocumentFloatPoint UnTransformVector(
+        DocumentFloatPoint vector,
+        double rotationAngle,
+        bool flipH,
+        bool flipV)
+    {
+        var x = vector.XDip;
+        var y = vector.YDip;
+        if (rotationAngle != 0)
+        {
+            var radians = -rotationAngle * Math.PI / 180.0;
+            var cos = Math.Cos(radians);
+            var sin = Math.Sin(radians);
+            (x, y) = (x * cos - y * sin, x * sin + y * cos);
+        }
+
+        if (flipH) x = -x;
+        if (flipV) y = -y;
+        return new DocumentFloatPoint(x, y);
+    }
+
+    public static IReadOnlyList<DocumentFloatingHandleRect> BuildFloatingGroupChildHandleRects(
+        DocumentFloatRect groupRect,
+        DocumentFloatRect childRect,
+        double handleSizeDip,
+        double childRotationAngle = 0,
+        bool childFlipH = false,
+        bool childFlipV = false,
+        double groupRotationAngle = 0,
+        bool groupFlipH = false,
+        bool groupFlipV = false)
+    {
+        return BuildFloatingHandleRects(childRect, handleSizeDip,
+                childRotationAngle, childFlipH, childFlipV)
+            .Select(handle =>
+            {
+                var center = new DocumentFloatPoint(
+                    handle.Rect.CenterXDip,
+                    handle.Rect.CenterYDip);
+                var transformed = TransformPoint(
+                    new DocumentFloatPoint(center.XDip, center.YDip),
+                    groupRect,
+                    groupRotationAngle,
+                    groupFlipH,
+                    groupFlipV);
+                return new DocumentFloatingHandleRect(
+                    handle.Handle,
+                    new DocumentFloatRect(
+                        transformed.XDip - handle.Rect.WidthDip / 2,
+                        transformed.YDip - handle.Rect.HeightDip / 2,
+                        handle.Rect.WidthDip,
+                        handle.Rect.HeightDip));
+            })
+            .ToList();
+    }
+
+    public static DocumentFloatingHandle HitTestFloatingGroupChildHandle(
+        DocumentFloatRect groupRect,
+        DocumentFloatRect childRect,
+        DocumentFloatPoint point,
+        double handleSizeDip,
+        double hitPaddingDip,
+        double childRotationAngle = 0,
+        bool childFlipH = false,
+        bool childFlipV = false,
+        double groupRotationAngle = 0,
+        bool groupFlipH = false,
+        bool groupFlipV = false)
+    {
+        var groupLocalPoint = UnTransformPoint(point, groupRect,
+            groupRotationAngle, groupFlipH, groupFlipV);
+        return HitTestFloatingHandle(childRect, groupLocalPoint, handleSizeDip,
+            hitPaddingDip, childRotationAngle, childFlipH, childFlipV);
+    }
+
+    public static DocumentFloatRect BuildFloatingGroupChildMoveRect(
+        DocumentFloatRect groupRect,
+        DocumentFloatRect childRect,
+        DocumentFloatPoint pointerDown,
+        DocumentFloatPoint pointer,
+        double groupRotationAngle = 0,
+        bool groupFlipH = false,
+        bool groupFlipV = false)
+    {
+        var localDown = UnTransformPoint(pointerDown, groupRect,
+            groupRotationAngle, groupFlipH, groupFlipV);
+        var localPointer = UnTransformPoint(pointer, groupRect,
+            groupRotationAngle, groupFlipH, groupFlipV);
+        return BuildFloatingMoveRect(childRect, localDown, localPointer);
+    }
+
+    public static DocumentFloatRect BuildFloatingGroupChildResizeRect(
+        DocumentFloatRect groupRect,
+        DocumentFloatRect childRect,
+        DocumentFloatingHandle handle,
+        DocumentFloatPoint pointer,
+        bool preserveAspect,
+        double minimumSizeDip,
+        double childRotationAngle = 0,
+        bool childFlipH = false,
+        bool childFlipV = false,
+        double groupRotationAngle = 0,
+        bool groupFlipH = false,
+        bool groupFlipV = false)
+    {
+        var groupLocalPointer = UnTransformPoint(pointer, groupRect,
+            groupRotationAngle, groupFlipH, groupFlipV);
+        return BuildFloatingResizeRect(childRect, handle, groupLocalPointer,
+            preserveAspect, minimumSizeDip,
+            childRotationAngle, childFlipH, childFlipV);
     }
 
     public static DocumentFloatingHandle HitTestFloatingHandle(

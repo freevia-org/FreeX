@@ -3337,6 +3337,188 @@ public sealed class SetDrawingGroupChildRotationCommand(
 }
 
 /// <summary>
+/// Set the group-local offset of one direct child. The owning group remains the floating run;
+/// only the child's <see cref="DrawingGroup.ChildOffsets"/> entry changes.
+/// </summary>
+public sealed class SetDrawingGroupChildPositionCommand(
+    int paragraphIndex, int runIndex, int childIndex,
+    double horizontalOffsetPt, double verticalOffsetPt) : IDocumentCommand
+{
+    private double _previousHorizontalOffsetPt;
+    private double _previousVerticalOffsetPt;
+    private bool _applied;
+
+    public string Label => "Move Group Child";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryMutate(context, horizontalOffsetPt, verticalOffsetPt,
+                out _previousHorizontalOffsetPt, out _previousVerticalOffsetPt))
+            return;
+
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied)
+            return;
+
+        TryMutate(context, _previousHorizontalOffsetPt, _previousVerticalOffsetPt,
+            out _, out _);
+        _applied = false;
+    }
+
+    private bool TryMutate(
+        IDocumentCommandContext context,
+        double horizontalOffsetPt,
+        double verticalOffsetPt,
+        out double previousHorizontalOffsetPt,
+        out double previousVerticalOffsetPt)
+    {
+        previousHorizontalOffsetPt = 0;
+        previousVerticalOffsetPt = 0;
+        if (!TryGetGroup(context, out var group)
+            || childIndex < 0
+            || childIndex >= group.Children.Count)
+            return false;
+
+        EnsureOffsetSlot(group, childIndex);
+        var previous = group.ChildOffsets[childIndex];
+        previousHorizontalOffsetPt = previous.X;
+        previousVerticalOffsetPt = previous.Y;
+        group.ChildOffsets[childIndex] = (horizontalOffsetPt, verticalOffsetPt);
+        return true;
+    }
+
+    private bool TryGetGroup(IDocumentCommandContext context, out DrawingGroup group)
+    {
+        group = null!;
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
+            || runIndex < 0
+            || runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[runIndex].DrawingGroup is not { } candidate)
+            return false;
+
+        group = candidate;
+        return true;
+    }
+
+    public static void EnsureOffsetSlot(DrawingGroup group, int childIndex)
+    {
+        while (group.ChildOffsets.Count <= childIndex)
+            group.ChildOffsets.Add((0, 0));
+    }
+}
+
+/// <summary>
+/// Set the local width and height of one direct group child. WordArt has no stored width/height;
+/// its font size is scaled proportionally so its derived child bounds follow the resize gesture.
+/// </summary>
+public sealed class SetDrawingGroupChildSizeCommand(
+    int paragraphIndex, int runIndex, int childIndex,
+    double widthPt, double heightPt) : IDocumentCommand
+{
+    private double _previousWidthPt;
+    private double _previousHeightPt;
+    private double _previousWordArtFontSizePt;
+    private bool _applied;
+
+    public string Label => "Resize Group Child";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (widthPt <= 0 || heightPt <= 0
+            || !TryMutate(context, widthPt, heightPt,
+                out _previousWidthPt, out _previousHeightPt, out _previousWordArtFontSizePt))
+            return;
+
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied)
+            return;
+
+        TryMutate(context, _previousWidthPt, _previousHeightPt,
+            out _, out _, out _,
+            restoreWordArtFontSizePt: _previousWordArtFontSizePt);
+        _applied = false;
+    }
+
+    private bool TryMutate(
+        IDocumentCommandContext context,
+        double width,
+        double height,
+        out double previousWidth,
+        out double previousHeight,
+        out double previousWordArtFontSize,
+        double? restoreWordArtFontSizePt = null)
+    {
+        previousWidth = 0;
+        previousHeight = 0;
+        previousWordArtFontSize = 0;
+        if (!TryGetChild(context, out var group, out var child)
+            || width <= 0
+            || height <= 0)
+            return false;
+
+        previousWidth = group.ChildWidthPt(childIndex);
+        previousHeight = group.ChildHeightPt(childIndex);
+        switch (child)
+        {
+            case InlineImage image:
+                image.WidthPt = width;
+                image.HeightPt = height;
+                return true;
+            case Shape shape:
+                shape.WidthPt = width;
+                shape.HeightPt = height;
+                return true;
+            case Chart chart:
+                chart.WidthPt = width;
+                chart.HeightPt = height;
+                return true;
+            case SmartArt smartArt:
+                smartArt.WidthPt = width;
+                smartArt.HeightPt = height;
+                return true;
+            case DrawingGroup nestedGroup:
+                nestedGroup.WidthPt = width;
+                nestedGroup.HeightPt = height;
+                return true;
+            case WordArt wordArt:
+                previousWordArtFontSize = wordArt.FontSizePt;
+                wordArt.FontSizePt = restoreWordArtFontSizePt
+                    ?? wordArt.FontSizePt * Math.Min(
+                        width / Math.Max(0.01, previousWidth),
+                        height / Math.Max(0.01, previousHeight));
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private bool TryGetChild(IDocumentCommandContext context, out DrawingGroup group, out object child)
+    {
+        group = null!;
+        child = null!;
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
+            || runIndex < 0
+            || runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[runIndex].DrawingGroup is not { } candidate
+            || childIndex < 0
+            || childIndex >= candidate.Children.Count)
+            return false;
+
+        group = candidate;
+        child = candidate.Children[childIndex];
+        return true;
+    }
+}
+
+/// <summary>
 /// Set only the position offsets (H/V in points) on a floating Image, updating
 /// <see cref="InlineImage.HorizontalOffsetPt"/> / <see cref="InlineImage.VerticalOffsetPt"/>
 /// while keeping anchors unchanged. Used by drag-move and arrow-key nudge in the Avalonia view.

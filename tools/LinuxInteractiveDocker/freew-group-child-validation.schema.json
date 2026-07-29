@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FreeW Wave 61 grouped-child physical validation",
+  "type": "object",
+  "required": ["schemaVersion", "suite", "platform", "app", "shell", "results", "summary", "persistedGeometry", "selectionPostcondition"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "suite": { "const": "freew-linux-group-child-wave61-physical" },
+    "platform": { "const": "linux" },
+    "app": { "const": "FreeW" },
+    "shell": { "const": "avalonia" },
+    "results": { "type": "array", "minItems": 1 },
+    "summary": { "type": "object", "required": ["status", "passed", "failed"] },
+    "persistedGeometry": {
+      "type": "object",
+      "required": ["exact", "before", "after", "groupUnchanged", "childMoved", "childResized"],
+      "properties": {
+        "exact": { "const": true },
+        "groupUnchanged": { "const": true },
+        "childMoved": { "const": true },
+        "childResized": { "const": true }
+      }
+    },
+    "selectionPostcondition": {
+      "type": "object",
+      "required": ["visible", "childIndex", "handleCount"],
+      "properties": {
+        "visible": { "const": true },
+        "childIndex": { "const": 1 },
+        "handleCount": { "const": 8 }
+      }
+    }
+  }
+}

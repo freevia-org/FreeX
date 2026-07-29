@@ -1046,6 +1046,59 @@ public sealed class DocumentViewLayoutPlannerTests
         snapshots[4].Rect.YDip.Should().BeApproximately(232, 0.01);
     }
 
+    [Fact]
+    public void GroupChildTransformHelpers_MapHandlesAndGesturesThroughParentTransform()
+    {
+        var groupRect = new DocumentFloatRect(100, 80, 240, 160);
+        var childRect = new DocumentFloatRect(160, 116, 96, 48);
+        var visibleHandles = DocumentViewLayoutPlanner.BuildFloatingGroupChildHandleRects(
+            groupRect,
+            childRect,
+            handleSizeDip: 8,
+            childRotationAngle: 30,
+            childFlipH: true,
+            groupRotationAngle: 90,
+            groupFlipV: true);
+        var targetHandle = visibleHandles.Single(handle =>
+            handle.Handle == DocumentFloatingHandle.BottomRight);
+
+        DocumentViewLayoutPlanner.HitTestFloatingGroupChildHandle(
+                groupRect,
+                childRect,
+                new DocumentFloatPoint(targetHandle.Rect.CenterXDip, targetHandle.Rect.CenterYDip),
+                handleSizeDip: 8,
+                hitPaddingDip: 1,
+                childRotationAngle: 30,
+                childFlipH: true,
+                groupRotationAngle: 90,
+                groupFlipV: true)
+            .Should().Be(DocumentFloatingHandle.BottomRight);
+
+        var moved = DocumentViewLayoutPlanner.BuildFloatingGroupChildMoveRect(
+            groupRect,
+            childRect,
+            new DocumentFloatPoint(188, 140),
+            new DocumentFloatPoint(212, 152),
+            groupRotationAngle: 90,
+            groupFlipV: true);
+        moved.XDip.Should().NotBeApproximately(childRect.XDip + 24, 0.01);
+        moved.YDip.Should().NotBeApproximately(childRect.YDip + 12, 0.01);
+
+        var resized = DocumentViewLayoutPlanner.BuildFloatingGroupChildResizeRect(
+            groupRect,
+            childRect,
+            DocumentFloatingHandle.BottomRight,
+            new DocumentFloatPoint(targetHandle.Rect.CenterXDip + 24, targetHandle.Rect.CenterYDip + 12),
+            preserveAspect: false,
+            minimumSizeDip: 8,
+            childRotationAngle: 30,
+            childFlipH: true,
+            groupRotationAngle: 90,
+            groupFlipV: true);
+        resized.WidthDip.Should().BeGreaterThan(0);
+        resized.HeightDip.Should().BeGreaterThan(0);
+    }
+
     private static Paragraph BuildAllFloatingKindsParagraph()
     {
         var paragraph = new Paragraph();
