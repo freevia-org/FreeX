@@ -62,6 +62,7 @@ public enum SmartArtColorPreset
 public enum SmartArtLayoutPreset
 {
     BasicProcess,
+    AccentProcess,
     BasicTimeline,
     PhasedProcess,
     CircleAccentTimeline,
@@ -196,6 +197,7 @@ public static class SmartArtAuthoringPlanner
     public const string GrayscaleCommandId = "freep.smartart.colors.grayscale";
     public const string SmartArtColorsGalleryCommandId = "freep.smartart.colors.gallery";
     public const string BasicProcessLayoutCommandId = "freep.smartart.layout.basic-process";
+    public const string AccentProcessLayoutCommandId = "freep.smartart.layout.accent-process";
     public const string BasicTimelineLayoutCommandId = "freep.smartart.layout.basic-timeline";
     public const string CircleAccentTimelineLayoutCommandId = "freep.smartart.layout.circle-accent-timeline";
     public const string PhasedProcessLayoutCommandId = "freep.smartart.layout.phased-process";
@@ -481,6 +483,8 @@ public static class SmartArtAuthoringPlanner
         {
             SmartArtLayoutPreset.BasicProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.AccentProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/accentProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.BasicTimeline =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicTimeline", SmartArtFamily.Process),
             SmartArtLayoutPreset.PhasedProcess =>

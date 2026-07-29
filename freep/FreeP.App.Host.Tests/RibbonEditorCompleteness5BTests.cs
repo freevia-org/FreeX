@@ -205,6 +205,7 @@ public class RibbonEditorCompleteness5BTests
             .Single(group => group.Id == "smartart-layouts");
         var expected = new Dictionary<string, SmartArtLayoutPreset>
         {
+            [SmartArtAuthoringPlanner.AccentProcessLayoutCommandId] = SmartArtLayoutPreset.AccentProcess,
             [SmartArtAuthoringPlanner.SegmentedProcessLayoutCommandId] = SmartArtLayoutPreset.SegmentedProcess,
             [SmartArtAuthoringPlanner.CircleAccentTimelineLayoutCommandId] = SmartArtLayoutPreset.CircleAccentTimeline,
             [SmartArtAuthoringPlanner.ChevronProcessLayoutCommandId] = SmartArtLayoutPreset.ChevronProcess,
