@@ -49,6 +49,8 @@ internal static class PptxChartReader
         {
             StyleId = ReadStyleId(chartSpace),
             RoundedCorners = ParseNullableBoolElement(chartSpace.Element(C + "roundedCorners")),
+            PreservedPivotSourceXml = chartSpace.Element(C + "pivotSource")
+                ?.ToString(SaveOptions.DisableFormatting),
             PreservedChartSpaceExtensionsXml = chartSpace.Element(C + "extLst")
                 ?.ToString(SaveOptions.DisableFormatting)
         };
