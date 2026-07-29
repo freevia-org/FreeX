@@ -18,10 +18,7 @@ public partial class MainWindow
     {
         var range = CreateWholeRowRange(_currentSheetId, row);
         if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
-        {
-            ApplyWholeRowOrColumnFormulaReferenceShorthand(range);
             return;
-        }
 
         ClearSelectionTransientOverlays();
         _selectionAnchor = range.Start;
@@ -40,10 +37,7 @@ public partial class MainWindow
     {
         var range = CreateWholeColumnRange(_currentSheetId, col);
         if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
-        {
-            ApplyWholeRowOrColumnFormulaReferenceShorthand(range);
             return;
-        }
 
         ClearSelectionTransientOverlays();
         _selectionAnchor = range.Start;
@@ -76,11 +70,11 @@ public partial class MainWindow
     private void AddAdditionalColumnSelection(uint col)
     {
         var range = CreateWholeColumnRange(_currentSheetId, col);
-        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
-        {
-            ApplyWholeRowOrColumnFormulaReferenceShorthand(range);
+        if (TryAppendDisjointFormulaReference(range))
             return;
-        }
+
+        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
+            return;
 
         ClearSelectionTransientOverlays();
         var ranges = AppendAdditionalSelectionRange(SheetGrid.SelectedRanges, SheetGrid.SelectedRange, range);
@@ -101,11 +95,11 @@ public partial class MainWindow
     private void AddAdditionalRowSelection(uint row)
     {
         var range = CreateWholeRowRange(_currentSheetId, row);
-        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
-        {
-            ApplyWholeRowOrColumnFormulaReferenceShorthand(range);
+        if (TryAppendDisjointFormulaReference(range))
             return;
-        }
+
+        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
+            return;
 
         ClearSelectionTransientOverlays();
         var ranges = AppendAdditionalSelectionRange(SheetGrid.SelectedRanges, SheetGrid.SelectedRange, range);
@@ -168,68 +162,6 @@ public partial class MainWindow
             new CellAddress(sheetId, 1, 1),
             new CellAddress(sheetId, CellAddress.MaxRow, CellAddress.MaxCol));
 
-    // Excel formats a formula reference spanning an entire row or column band using its bare
-    // "A:A"/"1:1" shorthand rather than the fully-qualified A1:A1048576 form that
-    // TryApplyFormulaRangeSelection/FormulaRangeEntryPlanner always emit (that layer has no
-    // whole-row/column concept). This rewrites the just-inserted reference span to the shorthand
-    // text afterward, but only for a genuine whole-row or whole-column band -- a whole-SHEET
-    // selection (both at once, e.g. Select All) has no bare Excel shorthand and is left as-is
-    // (R52-render-formula-bar-ref-3-1).
-    private void ApplyWholeRowOrColumnFormulaReferenceShorthand(GridRange range)
-    {
-        if (_options.UseR1C1ReferenceStyle)
-            return;
-
-        var shorthand = FormatWholeRowOrColumnReferenceShorthand(range);
-        if (shorthand is null)
-            return;
-
-        var editor = GetFormulaRangeEntryEditor();
-        if (editor is null)
-            return;
-
-        if (_formulaReferenceStart is not { } start || _formulaReferenceLength is not { } length ||
-            start < 0 || length < 0 || start + length > editor.Text.Length)
-        {
-            return;
-        }
-
-        if (string.Equals(editor.Text.Substring(start, length), shorthand, StringComparison.Ordinal))
-            return;
-
-        var updatedText = editor.Text.Remove(start, length).Insert(start, shorthand);
-        ApplyTextEdit(editor, new ExcelTextEdit(updatedText, start + shorthand.Length, 0));
-        if (!ReferenceEquals(editor, FormulaBar))
-            FormulaBar.Text = editor.Text;
-        else if (_inlineEditor?.IsVisible == true)
-            _inlineEditor.Text = editor.Text;
-
-        _formulaReferenceLength = shorthand.Length;
-        RefreshFormulaReferenceHighlights();
-    }
-
-    private string? FormatWholeRowOrColumnReferenceShorthand(GridRange range)
-    {
-        bool isWholeColumnBand = range.Start.Row == 1 && range.End.Row == CellAddress.MaxRow;
-        bool isWholeRowBand = range.Start.Col == 1 && range.End.Col == CellAddress.MaxCol;
-
-        // A genuine whole-sheet selection is both at once -- Excel has no bare shorthand for
-        // that, so leave the fully-qualified A1:XFD1048576-style text alone.
-        if (isWholeColumnBand == isWholeRowBand)
-            return null;
-
-        if (isWholeColumnBand)
-        {
-            var c1 = FormatColumnReference(range.Start.Col);
-            var c2 = FormatColumnReference(range.End.Col);
-            return c1 == c2 ? $"{c1}:{c1}" : $"{c1}:{c2}";
-        }
-
-        return range.Start.Row == range.End.Row
-            ? $"{range.Start.Row}:{range.Start.Row}"
-            : $"{range.Start.Row}:{range.End.Row}";
-    }
-
     // Ctrl+click during in-formula point-mode reference entry must append a NEW, comma-separated
     // disjoint area after whatever was previously inserted, rather than replacing it the way a
     // plain click (or TryApplyFormulaRangeSelection, which only ever replaces/extends the single
@@ -237,6 +169,9 @@ public partial class MainWindow
     // reference span to append after; the very first click in point mode has no prior span and
     // falls through to the normal (replacing) path.
     private bool TryAppendDisjointFormulaReference(CellAddress newAddr)
+        => TryAppendDisjointFormulaReference(new GridRange(newAddr, newAddr));
+
+    private bool TryAppendDisjointFormulaReference(GridRange range)
     {
         var editor = GetFormulaRangeEntryEditor();
         if (editor is null)
@@ -247,11 +182,11 @@ public partial class MainWindow
                 editor.Text,
                 _formulaReferenceStart,
                 _formulaReferenceLength,
-                new GridRange(newAddr, newAddr),
+                range,
                 formulaCell,
                 _options.UseR1C1ReferenceStyle,
                 out var edit,
-                _workbook.GetSheet(newAddr.Sheet)?.Name))
+                _workbook.GetSheet(range.Start.Sheet)?.Name))
         {
             return false;
         }
@@ -264,15 +199,17 @@ public partial class MainWindow
 
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;
-        _formulaRangeSelectionAnchor = newAddr;
+        _formulaRangeSelectionAnchor = range.Start;
 
         HideValidationDropdown();
         ClearCommentPreview();
-        _selectionAnchor = newAddr;
-        _selectionCursor = newAddr;
+        _selectionAnchor = range.Start;
+        _selectionCursor = range.End;
         SheetGrid.SelectedRanges = null;
-        SheetGrid.SelectedRange = new GridRange(newAddr, newAddr);
-        CellAddressBox.Text = FormatCellReference(newAddr);
+        SheetGrid.SelectedRange = range;
+        CellAddressBox.Text = range.Start == range.End
+            ? FormatCellReference(range.Start)
+            : FormatRangeReference(range.Start, range.End);
         RefreshStatusBar();
         RefreshFormulaReferenceHighlights();
         SetFormulaEditStatusBarMode(pointMode: true);
@@ -328,7 +265,6 @@ public partial class MainWindow
                                 new CellAddress(_currentSheetId, CellAddress.MaxRow, Math.Max(anchorCol, cm.Col)));
                             if (TryApplyFormulaRangeSelection(range, anchor, cursor))
                             {
-                                ApplyWholeRowOrColumnFormulaReferenceShorthand(range);
                                 BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Column, anchorCol);
                                 e.Handled = true;
                                 return;
@@ -385,7 +321,6 @@ public partial class MainWindow
                             new CellAddress(_currentSheetId, Math.Max(anchorRow, rm.Row), CellAddress.MaxCol));
                         if (TryApplyFormulaRangeSelection(range, anchor, cursor))
                         {
-                            ApplyWholeRowOrColumnFormulaReferenceShorthand(range);
                             BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Row, anchorRow);
                             e.Handled = true;
                             return;
@@ -1704,10 +1639,7 @@ public partial class MainWindow
                 new CellAddress(_currentSheetId, 1, firstCol),
                 new CellAddress(_currentSheetId, CellAddress.MaxRow, lastCol));
             if (TryApplyFormulaRangeSelection(range, anchor, cursor))
-            {
-                ApplyWholeRowOrColumnFormulaReferenceShorthand(range);
                 return;
-            }
 
             _selectionAnchor = anchor;
             _selectionCursor = cursor;
@@ -1726,10 +1658,7 @@ public partial class MainWindow
                 new CellAddress(_currentSheetId, firstRow, 1),
                 new CellAddress(_currentSheetId, lastRow, CellAddress.MaxCol));
             if (TryApplyFormulaRangeSelection(range, anchor, cursor))
-            {
-                ApplyWholeRowOrColumnFormulaReferenceShorthand(range);
                 return;
-            }
 
             _selectionAnchor = anchor;
             _selectionCursor = cursor;

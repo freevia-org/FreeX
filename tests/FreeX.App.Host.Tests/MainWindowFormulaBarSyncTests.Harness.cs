@@ -45,6 +45,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _tryApplyFormulaRangeSelection;
         private readonly MethodInfo _selectRow;
         private readonly MethodInfo _selectColumn;
+        private readonly MethodInfo _addAdditionalRowSelection;
         private readonly MethodInfo _selectAll;
 
         private MainWindowHarness(MainWindow window, ICommandBus commandBus)
@@ -128,6 +129,9 @@ public sealed partial class MainWindowFormulaBarSyncTests
             _selectColumn = typeof(MainWindow)
                 .GetMethod("SelectColumn", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SelectColumn");
+            _addAdditionalRowSelection = typeof(MainWindow)
+                .GetMethod("AddAdditionalRowSelection", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "AddAdditionalRowSelection");
             _selectAll = typeof(MainWindow)
                 .GetMethod("SelectAll", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SelectAll");
@@ -286,6 +290,14 @@ public sealed partial class MainWindowFormulaBarSyncTests
             PumpDispatcher();
         }
 
+        public Sheet AddSheet(string name) => Workbook.AddSheet(name);
+
+        public void SetCurrentSheetForFormulaPoint(SheetId sheetId)
+        {
+            _currentSheetIdField.SetValue(_window, sheetId);
+            PumpDispatcher();
+        }
+
         public void ShowInlineEditor(uint row, uint col)
         {
             var sheet = Workbook.Sheets[0];
@@ -316,6 +328,12 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public void SelectWholeColumn(uint col)
         {
             _selectColumn.Invoke(_window, [col]);
+            PumpDispatcher();
+        }
+
+        public void AddWholeRowFormulaReference(uint row)
+        {
+            _addAdditionalRowSelection.Invoke(_window, [row]);
             PumpDispatcher();
         }
 
