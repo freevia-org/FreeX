@@ -227,8 +227,13 @@ internal sealed class AvaloniaSlideShowMediaController
         return true;
     }
 
-    public bool TrySeek(uint shapeId, TimeSpan position) =>
-        _slots.FirstOrDefault(slot => slot.ShapeId == shapeId)?.Session.Seek(position) == true;
+    public bool TrySeek(uint shapeId, TimeSpan position)
+    {
+        if (position < TimeSpan.Zero)
+            return false;
+
+        return _slots.FirstOrDefault(slot => slot.ShapeId == shapeId)?.Session.Seek(position) == true;
+    }
 
     public bool TrySetVolume(uint shapeId, int volume)
     {
