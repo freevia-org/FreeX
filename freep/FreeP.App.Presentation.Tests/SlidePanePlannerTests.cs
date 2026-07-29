@@ -235,6 +235,22 @@ public sealed class SlidePanePlannerTests
     }
 
     [Fact]
+    public void BuildThumbnailVisualPlan_RefreshesAccessibleNameFromEntryAndSlide()
+    {
+        var slide = new Slide { Id = "slide1", Title = "Opening" };
+        var firstEntry = new SlidePaneEntry(SlidePaneEntryKind.Slide, 0, "1");
+
+        SlidePanePlanner.BuildThumbnailVisualPlan(firstEntry, slide, currentSlideIndex: 0)
+            .AccessibleName.Should().Be("Slide 1: Opening, 1 object");
+
+        slide.Title = "Updated opening";
+        var secondEntry = new SlidePaneEntry(SlidePaneEntryKind.Slide, 1, "2");
+
+        SlidePanePlanner.BuildThumbnailVisualPlan(secondEntry, slide, currentSlideIndex: 0)
+            .AccessibleName.Should().Be("Slide 2: Updated opening, 1 object");
+    }
+
+    [Fact]
     public void BuildSectionHeaderVisualPlan_ProjectsSharedChromeAndState()
     {
         var entry = new SlidePaneEntry(

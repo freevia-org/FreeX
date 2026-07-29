@@ -42,6 +42,7 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("plan.ItemMarginHorizontal");
         source.Should().Contain("plan.ItemMarginVertical");
         source.Should().Contain("ToolTip         = plan.ToolTipText");
+        source.Should().Contain("AutomationProperties.SetName(item, plan.AccessibleName)");
         source.Should().Contain("Text              = plan.DisclosureText");
         source.Should().Contain("Foreground        = BrushFromHex(plan.ForegroundHex)");
         source.Should().Contain("Background      = normalBackground");
