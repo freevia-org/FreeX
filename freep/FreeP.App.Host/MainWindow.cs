@@ -2988,9 +2988,10 @@ public sealed partial class MainWindow : Window
             Key.Tab => SmartArtTextPaneShortcutKey.Tab,
             Key.Up => SmartArtTextPaneShortcutKey.Up,
             Key.Down => SmartArtTextPaneShortcutKey.Down,
+            Key.Delete => SmartArtTextPaneShortcutKey.Delete,
             _ => default
         };
-        if (key is not (Key.Enter or Key.Return or Key.Tab or Key.Up or Key.Down))
+        if (key is not (Key.Enter or Key.Return or Key.Tab or Key.Up or Key.Down or Key.Delete))
         {
             modifiers = SmartArtTextPaneShortcutModifiers.None;
             return false;

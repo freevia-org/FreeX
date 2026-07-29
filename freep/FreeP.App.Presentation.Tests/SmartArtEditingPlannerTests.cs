@@ -1190,6 +1190,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtTextPaneShortcutKey.Tab, SmartArtTextPaneShortcutModifiers.Shift, SmartArtNodeEditKind.Promote, "smartart.text-pane.shift-tab.promote")]
     [InlineData(SmartArtTextPaneShortcutKey.Up, SmartArtTextPaneShortcutModifiers.Alt | SmartArtTextPaneShortcutModifiers.Shift, SmartArtNodeEditKind.MoveUp, "smartart.text-pane.alt-shift-up.move-up")]
     [InlineData(SmartArtTextPaneShortcutKey.Down, SmartArtTextPaneShortcutModifiers.Alt | SmartArtTextPaneShortcutModifiers.Shift, SmartArtNodeEditKind.MoveDown, "smartart.text-pane.alt-shift-down.move-down")]
+    [InlineData(SmartArtTextPaneShortcutKey.Delete, SmartArtTextPaneShortcutModifiers.None, SmartArtNodeEditKind.Remove, "smartart.text-pane.delete.remove")]
     public void PlanTextPaneKeyboardRoute_MapsSharedChordsToEditIntents(
         SmartArtTextPaneShortcutKey key,
         SmartArtTextPaneShortcutModifiers modifiers,

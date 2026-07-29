@@ -5492,7 +5492,12 @@ public sealed class MainWindowHeadlessTests
             window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.MoveDown, "n2")!.Applied.Should().BeTrue();
             window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.Promote, "freep-smartart-node-4")!.Applied.Should().BeTrue();
             window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.Demote, "freep-smartart-node-3")!.Applied.Should().BeTrue();
-            window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.Remove, "freep-smartart-node-3")!.Applied.Should().BeTrue();
+            var delete = window.ApplySmartArtTextPaneKeyboardRouteForTests(
+                SmartArtTextPaneShortcutKey.Delete,
+                SmartArtTextPaneShortcutModifiers.None,
+                "freep-smartart-node-3");
+            delete!.Applied.Should().BeTrue();
+            delete.Kind.Should().Be(SmartArtNodeEditKind.Remove);
             rowCountAfterKeyboard = window.SmartArtTextPaneRowCount;
         });
 

@@ -38,7 +38,8 @@ public enum SmartArtTextPaneShortcutKey
     Enter,
     Tab,
     Up,
-    Down
+    Down,
+    Delete
 }
 
 public sealed record SmartArtNodeEditIntent(
@@ -204,6 +205,13 @@ public static class SmartArtEditingPlanner
                     modifiers,
                     SmartArtNodeEditIntent.MoveDown(targetId),
                     "Alt+Shift+Down moves the selected SmartArt text-pane row later."),
+            (SmartArtTextPaneShortcutKey.Delete, SmartArtTextPaneShortcutModifiers.None) =>
+                Route(
+                    "smartart.text-pane.delete.remove",
+                    key,
+                    modifiers,
+                    SmartArtNodeEditIntent.Remove(targetId),
+                    "Delete removes the selected SmartArt text-pane row."),
             _ => null
         };
     }
