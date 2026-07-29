@@ -327,6 +327,10 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
 
                 formulaBox.Text.Should().Be("=B2");
                 window.Session.FormulaEditAddress.Should().Be(formulaAddress);
+                window.Session.SelectedRange.Should().Be(new GridRange(
+                    new CellAddress(sheet.Id, 2, 2),
+                    new CellAddress(sheet.Id, 2, 2)));
+                window.CellAddressBoxTextForTest.Should().Be("B2");
 
                 Press(window, Key.Enter, PhysicalKey.Enter);
                 await DrainInputAsync();

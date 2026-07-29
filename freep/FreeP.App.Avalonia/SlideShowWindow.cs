@@ -151,7 +151,10 @@ public sealed class SlideShowWindow : Window
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _playbackRoute = playbackRoute ?? throw new ArgumentNullException(nameof(playbackRoute));
-        _controller   = new SlideShowController(_playbackRoute.Slides, _playbackRoute.StartIndex);
+        _controller = new SlideShowController(
+            _playbackRoute.Slides,
+            _playbackRoute.StartIndex,
+            _playbackRoute.AnimationStartIndex);
         _session = new SlideShowSessionController(
             _presentation,
             _playbackRoute,
