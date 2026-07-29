@@ -15,7 +15,7 @@ namespace FreeW.App.Avalonia;
 
 internal static class PageLayoutDialogChrome
 {
-    internal static readonly AvaloniaCompactDialogChromeStyle Style = new(FontFamily.Default);
+    internal static readonly AvaloniaCompactDialogChromeStyle Style = AvaloniaCompactDialogChrome.WindowsStyle;
 
     internal static TextBox NumberBox(
         string text,
@@ -55,13 +55,12 @@ internal static class PageLayoutDialogChrome
         double buttonWidth = 84)
     {
         style ??= Style;
-        var ok = new Button { Content = LocalizedUiText.Ok, IsDefault = true };
-        var cancelButton = new Button { Content = LocalizedUiText.Cancel, IsCancel = true };
-        AvaloniaCompactDialogChrome.ApplyButton(ok, style, minWidth: buttonWidth, isDefault: true);
-        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, style, minWidth: buttonWidth);
-        ok.Click += (_, _) => accept();
-        cancelButton.Click += (_, _) => cancel();
-        return AvaloniaCompactDialogChrome.CreateActionRow([ok, cancelButton], new Thickness(0, 14, 0, 0), style);
+        return AvaloniaDialogButtonRowFactory.CreateOkCancel(
+            accept,
+            cancel,
+            buttonWidth,
+            new Thickness(0, 14, 0, 0),
+            style);
     }
 
     internal static void Configure(Window window, string title, double width)

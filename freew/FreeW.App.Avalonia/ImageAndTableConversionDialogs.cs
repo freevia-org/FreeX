@@ -11,7 +11,7 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class ImageCropDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly TextBox _leftBox;
     private readonly TextBox _rightBox;
@@ -156,7 +156,7 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
 
 internal sealed class TableTextConversionDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly ListBox _choices;
 
     private TableTextConversionDialog(string title)

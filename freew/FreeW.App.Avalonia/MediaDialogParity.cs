@@ -608,7 +608,7 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
 
 internal static class Chrome
 {
-    public static AvaloniaCompactDialogChromeStyle Style { get; } = new(FontFamily.Default);
+    public static AvaloniaCompactDialogChromeStyle Style { get; } = AvaloniaCompactDialogChrome.WindowsStyle;
 
     public static TextBox TextBox(string text, double minWidth)
     {

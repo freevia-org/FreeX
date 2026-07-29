@@ -776,19 +776,11 @@ public static class AvaloniaCompactDialogChrome
         Thickness margin = default,
         AvaloniaCompactDialogChromeStyle? style = null)
     {
-        style ??= WindowsStyle;
-        var ok = CreateActionButton(
-            ShellStrings.Current.Ok,
+        return AvaloniaDialogButtonRowFactory.CreateOkCancel(
             accept,
-            buttonWidth,
-            isDefault: true,
-            style: style);
-        var cancelButton = CreateActionButton(
-            ShellStrings.Current.Cancel,
             cancel,
             buttonWidth,
-            isCancel: true,
-            style: style);
-        return CreateActionRow([ok, cancelButton], margin, style);
+            margin,
+            style);
     }
 }

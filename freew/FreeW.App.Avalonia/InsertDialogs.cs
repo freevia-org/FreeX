@@ -330,7 +330,7 @@ public sealed class QuickPartDialog : FreeWDialogWindow
 /// <summary>Shared layout helpers for the AV-INSERT2 input dialogs (label rows, OK/Cancel, key handling).</summary>
 internal static class InsertDialogLayout
 {
-    public static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = new(FontFamily.Default);
+    public static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     public static void AddLabeledRow(Grid grid, int row, string label, Control field)
     {

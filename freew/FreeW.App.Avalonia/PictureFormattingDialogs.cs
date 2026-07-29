@@ -255,7 +255,7 @@ internal sealed class ImageBorderDialog : FreeWDialogWindow
 
 internal static class PictureFormattingDialogChrome
 {
-    public static AvaloniaCompactDialogChromeStyle Style { get; } = new(FontFamily.Default);
+    public static AvaloniaCompactDialogChromeStyle Style { get; } = AvaloniaCompactDialogChrome.WindowsStyle;
 
     public static TextBox CreateTextBox(string text, double minWidth)
     {

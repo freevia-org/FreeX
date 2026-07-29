@@ -9,7 +9,7 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class SaveCompatibilityWarningDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private SaveCompatibilityWarningDialog(DocumentSaveCompatibilityPlan plan)
     {

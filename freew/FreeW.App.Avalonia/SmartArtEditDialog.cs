@@ -12,7 +12,7 @@ namespace FreeW.App.Avalonia;
 /// <summary>Avalonia counterpart of WPF's seeded Insert SmartArt dialog used by Edit Text.</summary>
 internal sealed class SmartArtEditDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly ComboBox _kindBox;
     private readonly TextBox _nodeTextBox;
     private readonly TextBlock _status;

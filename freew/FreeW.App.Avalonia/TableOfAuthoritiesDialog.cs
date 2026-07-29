@@ -10,7 +10,7 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle Chrome = AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly IReadOnlyList<TableOfAuthoritiesCategoryChoice> _categories;
     private readonly IReadOnlyList<TableOfAuthoritiesTabLeaderChoice> _leaders;
     private readonly ComboBox _category;

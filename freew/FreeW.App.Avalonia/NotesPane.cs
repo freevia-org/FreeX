@@ -187,7 +187,7 @@ internal sealed class NotesPane : Border
 
 internal sealed class NoteTextDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle Chrome = AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly TextBox _text;
 
     private NoteTextDialog(bool footnote)

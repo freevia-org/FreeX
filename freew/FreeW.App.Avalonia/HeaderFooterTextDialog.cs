@@ -10,7 +10,7 @@ namespace FreeW.App.Avalonia;
 /// <summary>Owner-modal Insert &gt; Header/Footer text prompt matching the WPF TextPrompt contract.</summary>
 internal sealed class HeaderFooterTextDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly TextBox _text;
 
     private HeaderFooterTextDialog(bool footer, string initial)
