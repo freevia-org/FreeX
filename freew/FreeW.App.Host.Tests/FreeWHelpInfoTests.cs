@@ -9,6 +9,8 @@ namespace FreeW.App.Host.Tests;
 
 public sealed class FreeWHelpInfoTests
 {
+    private static readonly List<System.Windows.Interop.HwndSource> KeyEventPresentationSources = [];
+
     [Fact]
     public void AppInfo_UsesFreeWBrandingAndHonestLocalUrls()
     {
@@ -194,15 +196,28 @@ public sealed class FreeWHelpInfoTests
 
     private static KeyEventArgs CreateKeyDown(Window source, Key key)
     {
+        var inputSource = PresentationSource.FromVisual(source) ?? CreateKeyEventPresentationSource();
         var args = new KeyEventArgs(
             Keyboard.PrimaryDevice,
-            PresentationSource.FromVisual(source)!,
+            inputSource,
             0,
             key)
         {
             RoutedEvent = Keyboard.KeyDownEvent,
         };
         return args;
+    }
+
+    private static PresentationSource CreateKeyEventPresentationSource()
+    {
+        var hwndSource = new System.Windows.Interop.HwndSource(
+            new System.Windows.Interop.HwndSourceParameters("FreeWHelpInfoKeyEventSource")
+            {
+                Width = 1,
+                Height = 1
+            });
+        KeyEventPresentationSources.Add(hwndSource);
+        return hwndSource;
     }
 
     private static void PumpDispatcher()
