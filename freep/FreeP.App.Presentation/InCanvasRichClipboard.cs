@@ -3,6 +3,23 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
+public sealed record InCanvasRichClipboardTableBorder(
+    int ColorRgb = 0,
+    double WidthPt = 0.75,
+    bool IsNone = false);
+
+public sealed record InCanvasRichClipboardTableCellStyle(
+    int? FillRgb = null,
+    InCanvasRichClipboardTableBorder? Left = null,
+    InCanvasRichClipboardTableBorder? Right = null,
+    InCanvasRichClipboardTableBorder? Top = null,
+    InCanvasRichClipboardTableBorder? Bottom = null,
+    TableCellAnchor? Anchor = null,
+    double? InsetLeftPt = null,
+    double? InsetRightPt = null,
+    double? InsetTopPt = null,
+    double? InsetBottomPt = null);
+
 /// <summary>
 /// Renderer-neutral rich clipboard payload used by both desktop editors. The model fragment is
 /// intentionally narrower than a full shape: it carries only the selected text and its run and
@@ -13,7 +30,10 @@ public sealed record InCanvasRichClipboardPayload(
     string PlainText,
     Run? TypingRun = null,
     byte[]? ImageBytes = null,
-    string? ImageContentType = null)
+    string? ImageContentType = null,
+    bool ContainsTable = false,
+    IReadOnlyList<long>? TableColumnWidthsEmu = null,
+    IReadOnlyList<InCanvasRichClipboardTableCellStyle>? TableCellStyles = null)
 {
     public bool HasImage => ImageBytes is { Length: > 0 };
 
@@ -46,7 +66,12 @@ public sealed record InCanvasRichClipboardPayload(
     internal InCanvasRichClipboardPayload DeepClone() => new(
         TextBodyModelCloner.CloneTextBody(Body)!,
         PlainText,
-        TypingRun is null ? null : TextBodyModelCloner.CloneRun(TypingRun));
+        TypingRun is null ? null : TextBodyModelCloner.CloneRun(TypingRun),
+        ImageBytes?.ToArray(),
+        ImageContentType,
+        ContainsTable,
+        TableColumnWidthsEmu?.ToArray(),
+        TableCellStyles?.ToArray());
 
     internal static Run? RunFromStyle(InCanvasEditorTextStyleState? style) => style is null
         ? null
@@ -126,7 +151,10 @@ public static class InCanvasRichClipboardPlanner
             return new InCanvasRichClipboardPayload(
                 body,
                 plainText,
-                FromDto(dto.TypingRun));
+                FromDto(dto.TypingRun),
+                ContainsTable: dto.ContainsTable,
+                TableColumnWidthsEmu: dto.TableColumnWidthsEmu,
+                TableCellStyles: dto.TableCellStyles);
         }
         catch (JsonException)
         {
@@ -271,6 +299,9 @@ public static class InCanvasRichClipboardPlanner
         Version = CurrentVersion,
         Body = ToDto(payload.Body),
         TypingRun = payload.TypingRun is null ? null : ToDto(payload.TypingRun),
+        ContainsTable = payload.ContainsTable,
+        TableColumnWidthsEmu = payload.TableColumnWidthsEmu?.ToList(),
+        TableCellStyles = payload.TableCellStyles?.ToList(),
     };
 
     private static ClipboardBodyDto ToDto(TextBody body) => new()
@@ -707,6 +738,9 @@ public static class InCanvasRichClipboardPlanner
         public int Version { get; set; }
         public ClipboardBodyDto? Body { get; set; }
         public ClipboardRunDto? TypingRun { get; set; }
+        public bool ContainsTable { get; set; }
+        public List<long>? TableColumnWidthsEmu { get; set; }
+        public List<InCanvasRichClipboardTableCellStyle>? TableCellStyles { get; set; }
     }
 
     private sealed class ClipboardBodyDto

@@ -437,7 +437,7 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
-    public async Task XamlPackage_table_is_projected_into_formatted_text_box()
+    public async Task XamlPackage_table_is_pasted_as_native_editable_table()
     {
         var clipboard = new FakeSystemClipboard
         {
@@ -458,9 +458,40 @@ public sealed class PresentationClipboardInteropTests
         var result = await service.PasteAsync(editor);
 
         result.Should().Be(PresentationClipboardPasteSource.XamlPackage);
-        var paragraph = editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Single();
-        paragraph.Runs.Select(run => run.Text).Should().ContainInOrder("Q1", "\t", "42");
-        paragraph.Runs.Single(run => run.Text == "Q1").Italic.Should().BeTrue();
+        var shape = editor.CurrentSlide!.Shapes.Single();
+        shape.Kind.Should().Be(SlideShapeKind.Table);
+        shape.Table.Should().NotBeNull();
+        shape.Table!.Rows.Should().ContainSingle();
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
+            .Single().Text.Should().Be("Q1");
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
+            .Single().Italic.Should().BeTrue();
+        shape.Table.Rows[0].Cells[1].TextBody!.Paragraphs.Single().Runs
+            .Single().Text.Should().Be("42");
+    }
+
+    [Fact]
+    public async Task External_Rtf_table_preserves_solid_cell_style()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                RtfBytes: Encoding.ASCII.GetBytes(
+                    @"{\rtf1\ansi
+{\colortbl;\red255\green255\blue0;\red31\green78\blue121;}
+\trowd\clcbpat1\clvertalc\clpadl120\clpadr240\clpadt60\clpadb180\clbrdrl\brdrs\brdrw10\brdrcf2\cellx1440\cellx2880
+Header\cell Value\cell\row}")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.RichText);
+        var cell = editor.CurrentSlide!.Shapes.Single().Table!.Rows.Single().Cells[0];
+        ((ShapeFill.Solid)cell.Fill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFF00));
+        ((ShapeOutline.Visible)cell.Borders!.Left!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        cell.Anchor.Should().Be(TableCellAnchor.Middle);
+        cell.InsetLeftPt.Should().Be(6);
+        cell.InsetRightPt.Should().Be(12);
     }
 
     [Fact]

@@ -212,6 +212,13 @@ public static class FreePRibbon
             KeyTip = FreePRibbonText.TextDirectionKeyTip,
             Width = 160
         });
+        group.ComboBox("freep.text-columns", FreePRibbonText.TextColumnsLabel, control => control with
+        {
+            Items = FreePRibbonDefinitionData.TextColumnCountOptions,
+            Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextColumns),
+            KeyTip = FreePRibbonText.TextColumnsKeyTip,
+            Width = 96
+        });
         group.ComboBox("freep.table-cell-fill", FreePRibbonText.TableCellFillLabel, control => control with
         {
             Items = FreePRibbonDefinitionData.TableCellFillColors,

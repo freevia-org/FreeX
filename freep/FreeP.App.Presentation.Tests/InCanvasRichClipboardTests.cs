@@ -242,6 +242,45 @@ public sealed class InCanvasRichClipboardTests
     }
 
     [Fact]
+    public void TableGeometryAndStyles_SurviveInternalClipboardCodec()
+    {
+        var payload = new InCanvasRichClipboardPayload(
+            new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph { Runs = { new Run { Text = "A\tB" } } },
+                },
+            },
+            "A\tB",
+            ContainsTable: true,
+            TableColumnWidthsEmu: [914400L, 1828800L],
+            TableCellStyles:
+            [
+                new InCanvasRichClipboardTableCellStyle(
+                    FillRgb: 0xFFFF00,
+                    Left: new InCanvasRichClipboardTableBorder(0x1F4E79, 0.5),
+                    Anchor: TableCellAnchor.Middle,
+                    InsetLeftPt: 6,
+                    InsetRightPt: 12),
+                new InCanvasRichClipboardTableCellStyle(),
+            ]);
+
+        var decoded = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+
+        decoded.Should().NotBeNull();
+        decoded!.ContainsTable.Should().BeTrue();
+        decoded.TableColumnWidthsEmu.Should().Equal(914400L, 1828800L);
+        decoded.TableCellStyles.Should().HaveCount(2);
+        decoded.TableCellStyles![0].FillRgb.Should().Be(0xFFFF00);
+        decoded.TableCellStyles[0].Left!.WidthPt.Should().Be(0.5);
+        decoded.TableCellStyles[0].Anchor.Should().Be(TableCellAnchor.Middle);
+        decoded.TableCellStyles[0].InsetLeftPt.Should().Be(6);
+        decoded.TableCellStyles[0].InsetRightPt.Should().Be(12);
+    }
+
+    [Fact]
     public void PlainTextFallback_CreatesParagraphsAndUsesTypingStyle()
     {
         var payload = InCanvasRichClipboardPayload.FromPlainText(

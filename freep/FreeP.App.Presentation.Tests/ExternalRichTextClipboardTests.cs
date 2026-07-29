@@ -258,10 +258,37 @@ Left\cell{\ul Right}\ul0\cell\row}";
 
         payload.Should().NotBeNull();
         payload!.PlainText.Should().Be("Header\tValue\nLeft\tRight");
+        payload.TableColumnWidthsEmu.Should().Equal(914400L, 914400L);
         payload.Body.Paragraphs.Should().HaveCount(2);
         payload.Body.Paragraphs[0].Runs.Should().Contain(run => run.Text == "Header" && run.Bold);
         payload.Body.Paragraphs[0].Runs.Should().Contain(run => run.Text == "Value" && run.Italic);
         payload.Body.Paragraphs[1].Runs.Should().Contain(run => run.Text == "Right" && run.Underline);
+    }
+
+    [Fact]
+    public void WordTableCellStyles_PreserveSolidFillAndCommonBorders()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\colortbl;\red255\green255\blue0;\red31\green78\blue121;}
+\trowd\clcbpat1\clvertalc\clpadl120\clpadr240\clpadt60\clpadb180\clbrdrl\brdrs\brdrw10\brdrcf2\cellx1440\cellx2880
+Header\cell Value\cell\row}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.TableCellStyles.Should().HaveCount(2);
+        payload.TableCellStyles![0].FillRgb.Should().Be(0xFFFF00);
+        var left = payload.TableCellStyles[0].Left;
+        left.Should().NotBeNull();
+        left!.ColorRgb.Should().Be(0x1F4E79);
+        left.WidthPt.Should().Be(0.5);
+        payload.TableCellStyles[0].Anchor.Should().Be(TableCellAnchor.Middle);
+        payload.TableCellStyles[0].InsetLeftPt.Should().Be(6);
+        payload.TableCellStyles[0].InsetRightPt.Should().Be(12);
+        payload.TableCellStyles[0].InsetTopPt.Should().Be(3);
+        payload.TableCellStyles[0].InsetBottomPt.Should().Be(9);
+        payload.TableCellStyles[1].FillRgb.Should().BeNull();
     }
 
     [Fact]

@@ -21,4 +21,24 @@ public sealed class TextAutoFitAuthoringTests
     {
         TextAutoFitOptionParser.TryParse("Scale everything", out _).Should().BeFalse();
     }
+
+    [Theory]
+    [InlineData("1", 1)]
+    [InlineData("2", 2)]
+    [InlineData("Columns 4", 4)]
+    [InlineData("32", 32)]
+    public void TextColumnCountParser_MapsPositiveCounts(string option, int expected)
+    {
+        TextColumnCountOptionParser.TryParse(option, out var actual).Should().BeTrue();
+        actual.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("33")]
+    [InlineData("many")]
+    public void TextColumnCountParser_RejectsInvalidCounts(string option)
+    {
+        TextColumnCountOptionParser.TryParse(option, out _).Should().BeFalse();
+    }
 }
