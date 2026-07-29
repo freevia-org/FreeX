@@ -2,7 +2,7 @@
 // Uses the real Avalonia Skia backend (not the headless stub) so the output contains actual pixels.
 //
 // Usage:
-//   FreeW.PageLayoutShot [<output-dir>]
+//   FreeW.PageLayoutShot [<output-dir>] [--scenario <scenario-id> ...]
 //
 // If <output-dir> is omitted PNGs are written next to the executable:
 //   freew_print_layout.png  — Print Layout (grey desk + discrete white pages + drop-shadow)
@@ -27,7 +27,25 @@ using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using SkiaSharp;
 
-var outDir = args.Length > 0 ? args[0] : AppContext.BaseDirectory;
+var positionalArgs = new List<string>();
+for (var i = 0; i < args.Length; i++)
+{
+    if (string.Equals(args[i], "--scenario", StringComparison.OrdinalIgnoreCase))
+    {
+        if (++i >= args.Length || string.IsNullOrWhiteSpace(args[i]))
+            throw new ArgumentException("--scenario requires a scenario id.");
+
+        PageShotScenarioSelection.Add(args[i]);
+        continue;
+    }
+
+    positionalArgs.Add(args[i]);
+}
+
+if (positionalArgs.Count > 1)
+    throw new ArgumentException("usage: FreeW.PageLayoutShot [<output-dir>] [--scenario <scenario-id> ...]");
+
+var outDir = positionalArgs.Count > 0 ? positionalArgs[0] : AppContext.BaseDirectory;
 
 int exitCode = 0;
 var done = new ManualResetEventSlim(false);
@@ -595,6 +613,9 @@ static TextDocument BuildBorderWatermarkDocument()
 /// </summary>
 static int RenderFloatingImageScene(string outPath, List<FreeWVisualEvidenceRow> evidence)
 {
+    if (!PageShotScenarioSelection.Includes("page-composition-floating-image"))
+        return 0;
+
     var doc = BuildFloatingImageDocument();
     var view = new DocumentView();
     view.LoadDocument(doc);
@@ -738,6 +759,9 @@ static int RenderMode(
     bool hasEndnotes = false,
     bool isSyntheticPage = false)
 {
+    if (!PageShotScenarioSelection.Includes(scenarioId))
+        return 0;
+
     var sourceDocument = documentFactory?.Invoke() ?? BuildMultiPageDocument();
     var sectionPageSurface = ResolveSectionPageSurfacePlan(scenarioId, sourceDocument, pageNumber, pageCount);
     var sectionGeometryPage = sectionPageSurface?.PagePlan
@@ -1575,6 +1599,16 @@ static TextDocument BuildMultiPageDocument()
     return doc;
 }
 
+
+static class PageShotScenarioSelection
+{
+    private static readonly HashSet<string> ScenarioIds = new(StringComparer.OrdinalIgnoreCase);
+
+    public static void Add(string scenarioId) => ScenarioIds.Add(scenarioId);
+
+    public static bool Includes(string scenarioId) =>
+        ScenarioIds.Count == 0 || ScenarioIds.Contains(scenarioId);
+}
 
 /// <summary>Minimal Avalonia app used by the page-layout shot tool (no UI shown).</summary>
 public sealed class PageShotApp : Application
