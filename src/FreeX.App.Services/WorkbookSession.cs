@@ -736,8 +736,10 @@ public sealed class WorkbookSession
     public void SelectRangeForFormulaEdit(GridRange range, CellAddress formulaEditAddress)
     {
         ValidateSelectionRange(range, nameof(range));
-        if (formulaEditAddress.Sheet != range.Start.Sheet)
-            throw new ArgumentException("The formula edit cell must be on the selected range's sheet.", nameof(formulaEditAddress));
+        if (!IsValidAddress(formulaEditAddress) || Workbook.GetSheet(formulaEditAddress.Sheet) is null)
+            throw new ArgumentOutOfRangeException(
+                nameof(formulaEditAddress),
+                "The formula edit cell must belong to an existing worksheet and be inside the worksheet bounds.");
 
         SetSelectedRanges(range, [range]);
         ActiveCell = range.Start;
@@ -1690,6 +1692,20 @@ public sealed class WorkbookSession
     public bool SelectSheet(SheetId sheetId)
         => SelectSheet(sheetId, selectRange: false, toggle: false);
 
+    /// <summary>
+    /// Activates another worksheet without ending the active formula point edit. The pointed
+    /// worksheet owns the visible selection, while <see cref="FormulaEditAddress"/> remains the
+    /// source cell that receives the eventual commit. This is the shared state transition used by
+    /// both worksheet hosts when a formula edit crosses a sheet tab.
+    /// </summary>
+    public bool SelectSheetForFormulaEdit(SheetId sheetId)
+    {
+        if (FormulaEditAddress is null)
+            throw new InvalidOperationException("A formula edit must be active before switching sheets for formula pointing.");
+
+        return SelectSheet(sheetId, selectRange: false, toggle: false, preserveFormulaEdit: true);
+    }
+
     public bool SelectSheetFromTab(SheetId sheetId, bool selectRange, bool toggle)
         => SelectSheet(sheetId, selectRange, toggle);
 
@@ -1738,6 +1754,13 @@ public sealed class WorkbookSession
     }
 
     private bool SelectSheet(SheetId sheetId, bool selectRange, bool toggle)
+        => SelectSheet(sheetId, selectRange, toggle, preserveFormulaEdit: false);
+
+    private bool SelectSheet(
+        SheetId sheetId,
+        bool selectRange,
+        bool toggle,
+        bool preserveFormulaEdit)
     {
         var previousSheetId = ActiveSheet.Id;
         var previousGroupedSheetIds = _groupedSheetIds.ToHashSet();
@@ -1750,7 +1773,8 @@ public sealed class WorkbookSession
         ActiveSheet = selection.Sheet;
         UpdateGroupedSheetsForTabSelection(ActiveSheet.Id, selectRange, toggle);
         RefreshSheetTabsForActiveSheet();
-        FormulaEditAddress = null;
+        if (!preserveFormulaEdit)
+            FormulaEditAddress = null;
 
         if (sheetChanged)
         {
@@ -2330,6 +2354,21 @@ public sealed class WorkbookSession
 
     public void CancelFormulaEdit()
     {
+        if (FormulaEditAddress is { } formulaEditAddress &&
+            !ActiveSheet.Id.Equals(formulaEditAddress.Sheet))
+        {
+            RememberActiveWorksheetSelection();
+            var selection = _sheetSelectionService.SelectSheet(Workbook, formulaEditAddress.Sheet);
+            ActiveSheet = selection.Sheet;
+            RefreshSheetTabsForActiveSheet();
+            ActiveCell = formulaEditAddress;
+            ActiveSheet.ActiveRow = formulaEditAddress.Row;
+            ActiveSheet.ActiveCol = formulaEditAddress.Col;
+            SetSingleSelectedRange(new GridRange(formulaEditAddress, formulaEditAddress));
+            RefreshViewport();
+            EnsureActiveCellVisible();
+        }
+
         FormulaEditAddress = null;
     }
 
@@ -2368,8 +2407,6 @@ public sealed class WorkbookSession
         ArgumentNullException.ThrowIfNull(text);
 
         var address = FormulaEditAddress ?? ActiveCell;
-        if (!address.Sheet.Equals(ActiveSheet.Id))
-            throw new InvalidOperationException("Cell edit address must belong to the active sheet.");
 
         var cell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle, Workbook);
 
@@ -2391,9 +2428,14 @@ public sealed class WorkbookSession
                 return new WorkbookCellEditResult(false, check.Message, [], RecalcReport: null);
         }
 
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            CreateEditCellsCommand([(address, cell)]));
+        // Formula point mode can leave the visible sheet on the reference target while the edit
+        // belongs to the original source sheet. Build the command against the source sheet in that
+        // case; using the visible ActiveSheet here would write the source address into the pointed
+        // sheet and leave the real edit cell untouched.
+        var editCommand = address.Sheet.Equals(ActiveSheet.Id)
+            ? CreateEditCellsCommand([(address, cell)])
+            : new EditCellsCommand(address.Sheet, [(address, cell)]);
+        var result = _cellEditService.ExecuteEditCommand(Workbook, editCommand);
 
         if (!result.Success)
             return result;

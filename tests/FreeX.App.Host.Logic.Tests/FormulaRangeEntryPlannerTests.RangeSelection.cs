@@ -102,6 +102,33 @@ public sealed partial class FormulaRangeEntryPlannerTests
     }
 
     [Fact]
+    public void TryApplyRangeSelection_QualifiesCrossSheetReferenceAndQuotesSheetName()
+    {
+        var targetSheetId = SheetId.New();
+        var selected = new GridRange(
+            new CellAddress(targetSheetId, 2, 2),
+            new CellAddress(targetSheetId, 4, 3));
+
+        FormulaRangeEntryPlanner.TryApplyRangeSelection(
+                "=SUM(",
+                caretIndex: 5,
+                selectionLength: 0,
+                previousReferenceStart: null,
+                previousReferenceLength: null,
+                selected,
+                FormulaCell,
+                useR1C1ReferenceStyle: false,
+                out var edit,
+                selectedSheetName: "Revenue Data")
+            .Should()
+            .BeTrue();
+
+        edit.TextEdit.Text.Should().Be("=SUM('Revenue Data'!B2:C4");
+        edit.ReferenceStart.Should().Be(5);
+        edit.ReferenceLength.Should().Be(20);
+    }
+
+    [Fact]
     public void TryApplyRangeSelection_InsertsAtCaretWhenCaretMovedPastPreviousReference()
     {
         FormulaRangeEntryPlanner.TryApplyRangeSelection(

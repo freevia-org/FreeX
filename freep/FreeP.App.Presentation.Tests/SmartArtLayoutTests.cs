@@ -2209,6 +2209,37 @@ public sealed class SmartArtLayoutTests
         result[3].OffsetXEmu.Should().BeLessThan(result[1].OffsetXEmu);
     }
 
+    [Theory]
+    [InlineData(5)]
+    [InlineData(8)]
+    public void ConvergingRadial_LargerNodeCountsRemainLive(int nodeCount)
+    {
+        var data = MakeData(
+            SmartArtFamily.Relationship,
+            Enumerable.Range(1, nodeCount).Select(i => $"Node {i}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/convergingRadial";
+        data.IsLiveLayoutSupported = true;
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("convergingRadial should remain live as authored node count grows");
+        shapes!.Should().HaveCount(nodeCount);
+        shapes.Should().OnlyContain(shape =>
+            shape.AutoShapeKind == DrawingShapeKind.LeftArrow ||
+            shape.AutoShapeKind == DrawingShapeKind.RightArrow ||
+            shape.AutoShapeKind == DrawingShapeKind.UpArrow ||
+            shape.AutoShapeKind == DrawingShapeKind.DownArrow);
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(i => $"Node {i}"));
+        shapes.Should().AllSatisfy(shape =>
+        {
+            shape.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            shape.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        });
+    }
+
     // BI2: when nodes parse to zero, Layout returns null so compositor uses cached-drawing fallback.
     [Fact]
     public void EmptyNodes_SupportedFamily_ReturnsNull_SoCompositorUsesFallback()

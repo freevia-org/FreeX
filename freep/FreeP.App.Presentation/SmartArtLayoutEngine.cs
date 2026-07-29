@@ -1662,16 +1662,17 @@ public static class SmartArtLayoutEngine
     }
 
     /// <summary>
-    /// Bounded Converging Radial geometry: three or four inward-facing arrows
-    /// arranged around the frame center. The arrows are ordinary shared shape
-    /// operations so both hosts can edit and regenerate the same live layout.
+    /// Converging Radial geometry: three or four authored inward-facing arrows
+    /// retain their established compass arrangement. Larger authored lists use
+    /// a bounded radial ring with cardinal arrow presets so both hosts can keep
+    /// the diagram live and regenerate the same editable shapes.
     /// </summary>
     private static IReadOnlyList<SlideShape>? LayoutConvergingRadial(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan)
     {
-        if (nodes.Count is < 3 or > 4)
+        if (nodes.Count < 3)
             return null;
 
         long outerPadX = (long)(fcx * OuterPaddingFrac);
@@ -1685,20 +1686,41 @@ public static class SmartArtLayoutEngine
         long horizontalOffset = Math.Max((long)(innerW * 0.31), arrowW / 2);
         long verticalOffset = Math.Max((long)(innerH * 0.31), arrowH / 2);
 
-        var positions = nodes.Count == 3
-            ? new[]
+        var positions = new List<(long x, long y, DrawingShapeKind shapeKind)>(nodes.Count);
+        if (nodes.Count == 3)
+        {
+            positions.Add((centerX - arrowW / 2, centerY - verticalOffset - arrowH / 2, DrawingShapeKind.DownArrow));
+            positions.Add((centerX - horizontalOffset - arrowW / 2, centerY - arrowH / 2, DrawingShapeKind.RightArrow));
+            positions.Add((centerX + horizontalOffset - arrowW / 2, centerY - arrowH / 2, DrawingShapeKind.LeftArrow));
+        }
+        else if (nodes.Count == 4)
+        {
+            positions.Add((centerX - arrowW / 2, centerY - verticalOffset - arrowH / 2, DrawingShapeKind.DownArrow));
+            positions.Add((centerX + horizontalOffset - arrowW / 2, centerY - arrowH / 2, DrawingShapeKind.LeftArrow));
+            positions.Add((centerX - arrowW / 2, centerY + verticalOffset - arrowH / 2, DrawingShapeKind.UpArrow));
+            positions.Add((centerX - horizontalOffset - arrowW / 2, centerY - arrowH / 2, DrawingShapeKind.RightArrow));
+        }
+        else
+        {
+            // Reduce the arrow footprint as the ring gets denser while keeping
+            // a generous inset from the authored frame edges.
+            var density = Math.Max((int)Math.Ceiling(Math.Sqrt(nodes.Count)), 1);
+            arrowW = Math.Max(Math.Min(arrowW, innerW / (density + 2)), 1L);
+            arrowH = Math.Max(Math.Min(arrowH, innerH / (density + 2)), 1L);
+            var radiusX = Math.Max((long)(innerW * 0.32), arrowW / 2);
+            var radiusY = Math.Max((long)(innerH * 0.32), arrowH / 2);
+
+            for (var i = 0; i < nodes.Count; i++)
             {
-                (centerX - arrowW / 2, centerY - verticalOffset - arrowH / 2, DrawingShapeKind.DownArrow),
-                (centerX - horizontalOffset - arrowW / 2, centerY - arrowH / 2, DrawingShapeKind.RightArrow),
-                (centerX + horizontalOffset - arrowW / 2, centerY - arrowH / 2, DrawingShapeKind.LeftArrow)
+                var angle = -Math.PI / 2 + (2 * Math.PI * i / nodes.Count);
+                var x = centerX + (long)(Math.Cos(angle) * radiusX) - arrowW / 2;
+                var y = centerY + (long)(Math.Sin(angle) * radiusY) - arrowH / 2;
+                var shapeKind = Math.Abs(Math.Cos(angle)) > 0.45
+                    ? (Math.Cos(angle) > 0 ? DrawingShapeKind.LeftArrow : DrawingShapeKind.RightArrow)
+                    : (Math.Sin(angle) > 0 ? DrawingShapeKind.UpArrow : DrawingShapeKind.DownArrow);
+                positions.Add((x, y, shapeKind));
             }
-            : new[]
-            {
-                (centerX - arrowW / 2, centerY - verticalOffset - arrowH / 2, DrawingShapeKind.DownArrow),
-                (centerX + horizontalOffset - arrowW / 2, centerY - arrowH / 2, DrawingShapeKind.LeftArrow),
-                (centerX - arrowW / 2, centerY + verticalOffset - arrowH / 2, DrawingShapeKind.UpArrow),
-                (centerX - horizontalOffset - arrowW / 2, centerY - arrowH / 2, DrawingShapeKind.RightArrow)
-            };
+        }
 
         var shapes = new List<SlideShape>(nodes.Count);
         uint idCounter = 536;

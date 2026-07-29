@@ -6617,8 +6617,8 @@ public sealed class DocumentView : Control
     private static IBrush PageDeskBrush   { get; } = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
     private static IBrush PageShadowBrush { get; } = new SolidColorBrush(Color.FromArgb(0x55, 0x00, 0x00, 0x00));
     private static Pen    PageBorderPen   { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 0.5);
-    // AV-COL: thin gray rule drawn in each inter-column gap when ColumnsLineBetween is set.
-    private static Pen    ColumnRulePen   { get; } = new Pen(new SolidColorBrush(Colors.Gray), 1.0);
+    // Word's column separator is an opaque one-pixel black rule at the gap's device-pixel centre.
+    private static Pen    ColumnRulePen   { get; } = new Pen(new SolidColorBrush(Colors.Black), 1.0);
     // AV-NOTERENDER: thin separator rule above the footnote band / under the Endnotes heading.
     private static Pen    NoteSeparatorPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.75);
     // AV-VIEW: faint layout-gridlines drawn behind body text when ShowGridlines is set.
@@ -6710,7 +6710,8 @@ public sealed class DocumentView : Control
                 {
                     // Gap centre X = left edge of next column minus half gap.
                     var gapCentreX = _contentLeft + (ci + 1) * (_colWidth + _colGap) - _colGap / 2;
-                    context.DrawLine(ColumnRulePen, new Point(gapCentreX, ruleTop), new Point(gapCentreX, ruleBottom));
+                    var pixelCenteredX = Math.Floor(gapCentreX) - 0.5;
+                    context.DrawLine(ColumnRulePen, new Point(pixelCenteredX, ruleTop), new Point(pixelCenteredX, ruleBottom));
                 }
             }
         }
@@ -18579,10 +18580,15 @@ public sealed class DocumentView : Control
 
     private static IBrush BuildWordArtGradientBrush(DrawingObjectFillPlan fill)
     {
+        // DrawingML stores the linear gradient direction in 60k-degree units.
+        // WordArt must consume the serialized angle just like ordinary shapes do.
+        var angleRadians = fill.GradientAngle / 60000.0 * Math.PI / 180.0;
+        var cos = Math.Cos(angleRadians);
+        var sin = Math.Sin(angleRadians);
         var brush = new LinearGradientBrush
         {
-            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-            EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+            StartPoint = new RelativePoint(0.5 - cos * 0.5, 0.5 - sin * 0.5, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0.5 + cos * 0.5, 0.5 + sin * 0.5, RelativeUnit.Relative),
         };
 
         foreach (var stop in fill.GradientStops)
