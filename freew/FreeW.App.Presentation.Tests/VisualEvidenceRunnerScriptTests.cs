@@ -18,6 +18,8 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("if ($UseSoftwareFallback)");
         source.Should().Contain("$wpfRenderArgs += \"--software-fallback\"");
         source.Should().Contain("Invoke-DotNetRunNoBuild $fidelityRenderProject $wpfRenderArgs");
+        source.Should().Contain("$avaloniaRenderArgs = @($avaloniaDir, \"--fixtures-dir\", $fixtureDir)");
+        source.Should().Contain("Invoke-DotNetRun $pageLayoutShotProject $avaloniaRenderArgs");
         source.Should().Contain("-AllowMissingWord");
         source.Should().Contain("[switch]$UseVisibleWordPublish");
         source.Should().Contain("Export-WordPdfsVisible.ps1");
