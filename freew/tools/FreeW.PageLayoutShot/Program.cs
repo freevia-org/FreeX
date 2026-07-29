@@ -24,6 +24,7 @@ using Avalonia.Threading;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.Core.IO;
 using FreeW.Core.Model;
 using SkiaSharp;
 
@@ -36,6 +37,15 @@ for (var i = 0; i < args.Length; i++)
             throw new ArgumentException("--scenario requires a scenario id.");
 
         PageShotScenarioSelection.Add(args[i]);
+        continue;
+    }
+
+    if (string.Equals(args[i], "--fixtures-dir", StringComparison.OrdinalIgnoreCase))
+    {
+        if (++i >= args.Length || string.IsNullOrWhiteSpace(args[i]))
+            throw new ArgumentException("--fixtures-dir requires a directory.");
+
+        PageShotFixtureSource.Configure(args[i]);
         continue;
     }
 
@@ -774,7 +784,9 @@ static int RenderMode(
     if (!PageShotScenarioSelection.Includes(scenarioId))
         return 0;
 
-    var sourceDocument = documentFactory?.Invoke() ?? BuildMultiPageDocument();
+    var sourceDocument = PageShotFixtureSource.Resolve(
+        scenarioId,
+        documentFactory ?? BuildMultiPageDocument);
     var sectionPageSurface = ResolveSectionPageSurfacePlan(scenarioId, sourceDocument, pageNumber, pageCount);
     var sectionGeometryPage = sectionPageSurface?.PagePlan
         ?? ResolveSectionGeometryPage(scenarioId, sourceDocument, pageNumber, pageCount);
@@ -1621,6 +1633,26 @@ static class PageShotScenarioSelection
 
     public static bool Includes(string scenarioId) =>
         ScenarioIds.Count == 0 || ScenarioIds.Contains(scenarioId);
+}
+
+static class PageShotFixtureSource
+{
+    private static string? FixtureDirectory;
+
+    public static void Configure(string directory)
+    {
+        FixtureDirectory = Path.GetFullPath(directory);
+    }
+
+    public static TextDocument Resolve(string scenarioId, Func<TextDocument> fallback)
+    {
+        ArgumentNullException.ThrowIfNull(fallback);
+        if (string.IsNullOrWhiteSpace(FixtureDirectory))
+            return fallback();
+
+        var path = Path.Combine(FixtureDirectory, scenarioId + ".docx");
+        return File.Exists(path) ? DocxReader.Read(path) : fallback();
+    }
 }
 
 /// <summary>Minimal Avalonia app used by the page-layout shot tool (no UI shown).</summary>

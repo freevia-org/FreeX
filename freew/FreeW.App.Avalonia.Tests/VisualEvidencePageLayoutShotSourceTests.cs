@@ -19,6 +19,10 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("FreeWVisualEvidencePlanner.BuildEvidenceRow(");
         source.Should().Contain("FreeWVisualEvidencePlanner.EnsureTrusted(row)");
         source.Should().Contain("ComputePngPixelStats(");
+        source.Should().Contain("--fixtures-dir requires a directory.");
+        source.Should().Contain("PageShotFixtureSource.Configure(args[i])");
+        source.Should().Contain("PageShotFixtureSource.Resolve(");
+        source.Should().Contain("DocxReader.Read(path)");
         source.Should().Contain("page-composition-print-layout");
         source.Should().Contain("page-composition-columns");
         source.Should().Contain("page-composition-border-watermark");

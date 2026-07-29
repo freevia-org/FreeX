@@ -169,6 +169,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("$selectedWpfFixtureDir = Join-Path $runRoot 'wpf-fixtures'");
         source.Should().Contain("Copy-Item -LiteralPath (Join-Path $fixtureDir \"$scenarioId.docx\") -Destination $selectedWpfFixtureDir -Force");
         source.Should().Contain("$avaloniaRenderArgs += @('--scenario', $scenarioId)");
+        source.Should().Contain("'--fixtures-dir', $fixtureDir");
         source.Should().Contain("'--manifest', $wpfManifest");
         source.Should().Contain("'--manifest', $avaloniaManifest");
         source.Should().Contain("'--word-baseline-dir', $wordBaselineRoot");
