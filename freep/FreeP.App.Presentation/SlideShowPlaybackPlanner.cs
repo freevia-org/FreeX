@@ -188,6 +188,15 @@ public sealed record SlideShowFallbackAnimationPlaybackPlan(
     double FromOpacity,
     double FlashOpacity);
 
+/// <summary>
+/// Logical visibility behavior for an animation whose visual overlay could not be built.
+/// Hosts use this shared plan to preserve PowerPoint's step semantics without inventing
+/// renderer-specific geometry for an unavailable surface.
+/// </summary>
+public sealed record SlideShowAnimationFallbackVisibilityPlan(
+    bool SuppressAtStart,
+    bool SuppressAtCompletion);
+
 public static class SlideShowPlaybackPlanner
 {
     public const int MinTransitionDurationMs = 50;
@@ -426,6 +435,19 @@ public static class SlideShowPlaybackPlanner
                 FromOpacity: 1,
                 FlashOpacity: 0.5)
             : null;
+    }
+
+    public static SlideShowAnimationFallbackVisibilityPlan PlanFallbackVisibility(
+        ShapeAnimation animation)
+    {
+        ArgumentNullException.ThrowIfNull(animation);
+
+        return animation.Kind switch
+        {
+            AnimationKind.Entrance or AnimationKind.Motion => new(true, false),
+            AnimationKind.Exit => new(false, true),
+            _ => new(false, false),
+        };
     }
 
     private static SlideShowShapeAnimationEffectKind ResolveEffectKind(ShapeAnimation animation)

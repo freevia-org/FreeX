@@ -39,6 +39,7 @@ public sealed class OsClipboardServiceTests
         public byte[]? SelectionBytes { get; set; }
         public byte[]? RichTextBytes { get; set; }
         public byte[]? XamlPackageBytes { get; set; }
+        public byte[]? RtfBytes { get; set; }
         public string? OwnerToken { get; set; }
         public bool ThrowOnRead { get; set; }
         public bool ThrowOnWrite { get; set; }
@@ -63,7 +64,8 @@ public sealed class OsClipboardServiceTests
                 Text: HasText ? Text : null,
                 OwnerToken: OwnerToken,
                 RichTextBytes: RichTextBytes,
-                XamlPackageBytes: XamlPackageBytes);
+                XamlPackageBytes: XamlPackageBytes,
+                RtfBytes: RtfBytes);
         }
 
         public bool ContainsImage() => HasImage;
@@ -352,6 +354,19 @@ public sealed class OsClipboardServiceTests
         content.OwnerToken.Should().Be("legacy-owner");
     }
 
+    [StaFact]
+    public void WpfDataObject_ReadsNativeRtfPayload()
+    {
+        var rtf = Encoding.ASCII.GetBytes(@"{\rtf1\ansi Native RTF}");
+        var dataObject = new DataObject();
+        dataObject.SetData(DataFormats.Rtf, new MemoryStream(rtf, writable: false), false);
+
+        var content = WpfOsClipboard.ReadDataObject(dataObject);
+
+        content.RtfBytes.Should().Equal(rtf);
+        content.HasRichText.Should().BeTrue();
+    }
+
     private static byte[] ReadComHGlobal(DataObject dataObject, string format)
     {
         var formatEtc = new FORMATETC
@@ -528,6 +543,51 @@ public sealed class OsClipboardServiceTests
     }
 
     [StaFact]
+    public void Paste_ExternalRtfPayload_InsertsFormattedTextBox()
+    {
+        var fake = new FakeOsClipboard
+        {
+            RtfBytes = Encoding.ASCII.GetBytes(
+                @"{\rtf1\ansi{\fonttbl{\f0 Calibri;}}\pard\f0\fs24 Before \b bold\b0\par After}"),
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        var body = editor.CurrentSlide!.Shapes.Single().TextBody!;
+        body.Paragraphs.Should().HaveCount(2);
+        body.Paragraphs[0].Runs.Select(run => run.Text).Should().ContainInOrder("Before ", "bold");
+        body.Paragraphs[0].Runs.Single(run => run.Text == "bold").Bold.Should().BeTrue();
+        body.Paragraphs[1].Runs.Single().Text.Should().Be("After");
+    }
+
+    [StaFact]
+    public void Paste_ExternalRtfPicture_InsertsPictureAndRetainsText()
+    {
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi Caption {\pict\pngblip " + Convert.ToHexString(_minPng) + @"} After}");
+        var fake = new FakeOsClipboard { RtfBytes = rtf };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        editor.CurrentSlide.Shapes[0].Kind.Should().Be(SlideShapeKind.Picture);
+        editor.CurrentSlide.Shapes[0].Picture!.Bytes.Should().Equal(_minPng);
+        editor.CurrentSlide.Shapes[0].Picture!.ContentType.Should().Be("image/png");
+        editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
+            .Should().Contain(run => run.Text.Contains("Caption ", StringComparison.Ordinal));
+    }
+
+    [StaFact]
     public void Paste_XamlPackageTable_InsertsProjectedTextBox()
     {
         const string xaml = """
@@ -555,6 +615,32 @@ public sealed class OsClipboardServiceTests
         var body = editor.CurrentSlide!.Shapes.Single().TextBody!;
         body.Paragraphs.Single().Runs.Select(run => run.Text).Should().ContainInOrder("Q1", "\t", "42");
         body.Paragraphs.Single().Runs.Single(run => run.Text == "Q1").Bold.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void Paste_XamlPackageImage_InsertsPictureFromPackageResource()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <BlockUIContainer><Image Source="Images/pasted.png" /></BlockUIContainer>
+            </FlowDocument>
+            """;
+        var fake = new FakeOsClipboard
+        {
+            XamlPackageBytes = CreateXamlPackage(xaml, ("Images/pasted.png", _minPng)),
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.XamlPackage);
+        var picture = editor.CurrentSlide!.Shapes.Single();
+        picture.Kind.Should().Be(SlideShapeKind.Picture);
+        picture.Picture!.ContentType.Should().Be("image/png");
+        picture.Picture.Bytes.Should().Equal(_minPng);
     }
 
     [StaFact]
@@ -901,12 +987,24 @@ public sealed class OsClipboardServiceTests
             "Y9: empty OS text should not insert a textbox");
     }
 
-    private static byte[] CreateXamlPackage(string xaml)
+    private static byte[] CreateXamlPackage(
+        string xaml,
+        params (string Name, byte[] Bytes)[] resources)
     {
         using var output = new MemoryStream();
         using (var package = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
-        using (var writer = new StreamWriter(package.CreateEntry("Xaml/Document.xaml").Open(), Encoding.UTF8))
+        {
+            foreach (var resource in resources)
+            {
+                var entry = package.CreateEntry(resource.Name);
+                using var stream = entry.Open();
+                stream.Write(resource.Bytes);
+            }
+
+            var xamlEntry = package.CreateEntry("Xaml/Document.xaml");
+            using var writer = new StreamWriter(xamlEntry.Open(), Encoding.UTF8);
             writer.Write(xaml);
+        }
         return output.ToArray();
     }
 

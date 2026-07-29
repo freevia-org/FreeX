@@ -87,6 +87,152 @@ public sealed class R53_CrossSheetFormulaPointModeTests
     }
 
     [Fact]
+    public async Task ShiftSheetTabsInFormulaPointMode_EmitThreeDSheetSpan()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sourceSheet = window.Session.ActiveSheet;
+                var startSheet = window.Session.Workbook.AddSheet("Sheet2");
+                var endSheet = window.Session.Workbook.AddSheet("Sheet3");
+                var source = new CellAddress(sourceSheet.Id, 1, 1);
+                var formulaBox = GetField<global::Avalonia.Controls.TextBox>(window, "_formulaBox");
+
+                window.BeginFormulaEditForTest(source, "=");
+                formulaBox.Text = "=SUM(";
+                window.SetFormulaBoxSelectionForTest("=SUM(".Length, 0);
+                window.RaiseSheetTabModifierClickForTest(startSheet.Id, KeyModifiers.None);
+                window.RaiseSheetTabModifierClickForTest(endSheet.Id, KeyModifiers.Shift);
+
+                Invoke<bool>(window, "TryInsertFormulaPointReference", new CellAddress(endSheet.Id, 2, 2))
+                    .Should().BeTrue();
+                formulaBox.Text.Should().Be("=SUM(Sheet2:Sheet3!B2");
+                window.Session.FormulaEditAddress.Should().Be(source);
+
+                window.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs { Key = Key.Escape });
+                window.Session.ActiveSheet.Should().BeSameAs(sourceSheet);
+                window.Session.ActiveCell.Should().Be(source);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task FormulaPointingAfterTypingOperator_DropsAbandonedSheetSpan()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sourceSheet = window.Session.ActiveSheet;
+                var startSheet = window.Session.Workbook.AddSheet("Sheet2");
+                var endSheet = window.Session.Workbook.AddSheet("Sheet3");
+                var source = new CellAddress(sourceSheet.Id, 1, 1);
+                var formulaBox = GetField<global::Avalonia.Controls.TextBox>(window, "_formulaBox");
+
+                window.BeginFormulaEditForTest(source, "=");
+                formulaBox.Text = "=SUM(";
+                window.SetFormulaBoxSelectionForTest("=SUM(".Length, 0);
+                window.RaiseSheetTabModifierClickForTest(startSheet.Id, KeyModifiers.None);
+                window.RaiseSheetTabModifierClickForTest(endSheet.Id, KeyModifiers.Shift);
+                Invoke<bool>(window, "TryInsertFormulaPointReference", new CellAddress(endSheet.Id, 2, 2))
+                    .Should().BeTrue();
+
+                formulaBox.Text = "=SUM(Sheet2:Sheet3!B2+";
+                window.SetFormulaBoxSelectionForTest("=SUM(Sheet2:Sheet3!B2+".Length, 0);
+                Invoke<bool>(window, "TryInsertFormulaPointReference", new CellAddress(endSheet.Id, 3, 3))
+                    .Should().BeTrue();
+
+                formulaBox.Text.Should().Be("=SUM(Sheet2:Sheet3!B2+Sheet3!C3");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task FormulaPointingExtendsLiveReference_WithoutDroppingThreeDSheetSpan()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sourceSheet = window.Session.ActiveSheet;
+                var startSheet = window.Session.Workbook.AddSheet("Sheet2");
+                var endSheet = window.Session.Workbook.AddSheet("Sheet3");
+                var source = new CellAddress(sourceSheet.Id, 1, 1);
+                var formulaBox = GetField<global::Avalonia.Controls.TextBox>(window, "_formulaBox");
+
+                window.BeginFormulaEditForTest(source, "=");
+                formulaBox.Text = "=SUM(";
+                window.SetFormulaBoxSelectionForTest("=SUM(".Length, 0);
+                window.RaiseSheetTabModifierClickForTest(startSheet.Id, KeyModifiers.None);
+                window.RaiseSheetTabModifierClickForTest(endSheet.Id, KeyModifiers.Shift);
+                Invoke<bool>(window, "TryInsertFormulaPointReference", new CellAddress(endSheet.Id, 2, 2))
+                    .Should().BeTrue();
+                Invoke<bool>(window, "TryApplyFormulaRangeSelection", new CellAddress(endSheet.Id, 4, 3), true)
+                    .Should().BeTrue();
+
+                formulaBox.Text.Should().Be("=SUM(Sheet2:Sheet3!B2:C4");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task InlineCaretMovedOutsideLiveReference_DropsThreeDSheetSpan()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sourceSheet = window.Session.ActiveSheet;
+                var startSheet = window.Session.Workbook.AddSheet("Sheet2");
+                var endSheet = window.Session.Workbook.AddSheet("Sheet3");
+                var source = new CellAddress(sourceSheet.Id, 1, 1);
+                var formulaBox = GetField<global::Avalonia.Controls.TextBox>(window, "_formulaBox");
+
+                window.BeginInlineCellEditForTest(source, "=", 1);
+                var inlineEditor = GetField<global::Avalonia.Controls.TextBox>(window, "_inlineCellEditor");
+                inlineEditor.Text = "=SUM(";
+                inlineEditor.CaretIndex = inlineEditor.Text.Length;
+                inlineEditor.SelectionStart = inlineEditor.Text.Length;
+                inlineEditor.SelectionEnd = inlineEditor.Text.Length;
+                window.RaiseSheetTabModifierClickForTest(startSheet.Id, KeyModifiers.None);
+                window.RaiseSheetTabModifierClickForTest(endSheet.Id, KeyModifiers.Shift);
+                Invoke<bool>(window, "TryInsertFormulaPointReference", new CellAddress(endSheet.Id, 2, 2))
+                    .Should().BeTrue();
+
+                inlineEditor.SelectionStart = 0;
+                inlineEditor.SelectionEnd = 0;
+                inlineEditor.CaretIndex = 0;
+                Invoke<bool>(window, "TryInsertFormulaPointReference", new CellAddress(endSheet.Id, 3, 3))
+                    .Should().BeTrue();
+
+                formulaBox.Text.Should().Contain("Sheet3!C3");
+                formulaBox.Text.Should().NotContain("Sheet2:Sheet3!C3");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task CtrlColumnHeaderPointing_AppendsWholeColumnAreaWithoutCommittingEdit()
     {
         await Session.Dispatch(() =>
@@ -126,7 +272,19 @@ public sealed class R53_CrossSheetFormulaPointModeTests
         typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window) as T
         ?? throw new InvalidOperationException($"Missing field {name}.");
 
-    private static T Invoke<T>(MainWindow window, string name, params object[] args) =>
-        (T)typeof(MainWindow).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(window, args)!;
+    private static T Invoke<T>(MainWindow window, string name, params object[] args)
+    {
+        var method = typeof(MainWindow)
+            .GetMethods(BindingFlags.Instance | BindingFlags.NonPublic)
+            .Single(candidate =>
+            {
+                if (candidate.Name != name)
+                    return false;
+
+                var parameters = candidate.GetParameters();
+                return parameters.Length == args.Length &&
+                    parameters.Zip(args).All(pair => pair.First.ParameterType.IsInstanceOfType(pair.Second));
+            });
+        return (T)method.Invoke(window, args)!;
+    }
 }

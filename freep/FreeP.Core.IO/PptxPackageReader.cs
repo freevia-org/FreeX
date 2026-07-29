@@ -4439,6 +4439,7 @@ public static class PptxPackageReader
             if (iAttr is not null) { run.ItalicSet = true; run.Italic = iAttr.Value is "1" or "true"; }
             run.Underline = rPr.Attribute("u")?.Value is not null and not "none";
             run.Strikethrough = rPr.Attribute("strike")?.Value is "sngStrike" or "dblStrike";
+            run.RightToLeft = ParseNullableBoolean(rPr.Attribute("rtl")?.Value);
             run.Caps = rPr.Attribute("cap")?.Value.ToLowerInvariant() switch
             {
                 "all" => RunTextCaps.All,

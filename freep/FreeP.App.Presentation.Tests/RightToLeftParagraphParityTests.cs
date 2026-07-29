@@ -67,6 +67,42 @@ public sealed class RightToLeftParagraphParityTests
     }
 
     [Fact]
+    public void PptxRunRtl_ExplicitTrueFalseAndAbsent_RoundTripTruthfully()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run { Text = HebrewSample, RightToLeft = true },
+                new Run { Text = " / ", RightToLeft = false },
+                new Run { Text = "Inherited" },
+            },
+        });
+
+        using var package = new MemoryStream();
+        PptxPackageWriter.Write(MakePresentation(body), package);
+
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true))
+        using (var stream = archive.GetEntry("ppt/slides/slide1.xml")!.Open())
+        {
+            var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+            var values = XDocument.Load(stream)
+                .Descendants(a + "r")
+                .Select(r => r.Element(a + "rPr")?.Attribute("rtl")?.Value)
+                .ToArray();
+            values.Should().ContainInOrder("1", "0", null);
+        }
+
+        package.Position = 0;
+        var restored = PptxPackageReader.Read(package);
+        restored.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs
+            .Select(run => run.RightToLeft)
+            .Should().ContainInOrder(true, false, null);
+    }
+
+    [Fact]
     public void PptxParagraphRtl_StyleDirection_IsResolvedWhenParagraphOmitsAttribute()
     {
         var body = new TextBody
@@ -148,6 +184,31 @@ public sealed class RightToLeftParagraphParityTests
     }
 
     [Fact]
+    public void SharedClipboard_RunDirectionOverridesSurviveSerialization()
+    {
+        var source = new TextBody();
+        source.Paragraphs.Add(new Paragraph
+        {
+            RightToLeft = true,
+            Runs =
+            {
+                new Run { Text = HebrewSample, RightToLeft = true },
+                new Run { Text = " / ", RightToLeft = false },
+            },
+        });
+
+        var payload = InCanvasRichClipboardPlanner.Capture(
+            source,
+            new InCanvasEditorTextSelection(0, HebrewSample.Length + 3));
+        var restored = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+
+        restored.Should().NotBeNull();
+        restored!.Body.Paragraphs[0].Runs.Select(run => run.RightToLeft)
+            .Should().ContainInOrder(true, false);
+    }
+
+    [Fact]
     public void LtrParagraph_WithAbsentDirection_RemainsResolvedLtr()
     {
         var presentation = MakePresentation(new TextBody
@@ -224,5 +285,32 @@ public sealed class RightToLeftParagraphParityTests
         placements.Select(p => p.RunIndex).Should().ContainInOrder(0, 1, 2);
         placements.Select(p => p.X).Should().ContainInOrder(10, 50, 80);
         placements.Select(p => p.RightToLeft).Should().ContainInOrder(false, false, false);
+    }
+
+    [Fact]
+    public void ExplicitRunDirection_OverridesStrongCharacterInference()
+    {
+        var paragraph = new ResolvedParagraph
+        {
+            RightToLeft = false,
+            Runs =
+            [
+                new ResolvedRun { Text = HebrewSample, RightToLeft = false },
+                new ResolvedRun { Text = "LTR", RightToLeft = true },
+            ],
+        };
+
+        var placements = TextLayoutPlanner.PlanRunPlacements(
+            paragraph,
+            startX: 10,
+            availableWidth: 0,
+            (run, rightToLeft) =>
+            {
+                run.RightToLeft.Should().NotBeNull();
+                rightToLeft.Should().Be(run.RightToLeft!.Value);
+                return run.Text.Length * 10;
+            });
+
+        placements.Select(p => p.RightToLeft).Should().ContainInOrder(false, true);
     }
 }

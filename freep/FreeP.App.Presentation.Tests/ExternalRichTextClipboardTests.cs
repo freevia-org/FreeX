@@ -118,6 +118,37 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfPict_PreservesPngPayloadAlongsideText()
+    {
+        var png = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi Before {\pict\pngblip " + Convert.ToHexString(png) + @"} After}");
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(rtf);
+
+        payload.Should().NotBeNull();
+        payload!.HasImage.Should().BeTrue();
+        payload.ImageContentType.Should().Be("image/png");
+        payload.ImageBytes.Should().Equal(png);
+        payload.PlainText.Should().Be("Before  After");
+    }
+
+    [Fact]
+    public void RtfPict_RecognizesJpegSignature()
+    {
+        byte[] jpeg = [0xFF, 0xD8, 0xFF, 0xD9];
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi{\pict\jpegblip " + Convert.ToHexString(jpeg) + "}}");
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(rtf);
+
+        payload.Should().NotBeNull();
+        payload!.ImageContentType.Should().Be("image/jpeg");
+        payload.ImageBytes.Should().Equal(jpeg);
+    }
+
+    [Fact]
     public void UnsupportedAndMalformedRtf_IsBoundedAndNeverThrows()
     {
         var partial = ExternalRichTextClipboardPlanner.TryParseRtf(
@@ -131,6 +162,20 @@ public sealed class ExternalRichTextClipboardTests
         var oversized = Encoding.ASCII.GetBytes(
             "{\\rtf1\\ansi " + new string('x', ExternalRichTextClipboardPlanner.MaxOutputCharacters + 1));
         ExternalRichTextClipboardPlanner.TryParseRtf(oversized).Should().BeNull();
+    }
+
+    [Fact]
+    public void RtfCharacterDirection_RtlchAndLtrch_PreserveMixedRunOverrides()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\rtlpar\rtlch\u1488?\u1489?\u1490?\ltrch LTR}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Should().Contain(run => run.Text == "\u05D0\u05D1\u05D2" && run.RightToLeft == true);
+        runs.Should().Contain(run => run.Text == "LTR" && run.RightToLeft == false);
     }
 
     [Fact]

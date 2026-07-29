@@ -43,6 +43,7 @@ public static class ExternalRichTextClipboardPlanner
             ListOverrideTable,
             ListLevelText,
             FieldInstruction,
+            Picture,
             Skip,
         }
 
@@ -90,6 +91,7 @@ public static class ExternalRichTextClipboardPlanner
             public bool ItalicSet;
             public bool Underline;
             public bool Strikethrough;
+            public bool? RunRightToLeft;
             public int ColorIndex;
             public int UnicodeSkip = 1;
             public int UnicodeFallbackRemaining;
@@ -122,6 +124,7 @@ public static class ExternalRichTextClipboardPlanner
             bool Italic,
             bool Underline,
             bool Strikethrough,
+            bool? RunRightToLeft,
             SrgbColor? Color,
             bool BoldSet,
             bool ItalicSet,
@@ -154,6 +157,9 @@ public static class ExternalRichTextClipboardPlanner
         private int _currentListOverrideId;
         private LegacyListDefinition? _legacyList;
         private readonly HashSet<(int ListId, int Level)> _seenListLevels = new();
+        private readonly List<byte> _pictureBytes = new();
+        private int _picturePendingNibble = -1;
+        private bool _pictureCaptureStarted;
 
         public RtfReader(byte[] bytes) => _bytes = bytes;
 
@@ -182,9 +188,12 @@ public static class ExternalRichTextClipboardPlanner
             }
 
             EnsureParagraph();
+            var picture = TryGetPicturePayload();
             return new InCanvasRichClipboardPayload(
                 _body,
-                InCanvasTextEditPlanner.ExtractPlainText(_body));
+                InCanvasTextEditPlanner.ExtractPlainText(_body),
+                ImageBytes: picture.Bytes,
+                ImageContentType: picture.ContentType);
         }
 
         private bool ReadNext()
@@ -428,7 +437,6 @@ public static class ExternalRichTextClipboardPlanner
                     break;
                 case "stylesheet":
                 case "info":
-                case "pict":
                 case "object":
                 case "filetbl":
                 case "generator":
@@ -436,6 +444,24 @@ public static class ExternalRichTextClipboardPlanner
                 case "pntext":
                     _state.Destination = Destination.Skip;
                     _state.SkipOutput = true;
+                    break;
+                case "pict":
+                    if (!_pictureCaptureStarted && _pictureBytes.Count == 0)
+                    {
+                        _pictureCaptureStarted = true;
+                        _picturePendingNibble = -1;
+                        _state.Destination = Destination.Picture;
+                        _state.SkipOutput = true;
+                    }
+                    else
+                    {
+                        _state.Destination = Destination.Skip;
+                        _state.SkipOutput = true;
+                    }
+                    break;
+                case "pngblip":
+                    break;
+                case "jpegblip":
                     break;
 
                 case "f":
@@ -461,6 +487,8 @@ public static class ExternalRichTextClipboardPlanner
                 case "strike":
                 case "striked": _state.Strikethrough = value != 0; break;
                 case "strike0": _state.Strikethrough = false; break;
+                case "rtlch": _state.RunRightToLeft = true; break;
+                case "ltrch": _state.RunRightToLeft = false; break;
                 case "cf": _state.ColorIndex = Math.Max(0, value); break;
                 case "plain": ResetCharacterFormatting(); break;
                 case "pard": ResetParagraphFormatting(); break;
@@ -478,7 +506,12 @@ public static class ExternalRichTextClipboardPlanner
                 case "tab": AppendText("\t"); break;
                 case "bin":
                     if (parameter is { } count && count > 0)
-                        _position = Math.Min(_bytes.Length, _position + count);
+                    {
+                        if (_state.Destination == Destination.Picture)
+                            ReadPictureBinary(count);
+                        else
+                            _position = Math.Min(_bytes.Length, _position + count);
+                    }
                     break;
                 case "red": _state.Red = Math.Clamp(value, 0, 255); break;
                 case "green": _state.Green = Math.Clamp(value, 0, 255); break;
@@ -568,6 +601,12 @@ public static class ExternalRichTextClipboardPlanner
 
         private void AppendByte(byte value)
         {
+            if (_state.Destination == Destination.Picture)
+            {
+                AppendPictureHex(value);
+                return;
+            }
+
             if (_state.Destination == Destination.FontTable)
             {
                 if (value == (byte)';')
@@ -605,6 +644,66 @@ public static class ExternalRichTextClipboardPlanner
                 return;
 
             AppendText(DecodeByte(value).ToString());
+        }
+
+        private void AppendPictureHex(byte value)
+        {
+            if (value is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
+                return;
+
+            int nibble = HexValue(value);
+            if (nibble < 0)
+                return;
+
+            if (_picturePendingNibble < 0)
+            {
+                _picturePendingNibble = nibble;
+                return;
+            }
+
+            if (_pictureBytes.Count >= MaxRtfBytes)
+                throw new InvalidDataException("RTF picture limit exceeded.");
+
+            _pictureBytes.Add((byte)((_picturePendingNibble << 4) | nibble));
+            _picturePendingNibble = -1;
+        }
+
+        private void ReadPictureBinary(int count)
+        {
+            int end = Math.Min(_bytes.Length, _position + count);
+            if (end - _position > MaxRtfBytes - _pictureBytes.Count)
+                throw new InvalidDataException("RTF picture limit exceeded.");
+
+            for (; _position < end; _position++)
+                _pictureBytes.Add(_bytes[_position]);
+        }
+
+        private (byte[]? Bytes, string? ContentType) TryGetPicturePayload()
+        {
+            if (_pictureBytes.Count == 0)
+                return (null, null);
+
+            byte[] payload = _pictureBytes.ToArray();
+            if (HasPrefix(payload, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))
+                return (payload, "image/png");
+            if (HasPrefix(payload, [0xFF, 0xD8, 0xFF]))
+                return (payload, "image/jpeg");
+
+            return (null, null);
+        }
+
+        private static bool HasPrefix(byte[] value, byte[] prefix)
+        {
+            if (value.Length < prefix.Length)
+                return false;
+
+            for (int i = 0; i < prefix.Length; i++)
+            {
+                if (value[i] != prefix[i])
+                    return false;
+            }
+
+            return true;
         }
 
         private void AppendText(string text)
@@ -734,6 +833,7 @@ public static class ExternalRichTextClipboardPlanner
                 _state.Italic,
                 _state.Underline,
                 _state.Strikethrough,
+                _state.RunRightToLeft,
                 color,
                 _state.BoldSet,
                 _state.ItalicSet,
@@ -761,6 +861,7 @@ public static class ExternalRichTextClipboardPlanner
                 ItalicSet = _activeStyle.ItalicSet,
                 Underline = _activeStyle.Underline,
                 Strikethrough = _activeStyle.Strikethrough,
+                RightToLeft = _activeStyle.RunRightToLeft,
                 Color = _activeStyle.Color is { } color ? new ThemeAwareColor(color) : null,
                 Hyperlink = _activeStyle.Hyperlink,
             });
@@ -776,6 +877,7 @@ public static class ExternalRichTextClipboardPlanner
             && left.Italic == right.Italic
             && left.Underline == right.Underline
             && left.Strikethrough == right.Strikethrough
+            && left.RunRightToLeft == right.RunRightToLeft
             && Nullable.Equals(left.Color, right.Color)
             && left.BoldSet == right.BoldSet
             && left.ItalicSet == right.ItalicSet
@@ -791,6 +893,7 @@ public static class ExternalRichTextClipboardPlanner
             _state.ItalicSet = true;
             _state.Underline = false;
             _state.Strikethrough = false;
+            _state.RunRightToLeft = null;
             _state.ColorIndex = 0;
         }
 

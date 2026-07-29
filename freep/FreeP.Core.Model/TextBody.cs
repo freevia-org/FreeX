@@ -284,6 +284,11 @@ public sealed class Run
 
     public bool Underline { get; set; }
     public bool Strikethrough { get; set; }
+    /// <summary>
+    /// Explicit character direction. Null means inherit the paragraph direction or the
+    /// first strong character, while true/false preserve an authored RTL/LTR run override.
+    /// </summary>
+    public bool? RightToLeft { get; set; }
     public RunTextCaps Caps { get; set; }
 
     /// <summary>Run color, or null to inherit.</summary>

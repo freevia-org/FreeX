@@ -5902,18 +5902,15 @@ public sealed class DocumentView : RichTextBox
 
             if (plan.Text is { Text.Length: > 0 } text)
             {
-                var textBlock = new TextBlock
+                border.Child = new Border
                 {
-                    Text = text.Text,
-                    Margin = new Thickness(4),
-                    TextWrapping = TextWrapping.Wrap,
-                    VerticalAlignment = VerticalAlignment.Top
+                    Width = widthPx,
+                    Height = heightPx,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Clip = new RectangleGeometry(new Rect(0, 0, widthPx, heightPx)),
+                    Child = BuildFloatingShapeTextVisual(text, widthPx, heightPx)
                 };
-                if (text.Direction == ShapeTextDirection.Rotate90)
-                    textBlock.LayoutTransform = new RotateTransform(90);
-                else if (text.Direction == ShapeTextDirection.Rotate270)
-                    textBlock.LayoutTransform = new RotateTransform(270);
-                border.Child = textBlock;
             }
 
             element = border;
@@ -5921,6 +5918,87 @@ public sealed class DocumentView : RichTextBox
 
         ApplyDrawingObjectEffects(element, plan.Effects, DocumentEffectSet.FromTheme(_model.Theme));
         return element;
+    }
+
+    private Canvas BuildFloatingShapeTextVisual(DrawingObjectTextPlan text, double widthPx, double heightPx)
+    {
+        var isRotated = text.Direction is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270;
+        var layoutWidth = isRotated ? heightPx : widthPx;
+        var layoutHeight = isRotated ? widthPx : heightPx;
+        var layout = DrawingObjectTextLayoutPlanner.LayoutPlan(
+            text,
+            layoutWidth,
+            layoutHeight,
+            (value, formatting) => MeasureFloatingShapeText(value, formatting).WidthIncludingTrailingWhitespace,
+            formatting => MeasureFloatingShapeText("Ag", formatting).Height);
+
+        var canvas = new Canvas
+        {
+            Width = layout.Width,
+            Height = layout.Height,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Clip = new RectangleGeometry(new Rect(0, 0, layout.Width, layout.Height))
+        };
+        foreach (var glyph in layout.Glyphs)
+        {
+            var formatting = glyph.Formatting;
+            var glyphText = new TextBlock
+            {
+                Text = glyph.Character.ToString(),
+                FontFamily = formatting.FontFamily is { Length: > 0 } family
+                    ? new FontFamily(family)
+                    : new FontFamily("Segoe UI"),
+                FontSize = (formatting.FontSizePt ?? 9) * PxPerPoint,
+                FontWeight = formatting.Bold ? FontWeights.Bold : FontWeights.Normal,
+                FontStyle = formatting.Italic ? FontStyles.Italic : FontStyles.Normal,
+                Foreground = TryParseColor(formatting.ColorHex, out var color)
+                    ? new SolidColorBrush(color)
+                    : Brushes.Black,
+                Width = Math.Max(1, glyph.Width),
+                Height = Math.Max(1, glyph.Height),
+                Padding = new Thickness(0)
+            };
+            var decorations = new TextDecorationCollection();
+            if (formatting.Underline)
+                decorations.Add(TextDecorations.Underline);
+            if (formatting.Strikethrough)
+                decorations.Add(TextDecorations.Strikethrough);
+            if (decorations.Count > 0)
+                glyphText.TextDecorations = decorations;
+            Canvas.SetLeft(glyphText, glyph.X);
+            Canvas.SetTop(glyphText, glyph.Y);
+            canvas.Children.Add(glyphText);
+        }
+
+        if (isRotated)
+        {
+            canvas.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+            canvas.RenderTransform = new RotateTransform(
+                text.Direction == ShapeTextDirection.Rotate90 ? 90 : 270);
+        }
+
+        return canvas;
+    }
+
+    private static FormattedText MeasureFloatingShapeText(string value, RunFormatting formatting)
+    {
+        var typeface = new Typeface(
+            formatting.FontFamily is { Length: > 0 } family ? new FontFamily(family) : new FontFamily("Segoe UI"),
+            formatting.Italic ? FontStyles.Italic : FontStyles.Normal,
+            formatting.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStretches.Normal);
+        var brush = TryParseColor(formatting.ColorHex, out var color)
+            ? new SolidColorBrush(color)
+            : Brushes.Black;
+        return new FormattedText(
+            value,
+            System.Globalization.CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            (formatting.FontSizePt ?? 9) * PxPerPoint,
+            brush,
+            1.0);
     }
 
     private FrameworkElement BuildDrawingWordArtVisual(DrawingObjectVisualPlan plan)

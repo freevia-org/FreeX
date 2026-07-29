@@ -1130,6 +1130,60 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_thumbnails_expose_live_shared_automation_names()
+    {
+        string?[] namesAfterTitles = [];
+        string?[] namesAfterSelection = [];
+        string?[] namesAfterMove = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.SetSlideTitle(0, "Opening");
+            window.Editor.InsertSlide();
+            window.Editor.SetSlideTitle(1, "Agenda");
+
+            namesAfterTitles = window.SlidePaneThumbnailAutomationNamesForTests.ToArray();
+            window.Editor.SelectSlide(1);
+            namesAfterSelection = window.SlidePaneThumbnailAutomationNamesForTests.ToArray();
+            window.Editor.MoveSlide(1, 0);
+            namesAfterMove = window.SlidePaneThumbnailAutomationNamesForTests.ToArray();
+        });
+
+        if (!ran) return;
+        namesAfterTitles.Should().Equal(
+            "Slide 1: Opening, 1 object",
+            "Slide 2: Agenda, 1 object");
+        namesAfterSelection.Should().Equal(
+            "Slide 1: Opening, 1 object",
+            "Slide 2: Agenda, 1 object");
+        namesAfterMove.Should().Equal(
+            "Slide 1: Agenda, 1 object",
+            "Slide 2: Opening, 1 object");
+    }
+
+    [Fact]
+    public async Task SlidePane_section_headers_refresh_shared_automation_names()
+    {
+        string?[] namesExpanded = [];
+        string?[] namesCollapsed = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.AddSectionAtSlide(0, "Intro");
+            namesExpanded = window.SlidePaneSectionHeaderAutomationNamesForTests.ToArray();
+            window.ToggleSlidePaneSectionForTests(0);
+            namesCollapsed = window.SlidePaneSectionHeaderAutomationNamesForTests.ToArray();
+        });
+
+        if (!ran) return;
+        namesExpanded.Should().ContainSingle().Which.Should().Be("Section Intro  (2), expanded");
+        namesCollapsed.Should().ContainSingle().Which.Should().Be("Section Intro  (2), collapsed");
+    }
+
+    [Fact]
     public async Task SlidePane_section_header_toggle_collapses_member_slides()
     {
         var headersBefore = -1;

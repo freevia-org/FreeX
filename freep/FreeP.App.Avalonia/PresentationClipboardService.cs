@@ -46,6 +46,10 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
         DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.WindowsXamlPackage);
     internal static readonly DataFormat<byte[]> ExternalXamlPackageLinuxFormat =
         DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.LinuxXamlPackage);
+    internal static readonly DataFormat<byte[]> ExternalRtfWindowsFormat =
+        DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.WindowsRtf);
+    internal static readonly DataFormat<byte[]> ExternalRtfLinuxFormat =
+        DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.LinuxRtf);
 
     public async Task WriteAsync(PresentationClipboardContent content)
     {
@@ -146,6 +150,12 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
             ?? await TryGetValueAsync(transfer, OwnerTokenFormat);
         richText = await TryGetValueAsync(transfer, RichTextPlatformFormat)
             ?? await TryGetValueAsync(transfer, RichTextFormat);
+        var rtf = await TryGetValueAsync(
+            transfer,
+            OperatingSystem.IsWindows() ? ExternalRtfWindowsFormat : ExternalRtfLinuxFormat)
+            ?? await TryGetValueAsync(
+                transfer,
+                OperatingSystem.IsWindows() ? ExternalRtfLinuxFormat : ExternalRtfWindowsFormat);
         xamlPackage = await TryGetValueAsync(transfer, ExternalXamlPackageWindowsFormat)
             ?? await TryGetValueAsync(transfer, ExternalXamlPackageLinuxFormat);
         try { text = await transfer.TryGetTextAsync(); }
@@ -166,7 +176,7 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
         {
         }
 
-        return new PresentationClipboardContent(selection, png, text, ownerToken, richText, xamlPackage);
+        return new PresentationClipboardContent(selection, png, text, ownerToken, richText, xamlPackage, rtf);
     }
 
     private static async Task<T?> TryGetValueAsync<T>(
@@ -400,10 +410,14 @@ internal sealed class AvaloniaPresentationClipboardService(
 
         if (source == PresentationClipboardPasteSource.RichText)
         {
-            var payload = InCanvasRichClipboardPlanner.Deserialize(content.RichTextBytes);
+            var payload = InCanvasRichClipboardPlanner.Deserialize(content.RichTextBytes)
+                ?? ExternalRichTextClipboardPlanner.TryParseRtf(content.RtfBytes);
             if (payload is not null)
             {
-                request.Editor.InsertTextBox(payload.Body);
+                if (payload.HasImage)
+                    request.Editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
+                if (!string.IsNullOrWhiteSpace(payload.PlainText))
+                    request.Editor.InsertTextBox(payload.Body);
                 return source;
             }
 
@@ -422,7 +436,10 @@ internal sealed class AvaloniaPresentationClipboardService(
             var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(content.XamlPackageBytes);
             if (payload is not null)
             {
-                request.Editor.InsertTextBox(payload.Body);
+                if (payload.HasImage)
+                    request.Editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
+                if (!string.IsNullOrWhiteSpace(payload.PlainText))
+                    request.Editor.InsertTextBox(payload.Body);
                 return source;
             }
 
