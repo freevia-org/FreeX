@@ -271,6 +271,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private int? _formulaReferenceStart;
     private int? _formulaReferenceLength;
     private bool _formulaRangeEntryMode;
+    private ExcelSelectionMode _formulaRangeEntrySelectionMode = ExcelSelectionMode.Normal;
     // R78-render-inplace-editor-5-1: whether the current inline-edit session was opened via F2 /
     // double-click (Excel's "Edit" mode -- caret lands in existing content, arrows reposition it)
     // vs. by typing a fresh character over the selection (Excel's "Enter" mode -- arrows commit the
