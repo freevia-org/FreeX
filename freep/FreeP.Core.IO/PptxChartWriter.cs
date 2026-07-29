@@ -101,7 +101,7 @@ internal static class PptxChartWriter
                 ? new XElement(C + "style", new XAttribute("val", styleId))
                 : null,
             TryParsePreservedPivotSource(chart.PreservedPivotSourceXml),
-            TryParsePreservedChartProtection(chart.PreservedChartProtectionXml),
+            BuildChartProtectionEl(chart),
             new XElement(C + "chart",
                 titleEl,
                 new XElement(C + "autoTitleDeleted", new XAttribute("val", chart.Title is null ? "1" : "0")),
@@ -166,6 +166,30 @@ internal static class PptxChartWriter
         {
             return null;
         }
+    }
+
+    private static XElement? BuildChartProtectionEl(ChartShape chart)
+    {
+        var protection = TryParsePreservedChartProtection(chart.PreservedChartProtectionXml);
+        if (protection is null &&
+            chart.ChartObjectProtected is null &&
+            chart.ChartDataProtected is null &&
+            chart.ChartFormattingProtected is null)
+        {
+            return null;
+        }
+
+        protection ??= new XElement(C + "protection");
+        SetProtectionAttribute(protection, "chartObject", chart.ChartObjectProtected);
+        SetProtectionAttribute(protection, "data", chart.ChartDataProtected);
+        SetProtectionAttribute(protection, "formatting", chart.ChartFormattingProtected);
+        return protection;
+    }
+
+    private static void SetProtectionAttribute(XElement protection, string name, bool? value)
+    {
+        if (value is { } explicitValue)
+            protection.SetAttributeValue(name, BoolValue(explicitValue));
     }
 
     private static XElement? BuildChartShapePropertiesEl(ShapeFill? fill, ShapeOutline? outline)
