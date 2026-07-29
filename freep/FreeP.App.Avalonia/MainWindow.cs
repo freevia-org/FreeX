@@ -5521,11 +5521,22 @@ public sealed partial class MainWindow : Window
             case AnimationPanePlaybackControlKind.PlayFromSelected:
             case AnimationPanePlaybackControlKind.PlayCurrentSlide:
                 if (startPreview)
-                    StartSlideShow(fromStart: false);
+                    StartAnimationPanePreview(_animationPanePlaybackSessionPlan);
                 break;
         }
 
         return _animationPanePlaybackSessionPlan;
+    }
+
+    private void StartAnimationPanePreview(AnimationPanePlaybackSessionPlan session)
+    {
+        var animationStartIndex = session.CommandKind == AnimationPanePlaybackControlKind.PlayFromSelected
+            ? session.StartAnimationIndex
+            : null;
+        StartSlideShow(
+            fromStart: false,
+            timingIntent: FreeP.App.Compositor.SlideShowTimingIntent.None,
+            animationStartIndex: animationStartIndex);
     }
 
     private Control BuildAnimationPaneItemCard(AnimationPaneTimelineItemPlan item)
@@ -9160,7 +9171,8 @@ public sealed partial class MainWindow : Window
 
     private void StartSlideShow(
         bool fromStart,
-        FreeP.App.Compositor.SlideShowTimingIntent timingIntent)
+        FreeP.App.Compositor.SlideShowTimingIntent timingIntent,
+        int? animationStartIndex = null)
     {
         if (_presentation.Slides.Count == 0)
             return; // nothing to show
@@ -9176,6 +9188,9 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
+
+        if (animationStartIndex is int selectedAnimationIndex)
+            route = route.WithAnimationStartIndex(selectedAnimationIndex);
 
         var slideShow = new SlideShowWindow(_presentation, route);
         if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)

@@ -3758,7 +3758,7 @@ public sealed partial class MainWindow : Window
             // Lazy construction: create the pane against the current Editor.
             if (_animPane is null || _animPaneHost.Child is null)
             {
-                _animPane = new AnimationPane(Editor, onPreview: () => StartSlideShow(fromStart: false));
+                _animPane = new AnimationPane(Editor, onPreview: StartAnimationPanePreview);
                 _animPaneHost.Child = _animPane;
             }
             _animPaneHost.Visibility = Visibility.Visible;
@@ -3772,8 +3772,19 @@ public sealed partial class MainWindow : Window
     private void RebuildAnimationPaneIfVisible()
     {
         if (_animPaneHost is null || _animPaneHost.Visibility != Visibility.Visible) return;
-        _animPane = new AnimationPane(Editor, onPreview: () => StartSlideShow(fromStart: false));
+        _animPane = new AnimationPane(Editor, onPreview: StartAnimationPanePreview);
         _animPaneHost.Child = _animPane;
+    }
+
+    private void StartAnimationPanePreview(AnimationPanePlaybackSessionPlan session)
+    {
+        var animationStartIndex = session.CommandKind == AnimationPanePlaybackControlKind.PlayFromSelected
+            ? session.StartAnimationIndex
+            : null;
+        StartSlideShow(
+            fromStart: false,
+            timingIntent: FreeP.App.Compositor.SlideShowTimingIntent.None,
+            animationStartIndex: animationStartIndex);
     }
 
     // END 16B SEAM
@@ -3902,7 +3913,8 @@ public sealed partial class MainWindow : Window
 
     private void StartSlideShow(
         bool fromStart,
-        FreeP.App.Compositor.SlideShowTimingIntent timingIntent)
+        FreeP.App.Compositor.SlideShowTimingIntent timingIntent,
+        int? animationStartIndex = null)
     {
         if (_presentation.Slides.Count == 0) return;
 
@@ -3917,6 +3929,9 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
+
+        if (animationStartIndex is int selectedAnimationIndex)
+            route = route.WithAnimationStartIndex(selectedAnimationIndex);
 
         var window = new SlideShowWindow(_presentation, route);
         if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
