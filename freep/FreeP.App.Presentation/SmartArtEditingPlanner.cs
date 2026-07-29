@@ -1564,6 +1564,16 @@ public static class SmartArtEditingPlanner
                 ref generatedIdIndex, ref nodeCount, ref connectionCount,
                 authoredPoints, authoredConnections, reservedConnectionIds, emittedConnectionIds);
 
+        PreserveNonTreeConnections(
+            connections,
+            authoredConnections,
+            points.Select(point => point.Attribute("modelId")?.Value)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Select(id => id!)
+                .ToHashSet(StringComparer.Ordinal),
+            emittedConnectionIds,
+            ref connectionCount);
+
         if (sourceDocument?.Root is { } sourceRoot && sourceRoot.Name == Dgm + "dataModel")
         {
             var pointList = sourceRoot.Element(Dgm + "ptLst");
@@ -1588,6 +1598,47 @@ public static class SmartArtEditingPlanner
                 new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
                 new XElement(Dgm + "ptLst", points),
                 new XElement(Dgm + "cxnLst", connections)));
+    }
+
+    private static void PreserveNonTreeConnections(
+        List<XElement> connections,
+        IReadOnlyDictionary<string, XElement>? authoredConnections,
+        ISet<string> livePointIds,
+        ISet<string> emittedConnectionIds,
+        ref int connectionCount)
+    {
+        if (authoredConnections is null)
+            return;
+
+        foreach (var authoredConnection in authoredConnections.Values)
+        {
+            var type = authoredConnection.Attribute("type")?.Value?.Trim();
+            if (string.IsNullOrWhiteSpace(type)
+                || string.Equals(type, "parOf", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var sourceId = authoredConnection.Attribute("srcId")?.Value?.Trim();
+            var destinationId = authoredConnection.Attribute("destId")?.Value?.Trim();
+            if (string.IsNullOrWhiteSpace(sourceId)
+                || string.IsNullOrWhiteSpace(destinationId)
+                || !livePointIds.Contains(sourceId)
+                || !livePointIds.Contains(destinationId))
+            {
+                continue;
+            }
+
+            var connectionId = authoredConnection.Attribute("modelId")?.Value?.Trim();
+            if (string.IsNullOrWhiteSpace(connectionId)
+                || !emittedConnectionIds.Add(connectionId))
+            {
+                continue;
+            }
+
+            connections.Add(new XElement(authoredConnection));
+            connectionCount++;
+        }
     }
 
     private static void CollectDataPartElements(

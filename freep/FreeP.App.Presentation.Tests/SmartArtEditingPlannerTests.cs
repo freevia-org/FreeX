@@ -1303,6 +1303,48 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void RewriteDataPart_PreservesAuthoredNonTreeConnectionsForLiveNodes()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"), ("manager", "Manager"));
+        var smartArt = new SmartArtShape { Data = data };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("""
+                <dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram">
+                  <dgm:ptLst>
+                    <dgm:pt modelId="root" type="node" />
+                    <dgm:pt modelId="manager" type="node" />
+                  </dgm:ptLst>
+                  <dgm:cxnLst>
+                    <dgm:cxn modelId="tree" type="parOf" srcId="root" destId="manager" />
+                    <dgm:cxn modelId="presentation" type="presOf" srcId="manager" destId="root" />
+                  </dgm:cxnLst>
+                </dgm:dataModel>
+                """)
+        };
+
+        SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.Demote("manager"));
+        var result = SmartArtEditingPlanner.RewriteDataPart(smartArt);
+
+        result.Applied.Should().BeTrue();
+        result.ConnectionCount.Should().Be(2);
+
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var document = XDocument.Parse(Encoding.UTF8.GetString(
+            smartArt.Parts["ppt/diagrams/data1.xml"].Bytes));
+        document.Descendants(dgm + "cxn")
+            .Select(connection => (
+                Id: (string?)connection.Attribute("modelId"),
+                Type: (string?)connection.Attribute("type"),
+                Source: (string?)connection.Attribute("srcId"),
+                Destination: (string?)connection.Attribute("destId")))
+            .Should()
+            .Contain(("presentation", "presOf", "manager", "root"));
+    }
+
+    [Fact]
     public void RegenerateDrawingCache_AfterSharedOutlineEdit_RewritesDspDrawingFromLivePlan()
     {
         var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"), ("manager", "Manager"));
