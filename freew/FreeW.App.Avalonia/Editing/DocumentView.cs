@@ -2684,6 +2684,22 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>Test-facing view of the shared rich floating-shape glyph layout.</summary>
+    internal IReadOnlyList<(char Character, int ParagraphIndex, int RunIndex, int Offset,
+        double X, double Y, double Width, double Height, RunFormatting Formatting)>
+        FloatingShapeTextGlyphsForTest
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingShapes
+                .SelectMany(sd => sd.TextLayout?.Glyphs ?? [])
+                .Select(glyph => (glyph.Character, glyph.ParagraphIndex, glyph.RunIndex, glyph.Offset,
+                    glyph.X, glyph.Y, glyph.Width, glyph.Height, glyph.Formatting))
+                .ToList();
+        }
+    }
+
     // ── FO3 introspection properties ────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -5959,11 +5975,13 @@ public sealed class DocumentView : Control
                     break;
 
                 case DocumentFloatingObjectKind.Shape when run.Shape is { IsFloating: true } shape:
-                    _floatingShapes.Add(BuildFloatingShapeData(
+                    var shapeData = BuildFloatingShapeData(
                         DrawingObjectVisualPlanner.BuildVisualPlan(shape, snapshot),
                         snapshot.BlockIndex,
-                        snapshot.RunIndex));
-                    BuildShapeTextCaretStops(shape, rect, snapshot.BlockIndex, snapshot.RunIndex);
+                        snapshot.RunIndex);
+                    shapeData.TextLayout = BuildFloatingShapeTextLayout(shapeData, rect);
+                    _floatingShapes.Add(shapeData);
+                    BuildShapeTextCaretStops(shapeData);
                     break;
 
                 case DocumentFloatingObjectKind.Chart when run.Chart is { IsFloating: true } chart:
@@ -5997,102 +6015,58 @@ public sealed class DocumentView : Control
         }
     }
 
-    /// <summary>
-    /// Builds pointer-addressable caret stops for a floating text box. The renderer uses the same 9pt text
-    /// treatment for the shape body, so measuring each character with that treatment keeps the hit map
-    /// aligned with the visible text while preserving the model's paragraph/run identity. Rotated text
-    /// boxes keep their text layout in the renderer's pre-transform coordinate space; the matching rotation
-    /// metadata lets pointer hit-testing apply the inverse transform before resolving a caret.
-    /// </summary>
-    private void BuildShapeTextCaretStops(Shape shape, Rect rect, int blockIndex, int runIndex)
+    private DrawingObjectTextLayoutPlan? BuildFloatingShapeTextLayout(FloatingShapeData shapeData, Rect rect)
     {
-        if (shape.TextParagraphs.Count == 0)
+        if (shapeData.TextPlan is not { } plan)
+            return null;
+
+        var isRotated = plan.Direction is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270;
+        var layoutWidth = isRotated ? rect.Height : rect.Width;
+        var layoutHeight = isRotated ? rect.Width : rect.Height;
+        return DrawingObjectTextLayoutPlanner.LayoutPlan(
+            plan,
+            layoutWidth,
+            layoutHeight,
+            (value, formatting) => Build(value, formatting).WidthIncludingTrailingWhitespace,
+            formatting => Build("Ag", formatting).Height);
+    }
+
+    /// <summary>
+    /// Builds pointer-addressable caret stops from the shared floating-text layout. The renderer, hit-test,
+    /// drag-selection, and selection paint all consume the same run-aware positions and font metrics.
+    /// </summary>
+    private void BuildShapeTextCaretStops(FloatingShapeData shapeData)
+    {
+        if (shapeData.TextLayout is not { } layout)
             return;
 
-        const double TextInset = 4.0;
-        var format = new RunFormatting { FontSizePt = 9 };
-        var isRotated = shape.TextDirection is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270;
-        var rotationRadians = shape.TextDirection == ShapeTextDirection.Rotate90
+        var rotationRadians = shapeData.TextDirection == ShapeTextDirection.Rotate90
             ? Math.PI / 2
-            : shape.TextDirection == ShapeTextDirection.Rotate270
+            : shapeData.TextDirection == ShapeTextDirection.Rotate270
                 ? -Math.PI / 2
                 : 0;
+        var rect = shapeData.Rect;
         var rotationCenter = new Point(rect.Center.X, rect.Center.Y);
-        var textRect = isRotated
-            ? new Rect(rect.X, rect.Y, rect.Height, rect.Width)
-            : rect;
-        var insetWidth = Math.Max(1, textRect.Width - 2 * TextInset);
-        var fittedText = Build(shape.PlainText, format);
-        fittedText.MaxTextWidth = insetWidth;
-        var lineHeight = Math.Max(1, Build("Ag", format).Height);
-        var lineStartX = isRotated
-            ? rect.X + (rect.Width - Math.Max(1, fittedText.WidthIncludingTrailingWhitespace)) / 2
-            : rect.X + TextInset;
-        var lineStartY = isRotated
-            ? rect.Y + (rect.Height - Math.Max(1, fittedText.Height)) / 2
-            : rect.Y + TextInset;
-        var maxX = isRotated
-            ? Math.Max(lineStartX + 1, lineStartX + insetWidth)
-            : Math.Max(lineStartX + 1, rect.Right - TextInset);
-        var x = lineStartX;
-        var y = lineStartY;
+        var origin = ShapeTextLayoutOrigin(rect, layout);
 
-        for (var paragraphIndex = 0; paragraphIndex < shape.TextParagraphs.Count; paragraphIndex++)
+        foreach (var stop in layout.CaretStops)
         {
-            var paragraph = shape.TextParagraphs[paragraphIndex];
-            var addedStopForParagraph = false;
-
-            foreach (var (textRun, textRunIndex) in paragraph.Runs.Select((run, index) => (run, index)))
-            {
-                var text = textRun.Text ?? string.Empty;
-                if (text.Length == 0)
-                {
-                    AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
-                        0, x, y, lineHeight, rotationRadians, rotationCenter);
-                    addedStopForParagraph = true;
-                    continue;
-                }
-
-                for (var offset = 0; offset < text.Length; offset++)
-                {
-                    var character = text[offset];
-                    if (character == '\n' || character == '\r')
-                    {
-                        AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
-                            offset, x, y, lineHeight, rotationRadians, rotationCenter);
-                        x = lineStartX;
-                        y += lineHeight;
-                        addedStopForParagraph = true;
-                        continue;
-                    }
-
-                    var glyph = Build(character.ToString(), format);
-                    var glyphWidth = Math.Max(1, glyph.WidthIncludingTrailingWhitespace);
-                    if (x > lineStartX && x + glyphWidth > maxX)
-                    {
-                        x = lineStartX;
-                        y += lineHeight;
-                    }
-
-                    AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
-                        offset, x, y, lineHeight, rotationRadians, rotationCenter);
-                    x += glyphWidth;
-                    addedStopForParagraph = true;
-                }
-
-                AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
-                    text.Length, x, y, lineHeight, rotationRadians, rotationCenter);
-            }
-
-            if (!addedStopForParagraph)
-                AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, 0, 0, x, y, lineHeight,
-                    rotationRadians, rotationCenter);
-
-            // A paragraph break is represented by the next line in the shape text body.
-            x = lineStartX;
-            y += lineHeight;
+            AddShapeTextCaretStop(
+                shapeData.BlockIndex,
+                shapeData.RunIndex,
+                stop.ParagraphIndex,
+                stop.RunIndex,
+                stop.Offset,
+                origin.X + stop.X,
+                origin.Y + stop.Y,
+                stop.Height,
+                rotationRadians,
+                rotationCenter);
         }
     }
+
+    private static Point ShapeTextLayoutOrigin(Rect rect, DrawingObjectTextLayoutPlan layout) =>
+        new(rect.Center.X - layout.Width / 2, rect.Center.Y - layout.Height / 2);
 
     private void AddShapeTextCaretStop(
         int blockIndex,
@@ -6152,6 +6126,7 @@ public sealed class DocumentView : Control
             FillBrush = fillBrush,
             OutlinePen = outlinePen,
             Text = plan.Text?.Text,
+            TextPlan = plan.Text,
             TextDirection = plan.Text?.Direction ?? ShapeTextDirection.Horizontal,
             RotationAngle = plan.RotationAngle,
             FlipH = plan.FlipH,
@@ -7393,7 +7368,8 @@ public sealed class DocumentView : Control
         DrawingContext context,
         FloatingShapeData shapeData,
         Rect rect,
-        bool isRotated,
+        DrawingObjectTextLayoutPlan layout,
+        Point origin,
         Point center)
     {
         if (ShapeTextSelectionInfo is not { } selection
@@ -7404,7 +7380,7 @@ public sealed class DocumentView : Control
             return;
 
         IDisposable? rotation = null;
-        if (isRotated)
+        if (shapeData.TextDirection is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270)
         {
             var angle = shapeData.TextDirection == ShapeTextDirection.Rotate90
                 ? Math.PI / 2
@@ -7417,30 +7393,19 @@ public sealed class DocumentView : Control
 
         try
         {
-            var format = new RunFormatting { FontSizePt = 9 };
-            foreach (var stop in _shapeTextCaretStops.Where(stop =>
-                         stop.BlockIndex == shapeData.BlockIndex && stop.RunIndex == shapeData.RunIndex))
+            foreach (var glyph in layout.Glyphs)
             {
-                if (!TryGetShapeTextRun(stop.BlockIndex, stop.RunIndex, stop.TextParagraphIndex,
-                        stop.TextRunIndex, out var textRun)
-                    || stop.Offset < 0 || stop.Offset >= textRun.Text.Length)
-                    continue;
-                var character = textRun.Text[stop.Offset];
-                if (character is '\r' or '\n')
-                    continue;
-
-                var position = (stop.BlockIndex, stop.RunIndex, stop.TextParagraphIndex,
-                    stop.TextRunIndex, stop.Offset);
+                var position = (shapeData.BlockIndex, shapeData.RunIndex, glyph.ParagraphIndex,
+                    glyph.RunIndex, glyph.Offset);
                 if (CompareShapeTextPositions(position, selection.Start) < 0
                     || CompareShapeTextPositions(position, selection.End) >= 0)
                     continue;
 
-                var glyph = Build(character.ToString(), format);
                 context.FillRectangle(SelectionBrush, new Rect(
-                    stop.X,
-                    stop.Y,
-                    Math.Max(1, glyph.WidthIncludingTrailingWhitespace),
-                    Math.Max(1, stop.Height)));
+                    origin.X + glyph.X,
+                    origin.Y + glyph.Y,
+                    Math.Max(1, glyph.Width),
+                    Math.Max(1, glyph.Height)));
             }
         }
         finally
@@ -7570,45 +7535,41 @@ public sealed class DocumentView : Control
             }
 
             // ── Draw shape text (UU3 fix) ──────────────────────────────────────────
-            // WPF reference (BuildShapeRun ~8319-8324): TextBlock with Margin=4, TextWrapping.Wrap,
-            // VerticalAlignment.Top. Avalonia previously centred a single non-wrapping line.
-            // Fix: set MaxTextWidth to the inset shape width to enable wrapping; top-anchor with 4px inset.
-            if (!string.IsNullOrEmpty(sd.Text))
+            // Draw the shared run-aware layout. Rotated text is laid out in the swapped text box
+            // dimensions and then rotated around the shape centre; the outer clip remains unchanged.
+            if (sd.TextLayout is { } textLayout)
             {
-                const double TextInset = 4.0; // matches WPF Margin(4) on TextBlock
-                var textFmt = new RunFormatting { FontSizePt = 9 };
-                var isRotated = sd.TextDirection is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270;
-                var textRect = isRotated
-                    ? new Rect(rect.X, rect.Y, rect.Height, rect.Width)
-                    : rect;
-                var insetWidth = Math.Max(1, textRect.Width - 2 * TextInset);
-                var ft = Build(sd.Text, textFmt);
-                ft.MaxTextWidth = insetWidth; // enables word wrapping (FormattedText clips+wraps at this width)
-                using var _ = context.PushClip(rect);
-                DrawShapeTextSelection(context, sd, rect, isRotated, new Point(cx, cy));
-                if (!isRotated)
+                var origin = ShapeTextLayoutOrigin(rect, textLayout);
+                using var clip = context.PushClip(rect);
+                DrawShapeTextSelection(context, sd, rect, textLayout, origin, new Point(cx, cy));
+                IDisposable? rotation = null;
+                if (sd.TextDirection is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270)
                 {
-                    // Top-anchor: place text at the top of the shape with the inset offset.
-                    context.DrawText(ft, new Point(rect.X + TextInset, rect.Y + TextInset));
-                }
-                else
-                {
-                    // WPF applies LayoutTransform to the text block, leaving the shape itself
-                    // axis-aligned. Rotate the fitted text around the shape centre only.
                     var angle = sd.TextDirection == ShapeTextDirection.Rotate90
                         ? Math.PI / 2
                         : -Math.PI / 2;
-                    var textWidth = Math.Max(1, ft.WidthIncludingTrailingWhitespace);
-                    var textHeight = Math.Max(1, ft.Height);
-                    var textX = rect.X + (rect.Width - textWidth) / 2;
-                    var textY = rect.Y + (rect.Height - textHeight) / 2;
                     var center = new Point(cx, cy);
-                    using var rotated = context.PushTransform(
+                    rotation = context.PushTransform(
                         Matrix.CreateTranslation(-center.X, -center.Y)
                         * Matrix.CreateRotation(angle)
                         * Matrix.CreateTranslation(center.X, center.Y));
-                    context.DrawText(ft, new Point(textX, textY));
                 }
+                foreach (var glyph in textLayout.Glyphs)
+                {
+                    var point = new Point(origin.X + glyph.X, origin.Y + glyph.Y);
+                    context.DrawText(Build(glyph.Character.ToString(), glyph.Formatting), point);
+                    var decorationPen = new Pen(BrushFor(glyph.Formatting.ColorHex),
+                        Math.Max(1, glyph.Height / 14));
+                    if (glyph.Formatting.Underline)
+                        context.DrawLine(decorationPen,
+                            new Point(point.X, point.Y + glyph.Height * 0.82),
+                            new Point(point.X + glyph.Width, point.Y + glyph.Height * 0.82));
+                    if (glyph.Formatting.Strikethrough)
+                        context.DrawLine(decorationPen,
+                            new Point(point.X, point.Y + glyph.Height * 0.5),
+                            new Point(point.X + glyph.Width, point.Y + glyph.Height * 0.5));
+                }
+                rotation?.Dispose();
             }
         }
         finally
@@ -18679,7 +18640,9 @@ public sealed class DocumentView : Control
         public Pen? OutlinePen;             // null → no stroke
 
         // Text (optional)
-        public string? Text;               // plain text to centre inside the shape
+        public string? Text;               // plain text retained for diagnostics and selection metadata
+        public DrawingObjectTextPlan? TextPlan;
+        public DrawingObjectTextLayoutPlan? TextLayout;
         public ShapeTextDirection TextDirection;
 
         // Rotation / flip (in degrees; 0 → no rotation)
