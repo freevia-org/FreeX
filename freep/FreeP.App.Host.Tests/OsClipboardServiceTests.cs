@@ -651,6 +651,29 @@ public sealed class OsClipboardServiceTests
     }
 
     [StaFact]
+    public void Paste_ExternalRtfTable_PreservesSolidCellFillAndBorder()
+    {
+        var fake = new FakeOsClipboard
+        {
+            RtfBytes = Encoding.ASCII.GetBytes(
+                @"{\rtf1\ansi
+{\colortbl;\red255\green255\blue0;\red31\green78\blue121;}
+\trowd\clcbpat1\clbrdrl\brdrs\brdrw10\brdrcf2\cellx1440\cellx2880
+Header\cell Value\cell\row}"),
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        service.PasteWithResult(editor).Should().Be(PresentationClipboardPasteSource.RichText);
+        var cell = editor.CurrentSlide!.Shapes.Single().Table!.Rows.Single().Cells[0];
+        ((ShapeFill.Solid)cell.Fill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFF00));
+        ((ShapeOutline.Visible)cell.Borders!.Left!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        ((ShapeOutline.Visible)cell.Borders.Left).WidthPt.Should().Be(0.5);
+    }
+
+    [StaFact]
     public void Paste_XamlPackageImage_InsertsPictureFromPackageResource()
     {
         const string xaml = """

@@ -471,6 +471,27 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task External_Rtf_table_preserves_solid_cell_style()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                RtfBytes: Encoding.ASCII.GetBytes(
+                    @"{\rtf1\ansi
+{\colortbl;\red255\green255\blue0;\red31\green78\blue121;}
+\trowd\clcbpat1\clbrdrl\brdrs\brdrw10\brdrcf2\cellx1440\cellx2880
+Header\cell Value\cell\row}")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.RichText);
+        var cell = editor.CurrentSlide!.Shapes.Single().Table!.Rows.Single().Cells[0];
+        ((ShapeFill.Solid)cell.Fill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFF00));
+        ((ShapeOutline.Visible)cell.Borders!.Left!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+    }
+
+    [Fact]
     public async Task XamlPackage_image_is_pasted_as_picture()
     {
         var imageBytes = Convert.FromBase64String(
