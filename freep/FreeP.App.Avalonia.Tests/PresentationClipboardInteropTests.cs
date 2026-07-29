@@ -398,6 +398,34 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task XamlPackage_image_is_pasted_as_picture()
+    {
+        var imageBytes = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage(
+                    """
+                    <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                      <BlockUIContainer><Image Source="Images/pasted.png" /></BlockUIContainer>
+                    </FlowDocument>
+                    """,
+                    ("Images/pasted.png", imageBytes))),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        var result = await service.PasteAsync(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.XamlPackage);
+        var picture = editor.CurrentSlide!.Shapes.Single();
+        picture.Kind.Should().Be(SlideShapeKind.Picture);
+        picture.Picture!.ContentType.Should().Be("image/png");
+        picture.Picture.Bytes.Should().Equal(imageBytes);
+    }
+
+    [Fact]
     public async Task Own_copy_prefers_internal_editable_shape_over_exported_fallbacks()
     {
         var clipboard = new FakeSystemClipboard();
@@ -627,12 +655,24 @@ public sealed class PresentationClipboardInteropTests
         return body;
     }
 
-    private static byte[] CreateXamlPackage(string xaml)
+    private static byte[] CreateXamlPackage(
+        string xaml,
+        params (string Name, byte[] Bytes)[] resources)
     {
         using var output = new MemoryStream();
         using (var package = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
-        using (var writer = new StreamWriter(package.CreateEntry("Xaml/Document.xaml").Open(), Encoding.UTF8))
+        {
+            foreach (var resource in resources)
+            {
+                var entry = package.CreateEntry(resource.Name);
+                using var stream = entry.Open();
+                stream.Write(resource.Bytes);
+            }
+
+            var xamlEntry = package.CreateEntry("Xaml/Document.xaml");
+            using var writer = new StreamWriter(xamlEntry.Open(), Encoding.UTF8);
             writer.Write(xaml);
+        }
         return output.ToArray();
     }
 

@@ -422,7 +422,10 @@ internal sealed class AvaloniaPresentationClipboardService(
             var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(content.XamlPackageBytes);
             if (payload is not null)
             {
-                request.Editor.InsertTextBox(payload.Body);
+                if (payload.HasImage)
+                    request.Editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
+                if (!string.IsNullOrWhiteSpace(payload.PlainText))
+                    request.Editor.InsertTextBox(payload.Body);
                 return source;
             }
 

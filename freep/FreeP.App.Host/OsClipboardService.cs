@@ -429,7 +429,10 @@ public sealed class OsClipboardService
             var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(content.XamlPackageBytes);
             if (payload is not null)
             {
-                editor.InsertTextBox(payload.Body);
+                if (payload.HasImage)
+                    editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
+                if (!string.IsNullOrWhiteSpace(payload.PlainText))
+                    editor.InsertTextBox(payload.Body);
                 return source;
             }
 

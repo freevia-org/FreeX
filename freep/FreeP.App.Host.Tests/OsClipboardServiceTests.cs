@@ -558,6 +558,32 @@ public sealed class OsClipboardServiceTests
     }
 
     [StaFact]
+    public void Paste_XamlPackageImage_InsertsPictureFromPackageResource()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <BlockUIContainer><Image Source="Images/pasted.png" /></BlockUIContainer>
+            </FlowDocument>
+            """;
+        var fake = new FakeOsClipboard
+        {
+            XamlPackageBytes = CreateXamlPackage(xaml, ("Images/pasted.png", _minPng)),
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.XamlPackage);
+        var picture = editor.CurrentSlide!.Shapes.Single();
+        picture.Kind.Should().Be(SlideShapeKind.Picture);
+        picture.Picture!.ContentType.Should().Be("image/png");
+        picture.Picture.Bytes.Should().Equal(_minPng);
+    }
+
+    [StaFact]
     public void Paste_InternalClipboardFallback_WhenOsEmpty()
     {
         var fake = new FakeOsClipboard();   // empty OS clipboard
@@ -901,12 +927,24 @@ public sealed class OsClipboardServiceTests
             "Y9: empty OS text should not insert a textbox");
     }
 
-    private static byte[] CreateXamlPackage(string xaml)
+    private static byte[] CreateXamlPackage(
+        string xaml,
+        params (string Name, byte[] Bytes)[] resources)
     {
         using var output = new MemoryStream();
         using (var package = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
-        using (var writer = new StreamWriter(package.CreateEntry("Xaml/Document.xaml").Open(), Encoding.UTF8))
+        {
+            foreach (var resource in resources)
+            {
+                var entry = package.CreateEntry(resource.Name);
+                using var stream = entry.Open();
+                stream.Write(resource.Bytes);
+            }
+
+            var xamlEntry = package.CreateEntry("Xaml/Document.xaml");
+            using var writer = new StreamWriter(xamlEntry.Open(), Encoding.UTF8);
             writer.Write(xaml);
+        }
         return output.ToArray();
     }
 
