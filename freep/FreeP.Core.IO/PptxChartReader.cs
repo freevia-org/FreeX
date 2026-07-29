@@ -1442,13 +1442,26 @@ internal static class PptxChartReader
         if (manualLayoutEl is null)
             return null;
 
+        var xModeToken = manualLayoutEl.Element(C + "xMode")?.Attribute("val")?.Value;
+        var yModeToken = manualLayoutEl.Element(C + "yMode")?.Attribute("val")?.Value;
+        var widthModeToken = manualLayoutEl.Element(C + "wMode")?.Attribute("val")?.Value;
+        var heightModeToken = manualLayoutEl.Element(C + "hMode")?.Attribute("val")?.Value;
+        var xMode = ReadManualLayoutMode(xModeToken, out var rawXModeToken);
+        var yMode = ReadManualLayoutMode(yModeToken, out var rawYModeToken);
+        var widthMode = ReadManualLayoutMode(widthModeToken, out var rawWidthModeToken);
+        var heightMode = ReadManualLayoutMode(heightModeToken, out var rawHeightModeToken);
+
         var layout = new ChartManualLayout
         {
             LayoutTarget = EmptyToNull(manualLayoutEl.Element(C + "layoutTarget")?.Attribute("val")?.Value),
-            XMode = ReadManualLayoutMode(manualLayoutEl.Element(C + "xMode")?.Attribute("val")?.Value),
-            YMode = ReadManualLayoutMode(manualLayoutEl.Element(C + "yMode")?.Attribute("val")?.Value),
-            WidthMode = ReadManualLayoutMode(manualLayoutEl.Element(C + "wMode")?.Attribute("val")?.Value),
-            HeightMode = ReadManualLayoutMode(manualLayoutEl.Element(C + "hMode")?.Attribute("val")?.Value),
+            XMode = xMode,
+            YMode = yMode,
+            WidthMode = widthMode,
+            HeightMode = heightMode,
+            RawXModeToken = rawXModeToken,
+            RawYModeToken = rawYModeToken,
+            RawWidthModeToken = rawWidthModeToken,
+            RawHeightModeToken = rawHeightModeToken,
             X = ParseDouble(manualLayoutEl.Element(C + "x")?.Attribute("val")?.Value),
             Y = ParseDouble(manualLayoutEl.Element(C + "y")?.Attribute("val")?.Value),
             Width = ParseDouble(manualLayoutEl.Element(C + "w")?.Attribute("val")?.Value),
@@ -1468,13 +1481,22 @@ internal static class PptxChartReader
             : null;
     }
 
-    private static ChartManualLayoutMode ReadManualLayoutMode(string? value) =>
-        value switch
+    private static ChartManualLayoutMode ReadManualLayoutMode(string? value, out string? rawToken)
+    {
+        rawToken = null;
+        return value switch
         {
             null or "factor" => ChartManualLayoutMode.Factor,
             "edge" => ChartManualLayoutMode.Edge,
-            _ => ChartManualLayoutMode.Unsupported
+            _ => UnsupportedMode(value, out rawToken),
         };
+    }
+
+    private static ChartManualLayoutMode UnsupportedMode(string value, out string rawToken)
+    {
+        rawToken = value;
+        return ChartManualLayoutMode.Unsupported;
+    }
 
     private static ShapeFill? ReadDataTableBackgroundFill(XElement dTableEl, PresentationColorScheme scheme)
     {

@@ -150,6 +150,21 @@ public sealed class ChartManualLayout
     public ChartManualLayoutMode WidthMode { get; set; } = ChartManualLayoutMode.Factor;
     public ChartManualLayoutMode HeightMode { get; set; } = ChartManualLayoutMode.Factor;
 
+    /// <summary>
+    /// Original <c>c:xMode/@val</c> token when it is not one of the modes FreeP models.
+    /// The corresponding mode is <see cref="ChartManualLayoutMode.Unsupported"/>.
+    /// </summary>
+    public string? RawXModeToken { get; set; }
+
+    /// <summary>Original <c>c:yMode/@val</c> token when it is not modeled.</summary>
+    public string? RawYModeToken { get; set; }
+
+    /// <summary>Original <c>c:wMode/@val</c> token when it is not modeled.</summary>
+    public string? RawWidthModeToken { get; set; }
+
+    /// <summary>Original <c>c:hMode/@val</c> token when it is not modeled.</summary>
+    public string? RawHeightModeToken { get; set; }
+
     /// <summary>Manual x coordinate value from <c>c:x/@val</c>.</summary>
     public double? X { get; set; }
 
