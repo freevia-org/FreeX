@@ -191,6 +191,7 @@ public static class SlideCloner
             DataTable    = src.DataTable is null ? null : CloneChartDataTableSettings(src.DataTable),
             DisplayBlanksAs = src.DisplayBlanksAs,
             PlotVisibleOnly = src.PlotVisibleOnly,
+            RoundedCorners = src.RoundedCorners,
             ShowDataLabelsOverMaximum = src.ShowDataLabelsOverMaximum,
             BarGapWidthPercent = src.BarGapWidthPercent,
             BarOverlapPercent = src.BarOverlapPercent,

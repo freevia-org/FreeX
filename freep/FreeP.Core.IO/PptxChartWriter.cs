@@ -88,6 +88,9 @@ internal static class PptxChartWriter
 
         var chartSpace = new XElement(C + "chartSpace",
             NsAttr("c", C), NsAttr("a", A), NsAttr("r", R),
+            chart.RoundedCorners is { } roundedCorners
+                ? new XElement(C + "roundedCorners", new XAttribute("val", BoolValue(roundedCorners)))
+                : null,
             chart.StyleId is { } styleId
                 ? new XElement(C + "style", new XAttribute("val", styleId))
                 : null,
