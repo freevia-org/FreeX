@@ -93,6 +93,7 @@ static int RenderAll(string outDir)
     var fieldPageNumberP1Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 1);
     var fieldPageNumberP2Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 2);
     var fieldPageNumberP3Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 3);
+    var fieldPageNumberP4Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 4);
     var referencesHeavyP1Path = VisualEvidenceOutputPath(outDir, "references-heavy-fields", 1);
     var referencesHeavyP2Path = VisualEvidenceOutputPath(outDir, "references-heavy-fields", 2);
     var legalReferenceP1Path = VisualEvidenceOutputPath(outDir, "legal-reference-section-page-numbers", 1);
@@ -214,7 +215,7 @@ static int RenderAll(string outDir)
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument,
         pageNumber: 1,
-        pageCount: 3);
+        pageCount: 4);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, fieldPageNumberP2Path,
@@ -224,7 +225,7 @@ static int RenderAll(string outDir)
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument,
         pageNumber: 2,
-        pageCount: 3,
+        pageCount: 4,
         viewportOffsetY: 1100);
     if (rc != 0) return rc;
 
@@ -235,8 +236,19 @@ static int RenderAll(string outDir)
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument,
         pageNumber: 3,
-        pageCount: 3,
+        pageCount: 4,
         viewportOffsetY: 2200);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, fieldPageNumberP4Path,
+        width: 960, height: 1200,
+        label: "Field Page Number p4",
+        scenarioId: "field-page-number-variants",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument,
+        pageNumber: 4,
+        pageCount: 4,
+        viewportOffsetY: 3300);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, headerFooterImagesP1Path,
@@ -1138,6 +1150,7 @@ static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
     string.Equals(scenarioId, "equation-structures", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "chart-smartart-complex", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "object-format-position-size-style", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "field-page-number-variants", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "wordart-watermark-stress", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "wordart-picture-watermark-layout", StringComparison.OrdinalIgnoreCase);
 

@@ -603,7 +603,7 @@ public static class FreeWVisualEvidencePlanner
                 "body-text"
             ],
             "field-page-number-variants_p{page}.png",
-            3,
+            4,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsHeadersFooters = true }),
         new(

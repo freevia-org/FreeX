@@ -98,17 +98,17 @@ public static class FreeWVisualEvidenceDocumentFactory
             new Run("First header page "),
             Run.PageNumberField(),
             new Run(" of "),
-            Run.NumPagesField("3"));
+            Run.NumPagesField("4"));
         doc.FinalSectionHeadersFooters.FirstFooter = FieldHeaderFooter(
             new Run("First footer complex page "),
             Run.ComplexFieldRun(" PAGE ", "1"),
             new Run(" / "),
-            Run.ComplexFieldRun(" NUMPAGES ", "3"));
+            Run.ComplexFieldRun(" NUMPAGES ", "4"));
         doc.FinalSectionHeadersFooters.EvenHeader = FieldHeaderFooter(
             new Run("Even header page "),
             Run.PageNumberField(),
             new Run(" of "),
-            Run.NumPagesField("3"));
+            Run.NumPagesField("4"));
         doc.FinalSectionHeadersFooters.EvenFooter = FieldHeaderFooter(
             new Run("Even footer title: "),
             Run.TitleField("Field Page Number Evidence"));
@@ -116,7 +116,7 @@ public static class FreeWVisualEvidenceDocumentFactory
             new Run("Default header page "),
             Run.PageNumberField(),
             new Run(" of "),
-            Run.NumPagesField("3"));
+            Run.NumPagesField("4"));
         doc.FinalSectionHeadersFooters.Footer = FieldHeaderFooter(
             new Run("Default footer author: "),
             Run.AuthorField("FreeW Visual Evidence"),
