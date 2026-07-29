@@ -511,6 +511,172 @@ public sealed class DocumentViewFloatingShapeTests
     }
 
     [Fact]
+    public async Task Horizontal_shape_text_drag_selects_and_replaces_the_selected_range()
+    {
+        string? editedText = null;
+        int selectedLength = 0;
+        bool boldApplied = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
+                hOffsetPt: 0, vOffsetPt: 0,
+                fillColorHex: "#FFFFFF", text: "Hello shape");
+            var shape = ((Paragraph)doc.Blocks[0]).Runs[1].Shape!;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            view.SelectFloating(0, 1);
+            view.EnterSelectedShapeTextEditing().Should().BeTrue();
+
+            var rect = view.FloatingShapeRects.Should().ContainSingle().Which.Rect;
+            view.BeginShapeTextSelectionForTest(new Point(rect.X + 5, rect.Y + 8)).Should().BeTrue();
+            view.EndShapeTextSelectionForTest(new Point(rect.X + 34, rect.Y + 8));
+            view.ShapeTextSelectionInfo.Should().NotBeNull();
+            var selection = view.ShapeTextSelectionInfo!.Value;
+            selectedLength = selection.End.Offset - selection.Start.Offset;
+            selectedLength.Should().BeGreaterThan(0);
+
+            view.ToggleBold();
+            var globalOffset = 0;
+            boldApplied = true;
+            foreach (var run in shape.TextParagraphs[0].Runs)
+            {
+                for (var index = 0; index < run.Text.Length; index++)
+                {
+                    if (globalOffset >= selection.Start.Offset && globalOffset < selection.End.Offset
+                        && !run.Formatting.Bold)
+                        boldApplied = false;
+                    globalOffset++;
+                }
+            }
+
+            view.InsertText("X");
+            editedText = shape.PlainText;
+        });
+
+        if (!ran) return;
+        selectedLength.Should().BeGreaterThan(0);
+        boldApplied.Should().BeTrue();
+        editedText.Should().NotBe("Hello shape");
+        editedText.Should().Contain("X");
+    }
+
+    [Fact]
+    public async Task Shape_text_formatting_only_mutates_paragraphs_inside_the_selection()
+    {
+        var beforeFormatting = RunFormatting.Default with
+        {
+            FontFamily = "Arial",
+            FontSizePt = 8,
+            Italic = true,
+            ColorHex = "#C00000",
+        };
+        var middleFormatting = RunFormatting.Default with
+        {
+            FontFamily = "Calibri",
+            FontSizePt = 11,
+        };
+        var afterFormatting = RunFormatting.Default with
+        {
+            FontFamily = "Courier New",
+            FontSizePt = 14,
+            Underline = true,
+            ColorHex = "#007000",
+        };
+        string? beforeText = null;
+        string? afterText = null;
+        RunFormatting? actualBeforeFormatting = null;
+        RunFormatting? actualAfterFormatting = null;
+        bool middleSelectionBold = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
+                hOffsetPt: 0, vOffsetPt: 0,
+                fillColorHex: "#FFFFFF", text: "discarded");
+            var shape = ((Paragraph)doc.Blocks[0]).Runs[1].Shape!;
+            shape.TextParagraphs.Clear();
+            foreach (var (text, formatting) in new[]
+                     {
+                         ("Before", beforeFormatting),
+                         ("Middle", middleFormatting),
+                         ("After", afterFormatting),
+                     })
+            {
+                var paragraph = new Paragraph();
+                paragraph.Runs.Add(new Run(text, formatting));
+                shape.TextParagraphs.Add(paragraph);
+            }
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            view.SelectFloating(0, 1);
+            view.EnterSelectedShapeTextEditing().Should().BeTrue();
+            view.SelectShapeTextRangeForTest(paragraphIndex: 1, startOffset: 1, endOffset: 5)
+                .Should().BeTrue();
+
+            view.ToggleBold();
+
+            beforeText = shape.TextParagraphs[0].PlainText;
+            afterText = shape.TextParagraphs[2].PlainText;
+            actualBeforeFormatting = shape.TextParagraphs[0].Runs.Should().ContainSingle().Which.Formatting;
+            actualAfterFormatting = shape.TextParagraphs[2].Runs.Should().ContainSingle().Which.Formatting;
+            middleSelectionBold = shape.TextParagraphs[1].Runs
+                .Should().ContainSingle(run => run.Text == "iddl").Which.Formatting.Bold;
+        });
+
+        if (!ran) return;
+        beforeText.Should().Be("Before");
+        afterText.Should().Be("After");
+        actualBeforeFormatting.Should().Be(beforeFormatting);
+        actualAfterFormatting.Should().Be(afterFormatting);
+        middleSelectionBold.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Rotated_shape_text_drag_selects_and_replaces_the_selected_range()
+    {
+        var editedTexts = new Dictionary<ShapeTextDirection, string?>();
+        var ran = await OnUiThread(() =>
+        {
+            foreach (var direction in new[] { ShapeTextDirection.Rotate90, ShapeTextDirection.Rotate270 })
+            {
+                var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
+                    hOffsetPt: 0, vOffsetPt: 0,
+                    fillColorHex: "#FFFFFF", shapeWidthPt: 144, shapeHeightPt: 108,
+                    text: "ABCD");
+                var shape = ((Paragraph)doc.Blocks[0]).Runs[1].Shape!;
+                shape.TextDirection = direction;
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+                view.Measure(new Size(816, 2000));
+                view.SelectFloating(0, 1);
+                view.EnterSelectedShapeTextEditing().Should().BeTrue();
+
+                var rect = view.FloatingShapeRects.Should().ContainSingle().Which.Rect;
+                var start = direction == ShapeTextDirection.Rotate90
+                    ? new Point(rect.Center.X, rect.Y + 5)
+                    : new Point(rect.Center.X, rect.Bottom - 5);
+                var end = direction == ShapeTextDirection.Rotate90
+                    ? new Point(rect.Center.X, rect.Bottom - 5)
+                    : new Point(rect.Center.X, rect.Y + 5);
+                view.BeginShapeTextSelectionForTest(start).Should().BeTrue();
+                view.EndShapeTextSelectionForTest(end);
+                view.ShapeTextSelectionInfo.Should().NotBeNull();
+
+                view.InsertText("R");
+                editedTexts[direction] = shape.PlainText;
+            }
+        });
+
+        if (!ran) return;
+        editedTexts[ShapeTextDirection.Rotate90].Should().Be("R");
+        editedTexts[ShapeTextDirection.Rotate270].Should().Be("R");
+    }
+
+    [Fact]
     public async Task Selected_floating_text_box_supports_paragraph_break_merge_and_outer_text_sync()
     {
         int paragraphCountAfterBreak = -1;
