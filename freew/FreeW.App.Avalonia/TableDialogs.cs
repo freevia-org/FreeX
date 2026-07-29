@@ -268,7 +268,10 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         _tabs.Items.Add(new TabItem { Header = "Cell", Content = BuildCellTab() });
         _tabs.SelectedIndex = Math.Clamp((int)initialTab, 0, 3);
         AutomationProperties.SetAutomationId(_tabs, "TablePropertiesTabs");
-        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(_tabs);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
+            _tabs,
+            DialogChromeStyle,
+            contentPaneMargin: new Thickness(-12, 0, -12, 0));
         _initialFocusTargets = [_preferredWidth, _rowHeight, _columnWidth, _cellWidth];
 
         AvaloniaCompactDialogChrome.ApplyValidationStatus(
@@ -301,18 +304,18 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
 
     private Control BuildTableTab()
     {
-        var grid = TwoColumnGrid(4);
+        var grid = TwoColumnGrid(4, 137);
         AddRow(grid, 0, _preferredWidthOn, _preferredWidth);
         AddRow(grid, 1, "Alignment:", _alignment);
         AddRow(grid, 2, "Text wrapping:", _wrapping);
         AddRow(grid, 3, "Indent from left (pt):", _indent);
 
-        var margins = TwoColumnGrid(4);
+        var margins = TwoColumnGrid(4, 54);
         AddRow(margins, 0, "Top:", _cellMarginTop);
         AddRow(margins, 1, "Left:", _cellMarginLeft);
         AddRow(margins, 2, "Bottom:", _cellMarginBottom);
         AddRow(margins, 3, "Right:", _cellMarginRight);
-        var spacing = TwoColumnGrid(1);
+        var spacing = TwoColumnGrid(1, 203);
         AddRow(spacing, 0, _cellSpacingOn, _cellSpacing);
 
         return Stack(
@@ -324,25 +327,28 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
 
     private Control BuildRowTab()
     {
-        var grid = TwoColumnGrid(2);
+        var grid = TwoColumnGrid(2, 131);
         AddRow(grid, 0, _rowHeightOn, _rowHeight);
         AddRow(grid, 1, "Row height is:", _rowRule);
-        return Stack(grid, _allowRowBreak, _repeatHeader);
+        var checks = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        checks.Children.Add(_allowRowBreak);
+        checks.Children.Add(_repeatHeader);
+        return Stack(grid, checks);
     }
 
     private Control BuildColumnTab()
     {
-        var grid = TwoColumnGrid(1);
+        var grid = TwoColumnGrid(1, 137);
         AddRow(grid, 0, _columnWidthOn, _columnWidth);
         return Stack(grid);
     }
 
     private Control BuildCellTab()
     {
-        var grid = TwoColumnGrid(2);
+        var grid = TwoColumnGrid(2, 137);
         AddRow(grid, 0, _cellWidthOn, _cellWidth);
         AddRow(grid, 1, "Vertical alignment:", _cellVAlign);
-        var margins = TwoColumnGrid(4);
+        var margins = TwoColumnGrid(4, 54);
         AddRow(margins, 0, "Top:", _cmTop);
         AddRow(margins, 1, "Left:", _cmLeft);
         AddRow(margins, 2, "Bottom:", _cmBottom);
@@ -411,7 +417,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
 
     private static StackPanel Stack(params Control[] controls)
     {
-        var panel = new StackPanel { Margin = new Thickness(14), Spacing = 2 };
+        var panel = new StackPanel { Margin = new Thickness(14) };
         foreach (var control in controls)
             panel.Children.Add(control);
         return panel;
@@ -420,14 +426,18 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
     private static TextBlock Header(string text) => new()
     {
         Text = text,
+        Foreground = Brushes.Black,
         FontWeight = FontWeight.SemiBold,
-        Margin = new Thickness(0, 8, 0, 2),
+        Margin = new Thickness(0, 10, 0, 4),
     };
 
-    private static Grid TwoColumnGrid(int rows)
+    private static Grid TwoColumnGrid(int rows, double? firstColumnWidth = null)
     {
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = firstColumnWidth is double width ? new GridLength(width) : GridLength.Auto,
+        });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         for (var index = 0; index < rows; index++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -451,7 +461,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 4, 8, 4),
         };
-        AvaloniaCompactDialogChrome.ApplyCheckBox(box, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
         AutomationProperties.SetAutomationId(box, automationId);
         return box;
     }
@@ -475,6 +485,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         var block = new TextBlock
         {
             Text = label,
+            Foreground = Brushes.Black,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 4, 8, 4),
         };

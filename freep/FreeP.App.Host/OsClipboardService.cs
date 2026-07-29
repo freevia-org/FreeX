@@ -412,8 +412,8 @@ public sealed class OsClipboardService
                 ?? ExternalRichTextClipboardPlanner.TryParseRtf(content.RtfBytes);
             if (payload is not null)
             {
-                if (payload.HasImage)
-                    editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
+                foreach (var image in payload.GetImagePayloads())
+                    editor.InsertPicture(image.Bytes, image.ContentType);
                 var table = payload.ContainsTable
                     ? editor.InsertTableFromClipboard(
                         payload.Body,
@@ -440,8 +440,8 @@ public sealed class OsClipboardService
             var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(content.XamlPackageBytes);
             if (payload is not null)
             {
-                if (payload.HasImage)
-                    editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
+                foreach (var image in payload.GetImagePayloads())
+                    editor.InsertPicture(image.Bytes, image.ContentType);
                 var table = payload.ContainsTable
                     ? editor.InsertTableFromClipboard(
                         payload.Body,

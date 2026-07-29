@@ -891,6 +891,123 @@ probe_formula_bar_point_mode_3d() {
     dismiss_overlays
 }
 
+probe_formula_bar_point_mode_multi_area() {
+    local keyboard_formula="" keyboard_display="" pointer_formula="" pointer_display=""
+    local keyboard_normalized="" pointer_normalized=""
+    local keyboard_formula_passed=false keyboard_result_passed=false
+    local pointer_formula_passed=false pointer_result_passed=false
+    local artifacts="formula-multi-area-keyboard-start.png;formula-multi-area-keyboard-first.png;formula-multi-area-keyboard-add.png;formula-multi-area-keyboard-committed.png;formula-multi-area-pointer-start.png;formula-multi-area-pointer-first.png;formula-multi-area-pointer-second.png;formula-multi-area-pointer-committed.png;formula-multi-area-postcondition.txt"
+
+    # Point mode consumes the grid click as formula input. The normal selection helper
+    # retries when it cannot classify the transient point-mode border, which would append
+    # the same address twice. Each formula point therefore gets exactly one calibrated click.
+    point_formula_cell() {
+        local column_offset="$1" row_offset="$2"
+        focus_app
+        xdotool_mousemove_sync "$(cell_center_x "$column_offset")" "$(cell_center_y "$row_offset")" click 1
+        sleep "$settle_seconds"
+    }
+
+    # Seed separated source cells through the production inline-edit path. The same sources are
+    # reused by the keyboard Add-mode and Ctrl+pointer formula-reference cases below.
+    if ! set_cell_text_without_save 5 4 F5 10 || ! set_cell_text_without_save 5 6 F7 20 ||
+       ! set_cell_text_without_save 7 6 H7 20; then
+        write_artifact "formula-multi-area-postcondition.txt" "seed-f5=false\nseed-f7=false\nseed-h7=false\n"
+        record "formula-bar-point-mode-multi-area-keyboard" "failed" "formula-multi-area-postcondition.txt" "Could not seed the physical disjoint formula-point source cells." "$artifacts"
+        record "formula-bar-point-mode-multi-area-pointer" "failed" "formula-multi-area-postcondition.txt" "Could not seed the physical disjoint formula-point source cells." "$artifacts"
+        return
+    fi
+
+    # Case one: WPF/Excel Shift+F8 Add mode, followed by a physical Ctrl+Down data-boundary move
+    # that appends a separated second reference area. This exercises the formula-bar keyboard route
+    # rather than a test-only helper.
+    if select_cell 4 4 E5; then
+        send_key ctrl+F2
+        send_key ctrl+a
+        type_text "=SUM("
+        send_key F2
+        send_key F2
+        capture "formula-multi-area-keyboard-start.png"
+        point_formula_cell 5 4
+        capture "formula-multi-area-keyboard-first.png"
+        # Reassert the formula editor caret after the grid point so the following physical
+        # chord is delivered to the same production editor that owns Point/Add mode.
+        send_key ctrl+End
+        # Deliver the chord without --clearmodifiers; clearing modifiers can erase the
+        # Shift state Avalonia uses for Add mode.
+        focus_app
+        xdotool key --window "$window_id" shift+F8
+        sleep "$settle_seconds"
+        send_key ctrl+Down
+        capture "formula-multi-area-keyboard-add.png"
+        type_text ")"
+        send_key Return
+        keyboard_formula="$(copy_cell_formula 4 4 E5 || true)"
+        keyboard_display="$(copy_cell_display 4 4 E5 || true)"
+        capture "formula-multi-area-keyboard-committed.png"
+    fi
+    send_key Escape || true
+
+    keyboard_normalized="$(normalize_formula "$keyboard_formula")"
+    [[ "$keyboard_normalized" == "=SUM(F5,F7)" ]] && keyboard_formula_passed=true
+    [[ "$keyboard_display" =~ ^30([.]0+)?$ ]] && keyboard_result_passed=true
+    if $keyboard_formula_passed && $keyboard_result_passed; then
+        record "formula-bar-point-mode-multi-area-keyboard" "passed" \
+            "formula-multi-area-keyboard-start.png; formula-multi-area-keyboard-first.png; formula-multi-area-keyboard-add.png; formula-multi-area-keyboard-committed.png; formula=$keyboard_formula; result=$keyboard_display" \
+            "Physical formula-bar point mode entered Shift+F8 Add mode, used Ctrl+Down to append separated F7 after F5, and committed SUM(F5,F7) with result 30." "$artifacts"
+    else
+        record "formula-bar-point-mode-multi-area-keyboard" "failed" \
+            "formula-multi-area-keyboard-start.png; formula-multi-area-keyboard-first.png; formula-multi-area-keyboard-add.png; formula-multi-area-keyboard-committed.png; formula-multi-area-postcondition.txt" \
+            "Physical Shift+F8 formula point mode did not prove SUM(F5,F7)=30 (formula='$keyboard_formula', result='$keyboard_display')." "$artifacts"
+    fi
+
+    # Case two: the production pointer modifier route. A plain point selects the first area, then a
+    # physical Ctrl+click appends a second area before the closing parenthesis is committed.
+    if select_cell 6 9 G10; then
+        send_key ctrl+F2
+        send_key ctrl+a
+        type_text "=SUM("
+        send_key F2
+        send_key F2
+        capture "formula-multi-area-pointer-start.png"
+        point_formula_cell 5 4
+        capture "formula-multi-area-pointer-first.png"
+        send_key ctrl+End
+        focus_app
+        # Avalonia accepts either Control or Meta for this production route. Holding both
+        # makes the physical probe robust across X11 keyboard-map variants while still
+        # exercising the same modifier-gated pointer handler.
+        xdotool keydown Control_L
+        xdotool keydown Super_L
+        xdotool_mousemove_sync "$(cell_center_x 7)" "$(cell_center_y 6)" click 1
+        xdotool keyup Control_L
+        xdotool keyup Super_L
+        sleep "$settle_seconds"
+        capture "formula-multi-area-pointer-second.png"
+        type_text ")"
+        send_key Return
+        pointer_formula="$(copy_cell_formula 6 9 G10 || true)"
+        pointer_display="$(copy_cell_display 6 9 G10 || true)"
+        capture "formula-multi-area-pointer-committed.png"
+    fi
+    send_key Escape || true
+
+    pointer_normalized="$(normalize_formula "$pointer_formula")"
+    [[ "$pointer_normalized" == "=SUM(F5,H7)" ]] && pointer_formula_passed=true
+    [[ "$pointer_display" =~ ^30([.]0+)?$ ]] && pointer_result_passed=true
+    write_artifact "formula-multi-area-postcondition.txt" \
+        "keyboard-formula=$keyboard_formula\nkeyboard-normalized=$keyboard_normalized\nkeyboard-result=$keyboard_display\nkeyboard-formula-passed=$keyboard_formula_passed\nkeyboard-result-passed=$keyboard_result_passed\npointer-formula=$pointer_formula\npointer-normalized=$pointer_normalized\npointer-result=$pointer_display\npointer-formula-passed=$pointer_formula_passed\npointer-result-passed=$pointer_result_passed\n"
+    if $pointer_formula_passed && $pointer_result_passed; then
+        record "formula-bar-point-mode-multi-area-pointer" "passed" \
+            "formula-multi-area-pointer-start.png; formula-multi-area-pointer-first.png; formula-multi-area-pointer-second.png; formula-multi-area-pointer-committed.png; formula=$pointer_formula; result=$pointer_display" \
+            "Physical formula-bar point mode accepted a first cell and a Ctrl+click second cell, then committed SUM(F5,H7) with result 30." "$artifacts"
+    else
+        record "formula-bar-point-mode-multi-area-pointer" "failed" \
+            "formula-multi-area-pointer-start.png; formula-multi-area-pointer-first.png; formula-multi-area-pointer-second.png; formula-multi-area-pointer-committed.png; formula-multi-area-postcondition.txt" \
+            "Physical Ctrl+click formula point mode did not prove SUM(F5,H7)=30 (formula='$pointer_formula', result='$pointer_display')." "$artifacts"
+    fi
+}
+
 probe_sheet_tabs() {
     local tab_y left_nav_x right_nav_x first_tab_x sheet2_x sheet3_x top
     local before_value right_value left_value before_second before_third after_second after_third
@@ -1510,6 +1627,20 @@ if [[ "$probe_selector" == "formula-3d-point" ]]; then
     probe_formula_bar_point_mode_3d
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused 3-D formula point probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "formula-multi-area-point" ]]; then
+    # Focused iteration mode for physical disjoint formula reference entry. This selector keeps
+    # the existing all lane's fresh-workbook coordinates and result inventory unchanged.
+    probe_formula_bar_point_mode_multi_area
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused multi-area formula point probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then

@@ -87,6 +87,53 @@ public sealed class R53_CrossSheetFormulaPointModeTests
     }
 
     [Fact]
+    public async Task FormulaPointAppend_RecoversMissingTrackedSpanAndCalculatesDisjointAreas()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sheet = window.Session.ActiveSheet;
+                var formulaCell = new CellAddress(sheet.Id, 5, 5);
+                var firstArea = new CellAddress(sheet.Id, 5, 6);
+                var secondArea = new CellAddress(sheet.Id, 7, 6);
+                var formulaBox = GetField<global::Avalonia.Controls.TextBox>(window, "_formulaBox");
+                sheet.SetCell(firstArea, new NumberValue(10));
+                sheet.SetCell(secondArea, new NumberValue(20));
+
+                window.BeginFormulaEditForTest(formulaCell, "=");
+                formulaBox.Text = "=SUM(";
+                window.SetFormulaBoxSelectionForTest("=SUM(".Length, 0);
+                Invoke<bool>(window, "TryInsertFormulaPointReference", firstArea)
+                    .Should().BeTrue();
+
+                // This is the transient state observed after the physical Linux point click:
+                // the text still contains F5, but the tracked span has not survived focus return.
+                typeof(MainWindow).GetField("_formulaReferenceStart", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .SetValue(window, null);
+                typeof(MainWindow).GetField("_formulaReferenceLength", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .SetValue(window, null);
+
+                Invoke<bool>(window, "TryAppendDisjointFormulaPointReference", secondArea)
+                    .Should().BeTrue();
+                formulaBox.Text.Should().Be("=SUM(F5,F7");
+
+                formulaBox.Text += ")";
+                window.SetFormulaBoxSelectionForTest(formulaBox.Text.Length, 0);
+                window.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
+
+                sheet.GetCell(formulaCell)!.FormulaText.Should().Be("SUM(F5,F7)");
+                sheet.GetValue(formulaCell).Should().Be(new NumberValue(30));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ShiftSheetTabsInFormulaPointMode_EmitThreeDSheetSpan()
     {
         await Session.Dispatch(() =>

@@ -242,6 +242,27 @@ static void Populate(Window dialog, Scenario scenario)
 
 static void FocusScenarioTarget(Window dialog, Scenario scenario)
 {
+    if (scenario.RouteId == "table-properties")
+    {
+        var automationId = scenario.Tab?.ToLowerInvariant() switch
+        {
+            "row" => "TablePropertiesRowHeightBox",
+            "column" => "TablePropertiesColumnWidthBox",
+            "cell" => "TablePropertiesCellWidthBox",
+            _ => "TablePropertiesPreferredWidthBox",
+        };
+        var target = FindVisualChildren<Control>(dialog)
+            .FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == automationId);
+        if (target is not null)
+        {
+            target.Focus();
+            Keyboard.Focus(target);
+            if (target is TextBox textBox)
+                textBox.SelectAll();
+        }
+        return;
+    }
+
     if (scenario.RouteId == "style")
     {
         var name = FindVisualChildren<TextBox>(dialog).FirstOrDefault();

@@ -63,7 +63,11 @@ internal sealed record LivePaneAccessibilityObservation(
     string HelpText,
     string Role,
     string State,
-    string Value);
+    string Value,
+    bool IsVisible,
+    bool Focusable,
+    bool IsTabStop,
+    int TabIndex);
 
 internal sealed record LivePaneAccessibilityManifest(
     int SchemaVersion,
@@ -133,6 +137,14 @@ internal static class AccessibilityValidationCoordinator
         File.Move(temporaryManifestPath, manifestPath, overwrite: true);
 
         var atSpiResultPath = Path.Combine(outputDirectory, "atspi-result.json");
+        var atSpiReadyPath = Path.Combine(outputDirectory, "atspi-ready.json");
+        var readyDeadline = DateTime.UtcNow.AddSeconds(60);
+        while (!File.Exists(atSpiReadyPath) && DateTime.UtcNow < readyDeadline)
+            await Task.Delay(100);
+
+        if (File.Exists(atSpiReadyPath))
+            window.FocusRepresentativePanesForAccessibilityValidation();
+
         var deadline = DateTime.UtcNow.AddSeconds(45);
         while (!File.Exists(atSpiResultPath) && DateTime.UtcNow < deadline)
             await Task.Delay(100);
@@ -155,6 +167,10 @@ internal static class AccessibilityValidationCoordinator
             AutomationProperties.GetHelpText(control) ?? string.Empty,
             control.GetType().Name,
             AutomationProperties.GetItemStatus(control) ?? state.State,
-            textValue);
+            textValue,
+            control.IsVisible,
+            control.Focusable,
+            control.IsTabStop,
+            control.TabIndex);
     }
 }

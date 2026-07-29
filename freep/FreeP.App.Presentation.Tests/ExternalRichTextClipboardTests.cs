@@ -149,6 +149,35 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfPict_PreservesEveryImageAndRichClipboardRoundTripsThem()
+    {
+        var first = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+        var second = new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 };
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi Before {\pict\pngblip " + Convert.ToHexString(first)
+            + @"} middle {\pict\jpegblip " + Convert.ToHexString(second) + @"} After}");
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(rtf);
+
+        payload.Should().NotBeNull();
+        payload!.GetImagePayloads().Should().HaveCount(2);
+        payload.GetImagePayloads()[0].Bytes.Should().Equal(first);
+        payload.GetImagePayloads()[0].ContentType.Should().Be("image/png");
+        payload.GetImagePayloads()[1].Bytes.Should().Equal(second);
+        payload.GetImagePayloads()[1].ContentType.Should().Be("image/jpeg");
+        payload.PlainText.Should().Be("Before  middle  After");
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        reopened.Should().NotBeNull();
+        reopened!.GetImagePayloads().Select(image => image.ContentType)
+            .Should().Equal("image/png", "image/jpeg");
+        reopened.GetImagePayloads()[0].Bytes.Should().Equal(first);
+        reopened.GetImagePayloads()[1].Bytes.Should().Equal(second);
+    }
+
+    [Fact]
     public void RtfObject_PreservesVisibleResultAndSuppressesObjectMetadata()
     {
         const string rtf =

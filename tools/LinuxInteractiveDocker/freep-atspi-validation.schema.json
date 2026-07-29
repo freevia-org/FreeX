@@ -3,16 +3,48 @@
   "title": "FreeP Linux AT-SPI accessibility validation",
   "type": "object",
   "additionalProperties": true,
-  "required": ["schemaVersion", "suite", "platform", "shell", "app", "evidenceLevel", "status", "observations", "limitation"],
+  "required": ["schemaVersion", "suite", "platform", "shell", "app", "evidenceLevel", "status", "windowId", "observations", "focusEvents", "expectedFocusOrder", "focusTraversal", "keyboardTraversal", "limitation"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "suite": { "const": "freep-atspi-accessibility" },
     "platform": { "const": "linux" },
     "shell": { "const": "avalonia" },
     "app": { "const": "FreeP" },
-    "evidenceLevel": { "const": "os-atspi-x11" },
+    "evidenceLevel": { "const": "os-atspi-x11-focus-events" },
     "status": { "enum": ["passed", "not-proven"] },
-    "observations": { "type": "array" },
+    "windowId": { "type": "string" },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["target", "name", "role", "state", "focusable", "visible", "showing", "focusEventCount"],
+        "properties": {
+          "target": { "type": "string" },
+          "name": { "type": "string", "minLength": 1 },
+          "role": { "type": "string", "minLength": 1 },
+          "state": { "type": "array" },
+          "focusable": { "type": "boolean" },
+          "visible": { "type": "boolean" },
+          "showing": { "type": "boolean" },
+          "focusEventCount": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "focusEvents": { "type": "array", "minItems": 5 },
+    "expectedFocusOrder": { "type": "array", "const": ["slides", "notes", "comments", "selection", "animation"] },
+    "focusTraversal": {
+      "type": "array",
+      "items": { "enum": ["slides", "notes", "comments", "selection", "animation"] }
+    },
+    "keyboardTraversal": {
+      "type": "object",
+      "required": ["method", "key", "physical"],
+      "properties": {
+        "method": { "const": "xdotool X11 key Tab" },
+        "key": { "const": "Tab" },
+        "physical": { "const": true }
+      }
+    },
     "limitation": { "type": "string", "minLength": 1 }
   }
 }

@@ -139,4 +139,49 @@ public sealed class FormulaRangeEntryPlannerDisjointAreaTests
 
         edit.TextEdit.Text.Should().Be("=R1C2:R1048576C2");
     }
+
+    [Theory]
+    [InlineData("=SUM(F5", 7, 5, 2)]
+    [InlineData("=SUM('Revenue Data'!F5", 22, 5, 17)]
+    public void TrailingReferenceSpan_RecoversReferenceBeforeDisjointAppend(
+        string text,
+        int caretIndex,
+        int expectedStart,
+        int expectedLength)
+    {
+        FormulaRangeEntryPlanner.TryGetTrailingReferenceSpan(
+                text,
+                caretIndex,
+                out var start,
+                out var length)
+            .Should().BeTrue();
+
+        start.Should().Be(expectedStart);
+        length.Should().Be(expectedLength);
+    }
+
+    [Fact]
+    public void AppendDisjointRangeSelection_PreservesQuotedSheetQualifierOnPriorArea()
+    {
+        var sourceSheet = new SheetId(Guid.NewGuid());
+        var targetSheet = new SheetId(Guid.NewGuid());
+        var formulaCell = new CellAddress(sourceSheet, 10, 5);
+
+        FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(
+                "=SUM('Revenue Data'!F5",
+                previousReferenceStart: 5,
+                previousReferenceLength: 17,
+                new GridRange(
+                    new CellAddress(targetSheet, 7, 8),
+                    new CellAddress(targetSheet, 7, 8)),
+                formulaCell,
+                useR1C1ReferenceStyle: false,
+                out var edit,
+                selectedSheetName: "Revenue Data")
+            .Should().BeTrue();
+
+        edit.TextEdit.Text.Should().Be("=SUM('Revenue Data'!F5,'Revenue Data'!H7");
+        edit.ReferenceStart.Should().Be(23);
+        edit.ReferenceLength.Should().Be(17);
+    }
 }
