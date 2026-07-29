@@ -798,8 +798,9 @@ public sealed class ChartShape
     public string? PreservedPivotSourceXml { get; set; }
 
     /// <summary>
-    /// Verbatim <c>c:chartSpace/c:protection</c> payload. Protection semantics remain
-    /// source-owned until FreeP exposes the corresponding chart editing policy.
+    /// Verbatim <c>c:chartSpace/c:protection</c> payload. The modeled protection flags
+    /// below drive the shared editing policy; this payload preserves any source tokens
+    /// that are not modeled separately.
     /// </summary>
     [JsonIgnore]
     public string? PreservedChartProtectionXml { get; set; }

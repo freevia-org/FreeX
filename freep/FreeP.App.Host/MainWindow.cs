@@ -4189,7 +4189,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     internal void OpenChartDataDialog()
     {
-        if (Editor.SelectedChart is null) return;
+        if (!Editor.CanEditSelectedChartData) return;
 
         var dialog = new ChartDataDialog(Editor);
         if (IsVisible)
@@ -4201,7 +4201,7 @@ public sealed partial class MainWindow : Window
 
     internal void OpenChartDisplayOptionsDialog()
     {
-        if (Editor.SelectedChart is null) return;
+        if (!Editor.CanEditSelectedChartFormatting) return;
 
         var dialog = new ChartDisplayOptionsDialog(Editor);
         if (IsVisible)
@@ -4211,7 +4211,7 @@ public sealed partial class MainWindow : Window
 
     internal void OpenChartAxisOptionsDialog()
     {
-        if (Editor.SelectedChart is null) return;
+        if (!Editor.CanEditSelectedChartFormatting) return;
 
         var dialog = new ChartAxisOptionsDialog(Editor);
         if (IsVisible)
@@ -4221,7 +4221,7 @@ public sealed partial class MainWindow : Window
 
     internal void OpenChartSeriesOptionsDialog()
     {
-        if (Editor.SelectedChart is null) return;
+        if (!Editor.CanEditSelectedChartFormatting) return;
 
         var dialog = new ChartSeriesOptionsDialog(Editor);
         if (IsVisible)
@@ -4231,7 +4231,7 @@ public sealed partial class MainWindow : Window
 
     internal void OpenChartPointOptionsDialog()
     {
-        if (Editor.SelectedChart is null) return;
+        if (!Editor.CanEditSelectedChartFormatting) return;
 
         var dialog = new ChartPointOptionsDialog(Editor);
         if (IsVisible)
@@ -4241,7 +4241,7 @@ public sealed partial class MainWindow : Window
 
     internal void OpenChartLayoutOptionsDialog()
     {
-        if (Editor.SelectedChart is null) return;
+        if (!Editor.CanEditSelectedChartFormatting) return;
 
         var dialog = new ChartLayoutOptionsDialog(Editor);
         if (IsVisible)
@@ -4251,7 +4251,7 @@ public sealed partial class MainWindow : Window
 
     internal void OpenChartDataTableOptionsDialog()
     {
-        if (Editor.SelectedChart is null) return;
+        if (!Editor.CanEditSelectedChartFormatting) return;
 
         var dialog = new ChartDataTableOptionsDialog(Editor);
         if (IsVisible)
@@ -4261,7 +4261,8 @@ public sealed partial class MainWindow : Window
 
     internal void OpenChartBubbleOptionsDialog()
     {
-        if (Editor.SelectedChart is not { ChartType: ChartType.Bubble }) return;
+        if (!Editor.CanEditSelectedChartFormatting
+            || Editor.SelectedChart is not { ChartType: ChartType.Bubble }) return;
 
         var dialog = new ChartBubbleOptionsDialog(Editor);
         if (IsVisible)
@@ -4271,7 +4272,8 @@ public sealed partial class MainWindow : Window
 
     internal void OpenChartPieOptionsDialog()
     {
-        if (Editor.SelectedChart is not { ChartType: ChartType.Pie or ChartType.Doughnut }) return;
+        if (!Editor.CanEditSelectedChartFormatting
+            || Editor.SelectedChart is not { ChartType: ChartType.Pie or ChartType.Doughnut }) return;
 
         var dialog = new ChartPieOptionsDialog(Editor);
         if (IsVisible)
@@ -4281,7 +4283,8 @@ public sealed partial class MainWindow : Window
 
     internal void OpenChartPlotStyleOptionsDialog()
     {
-        if (Editor.SelectedChart is not { ChartType: ChartType.Scatter or ChartType.Radar }) return;
+        if (!Editor.CanEditSelectedChartFormatting
+            || Editor.SelectedChart is not { ChartType: ChartType.Scatter or ChartType.Radar }) return;
 
         var dialog = new ChartPlotStyleOptionsDialog(Editor);
         if (IsVisible)
@@ -4291,7 +4294,7 @@ public sealed partial class MainWindow : Window
 
     internal void OpenChart3DViewOptionsDialog()
     {
-        if (Editor.SelectedChart is null) return;
+        if (!Editor.CanEditSelectedChartFormatting) return;
 
         var dialog = new Chart3DViewOptionsDialog(Editor);
         if (IsVisible)
@@ -4301,7 +4304,7 @@ public sealed partial class MainWindow : Window
 
     internal void OpenChartTextOptionsDialog()
     {
-        if (Editor.SelectedChart is null) return;
+        if (!Editor.CanEditSelectedChartFormatting) return;
 
         var dialog = new ChartTextOptionsDialog(Editor);
         if (IsVisible)
@@ -4311,7 +4314,7 @@ public sealed partial class MainWindow : Window
 
     internal void OpenChartAreaOptionsDialog()
     {
-        if (Editor.SelectedChart is null) return;
+        if (!Editor.CanEditSelectedChartFormatting) return;
         var dialog = new ChartAreaOptionsDialog(Editor) { Owner = this };
         dialog.ShowDialog();
     }
