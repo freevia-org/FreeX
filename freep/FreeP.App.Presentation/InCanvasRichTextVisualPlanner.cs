@@ -12,6 +12,7 @@ public sealed record InCanvasRichTextVisualRun(
     bool Italic,
     bool Underline,
     bool Strikethrough,
+    bool? RightToLeft,
     int? BaselineOffset,
     ThemeAwareColor? Color);
 
@@ -79,6 +80,7 @@ public static class InCanvasRichTextVisualPlanner
                     run.Italic,
                     run.Underline,
                     run.Strikethrough,
+                    run.RightToLeft,
                     run.BaselineOffset,
                     run.Color));
                 runStart += run.Text.Length;

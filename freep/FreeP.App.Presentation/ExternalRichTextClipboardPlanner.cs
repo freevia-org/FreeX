@@ -90,6 +90,7 @@ public static class ExternalRichTextClipboardPlanner
             public bool ItalicSet;
             public bool Underline;
             public bool Strikethrough;
+            public bool? RunRightToLeft;
             public int ColorIndex;
             public int UnicodeSkip = 1;
             public int UnicodeFallbackRemaining;
@@ -122,6 +123,7 @@ public static class ExternalRichTextClipboardPlanner
             bool Italic,
             bool Underline,
             bool Strikethrough,
+            bool? RunRightToLeft,
             SrgbColor? Color,
             bool BoldSet,
             bool ItalicSet,
@@ -461,6 +463,8 @@ public static class ExternalRichTextClipboardPlanner
                 case "strike":
                 case "striked": _state.Strikethrough = value != 0; break;
                 case "strike0": _state.Strikethrough = false; break;
+                case "rtlch": _state.RunRightToLeft = true; break;
+                case "ltrch": _state.RunRightToLeft = false; break;
                 case "cf": _state.ColorIndex = Math.Max(0, value); break;
                 case "plain": ResetCharacterFormatting(); break;
                 case "pard": ResetParagraphFormatting(); break;
@@ -734,6 +738,7 @@ public static class ExternalRichTextClipboardPlanner
                 _state.Italic,
                 _state.Underline,
                 _state.Strikethrough,
+                _state.RunRightToLeft,
                 color,
                 _state.BoldSet,
                 _state.ItalicSet,
@@ -761,6 +766,7 @@ public static class ExternalRichTextClipboardPlanner
                 ItalicSet = _activeStyle.ItalicSet,
                 Underline = _activeStyle.Underline,
                 Strikethrough = _activeStyle.Strikethrough,
+                RightToLeft = _activeStyle.RunRightToLeft,
                 Color = _activeStyle.Color is { } color ? new ThemeAwareColor(color) : null,
                 Hyperlink = _activeStyle.Hyperlink,
             });
@@ -776,6 +782,7 @@ public static class ExternalRichTextClipboardPlanner
             && left.Italic == right.Italic
             && left.Underline == right.Underline
             && left.Strikethrough == right.Strikethrough
+            && left.RunRightToLeft == right.RunRightToLeft
             && Nullable.Equals(left.Color, right.Color)
             && left.BoldSet == right.BoldSet
             && left.ItalicSet == right.ItalicSet
@@ -791,6 +798,7 @@ public static class ExternalRichTextClipboardPlanner
             _state.ItalicSet = true;
             _state.Underline = false;
             _state.Strikethrough = false;
+            _state.RunRightToLeft = null;
             _state.ColorIndex = 0;
         }
 

@@ -66,6 +66,8 @@ public sealed class ResolvedRun
     public bool Italic { get; init; }
     public bool Underline { get; init; }
     public bool Strikethrough { get; init; }
+    /// <summary>Resolved character direction; paragraph direction is the fallback.</summary>
+    public bool? RightToLeft { get; init; }
     public SrgbColor Color { get; init; } = SrgbColor.Black;
 
     // ── Wave 16A: text effects ────────────────────────────────────────────────

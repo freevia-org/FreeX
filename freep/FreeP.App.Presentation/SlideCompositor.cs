@@ -1241,6 +1241,7 @@ public static class SlideCompositor
                     Italic       = run.Italic,
                     Underline    = run.Underline,
                     Strikethrough = run.Strikethrough,
+                    RightToLeft  = run.RightToLeft,
                     Color        = color
                 });
             }
@@ -1643,6 +1644,7 @@ public static class SlideCompositor
                     Italic        = italic,
                     Underline     = run.Underline,
                     Strikethrough = run.Strikethrough,
+                    RightToLeft   = run.RightToLeft,
                     Color         = color,
                     TextFill      = resolvedTextFill,
                     TextOutline   = resolvedTextOutline,
