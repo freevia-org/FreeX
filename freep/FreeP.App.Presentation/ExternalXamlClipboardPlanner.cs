@@ -83,6 +83,7 @@ public static class ExternalXamlClipboardPlanner
 
             var body = new TextBody();
             var outputCharacters = 0;
+            bool containsTable = blockElements.Any(element => element.Name.LocalName == "Table");
             foreach (var element in blockElements)
             {
                 if (element.Name.LocalName == "Table")
@@ -102,7 +103,8 @@ public static class ExternalXamlClipboardPlanner
                 body,
                 InCanvasTextEditPlanner.ExtractPlainText(body),
                 ImageBytes: image.Bytes,
-                ImageContentType: image.ContentType);
+                ImageContentType: image.ContentType,
+                ContainsTable: containsTable);
         }
         catch
         {

@@ -416,7 +416,10 @@ internal sealed class AvaloniaPresentationClipboardService(
             {
                 if (payload.HasImage)
                     request.Editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
-                if (!string.IsNullOrWhiteSpace(payload.PlainText))
+                var table = payload.ContainsTable
+                    ? request.Editor.InsertTableFromClipboard(payload.Body)
+                    : null;
+                if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
                     request.Editor.InsertTextBox(payload.Body);
                 return source;
             }
@@ -438,7 +441,10 @@ internal sealed class AvaloniaPresentationClipboardService(
             {
                 if (payload.HasImage)
                     request.Editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
-                if (!string.IsNullOrWhiteSpace(payload.PlainText))
+                var table = payload.ContainsTable
+                    ? request.Editor.InsertTableFromClipboard(payload.Body)
+                    : null;
+                if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
                     request.Editor.InsertTextBox(payload.Body);
                 return source;
             }
