@@ -129,6 +129,31 @@ public sealed partial class FormulaRangeEntryPlannerTests
     }
 
     [Fact]
+    public void TryAppendDisjointRangeSelection_QualifiesOnlyTheAppendedCrossSheetArea()
+    {
+        var targetSheetId = SheetId.New();
+        var selected = new GridRange(
+            new CellAddress(targetSheetId, 3, 2),
+            new CellAddress(targetSheetId, 3, 2));
+
+        FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(
+                "=SUM('Revenue Data'!A2",
+                previousReferenceStart: 5,
+                previousReferenceLength: 17,
+                selected,
+                FormulaCell,
+                useR1C1ReferenceStyle: false,
+                out var edit,
+                selectedSheetName: "Summary Data")
+            .Should()
+            .BeTrue();
+
+        edit.TextEdit.Text.Should().Be("=SUM('Revenue Data'!A2,'Summary Data'!B3");
+        edit.ReferenceStart.Should().Be(23);
+        edit.ReferenceLength.Should().Be(17);
+    }
+
+    [Fact]
     public void TryApplyRangeSelection_InsertsAtCaretWhenCaretMovedPastPreviousReference()
     {
         FormulaRangeEntryPlanner.TryApplyRangeSelection(

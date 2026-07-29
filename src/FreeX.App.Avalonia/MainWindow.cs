@@ -8984,6 +8984,19 @@ public sealed partial class MainWindow : Window
             }
 
             if (point.Properties.IsLeftButtonPressed &&
+                IsFormulaRangeEntryActiveForPointMode() &&
+                IsFormulaDisjointReferenceModifier(args.KeyModifiers) &&
+                TryAppendDisjointFormulaPointReference(address))
+            {
+                var referenceStart = _formulaReferenceStart;
+                var referenceLength = _formulaReferenceLength;
+                BeginCellSelectionDrag(args, border, address);
+                TrackFormulaPointDragAnchor(address, referenceStart, referenceLength);
+                args.Handled = true;
+                return;
+            }
+
+            if (point.Properties.IsLeftButtonPressed &&
                 TryInsertFormulaPointReference(address))
             {
                 var referenceStart = _formulaReferenceStart;
@@ -10169,6 +10182,74 @@ public sealed partial class MainWindow : Window
             new GridRange(address, address),
             address,
             address);
+    }
+
+    private bool IsFormulaRangeEntryActiveForPointMode() =>
+        GetFormulaRangeEntryEditor() is { } editor &&
+        _session.FormulaEditAddress is not null &&
+        _formulaRangeEntryMode &&
+        IsFormulaPointModeText(editor.Text);
+
+    private static bool IsFormulaDisjointReferenceModifier(KeyModifiers modifiers) =>
+        modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);
+
+    // WPF/Excel append a comma-separated area when the command modifier is held during formula
+    // point mode. Keep the existing reference span intact and track the newly appended span so a
+    // subsequent drag replaces only that area, including when the pointed cell is on another tab.
+    private bool TryAppendDisjointFormulaPointReference(CellAddress address)
+    {
+        var editor = GetFormulaRangeEntryEditor();
+        var formulaCell = _session.FormulaEditAddress;
+        if (editor is null || formulaCell is null ||
+            _formulaReferenceStart is not { } start ||
+            _formulaReferenceLength is not { } length ||
+            start < 0 || length < 0)
+        {
+            return false;
+        }
+
+        var editorText = editor.Text ?? "";
+        if (start + length > editorText.Length)
+            return false;
+
+        var range = new GridRange(address, address);
+        if (!FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(
+                editorText,
+                start,
+                length,
+                range,
+                formulaCell.Value,
+                UseR1C1ReferenceStyle,
+                out var edit,
+                _session.Workbook.GetSheet(address.Sheet)?.Name))
+        {
+            return false;
+        }
+
+        _isApplyingFormulaBoxText = true;
+        try
+        {
+            ApplyTextBoxEdit(editor, edit.TextEdit);
+            SetInlineCellEditorSelection(editor, edit.TextEdit);
+            SynchronizeFormulaEditors(editor);
+        }
+        finally
+        {
+            _isApplyingFormulaBoxText = false;
+        }
+
+        _session.SelectRangeForFormulaEdit(range, formulaCell.Value);
+        _formulaRangeSelectionAnchor = address;
+        _formulaRangeSelectionCursor = address;
+        _formulaReferenceStart = edit.ReferenceStart;
+        _formulaReferenceLength = edit.ReferenceLength;
+        _cellAddressText.Text = FormatRangeReference(range);
+        _selectionStatsText.Text = _session.SelectionStatsText;
+        RefreshFormulaReferenceHighlights();
+        RefreshFormulaReferenceGridHighlights();
+        ApplyFormulaEditStatusBarPlan(FormulaEditInteractionPlanner.BuildEditStatusBarPlan(pointMode: true));
+        editor.Focus();
+        return true;
     }
 
     private bool TryContinueFormulaRangeSelectionDrag(CellAddress address)
@@ -12033,9 +12114,9 @@ public sealed partial class MainWindow : Window
 
     private void SelectSheet(SheetId sheetId, bool selectRange, bool toggle)
     {
-        if (!selectRange && !toggle && GetFormulaRangeEntryEditor() is not null)
+        if (GetFormulaRangeEntryEditor() is not null)
         {
-            var changed = _session.SelectSheetForFormulaEdit(sheetId);
+            var changed = _session.SelectSheetForFormulaEdit(sheetId, selectRange, toggle);
             CloseAutoFilterFlyout();
             if (changed)
             {

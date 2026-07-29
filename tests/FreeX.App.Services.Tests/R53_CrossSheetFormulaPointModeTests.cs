@@ -73,4 +73,22 @@ public sealed class R53_CrossSheetFormulaPointModeTests
         action.Should().Throw<ArgumentOutOfRangeException>()
             .WithParameterName("formulaEditAddress");
     }
+
+    [Fact]
+    public void ModifierSheetTabPointing_PreservesFormulaSourceAndGroupedTabs()
+    {
+        var session = new WorkbookSessionFactory().CreateNew(viewportHeight: 240, viewportWidth: 320);
+        var sourceSheet = session.ActiveSheet;
+        var targetSheet = session.Workbook.AddSheet("Revenue Data");
+        var source = new CellAddress(sourceSheet.Id, 1, 1);
+
+        session.BeginFormulaEdit(source);
+        session.SelectSheetForFormulaEdit(targetSheet.Id, selectRange: false, toggle: true).Should().BeTrue();
+
+        session.ActiveSheet.Should().BeSameAs(targetSheet);
+        session.FormulaEditAddress.Should().Be(source);
+        session.IsWorkbookGrouped.Should().BeTrue();
+        session.IsSheetInActiveGroupSelection(sourceSheet.Id).Should().BeTrue();
+        session.IsSheetInActiveGroupSelection(targetSheet.Id).Should().BeTrue();
+    }
 }

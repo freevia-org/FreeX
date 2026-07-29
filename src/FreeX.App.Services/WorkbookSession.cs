@@ -1699,11 +1699,20 @@ public sealed class WorkbookSession
     /// both worksheet hosts when a formula edit crosses a sheet tab.
     /// </summary>
     public bool SelectSheetForFormulaEdit(SheetId sheetId)
+        => SelectSheetForFormulaEdit(sheetId, selectRange: false, toggle: false);
+
+    /// <summary>
+    /// Selects a worksheet tab while keeping the active formula point edit alive. WPF keeps the
+    /// source cell edit open even when Shift/Ctrl tab modifiers change the grouped-sheet state;
+    /// the selected worksheet then owns the next pointed range while FormulaEditAddress remains
+    /// the source cell that receives commit or cancel.
+    /// </summary>
+    public bool SelectSheetForFormulaEdit(SheetId sheetId, bool selectRange, bool toggle)
     {
         if (FormulaEditAddress is null)
             throw new InvalidOperationException("A formula edit must be active before switching sheets for formula pointing.");
 
-        return SelectSheet(sheetId, selectRange: false, toggle: false, preserveFormulaEdit: true);
+        return SelectSheet(sheetId, selectRange, toggle, preserveFormulaEdit: true);
     }
 
     public bool SelectSheetFromTab(SheetId sheetId, bool selectRange, bool toggle)
