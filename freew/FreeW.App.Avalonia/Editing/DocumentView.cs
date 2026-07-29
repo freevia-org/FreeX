@@ -5030,12 +5030,20 @@ public sealed class DocumentView : Control
         }
 
         var lineIndex = 0;
+        var supportsSplitFloatFragments = alignment == TextAlignment.Left
+            && Math.Abs(leftInset) < 0.01
+            && Math.Abs(indentLeft) < 0.01
+            && Math.Abs(indentFirst) < 0.01
+            && cells.All(cell => cell.Ch != '\t' && cell.EquationElement is null);
 
         // AV-WRAP: ask the shared presentation planner for the current line's effective width.
         double PeekLineAvail(double estimatedH, double baseAlignWidth)
         {
             if (_wrapExclusions.Count == 0) return baseAlignWidth;
-            return BuildFloatingTextWrapLinePlan(estimatedH, baseAlignWidth).EffectiveTextWidthDip;
+            var plan = BuildFloatingTextWrapLinePlan(estimatedH, baseAlignWidth);
+            return supportsSplitFloatFragments && plan.SplitLine is { } splitLine
+                ? splitLine.EffectiveTextWidthDip
+                : plan.EffectiveTextWidthDip;
         }
 
         while (i < cells.Count)
@@ -5222,15 +5230,22 @@ public sealed class DocumentView : Control
             colLeft = wrapLinePlan.ColumnLeftDip;
         }
 
-        var wrapLeftDelta = wrapLinePlan?.LeftDeltaDip ?? 0;
-        var effectiveLeftInset = leftInset + wrapLeftDelta;
-        var effectiveWidth = wrapLinePlan?.EffectiveTextWidthDip ?? availableWidth;
-        if (effectiveWidth < 20) effectiveWidth = 20; // safety floor
-
         // AV-TAB: detect whether this line contains any tab characters.
         var lineHasTabs = false;
         for (var c = from; c < to; c++)
             if (cells[c].Ch == '\t') { lineHasTabs = true; break; }
+
+        var splitLine = wrapLinePlan?.SplitLine;
+        var usesSplitFloatFragments = splitLine is not null
+            && alignment == TextAlignment.Left
+            && !lineHasTabs
+            && Math.Abs(leftInset) < 0.01;
+        var wrapLeftDelta = usesSplitFloatFragments ? 0 : wrapLinePlan?.LeftDeltaDip ?? 0;
+        var effectiveLeftInset = leftInset + wrapLeftDelta;
+        var effectiveWidth = usesSplitFloatFragments
+            ? splitLine!.EffectiveTextWidthDip
+            : wrapLinePlan?.EffectiveTextWidthDip ?? availableWidth;
+        if (effectiveWidth < 20) effectiveWidth = 20; // safety floor
 
         // Content origin: absolute left edge where pen-position 0 begins (before alignment offset).
         // Tab stops are measured from this origin, not from the alignment-shifted x.
@@ -5253,14 +5268,30 @@ public sealed class DocumentView : Control
         if (!string.IsNullOrWhiteSpace(pf.ShadingColorHex) || pf.Border is not null)
         {
             const double decorationPad = 2.0;
-            _paragraphDecorations.Add((
-                new Rect(
-                    contentOriginX - decorationPad,
-                    pageSpaceY,
-                    Math.Max(1, effectiveWidth + decorationPad * 2),
-                    lineHeight),
-                pf.ShadingColorHex,
-                pf.Border));
+            if (usesSplitFloatFragments)
+            {
+                _paragraphDecorations.Add((
+                    new Rect(contentOriginX - decorationPad, pageSpaceY,
+                        Math.Max(1, splitLine!.FirstWidthDip + decorationPad * 2), lineHeight),
+                    pf.ShadingColorHex,
+                    pf.Border));
+                _paragraphDecorations.Add((
+                    new Rect(colLeft + splitLine.SecondStartDeltaDip - decorationPad, pageSpaceY,
+                        Math.Max(1, splitLine.SecondWidthDip + decorationPad * 2), lineHeight),
+                    pf.ShadingColorHex,
+                    pf.Border));
+            }
+            else
+            {
+                _paragraphDecorations.Add((
+                    new Rect(
+                        contentOriginX - decorationPad,
+                        pageSpaceY,
+                        Math.Max(1, effectiveWidth + decorationPad * 2),
+                        lineHeight),
+                    pf.ShadingColorHex,
+                    pf.Border));
+            }
         }
 
         // AV-TAB: default tab interval for this line (from document page settings).
@@ -5285,9 +5316,32 @@ public sealed class DocumentView : Control
             };
         }
 
+        var splitAt = to;
+        var splitSecondStartX = 0.0;
+        if (usesSplitFloatFragments)
+        {
+            var firstWidth = 0.0;
+            var lastSplitBreak = -1;
+            for (var c = from; c < to; c++)
+            {
+                if (cells[c].Ch == ' ')
+                    lastSplitBreak = c + 1;
+                if (firstWidth + measured[c] > splitLine!.FirstWidthDip)
+                {
+                    splitAt = lastSplitBreak > from ? lastSplitBreak : c;
+                    break;
+                }
+                firstWidth += measured[c];
+            }
+            splitSecondStartX = colLeft + splitLine!.SecondStartDeltaDip;
+        }
+
         var reviewPolicy = CurrentReviewDisplayPolicy;
         for (var c = from; c < to; c++)
         {
+            if (usesSplitFloatFragments && c == splitAt)
+                x = splitSecondStartX;
+
             if (!reviewPolicy.IsRevisionTextVisible(cells[c].Revision))
             {
                 _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, 0, lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
@@ -19030,7 +19084,8 @@ public sealed class DocumentView : Control
                             snapshot.Wrapping,
                             nestedGroup.RotationAngle,
                             nestedGroup.FlipH,
-                            nestedGroup.FlipV));
+                            nestedGroup.FlipV,
+                            snapshot.WrapTextSide));
                     break;
 
                 default:

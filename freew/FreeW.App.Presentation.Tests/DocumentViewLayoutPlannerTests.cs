@@ -620,6 +620,72 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildFloatingTextWrapLinePlan_BothSidesSquareCreatesTwoFragments()
+    {
+        var surface = new DocumentViewSurfacePlan(
+            DocumentViewLayoutKind.WebLayout,
+            PageWidthDip: 400,
+            PageHeightDip: 800,
+            MarginLeftDip: 0,
+            MarginTopDip: 0,
+            MarginRightDip: 0,
+            MarginBottomDip: 0,
+            PageLeftDip: 0,
+            ContentLeftDip: 100,
+            ContentWidthDip: 300,
+            TextAreaHeightDip: 800,
+            DeskPaddingDip: 0,
+            PageGapDip: 0);
+        var zone = DocumentViewLayoutPlanner.BuildWrapExclusionZone(
+            new DocumentFloatRect(190, 20, 80, 60),
+            ImageWrapping.Square,
+            FloatingWrapTextSide.BothSides);
+
+        var plan = DocumentViewLayoutPlanner.BuildFloatingTextWrapLinePlan(
+            [zone!],
+            surface,
+            currentContentYDip: 30,
+            lineContentYDip: 30,
+            lineHeightDip: 14,
+            contentLeftDip: 100,
+            columnCount: 1,
+            columnWidthDip: 300,
+            columnGapDip: 0,
+            baseTextWidthDip: 300);
+
+        plan.HasSplitTextFragments.Should().BeTrue();
+        plan.SplitLine!.FirstWidthDip.Should().BeApproximately(81, 0.01);
+        plan.SplitLine.SecondStartDeltaDip.Should().BeApproximately(179, 0.01);
+        plan.SplitLine.SecondWidthDip.Should().BeApproximately(121, 0.01);
+        plan.SplitLine.EffectiveTextWidthDip.Should().BeApproximately(202, 0.01);
+        plan.EffectiveTextWidthDip.Should().BeApproximately(121, 0.01,
+            "the established single-side fallback remains available for unsupported text layouts");
+    }
+
+    [Fact]
+    public void BuildSquareTightWrapExclusion_HonorsSingleSidePolicy()
+    {
+        var leftOnly = DocumentViewLayoutPlanner.BuildWrapExclusionZone(
+            new DocumentFloatRect(190, 20, 80, 60),
+            ImageWrapping.Square,
+            FloatingWrapTextSide.Left);
+        var rightOnly = DocumentViewLayoutPlanner.BuildWrapExclusionZone(
+            new DocumentFloatRect(190, 20, 80, 60),
+            ImageWrapping.Square,
+            FloatingWrapTextSide.Right);
+
+        var leftPlan = DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(
+            [leftOnly!], 30, 14, 100, 300);
+        var rightPlan = DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(
+            [rightOnly!], 30, 14, 100, 300);
+
+        leftPlan.LeftDeltaDip.Should().Be(0);
+        leftPlan.RightShrinkDip.Should().BeApproximately(219, 0.01);
+        rightPlan.LeftDeltaDip.Should().BeApproximately(179, 0.01);
+        rightPlan.RightShrinkDip.Should().Be(0);
+    }
+
+    [Fact]
     public void BuildFloatingHandleGeometry_HitTestsMovesAndResizesSelectionRects()
     {
         var rect = new DocumentFloatRect(10, 20, 100, 80);
