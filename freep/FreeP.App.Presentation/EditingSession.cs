@@ -481,6 +481,12 @@ public sealed class EditingSession
     /// </summary>
     public void Select(uint shapeId, bool addToSelection = false)
     {
+        var selectedShape = CurrentSlide is { } slide
+            ? FindShape(slide.Shapes, shapeId)
+            : null;
+        if (selectedShape?.Chart?.ChartSelectionProtected == true)
+            return;
+
         if (!addToSelection)
             _selectedShapeIds.Clear();
         if (!_selectedShapeIds.Contains(shapeId))
@@ -503,7 +509,10 @@ public sealed class EditingSession
         if (slide is null) return;
         _selectedShapeIds.Clear();
         foreach (var s in slide.Shapes)
-            _selectedShapeIds.Add(s.Id);
+        {
+            if (s.Chart?.ChartSelectionProtected != true)
+                _selectedShapeIds.Add(s.Id);
+        }
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 

@@ -60,6 +60,7 @@ internal static class PptxChartReader
             ChartObjectProtected = ParseNullableBoolAttr(protection?.Attribute("chartObject")?.Value),
             ChartDataProtected = ParseNullableBoolAttr(protection?.Attribute("data")?.Value),
             ChartFormattingProtected = ParseNullableBoolAttr(protection?.Attribute("formatting")?.Value),
+            ChartSelectionProtected = ParseNullableBoolAttr(protection?.Attribute("selection")?.Value),
             PreservedChartSpaceExtensionsXml = chartSpace.Element(C + "extLst")
                 ?.ToString(SaveOptions.DisableFormatting)
         };
