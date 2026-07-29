@@ -35,7 +35,7 @@ public sealed class SetChartAreaOptionsCommand : IPresentationCommand
         chart = null!;
         if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count) return false;
         var found = presentation.Slides[_slideIndex].Shapes.FirstOrDefault(s => s.Id == _shapeId)?.Chart;
-        if (found is null) return false;
+        if (found is null || !ChartHelper.IsFormattingEditable(found)) return false;
         chart = found;
         return true;
     }

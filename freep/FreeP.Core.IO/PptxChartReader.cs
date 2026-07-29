@@ -42,6 +42,8 @@ internal static class PptxChartReader
         var chartSpace = doc.Root; // c:chartSpace
         if (chartSpace is null) return null;
 
+        var protection = chartSpace.Element(C + "protection");
+
         var chartEl = chartSpace.Element(C + "chart");
         if (chartEl is null) return null;
 
@@ -55,6 +57,9 @@ internal static class PptxChartReader
                 ?.ToString(SaveOptions.DisableFormatting),
             PreservedChartProtectionXml = chartSpace.Element(C + "protection")
                 ?.ToString(SaveOptions.DisableFormatting),
+            ChartObjectProtected = ParseNullableBoolAttr(protection?.Attribute("chartObject")?.Value),
+            ChartDataProtected = ParseNullableBoolAttr(protection?.Attribute("data")?.Value),
+            ChartFormattingProtected = ParseNullableBoolAttr(protection?.Attribute("formatting")?.Value),
             PreservedChartSpaceExtensionsXml = chartSpace.Element(C + "extLst")
                 ?.ToString(SaveOptions.DisableFormatting)
         };

@@ -128,6 +128,19 @@ public sealed class ChartDataCommandTests
         p.Slides[0].Shapes[0].Chart!.Series.Should().HaveCount(2, "no series added on out-of-range");
     }
 
+    [Fact]
+    public void SetChartCellValue_ProtectedData_IsIgnoredAndDoesNotMarkWorkbook()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartDataProtected = true;
+
+        bus.Execute(new SetChartCellValueCommand(0, id, seriesIndex: 0, categoryIndex: 1, value: 999.0));
+
+        chart.Series[0].Values[1].Should().Be(200.0);
+        chart.RegenerateWorkbookOnSave.Should().BeFalse();
+    }
+
     // ════════════════════════════════════════════════════════════════════════════════
     // SetChartCategoryLabelCommand
     // ════════════════════════════════════════════════════════════════════════════════

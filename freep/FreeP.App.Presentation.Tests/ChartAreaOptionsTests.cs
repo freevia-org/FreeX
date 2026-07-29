@@ -150,6 +150,33 @@ public sealed class ChartAreaOptionsTests
     }
 
     [Fact]
+    public void SetChartAreaOptions_ProtectedFormatting_IsIgnored()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape
+        {
+            ChartAreaFill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0xFFFFFF))),
+            ChartFormattingProtected = true,
+        };
+        var shape = new SlideShape { Id = 1, Kind = SlideShapeKind.Chart, Chart = chart };
+        slide.Shapes.Add(shape);
+        presentation.Slides.Add(slide);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetChartAreaOptionsCommand(
+            0,
+            shape.Id,
+            new ChartAreaOptions(
+                ChartAreaFormattingTarget.ChartArea,
+                new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79))),
+                null)));
+
+        ((ShapeFill.Solid)chart.ChartAreaFill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFFFF));
+        chart.RegenerateWorkbookOnSave.Should().BeFalse();
+    }
+
+    [Fact]
     public void BuildScenePlan_CarriesChartAndPlotAreaPaintToSharedRendererPlan()
     {
         var chart = new ChartShape

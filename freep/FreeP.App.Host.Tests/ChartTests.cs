@@ -156,6 +156,9 @@ public sealed class ChartTests : IDisposable
         chart.ChartLanguage = "en-US";
         chart.PreservedChartProtectionXml =
             "<c:protection xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" chartObject=\"1\" data=\"0\" />";
+        chart.ChartObjectProtected = true;
+        chart.ChartDataProtected = false;
+        chart.ChartFormattingProtected = true;
         slide.Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.Chart, Chart = chart });
 
         var clone = SlideCloner.CloneSlide(slide).Shapes.Single().Chart!;
@@ -184,6 +187,9 @@ public sealed class ChartTests : IDisposable
         clone.ChartDate1904.Should().BeTrue();
         clone.ChartLanguage.Should().Be("en-US");
         clone.PreservedChartProtectionXml.Should().Be(chart.PreservedChartProtectionXml);
+        clone.ChartObjectProtected.Should().BeTrue();
+        clone.ChartDataProtected.Should().BeFalse();
+        clone.ChartFormattingProtected.Should().BeTrue();
     }
 
     [Fact]
@@ -599,6 +605,9 @@ public sealed class ChartTests : IDisposable
         rt.ChartDate1904.Should().BeTrue();
         rt.ChartLanguage.Should().Be("fr-FR");
         rt.PreservedChartProtectionXml.Should().Contain("formatting");
+        rt.ChartObjectProtected.Should().BeTrue();
+        rt.ChartDataProtected.Should().BeFalse();
+        rt.ChartFormattingProtected.Should().BeTrue();
     }
 
     [Fact]

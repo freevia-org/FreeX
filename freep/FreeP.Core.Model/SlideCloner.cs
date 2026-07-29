@@ -223,6 +223,9 @@ public static class SlideCloner
             ChartLanguage = src.ChartLanguage,
             PreservedPivotSourceXml = src.PreservedPivotSourceXml,
             PreservedChartProtectionXml = src.PreservedChartProtectionXml,
+            ChartObjectProtected = src.ChartObjectProtected,
+            ChartDataProtected = src.ChartDataProtected,
+            ChartFormattingProtected = src.ChartFormattingProtected,
             PreservedChartSpaceExtensionsXml = src.PreservedChartSpaceExtensionsXml,
         };
 

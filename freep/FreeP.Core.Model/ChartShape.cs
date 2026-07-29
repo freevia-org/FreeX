@@ -804,6 +804,15 @@ public sealed class ChartShape
     [JsonIgnore]
     public string? PreservedChartProtectionXml { get; set; }
 
+    /// <summary>Whether <c>c:protection/@chartObject</c> blocks chart edits.</summary>
+    public bool? ChartObjectProtected { get; set; }
+
+    /// <summary>Whether <c>c:protection/@data</c> blocks chart data edits.</summary>
+    public bool? ChartDataProtected { get; set; }
+
+    /// <summary>Whether <c>c:protection/@formatting</c> blocks chart formatting edits.</summary>
+    public bool? ChartFormattingProtected { get; set; }
+
     /// <summary>
     /// Verbatim <c>c:chartSpace/c:extLst</c> payload from the source chart, retained so
     /// compatibility and producer-specific extensions survive a save or duplicate operation.

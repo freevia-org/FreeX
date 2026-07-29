@@ -17,13 +17,47 @@ internal static class ChartHelper
         return shape?.Chart;
     }
 
+    internal static ChartShape? FindDataEditable(Presentation p, int slideIndex, uint shapeId)
+    {
+        var chart = Find(p, slideIndex, shapeId);
+        return chart is null || !IsDataEditable(chart)
+            ? null
+            : chart;
+    }
+
+    internal static ChartShape? FindFormattingEditable(Presentation p, int slideIndex, uint shapeId)
+    {
+        var chart = Find(p, slideIndex, shapeId);
+        return chart is null || !IsFormattingEditable(chart)
+            ? null
+            : chart;
+    }
+
+    internal static bool IsDataEditable(ChartShape chart) =>
+        chart.ChartObjectProtected != true && chart.ChartDataProtected != true;
+
+    internal static bool IsFormattingEditable(ChartShape chart) =>
+        chart.ChartObjectProtected != true && chart.ChartFormattingProtected != true;
+
+    internal static ChartSeries? FindFormattingSeries(
+        Presentation p,
+        int slideIndex,
+        uint shapeId,
+        int seriesIndex)
+    {
+        var chart = FindFormattingEditable(p, slideIndex, shapeId);
+        return chart is not null && seriesIndex >= 0 && seriesIndex < chart.Series.Count
+            ? chart.Series[seriesIndex]
+            : null;
+    }
+
     internal static ChartSeries? FindSeries(
         Presentation p,
         int slideIndex,
         uint shapeId,
         int seriesIndex)
     {
-        var chart = Find(p, slideIndex, shapeId);
+        var chart = FindDataEditable(p, slideIndex, shapeId);
         return chart is not null && seriesIndex >= 0 && seriesIndex < chart.Series.Count
             ? chart.Series[seriesIndex]
             : null;
@@ -64,7 +98,7 @@ public sealed class SetChartCellValueCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
         if (_seriesIndex < 0 || _seriesIndex >= chart.Series.Count) return;
         var values = chart.Series[_seriesIndex].Values;
@@ -76,7 +110,7 @@ public sealed class SetChartCellValueCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
         if (_seriesIndex < 0 || _seriesIndex >= chart.Series.Count) return;
         var values = chart.Series[_seriesIndex].Values;
@@ -114,7 +148,7 @@ public sealed class SetChartCategoryLabelCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
         if (_categoryIndex < 0 || _categoryIndex >= chart.Categories.Count) return;
         _oldLabel                       = chart.Categories[_categoryIndex];
@@ -124,7 +158,7 @@ public sealed class SetChartCategoryLabelCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
         if (_categoryIndex < 0 || _categoryIndex >= chart.Categories.Count) return;
         chart.Categories[_categoryIndex] = _oldLabel;
@@ -160,7 +194,7 @@ public sealed class SetChartSeriesNameCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
         if (_seriesIndex < 0 || _seriesIndex >= chart.Series.Count) return;
         _oldName                      = chart.Series[_seriesIndex].Name;
@@ -170,7 +204,7 @@ public sealed class SetChartSeriesNameCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
         if (_seriesIndex < 0 || _seriesIndex >= chart.Series.Count) return;
         chart.Series[_seriesIndex].Name = _oldName;
@@ -203,7 +237,7 @@ public sealed class AddChartSeriesCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
 
         _added = new ChartSeries { Name = _name };
@@ -216,7 +250,7 @@ public sealed class AddChartSeriesCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null || _added is null) return;
         chart.Series.Remove(_added);
         ChartHelper.MarkWorkbookDirty(chart);
@@ -245,7 +279,7 @@ public sealed class RemoveChartSeriesCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
         if (_seriesIndex < 0 || _seriesIndex >= chart.Series.Count) return;
         _captured = chart.Series[_seriesIndex];
@@ -255,7 +289,7 @@ public sealed class RemoveChartSeriesCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null || _captured is null) return;
         var idx = Math.Clamp(_seriesIndex, 0, chart.Series.Count);
         chart.Series.Insert(idx, _captured);
@@ -284,7 +318,7 @@ public sealed class MoveChartSeriesCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null || !IsValid(chart, _sourceIndex) || !IsValid(chart, _targetIndex) ||
             _sourceIndex == _targetIndex)
             return;
@@ -301,7 +335,7 @@ public sealed class MoveChartSeriesCommand : IPresentationCommand
         if (!_applied)
             return;
 
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null || !IsValid(chart, _targetIndex))
             return;
 
@@ -339,7 +373,7 @@ public sealed class AddChartCategoryCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
         chart.Categories.Add(_label);
         foreach (var series in chart.Series)
@@ -349,7 +383,7 @@ public sealed class AddChartCategoryCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
         if (chart.Categories.Count == 0) return;
         chart.Categories.RemoveAt(chart.Categories.Count - 1);
@@ -383,7 +417,7 @@ public sealed class RemoveChartCategoryCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
         if (_categoryIndex < 0 || _categoryIndex >= chart.Categories.Count) return;
 
@@ -401,7 +435,7 @@ public sealed class RemoveChartCategoryCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
 
         var idx = Math.Clamp(_categoryIndex, 0, chart.Categories.Count);
@@ -509,7 +543,7 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
 
         // W6: Capture old values as nullable — preserves gap (null) entries for undo.
@@ -547,7 +581,7 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindDataEditable(p, _slideIndex, _shapeId);
         if (chart is null) return;
 
         // W8: Restore original series instances (restores FillColor, PointColors, etc.).

@@ -19,7 +19,7 @@ public sealed class SetChartBubbleOptionsCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);
         if (chart is null || chart.ChartType != ChartType.Bubble)
             return;
 
@@ -30,7 +30,7 @@ public sealed class SetChartBubbleOptionsCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);
         if (chart is null || chart.ChartType != ChartType.Bubble || _oldOptions is null)
             return;
 

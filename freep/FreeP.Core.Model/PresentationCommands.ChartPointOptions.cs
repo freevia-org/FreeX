@@ -22,9 +22,10 @@ public sealed class SetChartPointOptionsCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var series = ChartHelper.FindSeries(
+        var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);
+        var series = ChartHelper.FindFormattingSeries(
             p, _slideIndex, _shapeId, _newOptions.SeriesIndex);
-        if (series is null || _newOptions.PointIndex < 0)
+        if (chart is null || series is null || _newOptions.PointIndex < 0)
             return;
 
         _hadPointColor = series.PointColors.TryGetValue(_newOptions.PointIndex, out _oldPointColor);
@@ -61,15 +62,15 @@ public sealed class SetChartPointOptionsCommand : IPresentationCommand
         else
             series.PointStyles.Remove(_newOptions.PointIndex);
 
-        ChartHelper.MarkWorkbookDirty(ChartHelper.Find(p, _slideIndex, _shapeId)!);
+        ChartHelper.MarkWorkbookDirty(chart);
     }
 
     public void Revert(Presentation p)
     {
-        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);
         var series = chart is null
             ? null
-            : ChartHelper.FindSeries(p, _slideIndex, _shapeId, _newOptions.SeriesIndex);
+            : ChartHelper.FindFormattingSeries(p, _slideIndex, _shapeId, _newOptions.SeriesIndex);
         if (chart is null || series is null || _newOptions.PointIndex < 0)
             return;
 
