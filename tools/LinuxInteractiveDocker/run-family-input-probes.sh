@@ -65,6 +65,7 @@ if [[ "$app" == "FreeW" ]]; then
 else
     required_ids+=(
         "nested-keytip-prefix-deferral"
+        "animation-pane-physical-workflow"
         "slide-pane-new-slide-create"
         "slide-pane-new-slide-undo"
         "slide-pane-new-slide-redo"
@@ -383,6 +384,14 @@ capture_region() {
     local source_name="$1" name="$2" geometry="$3"
     convert "$output/$source_name" -crop "$geometry" +repage "$output/$name"
     track_screenshot "$name"
+}
+
+image_color_count() {
+    local image_path="$1" geometry="$2" color="$3" count
+    count="$(convert "$image_path" -crop "$geometry" +repage -format '%c' histogram:info:- 2>/dev/null |
+        awk -v needle="$color" '$0 ~ needle { split($0, fields, ":"); print fields[1]; exit }' |
+        tr -d '[:space:]')"
+    printf '%s' "${count:-0}"
 }
 
 active_window_is_owner() {
@@ -2149,6 +2158,144 @@ else
     else
         record "slide-pane-delete-undo" "failed" "slide-pane-delete-undo-proof.txt" \
             "The gated delete undo did not restore the calibrated three-slide state."
+    fi
+
+    # FreeP-only physical Animation Pane evidence. The app receives an explicit
+    # harness seed so this route starts with one real shape animation while all
+    # pane state changes below are driven through the ribbon and X11 pointer.
+    focus_app
+    click_pointer 1 "$slide_thumbnail_x" "$slide_thumbnail_y"
+    send_active_key Escape || true
+    geometry="$(xdotool getwindowgeometry --shell "$window_id" 2>/dev/null || true)"
+    eval "$geometry"
+    pane_width=250
+    # scrot -o captures the focused window, so image crops use window-local
+    # coordinates while xdotool input continues to use root-screen coordinates.
+    pane_top_offset=174
+    pane_bottom_offset=67
+    pane_top=$pane_top_offset
+    pane_height=$(( HEIGHT - pane_top_offset - pane_bottom_offset ))
+    pane_geometry="${pane_width}x${pane_height}+$((WIDTH - pane_width))+$pane_top_offset"
+    # Target the order/name portion of the row rather than its trigger ComboBox;
+    # this keeps the pane's row-selection handler as the pointer target.
+    pane_row_x=$(( X + WIDTH - pane_width + 55 ))
+    # scrot -o retains the full X11 root-screen coordinates (the screenshots are
+    # 1280x820), while xdotool also expects root-screen coordinates. The pane's
+    # row therefore uses its calibrated screenshot position directly; adding the
+    # decorated window Y would place the click 38px below the rendered row.
+    pane_row_y=$(( pane_top_offset + 58 ))
+    # Click the collapsed group's padded upper-left interior. Its child icon/text
+    # surfaces can consume pointer presses without bubbling to the Button.
+    pane_group_x=$(( X + WIDTH - 120 ))
+    pane_group_y=$(( Y + 90 ))
+    pane_menu_x=$(( X + WIDTH - 95 ))
+    # The one-item flyout is rendered below the 76px collapsed group. scrot's
+    # focused-window image starts at app-local zero, so its visible center is
+    # the app-relative offset 150 (root-screen Y + 150 for xdotool here).
+    pane_menu_y=$(( Y + 150 ))
+    pane_header_geometry="${pane_width}x34+$((WIDTH - pane_width))+$pane_top_offset"
+    pane_row_geometry="${pane_width}x54+$((WIDTH - pane_width))+$((pane_top_offset + 34))"
+    {
+        printf 'window-geometry=%s\n' "$geometry"
+        printf 'pane-geometry=%s\n' "$pane_geometry"
+        printf 'pane-row-point=%s,%s\n' "$pane_row_x" "$pane_row_y"
+        printf 'pane-group-point=%s,%s\n' "$pane_group_x" "$pane_group_y"
+        printf 'pane-menu-point=%s,%s\n' "$pane_menu_x" "$pane_menu_y"
+        printf 'pane-header-geometry=%s\n' "$pane_header_geometry"
+        printf 'pane-row-geometry=%s\n' "$pane_row_geometry"
+        printf 'seed=FREEP_PHYSICAL_ANIMATION_PANE_SEED=1\n'
+        printf 'open-route=physical pointer click on collapsed Advanced Animation group then flyout item\n'
+        printf 'interaction=pointer row selection plus ribbon close/reopen\n'
+    } > "$output/animation-pane-calibration.txt"
+
+    capture "animation-pane-before.png"
+    capture_region "animation-pane-before.png" "animation-pane-before-region.png" "$pane_geometry"
+    click_pointer 1 "$pane_group_x" "$pane_group_y"
+    capture "animation-pane-command-menu-open.png"
+    click_pointer 1 "$pane_menu_x" "$pane_menu_y"
+    capture "animation-pane-open.png"
+    capture_region "animation-pane-open.png" "animation-pane-open-region.png" "$pane_geometry"
+    pane_opened=false
+    pane_header_pixels="$(image_color_count "$output/animation-pane-open.png" "$pane_header_geometry" '#B7472A')"
+    if (( pane_header_pixels >= 500 )); then
+        pane_opened=true
+    fi
+    pane_row_visible=false
+    pane_row_pixels="$(image_color_count "$output/animation-pane-open.png" "$pane_row_geometry" '#FAFAFA')"
+    if (( pane_row_pixels >= 500 )); then
+        pane_row_visible=true
+    fi
+
+    click_pointer 1 "$pane_row_x" "$pane_row_y"
+    capture "animation-pane-row-selected.png"
+    capture_region "animation-pane-row-selected.png" "animation-pane-row-selected-region.png" "$pane_geometry"
+    row_selected=false
+    selected_row_pixels="$(image_color_count "$output/animation-pane-row-selected.png" "$pane_row_geometry" '#FFE0D6')"
+    if (( selected_row_pixels >= 500 )); then
+        row_selected=true
+    fi
+
+    click_pointer 1 "$pane_group_x" "$pane_group_y"
+    click_pointer 1 "$pane_menu_x" "$pane_menu_y"
+    capture "animation-pane-closed.png"
+    capture_region "animation-pane-closed.png" "animation-pane-closed-region.png" "$pane_geometry"
+    pane_closed=false
+    closed_header_pixels="$(image_color_count "$output/animation-pane-closed.png" "$pane_header_geometry" '#B7472A')"
+    closed_row_pixels="$(image_color_count "$output/animation-pane-closed.png" "$pane_row_geometry" '#FFE0D6')"
+    if (( closed_header_pixels == 0 && closed_row_pixels == 0 )); then
+        pane_closed=true
+    fi
+
+    click_pointer 1 "$pane_group_x" "$pane_group_y"
+    click_pointer 1 "$pane_menu_x" "$pane_menu_y"
+    capture "animation-pane-reopened.png"
+    capture_region "animation-pane-reopened.png" "animation-pane-reopened-region.png" "$pane_geometry"
+    pane_reopened=false
+    reopened_header_pixels="$(image_color_count "$output/animation-pane-reopened.png" "$pane_header_geometry" '#B7472A')"
+    reopened_row_pixels="$(image_color_count "$output/animation-pane-reopened.png" "$pane_row_geometry" '#FAFAFA')"
+    reopened_selected_row_pixels="$(image_color_count "$output/animation-pane-reopened.png" "$pane_row_geometry" '#FFE0D6')"
+    if (( reopened_header_pixels >= 500 && (reopened_row_pixels >= 500 || reopened_selected_row_pixels >= 500) )); then
+        pane_reopened=true
+    fi
+    {
+        printf 'pane-opened=%s\n' "$pane_opened"
+        printf 'pane-row-visible=%s\n' "$pane_row_visible"
+        printf 'row-selected=%s\n' "$row_selected"
+        printf 'pane-closed=%s\n' "$pane_closed"
+        printf 'pane-reopened=%s\n' "$pane_reopened"
+        printf 'pane-header-pixels=%s\n' "$pane_header_pixels"
+        printf 'pane-row-pixels=%s\n' "$pane_row_pixels"
+        printf 'selected-row-pixels=%s\n' "$selected_row_pixels"
+        printf 'closed-header-pixels=%s\n' "$closed_header_pixels"
+        printf 'closed-selected-row-pixels=%s\n' "$closed_row_pixels"
+        printf 'reopened-header-pixels=%s\n' "$reopened_header_pixels"
+        printf 'reopened-row-pixels=%s\n' "$reopened_row_pixels"
+        printf 'reopened-selected-row-pixels=%s\n' "$reopened_selected_row_pixels"
+        printf 'before-region=animation-pane-before-region.png\n'
+        printf 'open-region=animation-pane-open-region.png\n'
+        printf 'row-selected-region=animation-pane-row-selected-region.png\n'
+        printf 'closed-region=animation-pane-closed-region.png\n'
+        printf 'reopened-region=animation-pane-reopened-region.png\n'
+        printf 'observable-physical-workflow=%s\n' "$($pane_opened && $pane_row_visible && $row_selected && $pane_closed && $pane_reopened && echo true || echo false)"
+    } > "$output/animation-pane-physical-workflow-proof.txt"
+    if $pane_opened && $pane_row_visible && $row_selected && $pane_closed && $pane_reopened; then
+        record_evidence_set "animation-pane-physical-workflow" "passed" \
+            "The seeded real FreeP animation pane opened through physical clicks on the collapsed Advanced Animation group and its flyout item, exposed its animation row, changed semantic selection pixels after a physical row click, then closed and reopened through the same route with the row still visible." \
+            "animation-pane-calibration.txt" "animation-pane-physical-workflow-proof.txt" \
+            "animation-pane-command-menu-open.png" \
+            "animation-pane-before.png" "animation-pane-open.png" "animation-pane-row-selected.png" \
+            "animation-pane-closed.png" "animation-pane-reopened.png" \
+            "animation-pane-open-region.png" "animation-pane-row-selected-region.png" \
+            "animation-pane-closed-region.png" "animation-pane-reopened-region.png"
+    else
+        record_evidence_set "animation-pane-physical-workflow" "failed" \
+            "The FreeP physical Animation Pane route did not prove open, visible seeded row, selection, close, and reopen postconditions." \
+            "animation-pane-calibration.txt" "animation-pane-physical-workflow-proof.txt" \
+            "animation-pane-command-menu-open.png" \
+            "animation-pane-before.png" "animation-pane-open.png" "animation-pane-row-selected.png" \
+            "animation-pane-closed.png" "animation-pane-reopened.png" \
+            "animation-pane-open-region.png" "animation-pane-row-selected-region.png" \
+            "animation-pane-closed-region.png" "animation-pane-reopened-region.png"
     fi
 fi
 

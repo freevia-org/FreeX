@@ -162,6 +162,7 @@ function Assert-ManifestContract {
     } else {
         $requiredIds += @(
             "nested-keytip-prefix-deferral",
+            "animation-pane-physical-workflow",
             "slide-pane-new-slide-create",
             "slide-pane-new-slide-undo",
             "slide-pane-new-slide-redo",
@@ -183,7 +184,7 @@ function Assert-ManifestContract {
     if ($ids.Count -ne ($ids | Select-Object -Unique).Count) {
         throw "Manifest contains duplicate result IDs."
     }
-    $expectedResultCount = if ($App -eq "FreeP") { 23 } else { 37 }
+    $expectedResultCount = if ($App -eq "FreeP") { 24 } else { 37 }
     if ($results.Count -ne $expectedResultCount) {
         throw "$App family baseline must contain exactly $expectedResultCount result rows."
     }
@@ -253,6 +254,11 @@ try {
     )
     if (-not [string]::IsNullOrWhiteSpace($PublishDir)) {
         $startArguments += @("-PublishDir", $PublishDir)
+    }
+    if ($App -eq "FreeP") {
+        # This must be present on the application container, not only on the probe
+        # docker exec process, so the opt-in fixture hook can seed the live app.
+        $startArguments += @("-AppEnvironment", "FREEP_PHYSICAL_ANIMATION_PANE_SEED=1")
     }
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
@@ -355,6 +361,7 @@ try {
             )
         } else {
             $failureIds += @(
+                "animation-pane-physical-workflow",
                 "slide-pane-new-slide-create",
                 "slide-pane-new-slide-undo",
                 "slide-pane-new-slide-redo",

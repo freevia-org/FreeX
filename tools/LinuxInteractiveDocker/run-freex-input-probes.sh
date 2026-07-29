@@ -470,6 +470,168 @@ sheet_tab_right_nav_x() {
     printf '%d' "$((window_x + window_width - scrollbar_width - 12))"
 }
 
+pivot_pane_left() {
+    local pane_width="${FREEX_X11_PIVOT_PANE_WIDTH:-248}"
+    printf '%d' "$((window_x + window_width - pane_width))"
+}
+
+pivot_pane_top() {
+    # The task pane is docked beside the worksheet work area. The calibrated A1 cell
+    # starts one column-header pitch below that work-area edge.
+    printf '%d' "$((a1_y - cell_height))"
+}
+
+pivot_chip_x() {
+    printf '%d' "$(( $(pivot_pane_left) + ${FREEX_X11_PIVOT_CHIP_X_OFFSET:-96} ))"
+}
+
+pivot_bucket_chip_y() {
+    local bucket="$1"
+    local top="$(pivot_pane_top)"
+    local offset
+    # BuildPivotFieldPaneBody uses a fixed title/search preamble and then the
+    # Available, Filters, Columns, Rows, Values buckets in that order.
+    case "$bucket" in
+        filters) offset="${FREEX_X11_PIVOT_FILTERS_Y_OFFSET:-168}" ;;
+        rows) offset="${FREEX_X11_PIVOT_ROWS_Y_OFFSET:-288}" ;;
+        *) return 1 ;;
+    esac
+    printf '%d' "$((top + offset))"
+}
+
+pivot_layout_signature() {
+    python3 - "$document_path" <<'PY'
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+
+path = sys.argv[1]
+namespace = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+try:
+    with zipfile.ZipFile(path) as package:
+        root = ET.fromstring(package.read("xl/pivotTables/pivotTable1.xml"))
+except (OSError, KeyError, ET.ParseError):
+    raise SystemExit(1)
+
+def values(parent_name, attribute):
+    parent = root.find(namespace + parent_name)
+    if parent is None:
+        return ""
+    return ",".join(
+        child.attrib[attribute]
+        for child in list(parent)
+        if attribute in child.attrib
+    )
+
+print(f"rows={values('rowFields', 'x')}")
+print(f"pages={values('pageFields', 'fld')}")
+print(f"values={values('dataFields', 'fld')}")
+PY
+}
+
+wait_for_document_hash_change() {
+    local before="$1" current=""
+    for _ in $(seq 1 20); do
+        current="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}')"
+        if [[ -n "$before" && -n "$current" && "$current" != "$before" ]]; then
+            printf '%s' "$current"
+            return 0
+        fi
+        sleep 0.25
+    done
+    printf '%s' "$current"
+    return 1
+}
+
+drag_pivot_chip() {
+    local source_bucket="$1" target_bucket="$2" source_index="${3:-0}" target_index="${4:-0}" target_y
+    local source_x="$(pivot_chip_x)" source_y="$(pivot_bucket_chip_y "$source_bucket")"
+    source_y=$((source_y + source_index * 27))
+    target_y="$(pivot_bucket_chip_y "$target_bucket")"
+    target_y=$((target_y + target_index * 27 - 22))
+    focus_app
+    xdotool_mousemove_sync "$source_x" "$source_y"
+    xdotool mousedown 1
+    sleep 0.25
+    xdotool_mousemove_sync "$((source_x + 12))" "$((target_y - 18))"
+    sleep 0.25
+    xdotool_mousemove_sync "$((source_x + 12))" "$target_y"
+    sleep "$settle_seconds"
+    xdotool mouseup 1
+    sleep "$settle_seconds"
+}
+
+probe_pivot_field_list() {
+    local pivot_x pivot_y pane_left pane_top before_hash after_hash before_layout after_layout
+    local cross_passed=false reorder_passed=false
+    local artifacts="pivot-field-list-before.png;pivot-field-list-cross-bucket.png;pivot-field-list-reorder.png;pivot-field-list-postcondition.txt"
+
+    pivot_x="$(cell_center_x 4)"
+    pivot_y="$(cell_center_y 0)"
+    pane_left="$(pivot_pane_left)"
+    pane_top="$(pivot_pane_top)"
+    focus_app
+    xdotool_mousemove_sync "$pivot_x" "$pivot_y" click 1
+    sleep "$dialog_settle_seconds"
+    capture "pivot-field-list-before.png"
+    before_layout="$(pivot_layout_signature || true)"
+    before_hash="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}' || true)"
+
+    # Category (source field 1) starts in Filters. Moving it into Rows is a real
+    # cross-bucket, positional insertion before the existing Region (source 0).
+    drag_pivot_chip filters rows 0 0
+    send_key ctrl+s
+    after_hash="$(wait_for_document_hash_change "$before_hash" || true)"
+    capture "pivot-field-list-cross-bucket.png"
+    after_layout="$(pivot_layout_signature || true)"
+    if [[ "$after_layout" == *"rows=1,0"* && "$after_layout" == *"pages="* && "$after_layout" == *"values=2"* ]]; then
+        cross_passed=true
+    fi
+    write_artifact "pivot-field-list-cross-postcondition.txt" \
+        "before=$before_layout\nafter=$after_layout\npane-left=$pane_left\npane-top=$pane_top\nsource=filters\ntarget=rows\n"
+    if $cross_passed; then
+        record "pivot-field-drag-cross-bucket-physical" "passed" \
+            "pivot-field-list-before.png; pivot-field-list-cross-bucket.png; $after_layout" \
+            "Category was physically dragged from Filters into the Rows bucket before Region and the saved PivotTable package now reports row fields 1,0 with no page field." \
+            "pivot-field-list-before.png;pivot-field-list-cross-bucket.png;pivot-field-list-cross-postcondition.txt"
+    else
+        record "pivot-field-drag-cross-bucket-physical" "failed" \
+            "pivot-field-list-before.png; pivot-field-list-cross-bucket.png; pivot-field-list-cross-postcondition.txt" \
+            "The physical Filters-to-Rows drag did not produce the expected persisted PivotTable layout: $after_layout" \
+            "pivot-field-list-before.png;pivot-field-list-cross-bucket.png;pivot-field-list-cross-postcondition.txt"
+    fi
+
+    if $cross_passed; then
+        before_hash="$after_hash"
+        # Category is now the first Rows item. Dropping it below Region proves
+        # same-bucket reorder and positional insertion rather than mere transfer.
+        drag_pivot_chip rows rows 0 2
+        send_key ctrl+s
+        after_hash="$(wait_for_document_hash_change "$before_hash" || true)"
+        capture "pivot-field-list-reorder.png"
+        after_layout="$(pivot_layout_signature || true)"
+        if [[ "$after_layout" == *"rows=0,1"* && "$after_layout" == *"pages="* && "$after_layout" == *"values=2"* ]]; then
+            reorder_passed=true
+        fi
+        write_artifact "pivot-field-list-postcondition.txt" \
+            "cross-layout=rows=1,0;pages=;values=2\nreordered-layout=$after_layout\npane-left=$pane_left\npane-top=$pane_top\nsource=rows[0]\ntarget=rows[2]\n"
+    else
+        write_artifact "pivot-field-list-postcondition.txt" \
+            "cross-layout=$after_layout\nreordered-layout=not-run\npane-left=$pane_left\npane-top=$pane_top\n"
+    fi
+    if $reorder_passed; then
+        record "pivot-field-drag-same-bucket-reorder-physical" "passed" \
+            "pivot-field-list-cross-bucket.png; pivot-field-list-reorder.png; $after_layout" \
+            "Category was physically dragged within Rows below Region and the saved PivotTable package reports row fields 0,1 while preserving Values." \
+            "pivot-field-list-cross-bucket.png;pivot-field-list-reorder.png;pivot-field-list-postcondition.txt"
+    else
+        record "pivot-field-drag-same-bucket-reorder-physical" "failed" \
+            "pivot-field-list-cross-bucket.png; pivot-field-list-reorder.png; pivot-field-list-postcondition.txt" \
+            "The physical Rows reorder did not produce the expected persisted layout: $after_layout" \
+            "pivot-field-list-cross-bucket.png;pivot-field-list-reorder.png;pivot-field-list-postcondition.txt"
+    fi
+}
+
 sheet_tab_center_x() {
     local index="$1"
     if (( index == 0 )); then
@@ -1104,6 +1266,20 @@ if [[ "$probe_selector" == "sheet-tabs" ]]; then
     probe_sheet_tabs
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused sheet-tab probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "pivot-field-list" ]]; then
+    # Focused iteration mode for the deterministic PivotTable workbook supplied by
+    # the host runner. This lane intentionally does not mutate the CSV/default probes.
+    probe_pivot_field_list
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused PivotTable field-list probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then

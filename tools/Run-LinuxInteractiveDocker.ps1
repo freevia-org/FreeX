@@ -44,6 +44,7 @@ param(
     [string]$Image = "freex-linux-interactive:ubuntu24.04",
     [string]$DocumentPath = "",
     [string[]]$AppArgument = @(),
+    [string[]]$AppEnvironment = @(),
     [switch]$CupsDryRun,
     [ValidateSet("success", "failure")]
     [string]$CupsDryRunMode = "success",
@@ -414,6 +415,13 @@ $appArgumentsBase64 = if ($AppArgument.Count -eq 0) {
 } else {
     [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($AppArgument -join "`n")))
 }
+$appEnvironmentArguments = @()
+foreach ($environmentEntry in $AppEnvironment) {
+    if ([string]::IsNullOrWhiteSpace($environmentEntry) -or $environmentEntry -notmatch '=') {
+        throw "AppEnvironment entries must be non-empty NAME=VALUE pairs."
+    }
+    $appEnvironmentArguments += @("--env", $environmentEntry)
+}
 
 Write-Host "Starting interactive Linux container '$containerName'..."
 $dockerRunArguments = @(
@@ -436,9 +444,8 @@ $dockerRunArguments = @(
     "--env", "SCREEN_HEIGHT=$Height",
     "--env", "SCREEN_DPI=$Dpi",
     "--mount", $sessionMount,
-    "--mount", $documentsMount,
-    $appImage
-)
+    "--mount", $documentsMount
+) + $appEnvironmentArguments + @($appImage)
 if ($CupsDryRun) {
     $dockerRunArguments = @($dockerRunArguments[0..($dockerRunArguments.Count - 2)]) + @(
         "--env", "FREEX_CUPS_DRY_RUN=1",

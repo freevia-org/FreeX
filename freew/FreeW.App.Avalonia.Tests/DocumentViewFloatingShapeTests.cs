@@ -431,6 +431,44 @@ public sealed class DocumentViewFloatingShapeTests
     }
 
     [Fact]
+    public async Task Selected_floating_text_box_text_direction_uses_shared_undo_command()
+    {
+        ShapeTextDirection? afterRotate = null;
+        ShapeTextDirection? afterUndo = null;
+        ShapeTextDirection? afterRedo = null;
+        bool commandApplied = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(
+                ShapeKind.TextBox,
+                ImageWrapping.InFront,
+                hOffsetPt: 0,
+                vOffsetPt: 0,
+                fillColorHex: "#FFFFFF",
+                text: "Rotate me");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            view.SelectFloating(0, 1);
+
+            view.SetSelectedShapeTextDirection(ShapeTextDirection.Rotate90);
+            afterRotate = view.SelectedFloatingShape()?.TextDirection;
+            view.Undo();
+            afterUndo = view.SelectedFloatingShape()?.TextDirection;
+            view.Redo();
+            afterRedo = view.SelectedFloatingShape()?.TextDirection;
+            commandApplied = afterRotate == ShapeTextDirection.Rotate90;
+        });
+
+        if (!ran) return;
+        commandApplied.Should().BeTrue();
+        afterRotate.Should().Be(ShapeTextDirection.Rotate90);
+        afterUndo.Should().Be(ShapeTextDirection.Horizontal);
+        afterRedo.Should().Be(ShapeTextDirection.Rotate90);
+    }
+
+    [Fact]
     public async Task Multiple_floating_shapes_are_all_collected()
     {
         int count = 0;

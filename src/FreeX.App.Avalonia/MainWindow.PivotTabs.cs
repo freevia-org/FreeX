@@ -26,9 +26,12 @@ public sealed partial class MainWindow
     /// viewport refresh, which reevaluates pivot context whenever selection/navigation changes.
     /// </summary>
     private void RefreshPivotContextualTab()
-        => _ribbonContextSource.OnPivotActive(
+    {
+        RefreshPivotFieldPane();
+        _ribbonContextSource.OnPivotActive(
             _selectedDrawingObjectKind is null &&
             PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell) is not null);
+    }
 
     /// <summary>
     /// When true the user has explicitly closed the PivotTable field pane via the Analyze ▸ Field List

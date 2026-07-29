@@ -1447,6 +1447,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.shape-edit-shape", new ActionRibbonCommand(() => editor.Focus()));
         r.Register("freew.shape-convert-freeform", new ActionRibbonCommand(editor.ConvertSelectedShapeToFreeform));
         r.Register("freew.shape-edit-points", new ActionRibbonCommand(editor.BeginShapeEditPoints));
+        r.Register("freew.shape-text-horizontal", new ShapeTextDirectionCommand(editor, ShapeTextDirection.Horizontal));
+        r.Register("freew.shape-text-rotate90", new ShapeTextDirectionCommand(editor, ShapeTextDirection.Rotate90));
+        r.Register("freew.shape-text-rotate270", new ShapeTextDirectionCommand(editor, ShapeTextDirection.Rotate270));
         r.Register("freew.shape-align-left", new FloatingObjectParagraphAlignCommand(editor, "Shape", TextAlignment.Left));
         r.Register("freew.shape-align-center", new FloatingObjectParagraphAlignCommand(editor, "Shape", TextAlignment.Center));
         r.Register("freew.shape-align-right", new FloatingObjectParagraphAlignCommand(editor, "Shape", TextAlignment.Right));
@@ -1963,6 +1966,20 @@ internal static class FreeWAvaloniaRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: editor.IsGroupSelected);
+    }
+
+    private sealed class ShapeTextDirectionCommand(
+        DocumentView editor,
+        ShapeTextDirection direction) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled)
+                editor.SetSelectedShapeTextDirection(direction);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedFloatingShape() is { HasText: true });
     }
 
     private static void RegisterShapeFillOutlineCommands(RibbonCommandRegistry r, DocumentView editor)

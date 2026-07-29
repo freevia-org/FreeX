@@ -77,24 +77,29 @@ public sealed class PictureDrawingContextualTabTests
     }
 
     private static (TextDocument Doc, int BlockIdx, int RunIdx) DocWithFloatingShape(
-        ShapeKind kind = ShapeKind.Rectangle)
+        ShapeKind kind = ShapeKind.Rectangle,
+        string? text = null)
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         var para = new Paragraph();
         para.Runs.Add(new Run("Body text.", RunFormatting.Default));
-        para.Runs.Add(new Run(string.Empty, RunFormatting.Default)
+        var shape = new Shape
         {
-            Shape = new Shape
+            Kind = kind, WidthPt = 120, HeightPt = 80, FillColorHex = "#FF0000",
+            Placement = new FloatingPlacement
             {
-                Kind = kind, WidthPt = 120, HeightPt = 80, FillColorHex = "#FF0000",
-                Placement = new FloatingPlacement
-                {
-                    Wrapping = ImageWrapping.Square,
-                    HorizontalOffsetPt = 36, VerticalOffsetPt = 36, ZOrderIndex = 1,
-                },
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 36, VerticalOffsetPt = 36, ZOrderIndex = 1,
             },
-        });
+        };
+        if (text is not null)
+        {
+            var textParagraph = new Paragraph();
+            textParagraph.Runs.Add(new Run(text));
+            shape.TextParagraphs.Add(textParagraph);
+        }
+        para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Shape = shape });
         doc.Blocks.Add(para);
         return (doc, 0, 1);
     }
@@ -539,6 +544,36 @@ public sealed class PictureDrawingContextualTabTests
         image.Should().BeFalse("picture selections use the Picture Format tab, not shape fill/outline");
         shape.Should().BeTrue("plain shapes can be formatted");
         textBox.Should().BeTrue("text boxes share Word's Drawing Format fill/outline commands");
+    }
+
+    [Fact]
+    public async Task ShapeTextDirectionCommands_are_enabled_for_text_boxes_and_mutate_the_shared_model()
+    {
+        ShapeTextDirection? direction = null;
+        bool? plainShapeEnabled = null;
+        var ran = await OnUi(() =>
+        {
+            var view = new DocumentView();
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+            var (plainDoc, plainBlock, plainRun) = DocWithFloatingShape();
+            view.LoadDocument(plainDoc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(plainBlock, plainRun);
+            plainShapeEnabled = CommandIsEnabled(registry, "freew.shape-text-rotate90");
+
+            var (textDoc, textBlock, textRun) = DocWithFloatingShape(ShapeKind.TextBox, "Rotate me");
+            view.LoadDocument(textDoc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(textBlock, textRun);
+            CommandIsEnabled(registry, "freew.shape-text-rotate90").Should().BeTrue();
+            ExecuteCommand(registry, "freew.shape-text-rotate90");
+            direction = view.SelectedFloatingShape()?.TextDirection;
+        });
+        if (!ran) return;
+
+        plainShapeEnabled.Should().BeFalse("text direction is only available for text-box shapes");
+        direction.Should().Be(ShapeTextDirection.Rotate90);
     }
 
     [Fact]

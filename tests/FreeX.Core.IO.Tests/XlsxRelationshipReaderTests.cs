@@ -92,6 +92,60 @@ public sealed class XlsxRelationshipReaderTests
     }
 
     [Fact]
+    public void ReadTargets_KeepsPackageRootTargetsInternalAcrossPlatforms()
+    {
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsXml = new XDocument(new XElement(
+            relationshipNs + "Relationships",
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdRoot"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"),
+                new XAttribute("Target", "/xl/worksheets/sheet1.xml")),
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdRelative"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition"),
+                new XAttribute("Target", "pivotCache/pivotCacheDefinition1.xml")),
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdHttp"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"),
+                new XAttribute("Target", "https://example.com/workbook.xlsx")),
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdMailto"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"),
+                new XAttribute("Target", "mailto:support@example.com")),
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdFile"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"),
+                new XAttribute("Target", "file:///C:/Temp/workbook.xlsx")),
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdExplicitExternal"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"),
+                new XAttribute("Target", "/xl/external.xlsx"),
+                new XAttribute("TargetMode", "External")),
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdUnc"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"),
+                new XAttribute("Target", "//host/share/workbook.xlsx"))));
+
+        var targets = XlsxRelationshipReader.ReadTargets(
+            relationshipsXml,
+            relationshipNs,
+            target => XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", target));
+
+        targets.Should().HaveCount(2);
+        targets.Should().ContainKey("rIdRoot").WhoseValue.Should().Be("xl/worksheets/sheet1.xml");
+        targets.Should().ContainKey("rIdRelative").WhoseValue.Should().Be("xl/pivotCache/pivotCacheDefinition1.xml");
+        targets.Keys.Should().NotContain(new[] { "rIdHttp", "rIdMailto", "rIdFile", "rIdExplicitExternal", "rIdUnc" });
+    }
+
+    [Fact]
     public void ReadTargets_IgnoresDuplicateRelationshipIdsWhenBuildingInternalPartMap()
     {
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
