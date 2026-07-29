@@ -742,6 +742,10 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("_editor.SetShapeName(");
         source.Should().Contain("Key.Enter");
         source.Should().Contain("rename.LostFocus");
+        source.Should().Contain("PresentationSelectionPaneItemPlan.RenameToolTipText");
+        source.Should().Contain("item.VisibilityToolTipText");
+        source.Should().Contain("PresentationSelectionPaneItemPlan.MoveUpToolTipText");
+        source.Should().Contain("PresentationSelectionPaneItemPlan.MoveDownToolTipText");
         source.Should().Contain("_editor.MoveSelectedShapeInReadingOrder(");
         source.Should().Contain("item.CanMoveUp");
         source.Should().Contain("item.CanMoveDown");
@@ -1061,6 +1065,24 @@ public sealed class MainWindowHeadlessTests
         after.Should().Be(before + 1);
         currentSlideIndex.Should().Be(1, "the shared bottom affordance action inserts after and selects the current slide");
         paneItemsAfter.Should().Be(after, "the slide pane should refresh to include the newly inserted slide");
+    }
+
+    [Fact]
+    public async Task SelectionPane_rename_control_uses_shared_accessibility_tooltip()
+    {
+        string?[] renameToolTips = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertTextBox("Selection target");
+            window.ShowSelectionPane();
+            renameToolTips = window.SelectionPaneRenameToolTipsForTests.ToArray();
+        });
+
+        if (!ran) return;
+        renameToolTips.Should().NotBeEmpty()
+            .And.OnlyContain(toolTip => toolTip == PresentationSelectionPaneItemPlan.RenameToolTipText);
     }
 
     [Fact]
