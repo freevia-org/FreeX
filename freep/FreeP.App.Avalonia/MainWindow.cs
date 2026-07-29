@@ -618,6 +618,7 @@ public sealed partial class MainWindow : Window
     internal string PaneAccessibilitySnapshotSerializationForTests =>
         _paneAccessibility.SerializeSnapshot();
     internal TextBox NotesPaneForAccessibilityTests => _notesBox;
+    internal ListBox SlidePaneForAccessibilityTests => _slidePaneList;
     internal Border CommentsPaneForAccessibilityTests => _reviewCommentsPaneHost;
     internal IReadOnlyList<Control> CommentsPaneItemsForAccessibilityTests =>
         _reviewCommentsPanePanel is null
@@ -628,6 +629,7 @@ public sealed partial class MainWindow : Window
                     ?.StartsWith("FreePCommentsPaneItem", StringComparison.Ordinal) == true)
                 .ToArray();
     internal SelectionPane SelectionPaneForAccessibilityTests => _selectionPane;
+    internal Border AnimationPaneForAccessibilityTests => _animationPaneHost;
     internal IReadOnlyList<Control> SelectionPaneItemsForAccessibilityTests =>
         _selectionPane?.AccessibilityItemsForTests ?? Array.Empty<Control>();
     internal IReadOnlyList<Control> AnimationPaneItemsForAccessibilityTests =>
