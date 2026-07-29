@@ -763,7 +763,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_paste_special_unicode_text_menu_item=true");
         script.Should().Contain("native_paste_special_picture_menu_item=true");
         script.Should().Contain("native_paste_special_linked_picture_menu_item=true");
-        script.Should().Contain("AddStyledCellBorderOverlay(content, style, borderNeighbors);");
+        script.Should().Contain("AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor);");
         script.Should().Contain("DrawingObjectRenderPlanner.Plan(viewport)");
         script.Should().Contain("CreateSelectableDrawingObjectVisual(renderPlan, width, height)");
         script.Should().Contain("AutomationProperties.SetItemStatus(container, selected ? `\"Selected`\" : `\"Not selected`\")");
@@ -2357,7 +2357,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme);
                     CreateDrawingImageSourceRect(crop);
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
-                    AddStyledCellBorderOverlay(content, style, borderNeighbors);
+                    AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor);
                     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
                     _newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
                     ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);

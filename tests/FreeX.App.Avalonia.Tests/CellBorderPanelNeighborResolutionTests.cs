@@ -55,7 +55,7 @@ public sealed class CellBorderPanelNeighborResolutionTests
                 "only the resolved winner edge should be drawn -- not the panel's own weaker style and not two overlapping lines");
 
             var line = lines[0];
-            line.StrokeThickness.Should().BeApproximately(2.5, 0.001,
+            line.StrokeThickness.Should().BeApproximately(3, 0.001,
                 "the resolved edge must use the neighbor's heavier Thick thickness, not this cell's own Thin thickness");
             var stroke = line.Stroke.Should().BeOfType<SolidColorBrush>().Subject;
             stroke.Color.Should().Be(Color.FromRgb(0xFF, 0, 0),
@@ -81,7 +81,7 @@ public sealed class CellBorderPanelNeighborResolutionTests
             lines.Should().HaveCount(1);
 
             var line = lines[0];
-            line.StrokeThickness.Should().BeApproximately(0.5, 0.001,
+            line.StrokeThickness.Should().BeApproximately(1, 0.001,
                 "with no neighbor border, this cell's own Thin thickness must be unaffected");
             var stroke = line.Stroke.Should().BeOfType<SolidColorBrush>().Subject;
             stroke.Color.Should().Be(Colors.Black);
@@ -105,7 +105,7 @@ public sealed class CellBorderPanelNeighborResolutionTests
 
             var lines = panel.Children.OfType<Line>().ToList();
             lines.Should().HaveCount(1);
-            lines[0].StrokeThickness.Should().BeApproximately(2.5, 0.001);
+            lines[0].StrokeThickness.Should().BeApproximately(3, 0.001);
             var stroke = lines[0].Stroke.Should().BeOfType<SolidColorBrush>().Subject;
             stroke.Color.Should().Be(Color.FromRgb(0xFF, 0, 0));
         }, CancellationToken.None);

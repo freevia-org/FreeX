@@ -16,11 +16,16 @@ namespace FreeX.App.UI.Tests;
 /// </summary>
 public sealed class BorderRenderTests
 {
-    private static void InvokeDrawBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2)
+    private static void InvokeDrawBorderEdge(
+        DrawingContext dc,
+        CellBorder border,
+        Point p1,
+        Point p2,
+        double effectivePixelsPerDip = 1.0)
     {
         var method = typeof(GridView).GetMethod("DrawBorderEdge", BindingFlags.NonPublic | BindingFlags.Static);
         method.Should().NotBeNull();
-        method!.Invoke(null, [dc, border, p1, p2, null, null]);
+        method!.Invoke(null, [dc, border, p1, p2, null, null, effectivePixelsPerDip]);
     }
 
     private static RenderTargetBitmap RenderLineToBitmap(CellBorder border, Point p1, Point p2, int dpi)
@@ -28,7 +33,7 @@ public sealed class BorderRenderTests
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            InvokeDrawBorderEdge(dc, border, p1, p2);
+            InvokeDrawBorderEdge(dc, border, p1, p2, dpi / 96.0);
         }
 
         var scale = dpi / 96.0;
@@ -38,6 +43,21 @@ public sealed class BorderRenderTests
             dpi,
             dpi,
             PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        return bitmap;
+    }
+
+    private static RenderTargetBitmap RenderHorizontalLinesToBitmap(params double[] centers)
+    {
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            var border = new CellBorder(BorderStyle.Thin, CellColor.Black);
+            foreach (var y in centers)
+                InvokeDrawBorderEdge(dc, border, new Point(10, y), new Point(90, y));
+        }
+
+        var bitmap = new RenderTargetBitmap(100, 40, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(visual);
         return bitmap;
     }
@@ -53,6 +73,10 @@ public sealed class BorderRenderTests
         var alpha = pixels[3];
         return alpha > 10 && (red < 245 || green < 245 || blue < 245);
     }
+
+    private static int CountPaintedRowsNear(RenderTargetBitmap bitmap, int x, int centerY, int radius = 3) =>
+        Enumerable.Range(centerY - radius, radius * 2 + 1)
+            .Count(y => y >= 0 && y < bitmap.PixelHeight && IsPaintedPixel(bitmap, x, y));
 
     [Fact]
     public void DoubleBorder_RendersAsTwoParallelLinesWithGapBetweenThem()
@@ -104,6 +128,23 @@ public sealed class BorderRenderTests
             // (this is the pre-existing, still-correct behavior for every other border style).
             IsPaintedPixel(bitmap, x, centerY).Should().BeTrue(
                 "a Thin border should still paint a single unbroken line centered on the requested edge");
+        });
+    }
+
+    [Fact]
+    public void ThinBordersAtDifferentFractionalCenters_RenderSameDevicePixelThickness()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var bitmap = RenderHorizontalLinesToBitmap(10.0, 15.5);
+
+            var integerCenteredRows = CountPaintedRowsNear(bitmap, x: 50, centerY: 10);
+            var halfCenteredRows = CountPaintedRowsNear(bitmap, x: 50, centerY: 15);
+
+            integerCenteredRows.Should().Be(1,
+                "a Thin border on an integer DIP boundary should snap to one crisp device pixel");
+            halfCenteredRows.Should().Be(integerCenteredRows,
+                "identical Thin borders must not alternate between one and two painted pixel rows based on fractional position");
         });
     }
 
