@@ -386,17 +386,10 @@ function Get-OperatorChecklist {
 }
 
 $classification = Read-ToolJson -Path "docs\parity\functional-parity-classification.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-$conditionalRows = @($classification.rows | Where-Object {
-        $_.classification -eq "pseudo-command-gallery-item" -and
-        $_.tab -eq "Home" -and
-        $_.group -eq "Styles" -and
-        $_.nextAction -eq "Use the conditional-format popup/gallery parity lane for richer evidence instead of adding placeholder handlers."
-    } | Sort-Object -Property id)
-
-$expectedConditionalRows = [int]$classification.summary.'conditional-format-popup-gallery-row'
 $runtimeCatalogItems = [int]$classification.summary.'conditional-format-popup-catalog-item'
-if ($conditionalRows.Count -ne $expectedConditionalRows) {
-    throw "Conditional-format popup/gallery row count mismatch: summary says $expectedConditionalRows, found $($conditionalRows.Count)."
+$conditionalCommandIds = @($classification.catalogs.conditionalFormatPopupCommandIds | Sort-Object)
+if ($conditionalCommandIds.Count -ne $runtimeCatalogItems) {
+    throw "Conditional-format popup catalog count mismatch: summary says $runtimeCatalogItems, found $($conditionalCommandIds.Count)."
 }
 
 $captureTargets = @(
@@ -449,12 +442,12 @@ $blockerCategories = @($captureTargets |
     })
 $operatorChecklist = Get-OperatorChecklist -CaptureTargets $captureTargets
 
-$rows = foreach ($row in $conditionalRows) {
+$rows = foreach ($commandId in $conditionalCommandIds) {
     [ordered]@{
-        id = [string]$row.id
-        tab = [string]$row.tab
-        group = [string]$row.group
-        classification = [string]$row.classification
+        id = [string]$commandId
+        tab = "Home"
+        group = "Styles"
+        classification = "runtime-catalog-item"
         runtimeCatalogBacked = $true
         openedStateEvidenceStatus = $openedStateStatus
     }
@@ -465,7 +458,7 @@ $report = [ordered]@{
     generatedBy = "tools/Generate-ConditionalFormatOpenedStateEvidence.ps1"
     source = "docs/parity/functional-parity-classification.json"
     summary = [ordered]@{
-        conditionalFormatPopupGalleryRows = $conditionalRows.Count
+        conditionalFormatPopupGalleryRows = $conditionalCommandIds.Count
         conditionalFormatPopupCatalogItems = $runtimeCatalogItems
         captureTargets = $captureTargets.Count
         completeOpenedStateCaptureTargets = $completeOpenedStateTargets
@@ -568,7 +561,7 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $resolvedMarkdownP
 Set-Content -LiteralPath $resolvedJsonPath -Value $json -Encoding utf8 -NoNewline
 Set-Content -LiteralPath $resolvedMarkdownPath -Value $markdown -Encoding utf8 -NoNewline
 
-Write-Host "Conditional-format popup/gallery rows: $($conditionalRows.Count)"
+Write-Host "Conditional-format popup/gallery rows: $($conditionalCommandIds.Count)"
 Write-Host "Complete opened-state capture targets: $completeOpenedStateTargets/$($captureTargets.Count)"
 Write-Host "Wrote $(ConvertTo-ToolRepoRelativePath -Path $resolvedJsonPath -RepoRoot $repoRoot)"
 Write-Host "Wrote $(ConvertTo-ToolRepoRelativePath -Path $resolvedMarkdownPath -RepoRoot $repoRoot)"
