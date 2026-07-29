@@ -344,6 +344,31 @@ public sealed partial class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarPointMode_CrossSheetWholeRowAppend_PreservesSheetQualifier()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var targetSheet = harness.AddSheet("Revenue Data");
+
+            harness.SetFormulaEditCell(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("=");
+            harness.SetFormulaBarCaretIndex(1);
+            harness.ApplyFormulaRangeSelection(2, 2, extend: false).Should().BeTrue();
+            harness.FormulaBarText.Should().Be("=B2");
+
+            harness.SetCurrentSheetForFormulaPoint(targetSheet.Id);
+            harness.AddWholeRowFormulaReference(3);
+
+            harness.FormulaBarText.Should().Be("=B2,'Revenue Data'!3:3");
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(targetSheet.Id, 3, 1),
+                new CellAddress(targetSheet.Id, 3, CellAddress.MaxCol)));
+        });
+    }
+
+    [Fact]
     public void FormulaBarF2_TogglesFormulaBetweenCaretEditingAndPointSelection()
     {
         StaTestRunner.Run(() =>

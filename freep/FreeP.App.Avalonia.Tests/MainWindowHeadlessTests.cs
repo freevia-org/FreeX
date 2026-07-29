@@ -742,6 +742,10 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("_editor.SetShapeName(");
         source.Should().Contain("Key.Enter");
         source.Should().Contain("rename.LostFocus");
+        source.Should().Contain("PresentationSelectionPaneItemPlan.RenameToolTipText");
+        source.Should().Contain("item.VisibilityToolTipText");
+        source.Should().Contain("PresentationSelectionPaneItemPlan.MoveUpToolTipText");
+        source.Should().Contain("PresentationSelectionPaneItemPlan.MoveDownToolTipText");
         source.Should().Contain("_editor.MoveSelectedShapeInReadingOrder(");
         source.Should().Contain("item.CanMoveUp");
         source.Should().Contain("item.CanMoveDown");
@@ -1064,6 +1068,24 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SelectionPane_rename_control_uses_shared_accessibility_tooltip()
+    {
+        string?[] renameToolTips = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertTextBox("Selection target");
+            window.ShowSelectionPane();
+            renameToolTips = window.SelectionPaneRenameToolTipsForTests.ToArray();
+        });
+
+        if (!ran) return;
+        renameToolTips.Should().NotBeEmpty()
+            .And.OnlyContain(toolTip => toolTip == PresentationSelectionPaneItemPlan.RenameToolTipText);
+    }
+
+    [Fact]
     public async Task SlidePane_thumbnails_project_shared_visual_chrome_plan()
     {
         SlidePaneThumbnailVisualPlan? firstPlan = null;
@@ -1175,6 +1197,24 @@ public sealed class MainWindowHeadlessTests
         plan.ForegroundHex.Should().Be(SlidePanePlanner.DefaultSectionHeaderForegroundHex);
         plan.AccessibleName.Should().Be("Section Intro  (2), expanded");
         plan.ToolTipText.Should().Be("Collapse section");
+    }
+
+    [Fact]
+    public async Task SlidePane_section_headers_expose_wpf_equivalent_automation_names()
+    {
+        string?[] automationNames = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.AddSectionAtSlide(0, "Intro");
+            automationNames = window.SlidePaneSectionHeaderAutomationNamesForTests.ToArray();
+        });
+
+        if (!ran) return;
+        automationNames.Should().ContainSingle()
+            .Which.Should().Be("Section Intro  (2), expanded");
     }
 
     [Fact]
@@ -5738,6 +5778,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
                 SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
+                SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.StackedListLayoutCommandId,
                 SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,

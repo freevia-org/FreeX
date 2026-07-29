@@ -132,13 +132,19 @@ public sealed partial class MainWindow
     /// </summary>
     private void AddAdditionalRowSelection(uint row)
     {
+        var sheet = _session.ActiveSheet.Id;
+        var newRange = SelectionRangeService.GetWholeRows(
+            new GridRange(new CellAddress(sheet, row, 1), new CellAddress(sheet, row, 1)));
+        if (IsFormulaRangeEntryActiveForPointMode() &&
+            TryAppendDisjointFormulaPointRange(newRange))
+        {
+            return;
+        }
+
         if (!TryCommitPendingFormulaEdit())
             return;
 
         ClearSelectedDrawingObject();
-        var sheet = _session.ActiveSheet.Id;
-        var newRange = SelectionRangeService.GetWholeRows(
-            new GridRange(new CellAddress(sheet, row, 1), new CellAddress(sheet, row, 1)));
         var ranges = new List<GridRange>(_session.SelectedRanges) { newRange };
         _session.SelectRanges(newRange, ranges, newRange.Start);
         RefreshTableContextualTab();
@@ -172,13 +178,19 @@ public sealed partial class MainWindow
     /// </summary>
     private void AddAdditionalColumnSelection(uint col)
     {
+        var sheet = _session.ActiveSheet.Id;
+        var newRange = SelectionRangeService.GetWholeColumns(
+            new GridRange(new CellAddress(sheet, 1, col), new CellAddress(sheet, 1, col)));
+        if (IsFormulaRangeEntryActiveForPointMode() &&
+            TryAppendDisjointFormulaPointRange(newRange))
+        {
+            return;
+        }
+
         if (!TryCommitPendingFormulaEdit())
             return;
 
         ClearSelectedDrawingObject();
-        var sheet = _session.ActiveSheet.Id;
-        var newRange = SelectionRangeService.GetWholeColumns(
-            new GridRange(new CellAddress(sheet, 1, col), new CellAddress(sheet, 1, col)));
         var ranges = new List<GridRange>(_session.SelectedRanges) { newRange };
         _session.SelectRanges(newRange, ranges, newRange.Start);
         RefreshTableContextualTab();

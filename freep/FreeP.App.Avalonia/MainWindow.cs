@@ -377,10 +377,16 @@ public sealed partial class MainWindow : Window
     internal string? SlidePaneNewSlideButtonText => _slidePaneNewSlideButton.Content?.ToString();
     internal string? SlidePaneNewSlideButtonAutomationName => AutomationProperties.GetName(_slidePaneNewSlideButton);
     internal Button SlidePaneNewSlideButtonForTests => _slidePaneNewSlideButton;
+    internal IReadOnlyList<string?> SelectionPaneRenameToolTipsForTests => _selectionPane.RenameToolTipsForTests;
     internal bool IsShellShortcutTargetForTests(Control? focused) => IsShellShortcutTarget(focused);
     internal ListBoxItem? SelectedSlidePaneItemForTests => GetCurrentSlidePaneItem();
     internal IReadOnlyList<SlidePaneThumbnailVisualPlan> SlidePaneRenderedThumbnailPlans => _slidePaneRenderedThumbnailPlans;
     internal IReadOnlyList<SlidePaneSectionHeaderVisualPlan> SlidePaneRenderedSectionHeaderPlans => _slidePaneRenderedSectionHeaderPlans;
+    internal IReadOnlyList<string?> SlidePaneSectionHeaderAutomationNamesForTests => _slidePaneList.Items
+        .OfType<ListBoxItem>()
+        .Where(item => item.Tag is SlidePaneSectionHeaderTag)
+        .Select(AutomationProperties.GetName)
+        .ToArray();
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
     internal bool IsCloseDecisionPendingForTests => _closeCoordinator.IsClosePending;
@@ -2577,6 +2583,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBulletList)));
         r.Register(SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.HorizontalBulletList)));
+        r.Register(SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.HorizontalBlockList)));
         r.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicCycle)));
         r.Register(SmartArtAuthoringPlanner.ContinuousCycleLayoutCommandId,
@@ -7828,6 +7836,7 @@ public sealed partial class MainWindow : Window
             ContextMenu = BuildSlidePaneSectionContextMenu(entry),
         };
         ToolTip.SetTip(item, plan.ToolTipText);
+        AutomationProperties.SetName(item, plan.AccessibleName);
         WireContextMenuLifecycle(item);
         item.PointerEntered += (_, _) => headerChrome.Background = hoverBackground;
         item.PointerExited += (_, _) => headerChrome.Background = normalBackground;

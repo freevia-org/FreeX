@@ -87,7 +87,18 @@ public sealed record PresentationSelectionPaneItemPlan(
     bool IsSelected,
     int NestingDepth = 0,
     bool CanMoveUp = false,
-    bool CanMoveDown = false);
+    bool CanMoveDown = false)
+{
+    public string SelectToolTipText => $"Select {ShapeTypeLabel}";
+
+    public const string RenameToolTipText = "Rename object";
+
+    public string VisibilityToolTipText => IsHidden ? "Show object" : "Hide object";
+
+    public const string MoveUpToolTipText = "Move toward front";
+
+    public const string MoveDownToolTipText = "Move toward back";
+}
 
 public sealed record PresentationSelectionPanePlan(
     int SlideIndex,

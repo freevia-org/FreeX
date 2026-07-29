@@ -213,6 +213,26 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_CalibratesImportedMultiGradientArchUpWordArtLocally()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("Style: WordArtStyle.GradFillMulti");
+        source.Should().Contain("Warp: WordArtWarp.ArchUp");
+        source.Should().Contain("FontSizePt: > 33 and < 35");
+        source.Should().Contain("new Vector(0, -16)");
+        source.Should().Contain("? 0.74 : 1.0");
+    }
+
+    [Fact]
+    public void AvaloniaDocumentView_RegistersPageBorderStrokeInsideSerializedInset()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("var rect = pageRect.Deflate(new Thickness(inset + 1))");
+    }
+
+    [Fact]
     public void AvaloniaDocumentView_UsesWordArtFillAsFieldAndContrastingText()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));

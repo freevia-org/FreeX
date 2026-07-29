@@ -4221,7 +4221,7 @@ public sealed class SmartArtTests : IDisposable
         var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
         var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
 
-        liveShapes.Should().HaveCount(7, "four vertical-bullet-list boxes plus three connectors should render from shared live data");
+        liveShapes.Should().HaveCount(4, "four vertical-bullet-list bullet rows should render from shared live data");
         var renderedText = liveShapes
             .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .ToList();
@@ -4229,8 +4229,8 @@ public sealed class SmartArtTests : IDisposable
         renderedText.Should().Contain("Scope");
         renderedText.Should().Contain("Timeline");
         renderedText.Should().Contain("Risks");
-        liveShapes.Where(op => op.Text is null)
-            .Should().HaveCount(3, "WPF and Avalonia hosts consume shared connector DrawOps");
+        liveShapes.All(op => op.Text is not null)
+            .Should().BeTrue("vertical bullet lists are flat editable rows without hierarchy connectors");
     }
 
     [Fact]

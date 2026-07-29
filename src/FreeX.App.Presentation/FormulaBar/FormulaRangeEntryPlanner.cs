@@ -76,13 +76,11 @@ public static class FormulaRangeEntryPlanner
         out FormulaRangeEntryEdit edit,
         string? selectedSheetName = null)
     {
-        var cellReferenceText = SpreadsheetDisplayFormatter.FormatRangeReference(
-            selectedRange.Start,
-            selectedRange.End,
-            useR1C1ReferenceStyle);
-        var referenceText = selectedRange.Start.Sheet == formulaCell.Sheet || selectedSheetName is null
-            ? cellReferenceText
-            : $"{SheetNameFormatter.QuoteIfNeeded(selectedSheetName)}!{cellReferenceText}";
+        var referenceText = FormatRangeReference(
+            selectedRange,
+            formulaCell,
+            useR1C1ReferenceStyle,
+            selectedSheetName);
 
         return TryApplySelectionText(
             text,
@@ -92,6 +90,44 @@ public static class FormulaRangeEntryPlanner
             previousReferenceLength,
             referenceText,
             out edit);
+    }
+
+    public static bool TryAppendDisjointRangeSelection(
+        string text,
+        int? previousReferenceStart,
+        int? previousReferenceLength,
+        GridRange selectedRange,
+        CellAddress formulaCell,
+        bool useR1C1ReferenceStyle,
+        out FormulaRangeEntryEdit edit,
+        string? selectedSheetName = null)
+    {
+        var safeCaret = text.Length;
+        edit = new FormulaRangeEntryEdit(new ExcelTextEdit(text, safeCaret, 0), safeCaret, 0);
+
+        if (previousReferenceStart is not { } start ||
+            previousReferenceLength is not { } length ||
+            start < 0 ||
+            length < 0 ||
+            start + length > text.Length)
+        {
+            return false;
+        }
+
+        var referenceText = FormatRangeReference(
+            selectedRange,
+            formulaCell,
+            useR1C1ReferenceStyle,
+            selectedSheetName);
+        var insertAt = start + length;
+        var insertionText = "," + referenceText;
+        var updatedText = text.Insert(insertAt, insertionText);
+
+        edit = new FormulaRangeEntryEdit(
+            new ExcelTextEdit(updatedText, insertAt + insertionText.Length, 0),
+            insertAt + 1,
+            referenceText.Length);
+        return true;
     }
 
     public static bool TryApplySelectionText(
@@ -135,6 +171,51 @@ public static class FormulaRangeEntryPlanner
             selectionText.Length);
         return true;
     }
+
+    private static string FormatRangeReference(
+        GridRange selectedRange,
+        CellAddress formulaCell,
+        bool useR1C1ReferenceStyle,
+        string? selectedSheetName)
+    {
+        var shorthand = useR1C1ReferenceStyle
+            ? null
+            : FormatWholeRowOrColumnReferenceShorthand(selectedRange);
+        var cellReferenceText = shorthand
+                ?? SpreadsheetDisplayFormatter.FormatRangeReference(
+                    selectedRange.Start,
+                    selectedRange.End,
+                    useR1C1ReferenceStyle);
+        return selectedRange.Start.Sheet == formulaCell.Sheet || selectedSheetName is null
+            ? cellReferenceText
+            : $"{SheetNameFormatter.QuoteIfNeeded(selectedSheetName)}!{cellReferenceText}";
+    }
+
+    public static string? FormatWholeRowOrColumnReferenceShorthand(GridRange range)
+    {
+        var isWholeColumnBand = range.Start.Row == 1 && range.End.Row == CellAddress.MaxRow;
+        var isWholeRowBand = range.Start.Col == 1 && range.End.Col == CellAddress.MaxCol;
+
+        // A whole-sheet selection has no bare Excel shorthand; retain its full A1 extent.
+        if (isWholeColumnBand == isWholeRowBand)
+            return null;
+
+        if (isWholeColumnBand)
+        {
+            var firstColumn = FormatColumnReference(range.Start.Col);
+            var lastColumn = FormatColumnReference(range.End.Col);
+            return firstColumn == lastColumn
+                ? $"{firstColumn}:{firstColumn}"
+                : $"{firstColumn}:{lastColumn}";
+        }
+
+        return range.Start.Row == range.End.Row
+            ? $"{range.Start.Row}:{range.Start.Row}"
+            : $"{range.Start.Row}:{range.End.Row}";
+    }
+
+    private static string FormatColumnReference(uint column) =>
+        SpreadsheetDisplayFormatter.FormatColumnReference(column, useR1C1ReferenceStyle: false);
 
     private static CellAddress? GetHorizontalPageTarget(
         FormulaEditorKey key,

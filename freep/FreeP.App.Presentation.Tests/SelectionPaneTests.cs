@@ -29,6 +29,12 @@ public sealed class SelectionPaneTests
         plan.Items[1].CanMoveDown.Should().BeTrue();
         plan.Items[2].CanMoveUp.Should().BeTrue();
         plan.Items[2].CanMoveDown.Should().BeFalse();
+        plan.Items[0].SelectToolTipText.Should().Be("Select Shape");
+        plan.Items[0].VisibilityToolTipText.Should().Be("Hide object");
+        PresentationSelectionPaneItemPlan.RenameToolTipText.Should().Be("Rename object");
+        PresentationSelectionPaneItemPlan.MoveUpToolTipText.Should().Be("Move toward front");
+        PresentationSelectionPaneItemPlan.MoveDownToolTipText.Should().Be("Move toward back");
+        plan.Items[1].VisibilityToolTipText.Should().Be("Show object");
     }
 
     [Fact]

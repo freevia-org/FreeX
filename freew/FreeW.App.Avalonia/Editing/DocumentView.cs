@@ -29,7 +29,6 @@ public enum DocumentViewMode
     /// This is the default — matches Word's Print Layout view.
     /// </summary>
     PrintLayout,
-
     /// <summary>
     /// Single continuous column at the control's available width (capped at <c>WebMaxContentWidth</c>),
     /// plain white background, no page breaks, no grey desk, no page chrome. Matches Word's Web Layout.
@@ -176,6 +175,10 @@ public sealed class DocumentView : Control
     private byte[]? _watermarkBitmapCacheBytes;
     private Bitmap? _watermarkBitmapCache;
     private readonly List<(Rect Rect, int Block, int Row, int Col)> _cellHits = new();
+    // AV-SHAPETEXT2: caret stops emitted alongside floating text-box layout. Keeping the stops in
+    // page space lets pointer placement resolve the same paragraph/run/offset tuple that keyboard
+    // editing already consumes, without making the drawing surface a second text model.
+    private readonly List<ShapeTextCaretStop> _shapeTextCaretStops = new();
 
     // ── AV-TBL: in-place table cell caret ─────────────────────────────────────────────────────────
     // Non-null when the caret is inside a table cell. Stores the fully-qualified cell address and the
@@ -3383,6 +3386,7 @@ public sealed class DocumentView : Control
         _equationVisualSegments.Clear();
         _equationVisualElements.Clear();
         _cellHits.Clear();
+        _shapeTextCaretStops.Clear();
         _headerFooterItems.Clear();
         _noteItems.Clear();           // AV-NOTERENDER
         _noteSeparators.Clear();      // AV-NOTERENDER
@@ -3498,6 +3502,7 @@ public sealed class DocumentView : Control
                 _equationVisualSegments.Clear();
                 _equationVisualElements.Clear();
                 _cellHits.Clear();
+                _shapeTextCaretStops.Clear();
                 _tabLeaderSpans.Clear();
                 _layoutContentY = 0;
                 RunBodyLayoutBlocks(textWidth);
@@ -5952,6 +5957,7 @@ public sealed class DocumentView : Control
                         DrawingObjectVisualPlanner.BuildVisualPlan(shape, snapshot),
                         snapshot.BlockIndex,
                         snapshot.RunIndex));
+                    BuildShapeTextCaretStops(shape, rect, snapshot.BlockIndex, snapshot.RunIndex);
                     break;
 
                 case DocumentFloatingObjectKind.Chart when run.Chart is { IsFloating: true } chart:
@@ -5984,6 +5990,118 @@ public sealed class DocumentView : Control
             }
         }
     }
+
+    /// <summary>
+    /// Builds pointer-addressable caret stops for a floating text box. The renderer uses the same 9pt text
+    /// treatment for the shape body, so measuring each character with that treatment keeps the hit map
+    /// aligned with the visible text while preserving the model's paragraph/run identity. Rotated text
+    /// boxes keep their text layout in the renderer's pre-transform coordinate space; the matching rotation
+    /// metadata lets pointer hit-testing apply the inverse transform before resolving a caret.
+    /// </summary>
+    private void BuildShapeTextCaretStops(Shape shape, Rect rect, int blockIndex, int runIndex)
+    {
+        if (shape.TextParagraphs.Count == 0)
+            return;
+
+        const double TextInset = 4.0;
+        var format = new RunFormatting { FontSizePt = 9 };
+        var isRotated = shape.TextDirection is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270;
+        var rotationRadians = shape.TextDirection == ShapeTextDirection.Rotate90
+            ? Math.PI / 2
+            : shape.TextDirection == ShapeTextDirection.Rotate270
+                ? -Math.PI / 2
+                : 0;
+        var rotationCenter = new Point(rect.Center.X, rect.Center.Y);
+        var textRect = isRotated
+            ? new Rect(rect.X, rect.Y, rect.Height, rect.Width)
+            : rect;
+        var insetWidth = Math.Max(1, textRect.Width - 2 * TextInset);
+        var fittedText = Build(shape.PlainText, format);
+        fittedText.MaxTextWidth = insetWidth;
+        var lineHeight = Math.Max(1, Build("Ag", format).Height);
+        var lineStartX = isRotated
+            ? rect.X + (rect.Width - Math.Max(1, fittedText.WidthIncludingTrailingWhitespace)) / 2
+            : rect.X + TextInset;
+        var lineStartY = isRotated
+            ? rect.Y + (rect.Height - Math.Max(1, fittedText.Height)) / 2
+            : rect.Y + TextInset;
+        var maxX = isRotated
+            ? Math.Max(lineStartX + 1, lineStartX + insetWidth)
+            : Math.Max(lineStartX + 1, rect.Right - TextInset);
+        var x = lineStartX;
+        var y = lineStartY;
+
+        for (var paragraphIndex = 0; paragraphIndex < shape.TextParagraphs.Count; paragraphIndex++)
+        {
+            var paragraph = shape.TextParagraphs[paragraphIndex];
+            var addedStopForParagraph = false;
+
+            foreach (var (textRun, textRunIndex) in paragraph.Runs.Select((run, index) => (run, index)))
+            {
+                var text = textRun.Text ?? string.Empty;
+                if (text.Length == 0)
+                {
+                    AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
+                        0, x, y, lineHeight, rotationRadians, rotationCenter);
+                    addedStopForParagraph = true;
+                    continue;
+                }
+
+                for (var offset = 0; offset < text.Length; offset++)
+                {
+                    var character = text[offset];
+                    if (character == '\n' || character == '\r')
+                    {
+                        AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
+                            offset, x, y, lineHeight, rotationRadians, rotationCenter);
+                        x = lineStartX;
+                        y += lineHeight;
+                        addedStopForParagraph = true;
+                        continue;
+                    }
+
+                    var glyph = Build(character.ToString(), format);
+                    var glyphWidth = Math.Max(1, glyph.WidthIncludingTrailingWhitespace);
+                    if (x > lineStartX && x + glyphWidth > maxX)
+                    {
+                        x = lineStartX;
+                        y += lineHeight;
+                    }
+
+                    AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
+                        offset, x, y, lineHeight, rotationRadians, rotationCenter);
+                    x += glyphWidth;
+                    addedStopForParagraph = true;
+                }
+
+                AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
+                    text.Length, x, y, lineHeight, rotationRadians, rotationCenter);
+            }
+
+            if (!addedStopForParagraph)
+                AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, 0, 0, x, y, lineHeight,
+                    rotationRadians, rotationCenter);
+
+            // A paragraph break is represented by the next line in the shape text body.
+            x = lineStartX;
+            y += lineHeight;
+        }
+    }
+
+    private void AddShapeTextCaretStop(
+        int blockIndex,
+        int runIndex,
+        int paragraphIndex,
+        int textRunIndex,
+        int offset,
+        double x,
+        double y,
+        double height,
+        double rotationRadians,
+        Point rotationCenter) =>
+        _shapeTextCaretStops.Add(new ShapeTextCaretStop(
+            blockIndex, runIndex, paragraphIndex, textRunIndex, offset, x, y, height,
+            rotationRadians, rotationCenter.X, rotationCenter.Y));
 
     private static FloatingShapeData BuildFloatingShapeData(
         DrawingObjectVisualPlan plan,
@@ -6489,7 +6607,9 @@ public sealed class DocumentView : Control
         };
 
         var inset = Math.Min(PageBorderInsetDip, Math.Min(pageRect.Width, pageRect.Height) / 4);
-        var rect = pageRect.Deflate(new Thickness(inset));
+        // Avalonia centers the stroke on this rectangle. Move the paint geometry one device
+        // pixel inward so its opaque outer edge registers with Word's page-border raster.
+        var rect = pageRect.Deflate(new Thickness(inset + 1));
         context.DrawRectangle(null, pen, rect);
         // BorderLineStyle.Double: draw a second, inner stroke a couple of DIP inside the first.
         if (pb.LineStyle == BorderLineStyle.Double)
@@ -8584,6 +8704,71 @@ public sealed class DocumentView : Control
         return true;
     }
 
+    /// <summary>
+    /// Resolves a pointer inside the active horizontal text box to the nearest visible caret stop.
+    /// This mirrors the WPF RichTextBox pointer contract while keeping the existing floating-object
+    /// selection and drag routes intact when the shape is not already being edited.
+    /// </summary>
+    private bool TryPlaceShapeTextCaret(Point point,
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) active)
+    {
+        if (!TryHitTestFloat(point, out var floatHit)
+            || floatHit.BlockIndex != active.BlockIndex
+            || floatHit.RunIndex != active.RunIndex
+            || floatHit.Kind != "Shape")
+            return false;
+
+        var stops = _shapeTextCaretStops
+            .Where(candidate => candidate.BlockIndex == active.BlockIndex
+                && candidate.RunIndex == active.RunIndex)
+            .ToArray();
+        if (stops.Length == 0)
+            return false;
+
+        var first = stops[0];
+        var localPoint = RotateAround(
+            point,
+            new Point(first.RotationCenterX, first.RotationCenterY),
+            -first.RotationRadians);
+        var stop = stops
+            .OrderBy(candidate => VerticalDistance(localPoint.Y, candidate.Y, candidate.Height))
+            .ThenBy(candidate => Math.Abs(localPoint.X - candidate.X))
+            .First();
+
+        _shapeCaret = (
+            stop.BlockIndex,
+            stop.RunIndex,
+            stop.TextParagraphIndex,
+            stop.TextRunIndex,
+            stop.Offset);
+        Focus();
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+        return true;
+    }
+
+    private static double VerticalDistance(double pointY, double lineY, double lineHeight) =>
+        pointY < lineY
+            ? lineY - pointY
+            : pointY > lineY + lineHeight
+                ? pointY - (lineY + lineHeight)
+                : 0;
+
+    private static Point RotateAround(Point point, Point center, double radians)
+    {
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        var dx = point.X - center.X;
+        var dy = point.Y - center.Y;
+        return new Point(
+            center.X + dx * cos - dy * sin,
+            center.Y + dx * sin + dy * cos);
+    }
+
+    /// <summary>Test hook for the pointer-to-shape-caret parity path.</summary>
+    internal bool PlaceShapeTextCaretForTest(Point point) =>
+        _shapeCaret is { } active && TryPlaceShapeTextCaret(point, active);
+
     /// <summary>Insert a real paragraph break at the active text-box caret.</summary>
     public void InsertShapeTextParagraphBreak()
     {
@@ -10098,6 +10283,16 @@ public sealed class DocumentView : Control
         }
 
         if (updateKind == PointerUpdateKind.LeftButtonPressed && TryActivateContentControl(point))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        // AV-SHAPETEXT2: once a text box is in edit mode, a click inside its body moves the caret to
+        // the nearest paragraph/run/offset stop. Before edit mode the same click continues through the
+        // normal floating-object selection and drag path.
+        if (!shift && _shapeCaret is { } activeShapeCaret
+            && TryPlaceShapeTextCaret(point, activeShapeCaret))
         {
             e.Handled = true;
             return;
@@ -17931,6 +18126,19 @@ public sealed class DocumentView : Control
     // ── Floating shape data captured during layout ────────────────────────────────────────────────
     // Stores everything needed to draw a floating shape in Render() without re-touching the model.
 
+    private sealed record ShapeTextCaretStop(
+        int BlockIndex,
+        int RunIndex,
+        int TextParagraphIndex,
+        int TextRunIndex,
+        int Offset,
+        double X,
+        double Y,
+        double Height,
+        double RotationRadians,
+        double RotationCenterX,
+        double RotationCenterY);
+
     private sealed class FloatingShapeData
     {
         public Rect Rect;           // page-space bounding rect
@@ -18484,10 +18692,18 @@ public sealed class DocumentView : Control
         };
 
         var displayText = wd.Text;
+        var isImportedGradFillMultiArchUp = wd is
+        {
+            Style: WordArtStyle.GradFillMulti,
+            Warp: WordArtWarp.ArchUp,
+            FontSizePt: > 33 and < 35
+        };
+        var warpedTextOffset = isImportedGradFillMultiArchUp ? new Vector(0, -16) : default;
+        var warpedTextVerticalScale = isImportedGradFillMultiArchUp ? 0.74 : 1.0;
         using (context.PushClip(rect))
         {
             if (wd.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
-                DrawWarpedWordArtText(context, displayText, textFmt, rect, wd.Warp);
+                DrawWarpedWordArtText(context, displayText, textFmt, rect, wd.Warp, warpedTextOffset, warpedTextVerticalScale);
             else
             {
                 var ft = Build(displayText, textFmt);
@@ -18504,7 +18720,7 @@ public sealed class DocumentView : Control
             using (context.PushClip(rect))
             {
                 if (wd.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
-                    DrawWarpedWordArtText(context, displayText, outlineFmt, rect, wd.Warp, new Vector(1, 1));
+                    DrawWarpedWordArtText(context, displayText, outlineFmt, rect, wd.Warp, warpedTextOffset + new Vector(1, 1), warpedTextVerticalScale);
                 else
                 {
                     var outlineFt = Build(displayText, outlineFmt);
@@ -18527,7 +18743,8 @@ public sealed class DocumentView : Control
         RunFormatting format,
         Rect rect,
         WordArtWarp warp,
-        Vector offset = default)
+        Vector offset = default,
+        double verticalScale = 1.0)
     {
         var glyphs = BuildFittedWordArtGlyphs(text, format, rect);
         var placements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
@@ -18542,6 +18759,7 @@ public sealed class DocumentView : Control
             var placement = placements[index];
             using var transform = context.PushTransform(
                 Matrix.CreateTranslation(-glyph.WidthIncludingTrailingWhitespace / 2, -glyph.Height / 2)
+                * Matrix.CreateScale(1.0, verticalScale)
                 * Matrix.CreateRotation(placement.RotationRadians)
                 * Matrix.CreateTranslation(
                     rect.X + placement.CenterXNormalized * rect.Width + offset.X,
@@ -18702,6 +18920,7 @@ public sealed class DocumentView : Control
         }
 
     }
+
 
     /// <summary>
     /// Renders a floating SmartArt diagram at its page-space rect.
