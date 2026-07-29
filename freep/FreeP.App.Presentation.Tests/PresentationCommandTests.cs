@@ -280,6 +280,20 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DeleteShapeCommand_ProtectedChart_DoesNotRemoveChart()
+    {
+        var (p, bus) = Make();
+        var chart = MakeChart();
+        p.Slides[0].Shapes.Add(chart);
+
+        bus.Execute(new DeleteShapeCommand(0, chart.Id));
+
+        p.Slides[0].Shapes.Should().ContainSingle().Which.Should().BeSameAs(chart);
+        bus.Undo();
+        p.Slides[0].Shapes.Should().ContainSingle().Which.Should().BeSameAs(chart);
+    }
+
+    [Fact]
     public void MoveShapeCommand_Apply_TranslatesShape()
     {
         var (p, bus) = Make();
