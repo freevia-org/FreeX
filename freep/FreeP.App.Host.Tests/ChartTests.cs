@@ -150,6 +150,8 @@ public sealed class ChartTests : IDisposable
         chart.ShowNegativeBubbles = true;
         chart.PreservedChartSpaceExtensionsXml =
             "<c:extLst xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><c:ext uri=\"urn:freep:chart-test\" /></c:extLst>";
+        chart.PreservedPivotSourceXml =
+            "<c:pivotSource xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><c:name>PivotTable1</c:name><c:fmtId val=\"1\" /></c:pivotSource>";
         slide.Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.Chart, Chart = chart });
 
         var clone = SlideCloner.CloneSlide(slide).Shapes.Single().Chart!;
@@ -174,6 +176,7 @@ public sealed class ChartTests : IDisposable
         clone.BubbleSizeRepresents.Should().Be(BubbleSizeRepresentation.Width);
         clone.ShowNegativeBubbles.Should().BeTrue();
         clone.PreservedChartSpaceExtensionsXml.Should().Be(chart.PreservedChartSpaceExtensionsXml);
+        clone.PreservedPivotSourceXml.Should().Be(chart.PreservedPivotSourceXml);
     }
 
     [Fact]
@@ -538,6 +541,32 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_Chart_PivotSource_PreservesPackageAndModel()
+    {
+        var chart = BuildColumnChart();
+        chart.PreservedPivotSourceXml =
+            "<c:pivotSource xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><c:name>PivotTable1</c:name><c:fmtId val=\"1\" /></c:pivotSource>";
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var root = chartDoc.Root!;
+            var pivotSource = root.Element(ChartNs + "pivotSource");
+            pivotSource.Should().NotBeNull();
+            root.Elements().Select(element => element.Name.LocalName)
+                .Should().ContainInOrder("pivotSource", "chart");
+            pivotSource!.Element(ChartNs + "name")?.Value.Should().Be("PivotTable1");
+            pivotSource.Element(ChartNs + "fmtId")?.Attribute("val")?.Value.Should().Be("1");
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.PreservedPivotSourceXml.Should().Contain("PivotTable1");
+        rt.PreservedPivotSourceXml.Should().Contain("fmtId");
+    }
+
+    [Fact]
     public void RoundTrip_ChartLevelMetadata_DefaultsStayAbsentAndNull()
     {
         var path = WriteToPptx(BuildPresWithChart(BuildColumnChart()));
@@ -548,6 +577,7 @@ public sealed class ChartTests : IDisposable
             var chartEl = chartDoc.Root!.Element(ChartNs + "chart")!;
             chartEl.Element(ChartNs + "dispBlanksAs").Should().BeNull();
             chartDoc.Root!.Element(ChartNs + "roundedCorners").Should().BeNull();
+            chartDoc.Root!.Element(ChartNs + "pivotSource").Should().BeNull();
             chartEl.Element(ChartNs + "showDLblsOverMax").Should().BeNull();
         }
 
@@ -555,6 +585,7 @@ public sealed class ChartTests : IDisposable
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.DisplayBlanksAs.Should().BeNull();
         rt.RoundedCorners.Should().BeNull();
+        rt.PreservedPivotSourceXml.Should().BeNull();
         rt.ShowDataLabelsOverMaximum.Should().BeNull();
     }
 

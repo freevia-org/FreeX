@@ -94,6 +94,7 @@ internal static class PptxChartWriter
             chart.StyleId is { } styleId
                 ? new XElement(C + "style", new XAttribute("val", styleId))
                 : null,
+            TryParsePreservedPivotSource(chart.PreservedPivotSourceXml),
             new XElement(C + "chart",
                 titleEl,
                 new XElement(C + "autoTitleDeleted", new XAttribute("val", chart.Title is null ? "1" : "0")),
@@ -121,6 +122,22 @@ internal static class PptxChartWriter
         {
             var extensionList = XElement.Parse(xml, LoadOptions.PreserveWhitespace);
             return extensionList.Name == C + "extLst" ? extensionList : null;
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
+    private static XElement? TryParsePreservedPivotSource(string? xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return null;
+
+        try
+        {
+            var pivotSource = XElement.Parse(xml, LoadOptions.PreserveWhitespace);
+            return pivotSource.Name == C + "pivotSource" ? pivotSource : null;
         }
         catch (XmlException)
         {

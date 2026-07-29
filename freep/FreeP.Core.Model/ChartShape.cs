@@ -781,6 +781,14 @@ public sealed class ChartShape
     public string? SourcePartPath { get; set; }
 
     /// <summary>
+    /// Verbatim <c>c:chartSpace/c:pivotSource</c> payload from the source chart.
+    /// Pivot-chart identity is package metadata even when the current model does not
+    /// expose pivot-specific editing or rendering controls.
+    /// </summary>
+    [JsonIgnore]
+    public string? PreservedPivotSourceXml { get; set; }
+
+    /// <summary>
     /// Verbatim <c>c:chartSpace/c:extLst</c> payload from the source chart, retained so
     /// compatibility and producer-specific extensions survive a save or duplicate operation.
     /// Modeled chart fields remain authoritative for the generated chart body.
