@@ -707,6 +707,14 @@ public sealed class SlideShowWindow : Window
                 _controller,
                 _playbackRoute.Slides,
                 hlink.TargetSlideId));
+            var postconditionPath = Environment.GetEnvironmentVariable("FREEP_PHYSICAL_HYPERLINK_POSTCONDITION");
+            if (!string.IsNullOrWhiteSpace(postconditionPath))
+            {
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(postconditionPath)!);
+                File.WriteAllText(
+                    postconditionPath,
+                    $"activation=internal-slide-hyperlink\ntargetSlideId={hlink.TargetSlideId}\ncurrentSlideIndex={_controller.CurrentSlideIndex}\n");
+            }
         }
     }
 
