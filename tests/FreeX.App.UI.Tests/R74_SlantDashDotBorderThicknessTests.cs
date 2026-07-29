@@ -26,7 +26,7 @@ public sealed class R74_SlantDashDotBorderThicknessTests
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            method!.Invoke(null, [dc, border, new Point(0, 0), new Point(40, 0), null, borderPenCache]);
+            method!.Invoke(null, [dc, border, new Point(0, 0), new Point(40, 0), null, borderPenCache, 1.0]);
         }
 
         borderPenCache.Should().ContainKey(border);
@@ -42,8 +42,8 @@ public sealed class R74_SlantDashDotBorderThicknessTests
 
             var pen = InvokeDrawBorderEdgeAndCapturePen(border);
 
-            pen.Thickness.Should().Be(1.5,
-                "SlantDashDot is ranked as a medium-weight style in BorderEdgePrecedence and must render at the same 1.5 DIP weight as Medium/MediumDashed/MediumDashDot/MediumDashDotDot");
+            pen.Thickness.Should().Be(2,
+                "SlantDashDot is ranked as a medium-weight style and snaps to the same 2 device-pixel weight as Medium at 100% zoom");
         });
     }
 
@@ -56,7 +56,7 @@ public sealed class R74_SlantDashDotBorderThicknessTests
 
             var pen = InvokeDrawBorderEdgeAndCapturePen(border);
 
-            pen.Thickness.Should().Be(0.5, "a Thin border must keep its pre-existing 0.5 DIP weight");
+            pen.Thickness.Should().Be(1, "a Thin border must snap to one crisp device pixel at 100% zoom");
         });
     }
 
@@ -69,7 +69,7 @@ public sealed class R74_SlantDashDotBorderThicknessTests
 
             var pen = InvokeDrawBorderEdgeAndCapturePen(border);
 
-            pen.Thickness.Should().Be(1.5, "a Medium border must keep its pre-existing 1.5 DIP weight");
+            pen.Thickness.Should().Be(2, "a Medium border must snap to two crisp device pixels at 100% zoom");
         });
     }
 }

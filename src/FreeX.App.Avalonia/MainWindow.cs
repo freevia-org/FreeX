@@ -10832,7 +10832,8 @@ public sealed partial class MainWindow : Window
                 effectiveTextWrapping,
                 style,
                 borderNeighbors,
-                isEffectivelyRightToLeft: flowDirection == FlowDirection.RightToLeft)
+                isEffectivelyRightToLeft: flowDirection == FlowDirection.RightToLeft,
+                zoomFactor: zoomFactor)
             : CreateDefaultCellContent(
                 textBlock,
                 style,
@@ -10957,7 +10958,7 @@ public sealed partial class MainWindow : Window
         if (conditionalIcon is { } iconGlyph)
             content.Children.Add(CreateConditionalIconLayer(iconGlyph, zoomFactor, isRightToLeft));
 
-        AddStyledCellBorderOverlay(content, style, borderNeighbors);
+        AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor);
         return content;
     }
 
@@ -11165,7 +11166,8 @@ public sealed partial class MainWindow : Window
         TextWrapping textWrapping,
         CellStyle? style,
         CellBorderNeighborEdges borderNeighbors = default,
-        bool isEffectivelyRightToLeft = false)
+        bool isEffectivelyRightToLeft = false,
+        double zoomFactor = 1)
     {
         var content = new AvaloniaGrid { ClipToBounds = true };
         var canvas = new Canvas { ClipToBounds = true };
@@ -11199,7 +11201,7 @@ public sealed partial class MainWindow : Window
         Canvas.SetTop(textBlock, layout.TextPoint.Y);
         canvas.Children.Add(textBlock);
         content.Children.Add(canvas);
-        AddStyledCellBorderOverlay(content, style, borderNeighbors);
+        AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor);
         return content;
     }
 
@@ -11220,7 +11222,8 @@ public sealed partial class MainWindow : Window
         TextWrapping textWrapping,
         CellStyle? style,
         CellBorderNeighborEdges borderNeighbors = default,
-        bool isEffectivelyRightToLeft = false) =>
+        bool isEffectivelyRightToLeft = false,
+        double zoomFactor = 1) =>
         CreateOrientedCellContent(
             textBlock,
             cellWidth,
@@ -11233,9 +11236,14 @@ public sealed partial class MainWindow : Window
             textWrapping,
             style,
             borderNeighbors,
-            isEffectivelyRightToLeft);
+            isEffectivelyRightToLeft,
+            zoomFactor);
 
-    private static void AddStyledCellBorderOverlay(AvaloniaGrid content, CellStyle? style, CellBorderNeighborEdges borderNeighbors = default)
+    private static void AddStyledCellBorderOverlay(
+        AvaloniaGrid content,
+        CellStyle? style,
+        CellBorderNeighborEdges borderNeighbors = default,
+        double zoomFactor = 1)
     {
         if (style is not { } visibleStyle || !HasVisibleCellBorder(visibleStyle))
             return;
@@ -11246,7 +11254,7 @@ public sealed partial class MainWindow : Window
         // borderNeighbors carries the touching neighbor cells' opposing edge styles so a shared
         // grid edge resolves to the heavier/more-prominent style (CellBorderGeometry.
         // ResolveBorderEdgeWinner) instead of this cell always winning by paint order.
-        content.Children.Add(new CellBorderPanel(visibleStyle, borderNeighbors));
+        content.Children.Add(new CellBorderPanel(visibleStyle, borderNeighbors, zoomFactor));
     }
 
     private static bool HasVisibleCellBorder(CellStyle? style) =>
