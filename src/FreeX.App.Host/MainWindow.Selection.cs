@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Services;
 using FreeX.App.UI;
 using FreeX.Core.Commands;
@@ -241,25 +242,28 @@ public partial class MainWindow
         if (editor is null)
             return false;
 
-        if (_formulaReferenceStart is not { } start || _formulaReferenceLength is not { } length ||
-            start < 0 || length < 0 || start + length > editor.Text.Length)
+        if (_formulaEditCell is not { } formulaCell ||
+            !FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(
+                editor.Text,
+                _formulaReferenceStart,
+                _formulaReferenceLength,
+                new GridRange(newAddr, newAddr),
+                formulaCell,
+                _options.UseR1C1ReferenceStyle,
+                out var edit,
+                _workbook.GetSheet(newAddr.Sheet)?.Name))
         {
             return false;
         }
 
-        var newRefText = FormatRangeReference(newAddr, newAddr);
-        var insertAt = start + length;
-        var insertionText = "," + newRefText;
-
-        var updatedText = editor.Text.Insert(insertAt, insertionText);
-        ApplyTextEdit(editor, new ExcelTextEdit(updatedText, insertAt + insertionText.Length, 0));
+        ApplyTextEdit(editor, edit.TextEdit);
         if (!ReferenceEquals(editor, FormulaBar))
             FormulaBar.Text = editor.Text;
         else if (_inlineEditor?.IsVisible == true)
             _inlineEditor.Text = editor.Text;
 
-        _formulaReferenceStart = insertAt + 1;
-        _formulaReferenceLength = newRefText.Length;
+        _formulaReferenceStart = edit.ReferenceStart;
+        _formulaReferenceLength = edit.ReferenceLength;
         _formulaRangeSelectionAnchor = newAddr;
 
         HideValidationDropdown();

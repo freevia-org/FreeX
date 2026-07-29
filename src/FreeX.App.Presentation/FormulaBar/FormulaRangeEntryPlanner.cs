@@ -76,13 +76,11 @@ public static class FormulaRangeEntryPlanner
         out FormulaRangeEntryEdit edit,
         string? selectedSheetName = null)
     {
-        var cellReferenceText = SpreadsheetDisplayFormatter.FormatRangeReference(
-            selectedRange.Start,
-            selectedRange.End,
-            useR1C1ReferenceStyle);
-        var referenceText = selectedRange.Start.Sheet == formulaCell.Sheet || selectedSheetName is null
-            ? cellReferenceText
-            : $"{SheetNameFormatter.QuoteIfNeeded(selectedSheetName)}!{cellReferenceText}";
+        var referenceText = FormatRangeReference(
+            selectedRange,
+            formulaCell,
+            useR1C1ReferenceStyle,
+            selectedSheetName);
 
         return TryApplySelectionText(
             text,
@@ -92,6 +90,44 @@ public static class FormulaRangeEntryPlanner
             previousReferenceLength,
             referenceText,
             out edit);
+    }
+
+    public static bool TryAppendDisjointRangeSelection(
+        string text,
+        int? previousReferenceStart,
+        int? previousReferenceLength,
+        GridRange selectedRange,
+        CellAddress formulaCell,
+        bool useR1C1ReferenceStyle,
+        out FormulaRangeEntryEdit edit,
+        string? selectedSheetName = null)
+    {
+        var safeCaret = text.Length;
+        edit = new FormulaRangeEntryEdit(new ExcelTextEdit(text, safeCaret, 0), safeCaret, 0);
+
+        if (previousReferenceStart is not { } start ||
+            previousReferenceLength is not { } length ||
+            start < 0 ||
+            length < 0 ||
+            start + length > text.Length)
+        {
+            return false;
+        }
+
+        var referenceText = FormatRangeReference(
+            selectedRange,
+            formulaCell,
+            useR1C1ReferenceStyle,
+            selectedSheetName);
+        var insertAt = start + length;
+        var insertionText = "," + referenceText;
+        var updatedText = text.Insert(insertAt, insertionText);
+
+        edit = new FormulaRangeEntryEdit(
+            new ExcelTextEdit(updatedText, insertAt + insertionText.Length, 0),
+            insertAt + 1,
+            referenceText.Length);
+        return true;
     }
 
     public static bool TryApplySelectionText(
@@ -134,6 +170,21 @@ public static class FormulaRangeEntryPlanner
             replacementStart,
             selectionText.Length);
         return true;
+    }
+
+    private static string FormatRangeReference(
+        GridRange selectedRange,
+        CellAddress formulaCell,
+        bool useR1C1ReferenceStyle,
+        string? selectedSheetName)
+    {
+        var cellReferenceText = SpreadsheetDisplayFormatter.FormatRangeReference(
+            selectedRange.Start,
+            selectedRange.End,
+            useR1C1ReferenceStyle);
+        return selectedRange.Start.Sheet == formulaCell.Sheet || selectedSheetName is null
+            ? cellReferenceText
+            : $"{SheetNameFormatter.QuoteIfNeeded(selectedSheetName)}!{cellReferenceText}";
     }
 
     private static CellAddress? GetHorizontalPageTarget(
