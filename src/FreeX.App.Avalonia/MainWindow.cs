@@ -9644,7 +9644,8 @@ public sealed partial class MainWindow : Window
                 range,
                 formulaCell.Value,
                 UseR1C1ReferenceStyle,
-                out var edit))
+                out var edit,
+                _session.ActiveSheet.Name))
         {
             return false;
         }
@@ -11966,15 +11967,7 @@ public sealed partial class MainWindow : Window
 
     private void SelectSheetTabFromKeyboard(SheetId sheetId, bool selectRange)
     {
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        var changed = _session.SelectSheetFromTab(sheetId, selectRange, toggle: false);
-        if (changed)
-        {
-            ClearSelectedDrawingObject();
-            RefreshShell(UiText.Format("MainLoc_SelectedX", _session.ActiveSheet.Name));
-        }
+        SelectSheet(sheetId, selectRange, toggle: false);
 
         FocusActiveSheetTab();
     }
@@ -12040,6 +12033,18 @@ public sealed partial class MainWindow : Window
 
     private void SelectSheet(SheetId sheetId, bool selectRange, bool toggle)
     {
+        if (!selectRange && !toggle && GetFormulaRangeEntryEditor() is not null)
+        {
+            var changed = _session.SelectSheetForFormulaEdit(sheetId);
+            CloseAutoFilterFlyout();
+            if (changed)
+            {
+                ClearSelectedDrawingObject();
+                RefreshShell(UiText.Format("MainLoc_SelectedX", _session.ActiveSheet.Name));
+            }
+            return;
+        }
+
         if (!TryCommitPendingFormulaEdit())
             return;
 
