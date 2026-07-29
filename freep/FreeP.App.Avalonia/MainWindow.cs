@@ -2419,6 +2419,15 @@ public sealed partial class MainWindow : Window
         r.Register(
             ShapeEffectAuthoringPlanner.OffsetCommandId,
             new ActionRibbonCommand(() => Editor.SetSelectedShapeShadow(ShapeEffectAuthoringPlanner.Offset())));
+        r.Register(
+            ShapeEffectAuthoringPlanner.GlowNoneCommandId,
+            new ActionRibbonCommand(() => Editor.SetSelectedShapeGlow(ShapeEffectAuthoringPlanner.GlowNone())));
+        r.Register(
+            ShapeEffectAuthoringPlanner.GlowSubtleCommandId,
+            new ActionRibbonCommand(() => Editor.SetSelectedShapeGlow(ShapeEffectAuthoringPlanner.GlowSubtle())));
+        r.Register(
+            ShapeEffectAuthoringPlanner.GlowStrongCommandId,
+            new ActionRibbonCommand(() => Editor.SetSelectedShapeGlow(ShapeEffectAuthoringPlanner.GlowStrong())));
 
         r.Register(ChartDataDialogPlanner.EditDataCommandId, new ActionRibbonCommand(OpenChartDataDialog));
         r.Register(ChartDataDialogPlanner.ChangeChartTypeCommandId, new ActionRibbonCommand(OpenChartDataDialog));

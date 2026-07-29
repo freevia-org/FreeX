@@ -220,6 +220,9 @@ internal static class FreePRibbonText
     public static RibbonText ShapeShadowNoneCommand { get; } = new("Ribbon_Command_ShapeShadowNone_Label", "Ribbon_Command_ShapeShadowNone_KeyTip");
     public static RibbonText ShapeShadowSubtleCommand { get; } = new("Ribbon_Command_ShapeShadowSubtle_Label", "Ribbon_Command_ShapeShadowSubtle_KeyTip");
     public static RibbonText ShapeShadowOffsetCommand { get; } = new("Ribbon_Command_ShapeShadowOffset_Label", "Ribbon_Command_ShapeShadowOffset_KeyTip");
+    public static RibbonText ShapeGlowNoneCommand { get; } = new("Ribbon_Command_ShapeGlowNone_Label", "Ribbon_Command_ShapeGlowNone_KeyTip");
+    public static RibbonText ShapeGlowSubtleCommand { get; } = new("Ribbon_Command_ShapeGlowSubtle_Label", "Ribbon_Command_ShapeGlowSubtle_KeyTip");
+    public static RibbonText ShapeGlowStrongCommand { get; } = new("Ribbon_Command_ShapeGlowStrong_Label", "Ribbon_Command_ShapeGlowStrong_KeyTip");
     public static string VideoLabel => Get("Ribbon_Command_Video_Label");
     public static string VideoKeyTip => Get("Ribbon_Command_Video_KeyTip");
     public static string AudioLabel => Get("Ribbon_Command_Audio_Label");

@@ -18,6 +18,20 @@ public readonly record struct ShapeShadowValues(
         DirDeg: 0);
 }
 
+/// <summary>Authoritative glow values used by the shape-effects authoring command.</summary>
+public readonly record struct ShapeGlowValues(
+    bool Enabled,
+    SrgbColor Color,
+    byte Alpha,
+    long RadiusEmu)
+{
+    public static ShapeGlowValues None { get; } = new(
+        Enabled: false,
+        Color: SrgbColor.Black,
+        Alpha: 0,
+        RadiusEmu: 0);
+}
+
 /// <summary>Changes only a shape's outer shadow, preserving every other effect layer.</summary>
 public sealed class SetShapeShadowCommand : IPresentationCommand
 {
@@ -92,6 +106,97 @@ public sealed class SetShapeShadowCommand : IPresentationCommand
             effects.OuterShadowBlurRadEmu,
             effects.OuterShadowDistEmu,
             effects.OuterShadowDirDeg);
+
+    private SlideShape? FindShape(Presentation presentation)
+    {
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return null;
+
+        return presentation.Slides[_slideIndex].Shapes.FirstOrDefault(shape => shape.Id == _shapeId);
+    }
+
+    private static bool HasAnyEffects(ShapeEffects effects) =>
+        effects.HasOuterShadow ||
+        effects.HasInnerShadow ||
+        effects.HasGlow ||
+        effects.HasSoftEdge ||
+        effects.BevelTop is not null ||
+        effects.BevelBottom is not null ||
+        effects.ExtrusionHeightEmu != 0 ||
+        effects.ContourWidthEmu != 0 ||
+        effects.Scene3d is not null ||
+        !string.IsNullOrWhiteSpace(effects.PrstMaterial) ||
+        effects.ExtrusionColor is not null ||
+        effects.ContourColor is not null;
+}
+
+/// <summary>Changes only a shape's glow, preserving every other effect layer.</summary>
+public sealed class SetShapeGlowCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly ShapeGlowValues _values;
+    private bool _captured;
+    private ShapeEffects? _oldEffects;
+
+    public SetShapeGlowCommand(int slideIndex, uint shapeId, ShapeGlowValues values)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _values = values;
+    }
+
+    public string Label => "Shape Glow";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        return shape is not null && ReadValues(shape.Effects) != _values;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        if (shape is null)
+            return;
+
+        if (!_captured)
+        {
+            _captured = true;
+            _oldEffects = PresentationModelCloneHelper.CloneShapeEffects(shape.Effects);
+        }
+
+        if (!_values.Enabled && shape.Effects is null)
+            return;
+
+        if (shape.Effects is null)
+            shape.Effects = new ShapeEffects();
+
+        shape.Effects.HasGlow = _values.Enabled;
+        shape.Effects.GlowColor = _values.Color;
+        shape.Effects.GlowAlpha = _values.Alpha;
+        shape.Effects.GlowRadiusEmu = _values.RadiusEmu;
+
+        if (!HasAnyEffects(shape.Effects))
+            shape.Effects = null;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        if (shape is null || !_captured)
+            return;
+
+        shape.Effects = PresentationModelCloneHelper.CloneShapeEffects(_oldEffects);
+    }
+
+    private static ShapeGlowValues ReadValues(ShapeEffects? effects) => effects is null
+        ? ShapeGlowValues.None
+        : new(
+            effects.HasGlow,
+            effects.GlowColor,
+            effects.GlowAlpha,
+            effects.GlowRadiusEmu);
 
     private SlideShape? FindShape(Presentation presentation)
     {

@@ -649,6 +649,24 @@
   <data name="Ribbon_Command_ShapeShadowOffset_KeyTip" xml:space="preserve">
     <value>SSO</value>
   </data>
+  <data name="Ribbon_Command_ShapeGlowNone_Label" xml:space="preserve">
+    <value>No Shape Glow</value>
+  </data>
+  <data name="Ribbon_Command_ShapeGlowNone_KeyTip" xml:space="preserve">
+    <value>SGN</value>
+  </data>
+  <data name="Ribbon_Command_ShapeGlowSubtle_Label" xml:space="preserve">
+    <value>Subtle Shape Glow</value>
+  </data>
+  <data name="Ribbon_Command_ShapeGlowSubtle_KeyTip" xml:space="preserve">
+    <value>SGS</value>
+  </data>
+  <data name="Ribbon_Command_ShapeGlowStrong_Label" xml:space="preserve">
+    <value>Strong Shape Glow</value>
+  </data>
+  <data name="Ribbon_Command_ShapeGlowStrong_KeyTip" xml:space="preserve">
+    <value>SGH</value>
+  </data>
   <data name="Ribbon_Command_Picture_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>

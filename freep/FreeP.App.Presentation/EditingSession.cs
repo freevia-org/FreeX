@@ -909,6 +909,19 @@ public sealed class EditingSession
         return count;
     }
 
+    /// <summary>Applies one glow preset to every selected shape.</summary>
+    public int SetSelectedShapeGlow(ShapeGlowValues values)
+    {
+        var count = 0;
+        foreach (var id in _selectedShapeIds)
+        {
+            Bus.Execute(new SetShapeGlowCommand(_currentSlideIndex, id, values));
+            count++;
+        }
+
+        return count;
+    }
+
     /// <summary>Sets fill on all selected shapes.</summary>
     public void SetSelectedFill(ShapeFill? fill)
     {

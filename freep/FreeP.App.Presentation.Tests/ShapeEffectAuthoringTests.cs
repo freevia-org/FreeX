@@ -86,4 +86,58 @@ public sealed class ShapeEffectAuthoringTests
         shape.Effects.HasSoftEdge.Should().BeTrue();
         shape.Effects.SoftEdgeRadEmu.Should().Be(4321);
     }
+
+    [Fact]
+    public void Planner_UsesStablePowerPointGlowPresets()
+    {
+        var subtle = ShapeEffectAuthoringPlanner.ResolveGlow(ShapeGlowPreset.Subtle);
+        var strong = ShapeEffectAuthoringPlanner.ResolveGlow(ShapeGlowPreset.Strong);
+
+        subtle.Enabled.Should().BeTrue();
+        subtle.Color.Should().Be(new SrgbColor(0xFF, 0xC0, 0x00));
+        subtle.Alpha.Should().Be(0x66);
+        subtle.RadiusEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(4));
+        strong.Alpha.Should().Be(0xA0);
+        strong.RadiusEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(8));
+    }
+
+    [Fact]
+    public void SetShapeGlowCommand_PreservesOtherEffectsAndSupportsUndo()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var shape = new SlideShape
+        {
+            Id = 9,
+            Kind = SlideShapeKind.AutoShape,
+            Effects = new ShapeEffects
+            {
+                HasOuterShadow = true,
+                OuterShadowAlpha = 0x80,
+                HasSoftEdge = true,
+                SoftEdgeRadEmu = 321,
+            },
+        };
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetShapeGlowCommand(
+            0,
+            shape.Id,
+            ShapeEffectAuthoringPlanner.ResolveGlow(ShapeGlowPreset.Strong)));
+
+        shape.Effects.Should().NotBeNull();
+        shape.Effects!.HasGlow.Should().BeTrue();
+        shape.Effects.GlowAlpha.Should().Be(0xA0);
+        shape.Effects.GlowRadiusEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(8));
+        shape.Effects.HasOuterShadow.Should().BeTrue();
+        shape.Effects.HasSoftEdge.Should().BeTrue();
+
+        bus.Undo();
+
+        shape.Effects.Should().NotBeNull();
+        shape.Effects!.HasGlow.Should().BeFalse();
+        shape.Effects.HasOuterShadow.Should().BeTrue();
+        shape.Effects.HasSoftEdge.Should().BeTrue();
+        shape.Effects.SoftEdgeRadEmu.Should().Be(321);
+    }
 }
