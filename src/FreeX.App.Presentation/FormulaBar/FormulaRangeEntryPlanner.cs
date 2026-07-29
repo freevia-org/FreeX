@@ -244,6 +244,55 @@ public static class FormulaRangeEntryPlanner
         return true;
     }
 
+    // Avalonia can briefly lose the tracked selection span when a physical X11 point click
+    // returns focus to the formula editor. Recover the trailing reference from the editor caret
+    // so the production append path still inserts the required comma separator.
+    public static bool TryGetTrailingReferenceSpan(
+        string text,
+        int caretIndex,
+        out int referenceStart,
+        out int referenceLength)
+    {
+        referenceStart = 0;
+        referenceLength = 0;
+        var end = Math.Clamp(caretIndex, 0, text.Length);
+        while (end > 0 && char.IsWhiteSpace(text[end - 1]))
+            end--;
+
+        if (end == 0)
+            return false;
+
+        var inSheetName = false;
+        var start = end;
+        for (var index = end - 1; index >= 0; index--)
+        {
+            var character = text[index];
+            if (character == '\'')
+            {
+                inSheetName = !inSheetName;
+                continue;
+            }
+
+            if (inSheetName)
+                continue;
+
+            if (character is '(' or ',' or '+' or '-' or '*' or '/' or '^' or '&' or '=' or '<' or '>')
+            {
+                start = index + 1;
+                break;
+            }
+
+            start = index;
+        }
+
+        while (start < end && char.IsWhiteSpace(text[start]))
+            start++;
+
+        referenceStart = start;
+        referenceLength = end - start;
+        return referenceLength > 0;
+    }
+
     private static string FormatRangeReference(
         GridRange selectedRange,
         CellAddress formulaCell,
