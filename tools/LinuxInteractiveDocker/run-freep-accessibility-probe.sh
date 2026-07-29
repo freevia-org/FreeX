@@ -32,12 +32,12 @@ import time
 
 output_directory = sys.argv[1]
 window_id = sys.argv[2]
-targets = {
-    "slides": "slides",
-    "notes": "notes",
-    "comments": "comments",
-    "selection": "selection pane",
-    "animation": "animation pane",
+target_contracts = {
+    "slides": {"name": "slides", "roles": {"list", "list box", "listbox"}},
+    "notes": {"name": "notes", "roles": {"entry"}},
+    "comments": {"name": "comments", "roles": {"panel"}},
+    "selection": {"name": "selection pane", "roles": {"panel"}},
+    "animation": {"name": "animation pane", "roles": {"panel"}},
 }
 result = {
     "schemaVersion": 1,
@@ -119,6 +119,9 @@ else:
                 except Exception:
                     return ""
 
+            def normalize_role(role):
+                return " ".join((role or "").lower().replace("-", " ").split())
+
             def visit(node, depth=0):
                 if depth > 32:
                     return
@@ -127,8 +130,11 @@ else:
                     role = node.getRoleName()
                     states = [str(state) for state in node.getState().getStates()]
                     lower_name = name.lower()
-                    for key, target in targets.items():
-                        if target in lower_name and not any(item["target"] == key for item in result["observations"]):
+                    role_name = normalize_role(role)
+                    for key, contract in target_contracts.items():
+                        if (lower_name == contract["name"] and
+                                role_name in contract["roles"] and
+                                not any(item["target"] == key for item in result["observations"])):
                             result["observations"].append({
                                 "target": key,
                                 "name": name,
@@ -145,7 +151,7 @@ else:
                     return
 
             visit(freep_application)
-            expected = set(targets)
+            expected = set(target_contracts)
             observed = {item["target"] for item in result["observations"]}
             if expected.issubset(observed):
                 result["status"] = "passed"

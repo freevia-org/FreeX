@@ -25,6 +25,7 @@ public sealed class AccessibilityValidationSourceTests
         var source = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/AccessibilityValidation.cs"));
 
         source.Should().Contain("PaneAccessibilitySnapshotForTests");
+        source.Should().Contain("SlidePaneForAccessibilityTests");
         source.Should().Contain("AutomationProperties.GetAutomationId(control)");
         source.Should().Contain("AutomationProperties.GetName(control)");
         source.Should().Contain("AutomationProperties.GetItemStatus(control)");
@@ -40,12 +41,26 @@ public sealed class AccessibilityValidationSourceTests
 
         probe.Should().Contain("pyatspi.Registry.getDesktop(0)");
         probe.Should().Contain("find_freep_window");
+        probe.Should().Contain("target_contracts");
+        probe.Should().Contain("lower_name == contract[\"name\"]");
+        probe.Should().Contain("role_name in contract[\"roles\"]");
         probe.Should().Contain("getRoleName()");
         probe.Should().Contain("queryValue()");
         probe.Should().Contain("not-proven");
         probe.Should().Contain("contained a FreeP-titled window");
         dockerfile.Should().Contain("at-spi2-core");
         dockerfile.Should().Contain("python3-pyatspi");
+    }
+
+    [Fact]
+    public void Validation_runner_copies_the_branch_local_probe_before_execution()
+    {
+        var runner = File.ReadAllText(RepoFile("tools/Run-FreePAccessibilityValidation.ps1"));
+
+        runner.Should().Contain("docker cp");
+        runner.Should().Contain("run-freep-accessibility-probe.sh");
+        runner.Should().Contain("/tmp/freep-accessibility-probe.sh");
+        runner.Should().Contain("/bin/bash /tmp/freep-accessibility-probe.sh");
     }
 
     private static string RepoFile(string relativePath) =>

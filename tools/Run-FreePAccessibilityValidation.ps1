@@ -76,7 +76,15 @@ try {
     Invoke-External -Arguments $startArguments
     $started = $true
 
-    $probeResult = & docker exec $containerName /usr/local/bin/freep-accessibility-probe /work/accessibility-validation 2>&1
+    # Copy the branch-local probe into the running container so a cached app image
+    # cannot silently execute an older matcher.
+    $probeSource = Join-Path $repoRoot "tools/LinuxInteractiveDocker/run-freep-accessibility-probe.sh"
+    $probeTarget = "${containerName}:/tmp/freep-accessibility-probe.sh"
+    & docker cp $probeSource $probeTarget 2>&1 | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not copy the branch-local AT-SPI probe into owned container '$containerName'."
+    }
+    $probeResult = & docker exec $containerName /bin/bash /tmp/freep-accessibility-probe.sh /work/accessibility-validation 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "AT-SPI probe failed in owned container '$containerName': $($probeResult -join [Environment]::NewLine)"
     }
@@ -92,8 +100,14 @@ try {
         $live.platform -ne "linux" -or $live.shell -ne "avalonia" -or $live.app -ne "FreeP") {
         throw "Invalid live FreeP accessibility manifest: $livePath"
     }
-    if (@($live.observations).Count -lt 4) {
-        throw "Live FreeP accessibility manifest has fewer than four representative panes: $livePath"
+    $expectedLivePaneIds = @("slide-pane", "notes-pane", "comments-pane", "selection-pane", "animation-pane")
+    if (@($live.observations).Count -ne $expectedLivePaneIds.Count) {
+        throw "Live FreeP accessibility manifest must contain exactly five representative panes: $livePath"
+    }
+    foreach ($paneId in $expectedLivePaneIds) {
+        if (@($live.observations | Where-Object paneId -eq $paneId).Count -ne 1) {
+            throw "Live FreeP accessibility manifest did not contain exactly one '$paneId' observation."
+        }
     }
     foreach ($observation in @($live.observations)) {
         foreach ($property in @("paneId", "automationId", "name", "helpText", "role", "state", "value")) {
@@ -107,7 +121,14 @@ try {
         $atSpi.status -notin @("passed", "not-proven")) {
         throw "Invalid AT-SPI result: $atSpiPath"
     }
-    foreach ($target in @("slides", "notes", "comments", "selection", "animation")) {
+    $expectedAtSpiRoles = @{
+        slides = @("list", "list box", "listbox")
+        notes = @("entry")
+        comments = @("panel")
+        selection = @("panel")
+        animation = @("panel")
+    }
+    foreach ($target in $expectedAtSpiRoles.Keys) {
         $observation = @($atSpi.observations | Where-Object target -eq $target)
         if ($observation.Count -ne 1) {
             throw "AT-SPI result did not contain exactly one '$target' observation."
@@ -116,6 +137,10 @@ try {
             if ([string]::IsNullOrWhiteSpace([string]$observation[0].$property)) {
                 throw "AT-SPI '$target' observation has an empty $property."
             }
+        }
+        $role = ([string]$observation[0].role).ToLowerInvariant().Replace("-", " ").Trim()
+        if ($expectedAtSpiRoles[$target] -notcontains $role) {
+            throw "AT-SPI '$target' observation had role '$($observation[0].role)'; expected $($expectedAtSpiRoles[$target] -join ', ')."
         }
         if ($null -eq $observation[0].PSObject.Properties["value"]) {
             throw "AT-SPI '$target' observation did not report a value field."

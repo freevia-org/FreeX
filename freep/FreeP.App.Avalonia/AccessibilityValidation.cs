@@ -106,6 +106,8 @@ internal static class AccessibilityValidationCoordinator
         var snapshot = window.PaneAccessibilitySnapshotForTests;
         var observations = new[]
         {
+            Observe(window.SlidePaneForAccessibilityTests, PresentationPaneAccessibilityPlanner.SlidePaneId, snapshot,
+                textValue: $"Items={window.SlidePaneItemsForAccessibilityTests.Count}"),
             Observe(window.NotesPaneForAccessibilityTests, PresentationPaneAccessibilityPlanner.NotesPaneId, snapshot,
                 textValue: $"Text={(string.IsNullOrEmpty(window.NotesPaneForAccessibilityTests.Text) ? "<empty>" : window.NotesPaneForAccessibilityTests.Text)}"),
             Observe(window.CommentsPaneForAccessibilityTests, PresentationPaneAccessibilityPlanner.CommentsPaneId, snapshot,

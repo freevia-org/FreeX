@@ -618,6 +618,7 @@ public sealed partial class MainWindow : Window
     internal string PaneAccessibilitySnapshotSerializationForTests =>
         _paneAccessibility.SerializeSnapshot();
     internal TextBox NotesPaneForAccessibilityTests => _notesBox;
+    internal ListBox SlidePaneForAccessibilityTests => _slidePaneList;
     internal Border CommentsPaneForAccessibilityTests => _reviewCommentsPaneHost;
     internal IReadOnlyList<Control> CommentsPaneItemsForAccessibilityTests =>
         _reviewCommentsPanePanel is null
