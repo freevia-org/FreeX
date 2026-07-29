@@ -332,6 +332,45 @@ public sealed class FloatingObjectRenderTests
             "the second paragraph must use a shared hard-break line");
     }
 
+    [StaTheory]
+    [InlineData(ShapeTextDirection.Rotate90)]
+    [InlineData(ShapeTextDirection.Rotate270)]
+    public void FloatingRotatedShapeText_ArrangesSwappedCanvasCenteredAndClipped(ShapeTextDirection direction)
+    {
+        var shape = Shape.TextBoxWith("Rotate", widthPt: 150, heightPt: 80);
+        shape.TextDirection = direction;
+        shape.Placement = new FloatingPlacement { Wrapping = ImageWrapping.InFront };
+
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Border>().Single();
+        var textCanvas = LogicalDescendants<Canvas>(root).Single();
+        root.Measure(new Size(root.Width, root.Height));
+        root.Arrange(new Rect(0, 0, root.Width, root.Height));
+        root.UpdateLayout();
+
+        textCanvas.ActualWidth.Should().BeApproximately(root.ActualHeight, 0.01);
+        textCanvas.ActualHeight.Should().BeApproximately(root.ActualWidth, 0.01);
+        var transformedBounds = textCanvas.TransformToAncestor(root)
+            .TransformBounds(new Rect(0, 0, textCanvas.ActualWidth, textCanvas.ActualHeight));
+        transformedBounds.Left.Should().BeGreaterThanOrEqualTo(-0.01);
+        transformedBounds.Top.Should().BeGreaterThanOrEqualTo(-0.01);
+        transformedBounds.Right.Should().BeLessThanOrEqualTo(root.ActualWidth + 0.01);
+        transformedBounds.Bottom.Should().BeLessThanOrEqualTo(root.ActualHeight + 0.01);
+        textCanvas.Clip.Should().BeOfType<RectangleGeometry>()
+            .Which.Bounds.Size.Should().Be(new Size(textCanvas.ActualWidth, textCanvas.ActualHeight));
+        root.Clip.Should().BeOfType<RectangleGeometry>()
+            .Which.Bounds.Size.Should().Be(new Size(root.ActualWidth, root.ActualHeight));
+    }
+
     [StaFact]
     public void FloatingOverlay_RendersShapeFromSharedPlanWithActualGeometryFillOutlineAndEffect()
     {

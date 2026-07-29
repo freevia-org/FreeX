@@ -5897,7 +5897,8 @@ public sealed class DocumentView : RichTextBox
                 BorderThickness = new Thickness(strokeThickness),
                 CornerRadius = plan.GeometryKind == DrawingObjectGeometryKind.RoundedRectangle
                     ? new CornerRadius(6)
-                    : new CornerRadius(0)
+                    : new CornerRadius(0),
+                Clip = new RectangleGeometry(new Rect(0, 0, widthPx, heightPx))
             };
 
             if (plan.Text is { Text.Length: > 0 } text)
@@ -5928,6 +5929,8 @@ public sealed class DocumentView : RichTextBox
         {
             Width = layout.Width,
             Height = layout.Height,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
             Clip = new RectangleGeometry(new Rect(0, 0, layout.Width, layout.Height))
         };
         foreach (var glyph in layout.Glyphs)

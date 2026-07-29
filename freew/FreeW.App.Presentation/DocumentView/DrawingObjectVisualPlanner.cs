@@ -192,7 +192,7 @@ public static class DrawingObjectTextLayoutPlanner
         var lines = new List<TextLayoutLine>();
         var current = new TextLayoutLine(0, lineHeight(RunFormatting.Default), TextAlignment.Left);
         lines.Add(current);
-        var lineIndex = 0;
+        var lineIndex = 1;
 
         void StartLine(TextAlignment alignment)
         {
@@ -205,13 +205,53 @@ public static class DrawingObjectTextLayoutPlanner
             // The current line remains in the list; StartLine replaces it after a hard break.
         }
 
+        bool IsWordStart(IReadOnlyList<DrawingObjectTextRunPlan> paragraphRuns, int runPosition, int offset)
+        {
+            if (offset > 0)
+                return char.IsWhiteSpace(paragraphRuns[runPosition].Text[offset - 1]);
+
+            for (var previousRun = runPosition - 1; previousRun >= 0; previousRun--)
+            {
+                var previousText = paragraphRuns[previousRun].Text ?? string.Empty;
+                if (previousText.Length == 0)
+                    continue;
+                return char.IsWhiteSpace(previousText[^1]);
+            }
+
+            return true;
+        }
+
+        double MeasureWord(
+            IReadOnlyList<DrawingObjectTextRunPlan> paragraphRuns,
+            int runPosition,
+            int offset)
+        {
+            var wordWidth = 0d;
+            for (var wordRun = runPosition; wordRun < paragraphRuns.Count; wordRun++)
+            {
+                var wordText = paragraphRuns[wordRun].Text ?? string.Empty;
+                var wordOffset = wordRun == runPosition ? offset : 0;
+                for (; wordOffset < wordText.Length; wordOffset++)
+                {
+                    var wordCharacter = wordText[wordOffset];
+                    if (wordCharacter is '\r' or '\n' || char.IsWhiteSpace(wordCharacter))
+                        return wordWidth;
+                    wordWidth += Math.Max(1, measure(
+                        wordCharacter.ToString(), paragraphRuns[wordRun].Formatting));
+                }
+            }
+
+            return wordWidth;
+        }
+
         for (var paragraphIndex = 0; paragraphIndex < plan.Paragraphs.Count; paragraphIndex++)
         {
             var paragraph = plan.Paragraphs[paragraphIndex];
             current.Alignment = paragraph.Alignment;
             var hasRun = false;
-            foreach (var run in paragraph.Runs)
+            for (var runPosition = 0; runPosition < paragraph.Runs.Count; runPosition++)
             {
+                var run = paragraph.Runs[runPosition];
                 var text = run.Text ?? string.Empty;
                 hasRun = true;
                 current.CaretStops.Add(new TextLayoutCaret(
@@ -221,13 +261,35 @@ public static class DrawingObjectTextLayoutPlanner
                     var character = text[offset];
                     if (character is '\r' or '\n')
                     {
+                        var breakLength = character == '\r'
+                            && offset + 1 < text.Length
+                            && text[offset + 1] == '\n'
+                            ? 2
+                            : 1;
                         current.CaretStops.Add(new TextLayoutCaret(
                             run.ParagraphIndex, run.RunIndex, offset, current.Width, run.Formatting));
                         FinishLine();
                         StartLine(paragraph.Alignment);
                         current.CaretStops.Add(new TextLayoutCaret(
-                            run.ParagraphIndex, run.RunIndex, offset + 1, current.Width, run.Formatting));
+                            run.ParagraphIndex, run.RunIndex, offset + breakLength, current.Width, run.Formatting));
+                        offset += breakLength - 1;
                         continue;
+                    }
+
+                    if (!char.IsWhiteSpace(character)
+                        && IsWordStart(paragraph.Runs, runPosition, offset))
+                    {
+                        var wordWidth = MeasureWord(paragraph.Runs, runPosition, offset);
+
+                        if (current.Width > 0
+                            && wordWidth <= contentWidth
+                            && current.Width + wordWidth > contentWidth)
+                        {
+                            FinishLine();
+                            StartLine(paragraph.Alignment);
+                            current.CaretStops.Add(new TextLayoutCaret(
+                                run.ParagraphIndex, run.RunIndex, offset, current.Width, run.Formatting));
+                        }
                     }
 
                     var glyphWidth = Math.Max(1, measure(character.ToString(), run.Formatting));
@@ -265,8 +327,12 @@ public static class DrawingObjectTextLayoutPlanner
         var glyphs = new List<DrawingObjectTextGlyphPlan>();
         var carets = new List<DrawingObjectTextCaretStopPlan>();
         var y = 0d;
-        foreach (var line in lines)
+        for (var linePosition = 0; linePosition < lines.Count; linePosition++)
         {
+            var line = lines[linePosition];
+            System.Diagnostics.Debug.Assert(
+                line.Index == linePosition,
+                $"Floating shape text line indexes must be monotonic; expected {linePosition}, got {line.Index}.");
             var alignmentOffset = line.Alignment switch
             {
                 TextAlignment.Center => Math.Max(0, (contentWidth - line.Width) / 2),
