@@ -393,6 +393,17 @@ public sealed class FunctionalParityMatrixTests
               .Append(i == FunctionalParityClassifier.OrderedKinds.Count - 1 ? "\n" : ",\n");
         }
         sb.Append("  },\n");
+        sb.Append("  \"catalogs\": {\n");
+        sb.Append("    \"conditionalFormatPopupCommandIds\": ")
+          .Append(JsonArray(FunctionalParityClassifier.ConditionalFormattingGalleryRows.OrderBy(id => id, StringComparer.Ordinal).ToArray()))
+          .Append(",\n");
+        sb.Append("    \"accountingSymbolCommandIds\": ")
+          .Append(JsonArray(FunctionalParityClassifier.AccountingSymbolRows.OrderBy(id => id, StringComparer.Ordinal).ToArray()))
+          .Append(",\n");
+        sb.Append("    \"fontBorderChoiceCommandIds\": ")
+          .Append(JsonArray(FunctionalParityClassifier.FontAndBorderChoiceRows.OrderBy(id => id, StringComparer.Ordinal).ToArray()))
+          .Append('\n');
+        sb.Append("  },\n");
 
         var topGaps = classifications
             .Where(c => c.Classification == FunctionalParityClassifier.ClassificationKind.RealBehaviorGap)
