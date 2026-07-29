@@ -6583,7 +6583,9 @@ public sealed class DocumentView : Control
         };
 
         var inset = Math.Min(PageBorderInsetDip, Math.Min(pageRect.Width, pageRect.Height) / 4);
-        var rect = pageRect.Deflate(new Thickness(inset));
+        // Avalonia centers the stroke on this rectangle. Move the paint geometry one device
+        // pixel inward so its opaque outer edge registers with Word's page-border raster.
+        var rect = pageRect.Deflate(new Thickness(inset + 1));
         context.DrawRectangle(null, pen, rect);
         // BorderLineStyle.Double: draw a second, inner stroke a couple of DIP inside the first.
         if (pb.LineStyle == BorderLineStyle.Double)

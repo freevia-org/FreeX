@@ -225,6 +225,14 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_RegistersPageBorderStrokeInsideSerializedInset()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("var rect = pageRect.Deflate(new Thickness(inset + 1))");
+    }
+
+    [Fact]
     public void AvaloniaDocumentView_UsesWordArtFillAsFieldAndContrastingText()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
