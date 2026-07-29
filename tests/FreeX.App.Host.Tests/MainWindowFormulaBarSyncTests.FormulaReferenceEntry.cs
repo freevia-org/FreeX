@@ -281,6 +281,31 @@ public sealed partial class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarPointMode_ExtendingLiveReference_PreservesThreeDSheetSpan()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            var startSheet = harness.AddSheet("Sheet2");
+            var endSheet = harness.AddSheet("Sheet3");
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaEditCell(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("=SUM(");
+            harness.SetFormulaBarCaretIndex("=SUM(".Length);
+            harness.PressFormulaBarKey(Key.F2).Should().BeTrue();
+
+            harness.SelectFormulaSheetTab(startSheet.Id, ModifierKeys.None);
+            harness.SelectFormulaSheetTab(endSheet.Id, ModifierKeys.Shift);
+            harness.ApplyFormulaRangeSelection(endSheet.Id, 2, 2, extend: false).Should().BeTrue();
+            harness.ApplyFormulaRangeSelection(endSheet.Id, 4, 3, extend: true).Should().BeTrue();
+
+            harness.FormulaBarText.Should().Be("=SUM(Sheet2:Sheet3!B2:C4");
+        });
+    }
+
+    [Fact]
     public void InlineEditorEscape_AfterFormulaReferenceSelection_CancelsEditAndLeavesReadyMode()
     {
         StaTestRunner.Run(() =>

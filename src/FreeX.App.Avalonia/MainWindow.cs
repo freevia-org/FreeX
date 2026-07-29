@@ -9149,6 +9149,8 @@ public sealed partial class MainWindow : Window
 
             _inlineCellEditSelectionStart = editor.SelectionStart;
             _inlineCellEditSelectionEnd = editor.SelectionEnd;
+            if (!_isApplyingFormulaBoxText)
+                ClearFormulaReferenceEntrySpanIfCaretLeftReference(editor);
         };
         editor.TextChanged += (_, _) =>
         {
@@ -9730,7 +9732,6 @@ public sealed partial class MainWindow : Window
             _isApplyingFormulaBoxText = false;
         }
 
-        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
         _session.SelectRangeForFormulaEdit(range, formulaCell.Value);
         _formulaRangeSelectionAnchor = range.Start;
         _formulaRangeSelectionCursor = range.End;

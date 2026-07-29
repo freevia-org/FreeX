@@ -192,7 +192,6 @@ public partial class MainWindow
         }
 
         ApplyFormulaEditorTextEdit(editor, edit.TextEdit);
-        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
 
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;
