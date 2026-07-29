@@ -233,7 +233,6 @@ jobs:
             throw "No $app release assets were downloaded."
           }
 
-          $assetNames = ($assets | ForEach-Object { "- $(Split-Path -Leaf $_)" }) -join "`n"
           $notes = @"
           # $app v$version Tester Release
 
@@ -263,10 +262,6 @@ jobs:
           4. Run `chmod +x ~/$app/$app` once, then start it with `~/$app/$app`. To update, close the app and replace the extracted directory.
 
           These tester packages are self-contained. Do not run them from inside the archive; keep the extracted Linux or macOS directory intact.
-
-          ## Assets
-
-          $assetNames
           "@
 
           gh release view $tag *> $null

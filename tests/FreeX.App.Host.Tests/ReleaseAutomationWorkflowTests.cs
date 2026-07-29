@@ -266,7 +266,6 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("-Runtimes \"${{ matrix.runtime }}\"");
         workflow.Should().Contain("-WindowsPackageMode SingleFile");
         workflow.Should().Contain("$tag = \"$($app.ToLowerInvariant())-v$version\"");
-        workflow.Should().Contain("Split-Path -Leaf $_");
         workflow.Should().Contain("## Install and deploy");
         workflow.Should().Contain("### Windows x64");
         workflow.Should().Contain("### Linux x64 and ARM64");
@@ -275,6 +274,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("shasum -a 256 -c $app-v$version-osx-<architecture>.zip.sha256");
         workflow.Should().Contain("$notes | gh release edit $tag --title $title --notes-file -");
         workflow.Should().Contain("$notes | gh release create $tag @assets --target $env:GITHUB_SHA --title $title --notes-file - @releaseArgs");
+        workflow.Should().NotContain("## Assets");
 
         publisher.Should().Contain("[ValidateSet(\"FreeX\", \"FreeW\", \"FreeP\")]");
         publisher.Should().Contain("[ValidateSet(\"SingleFile\", \"FolderZip\")]");
