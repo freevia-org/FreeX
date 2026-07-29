@@ -219,6 +219,62 @@ public sealed class DocumentViewColumnLayoutTests
             $"but col0 starts at Y={minYCol0:F1} and col1 starts at Y={minYCol1:F1}");
     }
 
+    [Fact]
+    public async Task TwoColumn_overflow_discards_trailing_paragraph_spacing_before_next_column()
+    {
+        (double Left, double Width) band0 = default;
+        (double Left, double Width) band1 = default;
+        double minYCol0 = double.MaxValue;
+        double minYCol1 = double.MaxValue;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Page.WidthPt = 612;
+            doc.Page.HeightPt = 136;
+            doc.Page.MarginLeftPt = 72;
+            doc.Page.MarginRightPt = 72;
+            doc.Page.MarginTopPt = 36;
+            doc.Page.MarginBottomPt = 36;
+            doc.Page.ColumnCount = 2;
+            doc.Page.ColumnSpacingPt = 36;
+
+            for (var i = 1; i <= 12; i++)
+            {
+                var paragraph = new Paragraph($"Column paragraph {i}.")
+                {
+                    Formatting = ParagraphFormatting.Default with { SpaceAfterPt = 8, SpaceAfterIsSet = true }
+                };
+                doc.Blocks.Add(paragraph);
+            }
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 800));
+            band0 = view.LayoutColumnBand(0);
+            band1 = view.LayoutColumnBand(1);
+
+            for (var blockIndex = 0; blockIndex < view.BlockCount; blockIndex++)
+            {
+                foreach (var glyph in view.GetPlacedForBlock(blockIndex))
+                {
+                    if (glyph.X >= band0.Left - 2 && glyph.X < band0.Left + band0.Width + 2)
+                        minYCol0 = Math.Min(minYCol0, glyph.Y);
+                    else if (glyph.X >= band1.Left - 2 && glyph.X < band1.Left + band1.Width + 2)
+                        minYCol1 = Math.Min(minYCol1, glyph.Y);
+                }
+            }
+        });
+
+        if (!ran) return;
+
+        minYCol0.Should().BeLessThan(double.MaxValue);
+        minYCol1.Should().BeLessThan(double.MaxValue);
+        minYCol1.Should().BeApproximately(minYCol0, 0.5,
+            "trailing paragraph spacing must not offset the first line in the next column");
+    }
+
     // ── Test 4: All glyphs land in one of the two column bands ─────────────────────────────────────
 
     [Fact]

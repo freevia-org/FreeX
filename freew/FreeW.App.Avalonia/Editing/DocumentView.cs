@@ -4748,6 +4748,36 @@ public sealed class DocumentView : Control
         return _layoutContentY;
     }
 
+    /// <summary>
+    /// Applies paragraph-after spacing without carrying it into the next print-layout column or page.
+    /// Word discards the trailing paragraph space when the preceding line is the last content that fits
+    /// in a column; the next paragraph starts at the next column's text-area origin.
+    /// </summary>
+    private void AdvanceAfterParagraphSpacing(double spaceAfter)
+    {
+        if (spaceAfter <= 0)
+            return;
+
+        if (_layoutTextAreaHeight <= 0)
+        {
+            _layoutContentY += spaceAfter;
+            return;
+        }
+
+        var slot = (int)(_layoutContentY / _layoutTextAreaHeight);
+        var pageIndex = slot / _colCount;
+        var bandReservation = _footnoteBandHeightByPage.TryGetValue(pageIndex, out var bh) ? bh : 0.0;
+        var effectiveHeight = Math.Max(1, _layoutTextAreaHeight - bandReservation);
+        var posInPage = _layoutContentY % _layoutTextAreaHeight;
+        if (posInPage > 0 && posInPage + spaceAfter > effectiveHeight)
+        {
+            _layoutContentY += _layoutTextAreaHeight - posInPage;
+            return;
+        }
+
+        _layoutContentY += spaceAfter;
+    }
+
     // ── AV-WRAP: wrap-exclusion helpers ───────────────────────────────────────────────────────────────
 
     private DocumentFloatingTextWrapLinePlan BuildFloatingTextWrapLinePlan(
@@ -5010,7 +5040,7 @@ public sealed class DocumentView : Control
                 lineAlignWidth, paraLeftInset + lineExtraInset, pf, isLast: true,
                 naturalLineHeightScale: naturalLineHeightScale);
         }
-        _layoutContentY += spaceAfter;
+        AdvanceAfterParagraphSpacing(spaceAfter);
     }
 
     private void EmitLinePaged(
