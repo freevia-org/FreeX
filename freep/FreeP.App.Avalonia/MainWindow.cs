@@ -8653,12 +8653,27 @@ public sealed partial class MainWindow : Window
             PresentationPaneAccessibilityAdapter.ApplyItem(
                 item,
                 PresentationPaneAccessibilityPlanner.SlidePaneId,
-                slideIndex,
+                GetAccessibilityOrdinalForSlide(slideIndex),
                 plan.AccessibleName,
                 selected ? "Selected" : "Not selected",
                 $"Slide{slideIndex + 1}");
         }
         RefreshPaneAccessibilityMetadata();
+    }
+
+    private int GetAccessibilityOrdinalForSlide(int slideIndex)
+    {
+        if (_slidePaneProjection is null)
+            return slideIndex;
+
+        for (var ordinal = 0; ordinal < _slidePaneProjection.Entries.Count; ordinal++)
+        {
+            var entry = _slidePaneProjection.Entries[ordinal];
+            if (entry.Kind == SlidePaneEntryKind.Slide && entry.SlideIndex == slideIndex)
+                return ordinal;
+        }
+
+        return slideIndex;
     }
 
     private void OnSlidePaneSelectionChanged(object? sender, SelectionChangedEventArgs e)

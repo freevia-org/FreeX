@@ -135,6 +135,22 @@ public sealed class PresentationPaneAccessibilityTests
             slideItemIds.Should().Contain("FreePSlidePaneItemSection1");
             slideItemIds.Should().Contain("FreePSlidePaneItemSlide1");
             slideItemIds.Should().Contain("FreePSlidePaneItemSlide2");
+
+            slideItemIds.Should().Equal(
+                "FreePSlidePaneItemSection1",
+                "FreePSlidePaneItemSlide1",
+                "FreePSlidePaneItemSlide2");
+            var slideItems = window.SlidePaneItemsForAccessibilityTests;
+            AutomationProperties.GetItemStatus(slideItems[0]).Should().Be("Not selected; Order 1");
+            AutomationProperties.GetItemStatus(slideItems[1]).Should().Be("Not selected; Order 2");
+            AutomationProperties.GetItemStatus(slideItems[2]).Should().Be("Selected; Order 3");
+
+            window.Editor.SelectSlide(0);
+            var reorderedSlideItems = window.SlidePaneItemsForAccessibilityTests;
+            reorderedSlideItems.Select(AutomationProperties.GetAutomationId).Should().Equal(slideItemIds);
+            AutomationProperties.GetItemStatus(reorderedSlideItems[0]).Should().Be("Not selected; Order 1");
+            AutomationProperties.GetItemStatus(reorderedSlideItems[1]).Should().Be("Selected; Order 2");
+            AutomationProperties.GetItemStatus(reorderedSlideItems[2]).Should().Be("Not selected; Order 3");
         }, CancellationToken.None);
     }
 

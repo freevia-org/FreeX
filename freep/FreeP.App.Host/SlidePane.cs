@@ -255,12 +255,27 @@ public sealed class SlidePane : Border
                 PresentationPaneAccessibilityAdapter.ApplyItem(
                     item,
                     PresentationPaneAccessibilityPlanner.SlidePaneId,
-                    itemIdx,
+                    GetAccessibilityOrdinalForSlide(itemIdx),
                     plan.AccessibleName,
                     selected ? "Selected" : "Not selected",
                     $"Slide{itemIdx + 1}");
             }
         }
+    }
+
+    private int GetAccessibilityOrdinalForSlide(int slideIndex)
+    {
+        if (_sessionProjection is null)
+            return slideIndex;
+
+        for (var ordinal = 0; ordinal < _sessionProjection.Entries.Count; ordinal++)
+        {
+            var entry = _sessionProjection.Entries[ordinal];
+            if (entry.Kind == SlidePaneEntryKind.Slide && entry.SlideIndex == slideIndex)
+                return ordinal;
+        }
+
+        return slideIndex;
     }
 
     // ── Item construction ─────────────────────────────────────────────────────────
