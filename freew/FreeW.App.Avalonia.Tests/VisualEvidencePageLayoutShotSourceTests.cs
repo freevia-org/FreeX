@@ -51,6 +51,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("static int WordComparableContentOffsetY(string scenarioId, int pageNumber)");
         source.Should().Contain("string.Equals(scenarioId, \"f2-footnotes\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("string.Equals(scenarioId, \"f2-endnotes\", StringComparison.OrdinalIgnoreCase) && pageNumber == 1");
+        source.Should().MatchRegex("ShouldCaptureWordComparablePageSurface\\([\\s\\S]*?string.Equals\\(scenarioId, \"f2-hf-images\", StringComparison.OrdinalIgnoreCase\\)");
         source.Should().Contain("pageChromeMask");
         source.Should().Contain("DocumentViewLayoutPlanner.BuildSurfacePlan(");
         source.Should().Contain("pageTopInViewport = surfacePlan.PageTopDip(pageIndex) - viewportOffsetY");
