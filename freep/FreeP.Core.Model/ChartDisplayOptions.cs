@@ -28,4 +28,5 @@ public sealed record ChartDisplayOptions(
     bool ShowBubbleSize = false,
     int? StyleId = null,
     bool? ShowLeaderLines = null,
-    bool? TitleOverlay = null);
+    bool? TitleOverlay = null,
+    bool? PlotVisibleOnly = null);

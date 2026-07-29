@@ -14,6 +14,7 @@ public sealed record ChartDisplayOptionsSurfacePlan(
     string Title,
     string ChartTitleLabel,
     string TitleOverlayLabel,
+    string PlotVisibleOnlyLabel,
     string ChartStyleLabel,
     string LegendLabel,
     string ValueLabelsLabel,
@@ -54,6 +55,7 @@ public sealed class ChartDisplayOptionsPlanner
     public const string DialogTitle = "Chart Options";
     public const string ChartTitleLabel = "Chart Title";
     public const string TitleOverlayLabel = "Overlay title on plot";
+    public const string PlotVisibleOnlyLabel = "Plot visible cells only";
     public const string ChartStyleLabel = "Chart Style";
     public const string LegendLabel = "Legend";
     public const string ValueLabelsLabel = "Value Labels";
@@ -118,6 +120,8 @@ public sealed class ChartDisplayOptionsPlanner
     private string _title = string.Empty;
     private bool _titleOverlay;
     private bool _titleOverlayChanged;
+    private bool _plotVisibleOnly;
+    private bool _plotVisibleOnlyChanged;
     private int? _styleId;
     private LegendPosition? _legend;
     private bool _showValueLabels;
@@ -151,6 +155,7 @@ public sealed class ChartDisplayOptionsPlanner
     {
         _title = chart.Title ?? string.Empty;
         _titleOverlay = chart.TitleOverlay == true;
+        _plotVisibleOnly = chart.PlotVisibleOnly != false;
         _styleId = chart.StyleId;
         _availableStyleOptions = StyleOptionsFor(chart.StyleId);
         _legend = chart.Legend;
@@ -187,6 +192,7 @@ public sealed class ChartDisplayOptionsPlanner
             DialogTitle,
             ChartTitleLabel,
             TitleOverlayLabel,
+            PlotVisibleOnlyLabel,
             ChartStyleLabel,
             LegendLabel,
             ValueLabelsLabel,
@@ -225,6 +231,7 @@ public sealed class ChartDisplayOptionsPlanner
 
     public string Title => _title;
     public bool TitleOverlay => _titleOverlay;
+    public bool PlotVisibleOnly => _plotVisibleOnly;
     public int? StyleId => _styleId;
     public IReadOnlyList<ChartDisplayStyleOption> AvailableStyleOptions => _availableStyleOptions;
 
@@ -275,6 +282,11 @@ public sealed class ChartDisplayOptionsPlanner
     {
         _titleOverlay = value;
         _titleOverlayChanged = true;
+    }
+    public void SetPlotVisibleOnly(bool value)
+    {
+        _plotVisibleOnly = value;
+        _plotVisibleOnlyChanged = true;
     }
     public void SetStyleId(int? styleId)
     {
@@ -335,7 +347,8 @@ public sealed class ChartDisplayOptionsPlanner
         _showBubbleSize,
         _styleId,
         _showLeaderLines,
-        _titleOverlayChanged ? _titleOverlay : null);
+        _titleOverlayChanged ? _titleOverlay : null,
+        _plotVisibleOnlyChanged ? _plotVisibleOnly : null);
 
     private ChartTextStyle? BuildLabelTextStyle()
     {

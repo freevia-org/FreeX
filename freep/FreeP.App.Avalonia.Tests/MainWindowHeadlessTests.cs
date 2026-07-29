@@ -6701,6 +6701,7 @@ public sealed class MainWindowHeadlessTests
                 labelColor: "#2F5496",
                 showBubbleSize: true);
             dialog.SetTitleOverlayForTests(true);
+            dialog.SetPlotVisibleOnlyForTests(false);
             dialog.SetVaryColorsForTests(true);
             dialog.SetLegendOverlayForTests(true);
             dialog.SetHighLowLinesForTests(false);
@@ -6713,6 +6714,7 @@ public sealed class MainWindowHeadlessTests
         options.Should().NotBeNull();
         options!.Title.Should().Be("Revenue");
         options.TitleOverlay.Should().BeTrue();
+        options.PlotVisibleOnly.Should().BeFalse();
         options.Legend.Should().Be(LegendPosition.Bottom);
         options.LabelTextStyle.Should().NotBeNull();
         options.LabelTextStyle!.FontFamily.Should().Be("Aptos");

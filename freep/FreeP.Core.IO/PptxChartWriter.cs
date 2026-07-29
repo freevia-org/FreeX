@@ -97,7 +97,7 @@ internal static class PptxChartWriter
                 BuildView3DEl(chart),
                 plotArea,
                 legendEl,
-                new XElement(C + "plotVisOnly", new XAttribute("val", "1")),
+                new XElement(C + "plotVisOnly", new XAttribute("val", BoolValue(chart.PlotVisibleOnly ?? true))),
                 BuildDisplayBlanksAsEl(chart),
                 BuildShowDataLabelsOverMaximumEl(chart)),
             BuildChartShapePropertiesEl(chart.ChartAreaFill, chart.ChartAreaOutline),

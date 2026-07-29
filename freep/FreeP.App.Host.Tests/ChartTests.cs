@@ -119,6 +119,7 @@ public sealed class ChartTests : IDisposable
         chart.ChartAreaOutline = new ShapeOutline.Visible(SrgbColor.FromRgb(0x7F7F7F), 1.25);
         chart.HasAutomaticTitle = true;
         chart.TitleOverlay = true;
+        chart.PlotVisibleOnly = false;
         chart.PlotAreaManualLayout = new ChartManualLayout
         {
             LayoutTarget = "inner",
@@ -157,6 +158,7 @@ public sealed class ChartTests : IDisposable
         ((ShapeOutline.Visible)clone.ChartAreaOutline!).WidthPt.Should().Be(1.25);
         clone.HasAutomaticTitle.Should().BeTrue();
         clone.TitleOverlay.Should().BeTrue();
+        clone.PlotVisibleOnly.Should().BeFalse();
         clone.PlotAreaManualLayout.Should().NotBeSameAs(chart.PlotAreaManualLayout);
         clone.PlotAreaManualLayout!.LayoutTarget.Should().Be("inner");
         clone.PlotAreaManualLayout.XMode.Should().Be(ChartManualLayoutMode.Edge);
@@ -492,6 +494,27 @@ public sealed class ChartTests : IDisposable
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.Title.Should().Be("Quarterly Performance");
         rt.TitleOverlay.Should().Be(overlay);
+    }
+
+    [Theory]
+    [InlineData(true, "1")]
+    [InlineData(false, "0")]
+    public void RoundTrip_Chart_PlotVisibleOnly_PreservesPackageAndModel(bool visibleOnly, string xmlValue)
+    {
+        var chart = BuildColumnChart();
+        chart.PlotVisibleOnly = visibleOnly;
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var chartEl = chartDoc.Root!.Element(ChartNs + "chart")!;
+            chartEl.Element(ChartNs + "plotVisOnly")?.Attribute("val")?.Value.Should().Be(xmlValue);
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.PlotVisibleOnly.Should().Be(visibleOnly);
     }
 
     [Fact]
