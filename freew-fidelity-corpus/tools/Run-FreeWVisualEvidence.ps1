@@ -3713,7 +3713,8 @@ $avaloniaRenderArgs = @(
     '--project', $pageShotProject,
     '-c', $Configuration,
     '--',
-    $avaloniaDir
+    $avaloniaDir,
+    '--fixtures-dir', $fixtureDir
 )
 foreach ($scenarioId in $effectiveScenarioIds) {
     $avaloniaRenderArgs += @('--scenario', $scenarioId)
