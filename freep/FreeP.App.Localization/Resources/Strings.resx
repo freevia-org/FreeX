@@ -1288,6 +1288,24 @@
   <data name="Ribbon_Command_SmartArtBasicProcess_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
+  <data name="Ribbon_Command_SmartArtAccentProcess_Label" xml:space="preserve">
+    <value>Accent Process</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtAccentProcess_KeyTip" xml:space="preserve">
+      <value>AP</value>
+    </data>
+  <data name="Ribbon_Command_SmartArtAscendingProcess_Label" xml:space="preserve">
+      <value>Ascending Process</value>
+    </data>
+  <data name="Ribbon_Command_SmartArtAscendingProcess_KeyTip" xml:space="preserve">
+      <value>ASP</value>
+    </data>
+  <data name="Ribbon_Command_SmartArtDescendingProcess_Label" xml:space="preserve">
+      <value>Descending Process</value>
+    </data>
+  <data name="Ribbon_Command_SmartArtDescendingProcess_KeyTip" xml:space="preserve">
+      <value>DSP</value>
+    </data>
   <data name="Ribbon_Command_SmartArtBasicTimeline_Label" xml:space="preserve">
     <value>Basic Timeline</value>
   </data>

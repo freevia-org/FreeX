@@ -2718,6 +2718,12 @@ public sealed partial class MainWindow : Window
         }
         r.Register(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicProcess)));
+        r.Register(SmartArtAuthoringPlanner.AccentProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.AccentProcess)));
+        r.Register(SmartArtAuthoringPlanner.AscendingProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.AscendingProcess)));
+        r.Register(SmartArtAuthoringPlanner.DescendingProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.DescendingProcess)));
         r.Register(SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicTimeline)));
         r.Register(SmartArtAuthoringPlanner.CircleAccentTimelineLayoutCommandId,

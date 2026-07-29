@@ -158,3 +158,6 @@ foreach ($docx in @($files)) {
     }
 }
 Write-Host "== done: $ok ok, $fail failed. PNGs in $wordDir ==" -ForegroundColor Green
+if ($fail -gt 0) {
+    exit 1
+}
