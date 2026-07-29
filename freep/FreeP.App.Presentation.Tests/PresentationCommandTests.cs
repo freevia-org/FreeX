@@ -34,6 +34,19 @@ public sealed class PresentationCommandTests
         RotationDeg = 0,
     };
 
+    private static SlideShape MakeChart(uint id = 1, bool protectedObject = true) => new()
+    {
+        Id = id,
+        Name = $"Chart{id}",
+        Kind = SlideShapeKind.Chart,
+        OffsetXEmu = 100,
+        OffsetYEmu = 200,
+        ExtentCxEmu = 300,
+        ExtentCyEmu = 400,
+        RotationDeg = 15,
+        Chart = new ChartShape { ChartObjectProtected = protectedObject }
+    };
+
     // ════════════════════════════════════════════════════════════════════════════
     // SLIDE COMMANDS
     // ════════════════════════════════════════════════════════════════════════════
@@ -290,6 +303,39 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void MoveShapeCommand_ProtectedChart_DoesNotChangeGeometry()
+    {
+        var (p, bus) = Make();
+        var chart = MakeChart();
+        p.Slides[0].Shapes.Add(chart);
+
+        bus.Execute(new MoveShapeCommand(0, chart.Id, 500, 300));
+
+        chart.OffsetXEmu.Should().Be(100);
+        chart.OffsetYEmu.Should().Be(200);
+
+        bus.Undo();
+        chart.OffsetXEmu.Should().Be(100);
+        chart.OffsetYEmu.Should().Be(200);
+        bus.Redo();
+        chart.OffsetXEmu.Should().Be(100);
+        chart.OffsetYEmu.Should().Be(200);
+    }
+
+    [Fact]
+    public void MoveShapeCommand_UnprotectedChart_StillChangesGeometry()
+    {
+        var (p, bus) = Make();
+        var chart = MakeChart(protectedObject: false);
+        p.Slides[0].Shapes.Add(chart);
+
+        bus.Execute(new MoveShapeCommand(0, chart.Id, 500, 300));
+
+        chart.OffsetXEmu.Should().Be(600);
+        chart.OffsetYEmu.Should().Be(500);
+    }
+
+    [Fact]
     public void ResizeShapeCommand_Apply_SetsNewGeometry()
     {
         var (p, bus) = Make();
@@ -314,6 +360,27 @@ public sealed class PresentationCommandTests
         shape.OffsetYEmu.Should().Be(200);
         shape.ExtentCxEmu.Should().Be(300);
         shape.ExtentCyEmu.Should().Be(400);
+    }
+
+    [Fact]
+    public void ResizeShapeCommand_ProtectedChart_DoesNotChangeGeometry()
+    {
+        var (p, bus) = Make();
+        var chart = MakeChart();
+        p.Slides[0].Shapes.Add(chart);
+
+        bus.Execute(new ResizeShapeCommand(0, chart.Id, 10, 20, 500, 600));
+
+        chart.OffsetXEmu.Should().Be(100);
+        chart.OffsetYEmu.Should().Be(200);
+        chart.ExtentCxEmu.Should().Be(300);
+        chart.ExtentCyEmu.Should().Be(400);
+
+        bus.Undo();
+        chart.OffsetXEmu.Should().Be(100);
+        chart.OffsetYEmu.Should().Be(200);
+        chart.ExtentCxEmu.Should().Be(300);
+        chart.ExtentCyEmu.Should().Be(400);
     }
 
     [Fact]
@@ -577,6 +644,20 @@ public sealed class PresentationCommandTests
         bus.Execute(new RotateShapeCommand(0, 1, 90.0));
         bus.Undo();
         shape.RotationDeg.Should().Be(30.0);
+    }
+
+    [Fact]
+    public void RotateShapeCommand_ProtectedChart_DoesNotChangeRotation()
+    {
+        var (p, bus) = Make();
+        var chart = MakeChart();
+        p.Slides[0].Shapes.Add(chart);
+
+        bus.Execute(new RotateShapeCommand(0, chart.Id, 90.0));
+
+        chart.RotationDeg.Should().Be(15.0);
+        bus.Undo();
+        chart.RotationDeg.Should().Be(15.0);
     }
 
     [Fact]
