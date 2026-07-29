@@ -12,7 +12,7 @@ internal sealed record DateTimeDialogResult(string Text, bool IsField, string? F
 
 internal sealed class DateTimeDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle Chrome = AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly DateTime _moment;
     private readonly CultureInfo _culture;
     private readonly IReadOnlyList<DateTimeFormat> _formats;

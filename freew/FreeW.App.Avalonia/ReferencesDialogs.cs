@@ -10,7 +10,7 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class CrossReferenceDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly TextDocument _document;
     private readonly ComboBox _typeBox = new() { MinWidth = 170 };
@@ -155,7 +155,7 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
 
 internal sealed class SourceConflictResolutionDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private SourceManagementSourceConflictResolutionAction? _result;
 
@@ -212,7 +212,7 @@ internal sealed class SourceConflictResolutionDialog : FreeWDialogWindow
 
 internal sealed class CitationSourcePickerDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly IReadOnlyList<Source> _sources;
     private readonly ListBox _sourceList = new() { MinWidth = 340, Height = 160 };
@@ -289,7 +289,7 @@ internal sealed class CitationSourcePickerDialog : FreeWDialogWindow
 
 internal sealed class MarkCitationDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly IReadOnlyList<MarkCitationCategoryChoice> _categoryChoices;
     private readonly ComboBox _categoryBox = new() { MinWidth = 300 };
@@ -409,7 +409,7 @@ internal sealed class MarkCitationDialog : FreeWDialogWindow
 
 internal sealed class SourceEntryDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly IReadOnlyList<SourceManagementSourceTypeChoice> _typeChoices;
     private readonly ComboBox _typeBox = new() { MinWidth = 260 };
@@ -581,7 +581,7 @@ internal sealed class SourceEntryDialog : FreeWDialogWindow
 
 internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private sealed record RowControls(
         TextBox First,
@@ -760,7 +760,7 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
 
 internal sealed class ManageSourcesDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private SourceManagementDialogState _state;
     private readonly ListBox _masterList = new() { MinWidth = 220, Height = 190 };

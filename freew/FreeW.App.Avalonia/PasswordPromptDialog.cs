@@ -11,7 +11,7 @@ namespace FreeW.App.Avalonia;
 internal sealed class PasswordPromptDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
-        new(FontFamily.Default);
+        AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly TextBox _passwordBox = new()
     {

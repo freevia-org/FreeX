@@ -13,7 +13,7 @@ namespace FreeW.App.Avalonia;
 internal sealed class TableFormulaDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
-        new(FontFamily.Default);
+        AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly TextBox _formula;
     private readonly ComboBox _format;
@@ -180,7 +180,7 @@ internal enum TablePropertiesDialogTab
 internal sealed class TablePropertiesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
-        new(FontFamily.Default);
+        AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly CheckBox _preferredWidthOn;
     private readonly TextBox _preferredWidth;

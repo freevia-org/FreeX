@@ -28,7 +28,7 @@ public sealed class ZoomDialogPolicySourceGuardTests
         var source = ReadAvaloniaSource("ZoomDialog.cs");
 
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
-        source.Should().Contain("AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(");
+        source.Should().Contain("AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(_percentBox, DialogChromeStyle)");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true)");

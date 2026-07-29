@@ -17,7 +17,7 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 internal static class MailMergeDialogs
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     /// <summary>
     /// Recipient-list dialog: a multi-line CSV editor (first line = column headers). When the document

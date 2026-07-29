@@ -200,7 +200,7 @@ internal sealed class AutosaveAdapter : IDisposable
 /// </summary>
 internal sealed class RecoveryPromptDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private RecoveryPromptDialog(string message)
     {

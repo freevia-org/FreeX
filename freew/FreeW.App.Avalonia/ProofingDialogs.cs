@@ -10,7 +10,7 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class ProofingLanguageDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly ComboBox _languages = new() { MinWidth = 260 };
 
     public string? SelectedTag { get; private set; }

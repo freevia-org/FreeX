@@ -19,7 +19,7 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 internal sealed class ZoomDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     // Representative fit scales for the page-relative presets. These mirror typical Word values for
     // a Letter page in a roughly 1000px workspace; exact fit-to-viewport computation is deferred.
