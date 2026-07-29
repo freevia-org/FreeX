@@ -67,6 +67,59 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
     }
 
     [Fact]
+    public async Task FormulaBar_ShiftF8AddMode_AppendsKeyboardCreatedAreas()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = CreateWindowWithCleanSheet(out var sheet);
+            var formulaCell = new CellAddress(sheet.Id, 3, 3);
+            window.Session.SelectCell(formulaCell);
+            window.BeginFormulaEditForTest(formulaCell, "=");
+
+            var addMode = Press(Key.F8, KeyModifiers.Shift);
+            window.RaiseFormulaBoxKeyDownForTest(addMode);
+            addMode.Handled.Should().BeTrue();
+            window.FormulaRangeEntrySelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Add);
+
+            window.RaiseFormulaBoxKeyDownForTest(Press(Key.Right));
+            window.FormulaBoxTextForTest.Should().Be("=D3");
+
+            window.RaiseFormulaBoxKeyDownForTest(Press(Key.Down));
+            window.FormulaBoxTextForTest.Should().Be("=D3,D4");
+
+            window.RaiseFormulaBoxKeyDownForTest(Press(Key.Right, KeyModifiers.Shift));
+            window.FormulaBoxTextForTest.Should().Be("=D3,D4,D4:E4");
+
+            window.RaiseFormulaBoxKeyDownForTest(Press(Key.Escape));
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task InlineEditor_ShiftF8AddMode_AppendsKeyboardCreatedAreas()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = CreateWindowWithCleanSheet(out var sheet);
+            var formulaCell = new CellAddress(sheet.Id, 2, 2);
+            window.Session.SelectCell(formulaCell);
+            window.BeginInlineCellEditForTest(formulaCell, "=", 1);
+
+            var addMode = Press(Key.F8, KeyModifiers.Shift);
+            window.RaiseInlineCellEditorKeyDownForTest(addMode);
+            addMode.Handled.Should().BeTrue();
+
+            window.RaiseInlineCellEditorKeyDownForTest(Press(Key.Right));
+            window.InlineCellEditorTextForTest.Should().Be("=C2");
+            window.RaiseInlineCellEditorKeyDownForTest(Press(Key.Down));
+            window.InlineCellEditorTextForTest.Should().Be("=C2,C3");
+
+            window.RaiseInlineCellEditorKeyDownForTest(Press(Key.Escape));
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task FormulaBar_F4_CyclesReferenceAbsoluteState()
     {
         await Session.Dispatch(() =>

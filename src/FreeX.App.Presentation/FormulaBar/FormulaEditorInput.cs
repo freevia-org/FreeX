@@ -9,6 +9,7 @@ public enum FormulaEditorKey
     Escape,
     F2,
     F4,
+    F8,
     Up,
     Down,
     Left,

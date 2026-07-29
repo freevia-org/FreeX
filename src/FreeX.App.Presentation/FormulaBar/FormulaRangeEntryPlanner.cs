@@ -15,6 +15,72 @@ public static class FormulaRangeEntryPlanner
             ? cursor
             : selectedRange.Start;
 
+    public static bool TryToggleKeyboardSelectionMode(
+        FormulaEditorKey key,
+        FormulaEditorModifiers modifiers,
+        ExcelSelectionMode current,
+        out ExcelSelectionMode next)
+    {
+        next = current;
+        if (key != FormulaEditorKey.F8)
+            return false;
+
+        if (modifiers == FormulaEditorModifiers.None)
+        {
+            next = current == ExcelSelectionMode.Extend
+                ? ExcelSelectionMode.Normal
+                : ExcelSelectionMode.Extend;
+            return true;
+        }
+
+        if (modifiers == FormulaEditorModifiers.Shift)
+        {
+            next = current == ExcelSelectionMode.Add
+                ? ExcelSelectionMode.Normal
+                : ExcelSelectionMode.Add;
+            return true;
+        }
+
+        return false;
+    }
+
+    public static GridRange GetKeyboardDisjointRange(
+        CellAddress current,
+        CellAddress target,
+        bool extendSelection)
+    {
+        if (!extendSelection || current.Sheet != target.Sheet)
+            return new GridRange(target, target);
+
+        return new GridRange(
+            new CellAddress(target.Sheet, Math.Min(current.Row, target.Row), Math.Min(current.Col, target.Col)),
+            new CellAddress(target.Sheet, Math.Max(current.Row, target.Row), Math.Max(current.Col, target.Col)));
+    }
+
+    public static bool TryAppendKeyboardRangeSelection(
+        string text,
+        int? previousReferenceStart,
+        int? previousReferenceLength,
+        CellAddress current,
+        CellAddress target,
+        bool extendSelection,
+        CellAddress formulaCell,
+        bool useR1C1ReferenceStyle,
+        out FormulaRangeEntryEdit edit,
+        string? selectedSheetName = null)
+    {
+        var range = GetKeyboardDisjointRange(current, target, extendSelection);
+        return TryAppendDisjointRangeSelection(
+            text,
+            previousReferenceStart,
+            previousReferenceLength,
+            range,
+            formulaCell,
+            useR1C1ReferenceStyle,
+            out edit,
+            selectedSheetName);
+    }
+
     public static CellAddress? GetKeyboardSelectionTarget(
         FormulaEditorKey key,
         FormulaEditorKey systemKey,
