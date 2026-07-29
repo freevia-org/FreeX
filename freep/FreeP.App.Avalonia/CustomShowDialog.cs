@@ -26,6 +26,7 @@ internal sealed class CustomShowDialog : Window
     private readonly Button _startButton;
     private readonly Button _moveUpButton;
     private readonly Button _moveDownButton;
+    private readonly Button _removeButton;
     private readonly List<CheckBox> _slideCheckBoxes = new();
     private IReadOnlyList<SlideShowCustomShowSlideOption> _availableSlides = Array.Empty<SlideShowCustomShowSlideOption>();
     private Point? _customShowSlideDragStartPoint;
@@ -73,6 +74,7 @@ internal sealed class CustomShowDialog : Window
         _startButton = MakeButton("Start Show", OnStartShow);
         _moveUpButton = MakeButton("Move Up", () => OnMoveSelectedSlide(-1));
         _moveDownButton = MakeButton("Move Down", () => OnMoveSelectedSlide(1));
+        _removeButton = MakeButton("Remove", OnRemoveSelectedSlide);
 
         Content = BuildContent();
         Refresh(selectCustomShowIndex: 0);
@@ -94,6 +96,10 @@ internal sealed class CustomShowDialog : Window
     internal void MoveSelectedCustomShowSlideUpForTests() => OnMoveSelectedSlide(-1);
 
     internal void MoveSelectedCustomShowSlideDownForTests() => OnMoveSelectedSlide(1);
+
+    internal void RemoveSelectedCustomShowSlideForTests() => OnRemoveSelectedSlide();
+
+    internal void AddCustomShowSlideOccurrenceForTests(string slideId) => AddSlideOccurrence(slideId);
 
     internal SlideShowCustomShowDragReorderPlan DragReorderCustomShowSlideForTests(
         int sourceSlideIndex,
@@ -161,6 +167,7 @@ internal sealed class CustomShowDialog : Window
             {
                 _moveUpButton,
                 _moveDownButton,
+                _removeButton,
             },
         };
         DockPanel.SetDock(moveButtons, Dock.Right);
@@ -277,7 +284,13 @@ internal sealed class CustomShowDialog : Window
             checkBox.MaxHeight = 20;
             checkBox.Padding = new Thickness(0);
             _slideCheckBoxes.Add(checkBox);
-            _slidePanel.Children.Add(checkBox);
+            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2), LastChildFill = true };
+            var addButton = MakeButton("Add", () => AddSlideOccurrence(slide.SlideId));
+            addButton.MinWidth = 58;
+            DockPanel.SetDock(addButton, Dock.Right);
+            row.Children.Add(addButton);
+            row.Children.Add(checkBox);
+            _slidePanel.Children.Add(row);
         }
     }
 
@@ -330,6 +343,48 @@ internal sealed class CustomShowDialog : Window
         }
 
         ApplyMutationResult(_host.UpdateCustomShowSlides(SelectedShow.Index, SelectedSlideIds()));
+    }
+
+    private void AddSlideOccurrence(string slideId)
+    {
+        if (SelectedShow is null)
+        {
+            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
+            return;
+        }
+
+        var session = _host.BuildCustomShowSessionPlan(
+            SlideShowCustomShowSessionPlanner.SelectShow(SelectedShow.Index));
+        var result = _host.UpdateCustomShowSlides(
+            SelectedShow.Index,
+            session.SelectedSlideIds.Append(slideId));
+        ApplyMutationResult(result);
+        if (result.Succeeded)
+            _customShowSlideList.SelectedIndex = _customShowSlideList.Items.Count - 1;
+    }
+
+    private void OnRemoveSelectedSlide()
+    {
+        if (SelectedShow is null)
+        {
+            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
+            return;
+        }
+
+        if (_customShowSlideList.SelectedItem is not CustomShowSlideListItem selectedSlide)
+        {
+            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowSlideMessage);
+            return;
+        }
+
+        var session = _host.BuildCustomShowSessionPlan(
+            SlideShowCustomShowSessionPlanner.SelectShow(SelectedShow.Index));
+        var slideIds = session.SelectedSlideIds.ToList();
+        slideIds.RemoveAt(selectedSlide.Index);
+        var result = _host.UpdateCustomShowSlides(SelectedShow.Index, slideIds);
+        ApplyMutationResult(result);
+        if (result.Succeeded && _customShowSlideList.Items.Count > 0)
+            _customShowSlideList.SelectedIndex = Math.Min(selectedSlide.Index, _customShowSlideList.Items.Count - 1);
     }
 
     private void OnMoveSelectedSlide(int offset)
@@ -605,6 +660,7 @@ internal sealed class CustomShowDialog : Window
         var hasCustomShowSlide = selectedIndex >= 0 && selectedIndex < _customShowSlideList.Items.Count;
         _moveUpButton.IsEnabled = hasCustomShowSlide && selectedIndex > 0;
         _moveDownButton.IsEnabled = hasCustomShowSlide && selectedIndex < _customShowSlideList.Items.Count - 1;
+        _removeButton.IsEnabled = hasCustomShowSlide;
     }
 
     private IEnumerable<string?> SelectedSlideIds() =>

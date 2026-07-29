@@ -1554,6 +1554,21 @@ public sealed partial class SlideShowMainWindowCustomShowTests
             presentation.CustomShows[0].SlideIds.Should().Equal(presentation.Slides[1].Id, presentation.Slides[0].Id);
             dialog.SelectedCustomShowSlideIndex.Should().Be(1);
             dialog.ValidationMessage.Should().BeEmpty();
+
+            dialog.AddCustomShowSlideOccurrenceForTests(presentation.Slides[0].Id);
+
+            presentation.CustomShows[0].SlideIds.Should().Equal(
+                presentation.Slides[1].Id,
+                presentation.Slides[0].Id,
+                presentation.Slides[0].Id);
+            dialog.SelectedCustomShowSlideIndex.Should().Be(2);
+
+            dialog.RemoveSelectedCustomShowSlideForTests();
+
+            presentation.CustomShows[0].SlideIds.Should().Equal(
+                presentation.Slides[1].Id,
+                presentation.Slides[0].Id);
+            dialog.SelectedCustomShowSlideIndex.Should().Be(1);
         }
         finally
         {
