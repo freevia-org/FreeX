@@ -215,6 +215,28 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task Avalonia_data_transfer_reads_external_rtf_platform_format()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var rtf = Encoding.ASCII.GetBytes(@"{\rtf1\ansi Native RTF}");
+            var item = new DataTransferItem();
+            item.Set(
+                OperatingSystem.IsWindows()
+                    ? AvaloniaPresentationSystemClipboard.ExternalRtfWindowsFormat
+                    : AvaloniaPresentationSystemClipboard.ExternalRtfLinuxFormat,
+                rtf);
+            using var transfer = new DataTransfer();
+            transfer.Add(item);
+
+            var content = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+
+            content.RtfBytes.Should().Equal(rtf);
+            content.HasRichText.Should().BeTrue();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Avalonia_data_transfer_falls_back_when_public_platform_format_cannot_be_read()
     {
         using var transfer = new ThrowingPlatformAliasTransfer();
@@ -368,6 +390,27 @@ public sealed class PresentationClipboardInteropTests
         var run = editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Single().Runs.Single();
         run.Text.Should().Be("Rich Avalonia paste");
         run.Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task External_Rtf_is_pasted_as_formatted_text_box()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                RtfBytes: Encoding.ASCII.GetBytes(
+                    @"{\rtf1\ansi{\fonttbl{\f0 Calibri;}}\pard\f0\fs24 Before \b bold\b0\par After}")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        var result = await service.PasteAsync(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        var body = editor.CurrentSlide!.Shapes.Single().TextBody!;
+        body.Paragraphs.Should().HaveCount(2);
+        body.Paragraphs[0].Runs.Single(run => run.Text == "bold").Bold.Should().BeTrue();
+        body.Paragraphs[1].Runs.Single().Text.Should().Be("After");
     }
 
     [Fact]

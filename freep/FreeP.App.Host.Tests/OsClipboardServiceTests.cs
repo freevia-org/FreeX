@@ -39,6 +39,7 @@ public sealed class OsClipboardServiceTests
         public byte[]? SelectionBytes { get; set; }
         public byte[]? RichTextBytes { get; set; }
         public byte[]? XamlPackageBytes { get; set; }
+        public byte[]? RtfBytes { get; set; }
         public string? OwnerToken { get; set; }
         public bool ThrowOnRead { get; set; }
         public bool ThrowOnWrite { get; set; }
@@ -63,7 +64,8 @@ public sealed class OsClipboardServiceTests
                 Text: HasText ? Text : null,
                 OwnerToken: OwnerToken,
                 RichTextBytes: RichTextBytes,
-                XamlPackageBytes: XamlPackageBytes);
+                XamlPackageBytes: XamlPackageBytes,
+                RtfBytes: RtfBytes);
         }
 
         public bool ContainsImage() => HasImage;
@@ -352,6 +354,19 @@ public sealed class OsClipboardServiceTests
         content.OwnerToken.Should().Be("legacy-owner");
     }
 
+    [StaFact]
+    public void WpfDataObject_ReadsNativeRtfPayload()
+    {
+        var rtf = Encoding.ASCII.GetBytes(@"{\rtf1\ansi Native RTF}");
+        var dataObject = new DataObject();
+        dataObject.SetData(DataFormats.Rtf, new MemoryStream(rtf, writable: false), false);
+
+        var content = WpfOsClipboard.ReadDataObject(dataObject);
+
+        content.RtfBytes.Should().Equal(rtf);
+        content.HasRichText.Should().BeTrue();
+    }
+
     private static byte[] ReadComHGlobal(DataObject dataObject, string format)
     {
         var formatEtc = new FORMATETC
@@ -525,6 +540,29 @@ public sealed class OsClipboardServiceTests
         run.FontSizePt.Should().Be(18);
         run.Bold.Should().BeTrue();
         run.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+    }
+
+    [StaFact]
+    public void Paste_ExternalRtfPayload_InsertsFormattedTextBox()
+    {
+        var fake = new FakeOsClipboard
+        {
+            RtfBytes = Encoding.ASCII.GetBytes(
+                @"{\rtf1\ansi{\fonttbl{\f0 Calibri;}}\pard\f0\fs24 Before \b bold\b0\par After}"),
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        var body = editor.CurrentSlide!.Shapes.Single().TextBody!;
+        body.Paragraphs.Should().HaveCount(2);
+        body.Paragraphs[0].Runs.Select(run => run.Text).Should().ContainInOrder("Before ", "bold");
+        body.Paragraphs[0].Runs.Single(run => run.Text == "bold").Bold.Should().BeTrue();
+        body.Paragraphs[1].Runs.Single().Text.Should().Be("After");
     }
 
     [StaFact]

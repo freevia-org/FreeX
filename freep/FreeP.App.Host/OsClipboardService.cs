@@ -157,6 +157,7 @@ public sealed class WpfOsClipboard : IOsClipboard
             ?? TryReadBytes(data, LegacyAvaloniaSelectionFormat);
         var richText = TryReadBytes(data, RichTextFormat);
         var xamlPackage = TryReadBytes(data, WindowsXamlPackageFormat);
+        var rtf = TryReadBytes(data, DataFormats.Rtf);
         var ownerToken = TryReadCustomString(data, OwnerTokenFormat)
             ?? TryReadCustomString(data, LegacyAvaloniaOwnerTokenFormat);
 
@@ -183,7 +184,7 @@ public sealed class WpfOsClipboard : IOsClipboard
         {
         }
 
-        return new PresentationClipboardContent(selection, png, text, ownerToken, richText, xamlPackage);
+        return new PresentationClipboardContent(selection, png, text, ownerToken, richText, xamlPackage, rtf);
     }
 
     private static void SetRawBytes(DataObject data, string format, byte[] bytes) =>
@@ -407,10 +408,14 @@ public sealed class OsClipboardService
 
         if (source == PresentationClipboardPasteSource.RichText)
         {
-            var payload = InCanvasRichClipboardPlanner.Deserialize(content.RichTextBytes);
+            var payload = InCanvasRichClipboardPlanner.Deserialize(content.RichTextBytes)
+                ?? ExternalRichTextClipboardPlanner.TryParseRtf(content.RtfBytes);
             if (payload is not null)
             {
-                editor.InsertTextBox(payload.Body);
+                if (payload.HasImage)
+                    editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
+                if (!string.IsNullOrWhiteSpace(payload.PlainText))
+                    editor.InsertTextBox(payload.Body);
                 return source;
             }
 
