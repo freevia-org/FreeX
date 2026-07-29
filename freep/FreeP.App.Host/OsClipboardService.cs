@@ -415,7 +415,7 @@ public sealed class OsClipboardService
                 if (payload.HasImage)
                     editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
                 var table = payload.ContainsTable
-                    ? editor.InsertTableFromClipboard(payload.Body)
+                    ? editor.InsertTableFromClipboard(payload.Body, payload.TableColumnWidthsEmu)
                     : null;
                 if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
                     editor.InsertTextBox(payload.Body);
@@ -440,7 +440,7 @@ public sealed class OsClipboardService
                 if (payload.HasImage)
                     editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
                 var table = payload.ContainsTable
-                    ? editor.InsertTableFromClipboard(payload.Body)
+                    ? editor.InsertTableFromClipboard(payload.Body, payload.TableColumnWidthsEmu)
                     : null;
                 if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
                     editor.InsertTextBox(payload.Body);

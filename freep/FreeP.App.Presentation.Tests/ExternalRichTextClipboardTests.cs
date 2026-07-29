@@ -258,6 +258,7 @@ Left\cell{\ul Right}\ul0\cell\row}";
 
         payload.Should().NotBeNull();
         payload!.PlainText.Should().Be("Header\tValue\nLeft\tRight");
+        payload.TableColumnWidthsEmu.Should().Equal(914400L, 914400L);
         payload.Body.Paragraphs.Should().HaveCount(2);
         payload.Body.Paragraphs[0].Runs.Should().Contain(run => run.Text == "Header" && run.Bold);
         payload.Body.Paragraphs[0].Runs.Should().Contain(run => run.Text == "Value" && run.Italic);

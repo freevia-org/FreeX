@@ -1889,9 +1889,12 @@ public sealed class EditingSession
     /// tab-delimited table. Returns null for mixed prose or unsupported one-column projections,
     /// allowing the caller to retain the existing textbox fallback.
     /// </summary>
-    public SlideShape? InsertTableFromClipboard(TextBody body)
+    public SlideShape? InsertTableFromClipboard(
+        TextBody body,
+        IReadOnlyList<long>? columnWidthsEmu = null)
     {
-        if (CurrentSlide is null || !ClipboardTablePlanner.TryBuildStandaloneTable(body, out var table))
+        if (CurrentSlide is null
+            || !ClipboardTablePlanner.TryBuildStandaloneTable(body, columnWidthsEmu, out var table))
             return null;
 
         long cx = table.ColumnWidthsEmu.Sum();
