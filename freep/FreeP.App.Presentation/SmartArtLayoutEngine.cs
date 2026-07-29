@@ -159,6 +159,9 @@ public static class SmartArtLayoutEngine
         if (data.Family == SmartArtFamily.Hierarchy && IsTableHierarchyLayout(data.LayoutUniqueId))
             return LayoutTableHierarchy(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (data.Family == SmartArtFamily.Hierarchy && IsLabeledHierarchyLayout(data.LayoutUniqueId))
+            return LayoutLabeledHierarchy(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         return data.Family switch
         {
             SmartArtFamily.Process   => LayoutProcess  (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
@@ -2444,6 +2447,104 @@ public static class SmartArtLayoutEngine
         return shapes;
     }
 
+    /// <summary>
+    /// Labeled hierarchy layout: top-level branches become labeled section boxes on the
+    /// left, while each branch's children are rendered as a horizontal hierarchy to the
+    /// right. The label is a real shape in the live plan, so it remains editable and is
+    /// connected to every first-level child rather than being flattened into the cache.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutLabeledHierarchy(
+        SmartArtData data,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var roots = data.Nodes
+            .Select(CloneVisibleHierarchyNode)
+            .Where(node => node is not null)
+            .Cast<SmartArtNode>()
+            .ToList();
+        if (roots.Count == 0)
+            return [];
+
+        long padX = (long)(fcx * OuterPaddingFrac);
+        long padY = (long)(fcy * OuterPaddingFrac);
+        long availW = Math.Max(fcx - 2 * padX, 1L);
+        long availH = Math.Max(fcy - 2 * padY, 1L);
+        long gapX = Math.Max((long)(fcx * GapFrac), 1L);
+        long gapY = Math.Max((long)(fcy * GapFrac), 1L);
+        long labelW = Math.Max((long)(availW * 0.24), 1L);
+        long contentW = Math.Max(availW - labelW - gapX, 1L);
+
+        int leafRows = Math.Max(
+            roots.Sum(root => root.Children.Count == 0
+                ? 1
+                : root.Children.Sum(GetTreeWidth)),
+            1);
+        int contentDepth = Math.Max(
+            roots.SelectMany(root => root.Children)
+                .Select(GetTreeDepth)
+                .DefaultIfEmpty(1)
+                .Max(),
+            1);
+        long boxH = Math.Max(
+            (availH - Math.Max(leafRows - 1, 0) * gapY - Math.Max(roots.Count - 1, 0) * gapY)
+                / leafRows,
+            1L);
+        long boxW = Math.Max(
+            (contentW - Math.Max(contentDepth - 1, 0) * gapX) / contentDepth,
+            1L);
+
+        var shapes = new List<SlideShape>();
+        uint idCounter = 560;
+        long currentY = fy + padY;
+        long contentX = fx + padX + labelW + gapX;
+
+        foreach (var root in roots)
+        {
+            int rootRows = root.Children.Count == 0
+                ? 1
+                : Math.Max(root.Children.Sum(GetTreeWidth), 1);
+            long sectionH = rootRows * boxH + Math.Max(rootRows - 1, 0) * gapY;
+            var labelStyle = stylePlan.GetNodeStyle(0, root.Level, SmartArtFamily.Hierarchy);
+            long labelY = currentY;
+            long labelCenterY = labelY + sectionH / 2;
+
+            shapes.Add(MakeBox(
+                idCounter++, root.Text, labelStyle,
+                fx + padX, labelY, labelW, sectionH,
+                NodeFontSizeLargePt, DrawingShapeKind.Rectangle));
+
+            if (root.Children.Count > 0)
+            {
+                long childY = currentY;
+                foreach (var child in root.Children)
+                {
+                    int childRows = Math.Max(GetTreeWidth(child), 1);
+                    RenderHorizontalNode(
+                        child,
+                        levelIndex: 0,
+                        slotY: childY,
+                        leafRows: childRows,
+                        startX: contentX,
+                        boxW,
+                        boxH,
+                        gapX,
+                        gapY,
+                        shapes,
+                        stylePlan,
+                        ref idCounter,
+                        parentRightX: fx + padX + labelW,
+                        parentCenterY: labelCenterY);
+                    childY += childRows * boxH + Math.Max(childRows - 1, 0) * gapY + gapY;
+                }
+            }
+
+            currentY += sectionH + gapY;
+        }
+
+        return shapes;
+    }
+
     private static List<SmartArtNode> FlattenGroupNodes(SmartArtNode root)
     {
         var nodes = new List<SmartArtNode>();
@@ -2762,6 +2863,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "tablehierarchy", StringComparison.Ordinal);
+    }
+
+    private static bool IsLabeledHierarchyLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "labeledhierarchy", StringComparison.Ordinal);
     }
 
     private static bool IsHierarchy3Layout(string uniqueId)
