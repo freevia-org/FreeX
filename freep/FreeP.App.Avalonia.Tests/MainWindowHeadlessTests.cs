@@ -818,11 +818,14 @@ public sealed class MainWindowHeadlessTests
         var insert = definition.Tabs.Single(t => t.Id == "insert");
         var charts = insert.Groups.Single(g => g.Id == "charts");
 
-        charts.Controls.Select(control => control.CommandId.Value)
-            .Last()
-            .Should().Be(ChartAreaOptionsPlanner.CommandId);
-        charts.Controls.Select(control => control.CommandId.Value)
-            .Should().Contain(ChartDataTableOptionsPlanner.CommandId);
+        var commandIds = charts.Controls
+            .Select(control => control.CommandId.Value)
+            .ToArray();
+        commandIds
+            .Should().EndWith([
+                ChartAreaOptionsPlanner.CommandId,
+                ChartProtectionOptionsPlanner.CommandId]);
+        commandIds.Should().Contain(ChartDataTableOptionsPlanner.CommandId);
         charts.Controls.Count(control =>
             control.CommandId.Value == ChartDataDialogPlanner.EditDataCommandId)
             .Should().Be(1);

@@ -37,7 +37,8 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("var range = new PresentationSlideRangeRequest(PresentationSlideRangeKind.AllSlides);");
         source.Should().Contain("PresentationExportPlanner.BuildHandoutLayoutPlan(");
         source.Should().Contain("PresentationNotesPagePdfExporter.BuildRenderPlan(");
-        source.Should().Contain("PresentationNotesPagePdfExporter.ExportToBytes(_presentation, request)");
+        source.Should().Contain("PresentationNotesPagePdfExporter.ExportToBytes(");
+        source.Should().Contain("SkiaPdfWriter.WriteToBytesWithPortableFallback");
         source.Should().Contain("PresentationExportPlanner.BuildVideoExportPlan(");
         source.Should().Contain("PresentationVideoFramePackageExecutor.BuildPackage(");
         source.Should().Contain("PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(");
