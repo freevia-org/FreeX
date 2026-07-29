@@ -122,6 +122,7 @@ internal static class FreePRibbonCommands
         Action?             onEditChart3DViewOptions = null,
         Action?             onEditChartTextOptions = null,
         Action?             onEditChartAreaOptions = null,
+        Action?             onEditChartProtectionOptions = null,
         Action?             onInsertEmbeddedObject = null,
         Action<OleObjectInfo>? onOpenEmbeddedObject = null,
         Action?             onTransitionSound = null)
@@ -747,6 +748,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onEditChartTextOptions?.Invoke()));
         registry.Register(ChartAreaOptionsPlanner.CommandId,
             new ActionRibbonCommand(() => onEditChartAreaOptions?.Invoke()));
+        registry.Register(ChartProtectionOptionsPlanner.CommandId,
+            new ActionRibbonCommand(() => onEditChartProtectionOptions?.Invoke()));
 
         // ── Wave 11A: Hyperlinks ──────────────────────────────────────────────────
 

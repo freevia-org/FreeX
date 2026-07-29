@@ -255,6 +255,8 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("new Rect(wd.Rect.X - 1, wd.Rect.Y - 1, wd.Rect.Width + 1, wd.Rect.Height + 1)");
         source.Should().Contain("Warp: WordArtWarp.Wave1");
         source.Should().Contain("OffsetAndInflate(rect, 0, 0, radius * 0.55)");
+        source.Should().Contain("OffsetAndInflate(rect, 0, 0, radius * 0.75)");
+        source.Should().Contain("EffectBrush(glowColor, effects.GlowOpacity * 0.12)");
         source.Should().Contain("EffectBrush(glowColor, effects.GlowOpacity * 0.36)");
         source.Should().Contain("Text: \"Review Copy\"");
         source.Should().Contain("BuildSecondaryFillGoldMaterialBrush()");

@@ -7066,6 +7066,26 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartProtectionOptionsDialog_constructs_and_commits_shared_options()
+    {
+        ChartProtectionOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartProtectionOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(false, null, true, false);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().Be(new ChartProtectionOptions(false, null, true, false));
+    }
+
+    [Fact]
     public async Task ChartAxisOptionsDialog_constructs_and_commits_shared_options()
     {
         ChartAxisOptions? options = null;

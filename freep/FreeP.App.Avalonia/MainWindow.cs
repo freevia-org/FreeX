@@ -2680,6 +2680,7 @@ public sealed partial class MainWindow : Window
         r.Register(Chart3DViewOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChart3DViewOptionsDialog));
         r.Register(ChartTextOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartTextOptionsDialog));
         r.Register(ChartAreaOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAreaOptionsDialog));
+        r.Register(ChartProtectionOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartProtectionOptionsDialog));
         r.Register("freep.insert-link", new ActionRibbonCommand(OpenHyperlinkDialog));
         r.Register("freep.remove-link", new ActionRibbonCommand(() =>
         {
@@ -3833,6 +3834,21 @@ public sealed partial class MainWindow : Window
         if (!Editor.CanEditSelectedChartFormatting) return;
         var dialog = new ChartAreaOptionsDialog(Editor);
         dialog.ShowDialog(this);
+    }
+
+    internal void OpenChartProtectionOptionsDialog()
+    {
+        if (Editor.SelectedChart is null)
+            return;
+
+        var dialog = new ChartProtectionOptionsDialog(Editor);
+        if (IsVisible)
+        {
+            _ = dialog.ShowDialog<bool?>(this);
+            return;
+        }
+
+        dialog.Show();
     }
 
     internal async void OpenHyperlinkDialog()

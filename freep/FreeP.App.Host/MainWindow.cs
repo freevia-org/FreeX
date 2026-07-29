@@ -469,6 +469,7 @@ public sealed partial class MainWindow : Window
             onEditChart3DViewOptions: () => OpenChart3DViewOptionsDialog(),
             onEditChartTextOptions: () => OpenChartTextOptionsDialog(),
             onEditChartAreaOptions: () => OpenChartAreaOptionsDialog(),
+            onEditChartProtectionOptions: () => OpenChartProtectionOptionsDialog(),
             onInsertEmbeddedObject: () => InsertEmbeddedObjectFromFile(),
             getSlideCanvas:     () => SlideCanvas,
             onEditPoints:       () => SlideCanvas.SetEditPointsMode(!SlideCanvas.EditPointsEnabled),
@@ -4316,6 +4317,15 @@ public sealed partial class MainWindow : Window
     {
         if (!Editor.CanEditSelectedChartFormatting) return;
         var dialog = new ChartAreaOptionsDialog(Editor) { Owner = this };
+        dialog.ShowDialog();
+    }
+
+    internal void OpenChartProtectionOptionsDialog()
+    {
+        if (Editor.SelectedChart is null) return;
+        var dialog = new ChartProtectionOptionsDialog(Editor);
+        if (IsVisible)
+            dialog.Owner = this;
         dialog.ShowDialog();
     }
 

@@ -19852,6 +19852,9 @@ public sealed class DocumentView : Control
                 : Color.FromRgb(0x2E, 0x75, 0xB6);
             var radius = Math.Max(2.0, effects.GlowRadiusDip);
             context.FillRectangle(
+                EffectBrush(glowColor, effects.GlowOpacity * 0.12),
+                OffsetAndInflate(rect, 0, 0, radius * 0.75));
+            context.FillRectangle(
                 EffectBrush(glowColor, effects.GlowOpacity * 0.24),
                 OffsetAndInflate(rect, 0, 0, radius * 0.55));
             context.FillRectangle(
