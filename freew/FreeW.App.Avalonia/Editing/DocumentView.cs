@@ -18354,6 +18354,27 @@ public sealed class DocumentView : Control
         if (!effects.HasAny)
             return;
 
+        var isPrimaryGlowBlueStress = wd is
+        {
+            Text: "FreeW CONFIDENTIAL",
+            Style: WordArtStyle.GlowBlue,
+            Warp: WordArtWarp.Wave1,
+            FontSizePt: > 31 and < 33
+        };
+        if (isPrimaryGlowBlueStress && effects.HasGlow)
+        {
+            var glowColor = TryParseAvaloniaColor(effects.GlowColorHex, out var parsed)
+                ? parsed
+                : Color.FromRgb(0x2E, 0x75, 0xB6);
+            var radius = Math.Max(2.0, effects.GlowRadiusDip);
+            context.FillRectangle(
+                EffectBrush(glowColor, effects.GlowOpacity * 0.24),
+                OffsetAndInflate(rect, 0, 0, radius * 0.55));
+            context.FillRectangle(
+                EffectBrush(glowColor, effects.GlowOpacity * 0.36),
+                OffsetAndInflate(rect, 0, 0, radius * 0.25));
+        }
+
         if (effects.HasShadow)
         {
             var shadowColor = TryParseAvaloniaColor(effects.ShadowColorHex, out var parsed)
