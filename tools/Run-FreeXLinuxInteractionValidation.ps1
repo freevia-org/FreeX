@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "sheet-tabs", "pivot-field-list")]
+    [ValidateSet("all", "sheet-tabs", "pivot-field-list", "autofilter-recalculation")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -769,6 +769,10 @@ try {
             "pivot-field-drag-cross-bucket-physical",
             "pivot-field-drag-same-bucket-reorder-physical"
         )
+    } elseif ($PhysicalProbeSelector -eq "autofilter-recalculation") {
+        @(
+            "autofilter-recalculation-apply-change-clear-physical"
+        )
     } else {
         @(
         "inline-edit-f2-escape",
@@ -812,6 +816,10 @@ try {
         @(
             "pivot-field-drag-cross-bucket-physical",
             "pivot-field-drag-same-bucket-reorder-physical"
+        )
+    } elseif ($PhysicalProbeSelector -eq "autofilter-recalculation") {
+        @(
+            "autofilter-recalculation-apply-change-clear-physical"
         )
     } else {
         @(

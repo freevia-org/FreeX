@@ -608,6 +608,26 @@ public sealed class ChartTests : IDisposable
         rt.ChartObjectProtected.Should().BeTrue();
         rt.ChartDataProtected.Should().BeFalse();
         rt.ChartFormattingProtected.Should().BeTrue();
+
+        rt.ChartObjectProtected = false;
+        rt.ChartDataProtected = true;
+        rt.ChartFormattingProtected = false;
+        var editedPath = WriteToPptx(BuildPresWithChart(rt));
+        using (var archive = ZipFile.OpenRead(editedPath))
+        {
+            var protection = LoadChartXml(archive, chartIndex: 1).Root!
+                .Element(ChartNs + "protection");
+            protection.Should().NotBeNull();
+            protection!.Attribute("chartObject")?.Value.Should().Be("0");
+            protection.Attribute("data")?.Value.Should().Be("1");
+            protection.Attribute("formatting")?.Value.Should().Be("0");
+        }
+
+        var edited = PptxPackageReader.Read(editedPath);
+        var editedChart = edited.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        editedChart.ChartObjectProtected.Should().BeFalse();
+        editedChart.ChartDataProtected.Should().BeTrue();
+        editedChart.ChartFormattingProtected.Should().BeFalse();
     }
 
     [Fact]

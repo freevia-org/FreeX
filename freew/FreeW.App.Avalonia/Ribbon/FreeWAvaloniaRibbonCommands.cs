@@ -1447,6 +1447,11 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.shape-edit-shape", new ActionRibbonCommand(() => editor.Focus()));
         r.Register("freew.shape-convert-freeform", new ActionRibbonCommand(editor.ConvertSelectedShapeToFreeform));
         r.Register("freew.shape-edit-points", new ActionRibbonCommand(editor.BeginShapeEditPoints));
+        r.Register("freew.shape-change", new ShapeKindCommand(editor, null));
+        r.Register("freew.shape-change-rectangle", new ShapeKindCommand(editor, ShapeKind.Rectangle));
+        r.Register("freew.shape-change-rounded", new ShapeKindCommand(editor, ShapeKind.RoundedRectangle));
+        r.Register("freew.shape-change-ellipse", new ShapeKindCommand(editor, ShapeKind.Ellipse));
+        r.Register("freew.shape-text-direction", new ActionRibbonCommand(() => editor.Focus()));
         r.Register("freew.shape-text-horizontal", new ShapeTextDirectionCommand(editor, ShapeTextDirection.Horizontal));
         r.Register("freew.shape-text-rotate90", new ShapeTextDirectionCommand(editor, ShapeTextDirection.Rotate90));
         r.Register("freew.shape-text-rotate270", new ShapeTextDirectionCommand(editor, ShapeTextDirection.Rotate270));
@@ -1982,6 +1987,36 @@ internal static class FreeWAvaloniaRibbonCommands
             new(IsEnabled: editor.SelectedFloatingShape() is { HasText: true });
     }
 
+    private sealed class ShapeKindCommand(
+        DocumentView editor,
+        ShapeKind? kind) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (kind is { } target && GetState().IsEnabled)
+                editor.SetSelectedShapeKind(target);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedFloatingShape() is not null);
+    }
+
+    private sealed class ShapeEffectsCommand(
+        DocumentView editor,
+        ShapeEffectLst? effects) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!GetState().IsEnabled)
+                return;
+
+            editor.SetSelectedShapeEffects(effects?.Clone());
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedFloatingShape() is not null);
+    }
+
     private static void RegisterShapeFillOutlineCommands(RibbonCommandRegistry r, DocumentView editor)
     {
         r.Register(
@@ -1995,6 +2030,14 @@ internal static class FreeWAvaloniaRibbonCommands
             new ShapeStyleCommand(editor, () => { /* opener command */ }));
         foreach (var command in ObjectFormatCommandPlanner.ShapeOutlineCommands())
             r.Register(command.CommandId, new ShapeOutlineCommand(editor, command));
+
+        r.Register("freew.shape-effects", new ShapeEffectsCommand(editor, null));
+        r.Register("freew.shape-effects-none", new ShapeEffectsCommand(editor, null));
+        r.Register("freew.shape-effect-shadow", new ShapeEffectsCommand(editor, new ShapeEffectLst { HasShadow = true }));
+        r.Register("freew.shape-effect-glow", new ShapeEffectsCommand(editor, new ShapeEffectLst { HasGlow = true }));
+        r.Register("freew.shape-effect-soft-edge", new ShapeEffectsCommand(editor, new ShapeEffectLst { HasSoftEdge = true }));
+        r.Register("freew.shape-effect-reflection", new ShapeEffectsCommand(editor, new ShapeEffectLst { HasReflection = true }));
+        r.Register("freew.shape-effect-bevel", new ShapeEffectsCommand(editor, new ShapeEffectLst { HasBevel = true }));
 
         r.Register("freew.shape-styles-gallery", new ShapeStylesGalleryCommand(editor));
         foreach (var preset in ShapeStylePreset.Catalog)

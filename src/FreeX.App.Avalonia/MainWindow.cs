@@ -515,6 +515,7 @@ public sealed partial class MainWindow : Window
     private int? _formulaReferenceLength;
     private readonly TextBlock _formulaReferenceTextOverlay = new();
     private Canvas? _formulaReferenceGridOverlay;
+    private Canvas? _cellAffordanceOverlay;
     private readonly List<Control> _formulaReferenceGridHighlightVisuals = [];
     private readonly Border _formulaBarHost = new();
     private readonly Button _formulaExpandButton = new();
@@ -843,6 +844,8 @@ public sealed partial class MainWindow : Window
     /// production code paths.
     /// </summary>
     internal Control? ActiveCellBorderForTest => _activeCellBorder;
+    internal bool DataValidationDropdownOpenForTest =>
+        _activeDataValidationDropdown?.IsDropDownOpen == true;
 
     /// <summary>
     /// Test-only accessor for the Name Box's current text (K23 regression coverage), so headless
@@ -4584,6 +4587,7 @@ public sealed partial class MainWindow : Window
     {
         _sheetGridBuildCount++;
         _formulaReferenceGridOverlay = null;
+        _cellAffordanceOverlay = null;
         _formulaReferenceGridHighlightVisuals.Clear();
         _activeDataValidationDropdown = null;
         _activeCellBorder = null;
@@ -4763,6 +4767,7 @@ public sealed partial class MainWindow : Window
         grid.Children.Add(formulaReferenceOverlay);
 
         var overlay = BuildDrawingObjectOverlay(viewport);
+        _cellAffordanceOverlay = overlay;
         AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
 
         var pageBreakOverlay = WorksheetViewModeUiStatePlanner.Build(_session.ViewMode).UsesPageBreakPreviewOverlay
@@ -10667,9 +10672,7 @@ public sealed partial class MainWindow : Window
                 _ = ShowFormatCellsDialogAsync();
                 break;
             case WorksheetContextMenuAction.PickFromDropDown:
-                // Opens the active cell's in-cell data-validation dropdown overlay (the same dropdown
-                // Alt+Down opens). Reports honestly when the cell has no list to pick from.
-                if (!OpenActiveDataValidationDropdown())
+                if (!OpenActiveDropdown())
                     RefreshShell(UiText.Get("DrawingInteract_PickListNoList"));
                 break;
             default:
@@ -25309,10 +25312,7 @@ public sealed partial class MainWindow : Window
         {
             if (!_formulaBox.IsFocused)
             {
-                // Mirror WPF's OpenActiveDropdown fallback chain: data-validation dropdown first,
-                // then the AutoFilter column dropdown when the active cell is a filter-button cell
-                // (see OpenActiveAutoFilterDropdown in MainWindow.AutoFilter.cs).
-                e.Handled = OpenActiveDataValidationDropdown() || OpenActiveAutoFilterDropdown();
+                e.Handled = OpenActiveDropdown();
             }
 
             return;
@@ -25730,6 +25730,49 @@ public sealed partial class MainWindow : Window
 
         _activeDataValidationDropdown.Focus();
         _activeDataValidationDropdown.IsDropDownOpen = true;
+        return true;
+    }
+
+    private bool OpenActiveDropdown() =>
+        OpenActiveDataValidationDropdown() ||
+        OpenActiveAutoFilterDropdown() ||
+        OpenTextEntryPickListDropdown();
+
+    private bool OpenTextEntryPickListDropdown()
+    {
+        var items = DataValidationDropdownPlanner.GetTextEntryPickListItems(
+            _session.ActiveSheet,
+            _session.ActiveCell);
+        if (items.Count == 0 ||
+            _cellAffordanceOverlay is not { } overlay ||
+            !TryGetDisplayedCellBounds(
+                _session.Viewport,
+                _session.ActiveCell,
+                _session.IsShowingHeadings,
+                GetActiveZoomFactor(),
+                out var left,
+                out var top,
+                out var width,
+                out var height))
+        {
+            return false;
+        }
+
+        var btnWidth = Math.Max(
+            DataValidationDropdownPlanner.MinimumWidth,
+            DataValidationAffordancePlanner.ArrowButtonWidth * GetActiveZoomFactor());
+        var btnHeight = Math.Max(DataValidationDropdownPlanner.MinimumHeight, height);
+        var plan = new DataValidationDropdownPlan(
+            items,
+            SelectedItem: null,
+            new DataValidationDropdownBounds(left + width - btnWidth, top, btnWidth, btnHeight));
+        var dropdown = CreateDataValidationDropdown(plan, btnWidth, btnHeight);
+        Canvas.SetLeft(dropdown, plan.Bounds.Left);
+        Canvas.SetTop(dropdown, plan.Bounds.Top);
+        overlay.Children.Add(dropdown);
+        _activeDataValidationDropdown = dropdown;
+        dropdown.Focus();
+        dropdown.IsDropDownOpen = true;
         return true;
     }
 

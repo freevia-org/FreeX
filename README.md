@@ -18,12 +18,14 @@ Tester builds are published on the [FreeX releases page](https://github.com/tony
 - [FreeX-latest-macos-arm64.zip](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-arm64.zip)
 - [FreeX-latest-macos-x64.zip](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-x64.zip)
 
-Latest verified FreeX tester release: [FreeX (Test Release) v0.8.148](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-148-2026-07-01-19-22-54-run147-attempt1%2Bd1c354f0), published from Tester Release run 147 attempt 1 at commit `d1c354f0`. GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build.
+Latest verified FreeX tester release: [FreeX (Test Release) v0.8.150](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-150-2026-07-29-03-33-31-run157-attempt1%2Bc01c7bd3), published from Tester Release run 157 attempt 1 at commit `c01c7bd3`. GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build.
 
 Current platform tester releases:
 
-- [Windows and macOS v0.8.148](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-148-2026-07-01-19-22-54-run147-attempt1%2Bd1c354f0)
-- [Linux v0.8.148](https://github.com/tony-xmelon/FreeX/releases/tag/freex-linux-v0.8.148)
+- [FreeX Windows and macOS v0.8.150](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-150-2026-07-29-03-33-31-run157-attempt1%2Bc01c7bd3)
+- [FreeX Linux v0.8.150](https://github.com/tony-xmelon/FreeX/releases/tag/freex-linux-v0.8.150)
+- [FreeW v0.8.150](https://github.com/tony-xmelon/FreeX/releases/tag/freew-v0.8.150)
+- [FreeP v0.8.150](https://github.com/tony-xmelon/FreeX/releases/tag/freep-v0.8.150)
 
 ## Documentation
 

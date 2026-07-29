@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eEuo pipefail
 
 export DISPLAY="${DISPLAY:-:99}"
 
@@ -425,6 +425,21 @@ cell_y() { printf '%d' "$((a1_y + $1 * cell_height))"; }
 cell_center_x() { printf '%d' "$((a1_x + $1 * cell_width + cell_width / 2))"; }
 cell_center_y() { printf '%d' "$((a1_y + $1 * cell_height + cell_height / 2))"; }
 
+open_autofilter_menu() {
+    local column_offset="$1"
+    select_cell "$column_offset" 0 "filter-header-$column_offset"
+    send_key alt+Down
+}
+
+click_autofilter_control() {
+    local x_offset="$1" y_offset="$2"
+    xdotool_mousemove_sync "$((a1_x + x_offset))" "$((a1_y + y_offset))"
+    xdotool mousedown 1
+    sleep 0.12
+    xdotool mouseup 1
+    sleep "$settle_seconds"
+}
+
 select_cell() {
     local column_offset="$1" row_offset="$2" address="$3"
     local expected_x expected_y center_x center_y
@@ -629,6 +644,82 @@ probe_pivot_field_list() {
             "pivot-field-list-cross-bucket.png; pivot-field-list-reorder.png; pivot-field-list-postcondition.txt" \
             "The physical Rows reorder did not produce the expected persisted layout: $after_layout" \
             "pivot-field-list-cross-bucket.png;pivot-field-list-reorder.png;pivot-field-list-postcondition.txt"
+    fi
+}
+
+probe_autofilter_recalculation() {
+    local initial_value north_value south_value cleared_value
+    local artifacts="autofilter-recalculation-before.png;autofilter-recalculation-menu-open.png;autofilter-recalculation-north-checked.png;autofilter-recalculation-north-committed.png;autofilter-recalculation-north.png;autofilter-recalculation-south-checked.png;autofilter-recalculation-south-committed.png;autofilter-recalculation-south.png;autofilter-recalculation-cleared.png;autofilter-recalculation-postcondition.txt"
+    local passed=false
+
+    # Seed a compact, deterministic worksheet without saving it back to the caller's CSV.
+    set_cell_text_without_save 0 0 A1 "Region"
+    set_cell_text_without_save 1 0 B1 "Amount"
+    set_cell_text_without_save 0 1 A2 "North"
+    set_cell_text_without_save 1 1 B2 "10"
+    set_cell_text_without_save 0 2 A3 "South"
+    set_cell_text_without_save 1 2 B3 "20"
+    set_cell_text_without_save 1 3 B4 "=SUBTOTAL(109,B2:B3)"
+    initial_value="$(copy_cell_display 1 3 B4 || true)"
+    capture "autofilter-recalculation-before.png"
+
+    # Select A1:B3 and toggle AutoFilter through the production Excel shortcut.
+    select_cell 0 0 A1
+    send_key shift+Right
+    send_key shift+Down
+    send_key shift+Down
+    send_key ctrl+shift+l
+    select_cell 0 0 A1
+
+    # The harness is fixed at 96 DPI. Click the checklist and command controls relative to the
+    # calibrated A1 header so criteria controls cannot make this probe depend on incidental tab order.
+    open_autofilter_menu 0
+    capture "autofilter-recalculation-menu-open.png"
+    click_autofilter_control 29 366
+    capture "autofilter-recalculation-north-checked.png"
+    click_autofilter_control 246 395
+    capture "autofilter-recalculation-north-committed.png"
+    sleep "$settle_seconds"
+    # One filtered data row is hidden, so B4 occupies the third visible worksheet row.
+    north_value="$(copy_cell_display 1 2 B4-filtered-north || true)"
+    capture "autofilter-recalculation-north.png"
+
+    # Change the active checklist from North to South, preserving the same formula cell.
+    select_cell 0 0 A1
+    open_autofilter_menu 0
+    click_autofilter_control 29 348
+    click_autofilter_control 29 366
+    capture "autofilter-recalculation-south-checked.png"
+    click_autofilter_control 246 395
+    capture "autofilter-recalculation-south-committed.png"
+    sleep "$settle_seconds"
+    south_value="$(copy_cell_display 1 2 B4-filtered-south || true)"
+    capture "autofilter-recalculation-south.png"
+
+    # Clear the active Region filter from the same production flyout.
+    select_cell 0 0 A1
+    open_autofilter_menu 0
+    click_autofilter_control 151 121
+    sleep "$settle_seconds"
+    cleared_value="$(copy_cell_display 1 3 B4-cleared || true)"
+    capture "autofilter-recalculation-cleared.png"
+
+    write_artifact "autofilter-recalculation-postcondition.txt" \
+        "initial=$initial_value\nnorth=$north_value\nsouth=$south_value\ncleared=$cleared_value\n"
+    if [[ "$initial_value" == "30" && "$north_value" == "10" &&
+          "$south_value" == "20" && "$cleared_value" == "30" ]]; then
+        passed=true
+    fi
+    if $passed; then
+        record "autofilter-recalculation-apply-change-clear-physical" "passed" \
+            "autofilter-recalculation-before.png; autofilter-recalculation-north.png; autofilter-recalculation-south.png; autofilter-recalculation-cleared.png; values=$initial_value->$north_value->$south_value->$cleared_value" \
+            "The Linux X11 AutoFilter workflow recalculated SUBTOTAL(109,...) immediately after applying, changing, and clearing the filter." \
+            "$artifacts"
+    else
+        record "autofilter-recalculation-apply-change-clear-physical" "failed" \
+            "$artifacts" \
+            "Expected SUBTOTAL values 30->10->20->30, observed $initial_value->$north_value->$south_value->$cleared_value." \
+            "$artifacts"
     fi
 }
 
@@ -1280,6 +1371,19 @@ if [[ "$probe_selector" == "pivot-field-list" ]]; then
     probe_pivot_field_list
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused PivotTable field-list probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "autofilter-recalculation" ]]; then
+    # Focused iteration mode for the deterministic AutoFilter/SUBTOTAL workflow.
+    probe_autofilter_recalculation
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused AutoFilter recalculation probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then

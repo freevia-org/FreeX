@@ -184,7 +184,16 @@ public sealed class PictureDrawingContextualTabTests
             .Where(id => id is not null)
             .Select(id => id!)
             .ToArray();
-        drawingStyleIds.Should().Contain("freew.shape-styles-gallery");
+        drawingStyleIds.Should().Contain(new[]
+        {
+            "freew.shape-styles-gallery",
+            "freew.shape-fill",
+            "freew.shape-outline",
+            "freew.shape-effects",
+            "freew.shape-change",
+            "freew.shape-edit-shape",
+            "freew.shape-text-direction",
+        }, "Drawing Format should expose the WPF shape-format menus");
 
         var drawingArrangeIds = draw.Groups.Single(g => g.Id == "drawing-arrange").Controls
             .Select(control => GetCommandId(control)?.Value)
@@ -248,6 +257,12 @@ public sealed class PictureDrawingContextualTabTests
             "freew.shape-fill-gradient-orange", "freew.shape-fill-pattern-diag",
             "freew.shape-outline", "freew.shape-outline-no-outline", "freew.shape-outline-solid",
             "freew.shape-outline-dash", "freew.shape-outline-dot",
+            "freew.shape-change", "freew.shape-change-rectangle", "freew.shape-change-rounded",
+            "freew.shape-change-ellipse", "freew.shape-edit-shape", "freew.shape-convert-freeform",
+            "freew.shape-edit-points", "freew.shape-text-direction", "freew.shape-text-horizontal",
+            "freew.shape-text-rotate90", "freew.shape-text-rotate270", "freew.shape-effects",
+            "freew.shape-effects-none", "freew.shape-effect-shadow", "freew.shape-effect-glow",
+            "freew.shape-effect-soft-edge", "freew.shape-effect-reflection", "freew.shape-effect-bevel",
         };
 
         foreach (var id in ids)
@@ -935,6 +950,60 @@ public sealed class PictureDrawingContextualTabTests
         shape.OutlineColorHex.Should().BeNull("No Outline should clear the stroke color after a dash preset");
         shape.OutlineWidthPt.Should().Be(0);
         shape.OutlineDash.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ShapeChangeCommands_mutate_shape_kind_and_undo_through_registry()
+    {
+        ShapeKind? after = null;
+        ShapeKind? reverted = null;
+        var ran = await OnUi(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            CommandIsEnabled(registry, "freew.shape-change-ellipse").Should().BeTrue();
+            ExecuteCommand(registry, "freew.shape-change-ellipse");
+            after = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!.Kind;
+
+            view.Undo();
+            reverted = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!.Kind;
+        });
+        if (!ran) return;
+
+        after.Should().Be(ShapeKind.Ellipse);
+        reverted.Should().Be(ShapeKind.Rectangle);
+    }
+
+    [Fact]
+    public async Task ShapeEffectsCommands_apply_shared_effect_and_undo_through_registry()
+    {
+        bool? hasGlow = null;
+        bool? reverted = null;
+        var ran = await OnUi(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            CommandIsEnabled(registry, "freew.shape-effect-glow").Should().BeTrue();
+            ExecuteCommand(registry, "freew.shape-effect-glow");
+            hasGlow = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!.Effects?.HasGlow;
+
+            view.Undo();
+            reverted = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!.Effects is not null;
+        });
+        if (!ran) return;
+
+        hasGlow.Should().BeTrue();
+        reverted.Should().BeFalse();
     }
 
     [Fact]

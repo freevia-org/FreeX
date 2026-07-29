@@ -315,21 +315,7 @@ public partial class MainWindow
     /// in the column.
     /// </summary>
     private static IReadOnlyList<string> BuildTextEntryPickListItems(Sheet sheet, CellAddress activeCell)
-    {
-        var candidates = CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries(sheet, activeCell);
-        if (candidates.Count == 0)
-            return Array.Empty<string>();
-
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var items = new List<string>(candidates.Count);
-        foreach (var candidate in candidates)
-        {
-            if (seen.Add(candidate))
-                items.Add(candidate);
-        }
-
-        return items;
-    }
+        => DataValidationDropdownPlanner.GetTextEntryPickListItems(sheet, activeCell);
 
     private void OnAutoFilterDropdownRequested(CellAddress headerCell, System.Windows.Point position)
     {

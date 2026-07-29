@@ -215,6 +215,7 @@ public sealed partial class MainWindow : Window
     private Border _reviewCommentsPaneHost = null!;
     private ScrollViewer _reviewCommentsPaneScrollViewer = null!;
     private StackPanel _reviewCommentsPanePanel = null!;
+    private bool _reviewCommentsPaneRequested;
     private readonly PresentationReviewWorkflowSession _reviewWorkflowSession;
     private Border _altTextPaneHost = null!;
     private TextBlock _altTextPaneHeading = null!;
@@ -4755,7 +4756,10 @@ public sealed partial class MainWindow : Window
         => _reviewWorkflowSession.RefreshReviewWorkflowPlans();
 
     internal PresentationCommentPanePlan ShowReviewCommentsPane()
-        => _reviewWorkflowSession.ShowReviewCommentsPane();
+    {
+        _reviewCommentsPaneRequested = true;
+        return _reviewWorkflowSession.ShowReviewCommentsPane();
+    }
 
     private void ShowReviewCommentsPane(PresentationCommentPanePlan plan)
     {
@@ -4782,7 +4786,7 @@ public sealed partial class MainWindow : Window
                 _reviewCommentsPanePanel.Children.Add(BuildReviewCommentCard(comment));
         }
 
-        _reviewCommentsPaneHost.IsVisible = true;
+        _reviewCommentsPaneHost.IsVisible = plan.Comments.Count > 0 || _reviewCommentsPaneRequested;
     }
 
     private Control BuildReviewCommentsPaneHeader(PresentationCommentPanePlan plan)
@@ -4836,6 +4840,7 @@ public sealed partial class MainWindow : Window
 
     internal void HideReviewCommentsPane()
     {
+        _reviewCommentsPaneRequested = false;
         if (_reviewCommentsPaneHost is not null)
             _reviewCommentsPaneHost.IsVisible = false;
     }

@@ -378,8 +378,7 @@ public sealed partial class MainWindow
                 await ShowDeleteCellsDialogAsync();
                 break;
             case AvaloniaHostShortcut.OpenActiveDropdown:
-                if (!OpenActiveDataValidationDropdown())
-                    OpenActiveAutoFilterDropdown();
+                OpenActiveDropdown();
                 break;
         }
 

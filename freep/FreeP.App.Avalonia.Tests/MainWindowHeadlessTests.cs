@@ -4830,6 +4830,64 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Review_comments_pane_preserves_explicit_open_state_for_empty_slide()
+    {
+        var visibleAfterEmptyOpen = false;
+        var visibleAfterClose = true;
+        var visibleAfterReopen = false;
+        var visibleAfterAdd = false;
+        var visibleAfterRemove = false;
+        var visibleAfterClosedRefresh = true;
+        PresentationCommentPanePlan? emptyPlan = null;
+        PresentationCommentMutationPlan? addMutationPlan = null;
+        PresentationCommentPanePlan? addedPanePlan = null;
+        PresentationCommentMutationPlan? removeMutationPlan = null;
+        PresentationCommentPanePlan? removedPanePlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+
+            emptyPlan = window.ShowReviewCommentsPane();
+            visibleAfterEmptyOpen = window.IsReviewCommentsPaneVisible;
+
+            window.HideReviewCommentsPane();
+            visibleAfterClose = window.IsReviewCommentsPaneVisible;
+            window.RefreshReviewWorkflowPlans();
+            visibleAfterClosedRefresh = window.IsReviewCommentsPaneVisible;
+
+            window.ShowReviewCommentsPane();
+            visibleAfterReopen = window.IsReviewCommentsPaneVisible;
+
+            addMutationPlan = window.AddComment("Keep the review pane open.");
+            addedPanePlan = window.LastCommentPanePlan;
+            visibleAfterAdd = window.IsReviewCommentsPaneVisible;
+
+            removeMutationPlan = window.DeleteSelectedComment();
+            removedPanePlan = window.LastCommentPanePlan;
+            visibleAfterRemove = window.IsReviewCommentsPaneVisible;
+        });
+
+        if (!ran) return;
+        emptyPlan.Should().NotBeNull();
+        emptyPlan!.Comments.Should().BeEmpty();
+        visibleAfterEmptyOpen.Should().BeTrue();
+        visibleAfterClose.Should().BeFalse();
+        visibleAfterClosedRefresh.Should().BeFalse();
+        visibleAfterReopen.Should().BeTrue();
+        addMutationPlan.Should().NotBeNull();
+        addMutationPlan!.ShouldApply.Should().BeTrue();
+        addedPanePlan.Should().NotBeNull();
+        addedPanePlan!.Comments.Should().ContainSingle();
+        visibleAfterAdd.Should().BeTrue();
+        removeMutationPlan.Should().NotBeNull();
+        removeMutationPlan!.ShouldApply.Should().BeTrue();
+        removedPanePlan.Should().NotBeNull();
+        removedPanePlan!.Comments.Should().BeEmpty();
+        visibleAfterRemove.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Review_comment_resolve_reopen_routes_through_shared_mutation_plan()
     {
         SlideComment? resolvedComment = null;

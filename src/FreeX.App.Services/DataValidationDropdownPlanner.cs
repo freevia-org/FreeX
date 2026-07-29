@@ -42,10 +42,11 @@ public static class DataValidationDropdownPlanner
         if (activeCell.Sheet != sheet.Id)
             return false;
 
-        if (!TryGetDropdownItems(workbook, sheet, activeCell, out var items))
-            return false;
+        if (TryGetValidationDropdownItems(workbook, sheet, activeCell, out var validationItems))
+            return validationItems.Count > 0 && validationItems.Count <= MaximumDropdownItems;
 
-        return items.Count > 0 && items.Count <= MaximumDropdownItems;
+        var pickListItems = GetTextEntryPickListItems(sheet, activeCell);
+        return pickListItems.Count > 0 && pickListItems.Count <= MaximumDropdownItems;
     }
 
     public static bool TryPlan(
@@ -62,7 +63,7 @@ public static class DataValidationDropdownPlanner
         if (activeCell.Sheet != sheet.Id || !HasUsableBounds(cellBounds))
             return false;
 
-        if (!TryGetDropdownItems(workbook, sheet, activeCell, out var items))
+        if (!TryGetValidationDropdownItems(workbook, sheet, activeCell, out var items))
             return false;
 
         if (items.Count == 0 || items.Count > MaximumDropdownItems)
@@ -112,7 +113,29 @@ public static class DataValidationDropdownPlanner
     /// command works on any plain text column with no Data Validation at all) the distinct text
     /// values from the contiguous run of non-blank cells in the same column as the active cell.
     /// </summary>
-    private static bool TryGetDropdownItems(
+    public static IReadOnlyList<string> GetTextEntryPickListItems(Sheet sheet, CellAddress activeCell)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        if (activeCell.Sheet != sheet.Id)
+            return Array.Empty<string>();
+
+        var candidates = CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries(sheet, activeCell);
+        if (candidates.Count == 0)
+            return Array.Empty<string>();
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var items = new List<string>(candidates.Count);
+        foreach (var candidate in candidates)
+        {
+            if (seen.Add(candidate))
+                items.Add(candidate);
+        }
+
+        return items;
+    }
+
+    private static bool TryGetValidationDropdownItems(
         Workbook workbook,
         Sheet sheet,
         CellAddress activeCell,
@@ -133,37 +156,9 @@ public static class DataValidationDropdownPlanner
             }
         }
 
-        items = GetContiguousColumnTextValues(sheet, activeCell);
-        return true;
+        items = Array.Empty<string>();
+        return false;
     }
-
-    private static IReadOnlyList<string> GetContiguousColumnTextValues(Sheet sheet, CellAddress activeCell)
-    {
-        var col = activeCell.Col;
-
-        var topRow = activeCell.Row;
-        while (topRow > 1 && IsNonBlank(sheet.GetCell(topRow - 1, col)))
-            topRow--;
-
-        var bottomRow = activeCell.Row;
-        while (bottomRow < CellAddress.MaxRow && IsNonBlank(sheet.GetCell(bottomRow + 1, col)))
-            bottomRow++;
-
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var items = new List<string>();
-        for (var row = topRow; row <= bottomRow; row++)
-        {
-            if (row == activeCell.Row)
-                continue;
-
-            if (sheet.GetCell(row, col)?.Value is TextValue { Value.Length: > 0 } text && seen.Add(text.Value))
-                items.Add(text.Value);
-        }
-
-        return items;
-    }
-
-    private static bool IsNonBlank(Cell? cell) => cell is not null && cell.Value is not BlankValue;
 
     private static string? FindSelectedItem(IReadOnlyList<string> items, string currentText)
     {

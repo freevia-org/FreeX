@@ -211,7 +211,7 @@ public sealed class DataValidationDropdownPlannerTests
     }
 
     [Fact]
-    public void TryPlan_ReturnsDistinctContiguousColumnTextValues_WhenNoDataValidationExists()
+    public void GetTextEntryPickListItems_ReturnsDistinctContiguousColumnTextValues_WhenNoDataValidationExists()
     {
         var workbook = CreateWorkbook();
         var sheet = workbook.Sheets.Single();
@@ -225,11 +225,13 @@ public sealed class DataValidationDropdownPlannerTests
                 sheet,
                 target,
                 new DataValidationDropdownCellBounds(0, 0, 64, 20),
-                out var plan)
+                out _)
             .Should()
-            .BeTrue();
+            .BeFalse("plain text pick lists must not render as persistent validation arrows");
 
-        plan.Items.Should().Equal("Apple", "Banana");
+        DataValidationDropdownPlanner.GetTextEntryPickListItems(sheet, target)
+            .Should()
+            .Equal("apple", "Banana");
     }
 
     [Fact]
