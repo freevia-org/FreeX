@@ -32,6 +32,7 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("Text              = plan.DisclosureText");
         source.Should().Contain("Foreground        = BrushFromHex(plan.ForegroundHex)");
         source.Should().Contain("Background   = normalBackground");
+        source.Should().Contain("AutomationProperties.SetName(item, plan.AccessibleName)");
         source.Should().Contain("PointerEntered += (_, _) => headerChrome.Background = hoverBackground");
         source.Should().Contain("ToolTip.SetTip(item, plan.ToolTipText)");
         source.Should().Contain("ToggleSlidePaneSection(plan.SectionId)");
