@@ -4093,6 +4093,15 @@ public sealed class SmartArtTests : IDisposable
         renderedText.Should().Contain("Outcome");
         liveShapes.Where(op => op.Text is null)
             .Should().HaveCount(2, "labeledHierarchy uses the shared hierarchy connector DrawOps consumed by WPF and Avalonia");
+
+        var initiative = liveShapes.Single(op => op.Text?.Paragraphs.First().Runs.First().Text == "Initiative");
+        var childBoxes = liveShapes
+            .Where(op => op.Text?.Paragraphs.First().Runs.First().Text is "Owner" or "Outcome")
+            .ToList();
+        initiative.BoundsDip.Width.Should().BeGreaterThan(0);
+        childBoxes.Should().HaveCount(2);
+        childBoxes.Should().OnlyContain(op => op.BoundsDip.X > initiative.BoundsDip.X,
+            "the shared labeled-hierarchy plan keeps branch content to the right of its label column");
     }
 
     [Fact]

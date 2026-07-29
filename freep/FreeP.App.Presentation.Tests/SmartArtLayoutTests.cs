@@ -3994,6 +3994,14 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().NotContain("Cached labeled hierarchy fallback");
         shapeOps.Where(op => op.Text is null)
             .Should().HaveCount(2, "WPF and Avalonia hosts consume the same shared connector DrawOps");
+
+        var label = shapeOps.Single(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text == "Initiative");
+        var childBoxes = shapeOps
+            .Where(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text is "Owner" or "Outcome")
+            .ToList();
+        childBoxes.Should().HaveCount(2);
+        childBoxes.Should().OnlyContain(op => op.BoundsDip.X > label.BoundsDip.X,
+            "labeled hierarchy places branch content to the right of its section label");
     }
 
     [Fact]
