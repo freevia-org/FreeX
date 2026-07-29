@@ -35,6 +35,11 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
+    [ValidateSet("all", "sheet-tabs", "pivot-field-list")]
+    [string]$PhysicalProbeSelector = "all",
+
+    [string]$PhysicalDocumentPath = "",
+
     [switch]$SkipX11,
     [switch]$PhysicalOnly,
 
@@ -170,6 +175,7 @@ function Ensure-ReportProvenance {
 function Start-ValidationSession {
     param(
         [string[]]$AppArgument = @(),
+        [string]$DocumentPath = "",
         [string]$MemoryLimit = "",
         [switch]$ReusePublishedPayload
     )
@@ -182,6 +188,9 @@ function Start-ValidationSession {
         Replace = $true
         SessionMetadataPath = $metadataPath
         AppArgument = $AppArgument
+    }
+    if (-not [string]::IsNullOrWhiteSpace($DocumentPath)) {
+        $startArguments.DocumentPath = $DocumentPath
     }
     if ($SkipImageBuild -or $ReusePublishedPayload) { $startArguments.SkipImageBuild = $true }
     if ($SkipPublish -or $ReusePublishedPayload) { $startArguments.SkipPublish = $true }
@@ -724,12 +733,12 @@ try {
         }
     } else {
         # Phase one sends real X11 keyboard and pointer events through the production handlers.
-        $x11Session = Start-ValidationSession -AppArgument @()
+        $x11Session = Start-ValidationSession -AppArgument @() -DocumentPath $PhysicalDocumentPath
         Ensure-ReportProvenance
 
         & docker cp $x11ProbeScript "${containerName}:/tmp/run-freex-input-probes.sh"
         if ($LASTEXITCODE -ne 0) { throw "Could not copy X11 input probes into '$containerName'." }
-        & docker exec --env DISPLAY=:99 $containerName bash /tmp/run-freex-input-probes.sh /work/x11-validation
+        & docker exec --env DISPLAY=:99 --env "FREEX_X11_PROBE_SELECTOR=$PhysicalProbeSelector" $containerName bash /tmp/run-freex-input-probes.sh /work/x11-validation
         $x11ProbeExit = $LASTEXITCODE
         $x11ManifestPath = Join-Path ([string]$x11Session.sessionDirectory) "x11-validation/x11-input-results.json"
         if (-not (Test-Path -LiteralPath $x11ManifestPath -PathType Leaf)) {
@@ -740,7 +749,13 @@ try {
         & $harness -Action Stop -App FreeX -Port $Port
     }
 
-    $requiredPhysicalProbeIds = @(
+    $requiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "pivot-field-list") {
+        @(
+            "pivot-field-drag-cross-bucket-physical",
+            "pivot-field-drag-same-bucket-reorder-physical"
+        )
+    } else {
+        @(
         "inline-edit-f2-escape",
         "inline-edit-f2-enter-commit",
         "save-ctrl-s-persist",
@@ -764,8 +779,9 @@ try {
         "sheet-tab-overflow-create-physical",
         "sheet-tab-overflow-navigation-physical",
         "sheet-tab-overflow-activate-dialog-physical",
-        "sheet-tab-drag-reorder-physical"
-    )
+            "sheet-tab-drag-reorder-physical"
+        )
+    }
     $physicalProbeResults = @($x11Manifest.results)
     $x11EvidenceDirectory = Split-Path -Parent $x11ManifestPath
     $physicalProbeIds = @($physicalProbeResults | ForEach-Object { [string]$_.id })
@@ -777,7 +793,13 @@ try {
         [string]$_.status -notin @("passed", "failed") -or
         [string]::IsNullOrWhiteSpace([string]$_.evidence)
     })
-    $artifactRequiredPhysicalProbeIds = @(
+    $artifactRequiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "pivot-field-list") {
+        @(
+            "pivot-field-drag-cross-bucket-physical",
+            "pivot-field-drag-same-bucket-reorder-physical"
+        )
+    } else {
+        @(
         "worksheet-context-copy-physical",
         "worksheet-context-clear-physical",
         "clipboard-copy-paste-roundtrip",
@@ -789,8 +811,9 @@ try {
         "sheet-tab-overflow-create-physical",
         "sheet-tab-overflow-navigation-physical",
         "sheet-tab-overflow-activate-dialog-physical",
-        "sheet-tab-drag-reorder-physical"
-    )
+            "sheet-tab-drag-reorder-physical"
+        )
+    }
     $missingPhysicalArtifactIds = @()
     $invalidPhysicalArtifactRows = @()
     foreach ($physicalRow in $physicalProbeResults) {
