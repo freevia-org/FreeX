@@ -219,7 +219,10 @@ public static class SlideCloner
             SecondaryValueAxis = src.SecondaryValueAxis is null ? null : CloneChartAxis(src.SecondaryValueAxis),
             RegenerateWorkbookOnSave = src.RegenerateWorkbookOnSave,
             SourcePartPath = src.SourcePartPath,
+            ChartDate1904 = src.ChartDate1904,
+            ChartLanguage = src.ChartLanguage,
             PreservedPivotSourceXml = src.PreservedPivotSourceXml,
+            PreservedChartProtectionXml = src.PreservedChartProtectionXml,
             PreservedChartSpaceExtensionsXml = src.PreservedChartSpaceExtensionsXml,
         };
 

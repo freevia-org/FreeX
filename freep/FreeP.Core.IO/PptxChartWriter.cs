@@ -88,6 +88,12 @@ internal static class PptxChartWriter
 
         var chartSpace = new XElement(C + "chartSpace",
             NsAttr("c", C), NsAttr("a", A), NsAttr("r", R),
+            chart.ChartDate1904 is { } date1904
+                ? new XElement(C + "date1904", new XAttribute("val", BoolValue(date1904)))
+                : null,
+            string.IsNullOrWhiteSpace(chart.ChartLanguage)
+                ? null
+                : new XElement(C + "lang", new XAttribute("val", chart.ChartLanguage)),
             chart.RoundedCorners is { } roundedCorners
                 ? new XElement(C + "roundedCorners", new XAttribute("val", BoolValue(roundedCorners)))
                 : null,
@@ -95,6 +101,7 @@ internal static class PptxChartWriter
                 ? new XElement(C + "style", new XAttribute("val", styleId))
                 : null,
             TryParsePreservedPivotSource(chart.PreservedPivotSourceXml),
+            TryParsePreservedChartProtection(chart.PreservedChartProtectionXml),
             new XElement(C + "chart",
                 titleEl,
                 new XElement(C + "autoTitleDeleted", new XAttribute("val", chart.Title is null ? "1" : "0")),
@@ -138,6 +145,22 @@ internal static class PptxChartWriter
         {
             var pivotSource = XElement.Parse(xml, LoadOptions.PreserveWhitespace);
             return pivotSource.Name == C + "pivotSource" ? pivotSource : null;
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
+    private static XElement? TryParsePreservedChartProtection(string? xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return null;
+
+        try
+        {
+            var protection = XElement.Parse(xml, LoadOptions.PreserveWhitespace);
+            return protection.Name == C + "protection" ? protection : null;
         }
         catch (XmlException)
         {
