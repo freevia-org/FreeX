@@ -73,12 +73,16 @@ public static class FormulaRangeEntryPlanner
         GridRange selectedRange,
         CellAddress formulaCell,
         bool useR1C1ReferenceStyle,
-        out FormulaRangeEntryEdit edit)
+        out FormulaRangeEntryEdit edit,
+        string? selectedSheetName = null)
     {
-        var referenceText = SpreadsheetDisplayFormatter.FormatRangeReference(
+        var cellReferenceText = SpreadsheetDisplayFormatter.FormatRangeReference(
             selectedRange.Start,
             selectedRange.End,
             useR1C1ReferenceStyle);
+        var referenceText = selectedRange.Start.Sheet == formulaCell.Sheet || selectedSheetName is null
+            ? cellReferenceText
+            : $"{SheetNameFormatter.QuoteIfNeeded(selectedSheetName)}!{cellReferenceText}";
 
         return TryApplySelectionText(
             text,

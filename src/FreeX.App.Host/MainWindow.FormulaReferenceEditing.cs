@@ -157,7 +157,8 @@ public partial class MainWindow
                 range,
                 formulaCell.Value,
                 _options.UseR1C1ReferenceStyle,
-                out edit);
+                out edit,
+                _workbook.GetSheet(range.Start.Sheet)?.Name);
 
         if (!applied)
         {
