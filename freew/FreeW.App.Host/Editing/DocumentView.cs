@@ -5897,13 +5897,20 @@ public sealed class DocumentView : RichTextBox
                 BorderThickness = new Thickness(strokeThickness),
                 CornerRadius = plan.GeometryKind == DrawingObjectGeometryKind.RoundedRectangle
                     ? new CornerRadius(6)
-                    : new CornerRadius(0),
-                Clip = new RectangleGeometry(new Rect(0, 0, widthPx, heightPx))
+                    : new CornerRadius(0)
             };
 
             if (plan.Text is { Text.Length: > 0 } text)
             {
-                border.Child = BuildFloatingShapeTextVisual(text, widthPx, heightPx);
+                border.Child = new Border
+                {
+                    Width = widthPx,
+                    Height = heightPx,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Clip = new RectangleGeometry(new Rect(0, 0, widthPx, heightPx)),
+                    Child = BuildFloatingShapeTextVisual(text, widthPx, heightPx)
+                };
             }
 
             element = border;

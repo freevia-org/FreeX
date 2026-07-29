@@ -339,6 +339,15 @@ public sealed class FloatingObjectRenderTests
     {
         var shape = Shape.TextBoxWith("Rotate", widthPt: 150, heightPt: 80);
         shape.TextDirection = direction;
+        shape.Effects = new ShapeEffectLst
+        {
+            HasShadow = true,
+            ShadowColorHex = "000000",
+            ShadowAlpha = 35000,
+            ShadowBlurRad = 50800,
+            ShadowDist = 38100,
+            ShadowDir = 2700000
+        };
         shape.Placement = new FloatingPlacement { Wrapping = ImageWrapping.InFront };
 
         var doc = new TextDocument();
@@ -352,23 +361,31 @@ public sealed class FloatingObjectRenderTests
         view.SetFloatingCanvas(canvas);
 
         var root = canvas.Children.OfType<Border>().Single();
+        var textViewport = LogicalDescendants<Border>(root).Single(border => border.Child is Canvas);
         var textCanvas = LogicalDescendants<Canvas>(root).Single();
         root.Measure(new Size(root.Width, root.Height));
         root.Arrange(new Rect(0, 0, root.Width, root.Height));
         root.UpdateLayout();
 
+        var effect = root.Effect.Should().BeOfType<DropShadowEffect>().Subject;
+        root.Clip.Should().BeNull("the effect-bearing shape border must leave room for its outer shadow");
+        canvas.ClipToBounds.Should().BeFalse();
+        effect.BlurRadius.Should().BeGreaterThan(0);
+        effect.ShadowDepth.Should().BeGreaterThan(0);
+        textViewport.ActualWidth.Should().BeApproximately(root.ActualWidth, 0.01);
+        textViewport.ActualHeight.Should().BeApproximately(root.ActualHeight, 0.01);
         textCanvas.ActualWidth.Should().BeApproximately(root.ActualHeight, 0.01);
         textCanvas.ActualHeight.Should().BeApproximately(root.ActualWidth, 0.01);
-        var transformedBounds = textCanvas.TransformToAncestor(root)
+        var transformedBounds = textCanvas.TransformToAncestor(textViewport)
             .TransformBounds(new Rect(0, 0, textCanvas.ActualWidth, textCanvas.ActualHeight));
         transformedBounds.Left.Should().BeGreaterThanOrEqualTo(-0.01);
         transformedBounds.Top.Should().BeGreaterThanOrEqualTo(-0.01);
-        transformedBounds.Right.Should().BeLessThanOrEqualTo(root.ActualWidth + 0.01);
-        transformedBounds.Bottom.Should().BeLessThanOrEqualTo(root.ActualHeight + 0.01);
+        transformedBounds.Right.Should().BeLessThanOrEqualTo(textViewport.ActualWidth + 0.01);
+        transformedBounds.Bottom.Should().BeLessThanOrEqualTo(textViewport.ActualHeight + 0.01);
+        textViewport.Clip.Should().BeOfType<RectangleGeometry>()
+            .Which.Bounds.Size.Should().Be(new Size(root.ActualWidth, root.ActualHeight));
         textCanvas.Clip.Should().BeOfType<RectangleGeometry>()
             .Which.Bounds.Size.Should().Be(new Size(textCanvas.ActualWidth, textCanvas.ActualHeight));
-        root.Clip.Should().BeOfType<RectangleGeometry>()
-            .Which.Bounds.Size.Should().Be(new Size(root.ActualWidth, root.ActualHeight));
     }
 
     [StaFact]
