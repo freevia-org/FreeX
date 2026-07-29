@@ -76,6 +76,7 @@ internal static class Program
             return mode switch
             {
                 "--powerpoint-export" => RunPowerPointExport(args[1..]),
+                "--powerpoint-export-one" => RunPowerPointExportOne(args[1..]),
                 "--powerpoint-notes-export" => RunPowerPointNotesExport(args[1..]),
                 "--freep-render"      => RunFreePRender(args[1..]),
                 "--avalonia-render"   => RunAvaloniaRender(args[1..]),
@@ -104,6 +105,40 @@ internal static class Program
             Console.Error.WriteLine(ex.StackTrace);
             return 1;
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Mode: --powerpoint-export-one
+    // -----------------------------------------------------------------------
+    private static int RunPowerPointExportOne(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("usage: --powerpoint-export-one <pptx> <outDir> [--width W] [--height H] --result <jsonPath>");
+            return 2;
+        }
+
+        var pptxPath = Path.GetFullPath(args[0]);
+        var outputDirectory = Path.GetFullPath(args[1]);
+        var resultPath = ReadOption(args, "--result");
+        if (resultPath is null)
+        {
+            Console.Error.WriteLine("Missing required --result path.");
+            return 2;
+        }
+
+        var (width, height) = ParseWidthHeight(args[2..], 1280, 720);
+        var result = PowerPointInterop.ExportSlidesToPngDetailed(pptxPath, outputDirectory, width, height);
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(resultPath))!);
+        File.WriteAllText(
+            resultPath,
+            System.Text.Json.JsonSerializer.Serialize(
+                new PowerPointCorpusProcessExporter.ChildResult(
+                    result.ExitCode,
+                    result.FailureKind,
+                    result.ExportedSlides,
+                    result.TotalSlides)));
+        return result.ExitCode;
     }
 
     // -----------------------------------------------------------------------
@@ -698,12 +733,22 @@ internal static class Program
         }
 
         var (width, height) = ParseWidthHeight(args[2..], 1280, 720);
+        var timeoutSeconds = int.TryParse(ReadOption(args, "--deck-timeout-seconds"), out var parsedTimeout)
+            ? parsedTimeout
+            : (int)PowerPointCorpusProcessExporter.DefaultDeckTimeout.TotalSeconds;
+        if (timeoutSeconds <= 0)
+        {
+            Console.Error.WriteLine("--deck-timeout-seconds must be greater than zero.");
+            return 2;
+        }
+
         var result = PowerPointCorpusValidator.Validate(
             corpusDirectory,
             outputDirectory,
             referenceDirectory,
             width,
-            height);
+            height,
+            deckTimeout: TimeSpan.FromSeconds(timeoutSeconds));
         result.Print(Console.Out);
         return result.ExitCode;
     }
@@ -819,8 +864,8 @@ internal static class Program
         Console.WriteLine("      Print compact per-deck status and PowerPoint reference PNG availability.");
         Console.WriteLine("      --require-complete-refs fails when refs are missing unless --allow-missing-powerpoint is set and PowerPoint COM is unavailable.");
         Console.WriteLine();
-        Console.WriteLine("  --powerpoint-corpus-validate <corpusDir> <outDir> [--refs <refsDir>] [--width W] [--height H]");
-        Console.WriteLine("      Open/export every corpus deck through PowerPoint COM and optionally verify slide hashes against references.");
+        Console.WriteLine("  --powerpoint-corpus-validate <corpusDir> <outDir> [--refs <refsDir>] [--width W] [--height H] [--deck-timeout-seconds N]");
+        Console.WriteLine("      Open/export every corpus deck through isolated PowerPoint workers and optionally verify slide hashes against references.");
         Console.WriteLine();
         Console.WriteLine("  --generate-corpus <outDir>");
         Console.WriteLine("      Author test .pptx decks via PowerPoint COM.");

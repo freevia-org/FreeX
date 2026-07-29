@@ -11,9 +11,16 @@ internal static class PowerPointCorpusValidator
         string? referenceDirectory,
         int width,
         int height,
-        Func<string, string, int, int, PowerPointExportResult>? exporter = null)
+        Func<string, string, int, int, PowerPointExportResult>? exporter = null,
+        TimeSpan? deckTimeout = null)
     {
-        exporter ??= PowerPointInterop.ExportSlidesToPngDetailed;
+        exporter ??= (deckPath, deckOutputDirectory, exportWidth, exportHeight) =>
+            PowerPointCorpusProcessExporter.Export(
+                deckPath,
+                deckOutputDirectory,
+                exportWidth,
+                exportHeight,
+                deckTimeout ?? PowerPointCorpusProcessExporter.DefaultDeckTimeout);
 
         var decks = Directory.GetFiles(corpusDirectory, "*.pptx", SearchOption.TopDirectoryOnly)
             .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
