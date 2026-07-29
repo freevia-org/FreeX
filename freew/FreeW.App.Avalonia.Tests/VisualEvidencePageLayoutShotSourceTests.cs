@@ -23,8 +23,12 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("PageShotFixtureSource.Configure(args[i])");
         source.Should().Contain("PageShotFixtureSource.Resolve(");
         source.Should().Contain("DocxReader.Read(path)");
+        source.Should().Contain("ScenarioFixtureAliases");
+        source.Should().Contain("[\"page-composition-columns\"] = \"f2-columns\"");
+        source.Should().Contain("var fixtureId = ScenarioFixtureAliases.TryGetValue(scenarioId, out var alias)");
         source.Should().Contain("page-composition-print-layout");
         source.Should().Contain("page-composition-columns");
+        source.Should().Contain("static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>");
         source.Should().Contain("page-composition-border-watermark");
         source.Should().Contain("page-composition-floating-image");
         source.Should().Contain("f2-footnotes");

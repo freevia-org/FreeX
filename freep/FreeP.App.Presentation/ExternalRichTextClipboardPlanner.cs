@@ -224,7 +224,8 @@ public static class ExternalRichTextClipboardPlanner
             SrgbColor? Color,
             bool BoldSet,
             bool ItalicSet,
-            Hyperlink? Hyperlink);
+            Hyperlink? Hyperlink,
+            string? FieldType);
 
         private readonly byte[] _bytes;
         private readonly Dictionary<int, string> _fonts = new();
@@ -1010,7 +1011,8 @@ public static class ExternalRichTextClipboardPlanner
                 color,
                 state.BoldSet,
                 state.ItalicSet,
-                state.Hyperlink);
+                state.Hyperlink,
+                TryReadExternalFieldType(state.Field?.Instruction.ToString()));
         }
 
         private int? ResolveColorRgb(int colorIndex) =>
@@ -1045,6 +1047,18 @@ public static class ExternalRichTextClipboardPlanner
                 RightToLeft = _activeStyle.RunRightToLeft,
                 Color = _activeStyle.Color is { } color ? new ThemeAwareColor(color) : null,
                 Hyperlink = _activeStyle.Hyperlink,
+                Field = _activeStyle.FieldType is { } fieldType
+                    ? new FieldRun
+                    {
+                        FieldType = fieldType,
+                        CachedText = _activeText.ToString(),
+                        FontFamily = _activeStyle.FontFamily,
+                        FontSizePt = _activeStyle.FontSizePt,
+                        Bold = _activeStyle.Bold,
+                        Italic = _activeStyle.Italic,
+                        Color = _activeStyle.Color,
+                    }
+                    : null,
             });
             _activeParagraph = null;
             _hasActiveStyle = false;
@@ -1062,7 +1076,8 @@ public static class ExternalRichTextClipboardPlanner
             && Nullable.Equals(left.Color, right.Color)
             && left.BoldSet == right.BoldSet
             && left.ItalicSet == right.ItalicSet
-            && SameHyperlink(left.Hyperlink, right.Hyperlink);
+            && SameHyperlink(left.Hyperlink, right.Hyperlink)
+            && string.Equals(left.FieldType, right.FieldType, StringComparison.Ordinal);
 
         private void ResetCharacterFormatting()
         {
@@ -1171,6 +1186,33 @@ public static class ExternalRichTextClipboardPlanner
                 return null;
 
             return new Hyperlink { Url = uri.AbsoluteUri };
+        }
+
+        private static string? TryReadExternalFieldType(string? instruction)
+        {
+            if (string.IsNullOrWhiteSpace(instruction))
+                return null;
+
+            string value = instruction.Trim();
+            int end = 0;
+            while (end < value.Length
+                && !char.IsWhiteSpace(value[end])
+                && value[end] != '\\'
+                && value[end] != '"')
+            {
+                end++;
+            }
+
+            if (end == 0)
+                return null;
+
+            string fieldType = value[..end];
+            // Hyperlinks retain their dedicated URI policy and must not be emitted as
+            // generic field runs, otherwise the PPTX writer would lose hlinkClick metadata.
+            if (fieldType.Equals("HYPERLINK", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            return fieldType.Length <= 64 ? fieldType : null;
         }
 
         private static bool SameHyperlink(Hyperlink? left, Hyperlink? right) =>
