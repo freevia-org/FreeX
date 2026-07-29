@@ -134,6 +134,64 @@ public sealed class R53_CrossSheetFormulaPointModeTests
     }
 
     [Fact]
+    public async Task FormulaPointEdit_PreservesQuotedAreaSpanBeforeReplacingExistingArea()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sourceSheet = window.Session.ActiveSheet;
+                var qualifiedSheet = window.Session.Workbook.AddSheet("Revenue Data");
+                var formulaCell = new CellAddress(sourceSheet.Id, 5, 5);
+                var firstArea = new CellAddress(qualifiedSheet.Id, 5, 6);
+                var authoredSecondArea = new CellAddress(qualifiedSheet.Id, 7, 8);
+                var replacementArea = new CellAddress(qualifiedSheet.Id, 7, 10);
+                var formulaBox = GetField<global::Avalonia.Controls.TextBox>(window, "_formulaBox");
+                qualifiedSheet.SetCell(firstArea, new NumberValue(10));
+                qualifiedSheet.SetCell(replacementArea, new NumberValue(20));
+
+                window.BeginFormulaEditForTest(formulaCell, "=");
+                formulaBox.Text = "=SUM(";
+                window.SetFormulaBoxSelectionForTest(formulaBox.Text.Length, 0);
+                window.RaiseSheetTabModifierClickForTest(qualifiedSheet.Id, KeyModifiers.None);
+
+                Invoke<bool>(window, "TryInsertFormulaPointReference", firstArea).Should().BeTrue();
+                Invoke<bool>(window, "TryAppendDisjointFormulaPointReference", authoredSecondArea)
+                    .Should().BeTrue();
+                formulaBox.Text.Should().Be("=SUM('Revenue Data'!F5,'Revenue Data'!H7");
+
+                // Replace H7 with an equal-length caret edit. The subsequent point must replace
+                // that existing area rather than inserting a third reference at the caret.
+                // A physical Shift+Left selection is reverse-ordered in Avalonia: the anchor
+                // remains at the end of the reference while the active end moves left.
+                formulaBox.SelectionStart = formulaBox.Text.Length;
+                formulaBox.SelectionEnd = formulaBox.Text.Length - 2;
+                formulaBox.CaretIndex = formulaBox.SelectionStart;
+                formulaBox.Text = "=SUM('Revenue Data'!F5,'Revenue Data'!I7";
+                window.SetFormulaBoxSelectionForTest(formulaBox.Text.Length, 0);
+                Invoke<bool>(window, "TryInsertFormulaPointReference", replacementArea)
+                    .Should().BeTrue();
+
+                formulaBox.Text.Should().Be("=SUM('Revenue Data'!F5,'Revenue Data'!J7");
+                window.Session.SelectedRange.Should().Be(new GridRange(replacementArea, replacementArea));
+
+                formulaBox.Text += ")";
+                window.SetFormulaBoxSelectionForTest(formulaBox.Text.Length, 0);
+                window.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
+
+                sourceSheet.GetCell(formulaCell)!.FormulaText
+                    .Should().Be("SUM('Revenue Data'!F5,'Revenue Data'!J7)");
+                sourceSheet.GetValue(formulaCell).Should().Be(new NumberValue(30));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ShiftSheetTabsInFormulaPointMode_EmitThreeDSheetSpan()
     {
         await Session.Dispatch(() =>

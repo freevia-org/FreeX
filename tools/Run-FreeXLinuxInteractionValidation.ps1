@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "sheet-tabs", "pivot-field-list", "autofilter-recalculation", "formula-multi-area-point", "grid-drag")]
+    [ValidateSet("all", "sheet-tabs", "pivot-field-list", "autofilter-recalculation", "formula-multi-area-point", "formula-multi-area-edit", "grid-drag")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -778,6 +778,10 @@ try {
             "formula-bar-point-mode-multi-area-keyboard",
             "formula-bar-point-mode-multi-area-pointer"
         )
+    } elseif ($PhysicalProbeSelector -eq "formula-multi-area-edit") {
+        @(
+            "formula-bar-point-mode-multi-area-edit"
+        )
     } elseif ($PhysicalProbeSelector -eq "grid-drag") {
         @(
             "grid-autofill-handle-drag-physical",
@@ -836,6 +840,10 @@ try {
         @(
             "formula-bar-point-mode-multi-area-keyboard",
             "formula-bar-point-mode-multi-area-pointer"
+        )
+    } elseif ($PhysicalProbeSelector -eq "formula-multi-area-edit") {
+        @(
+            "formula-bar-point-mode-multi-area-edit"
         )
     } elseif ($PhysicalProbeSelector -eq "grid-drag") {
         @(

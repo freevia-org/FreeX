@@ -325,6 +325,31 @@ wait_for_selection() {
     return 1
 }
 
+formula_reference_box_at() {
+    local screenshot="$1" expected_x="$2" expected_y="$3" score
+    # Formula point mode uses the red reference outline rather than the green active-cell outline.
+    # Score red-dominant pixels inside the calibrated target cell, keeping this assertion local to
+    # the dedicated formula-edit selector instead of weakening the general selection primitive.
+    score="$(convert "$screenshot" \
+        -crop "${cell_width}x${cell_height}+${expected_x}+${expected_y}" \
+        -alpha off \
+        -fx '((r-g)>0.12 && (r-b)>0.12) ? 1 : 0' \
+        -format '%[fx:mean]' info: 2>/dev/null || true)"
+    awk -v score="$score" 'BEGIN { exit !(score > 0.03) }'
+}
+
+wait_for_formula_reference_selection() {
+    local expected_x="$1" expected_y="$2" evidence="$3"
+    for _ in $(seq 1 8); do
+        capture "$evidence"
+        if formula_reference_box_at "$output/$evidence" "$expected_x" "$expected_y"; then
+            return 0
+        fi
+        sleep 0.12
+    done
+    return 1
+}
+
 restore_a1() {
     for _ in $(seq 1 2); do
         send_key ctrl+Home
@@ -798,6 +823,21 @@ select_sheet_tab_range_end() {
     sleep "$settle_seconds"
 }
 
+rename_sheet_tab() {
+    local index="$1" tab_y="$(sheet_tab_y)" tab_x
+    tab_x="$(sheet_tab_center_x "$index")"
+    focus_app
+    xdotool_mousemove_sync "$tab_x" "$tab_y" click 1
+    xdotool click --repeat 2 --delay 120 1
+    sleep "$dialog_settle_seconds"
+    # The Avalonia Rename Sheet window is a separate X11 top-level window. Use the focused
+    # window for its text and accept keys; the main workbook window id does not own this dialog.
+    xdotool key --clearmodifiers ctrl+a
+    xdotool type --clearmodifiers --delay "$type_delay_ms" "Revenue Data"
+    xdotool key --clearmodifiers Return
+    sleep "$settle_seconds"
+}
+
 normalize_formula() {
     printf '%s' "$1" | tr -d "'\$ " | tr '[:lower:]' '[:upper:]'
 }
@@ -1150,6 +1190,138 @@ probe_grid_drag_parity() {
     else
         record "grid-selection-border-copy-physical" "failed" "grid-drag-copy-before.png; grid-drag-copy-after.png; grid-drag-postcondition.txt" "Ctrl-drag copy did not prove exact source/target values or final selection." "$artifacts"
     fi
+}
+
+probe_formula_bar_point_mode_multi_area_edit() {
+    local committed_formula="" committed_display="" normalized_formula=""
+    local formula_passed=false result_passed=false selection_passed=false
+    local artifacts="formula-multi-area-edit-rename.png;formula-multi-area-edit-seeded.png;formula-multi-area-edit-created.png;formula-multi-area-edit-start.png;formula-multi-area-edit-authored.png;formula-multi-area-edit-caret.png;formula-multi-area-edit-replaced.png;formula-multi-area-edit-committed.png;formula-multi-area-edit-selected.png;formula-multi-area-edit-postcondition.txt"
+    local expected_formula="=SUM('Revenue Data'!F5,'Revenue Data'!J7)"
+
+    point_formula_cell() {
+        local column_offset="$1" row_offset="$2"
+        focus_app
+        xdotool_mousemove_sync "$(cell_center_x "$column_offset")" "$(cell_center_y "$row_offset")" click 1
+        sleep "$settle_seconds"
+    }
+
+    seed_formula_cell() {
+        local column_offset="$1" row_offset="$2" value="$3"
+        focus_app
+        xdotool_mousemove_sync "$(cell_center_x "$column_offset")" "$(cell_center_y "$row_offset")" click 1
+        sleep "$settle_seconds"
+        send_key F2
+        send_key ctrl+a
+        send_key BackSpace
+        type_text "$value"
+        send_key Return
+    }
+
+    select_created_sheet_tab() {
+        # Revenue Data is the short first tab; Sheet2 follows it at this calibrated center.
+        local tab_x=$((a1_x + 139))
+        focus_app
+        xdotool_mousemove_sync "$tab_x" "$(sheet_tab_y)" click 1
+        sleep "$settle_seconds"
+    }
+
+    # Give the first physical worksheet a quoted name, then create a separate destination
+    # worksheet so every reference is genuinely sheet-qualified.
+    select_sheet_tab 0
+    rename_sheet_tab 0
+    capture_sheet_tab_strip "formula-multi-area-edit-rename.png"
+    # The separate Rename Sheet window can cause the workbook window manager frame to move.
+    # Recalibrate before any cell or tab coordinate is reused so the proof remains tied to
+    # the visible X11 geometry rather than the pre-dialog origin.
+    if ! calibrate_geometry; then
+        write_artifact "formula-multi-area-edit-postcondition.txt" "rename=true\nrecalibration=false\n"
+        record "formula-bar-point-mode-multi-area-edit" "failed" "formula-multi-area-edit-rename.png; formula-multi-area-edit-postcondition.txt" "Could not recalibrate the workbook after the physical sheet rename." "$artifacts"
+        return
+    fi
+    # The rename changes the tab's measured width, which can make the generic selection-border
+    # assertion stale for one transition. Keep the cell edit itself physical and production-routed,
+    # while reserving the strict selection assertion for the final replacement postcondition.
+    if ! seed_formula_cell 5 4 10 || ! seed_formula_cell 9 6 20; then
+        write_artifact "formula-multi-area-edit-postcondition.txt" "seed-f5=false\nseed-j7=false\n"
+        record "formula-bar-point-mode-multi-area-edit" "failed" "formula-multi-area-edit-postcondition.txt" "Could not seed the quoted source worksheet through physical X11 input." "formula-multi-area-edit-postcondition.txt"
+        return
+    fi
+    capture_sheet_tab_strip "formula-multi-area-edit-seeded.png"
+
+    # Revenue Data is shorter than the default CSV tab, so the plus center is the end of the
+    # renamed tab plus its small hit-area padding rather than the generic first-tab width.
+    plus_x=$((a1_x + 123))
+    focus_app
+    xdotool_mousemove_sync "$plus_x" "$(sheet_tab_y)"
+    xdotool mousedown 1
+    sleep 0.12
+    xdotool mouseup 1
+    sleep "$settle_seconds"
+    capture_sheet_tab_strip "formula-multi-area-edit-created.png"
+
+    # Author an existing two-area formula in the destination sheet. The second area is then
+    # edited through the formula-bar caret before a plain point replaces that same area.
+    focus_app
+    xdotool_mousemove_sync "$(cell_center_x 6)" "$(cell_center_y 9)" click 1
+    sleep "$settle_seconds"
+    send_key ctrl+F2
+    send_key ctrl+a
+    type_text "=SUM("
+    send_key F2
+    send_key F2
+    capture "formula-multi-area-edit-start.png"
+
+    select_sheet_tab 0
+    point_formula_cell 5 4
+    send_key ctrl+End
+    focus_app
+    xdotool keydown Control_L
+    xdotool keydown Super_L
+    xdotool_mousemove_sync "$(cell_center_x 7)" "$(cell_center_y 6)" click 1
+    xdotool keyup Control_L
+    xdotool keyup Super_L
+    sleep "$settle_seconds"
+    capture "formula-multi-area-edit-authored.png"
+
+    # Replace H7 with equal-length I7 while the tracked, quoted second-area span remains live.
+    send_key ctrl+End
+    focus_app
+    xdotool key --window "$window_id" --clearmodifiers Shift_L+Left Shift_L+Left
+    type_text "I7"
+    capture "formula-multi-area-edit-caret.png"
+
+    # A plain point must replace the edited second area, retaining the non-final F5 area and
+    # both quoted sheet qualifiers. It must not insert a third reference at the caret.
+    point_formula_cell 9 6
+    capture "formula-multi-area-edit-replaced.png"
+    if wait_for_formula_reference_selection "$(cell_x 9)" "$(cell_y 6)" "formula-multi-area-edit-selected.png"; then
+        selection_passed=true
+    fi
+    type_text ")"
+    send_key Return
+    capture "formula-multi-area-edit-committed.png"
+
+    # Read the committed formula and value from the destination sheet only after the selection
+    # proof is captured. The saved formula must retain the quoted qualifier on both areas.
+    select_created_sheet_tab
+    committed_formula="$(copy_cell_formula 6 9 G10 || true)"
+    committed_display="$(copy_cell_display 6 9 G10 || true)"
+    normalized_formula="$(normalize_formula "$committed_formula")"
+    [[ "$committed_formula" == "$expected_formula" ]] && formula_passed=true
+    [[ "$committed_display" =~ ^30([.]0+)?$ ]] && result_passed=true
+
+    write_artifact "formula-multi-area-edit-postcondition.txt" \
+        "expected-formula=$expected_formula\ncommitted-formula=$committed_formula\nnormalized-formula=$normalized_formula\ncommitted-result=$committed_display\nselection-before-read=Revenue Data!J7\nselection-passed=$selection_passed\nformula-passed=$formula_passed\nresult-passed=$result_passed\n"
+    if $formula_passed && $result_passed && $selection_passed; then
+        record "formula-bar-point-mode-multi-area-edit" "passed" \
+            "formula-multi-area-edit-authored.png; formula-multi-area-edit-caret.png; formula-multi-area-edit-replaced.png; formula-multi-area-edit-committed.png; formula=$committed_formula; result=$committed_display; selection=Revenue Data!J7" \
+            "Physical X11 input edited a quoted second area, replaced that existing area with J7, committed the exact two-area formula, calculated 30, and retained Revenue Data!J7 selected before formula/result readback." "$artifacts"
+    else
+        record "formula-bar-point-mode-multi-area-edit" "failed" \
+            "$artifacts" \
+            "Expected formula '$expected_formula', result 30, and selection Revenue Data!J7; observed formula '$committed_formula', result '$committed_display', selection-passed=$selection_passed." "$artifacts"
+    fi
+    send_key Escape || true
 }
 
 probe_sheet_tabs() {
@@ -1785,6 +1957,19 @@ if [[ "$probe_selector" == "formula-multi-area-point" ]]; then
     probe_formula_bar_point_mode_multi_area
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused multi-area formula point probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "formula-multi-area-edit" ]]; then
+    # Focused iteration mode for mutating an already-authored quoted multi-area formula.
+    probe_formula_bar_point_mode_multi_area_edit
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused multi-area formula edit probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then

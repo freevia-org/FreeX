@@ -9536,12 +9536,12 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var selectionStart = Math.Clamp(editor.SelectionStart, 0, textLength);
+        var selectionStart = Math.Clamp(Math.Min(editor.SelectionStart, editor.SelectionEnd), 0, textLength);
         if (editor.SelectionStart != editor.SelectionEnd)
         {
-            var selectionEnd = Math.Clamp(editor.SelectionEnd, selectionStart, textLength);
-            if (selectionStart < start || selectionEnd > end)
-                ClearFormulaReferenceEntrySpan();
+            // Avalonia raises SelectionStart/SelectionEnd independently while a reverse
+            // Shift+Left selection is forming. Preserve the live reference through that transient
+            // range; the collapsed-caret branch below performs the authoritative outside-span test.
             return;
         }
 
@@ -9842,12 +9842,27 @@ public sealed partial class MainWindow : Window
 
         var text = editor.Text ?? "";
         var (selectionStart, selectionLength) = GetFormulaEditorSelection(editor, text.Length);
+        var previousReferenceStart = _formulaReferenceStart;
+        var previousReferenceLength = _formulaReferenceLength;
+        if (previousReferenceStart is null && previousReferenceLength is null && selectionLength == 0)
+        {
+            // A physical Avalonia caret edit can clear the tracked span while the TextBox is
+            // moving a reverse selection. Recover the authored trailing area before replacing it,
+            // including its quoted sheet qualifier, instead of inserting a third reference.
+            FormulaRangeEntryPlanner.TryGetTrailingReferenceSpan(
+                text,
+                selectionStart,
+                out var recoveredStart,
+                out var recoveredLength);
+            previousReferenceStart = recoveredLength > 0 ? recoveredStart : null;
+            previousReferenceLength = recoveredLength > 0 ? recoveredLength : null;
+        }
         if (!FormulaRangeEntryPlanner.TryApplyRangeSelection(
                 text,
                 selectionStart,
                 selectionLength,
-                _formulaReferenceStart,
-                _formulaReferenceLength,
+                previousReferenceStart,
+                previousReferenceLength,
                 range,
                 formulaCell.Value,
                 UseR1C1ReferenceStyle,
@@ -10491,7 +10506,6 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        ClearFormulaReferenceEntrySpan();
         UpdateFormulaRangeEntryStateAfterTextChanged(_formulaBox.Text);
         if (_session.FormulaEditAddress is null)
         {
