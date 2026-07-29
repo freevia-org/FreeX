@@ -160,6 +160,12 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Test-Path -LiteralPath $wordBaselineRoot -PathType Container");
         source.Should().Contain("-WordBaselineUnavailableReason cannot be combined with -WordBaselineDir or -IncludeWordBaseline.");
         source.Should().Contain("Invoke-PowerShellStep 'Render MS Word baseline PNGs'");
+        source.Should().Contain("$wordBaselineArgs = @(");
+        source.Should().Contain("if ($effectiveScenarioIds.Count -gt 0)");
+        source.Should().Contain("$wordBaselineDocs = @($effectiveScenarioIds | ForEach-Object { \"$_.docx\" })");
+        source.Should().Contain("$wordBaselineArgs += '-Docs'");
+        source.Should().Contain("$wordBaselineArgs += $wordBaselineDocs");
+        source.Should().Contain("Selected Word baseline fixture(s) are missing");
         source.Should().Contain("'--manifest', $wpfManifest");
         source.Should().Contain("'--manifest', $avaloniaManifest");
         source.Should().Contain("'--word-baseline-dir', $wordBaselineRoot");
