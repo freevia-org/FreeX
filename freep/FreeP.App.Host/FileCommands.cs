@@ -3,6 +3,7 @@ using System.Windows;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Pdf.Wpf;
+using Free.Shared.Pdf.Skia;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
@@ -224,7 +225,10 @@ internal sealed class FileCommands
             var request = new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
                 PresentationPrintLayoutKind.NotesPages,
                 range));
-            var bytes = PresentationNotesPagePdfExporter.ExportToBytes(presentation, request);
+            var bytes = PresentationNotesPagePdfExporter.ExportToBytes(
+                presentation,
+                request,
+                SkiaPdfWriter.WriteToBytesWithPortableFallback);
             ExportAtomicWriter.WriteAllBytes(result.FileName!, bytes);
             return true;
         }
@@ -311,7 +315,8 @@ internal sealed class FileCommands
             _getModel(),
             request,
             WpfPresentationSlideImageRenderer.RenderSlideToPng,
-            WpfRasterPdfWriter.WriteToBytes);
+            WpfRasterPdfWriter.WriteToBytes,
+            SkiaPdfWriter.WriteToBytesWithPortableFallback);
         LastPrintExecutionDescriptor = PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(
             LastPrintOutputPackage,
             _nativePrintHostCapabilities,

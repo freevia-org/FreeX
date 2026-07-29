@@ -32,6 +32,15 @@ public static class PresentationHandoutPdfExporter
         PresentationHandoutPdfExportRequest? request = null) =>
         PortablePdfWriter.WriteToBytes(BuildDocument(presentation, request), "FreeP handout PDF");
 
+    public static byte[] ExportToBytes(
+        Presentation presentation,
+        PresentationHandoutPdfExportRequest? request,
+        PresentationPdfContentWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        return writer(BuildDocument(presentation, request));
+    }
+
     public static void Export(
         Presentation presentation,
         Stream stream,

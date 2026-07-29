@@ -4243,7 +4243,12 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            ExportAtomicWriter.WriteAllBytes(path, PresentationNotesPagePdfExporter.ExportToBytes(_presentation, request));
+            ExportAtomicWriter.WriteAllBytes(
+                path,
+                PresentationNotesPagePdfExporter.ExportToBytes(
+                    _presentation,
+                    request,
+                    SkiaPdfWriter.WriteToBytesWithPortableFallback));
             _statusText.Text = $"Exported {Path.GetFileName(path)}";
             return true;
         }
@@ -4349,7 +4354,8 @@ public sealed partial class MainWindow : Window
                 _presentation,
                 request,
                 SlideRenderer.RenderToBytes,
-                SkiaRasterPdfWriter.WriteToBytes);
+                SkiaRasterPdfWriter.WriteToBytes,
+                SkiaPdfWriter.WriteToBytesWithPortableFallback);
         LastPrintExecutionDescriptor = PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(
             LastPrintOutputPackage,
             _nativePrintHostCapabilities,

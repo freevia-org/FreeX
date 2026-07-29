@@ -250,7 +250,8 @@ public static class PresentationPrintOutputPackageExecutor
         Presentation presentation,
         PresentationPrintRequest? request,
         PresentationSlideImageRenderer renderSlideToPng,
-        PresentationRasterPdfWriter writeRasterPdf)
+        PresentationRasterPdfWriter writeRasterPdf,
+        PresentationPdfContentWriter? writeVectorPdf = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(renderSlideToPng);
@@ -270,13 +271,23 @@ public static class PresentationPrintOutputPackageExecutor
                     renderSlideToPng,
                     writeRasterPdf),
             PresentationPrintOutputPackageRoute.NotesPagePdf =>
-                PresentationNotesPagePdfExporter.ExportToBytes(
-                    presentation,
-                    new PresentationNotesPagePdfExportRequest(normalizedRequest)),
+                writeVectorPdf is null
+                    ? PresentationNotesPagePdfExporter.ExportToBytes(
+                        presentation,
+                        new PresentationNotesPagePdfExportRequest(normalizedRequest))
+                    : PresentationNotesPagePdfExporter.ExportToBytes(
+                        presentation,
+                        new PresentationNotesPagePdfExportRequest(normalizedRequest),
+                        writeVectorPdf),
             PresentationPrintOutputPackageRoute.HandoutPdf =>
-                PresentationHandoutPdfExporter.ExportToBytes(
-                    presentation,
-                    new PresentationHandoutPdfExportRequest(normalizedRequest)),
+                writeVectorPdf is null
+                    ? PresentationHandoutPdfExporter.ExportToBytes(
+                        presentation,
+                        new PresentationHandoutPdfExportRequest(normalizedRequest))
+                    : PresentationHandoutPdfExporter.ExportToBytes(
+                        presentation,
+                        new PresentationHandoutPdfExportRequest(normalizedRequest),
+                        writeVectorPdf),
             _ => throw new ArgumentOutOfRangeException(nameof(request), plan.Route, "Unsupported print output route."),
         };
 
