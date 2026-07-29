@@ -632,6 +632,84 @@ probe_pivot_field_list() {
     fi
 }
 
+probe_autofilter_recalculation() {
+    local initial_value north_value south_value cleared_value
+    local artifacts="autofilter-recalculation-before.png;autofilter-recalculation-north.png;autofilter-recalculation-south.png;autofilter-recalculation-cleared.png;autofilter-recalculation-postcondition.txt"
+    local passed=false
+
+    # Seed a compact, deterministic worksheet without saving it back to the caller's CSV.
+    set_cell_text_without_save 0 0 A1 "Region"
+    set_cell_text_without_save 1 0 B1 "Amount"
+    set_cell_text_without_save 0 1 A2 "North"
+    set_cell_text_without_save 1 1 B2 "10"
+    set_cell_text_without_save 0 2 A3 "South"
+    set_cell_text_without_save 1 2 B3 "20"
+    set_cell_text_without_save 1 3 B4 "=SUBTOTAL(109,B2:B3)"
+    initial_value="$(copy_cell_display 1 3 B4 || true)"
+    capture "autofilter-recalculation-before.png"
+
+    # Select A1:B3 and toggle Data > Filter > AutoFilter through the production legacy keytip
+    # route. This deliberately exercises the same input path a Windows keyboard user gets.
+    select_cell 0 0 A1
+    send_key shift+Right
+    send_key shift+Down
+    send_key shift+Down
+    send_key alt+d
+    send_key f
+    send_key f
+    select_cell 0 0 A1
+
+    # The text filter flyout initially focuses Sort A-Z. Its tab order reaches Select All, then
+    # the North and South checklist entries. Leave North selected and uncheck South.
+    send_key alt+Down
+    for _ in $(seq 1 9); do send_key Tab; done
+    send_key space
+    send_key Tab
+    send_key Return
+    sleep "$settle_seconds"
+    north_value="$(copy_cell_display 1 3 B4 || true)"
+    capture "autofilter-recalculation-north.png"
+
+    # Change the active checklist from North to South, preserving the same formula cell.
+    select_cell 0 0 A1
+    send_key alt+Down
+    for _ in $(seq 1 8); do send_key Tab; done
+    send_key space
+    for _ in $(seq 1 2); do send_key Tab; done
+    send_key Return
+    sleep "$settle_seconds"
+    south_value="$(copy_cell_display 1 3 B4 || true)"
+    capture "autofilter-recalculation-south.png"
+
+    # Clear the active Region filter from the same production flyout. Clear Filter is the third
+    # focusable action after the two sort commands.
+    select_cell 0 0 A1
+    send_key alt+Down
+    for _ in $(seq 1 2); do send_key Tab; done
+    send_key Return
+    sleep "$settle_seconds"
+    cleared_value="$(copy_cell_display 1 3 B4 || true)"
+    capture "autofilter-recalculation-cleared.png"
+
+    write_artifact "autofilter-recalculation-postcondition.txt" \
+        "initial=$initial_value\nnorth=$north_value\nsouth=$south_value\ncleared=$cleared_value\n"
+    if [[ "$initial_value" == "30" && "$north_value" == "10" &&
+          "$south_value" == "20" && "$cleared_value" == "30" ]]; then
+        passed=true
+    fi
+    if $passed; then
+        record "autofilter-recalculation-apply-change-clear-physical" "passed" \
+            "autofilter-recalculation-before.png; autofilter-recalculation-north.png; autofilter-recalculation-south.png; autofilter-recalculation-cleared.png; values=$initial_value->$north_value->$south_value->$cleared_value" \
+            "The Linux X11 AutoFilter workflow recalculated SUBTOTAL(109,...) immediately after applying, changing, and clearing the filter." \
+            "$artifacts"
+    else
+        record "autofilter-recalculation-apply-change-clear-physical" "failed" \
+            "$artifacts" \
+            "Expected SUBTOTAL values 30->10->20->30, observed $initial_value->$north_value->$south_value->$cleared_value." \
+            "$artifacts"
+    fi
+}
+
 sheet_tab_center_x() {
     local index="$1"
     if (( index == 0 )); then
@@ -1280,6 +1358,19 @@ if [[ "$probe_selector" == "pivot-field-list" ]]; then
     probe_pivot_field_list
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused PivotTable field-list probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "autofilter-recalculation" ]]; then
+    # Focused iteration mode for the deterministic AutoFilter/SUBTOTAL workflow.
+    probe_autofilter_recalculation
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused AutoFilter recalculation probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
