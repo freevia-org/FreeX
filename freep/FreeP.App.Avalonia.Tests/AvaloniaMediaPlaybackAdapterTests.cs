@@ -75,6 +75,7 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
         controller.TryHandleClick(slide, 960, 720, 960, 720, 480, 360).Should().BeTrue();
         mediaSession.PlayCount.Should().Be(2);
         controller.TrySeek(42, TimeSpan.FromSeconds(3)).Should().BeTrue();
+        controller.TrySeek(42, TimeSpan.FromSeconds(-1)).Should().BeFalse();
         controller.TrySetVolume(42, 35).Should().BeTrue();
         mediaSession.LastSeek.Should().Be(TimeSpan.FromSeconds(3));
         mediaSession.Volume.Should().Be(35);
