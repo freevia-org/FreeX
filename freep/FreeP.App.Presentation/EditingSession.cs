@@ -1239,6 +1239,27 @@ public sealed class EditingSession
         return commands.Length;
     }
 
+    /// <summary>Sets the number of text columns on all selected text shapes as one undo step.</summary>
+    public int SetTextColumnCountOnSelection(int columnCount)
+    {
+        if (CurrentSlide is null || columnCount < 1)
+            return 0;
+
+        var commands = _selectedShapeIds
+            .Where(id => CurrentSlide.Shapes.FirstOrDefault(shape => shape.Id == id)?.TextBody is not null)
+            .Select(id => (IPresentationCommand)new SetShapeTextColumnCountCommand(
+                _currentSlideIndex,
+                id,
+                columnCount))
+            .ToArray();
+
+        if (commands.Length == 0)
+            return 0;
+
+        Bus.Execute(new BatchCommand("Set Text Columns", commands));
+        return commands.Length;
+    }
+
     // ── Notes operations ─────────────────────────────────────────────────────────
 
     /// <summary>

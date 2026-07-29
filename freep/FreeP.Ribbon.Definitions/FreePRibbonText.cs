@@ -53,6 +53,8 @@ internal static class FreePRibbonText
     public static string TextAutoFitKeyTip => Get("Ribbon_Command_TextAutoFit_KeyTip");
     public static string TextDirectionLabel => Get("Ribbon_Command_TextDirection_Label");
     public static string TextDirectionKeyTip => Get("Ribbon_Command_TextDirection_KeyTip");
+    public static string TextColumnsLabel => Get("Ribbon_Command_TextColumns_Label");
+    public static string TextColumnsKeyTip => Get("Ribbon_Command_TextColumns_KeyTip");
     public static string TableCellFillLabel => Get("Ribbon_Command_TableCellFill_Label");
     public static string TableCellFillKeyTip => Get("Ribbon_Command_TableCellFill_KeyTip");
     public static string TableCellAnchorLabel => Get("Ribbon_Command_TableCellAnchor_Label");

@@ -2338,6 +2338,15 @@ public sealed partial class MainWindow : Window
                 return;
             Editor.SetTextVerticalTypeOnSelection(verticalType);
         }));
+        r.Register("freep.text-columns", new ContextRibbonCommand(ctx =>
+        {
+            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                value is not string selection ||
+                !TextColumnCountOptionParser.TryParse(selection, out var count))
+                return;
+
+            Editor.SetTextColumnCountOnSelection(count);
+        }));
         r.Register("freep.table-cell-fill", new ContextRibbonCommand(ctx =>
         {
             if (!TryGetRibbonFontColor(ctx, out var color))
