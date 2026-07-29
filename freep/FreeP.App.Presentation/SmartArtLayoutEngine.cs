@@ -440,9 +440,6 @@ public static class SmartArtLayoutEngine
         if (nodes.Count < 1 || fcx <= 0 || fcy <= 0)
             return null;
 
-        if (nodes.Any(node => node.Text is null || node.Text.Length > 512))
-            return null;
-
         long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
         long padY = Math.Max((long)(fcy * 0.10), 1L);
         long rawGap = Math.Max((long)(fcx * GapFrac), 1L);
@@ -505,11 +502,6 @@ public static class SmartArtLayoutEngine
         // Negative offsets are valid for objects that intentionally extend beyond the slide;
         // only the frame extents and the generated geometry are bounded here.
         if (nodes.Count < 1 || fcx <= 0 || fcy <= 0)
-            return null;
-
-        // Keep malformed imported text on the cached drawing path rather than allowing a
-        // single pathological node to collapse the live geometry or text layout.
-        if (nodes.Any(node => node.Text is null || node.Text.Length > 512))
             return null;
 
         long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
@@ -1087,9 +1079,6 @@ public static class SmartArtLayoutEngine
     {
         if (nodes.Count < 1 || fcx <= 0 || fcy <= 0)
             return null;
-        if (nodes.Any(node => node.Text is null || node.Text.Length > 512))
-            return null;
-
         long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
         long padY = Math.Max((long)(fcy * 0.08), 1L);
         long gap = Math.Max((long)(fcy * GapFrac), 1L);

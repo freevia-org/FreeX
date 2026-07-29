@@ -1177,9 +1177,9 @@ public sealed class SmartArtLayoutTests
     [Fact]
     public void ChevronProcess_MalformedInput_UsesCachedFallback()
     {
-        var data = MakeChevronData("basicChevronProcess", new string('x', 513));
+        var data = MakeChevronData("basicChevronProcess");
         SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
-            .Should().BeNull("pathological node text must keep the cached drawing authoritative");
+            .Should().BeNull("a chevron process with no nodes must keep the cached drawing authoritative");
     }
 
     [Theory]
@@ -1244,6 +1244,23 @@ public sealed class SmartArtLayoutTests
         shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
             .Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .Should().Equal(Enumerable.Range(1, nodeCount).Select(index => $"Node {index}"));
+    }
+
+    [Theory]
+    [InlineData("chevronProcess")]
+    [InlineData("basicChevronProcess")]
+    [InlineData("closedChevronProcess")]
+    public void ChevronProcess_KeepsAuthoredLongNodeTextOnLiveLayout(string layout)
+    {
+        var longText = string.Concat(Enumerable.Repeat("PowerPoint keeps this authored SmartArt text editable. ", 16));
+        var data = MakeChevronData(layout, longText, "Next step");
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("valid long node text should remain on the live SmartArt path");
+        shapes!.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Chevron)
+            .Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain(longText);
     }
 
     [Fact]
