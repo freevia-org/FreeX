@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "sheet-tabs", "pivot-field-list", "autofilter-recalculation")]
+    [ValidateSet("all", "sheet-tabs", "pivot-field-list", "autofilter-recalculation", "formula-multi-area-point")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -773,6 +773,11 @@ try {
         @(
             "autofilter-recalculation-apply-change-clear-physical"
         )
+    } elseif ($PhysicalProbeSelector -eq "formula-multi-area-point") {
+        @(
+            "formula-bar-point-mode-multi-area-keyboard",
+            "formula-bar-point-mode-multi-area-pointer"
+        )
     } else {
         @(
         "inline-edit-f2-escape",
@@ -820,6 +825,11 @@ try {
     } elseif ($PhysicalProbeSelector -eq "autofilter-recalculation") {
         @(
             "autofilter-recalculation-apply-change-clear-physical"
+        )
+    } elseif ($PhysicalProbeSelector -eq "formula-multi-area-point") {
+        @(
+            "formula-bar-point-mode-multi-area-keyboard",
+            "formula-bar-point-mode-multi-area-pointer"
         )
     } else {
         @(

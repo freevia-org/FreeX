@@ -96,6 +96,43 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
     }
 
     [Fact]
+    public async Task FormulaBar_DisjointPointFormula_CommitsAndCalculates()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = CreateWindowWithCleanSheet(out var sheet);
+            try
+            {
+                var firstArea = new CellAddress(sheet.Id, 5, 6);
+                var secondArea = new CellAddress(sheet.Id, 7, 6);
+                var formulaCell = new CellAddress(sheet.Id, 5, 5);
+                sheet.SetCell(firstArea, new NumberValue(10));
+                sheet.SetCell(secondArea, new NumberValue(20));
+                window.Session.SelectCell(formulaCell);
+                window.BeginFormulaEditForTest(formulaCell, "=");
+                window.FormulaBoxTextForTest = "=SUM(";
+                window.SetFormulaBoxSelectionForTest("=SUM(".Length, 0);
+
+                window.RaiseFormulaBoxKeyDownForTest(Press(Key.Right));
+                window.RaiseFormulaBoxKeyDownForTest(Press(Key.F8, KeyModifiers.Shift));
+                window.RaiseFormulaBoxKeyDownForTest(Press(Key.Down, KeyModifiers.Control));
+                window.FormulaBoxTextForTest.Should().Be("=SUM(F5,F7");
+
+                window.FormulaBoxTextForTest += ")";
+                window.RaiseFormulaBoxKeyDownForTest(Press(Key.Enter));
+
+                sheet.GetCell(formulaCell)!.FormulaText.Should().Be("SUM(F5,F7)");
+                sheet.GetValue(formulaCell).Should().Be(new NumberValue(30));
+                window.Session.FormulaEditAddress.Should().BeNull();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task InlineEditor_ShiftF8AddMode_AppendsKeyboardCreatedAreas()
     {
         await Session.Dispatch(() =>

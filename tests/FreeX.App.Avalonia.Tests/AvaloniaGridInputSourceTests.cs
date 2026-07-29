@@ -139,6 +139,35 @@ public sealed class AvaloniaGridInputSourceTests
     // ── R83-render-selection-fillhandle-5-2: fill-handle hover must use the crosshair, not Hand ──
 
     [Fact]
+    public void FormulaPointCtrlClick_TakesPrecedenceOverHyperlinkActivation()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var pointerStart = source.IndexOf("border.PointerPressed += (_, args) =>", StringComparison.Ordinal);
+        var pointerEnd = source.IndexOf(
+            "// PointerMoved and PointerReleased for cell-selection drag",
+            pointerStart,
+            StringComparison.Ordinal);
+
+        pointerStart.Should().BeGreaterThanOrEqualTo(0);
+        pointerEnd.Should().BeGreaterThan(pointerStart);
+        var pointerHandler = source[pointerStart..pointerEnd];
+
+        var appendIndex = pointerHandler.IndexOf(
+            "TryAppendDisjointFormulaPointReference(address)",
+            StringComparison.Ordinal);
+        var hyperlinkIndex = pointerHandler.IndexOf(
+            "HasHyperlinkActivationModifier(args.KeyModifiers)",
+            StringComparison.Ordinal);
+
+        appendIndex.Should().BeGreaterThanOrEqualTo(0);
+        hyperlinkIndex.Should().BeGreaterThanOrEqualTo(0);
+        appendIndex.Should().BeLessThan(
+            hyperlinkIndex,
+            "WPF/Excel must append a formula area before Ctrl+click hyperlink navigation is considered");
+        pointerHandler.Should().Contain("IsFormulaDisjointReferenceModifier(args.KeyModifiers)");
+    }
+
+    [Fact]
     public void WorksheetCapturedDrags_RequestSharedEdgeAutoScrollAndRefreshViewport()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));

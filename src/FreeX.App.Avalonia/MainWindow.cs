@@ -8977,6 +8977,19 @@ public sealed partial class MainWindow : Window
         {
             var point = args.GetCurrentPoint(border);
             if (point.Properties.IsLeftButtonPressed &&
+                IsFormulaRangeEntryActiveForPointMode() &&
+                IsFormulaDisjointReferenceModifier(args.KeyModifiers) &&
+                TryAppendDisjointFormulaPointReference(address))
+            {
+                var referenceStart = _formulaReferenceStart;
+                var referenceLength = _formulaReferenceLength;
+                BeginCellSelectionDrag(args, border, address);
+                TrackFormulaPointDragAnchor(address, referenceStart, referenceLength);
+                args.Handled = true;
+                return;
+            }
+
+            if (point.Properties.IsLeftButtonPressed &&
                 !args.KeyModifiers.HasFlag(KeyModifiers.Shift) &&
                 HasHyperlinkActivationModifier(args.KeyModifiers) &&
                 _session.TryGetHyperlinkPlan(address, out var _))
@@ -8993,19 +9006,6 @@ public sealed partial class MainWindow : Window
                 if (!IsSelectedCell(address))
                     SelectCell(address);
                 OpenWorksheetCellContextMenu((Control?)_activeCellBorder ?? _sheetGridHost);
-                args.Handled = true;
-                return;
-            }
-
-            if (point.Properties.IsLeftButtonPressed &&
-                IsFormulaRangeEntryActiveForPointMode() &&
-                IsFormulaDisjointReferenceModifier(args.KeyModifiers) &&
-                TryAppendDisjointFormulaPointReference(address))
-            {
-                var referenceStart = _formulaReferenceStart;
-                var referenceLength = _formulaReferenceLength;
-                BeginCellSelectionDrag(args, border, address);
-                TrackFormulaPointDragAnchor(address, referenceStart, referenceLength);
                 args.Handled = true;
                 return;
             }
@@ -9698,26 +9698,44 @@ public sealed partial class MainWindow : Window
         if (editor is null || formulaCell is null)
             return false;
 
-        if (_formulaReferenceStart is not { } previousStart ||
-            _formulaReferenceLength is not { } previousLength)
+        FormulaRangeEntryEdit edit;
+        if (_formulaReferenceStart is { } previousStart &&
+            _formulaReferenceLength is { } previousLength)
         {
-            return TryApplyFormulaRangeSelection(range, range.Start, target);
+            if (!FormulaRangeEntryPlanner.TryAppendKeyboardRangeSelection(
+                    editor.Text ?? "",
+                    previousStart,
+                    previousLength,
+                    current,
+                    target,
+                    extendSelection,
+                    formulaCell.Value,
+                    UseR1C1ReferenceStyle,
+                    out edit,
+                    _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
+                    _formulaSheetSpanEntryState))
+            {
+                return false;
+            }
         }
-
-        if (!FormulaRangeEntryPlanner.TryAppendKeyboardRangeSelection(
-                editor.Text ?? "",
-                previousStart,
-                previousLength,
-                current,
-                target,
-                extendSelection,
-                formulaCell.Value,
-                UseR1C1ReferenceStyle,
-                out var edit,
-                _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
-                _formulaSheetSpanEntryState))
+        else
         {
-            return false;
+            if (!TryGetFormulaReferenceSpanForAppend(editor, out var recoveredStart, out var recoveredLength))
+                return TryApplyFormulaRangeSelection(range, range.Start, target);
+
+            if (!FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(
+                    editor.Text ?? "",
+                    recoveredStart,
+                    recoveredLength,
+                    range,
+                    formulaCell.Value,
+                    UseR1C1ReferenceStyle,
+                    out edit,
+                    _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
+                    _formulaSheetSpanEntryState))
+            {
+                return false;
+            }
         }
 
         _isApplyingFormulaBoxText = true;
@@ -9763,6 +9781,33 @@ public sealed partial class MainWindow : Window
         }
 
         return IsFormulaRangeEntryActive(_formulaBox.Text) ? _formulaBox : null;
+    }
+
+    private bool TryGetFormulaReferenceSpanForAppend(
+        TextBox editor,
+        out int referenceStart,
+        out int referenceLength)
+    {
+        referenceStart = 0;
+        referenceLength = 0;
+        if (_formulaReferenceStart is { } trackedStart &&
+            _formulaReferenceLength is { } trackedLength &&
+            trackedStart >= 0 && trackedLength >= 0 &&
+            trackedStart + trackedLength <= (editor.Text?.Length ?? 0))
+        {
+            referenceStart = trackedStart;
+            referenceLength = trackedLength;
+            return true;
+        }
+
+        var text = editor.Text ?? "";
+        var (caretIndex, selectionLength) = GetFormulaEditorSelection(editor, text.Length);
+        return selectionLength == 0 &&
+            FormulaRangeEntryPlanner.TryGetTrailingReferenceSpan(
+                text,
+                caretIndex,
+                out referenceStart,
+                out referenceLength);
     }
 
     private bool TryApplyFormulaRangeSelection(CellAddress target, bool extendSelection)
@@ -10345,9 +10390,7 @@ public sealed partial class MainWindow : Window
         var editor = GetFormulaRangeEntryEditor();
         var formulaCell = _session.FormulaEditAddress;
         if (editor is null || formulaCell is null ||
-            _formulaReferenceStart is not { } start ||
-            _formulaReferenceLength is not { } length ||
-            start < 0 || length < 0)
+            !TryGetFormulaReferenceSpanForAppend(editor, out var start, out var length))
         {
             return false;
         }
