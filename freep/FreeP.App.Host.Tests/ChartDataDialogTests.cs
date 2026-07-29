@@ -643,6 +643,15 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().NotContain("_planner.ValuesForCommit()");
     }
 
+    [Fact]
+    public void MainWindow_ChartDialogsRespectImportedProtectionPolicy()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+
+        source.Should().Contain("if (!Editor.CanEditSelectedChartData) return;");
+        source.Should().Contain("if (!Editor.CanEditSelectedChartFormatting) return;");
+    }
+
     // ── EditingSession chart API (from session, not dialog) ───────────────────────
 
     [StaFact]

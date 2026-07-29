@@ -2814,6 +2814,22 @@ public sealed class EditingSession
     }
 
     /// <summary>
+    /// True when the selected chart can accept data edits under its imported PowerPoint
+    /// protection policy. A missing protection token means the chart is editable.
+    /// </summary>
+    public bool CanEditSelectedChartData => SelectedChart is { } chart
+        && chart.ChartObjectProtected != true
+        && chart.ChartDataProtected != true;
+
+    /// <summary>
+    /// True when the selected chart can accept formatting edits under its imported
+    /// PowerPoint protection policy. A missing protection token means the chart is editable.
+    /// </summary>
+    public bool CanEditSelectedChartFormatting => SelectedChart is { } chart
+        && chart.ChartObjectProtected != true
+        && chart.ChartFormattingProtected != true;
+
+    /// <summary>
     /// Changes only the selected chart's type through the same coordinate-aware, undoable path
     /// used by the chart data dialog. Scatter and Bubble transitions receive valid coordinates;
     /// ordinary chart data and formatting remain intact.
@@ -2821,7 +2837,7 @@ public sealed class EditingSession
     public bool ChangeSelectedChartType(ChartType chartType)
     {
         var selectedChart = SelectedChart;
-        if (selectedChart is null || chartType == ChartType.Unknown)
+        if (selectedChart is null || !CanEditSelectedChartData || chartType == ChartType.Unknown)
             return false;
 
         var planner = ChartDataDialogPlanner.FromChart(selectedChart);
