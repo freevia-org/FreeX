@@ -39,6 +39,9 @@ internal static class ChartHelper
     internal static bool IsFormattingEditable(ChartShape chart) =>
         chart.ChartObjectProtected != true && chart.ChartFormattingProtected != true;
 
+    internal static bool IsObjectEditable(SlideShape shape) =>
+        shape.Chart is null || shape.Chart.ChartObjectProtected != true;
+
     internal static ChartSeries? FindFormattingSeries(
         Presentation p,
         int slideIndex,

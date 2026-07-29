@@ -917,6 +917,7 @@ public sealed class MoveShapeCommand : IPresentationCommand
     private readonly uint _shapeId;
     private readonly long _dx;
     private readonly long _dy;
+    private bool _applied;
 
     // Captured reroute data: (connectorId, oldX, oldY, oldCx, oldCy, oldRoute, newX, newY, newCx, newCy)
     private List<(uint id, long ox, long oy, long ocx, long ocy, List<(long X, long Y)>? oroute, long nx, long ny, long ncx, long ncy)>?
@@ -935,9 +936,10 @@ public sealed class MoveShapeCommand : IPresentationCommand
     public void Apply(Presentation p)
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
-        if (s is null) return;
+        if (s is null || !ChartHelper.IsObjectEditable(s)) return;
         s.OffsetXEmu += _dx;
         s.OffsetYEmu += _dy;
+        _applied = true;
 
         // Reroute attached connectors after the shape has moved.
         _rerouteCapture = ApplyReroute(p, _slideIndex, _shapeId);
@@ -945,6 +947,7 @@ public sealed class MoveShapeCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
+        if (!_applied) return;
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
         if (s is null) return;
         s.OffsetXEmu -= _dx;
@@ -1006,6 +1009,7 @@ public sealed class ResizeShapeCommand : IPresentationCommand
     private readonly long _newCx;
     private readonly long _newCy;
     private long _oldOffsetX, _oldOffsetY, _oldCx, _oldCy;
+    private bool _applied;
 
     private List<(uint id, long ox, long oy, long ocx, long ocy, List<(long X, long Y)>? oroute, long nx, long ny, long ncx, long ncy)>?
         _rerouteCapture;
@@ -1025,7 +1029,7 @@ public sealed class ResizeShapeCommand : IPresentationCommand
     public void Apply(Presentation p)
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
-        if (s is null) return;
+        if (s is null || !ChartHelper.IsObjectEditable(s)) return;
         _oldOffsetX = s.OffsetXEmu;
         _oldOffsetY = s.OffsetYEmu;
         _oldCx      = s.ExtentCxEmu;
@@ -1034,12 +1038,14 @@ public sealed class ResizeShapeCommand : IPresentationCommand
         s.OffsetYEmu  = _newOffsetY;
         s.ExtentCxEmu = _newCx;
         s.ExtentCyEmu = _newCy;
+        _applied = true;
 
         _rerouteCapture = MoveShapeCommand.ApplyReroute(p, _slideIndex, _shapeId);
     }
 
     public void Revert(Presentation p)
     {
+        if (!_applied) return;
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
         if (s is null) return;
         s.OffsetXEmu  = _oldOffsetX;
@@ -1637,6 +1643,7 @@ public sealed class RotateShapeCommand : IPresentationCommand
     private readonly uint   _shapeId;
     private readonly double _newRotationDeg;
     private double          _oldRotationDeg;
+    private bool             _applied;
 
     private List<(uint id, long ox, long oy, long ocx, long ocy, List<(long X, long Y)>? oroute, long nx, long ny, long ncx, long ncy)>?
         _rerouteCapture;
@@ -1653,15 +1660,17 @@ public sealed class RotateShapeCommand : IPresentationCommand
     public void Apply(Presentation p)
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
-        if (s is null) return;
+        if (s is null || !ChartHelper.IsObjectEditable(s)) return;
         _oldRotationDeg = s.RotationDeg;
         s.RotationDeg   = _newRotationDeg;
+        _applied = true;
 
         _rerouteCapture = MoveShapeCommand.ApplyReroute(p, _slideIndex, _shapeId);
     }
 
     public void Revert(Presentation p)
     {
+        if (!_applied) return;
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
         if (s is null) return;
         s.RotationDeg = _oldRotationDeg;
