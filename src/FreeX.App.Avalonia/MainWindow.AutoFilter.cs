@@ -637,6 +637,7 @@ public sealed partial class MainWindow
             return;
         }
 
+        RecalculateAfterAutoFilterMutation();
         RefreshShell(allowedValues.Count == 0 ? UiText.Get("ShellLoc_ClearedFilter") : UiText.Get("ShellLoc_AppliedFilter"));
     }
 
@@ -653,6 +654,7 @@ public sealed partial class MainWindow
             return;
         }
 
+        RecalculateAfterAutoFilterMutation();
         RefreshShell(ascending ? UiText.Get("ShellLoc_SortedAToZ") : UiText.Get("ShellLoc_SortedZToA"));
     }
 
@@ -723,8 +725,20 @@ public sealed partial class MainWindow
             return;
         }
 
+        RecalculateAfterAutoFilterMutation();
         RefreshShell(successMessage);
     }
+
+    // Filter visibility and sort order are workbook state, but they are not ordinary cell edits.
+    // Recalculate explicitly so SUBTOTAL/AGGREGATE formulas that ignore hidden rows update in the
+    // same interaction as the corresponding WPF host path.
+    private void RecalculateAfterAutoFilterMutation() => _session.RecalculateWorkbook();
+
+    internal void RunAutoFilterForTest(
+        GridRange range,
+        uint columnOffset,
+        IReadOnlyList<string> allowedValues) =>
+        RunAutoFilter(range, columnOffset, allowedValues);
 
     private static string FormatFilterPromptPlanError(FilterPromptPlanError error) =>
         error switch
