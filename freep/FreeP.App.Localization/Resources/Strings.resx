@@ -172,6 +172,12 @@
   <data name="Ribbon_Command_TextDirection_KeyTip" xml:space="preserve">
     <value>TD</value>
   </data>
+  <data name="Ribbon_Command_TextColumns_Label" xml:space="preserve">
+    <value>Text Columns</value>
+  </data>
+  <data name="Ribbon_Command_TextColumns_KeyTip" xml:space="preserve">
+    <value>TC</value>
+  </data>
   <data name="Ribbon_Command_TableCellFill_Label" xml:space="preserve">
     <value>Table Cell Fill</value>
   </data>

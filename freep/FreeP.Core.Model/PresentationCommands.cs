@@ -1922,6 +1922,52 @@ public sealed class SetShapeTextVerticalTypeCommand : IPresentationCommand
     }
 }
 
+/// <summary>Changes the DrawingML text-frame column count of one shape.</summary>
+public sealed class SetShapeTextColumnCountCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _newCount;
+    private int _oldCount;
+
+    public SetShapeTextColumnCountCommand(int slideIndex, uint shapeId, int newCount)
+    {
+        if (newCount < 1)
+            throw new ArgumentOutOfRangeException(nameof(newCount), "Text column count must be positive.");
+
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _newCount = newCount;
+    }
+
+    public string Label => "Set Text Columns";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        return shape?.TextBody is { } body && body.ColumnCount != _newCount;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.TextBody is not { } body)
+            return;
+
+        _oldCount = body.ColumnCount;
+        body.ColumnCount = _newCount;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.TextBody is not { } body)
+            return;
+
+        body.ColumnCount = _oldCount;
+    }
+}
+
 /// <summary>
 /// Base for run-format toggle commands that operate over a single run identified by
 /// (slideIndex, shapeId, paragraphIndex, runIndex).

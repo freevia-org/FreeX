@@ -879,6 +879,38 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SetShapeTextColumnCountCommand_ApplyUndoAndRedo_PreservesCountAndSpacing()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape();
+        shape.TextBody = new TextBody { ColumnCount = 1, ColumnSpacingEmu = 457200 };
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new SetShapeTextColumnCountCommand(0, shape.Id, 3));
+        shape.TextBody!.ColumnCount.Should().Be(3);
+        shape.TextBody.ColumnSpacingEmu.Should().Be(457200);
+
+        bus.Undo();
+        shape.TextBody.ColumnCount.Should().Be(1);
+        shape.TextBody.ColumnSpacingEmu.Should().Be(457200);
+
+        bus.Redo();
+        shape.TextBody.ColumnCount.Should().Be(3);
+    }
+
+    [Fact]
+    public void SetShapeTextColumnCountCommand_NoOp_DoesNotAddUndoEntry()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape();
+        shape.TextBody = new TextBody { ColumnCount = 2 };
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new SetShapeTextColumnCountCommand(0, shape.Id, 2));
+        bus.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetTableCellTextVerticalTypeCommand_ApplyUndoAndRedo_PreservesOrientation()
     {
         var (p, bus) = Make();

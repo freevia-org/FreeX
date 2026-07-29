@@ -635,6 +635,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         var wpfRowHeight = RequiredCombo(wpf, "freep.table-row-height");
         var wpfTextAutoFit = RequiredCombo(wpf, "freep.text-autofit");
         var wpfTextDirection = RequiredCombo(wpf, "freep.text-direction");
+        var wpfTextColumns = RequiredCombo(wpf, "freep.text-columns");
         var size = RequiredCombo(avalonia, "freep.font-size");
         var color = RequiredCombo(avalonia, "freep.font-color");
         var fill = RequiredCombo(avalonia, "freep.table-cell-fill");
@@ -644,6 +645,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         var rowHeight = RequiredCombo(avalonia, "freep.table-row-height");
         var textAutoFit = RequiredCombo(avalonia, "freep.text-autofit");
         var textDirection = RequiredCombo(avalonia, "freep.text-direction");
+        var textColumns = RequiredCombo(avalonia, "freep.text-columns");
 
         wpfCommandIds.Should().ContainInOrder(
             "freep.font-family",
@@ -651,6 +653,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.font-color",
             "freep.text-autofit",
             "freep.text-direction",
+            "freep.text-columns",
             "freep.table-cell-fill",
             "freep.table-cell-anchor",
             "freep.table-cell-border",
@@ -667,6 +670,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.font-color",
             "freep.text-autofit",
             "freep.text-direction",
+            "freep.text-columns",
             "freep.table-cell-fill",
             "freep.table-cell-anchor",
             "freep.table-cell-border",
@@ -686,6 +690,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         wpfRowHeight.Items.Should().Equal(FreePRibbonDefinitionData.TableRowHeightOptions);
         wpfTextAutoFit.Items.Should().Equal(FreePRibbonDefinitionData.TextAutoFitOptions);
         wpfTextDirection.Items.Should().Equal(FreePRibbonDefinitionData.TextVerticalTypeOptions);
+        wpfTextColumns.Items.Should().Equal(FreePRibbonDefinitionData.TextColumnCountOptions);
         size.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
         color.Items.Should().Equal(FreePRibbonDefinitionData.FontColors);
         fill.Items.Should().Equal(FreePRibbonDefinitionData.TableCellFillColors);
@@ -695,6 +700,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         rowHeight.Items.Should().Equal(FreePRibbonDefinitionData.TableRowHeightOptions);
         textAutoFit.Items.Should().Equal(FreePRibbonDefinitionData.TextAutoFitOptions);
         textDirection.Items.Should().Equal(FreePRibbonDefinitionData.TextVerticalTypeOptions);
+        textColumns.Items.Should().Equal(FreePRibbonDefinitionData.TextColumnCountOptions);
     }
 
     [Fact]
