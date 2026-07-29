@@ -66,6 +66,10 @@ public sealed class SlidePane : Border
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
         Background = BackgroundBrush;
+        PresentationPaneAccessibilityAdapter.ApplyPaneMetadata(
+            this,
+            PresentationPaneAccessibilityPlanner.SlidePaneId,
+            isVisible: true);
 
         _stack = new StackPanel { Orientation = Orientation.Vertical };
 
@@ -127,11 +131,12 @@ public sealed class SlidePane : Border
             _editor.Presentation.Sections,
             _sessionState);
 
+        var accessibilityOrdinal = 0;
         foreach (var entry in _sessionProjection.Entries)
         {
             if (entry.Kind == SlidePaneEntryKind.SectionHeader)
             {
-                _stack.Children.Add(BuildSectionHeader(entry));
+                _stack.Children.Add(BuildSectionHeader(entry, accessibilityOrdinal++));
                 continue;
             }
 
@@ -139,7 +144,7 @@ public sealed class SlidePane : Border
                 entry,
                 slides[entry.SlideIndex],
                 _sessionProjection.SelectedSlideIndex);
-            var item = BuildSlideItem(plan, slides[entry.SlideIndex]);
+            var item = BuildSlideItem(plan, slides[entry.SlideIndex], accessibilityOrdinal++);
             _stack.Children.Add(item);
         }
 
@@ -151,7 +156,7 @@ public sealed class SlidePane : Border
     /// Builds an interactive section-header row showing the section name and slide count.
     /// Wave 11B.
     /// </summary>
-    private Border BuildSectionHeader(SlidePaneEntry entry)
+    private Border BuildSectionHeader(SlidePaneEntry entry, int accessibilityOrdinal)
     {
         var plan = SlidePanePlanner.BuildSectionHeaderVisualPlan(entry);
         var normalBackground = BrushFromHex(plan.BackgroundHex);
@@ -212,6 +217,13 @@ public sealed class SlidePane : Border
             }
         };
         AutomationProperties.SetName(header, plan.AccessibleName);
+        PresentationPaneAccessibilityAdapter.ApplyItem(
+            header,
+            PresentationPaneAccessibilityPlanner.SlidePaneId,
+            accessibilityOrdinal,
+            plan.AccessibleName,
+            "Not selected",
+            $"Section{plan.SectionIndex + 1}");
 
         return header;
     }
@@ -240,13 +252,38 @@ public sealed class SlidePane : Border
                     _editor.Presentation.Slides[itemIdx],
                     idx);
                 AutomationProperties.SetName(item, plan.AccessibleName);
+                PresentationPaneAccessibilityAdapter.ApplyItem(
+                    item,
+                    PresentationPaneAccessibilityPlanner.SlidePaneId,
+                    GetAccessibilityOrdinalForSlide(itemIdx),
+                    plan.AccessibleName,
+                    selected ? "Selected" : "Not selected",
+                    $"Slide{itemIdx + 1}");
             }
         }
     }
 
+    private int GetAccessibilityOrdinalForSlide(int slideIndex)
+    {
+        if (_sessionProjection is null)
+            return slideIndex;
+
+        for (var ordinal = 0; ordinal < _sessionProjection.Entries.Count; ordinal++)
+        {
+            var entry = _sessionProjection.Entries[ordinal];
+            if (entry.Kind == SlidePaneEntryKind.Slide && entry.SlideIndex == slideIndex)
+                return ordinal;
+        }
+
+        return slideIndex;
+    }
+
     // ── Item construction ─────────────────────────────────────────────────────────
 
-    private Border BuildSlideItem(SlidePaneThumbnailVisualPlan plan, Slide slide)
+    private Border BuildSlideItem(
+        SlidePaneThumbnailVisualPlan plan,
+        Slide slide,
+        int accessibilityOrdinal)
     {
         // Slide-number label.
         var label = new TextBlock
@@ -305,6 +342,13 @@ public sealed class SlidePane : Border
             ToolTip         = plan.ToolTipText
         };
         AutomationProperties.SetName(item, plan.AccessibleName);
+        PresentationPaneAccessibilityAdapter.ApplyItem(
+            item,
+            PresentationPaneAccessibilityPlanner.SlidePaneId,
+            accessibilityOrdinal,
+            plan.AccessibleName,
+            plan.IsSelected ? "Selected" : "Not selected",
+            $"Slide{plan.SlideIndex + 1}");
 
         // Click -> SelectSlide.
         item.MouseLeftButtonDown += (sender, e) =>
@@ -503,6 +547,12 @@ public sealed class SlidePane : Border
         .OfType<Border>()
         .Where(child => child.Tag is SectionHeaderTag)
         .Select(AutomationProperties.GetName)
+        .ToArray();
+
+    internal IReadOnlyList<FrameworkElement> AccessibilityItemsForTests => _stack.Children
+        .OfType<FrameworkElement>()
+        .Where(item => AutomationProperties.GetAutomationId(item)
+            .StartsWith("FreePSlidePaneItem", StringComparison.Ordinal))
         .ToArray();
 
     internal bool ToggleSectionForTests(int sectionIndex)
