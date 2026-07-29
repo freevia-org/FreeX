@@ -18580,10 +18580,15 @@ public sealed class DocumentView : Control
 
     private static IBrush BuildWordArtGradientBrush(DrawingObjectFillPlan fill)
     {
+        // DrawingML stores the linear gradient direction in 60k-degree units.
+        // WordArt must consume the serialized angle just like ordinary shapes do.
+        var angleRadians = fill.GradientAngle / 60000.0 * Math.PI / 180.0;
+        var cos = Math.Cos(angleRadians);
+        var sin = Math.Sin(angleRadians);
         var brush = new LinearGradientBrush
         {
-            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-            EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+            StartPoint = new RelativePoint(0.5 - cos * 0.5, 0.5 - sin * 0.5, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0.5 + cos * 0.5, 0.5 + sin * 0.5, RelativeUnit.Relative),
         };
 
         foreach (var stop in fill.GradientStops)

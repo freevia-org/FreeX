@@ -203,6 +203,16 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_UsesSerializedGradientAngleForWordArt()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("var angleRadians = fill.GradientAngle / 60000.0 * Math.PI / 180.0");
+        source.Should().Contain("StartPoint = new RelativePoint(0.5 - cos * 0.5, 0.5 - sin * 0.5, RelativeUnit.Relative)");
+        source.Should().Contain("EndPoint = new RelativePoint(0.5 + cos * 0.5, 0.5 + sin * 0.5, RelativeUnit.Relative)");
+    }
+
+    [Fact]
     public void AvaloniaDocumentView_UsesWordArtFillAsFieldAndContrastingText()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
