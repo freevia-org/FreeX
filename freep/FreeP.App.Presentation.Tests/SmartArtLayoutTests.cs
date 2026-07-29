@@ -931,22 +931,27 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void VerticalBulletList_ReturnsLiveTreeBoxesAndConnectors()
+    public void VerticalBulletList_UsesFlatEditableBulletRowsWithoutConnectors()
     {
         var data = MakeHierarchyData("Project", "Scope", "Timeline", "Risks");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList";
 
         var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        shapes.Should().NotBeNull("verticalBulletList is a bounded shared hierarchy-family layout");
-        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
-            .Should().HaveCount(4, "root plus three bullet child boxes should be emitted from the hierarchy tree");
+        shapes.Should().NotBeNull("verticalBulletList is a flat editable list layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.Rectangle)
+            .Should().HaveCount(4, "root and child nodes should become ordered list rows");
         shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
-            .Should().HaveCount(3, "verticalBulletList should reuse shared parent-child connector geometry");
+            .Should().BeEmpty("a bullet list does not have org-chart connectors");
 
-        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Rectangle).ToList();
         boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
-            .Should().BeEquivalentTo(new[] { "Project", "Scope", "Timeline", "Risks" });
+            .Should().Equal("Project", "Scope", "Timeline", "Risks");
+        boxes.Select(s => s.OffsetYEmu).Should().BeInAscendingOrder();
+        boxes.Select(s => s.TextBody!.Paragraphs[0].BulletKind).Should()
+            .OnlyContain(kind => kind == BulletKind.Char);
+        boxes.Select(s => s.TextBody!.Paragraphs[0].BulletChar).Should()
+            .OnlyContain(value => value == "•");
     }
 
     // ── Unknown family → null ──────────────────────────────────────────────────────
@@ -4423,7 +4428,7 @@ public sealed class SmartArtLayoutTests
         var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
 
         var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
-        shapeOps.Should().HaveCount(7, "verticalBulletList should render four live boxes plus three connectors");
+        shapeOps.Should().HaveCount(4, "verticalBulletList should render four live bullet rows");
         var renderedText = shapeOps
             .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .ToList();
@@ -4433,7 +4438,9 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().Contain("Risks");
         renderedText.Should().NotContain("Cached vertical bullet fallback");
         shapeOps.Where(op => op.Text is null)
-            .Should().HaveCount(3, "hosts consume the shared hierarchy connector DrawOps");
+            .Should().BeEmpty("a flat bullet list has no hierarchy connector DrawOps");
+        shapeOps.SelectMany(op => op.Text!.Paragraphs)
+            .Should().OnlyContain(paragraph => paragraph.BulletKind == BulletKind.Char);
     }
 
     [Fact]
