@@ -177,7 +177,7 @@ internal static class WpfVideoEncoderCapabilityDetector
             (true, true) => "Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available.",
             (true, false) => "Windows MediaComposition video export and narration capture are available; no camera device is currently available for camera PIP.",
             (false, true) => "Windows MediaComposition video export and camera PIP are available; no microphone device is currently available for narration.",
-            _ => "Windows MediaComposition video export is available; no microphone or camera device is currently available for capture."
+            _ => "Windows MediaComposition video export is available; no microphone device is currently available for narration, and no camera device is currently available for camera PIP."
         };
 
     internal static string? SelectSoftwareEncoder(string output)
