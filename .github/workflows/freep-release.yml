@@ -1,0 +1,87 @@
+name: FreeP Windows Tester Release
+
+# Builds the Windows asset set that can later be attached to freep-v<version>.
+# This workflow intentionally does not create or edit a GitHub release.
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Release version, for example 0.8.150
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: freep-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-windows-single-file:
+    name: FreeP Windows single-file tester build
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      RELEASE_VERSION: ${{ inputs.release_version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish self-contained Windows single-file executable
+        shell: pwsh
+        run: |
+          $version = $env:RELEASE_VERSION.Trim()
+          if ([string]::IsNullOrWhiteSpace($version) -or $version -match "[`r`n]") {
+            throw "release_version must be a non-empty single line."
+          }
+
+          $packageRoot = Join-Path $env:RUNNER_TEMP "freep-release"
+          tools/Publish-SisterAppTesterPackages.ps1 `
+            -App FreeP `
+            -Version $version `
+            -Runtimes "win-x64" `
+            -WindowsPackageMode SingleFile `
+            -OutputDir $packageRoot
+
+          $exeName = "FreeP-v$version-win-x64.exe"
+          $exePath = Join-Path $packageRoot $exeName
+          $checksumPath = "$exePath.sha256"
+          if (-not (Test-Path -LiteralPath $exePath)) {
+            throw "Expected single-file executable '$exePath' was not produced."
+          }
+          if (-not (Test-Path -LiteralPath $checksumPath)) {
+            throw "Expected checksum '$checksumPath' was not produced."
+          }
+
+          $stagingRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts\freep-release"
+          New-Item -ItemType Directory -Force -Path $stagingRoot | Out-Null
+          Copy-Item -LiteralPath $exePath -Destination (Join-Path $stagingRoot $exeName) -Force
+          Copy-Item -LiteralPath $checksumPath -Destination (Join-Path $stagingRoot "$exeName.sha256") -Force
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: FreeP-v${{ inputs.release_version }}-win-x64-exe
+          path: artifacts/freep-release/FreeP-v${{ inputs.release_version }}-win-x64.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Windows executable checksum
+        uses: actions/upload-artifact@v7
+        with:
+          name: FreeP-v${{ inputs.release_version }}-win-x64-exe-sha256
+          path: artifacts/freep-release/FreeP-v${{ inputs.release_version }}-win-x64.exe.sha256
+          if-no-files-found: error
+          retention-days: 14
