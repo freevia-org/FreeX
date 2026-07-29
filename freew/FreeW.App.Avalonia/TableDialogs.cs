@@ -4,6 +4,9 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using System.Collections.Generic;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -211,6 +214,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
     private readonly TextBlock _validation = new();
     private readonly TabControl _tabs;
     private readonly Control[] _initialFocusTargets;
+    private readonly List<string> _focusTrace = [];
 
     public TablePropertiesValues? Result { get; private set; }
 
@@ -262,10 +266,15 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         _cellMarginsOn = Check("Same as the whole table", state.CellMarginsSameAsTable, "TablePropertiesSameMarginsCheckBox");
 
         _tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
-        _tabs.Items.Add(new TabItem { Header = "Table", Content = BuildTableTab() });
-        _tabs.Items.Add(new TabItem { Header = "Row", Content = BuildRowTab() });
-        _tabs.Items.Add(new TabItem { Header = "Column", Content = BuildColumnTab() });
-        _tabs.Items.Add(new TabItem { Header = "Cell", Content = BuildCellTab() });
+        _tabs.Items.Add(TabPage("Table", "TablePropertiesTableTab", BuildTableTab()));
+        _tabs.Items.Add(TabPage("Row", "TablePropertiesRowTab", BuildRowTab()));
+        _tabs.Items.Add(TabPage("Column", "TablePropertiesColumnTab", BuildColumnTab()));
+        _tabs.Items.Add(TabPage("Cell", "TablePropertiesCellTab", BuildCellTab()));
+        _tabs.SelectionChanged += (_, _) =>
+        {
+            if (_tabs.SelectedIndex is >= 0 and < 4)
+                _focusTrace.Add($"TabPage:{((TabItem)_tabs.SelectedItem!).Header}");
+        };
         _tabs.SelectedIndex = Math.Clamp((int)initialTab, 0, 3);
         AutomationProperties.SetAutomationId(_tabs, "TablePropertiesTabs");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
@@ -293,12 +302,18 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         bottom.Children.Add(buttons);
         DockPanel.SetDock(bottom, Dock.Bottom);
         Content = new DockPanel { LastChildFill = true, Children = { bottom, _tabs } };
+        AddHandler(InputElement.GotFocusEvent, (_, args) =>
+        {
+            if (args.Source is Control control && AutomationProperties.GetAutomationId(control) is { Length: > 0 } automationId)
+                _focusTrace.Add(automationId);
+        }, RoutingStrategies.Bubble);
         Opened += (_, _) => FocusInitialField();
     }
 
     internal TabControl TabsForTest => _tabs;
     internal TextBlock ValidationForTest => _validation;
     internal Control InitialFocusTargetForTest => _initialFocusTargets[_tabs.SelectedIndex];
+    internal IReadOnlyList<string> FocusTraceForValidation => _focusTrace;
 
     internal TablePropertiesValues? AcceptForTest() => TryAccept(close: false);
 
@@ -323,6 +338,13 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
             Header("Default cell margins (pt):"),
             margins,
             spacing);
+    }
+
+    private static TabItem TabPage(string header, string automationId, Control content)
+    {
+        var tab = new TabItem { Header = header, Content = content };
+        AutomationProperties.SetAutomationId(tab, automationId);
+        return tab;
     }
 
     private Control BuildRowTab()
