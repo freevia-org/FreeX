@@ -3660,10 +3660,24 @@ if (@($effectiveScenarioIds).Count -eq 0 -or $effectiveScenarioIds -contains 'f2
 }
 
 if ($IncludeWordBaseline) {
-    Invoke-PowerShellStep 'Render MS Word baseline PNGs' $wordBaselineScript @(
+    $wordBaselineArgs = @(
         '-FilesDir', $fixtureDir,
         '-OutDir', $wordBaselineRenderRoot
     )
+    if ($effectiveScenarioIds.Count -gt 0) {
+        $wordBaselineDocs = @($effectiveScenarioIds | ForEach-Object { "$_.docx" })
+        $missingWordBaselineDocs = @($wordBaselineDocs | Where-Object {
+            -not (Test-Path -LiteralPath (Join-Path $fixtureDir $_) -PathType Leaf)
+        })
+        if ($missingWordBaselineDocs.Count -gt 0) {
+            throw "Selected Word baseline fixture(s) are missing: $($missingWordBaselineDocs -join ', ')"
+        }
+
+        $wordBaselineArgs += '-Docs'
+        $wordBaselineArgs += $wordBaselineDocs
+    }
+
+    Invoke-PowerShellStep 'Render MS Word baseline PNGs' $wordBaselineScript $wordBaselineArgs
 
     if (-not (Test-Path -LiteralPath $wordBaselineRoot -PathType Container)) {
         throw "Word baseline renderer did not produce the expected PNG directory: $wordBaselineRoot"
