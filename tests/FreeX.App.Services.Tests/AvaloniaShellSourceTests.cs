@@ -2232,7 +2232,11 @@ public sealed class AvaloniaShellSourceTests
         // first, and when the active cell isn't a List-DV cell, fall through to the AutoFilter column
         // dropdown when the active cell is a filter-button cell (review P35 — this shell used to only
         // ever try the data-validation dropdown, silently doing nothing on a plain AutoFilter header).
-        source.Should().Contain("e.Handled = OpenActiveDataValidationDropdown() || OpenActiveAutoFilterDropdown();");
+        source.Should().Contain("e.Handled = OpenActiveDropdown();");
+        source.Should().Contain("OpenActiveDataValidationDropdown() ||");
+        source.Should().Contain("OpenActiveAutoFilterDropdown() ||");
+        source.Should().Contain("OpenTextEntryPickListDropdown();");
+        source.Should().Contain("DataValidationDropdownPlanner.GetTextEntryPickListItems(");
         source.Should().Contain("_activeDataValidationDropdown.IsDropDownOpen = true;");
         source.Should().Contain("private void DataValidationDropdown_SelectionChanged(object? sender, SelectionChangedEventArgs e)");
         source.Should().Contain("CommitDataValidationDropdownSelection(selected);");

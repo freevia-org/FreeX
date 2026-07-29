@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eEuo pipefail
 
 export DISPLAY="${DISPLAY:-:99}"
 
@@ -425,6 +425,12 @@ cell_y() { printf '%d' "$((a1_y + $1 * cell_height))"; }
 cell_center_x() { printf '%d' "$((a1_x + $1 * cell_width + cell_width / 2))"; }
 cell_center_y() { printf '%d' "$((a1_y + $1 * cell_height + cell_height / 2))"; }
 
+open_autofilter_menu() {
+    local column_offset="$1"
+    select_cell "$column_offset" 0 "filter-header-$column_offset"
+    send_key alt+Down
+}
+
 select_cell() {
     local column_offset="$1" row_offset="$2" address="$3"
     local expected_x expected_y center_x center_y
@@ -648,20 +654,18 @@ probe_autofilter_recalculation() {
     initial_value="$(copy_cell_display 1 3 B4 || true)"
     capture "autofilter-recalculation-before.png"
 
-    # Select A1:B3 and toggle Data > Filter > AutoFilter through the production legacy keytip
-    # route. This deliberately exercises the same input path a Windows keyboard user gets.
+    # Select A1:B3 and toggle AutoFilter through the production Excel shortcut.
     select_cell 0 0 A1
     send_key shift+Right
     send_key shift+Down
     send_key shift+Down
-    send_key alt+d
-    send_key f
-    send_key f
+    send_key ctrl+shift+l
     select_cell 0 0 A1
 
     # The text filter flyout initially focuses Sort A-Z. Its tab order reaches Select All, then
     # the North and South checklist entries. Leave North selected and uncheck South.
-    send_key alt+Down
+    open_autofilter_menu 0
+    capture "autofilter-recalculation-menu-open.png"
     for _ in $(seq 1 9); do send_key Tab; done
     send_key space
     send_key Tab
@@ -672,7 +676,7 @@ probe_autofilter_recalculation() {
 
     # Change the active checklist from North to South, preserving the same formula cell.
     select_cell 0 0 A1
-    send_key alt+Down
+    open_autofilter_menu 0
     for _ in $(seq 1 8); do send_key Tab; done
     send_key space
     for _ in $(seq 1 2); do send_key Tab; done
@@ -684,7 +688,7 @@ probe_autofilter_recalculation() {
     # Clear the active Region filter from the same production flyout. Clear Filter is the third
     # focusable action after the two sort commands.
     select_cell 0 0 A1
-    send_key alt+Down
+    open_autofilter_menu 0
     for _ in $(seq 1 2); do send_key Tab; done
     send_key Return
     sleep "$settle_seconds"

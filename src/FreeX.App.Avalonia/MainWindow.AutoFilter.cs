@@ -23,6 +23,7 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     private Flyout? _autoFilterFlyout;
+    internal bool AutoFilterFlyoutOpenForTest => _autoFilterFlyout is not null;
 
     private static AvaloniaCompactDialogChromeStyle AutoFilterDialogChromeStyle => new(FormulaBarFontFamily);
 

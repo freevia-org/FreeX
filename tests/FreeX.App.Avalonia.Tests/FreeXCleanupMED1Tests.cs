@@ -140,6 +140,39 @@ public sealed class FreeXCleanupMED1Tests
                 "Alt+Down over an AutoFilter header cell must be handled by falling back to the " +
                 "column's filter dropdown when there is no data-validation dropdown to open — " +
                 "previously this key press did nothing at all for a keyboard-only user");
+            window.AutoFilterFlyoutOpenForTest.Should().BeTrue(
+                "the handled key must open the actual AutoFilter flyout, not the adjacent-text pick list");
+            window.DataValidationDropdownOpenForTest.Should().BeFalse();
+
+            window.Close();
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AltDown_OnPlainTextColumn_OpensTextEntryPickListAfterAutoFilterFallback()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            window.Show();
+            window.Measure(new Size(1120, 720));
+            window.Arrange(new Rect(0, 0, 1120, 720));
+            window.UpdateLayout();
+
+            var sheet = window.Session.Workbook.AddSheet("CleanFixture");
+            window.Session.SelectSheet(sheet.Id);
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("North"));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("South"));
+            window.Session.SelectCell(new CellAddress(sheet.Id, 3, 1));
+            window.RebuildSheetGridForTest();
+
+            var args = new KeyEventArgs { Key = Key.Down, KeyModifiers = KeyModifiers.Alt };
+            await window.RaiseKeyDownForTest(args);
+
+            args.Handled.Should().BeTrue();
+            window.DataValidationDropdownOpenForTest.Should().BeTrue();
+            window.AutoFilterFlyoutOpenForTest.Should().BeFalse();
 
             window.Close();
             return true;
