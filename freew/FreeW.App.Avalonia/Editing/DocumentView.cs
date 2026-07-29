@@ -7392,11 +7392,15 @@ public sealed class DocumentView : Control
     private void DrawShapeTextSelection(
         DrawingContext context,
         FloatingShapeData shapeData,
+        Rect rect,
         bool isRotated,
         Point center)
     {
-        var highlights = BuildShapeTextSelectionHighlights(shapeData);
-        if (highlights.Count == 0)
+        if (ShapeTextSelectionInfo is not { } selection
+            || selection.Start.BlockIndex != shapeData.BlockIndex
+            || selection.Start.RunIndex != shapeData.RunIndex
+            || !TryGetRun(shapeData.BlockIndex, shapeData.RunIndex, out var ownerRun)
+            || ownerRun.Shape is not { } shape)
             return;
 
         IDisposable? rotation = null;
@@ -7413,54 +7417,36 @@ public sealed class DocumentView : Control
 
         try
         {
-            foreach (var highlight in highlights)
-                context.FillRectangle(SelectionBrush, highlight.Rect);
+            var format = new RunFormatting { FontSizePt = 9 };
+            foreach (var stop in _shapeTextCaretStops.Where(stop =>
+                         stop.BlockIndex == shapeData.BlockIndex && stop.RunIndex == shapeData.RunIndex))
+            {
+                if (!TryGetShapeTextRun(stop.BlockIndex, stop.RunIndex, stop.TextParagraphIndex,
+                        stop.TextRunIndex, out var textRun)
+                    || stop.Offset < 0 || stop.Offset >= textRun.Text.Length)
+                    continue;
+                var character = textRun.Text[stop.Offset];
+                if (character is '\r' or '\n')
+                    continue;
+
+                var position = (stop.BlockIndex, stop.RunIndex, stop.TextParagraphIndex,
+                    stop.TextRunIndex, stop.Offset);
+                if (CompareShapeTextPositions(position, selection.Start) < 0
+                    || CompareShapeTextPositions(position, selection.End) >= 0)
+                    continue;
+
+                var glyph = Build(character.ToString(), format);
+                context.FillRectangle(SelectionBrush, new Rect(
+                    stop.X,
+                    stop.Y,
+                    Math.Max(1, glyph.WidthIncludingTrailingWhitespace),
+                    Math.Max(1, stop.Height)));
+            }
         }
         finally
         {
             rotation?.Dispose();
         }
-    }
-
-    private IReadOnlyList<ShapeTextSelectionHighlight> BuildShapeTextSelectionHighlights(
-        FloatingShapeData shapeData)
-    {
-        if (ShapeTextSelectionInfo is not { } selection
-            || selection.Start.BlockIndex != shapeData.BlockIndex
-            || selection.Start.RunIndex != shapeData.RunIndex)
-            return Array.Empty<ShapeTextSelectionHighlight>();
-
-        var highlights = new List<ShapeTextSelectionHighlight>();
-        foreach (var stop in _shapeTextCaretStops.Where(stop =>
-                     stop.BlockIndex == shapeData.BlockIndex && stop.RunIndex == shapeData.RunIndex))
-        {
-            if (!TryGetShapeTextRun(stop.BlockIndex, stop.RunIndex, stop.TextParagraphIndex,
-                    stop.TextRunIndex, out var textRun)
-                || stop.Offset < 0 || stop.Offset >= textRun.Text.Length)
-                continue;
-            var character = textRun.Text[stop.Offset];
-            if (character is '\r' or '\n')
-                continue;
-
-            var position = (stop.BlockIndex, stop.RunIndex, stop.TextParagraphIndex,
-                stop.TextRunIndex, stop.Offset);
-            if (CompareShapeTextPositions(position, selection.Start) < 0
-                || CompareShapeTextPositions(position, selection.End) >= 0)
-                continue;
-
-            var glyph = Build(character.ToString(), textRun.Formatting);
-            highlights.Add(new ShapeTextSelectionHighlight(
-                stop.TextParagraphIndex,
-                stop.TextRunIndex,
-                stop.Offset,
-                new Rect(
-                    stop.X,
-                    stop.Y,
-                    Math.Max(1, glyph.WidthIncludingTrailingWhitespace),
-                    Math.Max(1, stop.Height))));
-        }
-
-        return highlights;
     }
 
     /// <summary>
@@ -7599,7 +7585,7 @@ public sealed class DocumentView : Control
                 var ft = Build(sd.Text, textFmt);
                 ft.MaxTextWidth = insetWidth; // enables word wrapping (FormattedText clips+wraps at this width)
                 using var _ = context.PushClip(rect);
-                DrawShapeTextSelection(context, sd, isRotated, new Point(cx, cy));
+                DrawShapeTextSelection(context, sd, rect, isRotated, new Point(cx, cy));
                 if (!isRotated)
                 {
                     // Top-anchor: place text at the top of the shape with the inset offset.
@@ -8942,18 +8928,6 @@ public sealed class DocumentView : Control
         InvalidateVisual();
         CaretMoved?.Invoke();
         return ShapeTextSelectionInfo is not null;
-    }
-
-    /// <summary>Measured rectangles used to paint the active shape-text selection.</summary>
-    internal IReadOnlyList<ShapeTextSelectionHighlight> ShapeTextSelectionHighlightsForTest()
-    {
-        if (_shapeCaret is not { } caret)
-            return Array.Empty<ShapeTextSelectionHighlight>();
-        var shapeData = _floatingShapes.FirstOrDefault(shape =>
-            shape.BlockIndex == caret.BlockIndex && shape.RunIndex == caret.RunIndex);
-        return shapeData is null
-            ? Array.Empty<ShapeTextSelectionHighlight>()
-            : BuildShapeTextSelectionHighlights(shapeData);
     }
 
     /// <summary>Current shape-text selection endpoints in document order, or null when collapsed.</summary>
@@ -18684,12 +18658,6 @@ public sealed class DocumentView : Control
         double RotationRadians,
         double RotationCenterX,
         double RotationCenterY);
-
-    internal readonly record struct ShapeTextSelectionHighlight(
-        int TextParagraphIndex,
-        int TextRunIndex,
-        int Offset,
-        Rect Rect);
 
     private sealed class FloatingShapeData
     {

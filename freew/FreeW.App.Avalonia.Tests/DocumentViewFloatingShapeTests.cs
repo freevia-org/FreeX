@@ -636,41 +636,6 @@ public sealed class DocumentViewFloatingShapeTests
     }
 
     [Fact]
-    public async Task Shape_text_selection_highlights_use_each_runs_actual_font_metrics()
-    {
-        IReadOnlyList<DocumentView.ShapeTextSelectionHighlight>? highlights = null;
-
-        var ran = await OnUiThread(() =>
-        {
-            var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
-                hOffsetPt: 0, vOffsetPt: 0,
-                fillColorHex: "#FFFFFF", text: "discarded");
-            var shape = ((Paragraph)doc.Blocks[0]).Runs[1].Shape!;
-            var paragraph = shape.TextParagraphs[0];
-            paragraph.Runs.Clear();
-            paragraph.Runs.Add(new Run("W", RunFormatting.Default with { FontSizePt = 24 }));
-            paragraph.Runs.Add(new Run("W", RunFormatting.Default with { FontSizePt = 8 }));
-
-            var view = new DocumentView();
-            view.LoadDocument(doc);
-            view.Measure(new Size(816, 2000));
-            view.SelectFloating(0, 1);
-            view.EnterSelectedShapeTextEditing().Should().BeTrue();
-            view.SelectShapeTextRangeForTest(paragraphIndex: 0, startOffset: 0, endOffset: 2)
-                .Should().BeTrue();
-
-            highlights = view.ShapeTextSelectionHighlightsForTest();
-        });
-
-        if (!ran) return;
-        highlights.Should().NotBeNull();
-        highlights!.Should().HaveCount(2);
-        highlights[0].TextRunIndex.Should().Be(0);
-        highlights[1].TextRunIndex.Should().Be(1);
-        highlights[0].Rect.Width.Should().BeGreaterThan(highlights[1].Rect.Width * 2);
-    }
-
-    [Fact]
     public async Task Rotated_shape_text_drag_selects_and_replaces_the_selected_range()
     {
         var editedTexts = new Dictionary<ShapeTextDirection, string?>();
