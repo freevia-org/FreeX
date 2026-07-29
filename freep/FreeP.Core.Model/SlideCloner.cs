@@ -174,6 +174,7 @@ public static class SlideCloner
             HasHighLowLines = src.HasHighLowLines,
             StyleId      = src.StyleId,
             Title        = src.Title,
+            TitleOverlay = src.TitleOverlay,
             ChartAreaFill = src.ChartAreaFill,
             ChartAreaOutline = src.ChartAreaOutline,
             HasAutomaticTitle = src.HasAutomaticTitle,

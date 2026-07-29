@@ -606,6 +606,13 @@ public sealed class ChartShape
     /// <summary>Chart title text, or null if no title.</summary>
     public string? Title { get; set; }
 
+    /// <summary>
+    /// Explicit PowerPoint chart-title overlay state from <c>c:title/c:overlay</c>.
+    /// Null means the source did not author the token; false is the normal above-plot
+    /// placement and true places the title over the plot area.
+    /// </summary>
+    public bool? TitleOverlay { get; set; }
+
     /// <summary>Optional authored chart-area fill from <c>c:chartSpace/c:spPr</c>.</summary>
     public ShapeFill? ChartAreaFill { get; set; }
 

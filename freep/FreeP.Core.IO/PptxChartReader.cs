@@ -63,7 +63,9 @@ internal static class PptxChartReader
             ?? new ChartTextStyle { FontSizePt = 18.0, IsImplicitDefault = true };
 
         // Title
-        shape.Title = ReadTitle(chartEl.Element(C + "title"));
+        var titleElement = chartEl.Element(C + "title");
+        shape.Title = ReadTitle(titleElement);
+        shape.TitleOverlay = ReadTitleOverlay(titleElement);
         shape.DisplayBlanksAs = ReadDisplayBlanksAs(
             chartEl.Element(C + "dispBlanksAs")?.Attribute("val")?.Value);
         shape.ShowDataLabelsOverMaximum = ParseNullableBoolElement(
@@ -223,6 +225,9 @@ internal static class PptxChartReader
 
         return null;
     }
+
+    private static bool? ReadTitleOverlay(XElement? titleEl) =>
+        ParseNullableBoolElement(titleEl?.Element(C + "overlay"));
 
     // ── Chart type dispatch ───────────────────────────────────────────────────
 

@@ -12,6 +12,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly EditingSession _editor;
     private readonly ChartDisplayOptionsPlanner _planner;
     private readonly TextBox _titleBox;
+    private readonly CheckBox _titleOverlayCheck;
     private readonly ComboBox _styleCombo;
     private readonly ComboBox _legendCombo;
     private readonly CheckBox _valueLabelsCheck;
@@ -55,6 +56,11 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         ResizeMode = ResizeMode.NoResize;
 
         _titleBox = new TextBox { Text = _planner.Title, MinWidth = 240 };
+        _titleOverlayCheck = new CheckBox
+        {
+            Content = surface.TitleOverlayLabel,
+            IsChecked = _planner.TitleOverlay,
+        };
         _styleCombo = new ComboBox
         {
             ItemsSource = _planner.AvailableStyleOptions,
@@ -179,6 +185,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
         var content = new StackPanel { Margin = new Thickness(14) };
         content.Children.Add(MakeRow(surface.ChartTitleLabel, _titleBox));
+        content.Children.Add(_titleOverlayCheck);
         content.Children.Add(MakeRow(surface.ChartStyleLabel, _styleCombo));
         content.Children.Add(MakeRow(surface.LegendLabel, _legendCombo));
         content.Children.Add(MakeRow(surface.LabelPositionLabel, _labelPositionCombo));
@@ -218,6 +225,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     internal void SetVaryColorsForTests(bool value) => _varyColorsCheck.IsChecked = value;
 
+    internal void SetTitleOverlayForTests(bool value) => _titleOverlayCheck.IsChecked = value;
+
     internal void SetStyleIdForTests(int? styleId) => _styleCombo.SelectedIndex = FindStyleIndex(styleId);
 
     internal void SetLegendOverlayForTests(bool? value) => _legendOverlayCheck.IsChecked = value;
@@ -246,6 +255,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private void UpdatePlannerFromControls()
     {
         _planner.SetTitle(_titleBox.Text);
+        _planner.SetTitleOverlay(_titleOverlayCheck.IsChecked == true);
         if (_styleCombo.SelectedItem is ChartDisplayStyleOption style)
             _planner.SetStyleId(style.Value);
         _planner.SetLegend(_legendCombo.SelectedItem is ChartDisplayLegendOption legend ? legend.Value : null);

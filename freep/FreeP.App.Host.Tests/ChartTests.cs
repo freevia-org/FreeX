@@ -118,6 +118,7 @@ public sealed class ChartTests : IDisposable
         chart.ChartAreaFill = new ShapeFill.Solid(SrgbColor.FromRgb(0xF2F2F2));
         chart.ChartAreaOutline = new ShapeOutline.Visible(SrgbColor.FromRgb(0x7F7F7F), 1.25);
         chart.HasAutomaticTitle = true;
+        chart.TitleOverlay = true;
         chart.PlotAreaManualLayout = new ChartManualLayout
         {
             LayoutTarget = "inner",
@@ -155,6 +156,7 @@ public sealed class ChartTests : IDisposable
         ((ShapeFill.Solid)clone.ChartAreaFill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xF2F2F2));
         ((ShapeOutline.Visible)clone.ChartAreaOutline!).WidthPt.Should().Be(1.25);
         clone.HasAutomaticTitle.Should().BeTrue();
+        clone.TitleOverlay.Should().BeTrue();
         clone.PlotAreaManualLayout.Should().NotBeSameAs(chart.PlotAreaManualLayout);
         clone.PlotAreaManualLayout!.LayoutTarget.Should().Be("inner");
         clone.PlotAreaManualLayout.XMode.Should().Be(ChartManualLayoutMode.Edge);
@@ -465,6 +467,31 @@ public sealed class ChartTests : IDisposable
 
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.Title.Should().Be("Quarterly Performance");
+    }
+
+    [Theory]
+    [InlineData(true, "1")]
+    [InlineData(false, "0")]
+    public void RoundTrip_Chart_TitleOverlay_PreservesPackageAndModel(bool overlay, string xmlValue)
+    {
+        var chart = BuildColumnChart();
+        chart.Title = "Quarterly Performance";
+        chart.TitleOverlay = overlay;
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var title = chartDoc.Root!.Element(ChartNs + "chart")!
+                .Element(ChartNs + "title");
+            title.Should().NotBeNull();
+            title!.Element(ChartNs + "overlay")?.Attribute("val")?.Value.Should().Be(xmlValue);
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.Title.Should().Be("Quarterly Performance");
+        rt.TitleOverlay.Should().Be(overlay);
     }
 
     [Fact]

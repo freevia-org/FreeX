@@ -980,10 +980,12 @@ public sealed class ChartDataCommandTests
                     Italic = false,
                     Color = new ThemeAwareColor(SrgbColor.FromRgb(0x2F5496)),
                 },
-                ShowBubbleSize: true)));
+                ShowBubbleSize: true,
+                TitleOverlay: true)));
 
         chart.Title.Should().Be("Revenue");
         chart.HasAutomaticTitle.Should().BeFalse();
+        chart.TitleOverlay.Should().BeTrue();
         chart.Legend.Should().Be(LegendPosition.Bottom);
         chart.DataLabels!.ShowCategoryName.Should().BeTrue("existing label components are preserved");
         chart.DataLabels.ShowValue.Should().BeTrue();
@@ -1015,6 +1017,7 @@ public sealed class ChartDataCommandTests
         var reloaded = PptxPackageReader.Read(stream);
         var roundTripped = reloaded.Slides[0].Shapes[0].Chart!;
         roundTripped.Title.Should().Be("Revenue");
+        roundTripped.TitleOverlay.Should().BeTrue();
         roundTripped.Legend.Should().Be(LegendPosition.Bottom);
         roundTripped.DataLabels!.ShowValue.Should().BeTrue();
         roundTripped.DataLabels.ShowPercent.Should().BeTrue();
@@ -1041,6 +1044,7 @@ public sealed class ChartDataCommandTests
         bus.Undo();
         chart.Title.Should().Be("Old title");
         chart.HasAutomaticTitle.Should().BeTrue();
+        chart.TitleOverlay.Should().BeNull();
         chart.Legend.Should().Be(LegendPosition.Right);
         chart.DataLabels!.ShowValue.Should().BeFalse();
         chart.DataLabels.ShowCategoryName.Should().BeTrue();

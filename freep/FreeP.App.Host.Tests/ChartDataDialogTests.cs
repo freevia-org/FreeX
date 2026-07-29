@@ -129,6 +129,7 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart.ChartType = ChartType.Stock;
 
         var dialog = new ChartDisplayOptionsDialog(sess);
+        dialog.SetTitleOverlayForTests(true);
         dialog.SetVaryColorsForTests(true);
         dialog.SetLegendOverlayForTests(true);
         dialog.SetHighLowLinesForTests(false);
@@ -139,6 +140,7 @@ public sealed class ChartDataDialogTests : IDisposable
 
         dialog.Should().NotBeNull();
         options.Title.Should().Be("Existing");
+        options.TitleOverlay.Should().BeTrue();
         options.Legend.Should().Be(LegendPosition.Right);
         options.DisplayBlanksAs.Should().BeNull();
         options.VaryColors.Should().BeTrue();

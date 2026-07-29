@@ -345,6 +345,7 @@ public sealed class ChartDataDialogPlannerTests
     {
         var chart = MakeChart();
         chart.Title = "Existing";
+        chart.TitleOverlay = false;
         chart.Legend = LegendPosition.Right;
         chart.DataLabels = new ChartDataLabels { ShowValue = true, Position = DataLabelPosition.Center };
         chart.CategoryAxis.HasMajorGridlines = true;
@@ -354,6 +355,7 @@ public sealed class ChartDataDialogPlannerTests
 
         var planner = ChartDisplayOptionsPlanner.FromChart(chart);
         planner.SetTitle("Revenue");
+        planner.SetTitleOverlay(true);
         planner.SetLegend(LegendPosition.Bottom);
         planner.SetShowValueLabels(false);
         planner.SetShowPercentLabels(true);
@@ -385,7 +387,7 @@ public sealed class ChartDataDialogPlannerTests
         commit.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, false, DataLabelPosition.OutsideEnd, false, true,
             true, true, true, true, "0.0%", " | ", 40, 55, ChartDisplayBlanksAs.Span, true, true, true, false,
-            commit.LabelTextStyle, true, 12, true));
+            commit.LabelTextStyle, true, 12, true, true));
         commit.LabelTextStyle.Should().NotBeNull();
         commit.LabelTextStyle!.FontFamily.Should().Be("Aptos");
         commit.LabelTextStyle.FontSizePt.Should().Be(9);

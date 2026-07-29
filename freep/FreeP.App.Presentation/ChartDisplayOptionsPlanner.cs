@@ -13,6 +13,7 @@ public sealed record ChartDisplayOptionsSurfacePlan(
     string CommandId,
     string Title,
     string ChartTitleLabel,
+    string TitleOverlayLabel,
     string ChartStyleLabel,
     string LegendLabel,
     string ValueLabelsLabel,
@@ -52,6 +53,7 @@ public sealed class ChartDisplayOptionsPlanner
     public const string CommandId = "freep.chart.format-options";
     public const string DialogTitle = "Chart Options";
     public const string ChartTitleLabel = "Chart Title";
+    public const string TitleOverlayLabel = "Overlay title on plot";
     public const string ChartStyleLabel = "Chart Style";
     public const string LegendLabel = "Legend";
     public const string ValueLabelsLabel = "Value Labels";
@@ -114,6 +116,8 @@ public sealed class ChartDisplayOptionsPlanner
     ];
 
     private string _title = string.Empty;
+    private bool _titleOverlay;
+    private bool _titleOverlayChanged;
     private int? _styleId;
     private LegendPosition? _legend;
     private bool _showValueLabels;
@@ -146,6 +150,7 @@ public sealed class ChartDisplayOptionsPlanner
     private ChartDisplayOptionsPlanner(ChartShape chart)
     {
         _title = chart.Title ?? string.Empty;
+        _titleOverlay = chart.TitleOverlay == true;
         _styleId = chart.StyleId;
         _availableStyleOptions = StyleOptionsFor(chart.StyleId);
         _legend = chart.Legend;
@@ -181,6 +186,7 @@ public sealed class ChartDisplayOptionsPlanner
             CommandId,
             DialogTitle,
             ChartTitleLabel,
+            TitleOverlayLabel,
             ChartStyleLabel,
             LegendLabel,
             ValueLabelsLabel,
@@ -218,6 +224,7 @@ public sealed class ChartDisplayOptionsPlanner
     }
 
     public string Title => _title;
+    public bool TitleOverlay => _titleOverlay;
     public int? StyleId => _styleId;
     public IReadOnlyList<ChartDisplayStyleOption> AvailableStyleOptions => _availableStyleOptions;
 
@@ -264,6 +271,11 @@ public sealed class ChartDisplayOptionsPlanner
     ];
 
     public void SetTitle(string? title) => _title = title ?? string.Empty;
+    public void SetTitleOverlay(bool value)
+    {
+        _titleOverlay = value;
+        _titleOverlayChanged = true;
+    }
     public void SetStyleId(int? styleId)
     {
         if (styleId is not null && !StyleOptions.Any(option => option.Value == styleId) &&
@@ -322,7 +334,8 @@ public sealed class ChartDisplayOptionsPlanner
         BuildLabelTextStyle(),
         _showBubbleSize,
         _styleId,
-        _showLeaderLines);
+        _showLeaderLines,
+        _titleOverlayChanged ? _titleOverlay : null);
 
     private ChartTextStyle? BuildLabelTextStyle()
     {
