@@ -140,4 +140,54 @@ public sealed class ShapeEffectAuthoringTests
         shape.Effects.HasSoftEdge.Should().BeTrue();
         shape.Effects.SoftEdgeRadEmu.Should().Be(321);
     }
+
+    [Fact]
+    public void Planner_UsesStablePowerPointSoftEdgePresets()
+    {
+        var subtle = ShapeEffectAuthoringPlanner.ResolveSoftEdge(ShapeSoftEdgePreset.Subtle);
+        var strong = ShapeEffectAuthoringPlanner.ResolveSoftEdge(ShapeSoftEdgePreset.Strong);
+
+        subtle.Enabled.Should().BeTrue();
+        subtle.RadiusEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(4));
+        strong.Enabled.Should().BeTrue();
+        strong.RadiusEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(8));
+    }
+
+    [Fact]
+    public void SetShapeSoftEdgeCommand_PreservesOtherEffectsAndSupportsUndo()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var shape = new SlideShape
+        {
+            Id = 10,
+            Kind = SlideShapeKind.AutoShape,
+            Effects = new ShapeEffects
+            {
+                HasGlow = true,
+                GlowAlpha = 0xA0,
+                HasOuterShadow = true,
+                OuterShadowAlpha = 0x80,
+            },
+        };
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetShapeSoftEdgeCommand(
+            0,
+            shape.Id,
+            ShapeEffectAuthoringPlanner.ResolveSoftEdge(ShapeSoftEdgePreset.Strong)));
+
+        shape.Effects.Should().NotBeNull();
+        shape.Effects!.HasSoftEdge.Should().BeTrue();
+        shape.Effects.SoftEdgeRadEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(8));
+        shape.Effects.HasGlow.Should().BeTrue();
+        shape.Effects.HasOuterShadow.Should().BeTrue();
+
+        bus.Undo();
+
+        shape.Effects.Should().NotBeNull();
+        shape.Effects!.HasSoftEdge.Should().BeFalse();
+        shape.Effects.HasGlow.Should().BeTrue();
+        shape.Effects.HasOuterShadow.Should().BeTrue();
+    }
 }

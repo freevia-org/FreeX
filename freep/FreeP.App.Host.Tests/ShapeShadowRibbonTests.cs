@@ -73,4 +73,38 @@ public sealed class ShapeShadowRibbonTests
         shape.Effects!.HasGlow.Should().BeTrue();
         shape.Effects.GlowRadiusEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(4));
     }
+
+    [Fact]
+    public void ShapeSoftEdgePresets_AreDefinedAndRoutedByHost()
+    {
+        var definition = FreePRibbon.Build();
+        var illustrations = definition.Tabs
+            .SelectMany(tab => tab.Groups)
+            .Single(group => group.Id == "illustrations");
+
+        foreach (var commandId in new[]
+        {
+            ShapeEffectAuthoringPlanner.SoftEdgeNoneCommandId,
+            ShapeEffectAuthoringPlanner.SoftEdgeSubtleCommandId,
+            ShapeEffectAuthoringPlanner.SoftEdgeStrongCommandId,
+        })
+        {
+            illustrations.Controls.Should().Contain(control => control.CommandId.Value == commandId);
+        }
+
+        var presentation = Presentation.CreateEmpty();
+        var shape = new SlideShape { Id = 503, Kind = SlideShapeKind.AutoShape };
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        var editor = new EditingSession(presentation, bus);
+        editor.Select(shape.Id);
+
+        var registry = FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+        registry.TryGet(ShapeEffectAuthoringPlanner.SoftEdgeSubtleCommandId, out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.Empty);
+
+        shape.Effects.Should().NotBeNull();
+        shape.Effects!.HasSoftEdge.Should().BeTrue();
+        shape.Effects.SoftEdgeRadEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(4));
+    }
 }

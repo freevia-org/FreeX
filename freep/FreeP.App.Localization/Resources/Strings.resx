@@ -667,6 +667,24 @@
   <data name="Ribbon_Command_ShapeGlowStrong_KeyTip" xml:space="preserve">
     <value>SGH</value>
   </data>
+  <data name="Ribbon_Command_ShapeSoftEdgeNone_Label" xml:space="preserve">
+    <value>No Shape Soft Edge</value>
+  </data>
+  <data name="Ribbon_Command_ShapeSoftEdgeNone_KeyTip" xml:space="preserve">
+    <value>SEN</value>
+  </data>
+  <data name="Ribbon_Command_ShapeSoftEdgeSubtle_Label" xml:space="preserve">
+    <value>Subtle Shape Soft Edge</value>
+  </data>
+  <data name="Ribbon_Command_ShapeSoftEdgeSubtle_KeyTip" xml:space="preserve">
+    <value>SES</value>
+  </data>
+  <data name="Ribbon_Command_ShapeSoftEdgeStrong_Label" xml:space="preserve">
+    <value>Strong Shape Soft Edge</value>
+  </data>
+  <data name="Ribbon_Command_ShapeSoftEdgeStrong_KeyTip" xml:space="preserve">
+    <value>SEH</value>
+  </data>
   <data name="Ribbon_Command_Picture_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>

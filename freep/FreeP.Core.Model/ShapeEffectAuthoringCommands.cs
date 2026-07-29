@@ -32,6 +32,16 @@ public readonly record struct ShapeGlowValues(
         RadiusEmu: 0);
 }
 
+/// <summary>Authoritative soft-edge values used by the shape-effects authoring command.</summary>
+public readonly record struct ShapeSoftEdgeValues(
+    bool Enabled,
+    long RadiusEmu)
+{
+    public static ShapeSoftEdgeValues None { get; } = new(
+        Enabled: false,
+        RadiusEmu: 0);
+}
+
 /// <summary>Changes only a shape's outer shadow, preserving every other effect layer.</summary>
 public sealed class SetShapeShadowCommand : IPresentationCommand
 {
@@ -197,6 +207,91 @@ public sealed class SetShapeGlowCommand : IPresentationCommand
             effects.GlowColor,
             effects.GlowAlpha,
             effects.GlowRadiusEmu);
+
+    private SlideShape? FindShape(Presentation presentation)
+    {
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return null;
+
+        return presentation.Slides[_slideIndex].Shapes.FirstOrDefault(shape => shape.Id == _shapeId);
+    }
+
+    private static bool HasAnyEffects(ShapeEffects effects) =>
+        effects.HasOuterShadow ||
+        effects.HasInnerShadow ||
+        effects.HasGlow ||
+        effects.HasSoftEdge ||
+        effects.BevelTop is not null ||
+        effects.BevelBottom is not null ||
+        effects.ExtrusionHeightEmu != 0 ||
+        effects.ContourWidthEmu != 0 ||
+        effects.Scene3d is not null ||
+        !string.IsNullOrWhiteSpace(effects.PrstMaterial) ||
+        effects.ExtrusionColor is not null ||
+        effects.ContourColor is not null;
+}
+
+/// <summary>Changes only a shape's soft edge, preserving every other effect layer.</summary>
+public sealed class SetShapeSoftEdgeCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly ShapeSoftEdgeValues _values;
+    private bool _captured;
+    private ShapeEffects? _oldEffects;
+
+    public SetShapeSoftEdgeCommand(int slideIndex, uint shapeId, ShapeSoftEdgeValues values)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _values = values;
+    }
+
+    public string Label => "Shape Soft Edge";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        return shape is not null && ReadValues(shape.Effects) != _values;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        if (shape is null)
+            return;
+
+        if (!_captured)
+        {
+            _captured = true;
+            _oldEffects = PresentationModelCloneHelper.CloneShapeEffects(shape.Effects);
+        }
+
+        if (!_values.Enabled && shape.Effects is null)
+            return;
+
+        if (shape.Effects is null)
+            shape.Effects = new ShapeEffects();
+
+        shape.Effects.HasSoftEdge = _values.Enabled;
+        shape.Effects.SoftEdgeRadEmu = _values.RadiusEmu;
+
+        if (!HasAnyEffects(shape.Effects))
+            shape.Effects = null;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        if (shape is null || !_captured)
+            return;
+
+        shape.Effects = PresentationModelCloneHelper.CloneShapeEffects(_oldEffects);
+    }
+
+    private static ShapeSoftEdgeValues ReadValues(ShapeEffects? effects) => effects is null
+        ? ShapeSoftEdgeValues.None
+        : new(effects.HasSoftEdge, effects.SoftEdgeRadEmu);
 
     private SlideShape? FindShape(Presentation presentation)
     {
