@@ -1451,6 +1451,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.shape-change-rectangle", new ShapeKindCommand(editor, ShapeKind.Rectangle));
         r.Register("freew.shape-change-rounded", new ShapeKindCommand(editor, ShapeKind.RoundedRectangle));
         r.Register("freew.shape-change-ellipse", new ShapeKindCommand(editor, ShapeKind.Ellipse));
+        r.Register("freew.shape-text-direction", new ActionRibbonCommand(() => editor.Focus()));
         r.Register("freew.shape-text-horizontal", new ShapeTextDirectionCommand(editor, ShapeTextDirection.Horizontal));
         r.Register("freew.shape-text-rotate90", new ShapeTextDirectionCommand(editor, ShapeTextDirection.Rotate90));
         r.Register("freew.shape-text-rotate270", new ShapeTextDirectionCommand(editor, ShapeTextDirection.Rotate270));
