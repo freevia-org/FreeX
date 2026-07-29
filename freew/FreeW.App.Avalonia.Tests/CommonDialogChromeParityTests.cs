@@ -81,6 +81,7 @@ public sealed class CommonDialogChromeParityTests
         textBox.FontSize.Should().Be(12);
         comboBox.FontSize.Should().Be(12);
         comboBox.HorizontalContentAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Stretch);
+        comboBox.HorizontalAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Stretch);
         ((ISolidColorBrush)button.Background!).Color.Should().Be(Color.FromRgb(221, 221, 221));
         ((ISolidColorBrush)button.BorderBrush!).Color.Should().Be(Color.FromRgb(0, 120, 215));
         ((ISolidColorBrush)listBox.Background!).Color.Should().Be(Colors.White);
@@ -88,6 +89,36 @@ public sealed class CommonDialogChromeParityTests
         listBox.BorderThickness.Should().Be(new Thickness(1));
         ((ISolidColorBrush)comboBox.Background!).Color.Should().Be(Color.FromRgb(240, 240, 240));
         row.Spacing.Should().Be(style.ActionSpacing);
+    }
+
+    [Fact]
+    public async Task Shared_descendant_chrome_normalizes_non_table_text_and_checkbox_controls()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new ChromeProbeDialog();
+            try
+            {
+                dialog.Width = 300;
+                dialog.Height = 120;
+                dialog.Show();
+                dialog.Measure(new Size(300, 120));
+                dialog.Arrange(new Rect(0, 0, 300, 120));
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                dialog.Label.FontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
+                dialog.Label.FontSize.Should().Be(12);
+                ((ISolidColorBrush)dialog.Label.Foreground!).Color.Should().Be(Color.FromRgb(0x1f, 0x1f, 0x1f));
+                dialog.Check.FontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
+                dialog.Check.FontSize.Should().Be(12);
+                ((ISolidColorBrush)dialog.Check.Foreground!).Color.Should().Be(Color.FromRgb(0x1f, 0x1f, 0x1f));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
     }
 
     [Fact]
@@ -250,5 +281,23 @@ public sealed class CommonDialogChromeParityTests
 
     private sealed class TestDialog : AvaloniaDialogWindow
     {
+    }
+
+    private sealed class ChromeProbeDialog : AvaloniaDialogWindow
+    {
+        internal TextBlock Label { get; } = new() { Text = "Probe" };
+        internal CheckBox Check { get; } = new() { Content = "Probe" };
+
+        public ChromeProbeDialog()
+        {
+            Content = new StackPanel
+            {
+                Children =
+                {
+                    Label,
+                    Check,
+                },
+            };
+        }
     }
 }

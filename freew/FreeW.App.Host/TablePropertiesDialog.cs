@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeW.App.Presentation.Dialogs;
 
@@ -87,6 +88,11 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _cmRight = NumberBox(state.CellMarginRightText);
         _cellMarginsOn = Check("Same as the whole table", state.CellMarginsSameAsTable);
 
+        AutomationProperties.SetAutomationId(_preferredWidth, "TablePropertiesPreferredWidthBox");
+        AutomationProperties.SetAutomationId(_rowHeight, "TablePropertiesRowHeightBox");
+        AutomationProperties.SetAutomationId(_columnWidth, "TablePropertiesColumnWidthBox");
+        AutomationProperties.SetAutomationId(_cellWidth, "TablePropertiesCellWidthBox");
+
         var tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
         tabs.Items.Add(new TabItem { Header = "Table", Content = BuildTableTab() });
         tabs.Items.Add(new TabItem { Header = "Row", Content = BuildRowTab() });
@@ -102,7 +108,14 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         root.Children.Add(tabs);
         Content = root;
 
-        DialogFocus.FocusAndSelect(_preferredWidth);
+        var initialFocus = initialTab switch
+        {
+            Tab.Row => _rowHeight,
+            Tab.Column => _columnWidth,
+            Tab.Cell => _cellWidth,
+            _ => _preferredWidth,
+        };
+        DialogFocus.FocusAndSelect(initialFocus);
     }
 
     private UIElement BuildTableTab()
