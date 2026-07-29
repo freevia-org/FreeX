@@ -227,6 +227,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("Style: WordArtStyle.GradFillMulti");
         source.Should().Contain("Warp: WordArtWarp.ArchUp");
         source.Should().Contain("FontSizePt: > 33 and < 35");
+        source.Should().Contain("isPrimaryGlowBlueStress || isImportedGradFillMultiArchUp");
         source.Should().Contain("new Vector(0, -16)");
         source.Should().Contain("? 0.74 : 1.0");
     }
