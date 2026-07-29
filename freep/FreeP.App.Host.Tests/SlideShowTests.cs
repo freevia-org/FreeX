@@ -162,6 +162,25 @@ public sealed class SlideShowControllerTests
     }
 
     [Fact]
+    public void Controller_AnimationStartIndex_SkipsEarlierAnimationSteps()
+    {
+        var slide = SlideWithAnimations(
+            (AnimationTrigger.OnClick, AnimationPreset.Appear),
+            (AnimationTrigger.OnClick, AnimationPreset.Fade),
+            (AnimationTrigger.OnClick, AnimationPreset.FlyIn));
+        var ctrl = new SlideShowController(new[] { slide }, 0, animationStartIndex: 1);
+
+        ctrl.CurrentSteps.Should().HaveCount(2);
+        ctrl.CurrentSteps[0].Animations.Should().ContainSingle()
+            .Which.ShapeId.Should().Be(2u);
+        ctrl.PendingStepIndex.Should().Be(0);
+
+        var first = ctrl.Advance().Should().BeOfType<AdvanceResult.PlayStep>().Subject;
+        first.Step.Animations.Should().ContainSingle()
+            .Which.ShapeId.Should().Be(2u);
+    }
+
+    [Fact]
     public void Controller_NoSlides_IndexIsMinusOne()
     {
         var empty = new SlideShowController(Array.Empty<Slide>(), 0);
@@ -356,6 +375,42 @@ public sealed class SlideShowWindowTests
         try
         {
             window.Controller.CurrentSlideIndex.Should().Be(2);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void SlideShowWindow_AnimationRoute_StartsAtSelectedAnimation()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 1,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Appear,
+            Trigger = AnimationTrigger.OnClick,
+            DurationMs = 500,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 2,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Fade,
+            Trigger = AnimationTrigger.OnClick,
+            DurationMs = 500,
+        });
+        var route = SlideShowCustomShowPlanner
+            .BuildFullPresentationRoute(pres)
+            .WithAnimationStartIndex(1);
+        var window = new SlideShowWindow(pres, route);
+        try
+        {
+            window.Controller.CurrentSteps[0].Animations.Should().ContainSingle()
+                .Which.ShapeId.Should().Be(2u);
         }
         finally
         {

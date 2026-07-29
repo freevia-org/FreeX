@@ -81,7 +81,8 @@ public sealed class SlideShowPlaybackRoute
         string? customShowName,
         IReadOnlyList<Slide> slides,
         IReadOnlyList<int> sourceSlideIndices,
-        int startIndex)
+        int startIndex,
+        int animationStartIndex = -1)
     {
         ArgumentNullException.ThrowIfNull(slides);
         ArgumentNullException.ThrowIfNull(sourceSlideIndices);
@@ -101,6 +102,7 @@ public sealed class SlideShowPlaybackRoute
         StartIndex = slides.Count == 0
             ? 0
             : Math.Clamp(startIndex, 0, slides.Count - 1);
+        AnimationStartIndex = animationStartIndex;
     }
 
     public string? CustomShowName { get; }
@@ -111,12 +113,26 @@ public sealed class SlideShowPlaybackRoute
 
     public int StartIndex { get; }
 
+    /// <summary>
+    /// Optional zero-based animation index for Animation Pane playback. A negative
+    /// value keeps the normal first-animation state for the route's first slide.
+    /// </summary>
+    public int AnimationStartIndex { get; }
+
     public int SlideCount => Slides.Count;
 
     public int GetSourceSlideIndex(int playbackSlideIndex) =>
         playbackSlideIndex >= 0 && playbackSlideIndex < SourceSlideIndices.Count
             ? SourceSlideIndices[playbackSlideIndex]
             : -1;
+
+    public SlideShowPlaybackRoute WithAnimationStartIndex(int animationStartIndex) =>
+        new(
+            CustomShowName,
+            Slides,
+            SourceSlideIndices,
+            StartIndex,
+            animationStartIndex);
 }
 
 public static class SlideShowCustomShowPlanner

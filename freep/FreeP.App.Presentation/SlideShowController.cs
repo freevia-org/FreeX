@@ -46,13 +46,22 @@ public sealed class SlideShowController
 
     /// <param name="slides">The ordered slide list from Presentation.Slides.</param>
     /// <param name="startIndex">Zero-based index to begin playback at.</param>
-    public SlideShowController(IReadOnlyList<Slide> slides, int startIndex)
+    /// <param name="animationStartIndex">
+    /// Optional flat animation index for Animation Pane playback. Prior click steps
+    /// are skipped and the selected step is trimmed to begin at that entry.
+    /// </param>
+    public SlideShowController(
+        IReadOnlyList<Slide> slides,
+        int startIndex,
+        int animationStartIndex = -1)
     {
         _slides = slides ?? throw new ArgumentNullException(nameof(slides));
         CurrentSlideIndex = _slides.Count == 0
             ? -1
             : Math.Clamp(startIndex, 0, _slides.Count - 1);
         RebuildSteps();
+        if (animationStartIndex >= 0)
+            StartAtAnimationIndex(animationStartIndex);
     }
 
     // ── Public state queries ──────────────────────────────────────────────────────
@@ -125,6 +134,52 @@ public sealed class SlideShowController
         if (_slides.Count == 0) return;
         CurrentSlideIndex = Math.Clamp(index, 0, _slides.Count - 1);
         RebuildSteps();
+    }
+
+    /// <summary>
+    /// Starts the current slide's main animation sequence at a selected flat
+    /// animation entry. Trigger-only animations are not part of the main click
+    /// sequence and therefore leave the normal sequence untouched.
+    /// </summary>
+    public bool StartAtAnimationIndex(int animationIndex)
+    {
+        var slide = CurrentSlide;
+        if (slide is null
+            || animationIndex < 0
+            || animationIndex >= slide.Animations.Count)
+        {
+            return false;
+        }
+
+        var selectedAnimation = slide.Animations[animationIndex];
+        for (var stepIndex = 0; stepIndex < _currentSteps.Count; stepIndex++)
+        {
+            var step = _currentSteps[stepIndex];
+            var entryIndex = -1;
+            for (var i = 0; i < step.Entries.Count; i++)
+            {
+                if (ReferenceEquals(step.Entries[i].Animation, selectedAnimation))
+                {
+                    entryIndex = i;
+                    break;
+                }
+            }
+
+            if (entryIndex < 0)
+                continue;
+
+            var trimmedSteps = new List<AnimationStep>(_currentSteps.Count - stepIndex)
+            {
+                new AnimationStep(step.Entries.Skip(entryIndex).ToArray())
+            };
+            trimmedSteps.AddRange(_currentSteps.Skip(stepIndex + 1));
+            _currentSteps = trimmedSteps;
+            PendingStepIndex = 0;
+            _triggerStepCursors.Clear();
+            return true;
+        }
+
+        return false;
     }
 
     // ── Step grouping ──────────────────────────────────────────────────────────────

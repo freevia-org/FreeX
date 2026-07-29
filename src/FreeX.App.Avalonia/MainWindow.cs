@@ -9661,10 +9661,13 @@ public sealed partial class MainWindow : Window
             _isApplyingFormulaBoxText = false;
         }
 
+        _session.SelectRangeForFormulaEdit(range, formulaCell.Value);
         _formulaRangeSelectionAnchor = selectionAnchor;
         _formulaRangeSelectionCursor = selectionCursor;
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;
+        _cellAddressText.Text = FormatRangeReference(range);
+        _selectionStatsText.Text = _session.SelectionStatsText;
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
         ApplyFormulaEditStatusBarPlan(FormulaEditInteractionPlanner.BuildEditStatusBarPlan(pointMode: true));

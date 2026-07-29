@@ -52,7 +52,7 @@ public sealed class AnimationPane : Border
     // ── Fields ────────────────────────────────────────────────────────────────────
 
     private readonly EditingSession _editor;
-    private readonly Action?        _onPreview;   // callback → MainWindow.StartSlideShow(false)
+    private readonly Action<AnimationPanePlaybackSessionPlan>? _onPreview;
 
     private readonly StackPanel _listPanel;
     private readonly StackPanel _playbackControlsPanel;
@@ -79,10 +79,13 @@ public sealed class AnimationPane : Border
     /// <param name="editor">Active editing session.</param>
     /// <param name="onPreview">
     ///   Optional callback called when the "▶ Preview" button is clicked.
-    ///   Typically <c>() => mainWindow.StartSlideShow(false)</c>.
+    ///   The session carries the selected animation index so "Play From Selected"
+    ///   can launch the slideshow at the same row in both hosts.
     ///   May be null (Preview button is hidden in that case).
     /// </param>
-    public AnimationPane(EditingSession editor, Action? onPreview = null)
+    public AnimationPane(
+        EditingSession editor,
+        Action<AnimationPanePlaybackSessionPlan>? onPreview = null)
     {
         _editor    = editor    ?? throw new ArgumentNullException(nameof(editor));
         _onPreview = onPreview;
@@ -243,7 +246,7 @@ public sealed class AnimationPane : Border
             case AnimationPanePlaybackControlKind.PlayFromSelected:
             case AnimationPanePlaybackControlKind.PlayCurrentSlide:
                 if (invokePreview)
-                    _onPreview?.Invoke();
+                    _onPreview?.Invoke(_playbackSessionPlan);
                 break;
         }
 

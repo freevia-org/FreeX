@@ -574,6 +574,46 @@ public sealed class DocumentViewFloatingSelectionTests
     }
 
     [Fact]
+    public async Task Group_child_hit_test_selects_child_and_rotates_child_with_undo()
+    {
+        int selectedChildIndex = -1;
+        string? selectedChildKind = null;
+        double childAngleAfter = 0, childAngleReverted = 0, groupAngleAfter = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = MakeDocWithNestedGroupAndShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+
+            var childRect = view.FloatingGroupChildRectsForTest(0, 1)
+                .Single(child => child.ChildIndex == 1).Rect;
+            view.SelectFloatingGroupChildForTest(childRect.Center).Should().BeTrue();
+
+            var selected = view.SelectedFloatingGroupChildInfo;
+            selected.Should().NotBeNull();
+            selectedChildIndex = selected!.Value.ChildIndex;
+            selectedChildKind = selected.Value.Kind;
+
+            view.RotateSelectedFloating(45);
+            var group = ((Paragraph)doc.Blocks[0]).Runs[1].DrawingGroup!;
+            var childShape = group.Children[1].Should().BeOfType<Shape>().Subject;
+            childAngleAfter = childShape.RotationAngle;
+            groupAngleAfter = group.RotationAngle;
+
+            view.Undo();
+            childAngleReverted = childShape.RotationAngle;
+        });
+        if (!ran) return;
+
+        Assert.Equal(1, selectedChildIndex);
+        Assert.Equal("Shape", selectedChildKind);
+        Assert.Equal(45, childAngleAfter);
+        Assert.Equal(0, groupAngleAfter);
+        Assert.Equal(0, childAngleReverted);
+    }
+
+    [Fact]
     public async Task RotateAndFlipSelectedFloating_updates_group_transform_and_is_undoable()
     {
         double angleAfter = 0, angleReverted = 0;

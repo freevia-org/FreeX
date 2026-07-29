@@ -209,6 +209,10 @@ public sealed class DocumentView : Control
     // Multi-select set for object arrange and nested-group commands. Valid DrawingGroups are
     // groupable members just like the concrete floating object runs they contain.
     private readonly List<(int BlockIndex, int RunIndex, string Kind)> _selectedFloatingObjects = [];
+    // Direct child selection keeps the owning group selected for group-level commands while exposing
+    // the child identity for child-local editing. The child index is stable for the undoable model
+    // command until the group is structurally edited.
+    private (int BlockIndex, int RunIndex, int ChildIndex, string Kind, Rect Rect)? _selectedFloatingGroupChild;
     // AV-HANDLES: drag state — non-null while the user is dragging a selected float (move OR resize).
     // PointerDown : pointer page-space position when the drag started.
     // FloatRect   : the float's page-space Rect at drag start (used to revert on Esc + as the resize base).
@@ -502,6 +506,7 @@ public sealed class DocumentView : Control
         _collapsedHeadings.Clear();
         _hfCaret = null; // AV-HFEDIT: clear header/footer caret on document load
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
+        _selectedFloatingGroupChild = null;
         _shapeCaret = null;
         _selectedFloatingObjects.Clear();
         _floatDragState   = null;
@@ -1206,6 +1211,7 @@ public sealed class DocumentView : Control
         _cellBlockFocus = null;
         _selectionAnchor = null;
         _selectedFloating = null;
+        _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
         _shapeEditPointsTarget = null;
         _shapeEditPointDragState = null;
@@ -6938,8 +6944,23 @@ public sealed class DocumentView : Control
         }
 
         // AV-FLSEL: draw selection outline + 8 resize handles over the selected floating object.
-        if (_selectedFloating is { } selFl)
+        if (_selectedFloatingGroupChild is { } selChild)
+        {
+            var transform = GetFloatingGroupChildRotation(
+                selChild.BlockIndex, selChild.RunIndex, selChild.ChildIndex);
+            if (TryGetFloatingGroupData(selChild.BlockIndex, selChild.RunIndex, out var ownerGroup))
+            {
+                using (context.PushTransform(BuildFloatingGroupTransform(ownerGroup)))
+                {
+                    DrawFloatingSelection(context, selChild.Rect, transform.Angle,
+                        transform.FlipH, transform.FlipV);
+                }
+            }
+        }
+        else if (_selectedFloating is { } selFl)
+        {
             DrawFloatingSelection(context, selFl.Rect, selFl.BlockIndex, selFl.RunIndex, selFl.Kind);
+        }
 
         // AV-HFEDIT: the header/footer caret renders independently of the body caret.
         if (IsFocused && _hfCaret is not null && TryGetHfCaretRect(out var hfRect))
@@ -7658,16 +7679,21 @@ public sealed class DocumentView : Control
     /// </summary>
     private void DrawFloatingSelection(DrawingContext context, Rect rect, int blockIndex, int runIndex, string kind)
     {
+        var (angle, flipH, flipV) = GetFloatRotation(blockIndex, runIndex, kind);
+        DrawFloatingSelection(context, rect, angle, flipH, flipV);
+        DrawShapeEditPointHandles(context, rect, blockIndex, runIndex);
+    }
+
+    private static void DrawFloatingSelection(
+        DrawingContext context, Rect rect, double angle, bool flipH, bool flipV)
+    {
         context.DrawRectangle(null, FloatSelectionPen, rect);
 
-        var (angle, flipH, flipV) = GetFloatRotation(blockIndex, runIndex, kind);
         foreach (var (_, hRect) in HandleRects(rect, angle, flipH, flipV))
         {
             context.FillRectangle(FloatHandleFill, hRect);
             context.DrawRectangle(null, FloatHandlePen, hRect);
         }
-
-        DrawShapeEditPointHandles(context, rect, blockIndex, runIndex);
     }
 
     private static readonly IBrush ShapeEditPointFill =
@@ -8295,6 +8321,82 @@ public sealed class DocumentView : Control
         return true;
     }
 
+    private bool TryHitTestFloatingGroupChild(
+        Point point,
+        out (int BlockIndex, int RunIndex, int ChildIndex, string Kind, Rect Rect) hit)
+    {
+        hit = default;
+
+        foreach (var group in _floatingGroups
+            .Where(group => ContainsTransformedPoint(point, group.Rect,
+                group.RotationAngle, group.FlipH, group.FlipV))
+            .OrderBy(group => group.BehindText ? 1 : 0)
+            .ThenByDescending(group => group.ZOrder)
+            .ThenByDescending(group => group.BlockIndex)
+            .ThenByDescending(group => group.RunIndex))
+        {
+            var groupLocalPoint = UntransformPoint(point, group.Rect,
+                group.RotationAngle, group.FlipH, group.FlipV);
+
+            // Children are painted in list order, so the last matching child is in front.
+            foreach (var child in group.Children.AsEnumerable().Reverse())
+            {
+                var (angle, flipH, flipV) = GetFloatingGroupChildRotation(
+                    group.BlockIndex, group.RunIndex, child.ChildIndex);
+                if (!ContainsTransformedPoint(groupLocalPoint, child.Rect, angle, flipH, flipV))
+                    continue;
+
+                hit = (group.BlockIndex, group.RunIndex, child.ChildIndex,
+                    child.Kind.ToString(), child.Rect);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ContainsTransformedPoint(
+        Point point, Rect rect, double angle, bool flipH, bool flipV) =>
+        rect.Contains(UntransformPoint(point, rect, angle, flipH, flipV));
+
+    private static Point UntransformPoint(
+        Point point, Rect rect, double angle, bool flipH, bool flipV)
+    {
+        var local = DocumentViewLayoutPlanner.UnTransformPoint(
+            ToPlannerPoint(point), ToPlannerRect(rect), angle, flipH, flipV);
+        return new Point(local.XDip, local.YDip);
+    }
+
+    private (double Angle, bool FlipH, bool FlipV) GetFloatingGroupChildRotation(
+        int blockIndex, int runIndex, int childIndex)
+    {
+        if (!TryGetRun(blockIndex, runIndex, out var run)
+            || run.DrawingGroup is not { } group
+            || childIndex < 0
+            || childIndex >= group.Children.Count)
+            return (0, false, false);
+
+        return group.Children[childIndex] switch
+        {
+            InlineImage image => (image.RotationAngle, image.FlipH, image.FlipV),
+            Shape shape => (shape.RotationAngle, shape.FlipH, shape.FlipV),
+            WordArt wordArt => (wordArt.RotationAngle, wordArt.FlipH, wordArt.FlipV),
+            FreeW.Core.Model.DrawingGroup nestedGroup =>
+                (nestedGroup.RotationAngle, nestedGroup.FlipH, nestedGroup.FlipV),
+            _ => (0, false, false)
+        };
+    }
+
+    internal (int BlockIndex, int RunIndex, int ChildIndex, string Kind, Rect Rect)?
+        HitTestFloatingGroupChildForTest(Point point) =>
+        TryHitTestFloatingGroupChild(point, out var hit) ? hit : null;
+
+    internal IReadOnlyList<(int ChildIndex, Rect Rect)> FloatingGroupChildRectsForTest(
+        int blockIndex, int runIndex) =>
+        TryGetFloatingGroupData(blockIndex, runIndex, out var groupData)
+            ? groupData.Children.Select(child => (child.ChildIndex, child.Rect)).ToArray()
+            : [];
+
     /// <summary>
     /// Commits a drag-move by computing the new HOffset/VOffset in points (delta from the layout-time
     /// position, converted back through PxPerPoint) and issuing the appropriate move command.
@@ -8357,8 +8459,41 @@ public sealed class DocumentView : Control
             _selectedFloatingObjects.RemoveAll(item =>
                 item.BlockIndex == blockIndex && item.RunIndex == runIndex);
         }
+        RefreshSelectedFloatingGroupChildRect(blockIndex, runIndex);
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateVisual();
+    }
+
+    private void RefreshSelectedFloatingGroupChildRect(int blockIndex, int runIndex)
+    {
+        if (_selectedFloatingGroupChild is not { } selected
+            || selected.BlockIndex != blockIndex
+            || selected.RunIndex != runIndex
+            || !TryGetFloatingGroupData(blockIndex, runIndex, out var groupData))
+        {
+            return;
+        }
+
+        var child = groupData.Children.FirstOrDefault(item => item.ChildIndex == selected.ChildIndex);
+        if (child is null)
+        {
+            _selectedFloatingGroupChild = null;
+            return;
+        }
+
+        _selectedFloatingGroupChild = selected with
+        {
+            Kind = child.Kind.ToString(),
+            Rect = child.Rect
+        };
+    }
+
+    private bool TryGetFloatingGroupData(int blockIndex, int runIndex, out FloatingGroupData groupData)
+    {
+        groupData = null!;
+        groupData = _floatingGroups.FirstOrDefault(group =>
+            group.BlockIndex == blockIndex && group.RunIndex == runIndex)!;
+        return groupData is not null;
     }
 
     // ── AV-FLSEL: public edit API ──────────────────────────────────────────────────────────────────
@@ -8370,6 +8505,14 @@ public sealed class DocumentView : Control
     /// </summary>
     public (int BlockIndex, int RunIndex, string Kind, Rect Rect)? SelectedFloatingInfo
         => _selectedFloating;
+
+    /// <summary>
+    /// Direct child selected inside the active drawing group, or null when the group itself is active.
+    /// The parent remains the active <see cref="SelectedFloatingInfo"/> so group-level arrange commands
+    /// retain their existing behavior.
+    /// </summary>
+    public (int BlockIndex, int RunIndex, int ChildIndex, string Kind, Rect Rect)? SelectedFloatingGroupChildInfo
+        => _selectedFloatingGroupChild;
 
     /// <summary>The currently selected floating image, or null when the active object is not an image.</summary>
     public InlineImage? SelectedFloatingImage()
@@ -8454,6 +8597,7 @@ public sealed class DocumentView : Control
         if (_selectedFloating is null && _selectedFloatingObjects.Count == 0) return;
         _shapeCaret = null;
         _selectedFloating = null;
+        _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
         _floatDragState   = null;
         _shapeEditPointsTarget = null;
@@ -8489,6 +8633,7 @@ public sealed class DocumentView : Control
     private void SelectFloatingCore(int blockIndex, int runIndex, string kind, bool addToMultiSelect)
     {
         _shapeCaret = null;
+        _selectedFloatingGroupChild = null;
         _shapeEditPointsTarget = null;
         _shapeEditPointDragState = null;
         var item = (blockIndex, runIndex, kind);
@@ -8527,6 +8672,26 @@ public sealed class DocumentView : Control
         // Dummy rect; RefreshSelectedFloatingRect will update.
         _selectedFloating = (blockIndex, runIndex, kind, default);
         RefreshSelectedFloatingRect(blockIndex, runIndex, kind);
+    }
+
+    private void SelectFloatingGroupChildCore(
+        (int BlockIndex, int RunIndex, int ChildIndex, string Kind, Rect Rect) hit)
+    {
+        // Keep the group as the active floating object so group-level commands continue to target
+        // the owning run, while the child identity drives the local edit route and outline.
+        SelectFloatingCore(hit.BlockIndex, hit.RunIndex, "Group", addToMultiSelect: false);
+        _selectedFloatingGroupChild = hit;
+        RaiseFloatingSelectionChangedIfIdentityChanged();
+        InvalidateVisual();
+    }
+
+    internal bool SelectFloatingGroupChildForTest(Point point)
+    {
+        if (!TryHitTestFloatingGroupChild(point, out var hit))
+            return false;
+
+        SelectFloatingGroupChildCore(hit);
+        return true;
     }
 
     private static bool IsGroupableFloatingKind(string kind) =>
@@ -9070,6 +9235,25 @@ public sealed class DocumentView : Control
         if (_selectedFloating is not { } sel) return;
         if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
         if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
+
+        if (_selectedFloatingGroupChild is { } child
+            && child.BlockIndex == sel.BlockIndex
+            && child.RunIndex == sel.RunIndex
+            && para.Runs[sel.RunIndex].DrawingGroup is { } selectedGroup
+            && child.ChildIndex >= 0
+            && child.ChildIndex < selectedGroup.Children.Count)
+        {
+            var transform = GetFloatingGroupChildRotation(
+                child.BlockIndex, child.RunIndex, child.ChildIndex);
+            _bus.Execute(new SetDrawingGroupChildRotationCommand(
+                child.BlockIndex, child.RunIndex, child.ChildIndex,
+                angleDeg, transform.FlipH, transform.FlipV));
+            InvalidateLayoutAndVisual();
+            Relayout(FallbackWidth);
+            RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+            return;
+        }
+
         var run = para.Runs[sel.RunIndex];
         if (run.Image is { IsFloating: true } img)
             _bus.Execute(new SetImageRotationCommand(sel.BlockIndex, sel.RunIndex,
@@ -9096,6 +9280,27 @@ public sealed class DocumentView : Control
         if (_selectedFloating is not { } sel) return;
         if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
         if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
+
+        if (_selectedFloatingGroupChild is { } child
+            && child.BlockIndex == sel.BlockIndex
+            && child.RunIndex == sel.RunIndex
+            && para.Runs[sel.RunIndex].DrawingGroup is { } selectedGroup
+            && child.ChildIndex >= 0
+            && child.ChildIndex < selectedGroup.Children.Count)
+        {
+            var transform = GetFloatingGroupChildRotation(
+                child.BlockIndex, child.RunIndex, child.ChildIndex);
+            var newFlipH = horizontal ? !transform.FlipH : transform.FlipH;
+            var newFlipV = horizontal ? transform.FlipV : !transform.FlipV;
+            _bus.Execute(new SetDrawingGroupChildRotationCommand(
+                child.BlockIndex, child.RunIndex, child.ChildIndex,
+                transform.Angle, newFlipH, newFlipV));
+            InvalidateLayoutAndVisual();
+            Relayout(FallbackWidth);
+            RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+            return;
+        }
+
         var run = para.Runs[sel.RunIndex];
         if (run.Image is { IsFloating: true } img)
         {
@@ -9137,6 +9342,7 @@ public sealed class DocumentView : Control
 
         _bus.Execute(new GroupFloatingObjectsCommand(members));
         _selectedFloating = null;
+        _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
         _floatDragState = null;
         _shapeEditPointsTarget = null;
@@ -9157,6 +9363,7 @@ public sealed class DocumentView : Control
 
         _bus.Execute(new UngroupFloatingObjectsCommand(sel.BlockIndex, sel.RunIndex));
         _selectedFloating = null;
+        _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
         _floatDragState = null;
         RaiseFloatingSelectionChangedIfIdentityChanged();
@@ -9489,6 +9696,7 @@ public sealed class DocumentView : Control
         // Remove the run in-place via a command (undoable).
         _bus.Execute(new RemoveFloatingRunCommand(sel.BlockIndex, sel.RunIndex));
         _selectedFloating = null;
+        _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
         _floatDragState   = null;
         _shapeEditPointsTarget = null;
@@ -9906,6 +10114,17 @@ public sealed class DocumentView : Control
             }
         }
 
+        // A direct click on a rendered child enters group-child selection. The group remains the
+        // owning selection for arrange/ungroup commands, while local transforms target the child.
+        if (!extendFloatingSelection && TryHitTestFloatingGroupChild(point, out var groupChildHit))
+        {
+            SelectFloatingGroupChildCore(groupChildHit);
+            _floatDragState = null;
+            Cursor = Cursor.Default;
+            e.Handled = true;
+            return;
+        }
+
         // AV-FLSEL: check whether the click landed on a floating object BEFORE body text hit-test.
         // The topmost object (highest z-order, in-front preferred over behind) wins.
         if (TryHitTestFloat(point, out var floatHit))
@@ -9934,6 +10153,7 @@ public sealed class DocumentView : Control
         {
             _shapeCaret = null;
             _selectedFloating = null;
+            _selectedFloatingGroupChild = null;
             _selectedFloatingObjects.Clear();
             _floatDragState   = null;
             _shapeEditPointsTarget = null;
@@ -10351,7 +10571,17 @@ public sealed class DocumentView : Control
                         e.Handled = true;
                         return;
                     }
+                    if (_selectedFloatingGroupChild is not null)
+                    {
+                        _selectedFloatingGroupChild = null;
+                        Cursor = Cursor.Default;
+                        RaiseFloatingSelectionChangedIfIdentityChanged();
+                        InvalidateVisual();
+                        e.Handled = true;
+                        return;
+                    }
                     _selectedFloating = null;
+                    _selectedFloatingGroupChild = null;
                     _selectedFloatingObjects.Clear();
                     _floatDragState   = null;
                     _shapeEditPointsTarget = null;
@@ -18754,20 +18984,9 @@ public sealed class DocumentView : Control
     /// </summary>
     private void DrawFloatingGroup(DrawingContext context, FloatingGroupData gd)
     {
-        var centerX = gd.Rect.X + gd.Rect.Width / 2;
-        var centerY = gd.Rect.Y + gd.Rect.Height / 2;
         IDisposable? transformState = null;
         if (gd.RotationAngle != 0 || gd.FlipH || gd.FlipV)
-        {
-            var matrix = Matrix.Identity;
-            matrix = matrix * Matrix.CreateTranslation(-centerX, -centerY);
-            if (gd.FlipH) matrix = matrix * new Matrix(-1, 0, 0, 1, 0, 0);
-            if (gd.FlipV) matrix = matrix * new Matrix(1, 0, 0, -1, 0, 0);
-            if (gd.RotationAngle != 0)
-                matrix = matrix * Matrix.CreateRotation(gd.RotationAngle * Math.PI / 180.0);
-            matrix = matrix * Matrix.CreateTranslation(centerX, centerY);
-            transformState = context.PushTransform(matrix);
-        }
+            transformState = context.PushTransform(BuildFloatingGroupTransform(gd));
 
         try
         {
@@ -18811,5 +19030,18 @@ public sealed class DocumentView : Control
         {
             transformState?.Dispose();
         }
+    }
+
+    private static Matrix BuildFloatingGroupTransform(FloatingGroupData group)
+    {
+        var centerX = group.Rect.X + group.Rect.Width / 2;
+        var centerY = group.Rect.Y + group.Rect.Height / 2;
+        var matrix = Matrix.Identity;
+        matrix *= Matrix.CreateTranslation(-centerX, -centerY);
+        if (group.FlipH) matrix *= new Matrix(-1, 0, 0, 1, 0, 0);
+        if (group.FlipV) matrix *= new Matrix(1, 0, 0, -1, 0, 0);
+        if (group.RotationAngle != 0)
+            matrix *= Matrix.CreateRotation(group.RotationAngle * Math.PI / 180.0);
+        return matrix * Matrix.CreateTranslation(centerX, centerY);
     }
 }

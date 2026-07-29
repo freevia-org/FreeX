@@ -727,6 +727,26 @@ public sealed class WorkbookSession
         SelectRanges(range, [range]);
     }
 
+    /// <summary>
+    /// Selects a range while a formula is being edited, keeping the formula's source cell
+    /// separate from the pointed-to worksheet selection. This is the state Excel exposes while
+    /// formula point mode is active: the grid highlights the reference range, but Enter still
+    /// commits the edit to <paramref name="formulaEditAddress"/>.
+    /// </summary>
+    public void SelectRangeForFormulaEdit(GridRange range, CellAddress formulaEditAddress)
+    {
+        ValidateSelectionRange(range, nameof(range));
+        if (formulaEditAddress.Sheet != range.Start.Sheet)
+            throw new ArgumentException("The formula edit cell must be on the selected range's sheet.", nameof(formulaEditAddress));
+
+        SetSelectedRanges(range, [range]);
+        ActiveCell = range.Start;
+        ActiveSheet.ActiveRow = ActiveCell.Row;
+        ActiveSheet.ActiveCol = ActiveCell.Col;
+        FormulaEditAddress = formulaEditAddress;
+        EnsureActiveCellVisible();
+    }
+
     public void SelectRanges(GridRange primaryRange, IReadOnlyList<GridRange> ranges) =>
         SelectRanges(primaryRange, ranges, primaryRange.Start);
 

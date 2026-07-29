@@ -2985,6 +2985,107 @@ public sealed class SetFloatingRotationCommand(
 }
 
 /// <summary>
+/// Set the rotation and flips on one direct child of a floating drawing group.
+/// The group remains the owning floating run; this command only changes the child's
+/// local transform and is undoable through the normal document command bus.
+/// </summary>
+public sealed class SetDrawingGroupChildRotationCommand(
+    int paragraphIndex, int runIndex, int childIndex,
+    double angleDeg, bool flipH, bool flipV) : IDocumentCommand
+{
+    private double _previousAngle;
+    private bool _previousFlipH;
+    private bool _previousFlipV;
+    private bool _applied;
+
+    public string Label => "Rotate Group Child";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryMutate(context, angleDeg, flipH, flipV,
+                out _previousAngle, out _previousFlipH, out _previousFlipV))
+            return;
+
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied)
+            return;
+
+        TryMutate(context, _previousAngle, _previousFlipH, _previousFlipV,
+            out _, out _, out _);
+        _applied = false;
+    }
+
+    private bool TryMutate(
+        IDocumentCommandContext context,
+        double angle,
+        bool flipH,
+        bool flipV,
+        out double previousAngle,
+        out bool previousFlipH,
+        out bool previousFlipV)
+    {
+        previousAngle = 0;
+        previousFlipH = false;
+        previousFlipV = false;
+
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
+            || runIndex < 0
+            || runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[runIndex].DrawingGroup is not { } group
+            || childIndex < 0
+            || childIndex >= group.Children.Count)
+            return false;
+
+        var child = group.Children[childIndex];
+        switch (child)
+        {
+            case InlineImage image:
+                previousAngle = image.RotationAngle;
+                previousFlipH = image.FlipH;
+                previousFlipV = image.FlipV;
+                image.RotationAngle = angle;
+                image.FlipH = flipH;
+                image.FlipV = flipV;
+                return true;
+
+            case Shape shape:
+                previousAngle = shape.RotationAngle;
+                previousFlipH = shape.FlipH;
+                previousFlipV = shape.FlipV;
+                shape.RotationAngle = angle;
+                shape.FlipH = flipH;
+                shape.FlipV = flipV;
+                return true;
+
+            case WordArt wordArt:
+                previousAngle = wordArt.RotationAngle;
+                previousFlipH = wordArt.FlipH;
+                previousFlipV = wordArt.FlipV;
+                wordArt.RotationAngle = angle;
+                wordArt.FlipH = flipH;
+                wordArt.FlipV = flipV;
+                return true;
+
+            case DrawingGroup nestedGroup:
+                previousAngle = nestedGroup.RotationAngle;
+                previousFlipH = nestedGroup.FlipH;
+                previousFlipV = nestedGroup.FlipV;
+                nestedGroup.RotationAngle = angle;
+                nestedGroup.FlipH = flipH;
+                nestedGroup.FlipV = flipV;
+                return true;
+
+            default:
+                return false;
+        }
+    }
+}
+
+/// <summary>
 /// Set only the position offsets (H/V in points) on a floating Image, updating
 /// <see cref="InlineImage.HorizontalOffsetPt"/> / <see cref="InlineImage.VerticalOffsetPt"/>
 /// while keeping anchors unchanged. Used by drag-move and arrow-key nudge in the Avalonia view.

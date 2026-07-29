@@ -91,6 +91,42 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlideShowWindow_animation_route_starts_at_selected_animation()
+    {
+        uint? firstShapeId = null;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = Presentation.CreateEmpty();
+            var slide = pres.Slides[0];
+            slide.Animations.Add(new ShapeAnimation
+            {
+                ShapeId = 1,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Appear,
+                Trigger = AnimationTrigger.OnClick,
+                DurationMs = 500,
+            });
+            slide.Animations.Add(new ShapeAnimation
+            {
+                ShapeId = 2,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Fade,
+                Trigger = AnimationTrigger.OnClick,
+                DurationMs = 500,
+            });
+            var route = SlideShowCustomShowPlanner
+                .BuildFullPresentationRoute(pres)
+                .WithAnimationStartIndex(1);
+            var window = new SlideShowWindow(pres, route);
+            firstShapeId = window.Controller.CurrentSteps[0].Animations[0].ShapeId;
+            window.Close();
+        });
+
+        if (!ran) return;
+        firstShapeId.Should().Be(2u);
+    }
+
+    [Fact]
     public async Task SlideShowWindow_custom_playback_route_uses_ordered_slides()
     {
         string? currentTitle = null;
