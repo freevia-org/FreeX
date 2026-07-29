@@ -169,6 +169,30 @@ public sealed partial class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void DeclarativeHomeMenuChoices_AreEnabledAcrossFormattingFamilies()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.H, Key.L);
+            harness.ActiveMenuItemIsEnabled("Data Bars...").Should().BeTrue();
+            harness.ActiveMenuItemIsEnabled("Color Scales...").Should().BeTrue();
+            harness.ActiveMenuItemIsEnabled("Greater Than...").Should().BeTrue();
+            harness.HandleKeyTip(Key.I);
+            harness.ActiveMenuItemIsEnabled("3 Arrows").Should().BeTrue();
+
+            harness.OpenRibbonMenu(Key.H, Key.B);
+            harness.ActiveMenuItemIsEnabled("Black").Should().BeTrue();
+            harness.ActiveMenuItemIsEnabled("Dashed").Should().BeTrue();
+
+            harness.OpenRibbonMenu(Key.H, Key.A, Key.N);
+            harness.ActiveMenuItemIsEnabled("US Dollar ($)").Should().BeTrue();
+            harness.ActiveMenuItemIsEnabled("Euro (€)").Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void CollapsedRibbonGroupKeyTip_RoutesThroughVisibleOverflowGroup()
     {
         RunSta(() =>

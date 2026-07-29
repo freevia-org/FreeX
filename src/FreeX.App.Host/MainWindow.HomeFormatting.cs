@@ -954,6 +954,10 @@ public partial class MainWindow
     private void AccountingSymbolMenuItem_Click(object sender, RoutedEventArgs e)
     {
         var symbol = (sender as MenuItem)?.Tag?.ToString();
+        var option = HomeNumberFormatDropdownPlanner.AccountingSymbolOptions.FirstOrDefault(candidate =>
+            string.Equals(candidate.CommandId, symbol, StringComparison.Ordinal) ||
+            string.Equals(candidate.Label, symbol, StringComparison.Ordinal));
+        symbol = option?.Symbol ?? symbol;
         if (string.IsNullOrEmpty(symbol))
             symbol = "$";
 
@@ -1032,6 +1036,7 @@ public partial class MainWindow
         if (sender is not MenuItem { Tag: string style })
             return;
 
+        style = ConditionalFormatPresetFactory.IconSetStyleForMenuId(style) ?? style;
         ApplyIconSetPreset(style);
     }
     private void CfNewRuleMenuItem_Click(object sender, RoutedEventArgs e)  => ShowCfDialog("New Rule");

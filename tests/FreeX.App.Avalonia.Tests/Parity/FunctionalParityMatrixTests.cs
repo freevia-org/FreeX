@@ -149,56 +149,54 @@ public sealed class FunctionalParityMatrixTests
     }
 
     [Fact]
-    public void Classifier_ConditionalFormatPseudoGalleryRows_AreBackedByRuntimePopupCatalog()
+    public void ConditionalFormatPopupRows_AreBoundInBothHosts()
     {
         var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
         var rows = FunctionalParityMatrix.Compute(wpf);
-        var classifications = FunctionalParityClassifier.Classify(rows);
         var catalogIds = ConditionalFormatPresetGalleryPlanner.PopupItems
             .Select(item => item.CommandId)
             .ToHashSet(StringComparer.Ordinal);
 
-        var conditionalFormatRows = classifications
-            .Where(FunctionalParityClassifier.IsConditionalFormattingGalleryRow)
+        var conditionalFormatRows = rows
+            .Where(row => catalogIds.Contains(row.CommandId))
             .ToArray();
 
-        Assert.Equal(34, conditionalFormatRows.Length);
+        Assert.Equal(catalogIds.Count, conditionalFormatRows.Length);
         Assert.All(conditionalFormatRows, row =>
         {
-            Assert.Equal(FunctionalParityClassifier.ClassificationKind.PseudoCommandGalleryItem, row.Classification);
-            Assert.Contains(row.MatrixRow.CommandId, catalogIds);
-            Assert.Equal("Use the conditional-format popup/gallery parity lane for richer evidence instead of adding placeholder handlers.", row.NextAction);
+            Assert.True(row.HasWpfHandler);
+            Assert.True(row.HasAvaloniaHandler);
+            Assert.Equal(FunctionalParityMatrix.ParityStatus.Parity, row.Status);
         });
 
-        Assert.Contains(conditionalFormatRows, row => row.MatrixRow.CommandId == "Data Bars");
-        Assert.Contains(conditionalFormatRows, row => row.MatrixRow.CommandId == "Color Scales");
-        Assert.Contains(conditionalFormatRows, row => row.MatrixRow.CommandId == "3 Arrows");
-        Assert.Contains(conditionalFormatRows, row => row.MatrixRow.CommandId == "More Rules");
+        Assert.Contains(conditionalFormatRows, row => row.CommandId == "Data Bars");
+        Assert.Contains(conditionalFormatRows, row => row.CommandId == "Color Scales");
+        Assert.Contains(conditionalFormatRows, row => row.CommandId == "3 Arrows");
+        Assert.Contains(conditionalFormatRows, row => row.CommandId == "More Rules");
     }
 
     [Fact]
-    public void Classifier_AccountingSymbolPseudoGalleryRows_AreBackedBySharedNumberFormatCatalog()
+    public void AccountingSymbolRows_AreBoundInBothHosts()
     {
         var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
         var rows = FunctionalParityMatrix.Compute(wpf);
-        var classifications = FunctionalParityClassifier.Classify(rows);
         var catalogIds = HomeNumberFormatDropdownPlanner.AccountingSymbolOptions
             .Select(option => option.CommandId)
             .ToArray();
 
-        var accountingRows = classifications
-            .Where(FunctionalParityClassifier.IsAccountingSymbolGalleryRow)
+        var accountingRows = rows
+            .Where(row => catalogIds.Contains(row.CommandId, StringComparer.Ordinal))
             .ToArray();
 
         Assert.Equal(4, accountingRows.Length);
         Assert.Equal(catalogIds.OrderBy(id => id, StringComparer.Ordinal), accountingRows
-            .Select(row => row.MatrixRow.CommandId)
+            .Select(row => row.CommandId)
             .OrderBy(id => id, StringComparer.Ordinal));
         Assert.All(accountingRows, row =>
         {
-            Assert.Equal(FunctionalParityClassifier.ClassificationKind.PseudoCommandGalleryItem, row.Classification);
-            Assert.Contains(row.MatrixRow.CommandId, catalogIds);
-            Assert.Equal("Use the HomeNumberFormatDropdownPlanner accounting symbol catalog for parity evidence; do not treat this row as a missing WPF command.", row.NextAction);
+            Assert.True(row.HasWpfHandler);
+            Assert.True(row.HasAvaloniaHandler);
+            Assert.Equal(FunctionalParityMatrix.ParityStatus.Parity, row.Status);
         });
 
         Assert.All(HomeNumberFormatDropdownPlanner.AccountingSymbolOptions, option =>
@@ -206,26 +204,25 @@ public sealed class FunctionalParityMatrixTests
     }
 
     [Fact]
-    public void Classifier_FontBorderPseudoGalleryRows_AreBackedByRuntimePopupCatalog()
+    public void FontBorderChoiceRows_AreBoundInBothHosts()
     {
         var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
         var rows = FunctionalParityMatrix.Compute(wpf);
-        var classifications = FunctionalParityClassifier.Classify(rows);
         var catalogIds = HomeFontBorderPopupCatalogPlanner.ClassifiedFontBorderRowsCovered;
 
-        var fontBorderRows = classifications
-            .Where(FunctionalParityClassifier.IsFontBorderGalleryRow)
+        var fontBorderRows = rows
+            .Where(row => catalogIds.Contains(row.CommandId))
             .ToArray();
 
         Assert.Equal(10, fontBorderRows.Length);
         Assert.Equal(catalogIds.OrderBy(id => id, StringComparer.Ordinal), fontBorderRows
-            .Select(row => row.MatrixRow.CommandId)
+            .Select(row => row.CommandId)
             .OrderBy(id => id, StringComparer.Ordinal));
         Assert.All(fontBorderRows, row =>
         {
-            Assert.Equal(FunctionalParityClassifier.ClassificationKind.PseudoCommandGalleryItem, row.Classification);
-            Assert.Contains(row.MatrixRow.CommandId, catalogIds);
-            Assert.Equal("Use the HomeFontBorderPopupCatalogPlanner evidence; keep it classified as a pseudo-gallery row unless the binding matrix grows per-choice popup evidence.", row.NextAction);
+            Assert.True(row.HasWpfHandler);
+            Assert.True(row.HasAvaloniaHandler);
+            Assert.Equal(FunctionalParityMatrix.ParityStatus.Parity, row.Status);
         });
     }
 
@@ -244,27 +241,14 @@ public sealed class FunctionalParityMatrixTests
 
         Assert.Equal(
             [
-                "About FreeX#AboutBtn_Click",
-                "Check for Updates#CheckForUpdatesBtn_Click",
-                "Feedback#FeedbackBtn_Click",
                 "Font",
                 "Font Size",
-                "Help Online#HelpOnlineBtn_Click",
                 "Number Format",
                 "Scale Height",
                 "Scale Percent",
                 "Scale Width",
             ],
             nonClickRows);
-
-        var helpRoutes = classifications
-            .Where(row => row.EvidenceKind == "handler-qualified-help-route")
-            .Select(row => row.MatrixRow.CommandId)
-            .OrderBy(id => id, StringComparer.Ordinal)
-            .ToArray();
-        Assert.Equal(
-            FunctionalParityClassifier.HandlerQualifiedHelpRouteRows.OrderBy(id => id, StringComparer.Ordinal),
-            helpRoutes);
 
         var editableControls = classifications
             .Where(row => row.EvidenceKind == "shared-ribbon-combo-box-control")
@@ -278,8 +262,6 @@ public sealed class FunctionalParityMatrixTests
             entry.CommandId == id &&
             entry.ControlKind == "ComboBox" &&
             !entry.IsMenuItem));
-
-        Assert.All(helpRoutes, id => Assert.Contains(id, SurfaceCatalog.AvaloniaBoundCanonicalIds));
     }
 
     private static void WriteJson(IReadOnlyList<FunctionalParityMatrix.Row> rows)

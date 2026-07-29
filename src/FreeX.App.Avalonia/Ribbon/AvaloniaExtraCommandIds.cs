@@ -23,6 +23,8 @@ internal static class AvaloniaExtraCommandIds
         "Bottom Border", "Bottom Double Border", "Inside Borders", "Left Border", "Right Border",
         "Top Border", "Top and Bottom Border", "Top and Double Bottom Border", "Top and Thick Bottom Border",
         "Thick Bottom Border", "Thick Outside Borders", "More Borders", "Draw Border", "Draw Border Grid", "Erase Border",
+        "Black", "Gray", "Accent 1", "Accent 2",
+        "Thin", "Medium", "Thick", "Dashed", "Dotted", "Double",
         "Accounting Number Format US Dollar", "Accounting Number Format Euro",
         "Accounting Number Format British Pound", "Accounting Number Format Japanese Yen",
         "More Accounting Formats",
