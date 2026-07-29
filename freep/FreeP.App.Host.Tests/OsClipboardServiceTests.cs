@@ -643,7 +643,8 @@ public sealed class OsClipboardServiceTests
         result.Should().Be(PresentationClipboardPasteSource.RichText);
         var shape = editor.CurrentSlide!.Shapes.Single();
         shape.Kind.Should().Be(SlideShapeKind.Table);
-        shape.Table!.Rows.Single().Cells[0].TextBody!.Paragraphs.Single().Runs
+        shape.Table!.ColumnWidthsEmu.Should().Equal(914400L, 914400L);
+        shape.Table.Rows.Single().Cells[0].TextBody!.Paragraphs.Single().Runs
             .Single().Bold.Should().BeTrue();
         shape.Table.Rows.Single().Cells[1].TextBody!.Paragraphs.Single().Runs
             .Single().Italic.Should().BeTrue();

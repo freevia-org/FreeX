@@ -145,6 +145,8 @@ public static class ExternalRichTextClipboardPlanner
         private bool _tableRowActive;
         private int _tableCellCount;
         private bool _containsTable;
+        private readonly List<long> _tableCellRightEdgesTwips = new();
+        private IReadOnlyList<long>? _tableColumnWidthsEmu;
         private bool _sawRtfHeader;
         private bool _lastWasParagraphBreak;
         private Paragraph? _activeParagraph;
@@ -195,7 +197,8 @@ public static class ExternalRichTextClipboardPlanner
                 InCanvasTextEditPlanner.ExtractPlainText(_body),
                 ImageBytes: picture.Bytes,
                 ImageContentType: picture.ContentType,
-                ContainsTable: _containsTable);
+                ContainsTable: _containsTable,
+                TableColumnWidthsEmu: _tableColumnWidthsEmu);
         }
 
         private bool ReadNext()
@@ -585,6 +588,12 @@ public static class ExternalRichTextClipboardPlanner
                 case "pnf":
                 case "pnfs":
                 case "cellx":
+                    if (_tableRowActive && parameter is > 0
+                        && _tableCellRightEdgesTwips.Count < MaxTableCellsPerRow)
+                    {
+                        _tableCellRightEdgesTwips.Add(parameter.Value);
+                    }
+                    break;
                 case "trleft":
                 case "trgaph":
                 case "trrh":
@@ -759,8 +768,11 @@ public static class ExternalRichTextClipboardPlanner
                 return;
 
             FlushActiveRun();
+            if (_tableRowActive)
+                CaptureTableColumnWidths();
             _tableRowActive = true;
             _tableCellCount = 0;
+            _tableCellRightEdgesTwips.Clear();
             _containsTable = true;
             _state.InTable = true;
         }
@@ -798,8 +810,29 @@ public static class ExternalRichTextClipboardPlanner
             if (!_lastWasParagraphBreak)
                 AppendParagraphBreak();
 
+            CaptureTableColumnWidths();
             _tableRowActive = false;
             _tableCellCount = 0;
+            _tableCellRightEdgesTwips.Clear();
+        }
+
+        private void CaptureTableColumnWidths()
+        {
+            if (_tableColumnWidthsEmu is not null || _tableCellRightEdgesTwips.Count < 2)
+                return;
+
+            long previousTwips = 0;
+            var widths = new List<long>(_tableCellRightEdgesTwips.Count);
+            foreach (long rightEdgeTwips in _tableCellRightEdgesTwips)
+            {
+                if (rightEdgeTwips <= previousTwips)
+                    return;
+
+                widths.Add((rightEdgeTwips - previousTwips) * 635L);
+                previousTwips = rightEdgeTwips;
+            }
+
+            _tableColumnWidthsEmu = widths;
         }
 
         private void RemoveTrailingTableDelimiter()

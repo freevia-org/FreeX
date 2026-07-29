@@ -10,7 +10,10 @@ namespace FreeP.App.Compositor;
 /// </summary>
 public static class ClipboardTablePlanner
 {
-    public static bool TryBuildStandaloneTable(TextBody body, out TableShape table)
+    public static bool TryBuildStandaloneTable(
+        TextBody body,
+        IReadOnlyList<long>? columnWidthsEmu,
+        out TableShape table)
     {
         ArgumentNullException.ThrowIfNull(body);
         table = new TableShape
@@ -38,10 +41,19 @@ public static class ClipboardTablePlanner
 
         const long widthEmu = 5_486_400;
         const long heightEmu = 2_743_200;
-        long columnWidth = widthEmu / columnCount;
         long rowHeight = heightEmu / cellRows.Length;
-        for (int column = 0; column < columnCount; column++)
-            table.ColumnWidthsEmu.Add(columnWidth);
+        if (columnWidthsEmu is { Count: var widthCount }
+            && widthCount == columnCount
+            && columnWidthsEmu.All(width => width > 0))
+        {
+            table.ColumnWidthsEmu.AddRange(columnWidthsEmu);
+        }
+        else
+        {
+            long columnWidth = widthEmu / columnCount;
+            for (int column = 0; column < columnCount; column++)
+                table.ColumnWidthsEmu.Add(columnWidth);
+        }
 
         foreach (var cells in cellRows)
         {

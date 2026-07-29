@@ -417,7 +417,7 @@ internal sealed class AvaloniaPresentationClipboardService(
                 if (payload.HasImage)
                     request.Editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
                 var table = payload.ContainsTable
-                    ? request.Editor.InsertTableFromClipboard(payload.Body)
+                    ? request.Editor.InsertTableFromClipboard(payload.Body, payload.TableColumnWidthsEmu)
                     : null;
                 if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
                     request.Editor.InsertTextBox(payload.Body);
@@ -442,7 +442,7 @@ internal sealed class AvaloniaPresentationClipboardService(
                 if (payload.HasImage)
                     request.Editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
                 var table = payload.ContainsTable
-                    ? request.Editor.InsertTableFromClipboard(payload.Body)
+                    ? request.Editor.InsertTableFromClipboard(payload.Body, payload.TableColumnWidthsEmu)
                     : null;
                 if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
                     request.Editor.InsertTextBox(payload.Body);
