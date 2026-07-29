@@ -213,6 +213,7 @@ public class RibbonEditorCompleteness5BTests
             [SmartArtAuthoringPlanner.BendingProcessLayoutCommandId] = SmartArtLayoutPreset.BendingProcess,
             [SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId] = SmartArtLayoutPreset.VerticalBulletList,
             [SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId] = SmartArtLayoutPreset.HorizontalBulletList,
+            [SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId] = SmartArtLayoutPreset.HorizontalBlockList,
             [SmartArtAuthoringPlanner.TitledMatrixLayoutCommandId] = SmartArtLayoutPreset.TitledMatrix,
             [SmartArtAuthoringPlanner.GridMatrixLayoutCommandId] = SmartArtLayoutPreset.GridMatrix,
             [SmartArtAuthoringPlanner.BasicRelationshipLayoutCommandId] = SmartArtLayoutPreset.BasicRelationship,

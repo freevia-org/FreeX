@@ -132,6 +132,9 @@ public static class SmartArtLayoutEngine
         if (IsHorizontalBulletListLayout(data.LayoutUniqueId))
             return LayoutHorizontalBulletList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsHorizontalBlockListLayout(data.LayoutUniqueId))
+            return LayoutHorizontalBlockList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsDescendingBlockListLayout(data.LayoutUniqueId))
             return LayoutDescendingBlockList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1061,6 +1064,43 @@ public static class SmartArtLayoutEngine
                 startY + row * (boxHeight + gapY),
                 boxWidth,
                 boxHeight));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Horizontal Block List geometry: one editable block per authored node in a
+    /// left-to-right row. Unlike the bullet-list route, each block owns the full
+    /// node surface and no synthetic bullet/grid treatment is introduced.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutHorizontalBlockList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var count = nodes.Count;
+        var padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        var padY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);
+        var gap = Math.Max((long)(fcx * GapFrac), 1L);
+        var innerWidth = Math.Max(fcx - (2 * padX) - ((count - 1) * gap), 1L);
+        var blockWidth = Math.Max(innerWidth / Math.Max(count, 1), 1L);
+        var blockHeight = Math.Max(fcy - (2 * padY), 1L);
+        var shapes = new List<SlideShape>(count);
+
+        for (var index = 0; index < count; index++)
+        {
+            var style = stylePlan.GetNodeStyle(index, nodes[index].Level, SmartArtFamily.List);
+            shapes.Add(MakeBox(
+                (uint)(275 + index),
+                nodes[index].Text,
+                style,
+                fx + padX + index * (blockWidth + gap),
+                fy + padY,
+                blockWidth,
+                blockHeight,
+                NodeFontSizePt,
+                DrawingShapeKind.Rectangle));
         }
 
         return shapes;
@@ -3061,6 +3101,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "horizontalbulletlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsHorizontalBlockListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "horizontalblocklist", StringComparison.Ordinal);
     }
 
     private static bool IsBasicPyramidLayout(string uniqueId)
