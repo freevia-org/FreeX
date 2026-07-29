@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FreeP Wave 61 rotated shape text physical validation",
+  "type": "object",
+  "required": ["schemaVersion", "suite", "platform", "shell", "app", "fixture", "package", "results"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "suite": { "const": "freep-linux-rotated-shape-text-edit-physical" },
+    "platform": { "const": "linux" },
+    "shell": { "const": "avalonia" },
+    "app": { "const": "FreeP" },
+    "fixture": {
+      "type": "object",
+      "required": ["file", "shapeId", "name", "bounds", "rotation", "text"],
+      "properties": {
+        "file": { "const": "rotated-shape-text-fixture.pptx" },
+        "shapeId": { "const": 2 },
+        "name": { "const": "Wave61 Rotated Text" },
+        "bounds": { "$ref": "#/$defs/bounds" },
+        "rotation": { "const": 30 },
+        "text": { "const": "Rotate me" }
+      },
+      "additionalProperties": false
+    },
+    "package": {
+      "type": "object",
+      "required": ["savedText", "bounds", "rotation"],
+      "properties": {
+        "savedText": { "const": "Typed rotated text" },
+        "bounds": { "$ref": "#/$defs/bounds" },
+        "rotation": { "const": 30 }
+      },
+      "additionalProperties": false
+    },
+    "results": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "evidenceLevel", "evidence"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "enum": ["passed", "failed"] },
+          "evidenceLevel": { "const": "physical-x11-input" },
+          "evidence": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "$defs": {
+    "bounds": {
+      "type": "object",
+      "required": ["x", "y", "cx", "cy"],
+      "properties": {
+        "x": { "const": 2857500 },
+        "y": { "const": 1428750 },
+        "cx": { "const": 2286000 },
+        "cy": { "const": 1524000 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

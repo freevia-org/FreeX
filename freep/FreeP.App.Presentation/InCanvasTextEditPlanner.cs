@@ -140,7 +140,10 @@ public sealed class InCanvasTextEditPlanner
         var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(
             screenRect,
             minimumWidth,
-            minimumHeight);
+            minimumHeight,
+            shape.RotationDeg,
+            shape.FlipH,
+            shape.FlipV);
         var originalBody = TextBodyModelCloner.CloneTextBody(shape.TextBody);
         var initialSelection = TableCellEditPlanner.PlanInitialSelection(originalBody);
         var richTextPlan = TableCellEditPlanner.PlanRichTextEdit(originalBody, initialSelection);

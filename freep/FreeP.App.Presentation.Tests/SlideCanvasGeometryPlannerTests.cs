@@ -46,6 +46,27 @@ public sealed class SlideCanvasGeometryPlannerTests
     }
 
     [Fact]
+    public void PlanEditorPlacement_RetainsRotationAndUnexpandedShapeCenter()
+    {
+        var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(
+            new SlideScreenRect(12, 34, 10, 5),
+            minimumWidth: 40,
+            minimumHeight: 20,
+            rotationDegrees: 30,
+            flipHorizontal: true,
+            flipVertical: false);
+
+        placement.HasTransform.Should().BeTrue();
+        placement.RotationDegrees.Should().Be(30);
+        placement.FlipHorizontal.Should().BeTrue();
+        placement.FlipVertical.Should().BeFalse();
+        placement.EffectiveTransformOriginX.Should().Be(5);
+        placement.EffectiveTransformOriginY.Should().Be(2.5);
+        placement.Width.Should().Be(40);
+        placement.Height.Should().Be(20);
+    }
+
+    [Fact]
     public void PlanMove_AppliesGridSnapToPreviewAndCommitDelta()
     {
         var transform = new SlideTransformCore(2, 10, 20, 400, 300);

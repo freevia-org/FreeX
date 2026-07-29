@@ -23,6 +23,7 @@ public sealed class InCanvasTextEditor : IDisposable
     private TextBody? _shapeParagraphBody;
     private uint _editingShapeId;
     private bool _active;
+    private bool _canceling;
 
     public InCanvasTextEditor(SlideCanvas canvas, EditingSession editor, Canvas overlay)
     {
@@ -115,14 +116,7 @@ public sealed class InCanvasTextEditor : IDisposable
         _editPlan = startPlan.EditPlanner;
         _shapeParagraphBody = startPlan.OriginalBody;
 
-        var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(
-            new SlideScreenRect(
-                startPlan.Placement.Value.Left,
-                startPlan.Placement.Value.Top,
-                startPlan.Placement.Value.Width,
-                startPlan.Placement.Value.Height),
-            minimumWidth: 40,
-            minimumHeight: 20);
+        var placement = startPlan.Placement.Value;
 
         double fallbackPt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
             startPlan.OriginalBody,
@@ -148,8 +142,9 @@ public sealed class InCanvasTextEditor : IDisposable
 
         Canvas.SetLeft(_richBox, placement.Left);
         Canvas.SetTop(_richBox, placement.Top);
+        ApplyPlacementTransform(_richBox, placement);
 
-        _richBox.LostFocus += (_, _) => Commit();
+        _richBox.LostFocus += OnRichBoxLostFocus;
         _richBox.KeyDown += OnRichBoxKeyDown;
         _richBox.PreviewKeyDown += OnRichBoxPreviewKeyDown;
 
@@ -200,14 +195,22 @@ public sealed class InCanvasTextEditor : IDisposable
             return;
         }
 
-        _overlay.Children.Remove(_richBox);
-        _overlay.IsHitTestVisible = false;
-        _richBox = null;
-        _active = false;
-        _canvas.ActiveTextEditShapeId = null;
-        _ = _editPlan?.Cancel();
-        _editPlan = null;
-        _shapeParagraphBody = null;
+        _canceling = true;
+        try
+        {
+            _overlay.Children.Remove(_richBox);
+            _overlay.IsHitTestVisible = false;
+            _richBox = null;
+            _active = false;
+            _canvas.ActiveTextEditShapeId = null;
+            _ = _editPlan?.Cancel();
+            _editPlan = null;
+            _shapeParagraphBody = null;
+        }
+        finally
+        {
+            _canceling = false;
+        }
     }
 
     public void Dispose()
@@ -417,6 +420,36 @@ public sealed class InCanvasTextEditor : IDisposable
         e.Handled = true;
     }
 
+    private static void ApplyPlacementTransform(
+        FrameworkElement editor,
+        InCanvasEditorPlacement placement)
+    {
+        if (!placement.HasTransform)
+            return;
+
+        double originX = placement.EffectiveTransformOriginX;
+        double originY = placement.EffectiveTransformOriginY;
+        var transform = new TransformGroup();
+        if (placement.FlipHorizontal || placement.FlipVertical)
+        {
+            transform.Children.Add(new ScaleTransform(
+                placement.FlipHorizontal ? -1 : 1,
+                placement.FlipVertical ? -1 : 1,
+                originX,
+                originY));
+        }
+
+        if (Math.Abs(placement.RotationDegrees) > 0.0001)
+        {
+            transform.Children.Add(new RotateTransform(
+                placement.RotationDegrees,
+                originX,
+                originY));
+        }
+
+        editor.RenderTransform = transform;
+    }
+
     private static TextPointer? TextPointerAtLogicalOffset(FlowDocument document, int logicalOffset)
     {
         int remaining = logicalOffset;
@@ -459,6 +492,12 @@ public sealed class InCanvasTextEditor : IDisposable
             Cancel();
             e.Handled = true;
         }
+    }
+
+    private void OnRichBoxLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!_canceling)
+            Commit();
     }
 
     private void OnRichBoxPreviewKeyDown(object sender, KeyEventArgs e)

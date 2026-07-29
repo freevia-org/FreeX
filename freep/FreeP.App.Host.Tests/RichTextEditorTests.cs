@@ -639,6 +639,79 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void InCanvasTextEditor_RotatedShape_TransformsOverlayAndPersistsTypedText()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 2743200L,
+            ExtentCyEmu = 1371600L,
+            RotationDeg = 30,
+            TextBody = MakeTwoRunBody(),
+        };
+        slide.Shapes.Add(shape);
+
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var canvas = new SlideCanvas { Presentation = presentation, Slide = slide };
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+
+        canvas.TextEditor!.Activate(shape.Id);
+
+        var box = overlay.Children.OfType<System.Windows.Controls.RichTextBox>().Single();
+        var transform = box.RenderTransform.Should().BeOfType<TransformGroup>().Subject;
+        transform.Children.OfType<RotateTransform>().Should().ContainSingle()
+            .Which.Angle.Should().BeApproximately(30, 0.001);
+        transform.Children.OfType<RotateTransform>().Single().CenterX.Should().BeApproximately(144, 0.1);
+        transform.Children.OfType<RotateTransform>().Single().CenterY.Should().BeApproximately(72, 0.1);
+
+        canvas.TextEditor.TrySelectTextRange(0, 5).Should().BeTrue();
+        canvas.TextEditor.SelectedText.Should().Be("Hello");
+        box.Selection.Text = "Edited";
+        canvas.TextEditor.Commit();
+
+        InCanvasTextEditPlanner.ExtractPlainText(shape.TextBody).Should().Be("Edited world");
+        shape.RotationDeg.Should().BeApproximately(30, 0.001);
+        editor.CanUndo.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void InCanvasTextEditor_RotatedShape_CancelDoesNotCommitOnLostFocus()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            ExtentCxEmu = 2743200L,
+            ExtentCyEmu = 1371600L,
+            RotationDeg = 30,
+            TextBody = MakeTwoRunBody(),
+        };
+        slide.Shapes.Add(shape);
+
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var canvas = new SlideCanvas { Presentation = presentation, Slide = slide };
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+
+        canvas.TextEditor!.Activate(shape.Id);
+        var box = overlay.Children.OfType<System.Windows.Controls.RichTextBox>().Single();
+        box.Selection.Text = "Discarded";
+        canvas.TextEditor.Cancel();
+
+        InCanvasTextEditPlanner.ExtractPlainText(shape.TextBody).Should().Be("Hello world");
+        canvas.ActiveTextEditShapeId.Should().BeNull();
+        editor.CanUndo.Should().BeFalse();
+    }
+
+    [StaFact]
     public void InCanvasTextEditor_ActiveShapeSuppression_FollowsEditorLifecycle()
     {
         var p = Presentation.CreateEmpty();

@@ -55,6 +55,44 @@ public sealed class InCanvasTextEditPlannerTests
     }
 
     [Fact]
+    public void BeginShapeEdit_RotatedShape_CarriesEditorTransformMetadata()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 914400L,
+            ExtentCyEmu = 457200L,
+            RotationDeg = 37.5,
+            FlipH = true,
+            TextBody = MakeBody("Rotated"),
+        };
+        slide.Shapes.Add(shape);
+
+        var plan = InCanvasTextEditPlanner.BeginShapeEdit(
+            0,
+            presentation,
+            slide,
+            shape.Id,
+            new SlideTransformCore(2, 10, 20, 960, 540),
+            minimumWidth: 40,
+            minimumHeight: 20,
+            InCanvasTextEditKind.RichText);
+
+        plan.IsReady.Should().BeTrue();
+        plan.Placement.Should().NotBeNull();
+        plan.Placement!.Value.RotationDegrees.Should().Be(37.5);
+        plan.Placement.Value.FlipHorizontal.Should().BeTrue();
+        plan.Placement.Value.FlipVertical.Should().BeFalse();
+        plan.Placement.Value.EffectiveTransformOriginX.Should().Be(96);
+        plan.Placement.Value.EffectiveTransformOriginY.Should().Be(48);
+    }
+
+    [Fact]
     public void BeginShapeEdit_MissingTextBody_ReturnsDisabledPlan()
     {
         var presentation = Presentation.CreateEmpty();

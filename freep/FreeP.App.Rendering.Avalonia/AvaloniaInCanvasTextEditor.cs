@@ -23,6 +23,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
     private uint _editingShapeId;
     private bool _active;
     private bool _committing;
+    private bool _canceling;
 
     private AvaloniaRichTextEditor? _cellTextBox;
     private Border? _cellHighlight;
@@ -393,14 +394,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         _active = true;
         _editPlan = startPlan.EditPlanner;
 
-        var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(
-            new SlideScreenRect(
-                startPlan.Placement.Value.Left,
-                startPlan.Placement.Value.Top,
-                startPlan.Placement.Value.Width,
-                startPlan.Placement.Value.Height),
-            minimumWidth: 40,
-            minimumHeight: 20);
+        var placement = startPlan.Placement.Value;
 
         var shapeFallbackFontSizePt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
             startPlan.OriginalBody,
@@ -419,6 +413,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
 
         Canvas.SetLeft(_textBox, placement.Left);
         Canvas.SetTop(_textBox, placement.Top);
+        ApplyPlacementTransform(_textBox, placement);
 
         _textBox.InputBox.LostFocus += OnTextBoxLostFocus;
         _textBox.InputBox.KeyDown += OnTextBoxKeyDown;
@@ -590,13 +585,21 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             return;
         }
 
-        _overlay.Children.Remove(_textBox);
-        _textBox = null;
-        _active = false;
-        _canvas.ActiveTextEditShapeId = null;
-        _ = _editPlan?.Cancel();
-        _editPlan = null;
-        UpdateOverlayState();
+        _canceling = true;
+        try
+        {
+            _overlay.Children.Remove(_textBox);
+            _textBox = null;
+            _active = false;
+            _canvas.ActiveTextEditShapeId = null;
+            _ = _editPlan?.Cancel();
+            _editPlan = null;
+            UpdateOverlayState();
+        }
+        finally
+        {
+            _canceling = false;
+        }
     }
 
     /// <summary>Cancels the current table-cell edit without committing.</summary>
@@ -717,8 +720,35 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             };
     }
 
-    private void OnTextBoxLostFocus(object? sender, RoutedEventArgs e) => Commit();
+    private void OnTextBoxLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (!_canceling)
+            Commit();
+    }
     private void OnCellTextBoxLostFocus(object? sender, RoutedEventArgs e) => CommitCellEdit();
+
+    private static void ApplyPlacementTransform(
+        AvaloniaRichTextEditor editor,
+        InCanvasEditorPlacement placement)
+    {
+        if (!placement.HasTransform)
+            return;
+
+        double originX = placement.EffectiveTransformOriginX;
+        double originY = placement.EffectiveTransformOriginY;
+        double scaleX = placement.FlipHorizontal ? -1 : 1;
+        double scaleY = placement.FlipVertical ? -1 : 1;
+        double radians = placement.RotationDegrees * Math.PI / 180.0;
+        var matrix = Matrix.CreateScale(scaleX, scaleY);
+        if (Math.Abs(placement.RotationDegrees) > 0.0001)
+            matrix *= Matrix.CreateRotation(radians);
+
+        editor.RenderTransformOrigin = new RelativePoint(
+            originX / Math.Max(1, placement.Width),
+            originY / Math.Max(1, placement.Height),
+            RelativeUnit.Relative);
+        editor.RenderTransform = new MatrixTransform(matrix);
+    }
 
     private void OnCellTextBoxKeyDown(object? sender, KeyEventArgs e)
     {

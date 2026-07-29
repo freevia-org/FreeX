@@ -18,7 +18,35 @@ public readonly record struct InCanvasEditorPlacement(
     double Left,
     double Top,
     double Width,
-    double Height);
+    double Height)
+{
+    /// <summary>Shape rotation in screen/editor space, matching the rendered shape.</summary>
+    public double RotationDegrees { get; init; }
+
+    /// <summary>Whether the rendered shape is horizontally flipped.</summary>
+    public bool FlipHorizontal { get; init; }
+
+    /// <summary>Whether the rendered shape is vertically flipped.</summary>
+    public bool FlipVertical { get; init; }
+
+    /// <summary>
+    /// The unexpanded shape center in editor-local coordinates.  This remains distinct from
+    /// the editor center when a tiny shape is clamped to the minimum editing size.
+    /// </summary>
+    public double TransformOriginX { get; init; }
+
+    /// <summary>See <see cref="TransformOriginX"/> for the Y coordinate.</summary>
+    public double TransformOriginY { get; init; }
+
+    public bool HasTransform =>
+        Math.Abs(RotationDegrees) > 0.0001 || FlipHorizontal || FlipVertical;
+
+    public double EffectiveTransformOriginX =>
+        TransformOriginX > 0 ? TransformOriginX : Width / 2;
+
+    public double EffectiveTransformOriginY =>
+        TransformOriginY > 0 ? TransformOriginY : Height / 2;
+}
 
 public static class SlideCanvasGeometryPlanner
 {
@@ -101,12 +129,31 @@ public static class SlideCanvasGeometryPlanner
     public static InCanvasEditorPlacement PlanEditorPlacement(
         SlideScreenRect screenRect,
         double minimumWidth,
-        double minimumHeight) =>
-        new(
+        double minimumHeight,
+        double rotationDegrees = 0,
+        bool flipHorizontal = false,
+        bool flipVertical = false)
+    {
+        var placement = new InCanvasEditorPlacement(
             screenRect.Left,
             screenRect.Top,
             Math.Max(minimumWidth, screenRect.Width),
-            Math.Max(minimumHeight, screenRect.Height));
+            Math.Max(minimumHeight, screenRect.Height))
+        {
+            RotationDegrees = rotationDegrees,
+            FlipHorizontal = flipHorizontal,
+            FlipVertical = flipVertical,
+        };
+        if (placement.HasTransform)
+        {
+            placement = placement with
+            {
+                TransformOriginX = screenRect.Width / 2,
+                TransformOriginY = screenRect.Height / 2,
+            };
+        }
+        return placement;
+    }
 
     public static SlideScreenRect? Union(IEnumerable<SlideScreenRect> rects)
     {

@@ -347,6 +347,95 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task InCanvasTextEditor_RotatedShape_TransformsOverlayAndPersistsTypedText()
+    {
+        Presentation? presentation = null;
+        EditingSession? editor = null;
+        SlideShape? shape = null;
+
+        await Run(() =>
+        {
+            presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = new SlideShape
+                {
+                    Id = 1,
+                    OffsetXEmu = 0,
+                    OffsetYEmu = 0,
+                    ExtentCxEmu = 2743200L,
+                    ExtentCyEmu = 1371600L,
+                    RotationDeg = 30,
+                    TextBody = MakeTextBody("Rotated text"),
+                };
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.Activate(shape!.Id);
+
+            var richEditor = RichEditor(overlay);
+            var transform = richEditor.RenderTransform.Should().BeOfType<MatrixTransform>().Subject;
+            transform.Matrix.M11.Should().BeApproximately(Math.Cos(Math.PI / 6), 0.0001);
+            transform.Matrix.M12.Should().BeApproximately(Math.Sin(Math.PI / 6), 0.0001);
+            richEditor.RenderTransformOrigin.Point.X.Should().BeApproximately(0.5, 0.0001);
+            richEditor.RenderTransformOrigin.Point.Y.Should().BeApproximately(0.5, 0.0001);
+
+            textEditor.TrySelectTextRange(0, 7).Should().BeTrue();
+            textEditor.SelectedText.Should().Be("Rotated");
+            richEditor.InputBox.Text = "Edited text";
+            textEditor.Commit();
+        });
+
+        InCanvasTextEditPlanner.ExtractPlainText(shape!.TextBody).Should().Be("Edited text");
+        shape.RotationDeg.Should().BeApproximately(30, 0.001);
+        editor!.CanUndo.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task InCanvasTextEditor_RotatedShape_CancelDoesNotCommitOnLostFocus()
+    {
+        Presentation? presentation = null;
+        EditingSession? editor = null;
+        SlideShape? shape = null;
+
+        await Run(() =>
+        {
+            presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = new SlideShape
+                {
+                    Id = 1,
+                    ExtentCxEmu = 2743200L,
+                    ExtentCyEmu = 1371600L,
+                    RotationDeg = 30,
+                    TextBody = MakeTextBody("Original text"),
+                };
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.Activate(shape!.Id);
+            RichEditor(overlay).InputBox.Text = "Discarded";
+            textEditor.Cancel();
+
+            canvas.ActiveTextEditShapeId.Should().BeNull();
+        });
+
+        InCanvasTextEditPlanner.ExtractPlainText(shape!.TextBody).Should().Be("Original text");
+        editor!.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task InCanvasTextEditor_ActiveShapeSuppression_FollowsEditorLifecycle()
     {
         await Run(() =>
