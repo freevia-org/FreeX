@@ -236,7 +236,7 @@ static int RenderAll(string outDir)
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument,
         pageNumber: 2,
         pageCount: 4,
-        viewportOffsetY: 1100);
+        alignViewportToRequestedPage: true);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, fieldPageNumberP3Path,
@@ -247,7 +247,7 @@ static int RenderAll(string outDir)
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument,
         pageNumber: 3,
         pageCount: 4,
-        viewportOffsetY: 2200);
+        alignViewportToRequestedPage: true);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, fieldPageNumberP4Path,
@@ -258,7 +258,7 @@ static int RenderAll(string outDir)
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument,
         pageNumber: 4,
         pageCount: 4,
-        viewportOffsetY: 3300);
+        alignViewportToRequestedPage: true);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, headerFooterImagesP1Path,
@@ -777,6 +777,7 @@ static int RenderMode(
     int pageNumber = 1,
     int pageCount = 1,
     double viewportOffsetY = 0,
+    bool alignViewportToRequestedPage = false,
     bool hasFootnotes = false,
     bool hasEndnotes = false,
     bool isSyntheticPage = false)
@@ -787,6 +788,14 @@ static int RenderMode(
     var sourceDocument = PageShotFixtureSource.Resolve(
         scenarioId,
         documentFactory ?? BuildMultiPageDocument);
+    if (alignViewportToRequestedPage && pageNumber > 1)
+    {
+        var surfacePlan = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            sourceDocument.Page,
+            DocumentViewLayoutKind.PrintLayout,
+            width);
+        viewportOffsetY = surfacePlan.PageTopDip(pageNumber - 1);
+    }
     var sectionPageSurface = ResolveSectionPageSurfacePlan(scenarioId, sourceDocument, pageNumber, pageCount);
     var sectionGeometryPage = sectionPageSurface?.PagePlan
         ?? ResolveSectionGeometryPage(scenarioId, sourceDocument, pageNumber, pageCount);
