@@ -67,7 +67,8 @@ public static class FormulaRangeEntryPlanner
         CellAddress formulaCell,
         bool useR1C1ReferenceStyle,
         out FormulaRangeEntryEdit edit,
-        string? selectedSheetName = null)
+        string? selectedSheetName = null,
+        FormulaSheetSpanEntryState? sheetSpan = null)
     {
         var range = GetKeyboardDisjointRange(current, target, extendSelection);
         return TryAppendDisjointRangeSelection(
@@ -78,7 +79,8 @@ public static class FormulaRangeEntryPlanner
             formulaCell,
             useR1C1ReferenceStyle,
             out edit,
-            selectedSheetName);
+            selectedSheetName,
+            sheetSpan);
     }
 
     public static CellAddress? GetKeyboardSelectionTarget(
@@ -140,13 +142,15 @@ public static class FormulaRangeEntryPlanner
         CellAddress formulaCell,
         bool useR1C1ReferenceStyle,
         out FormulaRangeEntryEdit edit,
-        string? selectedSheetName = null)
+        string? selectedSheetName = null,
+        FormulaSheetSpanEntryState? sheetSpan = null)
     {
         var referenceText = FormatRangeReference(
             selectedRange,
             formulaCell,
             useR1C1ReferenceStyle,
-            selectedSheetName);
+            selectedSheetName,
+            sheetSpan);
 
         return TryApplySelectionText(
             text,
@@ -166,7 +170,8 @@ public static class FormulaRangeEntryPlanner
         CellAddress formulaCell,
         bool useR1C1ReferenceStyle,
         out FormulaRangeEntryEdit edit,
-        string? selectedSheetName = null)
+        string? selectedSheetName = null,
+        FormulaSheetSpanEntryState? sheetSpan = null)
     {
         var safeCaret = text.Length;
         edit = new FormulaRangeEntryEdit(new ExcelTextEdit(text, safeCaret, 0), safeCaret, 0);
@@ -184,7 +189,8 @@ public static class FormulaRangeEntryPlanner
             selectedRange,
             formulaCell,
             useR1C1ReferenceStyle,
-            selectedSheetName);
+            selectedSheetName,
+            sheetSpan);
         var insertAt = start + length;
         var insertionText = "," + referenceText;
         var updatedText = text.Insert(insertAt, insertionText);
@@ -242,7 +248,8 @@ public static class FormulaRangeEntryPlanner
         GridRange selectedRange,
         CellAddress formulaCell,
         bool useR1C1ReferenceStyle,
-        string? selectedSheetName)
+        string? selectedSheetName,
+        FormulaSheetSpanEntryState? sheetSpan)
     {
         var shorthand = useR1C1ReferenceStyle
             ? null
@@ -252,6 +259,9 @@ public static class FormulaRangeEntryPlanner
                     selectedRange.Start,
                     selectedRange.End,
                     useR1C1ReferenceStyle);
+        if (sheetSpan is { HasSpan: true })
+            return $"{FormulaSheetSpanEntryPlanner.FormatSheetQualifier(sheetSpan.Value)}!{cellReferenceText}";
+
         return selectedRange.Start.Sheet == formulaCell.Sheet || selectedSheetName is null
             ? cellReferenceText
             : $"{SheetNameFormatter.QuoteIfNeeded(selectedSheetName)}!{cellReferenceText}";

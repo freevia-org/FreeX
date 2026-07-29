@@ -8,6 +8,7 @@ using FreeX.Core.IO;
 using System.Collections.Generic;
 using System.ComponentModel;
 using FreeX.App.Presentation.GridInteraction;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Services;
 using FreeX.App.UI;
 using Free.Shared.Theme.Wpf;
@@ -268,6 +269,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private SheetId _autoFilterDropdownSheetId;
     private CellAddress? _formulaEditCell;
     private CellAddress? _formulaRangeSelectionAnchor;
+    private FormulaSheetSpanEntryState _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
     private int? _formulaReferenceStart;
     private int? _formulaReferenceLength;
     private bool _formulaRangeEntryMode;

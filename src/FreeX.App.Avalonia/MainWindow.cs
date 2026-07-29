@@ -510,6 +510,7 @@ public sealed partial class MainWindow : Window
     private long _lastCellPointerPressTimestamp;
     private CellAddress? _formulaRangeSelectionAnchor;
     private CellAddress? _formulaRangeSelectionCursor;
+    private FormulaSheetSpanEntryState _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
     private bool _formulaRangeEntryMode;
     private ExcelSelectionMode _formulaRangeEntrySelectionMode = ExcelSelectionMode.Normal;
     private int? _formulaReferenceStart;
@@ -9506,6 +9507,7 @@ public sealed partial class MainWindow : Window
         _formulaRangeSelectionCursor = null;
         _formulaRangeEntryMode = false;
         _formulaRangeEntrySelectionMode = ExcelSelectionMode.Normal;
+        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
         ClearFormulaReferenceEntrySpan();
         ClearFormulaReferenceTextOverlay();
         ClearFormulaReferenceGridHighlights();
@@ -9669,7 +9671,8 @@ public sealed partial class MainWindow : Window
                 formulaCell.Value,
                 UseR1C1ReferenceStyle,
                 out var edit,
-                _session.Workbook.GetSheet(range.Start.Sheet)?.Name))
+                _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
+                _formulaSheetSpanEntryState))
         {
             return false;
         }
@@ -9752,7 +9755,8 @@ public sealed partial class MainWindow : Window
                 formulaCell.Value,
                 UseR1C1ReferenceStyle,
                 out var edit,
-                _session.ActiveSheet.Name))
+                _session.ActiveSheet.Name,
+                _formulaSheetSpanEntryState))
         {
             return false;
         }

@@ -129,6 +129,51 @@ public sealed partial class FormulaRangeEntryPlannerTests
     }
 
     [Fact]
+    public void TryApplyRangeSelection_FormatsThreeDSheetSpan()
+    {
+        var targetSheetId = SheetId.New();
+        var selected = new GridRange(
+            new CellAddress(targetSheetId, 2, 2),
+            new CellAddress(targetSheetId, 4, 3));
+        var span = FormulaSheetSpanEntryPlanner.PlanTabSelection(
+            FormulaSheetSpanEntryState.Empty,
+            "Sheet1",
+            "Sheet2",
+            shiftHeld: false);
+        span = FormulaSheetSpanEntryPlanner.PlanTabSelection(span, "Sheet2", "Sheet3", shiftHeld: true);
+
+        FormulaRangeEntryPlanner.TryApplyRangeSelection(
+                "=SUM(",
+                caretIndex: 5,
+                selectionLength: 0,
+                previousReferenceStart: null,
+                previousReferenceLength: null,
+                selected,
+                FormulaCell,
+                useR1C1ReferenceStyle: false,
+                out var edit,
+                selectedSheetName: "Sheet3",
+                sheetSpan: span)
+            .Should()
+            .BeTrue();
+
+        edit.TextEdit.Text.Should().Be("=SUM(Sheet2:Sheet3!B2:C4");
+    }
+
+    [Theory]
+    [InlineData("Sheet1", "Revenue Data", "'Sheet1:Revenue Data'")]
+    [InlineData("O'Brien", "Summary", "'O''Brien:Summary'")]
+    public void SheetSpanQualifier_QuotesTheWholeSpanWhenNeeded(
+        string startSheet,
+        string endSheet,
+        string expected)
+    {
+        var state = new FormulaSheetSpanEntryState(startSheet, endSheet);
+
+        FormulaSheetSpanEntryPlanner.FormatSheetQualifier(state).Should().Be(expected);
+    }
+
+    [Fact]
     public void TryAppendDisjointRangeSelection_QualifiesOnlyTheAppendedCrossSheetArea()
     {
         var targetSheetId = SheetId.New();

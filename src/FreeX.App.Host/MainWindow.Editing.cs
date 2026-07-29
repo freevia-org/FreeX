@@ -589,8 +589,9 @@ public partial class MainWindow
             var addr = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
             if (addr.HasValue)
             {
-                var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
+                var cell = _workbook.GetSheet(addr.Value.Sheet)?.GetCell(addr.Value);
                 FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
+                RestoreFormulaEditCellSelection(addr.Value);
             }
             ClearFormulaRangeEntryState();
             RefreshStatusBar();
@@ -909,8 +910,9 @@ public partial class MainWindow
             var addr = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
             if (addr.HasValue)
             {
-                var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
+                var cell = _workbook.GetSheet(addr.Value.Sheet)?.GetCell(addr.Value);
                 FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
+                RestoreFormulaEditCellSelection(addr.Value);
             }
             HideInlineEditor(commit: false);
             ClearFormulaRangeEntryState();
@@ -1011,8 +1013,9 @@ public partial class MainWindow
         var addr = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
         if (addr.HasValue)
         {
-            var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
+            var cell = _workbook.GetSheet(addr.Value.Sheet)?.GetCell(addr.Value);
             FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
+            RestoreFormulaEditCellSelection(addr.Value);
         }
 
         HideInlineEditor(commit: false);

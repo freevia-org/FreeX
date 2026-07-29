@@ -43,6 +43,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _formulaBarExpandButtonClick;
         private readonly MethodInfo _editActiveCellInFormulaBar;
         private readonly MethodInfo _tryApplyFormulaRangeSelection;
+        private readonly MethodInfo _tryHandleFormulaSheetTabClick;
         private readonly MethodInfo _tryToggleFormulaRangeEntrySelectionMode;
         private readonly MethodInfo _selectRow;
         private readonly MethodInfo _selectColumn;
@@ -124,6 +125,9 @@ public sealed partial class MainWindowFormulaBarSyncTests
                     types: [typeof(CellAddress), typeof(bool)],
                     modifiers: null)
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryApplyFormulaRangeSelection");
+            _tryHandleFormulaSheetTabClick = typeof(MainWindow)
+                .GetMethod("TryHandleFormulaSheetTabClick", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleFormulaSheetTabClick");
             _tryToggleFormulaRangeEntrySelectionMode = typeof(MainWindow)
                 .GetMethod("TryToggleFormulaRangeEntrySelectionMode", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryToggleFormulaRangeEntrySelectionMode");
@@ -142,6 +146,8 @@ public sealed partial class MainWindowFormulaBarSyncTests
         }
 
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
+
+        public bool FormulaRangeEntryMode => (bool)_formulaRangeEntryModeField.GetValue(_window)!;
 
         public string CellAddressBoxText => CellAddressBox.Text;
 
@@ -296,6 +302,12 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         public Sheet AddSheet(string name) => Workbook.AddSheet(name);
 
+        public void SelectFormulaSheetTab(SheetId sheetId, ModifierKeys modifiers)
+        {
+            ((bool)_tryHandleFormulaSheetTabClick.Invoke(_window, [sheetId, modifiers])!).Should().BeTrue();
+            PumpDispatcher();
+        }
+
         public void SetCurrentSheetForFormulaPoint(SheetId sheetId)
         {
             _currentSheetIdField.SetValue(_window, sheetId);
@@ -319,6 +331,15 @@ public sealed partial class MainWindowFormulaBarSyncTests
             var applied = (bool)_tryApplyFormulaRangeSelection.Invoke(
                 _window,
                 [new CellAddress(sheet.Id, row, col), extend])!;
+            PumpDispatcher();
+            return applied;
+        }
+
+        public bool ApplyFormulaRangeSelection(SheetId sheetId, uint row, uint col, bool extend)
+        {
+            var applied = (bool)_tryApplyFormulaRangeSelection.Invoke(
+                _window,
+                [new CellAddress(sheetId, row, col), extend])!;
             PumpDispatcher();
             return applied;
         }

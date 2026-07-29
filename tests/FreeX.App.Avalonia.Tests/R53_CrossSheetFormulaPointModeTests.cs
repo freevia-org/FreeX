@@ -87,6 +87,42 @@ public sealed class R53_CrossSheetFormulaPointModeTests
     }
 
     [Fact]
+    public async Task ShiftSheetTabsInFormulaPointMode_EmitThreeDSheetSpan()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sourceSheet = window.Session.ActiveSheet;
+                var startSheet = window.Session.Workbook.AddSheet("Sheet2");
+                var endSheet = window.Session.Workbook.AddSheet("Sheet3");
+                var source = new CellAddress(sourceSheet.Id, 1, 1);
+                var formulaBox = GetField<global::Avalonia.Controls.TextBox>(window, "_formulaBox");
+
+                window.BeginFormulaEditForTest(source, "=");
+                formulaBox.Text = "=SUM(";
+                window.SetFormulaBoxSelectionForTest("=SUM(".Length, 0);
+                window.RaiseSheetTabModifierClickForTest(startSheet.Id, KeyModifiers.None);
+                window.RaiseSheetTabModifierClickForTest(endSheet.Id, KeyModifiers.Shift);
+
+                Invoke<bool>(window, "TryInsertFormulaPointReference", new CellAddress(endSheet.Id, 2, 2))
+                    .Should().BeTrue();
+                formulaBox.Text.Should().Be("=SUM(Sheet2:Sheet3!B2");
+                window.Session.FormulaEditAddress.Should().Be(source);
+
+                window.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs { Key = Key.Escape });
+                window.Session.ActiveSheet.Should().BeSameAs(sourceSheet);
+                window.Session.ActiveCell.Should().Be(source);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task CtrlColumnHeaderPointing_AppendsWholeColumnAreaWithoutCommittingEdit()
     {
         await Session.Dispatch(() =>

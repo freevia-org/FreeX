@@ -35,6 +35,12 @@ public sealed partial class MainWindow
         if (!point.Properties.IsLeftButtonPressed)
             return;
 
+        if (TryBeginFormulaSheetSpanTabPointer(sheetId, args.KeyModifiers))
+        {
+            args.Handled = true;
+            return;
+        }
+
         if (args.ClickCount >= 2)
         {
             args.Handled = true;
@@ -59,11 +65,35 @@ public sealed partial class MainWindow
 
     private bool BeginSheetTabPointer(SheetId sheetId, KeyModifiers modifiers)
     {
+        if (TryBeginFormulaSheetSpanTabPointer(sheetId, modifiers))
+            return true;
+
         var selectRange = modifiers.HasFlag(KeyModifiers.Shift);
         var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);
         SelectSheet(sheetId, selectRange, toggle);
         _sheetTabModifierClickSuppressionId = selectRange || toggle ? sheetId : null;
         return selectRange || toggle;
+    }
+
+    private bool TryBeginFormulaSheetSpanTabPointer(SheetId sheetId, KeyModifiers modifiers)
+    {
+        if (!IsFormulaRangeEntryActiveForPointMode() ||
+            _session.Workbook.GetSheet(sheetId) is not { } clickedSheet)
+        {
+            return false;
+        }
+
+        _formulaSheetSpanEntryState = FormulaSheetSpanEntryPlanner.PlanTabSelection(
+            _formulaSheetSpanEntryState,
+            _session.ActiveSheet.Name,
+            clickedSheet.Name,
+            modifiers.HasFlag(KeyModifiers.Shift));
+        SelectSheet(
+            sheetId,
+            selectRange: modifiers.HasFlag(KeyModifiers.Shift),
+            toggle: modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta));
+        _sheetTabModifierClickSuppressionId = sheetId;
+        return true;
     }
 
     private void SheetTabDragPointerMoved(object? sender, PointerEventArgs args)
