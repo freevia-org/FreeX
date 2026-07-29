@@ -628,6 +628,7 @@ public sealed partial class MainWindow : Window
                     ?.StartsWith("FreePCommentsPaneItem", StringComparison.Ordinal) == true)
                 .ToArray();
     internal SelectionPane SelectionPaneForAccessibilityTests => _selectionPane;
+    internal Border AnimationPaneForAccessibilityTests => _animationPaneHost;
     internal IReadOnlyList<Control> SelectionPaneItemsForAccessibilityTests =>
         _selectionPane?.AccessibilityItemsForTests ?? Array.Empty<Control>();
     internal IReadOnlyList<Control> AnimationPaneItemsForAccessibilityTests =>

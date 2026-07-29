@@ -13,6 +13,7 @@ public sealed class App : Application
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
     internal static LaunchSmokeOptions? LaunchSmokeOptions { get; set; }
     internal static PhysicalValidationOptions? PhysicalValidationOptions { get; set; }
+    internal static AccessibilityValidationOptions? AccessibilityValidationOptions { get; set; }
     internal static string? DialogPaneVisualEvidenceOutputRoot { get; set; }
     internal static string? DialogPaneVisualEvidenceScenarioId { get; set; }
     internal static string? WholeWindowVisualEvidenceOutputRoot { get; set; }
@@ -51,6 +52,11 @@ public sealed class App : Application
                     if (PhysicalValidationOptions is { } physicalValidationOptions)
                     {
                         PhysicalValidationCoordinator.Start(mainWindow, physicalValidationOptions);
+                        return;
+                    }
+                    if (AccessibilityValidationOptions is { } accessibilityValidationOptions)
+                    {
+                        AccessibilityValidationCoordinator.Start(mainWindow, accessibilityValidationOptions);
                         return;
                     }
                     if (LaunchSmokeOptions is { } options)
