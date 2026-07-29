@@ -1810,7 +1810,7 @@ public static class SmartArtLayoutEngine
         SmartArtStylePlan stylePlan)
     {
         int n = nodes.Count;
-        if (n is < 3 or > 5)
+        if (n < 3)
             return null;
 
         var shapes = new List<SlideShape>();
@@ -1920,7 +1920,7 @@ public static class SmartArtLayoutEngine
         SmartArtStylePlan stylePlan)
     {
         int n = nodes.Count;
-        if (n is < 2 or > 5)
+        if (n < 2)
             return null;
 
         var shapes = new List<SlideShape>();
@@ -1979,7 +1979,7 @@ public static class SmartArtLayoutEngine
         SmartArtStylePlan stylePlan)
     {
         int n = nodes.Count;
-        if (n is < 2 or > 5)
+        if (n < 2)
             return null;
 
         long outerPadX = (long)(fcx * OuterPaddingFrac);

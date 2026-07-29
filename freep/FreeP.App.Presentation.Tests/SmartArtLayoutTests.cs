@@ -1800,17 +1800,41 @@ public sealed class SmartArtLayoutTests
         }
     }
 
-    [Theory]
-    [InlineData(2)]
-    [InlineData(6)]
-    public void RadialVenn_OutsideBoundedNodeCount_ReturnsNullForCachedFallback(int nodeCount)
+    [Fact]
+    public void RadialVenn_BelowMinimumNodeCount_ReturnsNullForCachedFallback()
     {
-        var data = MakeData(SmartArtFamily.Relationship, Enumerable.Range(1, nodeCount).Select(i => $"N{i}").ToArray());
+        var data = MakeData(SmartArtFamily.Relationship, "N1", "N2");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radialVenn";
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        result.Should().BeNull("the bounded radialVenn planner owns only readable three-to-five node relationship diagrams");
+        result.Should().BeNull("radialVenn needs at least three relationship nodes");
+    }
+
+    [Theory]
+    [InlineData(6)]
+    [InlineData(8)]
+    public void RadialVenn_LargerNodeCountsRemainLive(int nodeCount)
+    {
+        var data = MakeData(
+            SmartArtFamily.Relationship,
+            Enumerable.Range(1, nodeCount).Select(i => $"Node {i}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radialVenn";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("radialVenn should remain live as authored node count grows");
+        shapes!.Should().HaveCount(nodeCount);
+        shapes.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse);
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(i => $"Node {i}"));
+        shapes.Should().AllSatisfy(shape =>
+        {
+            shape.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            shape.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        });
     }
 
     [Fact]
@@ -1914,17 +1938,41 @@ public sealed class SmartArtLayoutTests
         }
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(6)]
-    public void StackedVenn_OutsideBoundedNodeCount_ReturnsNullForCachedFallback(int nodeCount)
+    [Fact]
+    public void StackedVenn_BelowMinimumNodeCount_ReturnsNullForCachedFallback()
     {
-        var data = MakeData(SmartArtFamily.Relationship, Enumerable.Range(1, nodeCount).Select(i => $"N{i}").ToArray());
+        var data = MakeData(SmartArtFamily.Relationship, "N1");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn";
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        result.Should().BeNull("the bounded stackedVenn planner owns only readable two-to-five node relationship diagrams");
+        result.Should().BeNull("stackedVenn needs at least two relationship nodes");
+    }
+
+    [Theory]
+    [InlineData(6)]
+    [InlineData(8)]
+    public void StackedVenn_LargerNodeCountsRemainLive(int nodeCount)
+    {
+        var data = MakeData(
+            SmartArtFamily.Relationship,
+            Enumerable.Range(1, nodeCount).Select(i => $"Node {i}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("stackedVenn should remain live as authored node count grows");
+        shapes!.Should().HaveCount(nodeCount);
+        shapes.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse);
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(i => $"Node {i}"));
+        shapes.Should().AllSatisfy(shape =>
+        {
+            shape.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            shape.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        });
     }
 
     [Fact]
@@ -1954,16 +2002,40 @@ public sealed class SmartArtLayoutTests
         }
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(6)]
-    public void InterlockingRings_OutsideBoundedNodeCount_ReturnsNullForCachedFallback(int nodeCount)
+    [Fact]
+    public void InterlockingRings_BelowMinimumNodeCount_ReturnsNullForCachedFallback()
     {
-        var data = MakeData(SmartArtFamily.Relationship, Enumerable.Range(1, nodeCount).Select(i => $"N{i}").ToArray());
+        var data = MakeData(SmartArtFamily.Relationship, "N1");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/interlockingRings";
 
         SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
-            .Should().BeNull("the bounded Interlocking Rings planner owns only readable two-to-five node diagrams");
+            .Should().BeNull("interlockingRings needs at least two relationship nodes");
+    }
+
+    [Theory]
+    [InlineData(6)]
+    [InlineData(8)]
+    public void InterlockingRings_LargerNodeCountsRemainLive(int nodeCount)
+    {
+        var data = MakeData(
+            SmartArtFamily.Relationship,
+            Enumerable.Range(1, nodeCount).Select(i => $"Node {i}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/interlockingRings";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("interlockingRings should remain live as authored node count grows");
+        shapes!.Should().HaveCount(nodeCount);
+        shapes.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse);
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(i => $"Node {i}"));
+        shapes.Should().AllSatisfy(shape =>
+        {
+            shape.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            shape.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        });
     }
 
     [Fact]
