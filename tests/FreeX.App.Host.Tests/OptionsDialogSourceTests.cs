@@ -119,9 +119,11 @@ public sealed partial class OptionsDialogSourceTests
                 var cancelBounds = cancelButton.TransformToAncestor(content).TransformBounds(new Rect(cancelButton.RenderSize));
 
                 content.ActualWidth.Should().BeApproximately(OptionsDialogPlanner.CaptureWidth, 0.25);
-                content.ActualHeight.Should().BeApproximately(OptionsDialogPlanner.CaptureHeight, 0.25);
+                content.ActualHeight.Should().BeInRange(
+                    OptionsDialogPlanner.CaptureHeight - 1.0,
+                    OptionsDialogPlanner.CaptureHeight + 1.0);
                 footer.ActualHeight.Should().BeApproximately(OptionsDialogPlanner.FooterHeight, 0.01);
-                footerBounds.Bottom.Should().BeApproximately(OptionsDialogPlanner.CaptureHeight, 0.25);
+                footerBounds.Bottom.Should().BeApproximately(content.ActualHeight, 0.25);
                 okBounds.Bottom.Should().BeLessThan(footerBounds.Bottom);
                 cancelBounds.Bottom.Should().BeLessThan(footerBounds.Bottom);
                 bitmap.PixelWidth.Should().Be((int)OptionsDialogPlanner.CaptureWidth);

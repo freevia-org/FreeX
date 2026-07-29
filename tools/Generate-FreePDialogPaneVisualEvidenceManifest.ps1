@@ -16,6 +16,24 @@ $summaryPath = Join-Path $resolvedRoot "summary.json"
 $markdownPath = Join-Path $resolvedRoot "report.md"
 $htmlPath = Join-Path $resolvedRoot "report.html"
 
+function Get-Sha256Hash {
+    param([Parameter(Mandatory = $true)][string]$LiteralPath)
+
+    $stream = [IO.File]::OpenRead($LiteralPath)
+    try {
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        try {
+            return ([BitConverter]::ToString($sha256.ComputeHash($stream)).Replace("-", "")).ToLowerInvariant()
+        }
+        finally {
+            $sha256.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 foreach ($requiredPath in @($summaryPath, $markdownPath, $htmlPath, (Join-Path $resolvedRoot "wpf\manifest.json"), (Join-Path $resolvedRoot "avalonia\manifest.json"))) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "FreeP dialog/pane visual evidence artifact is missing: $requiredPath"
@@ -44,7 +62,7 @@ function Test-RecordedImageHash {
     if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
         throw "$Label is missing: $resolvedPath"
     }
-    $actualHash = (Get-FileHash -LiteralPath $resolvedPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $actualHash = Get-Sha256Hash -LiteralPath $resolvedPath
     if ($actualHash -ne $ExpectedHash) {
         throw "$Label hash is stale for '$RelativePath': expected $ExpectedHash, actual $actualHash."
     }
@@ -95,7 +113,7 @@ $files = Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File |
         [ordered]@{
             path = Get-EvidenceRelativePath -Path $_.FullName
             bytes = $_.Length
-            sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            sha256 = Get-Sha256Hash -LiteralPath $_.FullName
         }
     }
 

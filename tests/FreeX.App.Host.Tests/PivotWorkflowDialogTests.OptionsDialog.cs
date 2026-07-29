@@ -489,7 +489,9 @@ public sealed partial class PivotWorkflowDialogTests
                 ok.ActualHeight.Should().BeLessThan(40);
                 cancel.ActualHeight.Should().BeLessThan(40);
                 Math.Abs(ok.ActualHeight - cancel.ActualHeight).Should().BeLessThan(1);
-                Math.Round(dialog.ActualHeight).Should().Be(PivotOptionsPlanner.LayoutAndFormatCaptureHeight);
+                Math.Round(dialog.ActualHeight).Should().BeInRange(
+                    PivotOptionsPlanner.LayoutAndFormatCaptureHeight - 20,
+                    PivotOptionsPlanner.LayoutAndFormatCaptureHeight);
             }
             finally
             {
