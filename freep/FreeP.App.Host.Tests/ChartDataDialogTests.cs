@@ -436,6 +436,21 @@ public sealed class ChartDataDialogTests : IDisposable
         fill.Color.Alpha.Should().Be(153);
     }
 
+    [StaFact]
+    public void ChartProtectionOptionsDialog_ConstructsAndUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.ChartObjectProtected = true;
+        sess.SelectedChart.ChartDataProtected = false;
+
+        var dialog = new ChartProtectionOptionsDialog(sess);
+        dialog.SetOptionsForTests(false, null, true, false);
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.Should().Be(new ChartProtectionOptions(false, null, true, false));
+    }
+
     [Fact]
     public void ChartDisplayOptionsDialog_UsesSharedPlannerAndSessionCommand()
     {
@@ -650,6 +665,16 @@ public sealed class ChartDataDialogTests : IDisposable
 
         source.Should().Contain("if (!Editor.CanEditSelectedChartData) return;");
         source.Should().Contain("if (!Editor.CanEditSelectedChartFormatting) return;");
+    }
+
+    [Fact]
+    public void MainWindow_ChartProtectionDialogRouteIsAvailableForSelectedCharts()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+        var ribbon = ReadWorkspaceFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
+
+        source.Should().Contain("OpenChartProtectionOptionsDialog");
+        ribbon.Should().Contain("ChartProtectionOptionsPlanner.CommandId");
     }
 
     // ── EditingSession chart API (from session, not dialog) ───────────────────────

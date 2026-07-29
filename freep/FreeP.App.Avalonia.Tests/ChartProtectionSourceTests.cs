@@ -11,6 +11,15 @@ public sealed class ChartProtectionSourceTests
         source.Should().Contain("if (!Editor.CanEditSelectedChartFormatting)");
     }
 
+    [Fact]
+    public void Avalonia_ChartProtectionDialogIsRegistered()
+    {
+        var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("ChartProtectionOptionsPlanner.CommandId");
+        source.Should().Contain("OpenChartProtectionOptionsDialog");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
