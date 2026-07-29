@@ -1746,6 +1746,38 @@ public sealed class SlideShowMediaControllerTests
             .Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("audio/mpeg", ".mp3")]
+    [InlineData("audio/x-wav", ".wav")]
+    [InlineData("audio/flac", ".flac")]
+    [InlineData("audio/x-m4a", ".m4a")]
+    [InlineData("audio/unknown", ".mp3")]
+    public void TransitionSoundContentTypeToExtension_KnownAndFallbackTypes_ReturnExpectedExtension(
+        string contentType, string expected)
+    {
+        TransitionSoundTempFile.ContentTypeToExtension(contentType)
+            .Should().Be(expected);
+    }
+
+    [Fact]
+    public void TransitionSoundTempFile_WriteAndDelete_UsesOneOwnedFile()
+    {
+        var path = TransitionSoundTempFile.Write(new byte[] { 1, 2, 3 }, "audio/wav");
+
+        try
+        {
+            path.Should().EndWith(".wav");
+            File.Exists(path).Should().BeTrue();
+            File.Exists(path[..^4] + ".tmp").Should().BeFalse();
+        }
+        finally
+        {
+            TransitionSoundTempFile.Delete(path);
+        }
+
+        File.Exists(path).Should().BeFalse();
+    }
+
     // ── Fake file writer: lifecycle ───────────────────────────────────────────
 
     /// <summary>In-memory fake that records writes and deletes for lifecycle assertions.</summary>
