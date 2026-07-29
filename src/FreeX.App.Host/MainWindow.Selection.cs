@@ -76,6 +76,12 @@ public partial class MainWindow
     private void AddAdditionalColumnSelection(uint col)
     {
         var range = CreateWholeColumnRange(_currentSheetId, col);
+        if (TryAppendDisjointFormulaReference(range))
+        {
+            ApplyWholeRowOrColumnFormulaReferenceShorthand(range);
+            return;
+        }
+
         if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
         {
             ApplyWholeRowOrColumnFormulaReferenceShorthand(range);
@@ -101,6 +107,12 @@ public partial class MainWindow
     private void AddAdditionalRowSelection(uint row)
     {
         var range = CreateWholeRowRange(_currentSheetId, row);
+        if (TryAppendDisjointFormulaReference(range))
+        {
+            ApplyWholeRowOrColumnFormulaReferenceShorthand(range);
+            return;
+        }
+
         if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
         {
             ApplyWholeRowOrColumnFormulaReferenceShorthand(range);
@@ -237,6 +249,9 @@ public partial class MainWindow
     // reference span to append after; the very first click in point mode has no prior span and
     // falls through to the normal (replacing) path.
     private bool TryAppendDisjointFormulaReference(CellAddress newAddr)
+        => TryAppendDisjointFormulaReference(new GridRange(newAddr, newAddr));
+
+    private bool TryAppendDisjointFormulaReference(GridRange range)
     {
         var editor = GetFormulaRangeEntryEditor();
         if (editor is null)
@@ -247,11 +262,11 @@ public partial class MainWindow
                 editor.Text,
                 _formulaReferenceStart,
                 _formulaReferenceLength,
-                new GridRange(newAddr, newAddr),
+                range,
                 formulaCell,
                 _options.UseR1C1ReferenceStyle,
                 out var edit,
-                _workbook.GetSheet(newAddr.Sheet)?.Name))
+                _workbook.GetSheet(range.Start.Sheet)?.Name))
         {
             return false;
         }
@@ -264,15 +279,17 @@ public partial class MainWindow
 
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;
-        _formulaRangeSelectionAnchor = newAddr;
+        _formulaRangeSelectionAnchor = range.Start;
 
         HideValidationDropdown();
         ClearCommentPreview();
-        _selectionAnchor = newAddr;
-        _selectionCursor = newAddr;
+        _selectionAnchor = range.Start;
+        _selectionCursor = range.End;
         SheetGrid.SelectedRanges = null;
-        SheetGrid.SelectedRange = new GridRange(newAddr, newAddr);
-        CellAddressBox.Text = FormatCellReference(newAddr);
+        SheetGrid.SelectedRange = range;
+        CellAddressBox.Text = range.Start == range.End
+            ? FormatCellReference(range.Start)
+            : FormatRangeReference(range.Start, range.End);
         RefreshStatusBar();
         RefreshFormulaReferenceHighlights();
         SetFormulaEditStatusBarMode(pointMode: true);

@@ -10197,6 +10197,9 @@ public sealed partial class MainWindow : Window
     // point mode. Keep the existing reference span intact and track the newly appended span so a
     // subsequent drag replaces only that area, including when the pointed cell is on another tab.
     private bool TryAppendDisjointFormulaPointReference(CellAddress address)
+        => TryAppendDisjointFormulaPointRange(new GridRange(address, address));
+
+    private bool TryAppendDisjointFormulaPointRange(GridRange range)
     {
         var editor = GetFormulaRangeEntryEditor();
         var formulaCell = _session.FormulaEditAddress;
@@ -10212,7 +10215,6 @@ public sealed partial class MainWindow : Window
         if (start + length > editorText.Length)
             return false;
 
-        var range = new GridRange(address, address);
         if (!FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(
                 editorText,
                 start,
@@ -10221,7 +10223,7 @@ public sealed partial class MainWindow : Window
                 formulaCell.Value,
                 UseR1C1ReferenceStyle,
                 out var edit,
-                _session.Workbook.GetSheet(address.Sheet)?.Name))
+                _session.Workbook.GetSheet(range.Start.Sheet)?.Name))
         {
             return false;
         }
@@ -10239,8 +10241,8 @@ public sealed partial class MainWindow : Window
         }
 
         _session.SelectRangeForFormulaEdit(range, formulaCell.Value);
-        _formulaRangeSelectionAnchor = address;
-        _formulaRangeSelectionCursor = address;
+        _formulaRangeSelectionAnchor = range.Start;
+        _formulaRangeSelectionCursor = range.End;
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;
         _cellAddressText.Text = FormatRangeReference(range);

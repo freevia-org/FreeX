@@ -178,14 +178,48 @@ public static class FormulaRangeEntryPlanner
         bool useR1C1ReferenceStyle,
         string? selectedSheetName)
     {
-        var cellReferenceText = SpreadsheetDisplayFormatter.FormatRangeReference(
-            selectedRange.Start,
-            selectedRange.End,
-            useR1C1ReferenceStyle);
+        var cellReferenceText = !useR1C1ReferenceStyle &&
+            TryFormatWholeRowOrColumnReference(selectedRange, out var shorthand)
+                ? shorthand
+                : SpreadsheetDisplayFormatter.FormatRangeReference(
+                    selectedRange.Start,
+                    selectedRange.End,
+                    useR1C1ReferenceStyle);
         return selectedRange.Start.Sheet == formulaCell.Sheet || selectedSheetName is null
             ? cellReferenceText
             : $"{SheetNameFormatter.QuoteIfNeeded(selectedSheetName)}!{cellReferenceText}";
     }
+
+    private static bool TryFormatWholeRowOrColumnReference(GridRange range, out string reference)
+    {
+        var isWholeColumnBand = range.Start.Row == 1 && range.End.Row == CellAddress.MaxRow;
+        var isWholeRowBand = range.Start.Col == 1 && range.End.Col == CellAddress.MaxCol;
+
+        // A whole-sheet selection has no bare Excel shorthand; retain its full A1 extent.
+        if (isWholeColumnBand == isWholeRowBand)
+        {
+            reference = "";
+            return false;
+        }
+
+        if (isWholeColumnBand)
+        {
+            var firstColumn = FormatColumnReference(range.Start.Col);
+            var lastColumn = FormatColumnReference(range.End.Col);
+            reference = firstColumn == lastColumn
+                ? $"{firstColumn}:{firstColumn}"
+                : $"{firstColumn}:{lastColumn}";
+            return true;
+        }
+
+        reference = range.Start.Row == range.End.Row
+            ? $"{range.Start.Row}:{range.Start.Row}"
+            : $"{range.Start.Row}:{range.End.Row}";
+        return true;
+    }
+
+    private static string FormatColumnReference(uint column) =>
+        SpreadsheetDisplayFormatter.FormatColumnReference(column, useR1C1ReferenceStyle: false);
 
     private static CellAddress? GetHorizontalPageTarget(
         FormulaEditorKey key,
