@@ -356,6 +356,31 @@ Three\cell Four\cell\row}";
     }
 
     [Fact]
+    public void RtfField_PreservesNonHyperlinkTypeCachedResultAndClipboardRoundTrip()
+    {
+        const string rtf =
+            @"{\rtf1\ansi Before {\field{\*\fldinst PAGE \\* MERGEFORMAT}{\fldrslt 2}} After}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var fieldRun = payload!.Body.Paragraphs.Single().Runs
+            .Single(run => run.Text == "2");
+        fieldRun.Field.Should().NotBeNull();
+        fieldRun.Field!.FieldType.Should().Be("PAGE");
+        fieldRun.Field.CachedText.Should().Be("2");
+        fieldRun.Hyperlink.Should().BeNull();
+
+        var restored = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        restored.Should().NotBeNull();
+        var restoredField = restored!.Body.Paragraphs.Single().Runs
+            .Single(run => run.Text == "2");
+        restoredField.Field!.FieldType.Should().Be("PAGE");
+        restoredField.Field.CachedText.Should().Be("2");
+    }
+
+    [Fact]
     public void LegacyPnGroups_PreserveBulletLevelAndExplicitNumberRestart()
     {
         const string rtf =

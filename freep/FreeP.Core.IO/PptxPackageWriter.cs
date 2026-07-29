@@ -4154,11 +4154,11 @@ public static class PptxPackageWriter
         {
             var fld = run.Field;
             var fldId = Guid.NewGuid().ToString("B").ToUpperInvariant();
-            var fldRPrAttrs = BuildFieldRPrAttrs(fld);
+            var fldRPr = BuildFieldRPr(fld);
             return new XElement(A + "fld",
                 new XAttribute("id", fldId),
                 new XAttribute("type", fld.FieldType),
-                fldRPrAttrs is not null ? new XElement(A + "rPr", fldRPrAttrs) : null,
+                fldRPr,
                 new XElement(A + "t", run.Text));
         }
 
@@ -4277,6 +4277,16 @@ public static class PptxPackageWriter
         if (fld.Bold)   attrs.Add(new XAttribute("b", "1"));
         if (fld.Italic) attrs.Add(new XAttribute("i", "1"));
         return attrs.Count > 0 ? attrs : null;
+    }
+
+    private static XElement? BuildFieldRPr(FieldRun fld)
+    {
+        var rPr = new XElement(A + "rPr", BuildFieldRPrAttrs(fld));
+        if (fld.Color is { } color)
+            rPr.Add(new XElement(A + "solidFill", BuildColorEl(new ThemeAwareColor(color))));
+        if (!string.IsNullOrWhiteSpace(fld.FontFamily))
+            rPr.Add(new XElement(A + "latin", new XAttribute("typeface", fld.FontFamily)));
+        return rPr.HasAttributes || rPr.HasElements ? rPr : null;
     }
 
     private static XElement BuildPhEl(Placeholder ph)
