@@ -511,6 +511,99 @@ public sealed class DocumentViewFloatingShapeTests
     }
 
     [Fact]
+    public async Task Horizontal_shape_text_drag_selects_and_replaces_the_selected_range()
+    {
+        string? editedText = null;
+        int selectedLength = 0;
+        bool boldApplied = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
+                hOffsetPt: 0, vOffsetPt: 0,
+                fillColorHex: "#FFFFFF", text: "Hello shape");
+            var shape = ((Paragraph)doc.Blocks[0]).Runs[1].Shape!;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            view.SelectFloating(0, 1);
+            view.EnterSelectedShapeTextEditing().Should().BeTrue();
+
+            var rect = view.FloatingShapeRects.Should().ContainSingle().Which.Rect;
+            view.BeginShapeTextSelectionForTest(new Point(rect.X + 5, rect.Y + 8)).Should().BeTrue();
+            view.EndShapeTextSelectionForTest(new Point(rect.X + 34, rect.Y + 8));
+            view.ShapeTextSelectionInfo.Should().NotBeNull();
+            var selection = view.ShapeTextSelectionInfo!.Value;
+            selectedLength = selection.End.Offset - selection.Start.Offset;
+            selectedLength.Should().BeGreaterThan(0);
+
+            view.ToggleBold();
+            var globalOffset = 0;
+            boldApplied = true;
+            foreach (var run in shape.TextParagraphs[0].Runs)
+            {
+                for (var index = 0; index < run.Text.Length; index++)
+                {
+                    if (globalOffset >= selection.Start.Offset && globalOffset < selection.End.Offset
+                        && !run.Formatting.Bold)
+                        boldApplied = false;
+                    globalOffset++;
+                }
+            }
+
+            view.InsertText("X");
+            editedText = shape.PlainText;
+        });
+
+        if (!ran) return;
+        selectedLength.Should().BeGreaterThan(0);
+        boldApplied.Should().BeTrue();
+        editedText.Should().NotBe("Hello shape");
+        editedText.Should().Contain("X");
+    }
+
+    [Fact]
+    public async Task Rotated_shape_text_drag_selects_and_replaces_the_selected_range()
+    {
+        var editedTexts = new Dictionary<ShapeTextDirection, string?>();
+        var ran = await OnUiThread(() =>
+        {
+            foreach (var direction in new[] { ShapeTextDirection.Rotate90, ShapeTextDirection.Rotate270 })
+            {
+                var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
+                    hOffsetPt: 0, vOffsetPt: 0,
+                    fillColorHex: "#FFFFFF", shapeWidthPt: 144, shapeHeightPt: 108,
+                    text: "ABCD");
+                var shape = ((Paragraph)doc.Blocks[0]).Runs[1].Shape!;
+                shape.TextDirection = direction;
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+                view.Measure(new Size(816, 2000));
+                view.SelectFloating(0, 1);
+                view.EnterSelectedShapeTextEditing().Should().BeTrue();
+
+                var rect = view.FloatingShapeRects.Should().ContainSingle().Which.Rect;
+                var start = direction == ShapeTextDirection.Rotate90
+                    ? new Point(rect.Center.X, rect.Y + 5)
+                    : new Point(rect.Center.X, rect.Bottom - 5);
+                var end = direction == ShapeTextDirection.Rotate90
+                    ? new Point(rect.Center.X, rect.Bottom - 5)
+                    : new Point(rect.Center.X, rect.Y + 5);
+                view.BeginShapeTextSelectionForTest(start).Should().BeTrue();
+                view.EndShapeTextSelectionForTest(end);
+                view.ShapeTextSelectionInfo.Should().NotBeNull();
+
+                view.InsertText("R");
+                editedTexts[direction] = shape.PlainText;
+            }
+        });
+
+        if (!ran) return;
+        editedTexts[ShapeTextDirection.Rotate90].Should().Be("R");
+        editedTexts[ShapeTextDirection.Rotate270].Should().Be("R");
+    }
+
+    [Fact]
     public async Task Selected_floating_text_box_supports_paragraph_break_merge_and_outer_text_sync()
     {
         int paragraphCountAfterBreak = -1;
