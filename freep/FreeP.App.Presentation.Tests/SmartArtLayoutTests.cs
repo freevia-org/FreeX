@@ -2116,6 +2116,33 @@ public sealed class SmartArtLayoutTests
         result[1].OffsetXEmu.Should().BeLessThan(result[0].OffsetXEmu + result[0].ExtentCxEmu);
     }
 
+    [Theory]
+    [InlineData(4)]
+    [InlineData(8)]
+    public void BasicRelationship_LargerNodeCountsRemainLive(int nodeCount)
+    {
+        var data = MakeData(
+            SmartArtFamily.Relationship,
+            Enumerable.Range(1, nodeCount).Select(i => $"Node {i}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/relationship1";
+        data.IsLiveLayoutSupported = true;
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("relationship1 should remain live as authored node count grows");
+        shapes!.Should().HaveCount(nodeCount);
+        shapes.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse);
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(i => $"Node {i}"));
+        shapes.Should().AllSatisfy(shape =>
+        {
+            shape.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            shape.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        });
+    }
+
     [Fact]
     public void OpposingIdeas_UsesInwardFacingArrows()
     {
@@ -2131,6 +2158,35 @@ public sealed class SmartArtLayoutTests
         result[1].AutoShapeKind.Should().Be(DrawingShapeKind.LeftArrow);
         result[0].OffsetXEmu.Should().BeLessThan(result[1].OffsetXEmu);
         result[0].OffsetYEmu.Should().Be(result[1].OffsetYEmu);
+    }
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(8)]
+    public void OpposingIdeas_LargerNodeCountsRemainLive(int nodeCount)
+    {
+        var data = MakeData(
+            SmartArtFamily.Relationship,
+            Enumerable.Range(1, nodeCount).Select(i => $"Node {i}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/opposingIdeas";
+        data.IsLiveLayoutSupported = true;
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("opposingIdeas should remain live as authored node count grows");
+        shapes!.Should().HaveCount(nodeCount);
+        shapes.Should().OnlyContain(shape =>
+            shape.AutoShapeKind == DrawingShapeKind.LeftArrow ||
+            shape.AutoShapeKind == DrawingShapeKind.RightArrow);
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(Enumerable.Range(1, nodeCount).Select(i => $"Node {i}"));
+        shapes.Should().AllSatisfy(shape =>
+        {
+            shape.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            shape.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        });
     }
 
     [Fact]
