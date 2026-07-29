@@ -14,6 +14,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly TextBox _titleBox;
     private readonly CheckBox _titleOverlayCheck;
     private readonly CheckBox _plotVisibleOnlyCheck;
+    private readonly CheckBox _roundedCornersCheck;
     private readonly ComboBox _styleCombo;
     private readonly ComboBox _legendCombo;
     private readonly CheckBox _valueLabelsCheck;
@@ -66,6 +67,11 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         {
             Content = surface.PlotVisibleOnlyLabel,
             IsChecked = _planner.PlotVisibleOnly,
+        };
+        _roundedCornersCheck = new CheckBox
+        {
+            Content = surface.RoundedCornersLabel,
+            IsChecked = _planner.RoundedCorners,
         };
         _styleCombo = new ComboBox
         {
@@ -193,6 +199,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         content.Children.Add(MakeRow(surface.ChartTitleLabel, _titleBox));
         content.Children.Add(_titleOverlayCheck);
         content.Children.Add(_plotVisibleOnlyCheck);
+        content.Children.Add(_roundedCornersCheck);
         content.Children.Add(MakeRow(surface.ChartStyleLabel, _styleCombo));
         content.Children.Add(MakeRow(surface.LegendLabel, _legendCombo));
         content.Children.Add(MakeRow(surface.LabelPositionLabel, _labelPositionCombo));
@@ -236,6 +243,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     internal void SetPlotVisibleOnlyForTests(bool value) => _plotVisibleOnlyCheck.IsChecked = value;
 
+    internal void SetRoundedCornersForTests(bool value) => _roundedCornersCheck.IsChecked = value;
+
     internal void SetStyleIdForTests(int? styleId) => _styleCombo.SelectedIndex = FindStyleIndex(styleId);
 
     internal void SetLegendOverlayForTests(bool? value) => _legendOverlayCheck.IsChecked = value;
@@ -266,6 +275,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _planner.SetTitle(_titleBox.Text);
         _planner.SetTitleOverlay(_titleOverlayCheck.IsChecked == true);
         _planner.SetPlotVisibleOnly(_plotVisibleOnlyCheck.IsChecked == true);
+        _planner.SetRoundedCorners(_roundedCornersCheck.IsChecked == true);
         if (_styleCombo.SelectedItem is ChartDisplayStyleOption style)
             _planner.SetStyleId(style.Value);
         _planner.SetLegend(_legendCombo.SelectedItem is ChartDisplayLegendOption legend ? legend.Value : null);

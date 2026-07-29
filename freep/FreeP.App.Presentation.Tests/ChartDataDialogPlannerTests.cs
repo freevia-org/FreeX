@@ -358,6 +358,7 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetTitle("Revenue");
         planner.SetTitleOverlay(true);
         planner.SetPlotVisibleOnly(true);
+        planner.SetRoundedCorners(true);
         planner.SetLegend(LegendPosition.Bottom);
         planner.SetShowValueLabels(false);
         planner.SetShowPercentLabels(true);
@@ -389,7 +390,8 @@ public sealed class ChartDataDialogPlannerTests
         commit.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, false, DataLabelPosition.OutsideEnd, false, true,
             true, true, true, true, "0.0%", " | ", 40, 55, ChartDisplayBlanksAs.Span, true, true, true, false,
-            commit.LabelTextStyle, true, 12, true, true, true));
+            commit.LabelTextStyle, true, 12, true, true, true, true));
+        commit.RoundedCorners.Should().BeTrue();
         commit.LabelTextStyle.Should().NotBeNull();
         commit.LabelTextStyle!.FontFamily.Should().Be("Aptos");
         commit.LabelTextStyle.FontSizePt.Should().Be(9);

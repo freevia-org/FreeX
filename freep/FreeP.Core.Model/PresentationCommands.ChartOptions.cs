@@ -11,6 +11,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
     private bool _oldAutomaticTitle;
     private bool? _oldTitleOverlay;
     private bool? _oldPlotVisibleOnly;
+    private bool? _oldRoundedCorners;
     private LegendPosition? _oldLegend;
     private ChartDataLabels? _oldDataLabels;
     private bool _oldCategoryGridlines;
@@ -46,6 +47,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         _oldAutomaticTitle = chart.HasAutomaticTitle;
         _oldTitleOverlay = chart.TitleOverlay;
         _oldPlotVisibleOnly = chart.PlotVisibleOnly;
+        _oldRoundedCorners = chart.RoundedCorners;
         _oldLegend = chart.Legend;
         _oldDataLabels = CloneDataLabels(chart.DataLabels);
         _oldCategoryGridlines = chart.CategoryAxis.HasMajorGridlines;
@@ -65,6 +67,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
             chart.TitleOverlay = _newOptions.TitleOverlay;
         if (_newOptions.PlotVisibleOnly.HasValue)
             chart.PlotVisibleOnly = _newOptions.PlotVisibleOnly;
+        if (_newOptions.RoundedCorners.HasValue)
+            chart.RoundedCorners = _newOptions.RoundedCorners;
         chart.Legend = _newOptions.Legend;
         chart.CategoryAxis.HasMajorGridlines = _newOptions.CategoryGridlines;
         chart.ValueAxis.HasMajorGridlines = _newOptions.ValueGridlines;
@@ -132,6 +136,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.HasAutomaticTitle = _oldAutomaticTitle;
         chart.TitleOverlay = _oldTitleOverlay;
         chart.PlotVisibleOnly = _oldPlotVisibleOnly;
+        chart.RoundedCorners = _oldRoundedCorners;
         chart.Legend = _oldLegend;
         chart.DataLabels = CloneDataLabels(_oldDataLabels);
         chart.CategoryAxis.HasMajorGridlines = _oldCategoryGridlines;
