@@ -134,6 +134,20 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfCharacterDirection_RtlchAndLtrch_PreserveMixedRunOverrides()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\rtlpar\rtlch\u1488?\u1489?\u1490?\ltrch LTR}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Should().Contain(run => run.Text == "\u05D0\u05D1\u05D2" && run.RightToLeft == true);
+        runs.Should().Contain(run => run.Text == "LTR" && run.RightToLeft == false);
+    }
+
+    [Fact]
     public void PlannerApply_PastesExternalFragmentWithItsRichRuns()
     {
         var payload = ExternalRichTextClipboardPlanner.TryParseRtf(

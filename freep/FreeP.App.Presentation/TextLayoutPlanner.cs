@@ -367,6 +367,7 @@ public static class TextLayoutPlanner
                 Italic = run.Italic,
                 Underline = run.Underline,
                 Strikethrough = run.Strikethrough,
+                RightToLeft = run.RightToLeft,
                 Color = run.Color,
                 TextFill = run.TextFill,
                 TextOutline = run.TextOutline,
@@ -771,7 +772,8 @@ public static class TextLayoutPlanner
         double totalWidth = 0;
         for (int i = 0; i < runs.Count; i++)
         {
-            directions[i] = ResolveRunRightToLeft(paragraph.RightToLeft, runs[i].Text);
+            directions[i] = runs[i].RightToLeft
+                ?? ResolveRunRightToLeft(paragraph.RightToLeft, runs[i].Text);
             widths[i] = Math.Max(0, measureRun(runs[i], directions[i]));
             totalWidth += widths[i];
         }

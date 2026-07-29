@@ -332,6 +332,7 @@ public static class InCanvasRichClipboardPlanner
         ItalicSet = run.ItalicSet,
         Underline = run.Underline,
         Strikethrough = run.Strikethrough,
+        RightToLeft = run.RightToLeft,
         Caps = run.Caps,
         Color = ToDto(run.Color),
         TextFill = ToDto(run.TextFill),
@@ -480,6 +481,7 @@ public static class InCanvasRichClipboardPlanner
             ItalicSet = dto.ItalicSet,
             Underline = dto.Underline,
             Strikethrough = dto.Strikethrough,
+            RightToLeft = dto.RightToLeft,
             Caps = dto.Caps,
             Color = FromDto(dto.Color),
             TextFill = FromDto(dto.TextFill),
@@ -770,6 +772,7 @@ public static class InCanvasRichClipboardPlanner
         public bool ItalicSet { get; set; }
         public bool Underline { get; set; }
         public bool Strikethrough { get; set; }
+        public bool? RightToLeft { get; set; }
         public RunTextCaps Caps { get; set; }
         public ClipboardColorDto? Color { get; set; }
         public ClipboardFillDto? TextFill { get; set; }
