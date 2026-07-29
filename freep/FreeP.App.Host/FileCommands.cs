@@ -506,11 +506,7 @@ internal sealed class FileCommands
             capability.CanEncodeMp4,
             capability.CanCaptureNarration,
             capability.CanCaptureCameraAndMedia,
-            capability.CanEncodeMp4
-                ? string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal)
-                    ? "Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available."
-                    : "FFmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available."
-                : capability.Reason);
+            capability.Reason);
 
     /// <summary>Save-before-close gate, called from the window's Closing handler.</summary>
     public bool ConfirmCloseAllowed() => _workflow.ConfirmCloseAllowed();
