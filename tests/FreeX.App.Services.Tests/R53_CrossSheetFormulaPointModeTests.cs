@@ -58,4 +58,19 @@ public sealed class R53_CrossSheetFormulaPointModeTests
         session.ActiveCell.Should().Be(source);
         session.FormulaEditAddress.Should().BeNull();
     }
+
+    [Fact]
+    public void CrossSheetPointing_RejectsMissingFormulaSourceSheet()
+    {
+        var session = new WorkbookSessionFactory().CreateNew(viewportHeight: 240, viewportWidth: 320);
+        var target = session.ActiveCell;
+        var missingSource = new CellAddress(SheetId.New(), 1, 1);
+
+        var action = () => session.SelectRangeForFormulaEdit(
+            new GridRange(target, target),
+            missingSource);
+
+        action.Should().Throw<ArgumentOutOfRangeException>()
+            .WithParameterName("formulaEditAddress");
+    }
 }

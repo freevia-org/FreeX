@@ -736,8 +736,10 @@ public sealed class WorkbookSession
     public void SelectRangeForFormulaEdit(GridRange range, CellAddress formulaEditAddress)
     {
         ValidateSelectionRange(range, nameof(range));
-        if (!IsValidAddress(formulaEditAddress))
-            throw new ArgumentOutOfRangeException(nameof(formulaEditAddress), "The formula edit cell must be inside the worksheet bounds.");
+        if (!IsValidAddress(formulaEditAddress) || Workbook.GetSheet(formulaEditAddress.Sheet) is null)
+            throw new ArgumentOutOfRangeException(
+                nameof(formulaEditAddress),
+                "The formula edit cell must belong to an existing worksheet and be inside the worksheet bounds.");
 
         SetSelectedRanges(range, [range]);
         ActiveCell = range.Start;
