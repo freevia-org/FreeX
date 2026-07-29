@@ -82,6 +82,65 @@ name_handlers = defaultdict(set)
 # own menu items). HomeRibbonDefinition.cs uses PLAIN command ids, so these must map plainly.
 home_handlers = {}
 
+# The shared declarative Home menu has evolved beyond the archived XAML this generator reads.
+# Keep its executable leaf ids here so regenerating the native WPF map cannot disable those items.
+# Data Bars / Color Scales are leaf commands in the shared definition (the archived XAML used
+# SubmenuOpened), and the accounting entries use unique ids rather than the old repeated command name.
+declarative_home_handler_overrides = {
+    "3 Arrows": "CfIconSetPresetMenuItem_Click",
+    "3 Arrows (Gray)": "CfIconSetPresetMenuItem_Click",
+    "3 Flags": "CfIconSetPresetMenuItem_Click",
+    "3 Signs": "CfIconSetPresetMenuItem_Click",
+    "3 Symbols": "CfIconSetPresetMenuItem_Click",
+    "3 Symbols (Uncircled)": "CfIconSetPresetMenuItem_Click",
+    "3 Traffic Lights": "CfIconSetPresetMenuItem_Click",
+    "3 Traffic Lights (Rimmed)": "CfIconSetPresetMenuItem_Click",
+    "4 Arrows": "CfIconSetPresetMenuItem_Click",
+    "4 Arrows (Gray)": "CfIconSetPresetMenuItem_Click",
+    "4 Ratings": "CfIconSetPresetMenuItem_Click",
+    "4 Red To Black": "CfIconSetPresetMenuItem_Click",
+    "4 Traffic Lights": "CfIconSetPresetMenuItem_Click",
+    "5 Arrows": "CfIconSetPresetMenuItem_Click",
+    "5 Arrows (Gray)": "CfIconSetPresetMenuItem_Click",
+    "5 Boxes": "CfIconSetPresetMenuItem_Click",
+    "5 Quarters": "CfIconSetPresetMenuItem_Click",
+    "5 Ratings": "CfIconSetPresetMenuItem_Click",
+    "A Date Occurring": "CfDateMenuItem_Click",
+    "About FreeX#AboutBtn_Click": "AboutBtn_Click",
+    "Above Average": "CfAboveAvgMenuItem_Click",
+    "Accent 1": "BorderLineColorAccent1MenuItem_Click",
+    "Accent 2": "BorderLineColorAccent2MenuItem_Click",
+    "Accounting Number Format British Pound": "AccountingSymbolMenuItem_Click",
+    "Accounting Number Format Euro": "AccountingSymbolMenuItem_Click",
+    "Accounting Number Format Japanese Yen": "AccountingSymbolMenuItem_Click",
+    "Accounting Number Format US Dollar": "AccountingSymbolMenuItem_Click",
+    "Below Average": "CfBelowAvgMenuItem_Click",
+    "Between": "CfBetweenMenuItem_Click",
+    "Black": "BorderLineColorBlackMenuItem_Click",
+    "Bottom 10 Items": "CfBottom10MenuItem_Click",
+    "Bottom 10%": "CfBottom10PercentMenuItem_Click",
+    "Check for Updates#CheckForUpdatesBtn_Click": "CheckForUpdatesBtn_Click",
+    "Color Scales": "CfColorScaleMenuItem_Click",
+    "Dashed": "BorderLineStyleDashedMenuItem_Click",
+    "Data Bars": "CfDataBarMenuItem_Click",
+    "Dotted": "BorderLineStyleDottedMenuItem_Click",
+    "Double": "BorderLineStyleDoubleMenuItem_Click",
+    "Duplicate Values": "CfDuplicateMenuItem_Click",
+    "Equal To": "CfEqMenuItem_Click",
+    "Feedback#FeedbackBtn_Click": "FeedbackBtn_Click",
+    "Gray": "BorderLineColorGrayMenuItem_Click",
+    "Greater Than": "CfGtMenuItem_Click",
+    "Help Online#HelpOnlineBtn_Click": "HelpOnlineBtn_Click",
+    "Less Than": "CfLtMenuItem_Click",
+    "Medium": "BorderLineStyleMediumMenuItem_Click",
+    "More Rules": "CfIconSetMenuItem_Click",
+    "Text that Contains": "CfTextMenuItem_Click",
+    "Thick": "BorderLineStyleThickMenuItem_Click",
+    "Thin": "BorderLineStyleThinMenuItem_Click",
+    "Top 10 Items": "CfTop10MenuItem_Click",
+    "Top 10%": "CfTop10PercentMenuItem_Click",
+}
+
 def record(tab, name, handler, is_control):
     if not handler:
         return
@@ -163,6 +222,7 @@ for name, handlers in name_handlers.items():
 # name is ambiguous (and thus only minted as "name#handler" by the generated tabs above).
 for name, handler in home_handlers.items():
     handler_map.setdefault(name, handler)
+handler_map.update(declarative_home_handler_overrides)
 
 ctxkey = {
     "ShapeFormatTab": "shape.selected",
