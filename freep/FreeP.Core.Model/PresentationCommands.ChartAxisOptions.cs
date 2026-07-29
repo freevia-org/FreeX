@@ -16,6 +16,8 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
     private double? _oldMinorUnit;
     private string? _oldNumberFormatCode;
     private bool? _oldNumberFormatSourceLinked;
+    private ChartAxisDisplayUnit _oldDisplayUnit;
+    private string? _oldRawDisplayUnitToken;
     private bool _oldMajorGridlines;
     private bool _oldMinorGridlines;
     private ChartTickMark? _oldMajorTickMark;
@@ -61,6 +63,10 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
             ? null
             : _newOptions.NumberFormatCode.Trim();
         axis.NumberFormatSourceLinked = axis.NumberFormatCode is null ? null : false;
+        axis.DisplayUnit = _newOptions.DisplayUnit;
+        axis.RawDisplayUnitToken = _newOptions.DisplayUnit == ChartAxisDisplayUnit.Unsupported
+            ? _newOptions.RawDisplayUnitToken
+            : null;
         axis.HasMajorGridlines = _newOptions.MajorGridlines;
         axis.HasMinorGridlines = _newOptions.MinorGridlines;
         axis.MajorTickMark = _newOptions.MajorTickMark;
@@ -97,6 +103,8 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         axis.MinorUnit = _oldMinorUnit;
         axis.NumberFormatCode = _oldNumberFormatCode;
         axis.NumberFormatSourceLinked = _oldNumberFormatSourceLinked;
+        axis.DisplayUnit = _oldDisplayUnit;
+        axis.RawDisplayUnitToken = _oldRawDisplayUnitToken;
         axis.HasMajorGridlines = _oldMajorGridlines;
         axis.HasMinorGridlines = _oldMinorGridlines;
         axis.MajorTickMark = _oldMajorTickMark;
@@ -126,6 +134,8 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         _oldMinorUnit = axis.MinorUnit;
         _oldNumberFormatCode = axis.NumberFormatCode;
         _oldNumberFormatSourceLinked = axis.NumberFormatSourceLinked;
+        _oldDisplayUnit = axis.DisplayUnit;
+        _oldRawDisplayUnitToken = axis.RawDisplayUnitToken;
         _oldMajorGridlines = axis.HasMajorGridlines;
         _oldMinorGridlines = axis.HasMinorGridlines;
         _oldMajorTickMark = axis.MajorTickMark;

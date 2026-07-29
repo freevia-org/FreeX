@@ -1416,11 +1416,33 @@ internal static class PptxChartWriter
 
     private static IEnumerable<XElement> BuildAxisUnitElements(ChartAxis axis)
     {
+        var displayUnit = DisplayUnitValue(axis);
+        if (displayUnit is not null)
+            yield return new XElement(C + "dispUnits",
+                new XElement(C + "builtInUnit", new XAttribute("val", displayUnit)));
         if (axis.MajorUnit is { } majorUnit)
             yield return new XElement(C + "majorUnit", new XAttribute("val", majorUnit.ToString("G", CultureInfo.InvariantCulture)));
         if (axis.MinorUnit is { } minorUnit)
             yield return new XElement(C + "minorUnit", new XAttribute("val", minorUnit.ToString("G", CultureInfo.InvariantCulture)));
     }
+
+    private static string? DisplayUnitValue(ChartAxis axis) => axis.DisplayUnit switch
+    {
+        ChartAxisDisplayUnit.None => null,
+        ChartAxisDisplayUnit.Hundreds => "hundreds",
+        ChartAxisDisplayUnit.Thousands => "thousands",
+        ChartAxisDisplayUnit.TenThousands => "tenThousands",
+        ChartAxisDisplayUnit.HundredThousands => "hundredThousands",
+        ChartAxisDisplayUnit.Millions => "millions",
+        ChartAxisDisplayUnit.TenMillions => "tenMillions",
+        ChartAxisDisplayUnit.HundredMillions => "hundredMillions",
+        ChartAxisDisplayUnit.Billions => "billions",
+        ChartAxisDisplayUnit.Trillions => "trillions",
+        ChartAxisDisplayUnit.Unsupported => string.IsNullOrWhiteSpace(axis.RawDisplayUnitToken)
+            ? null
+            : axis.RawDisplayUnitToken,
+        _ => null,
+    };
 
     private static IEnumerable<XElement> BuildAxisDisplayElements(ChartAxis axis)
     {

@@ -2920,7 +2920,7 @@ public static partial class ChartRenderPlanner
             {
                 double x = plot.X + plot.Width * tickIndex / steps;
                 labels.Add(new ChartTextPlan(
-                    FormatChartAxisLabelValue(chart, value, chart.ValueAxis.NumberFormatCode),
+                    FormatChartAxisLabelValue(chart, value, chart.ValueAxis),
                     new ChartPlanRect(x - ResolveAxisLabelWidth(chart) / 2, plot.Bottom + 2, ResolveAxisLabelWidth(chart), ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
@@ -2945,7 +2945,7 @@ public static partial class ChartRenderPlanner
                     ? plot.X + 21.0 - 4.0
                     : plot.X - rightGap;
                 labels.Add(new ChartTextPlan(
-                    FormatChartAxisLabelValue(chart, value, chart.ValueAxis.NumberFormatCode),
+                    FormatChartAxisLabelValue(chart, value, chart.ValueAxis),
                     new ChartPlanRect(labelRight - labelWidth, y - verticalOffset, labelWidth, ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
@@ -3405,7 +3405,7 @@ public static partial class ChartRenderPlanner
                 new ChartPlanPoint(plot.Right, y),
                 new ChartPlanPoint(plot.Right + AxisMajorTickLength, y)));
             labels.Add(new ChartTextPlan(
-                FormatChartAxisLabelValue(chart, value, chart.SecondaryValueAxis.NumberFormatCode),
+                FormatChartAxisLabelValue(chart, value, chart.SecondaryValueAxis),
                 new ChartPlanRect(labelX, y - labelVerticalOffset, labelWidth, UsesImportedTextMetrics(chart) ? 32.0 : 12.0),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
@@ -6867,8 +6867,9 @@ public static partial class ChartRenderPlanner
     private static string FormatChartAxisLabelValue(
         ChartShape chart,
         double value,
-        string? numberFormatCode)
+        ChartAxis axis)
     {
+        var numberFormatCode = axis.NumberFormatCode;
         if (IsHundredPercentStacked(chart.ChartType) &&
             (string.IsNullOrWhiteSpace(numberFormatCode) ||
              string.Equals(numberFormatCode, "General", StringComparison.OrdinalIgnoreCase)))
@@ -6880,11 +6881,27 @@ public static partial class ChartRenderPlanner
             chart.Series.Any(series => series.OnSecondaryAxis) &&
             string.IsNullOrWhiteSpace(numberFormatCode))
         {
-            return FormatAxisValueWithoutScale(value);
+            return FormatAxisValueWithoutScale(value / DisplayUnitDivisor(axis.DisplayUnit));
         }
+
+        value /= DisplayUnitDivisor(axis.DisplayUnit);
 
         return FormatAxisLabelValue(value, numberFormatCode);
     }
+
+    private static double DisplayUnitDivisor(ChartAxisDisplayUnit displayUnit) => displayUnit switch
+    {
+        ChartAxisDisplayUnit.Hundreds => 100,
+        ChartAxisDisplayUnit.Thousands => 1_000,
+        ChartAxisDisplayUnit.TenThousands => 10_000,
+        ChartAxisDisplayUnit.HundredThousands => 100_000,
+        ChartAxisDisplayUnit.Millions => 1_000_000,
+        ChartAxisDisplayUnit.TenMillions => 10_000_000,
+        ChartAxisDisplayUnit.HundredMillions => 100_000_000,
+        ChartAxisDisplayUnit.Billions => 1_000_000_000,
+        ChartAxisDisplayUnit.Trillions => 1_000_000_000_000,
+        _ => 1,
+    };
 
     private static string FormatAxisValueWithoutScale(double value) =>
         value == Math.Floor(value)

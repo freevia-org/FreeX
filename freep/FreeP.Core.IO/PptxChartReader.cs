@@ -1198,6 +1198,12 @@ internal static class PptxChartReader
                 ParseNullableBoolAttr(numFmt.Attribute("sourceLinked")?.Value);
         }
 
+        var displayUnitToken = axEl.Element(C + "dispUnits")?.Element(C + "builtInUnit")?.Attribute("val")?.Value;
+        axis.DisplayUnit = ParseDisplayUnit(displayUnitToken);
+        axis.RawDisplayUnitToken = axis.DisplayUnit == ChartAxisDisplayUnit.Unsupported
+            ? displayUnitToken
+            : null;
+
         var scaling = axEl.Element(C + "scaling");
         if (scaling is not null)
         {
@@ -1226,6 +1232,21 @@ internal static class PptxChartReader
             "out"   => ChartTickMark.Out,
             _       => null
         };
+
+    private static ChartAxisDisplayUnit ParseDisplayUnit(string? token) => token switch
+    {
+        null or "" => ChartAxisDisplayUnit.None,
+        "hundreds" => ChartAxisDisplayUnit.Hundreds,
+        "thousands" => ChartAxisDisplayUnit.Thousands,
+        "tenThousands" => ChartAxisDisplayUnit.TenThousands,
+        "hundredThousands" => ChartAxisDisplayUnit.HundredThousands,
+        "millions" => ChartAxisDisplayUnit.Millions,
+        "tenMillions" => ChartAxisDisplayUnit.TenMillions,
+        "hundredMillions" => ChartAxisDisplayUnit.HundredMillions,
+        "billions" => ChartAxisDisplayUnit.Billions,
+        "trillions" => ChartAxisDisplayUnit.Trillions,
+        _ => ChartAxisDisplayUnit.Unsupported,
+    };
 
     private static ChartTickLabelPosition? ParseTickLabelPosition(XElement? element) =>
         element?.Attribute("val")?.Value switch

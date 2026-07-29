@@ -618,6 +618,24 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void AxisLabelPlans_ApplyAuthoredDisplayUnitsToValueLabels()
+    {
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 0, 2_000 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(series);
+        chart.ValueAxis.Min = 0;
+        chart.ValueAxis.Max = 2_000;
+        chart.ValueAxis.MajorUnit = 1_000;
+        chart.ValueAxis.DisplayUnit = ChartAxisDisplayUnit.Thousands;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame)
+            .Select(label => label.Text)
+            .Should().Equal("0", "1", "2");
+    }
+
+    [Fact]
     public void FormatWithCode_UnsupportedFormatFallsBackWithoutThrowing()
     {
         var act = () => ChartRenderPlanner.FormatWithCode(1200, "unsupported text");

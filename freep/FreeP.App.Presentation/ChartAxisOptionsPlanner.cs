@@ -9,6 +9,7 @@ public sealed record ChartAxisCrossingOption(ChartAxisCrossing? Value, string La
 public sealed record ChartCrossBetweenOption(ChartCrossBetween? Value, string Label);
 public sealed record ChartLabelAlignmentOption(ChartLabelAlignment? Value, string Label);
 public sealed record ChartAxisBooleanOption(bool? Value, string Label);
+public sealed record ChartAxisDisplayUnitOption(ChartAxisDisplayUnit Value, string Label);
 
 public sealed record ChartAxisOptionsSurfacePlan(
     string CommandId,
@@ -24,6 +25,7 @@ public sealed record ChartAxisOptionsSurfacePlan(
     string MajorUnitLabel,
     string MinorUnitLabel,
     string NumberFormatLabel,
+    string DisplayUnitLabel,
     string MajorGridlinesLabel,
     string MinorGridlinesLabel,
     string AxisTitleFontFamilyLabel,
@@ -65,6 +67,7 @@ public sealed class ChartAxisOptionsPlanner
     public const string MajorUnitLabel = "Major unit";
     public const string MinorUnitLabel = "Minor unit";
     public const string NumberFormatLabel = "Number format";
+    public const string DisplayUnitLabel = "Display units";
     public const string MajorGridlinesLabel = "Major gridlines";
     public const string MinorGridlinesLabel = "Minor gridlines";
     public const string AxisTitleFontFamilyLabel = "Axis title font family";
@@ -151,6 +154,21 @@ public sealed class ChartAxisOptionsPlanner
         new(false, "Use explicit crossing"),
     ];
 
+    public static IReadOnlyList<ChartAxisDisplayUnitOption> DisplayUnitOptions { get; } =
+    [
+        new(ChartAxisDisplayUnit.None, "None"),
+        new(ChartAxisDisplayUnit.Hundreds, "Hundreds"),
+        new(ChartAxisDisplayUnit.Thousands, "Thousands"),
+        new(ChartAxisDisplayUnit.TenThousands, "Ten thousands"),
+        new(ChartAxisDisplayUnit.HundredThousands, "Hundred thousands"),
+        new(ChartAxisDisplayUnit.Millions, "Millions"),
+        new(ChartAxisDisplayUnit.TenMillions, "Ten millions"),
+        new(ChartAxisDisplayUnit.HundredMillions, "Hundred millions"),
+        new(ChartAxisDisplayUnit.Billions, "Billions"),
+        new(ChartAxisDisplayUnit.Trillions, "Trillions"),
+        new(ChartAxisDisplayUnit.Unsupported, "Preserve unknown source unit"),
+    ];
+
     private readonly ChartShape _chart;
     private ChartAxisKind _axisKind;
     private string _title = string.Empty;
@@ -160,6 +178,8 @@ public sealed class ChartAxisOptionsPlanner
     private double? _majorUnit;
     private double? _minorUnit;
     private string _numberFormat = string.Empty;
+    private ChartAxisDisplayUnit _displayUnit;
+    private string? _rawDisplayUnitToken;
     private bool _majorGridlines;
     private bool _minorGridlines;
     private ChartTickMark? _majorTickMark;
@@ -200,6 +220,7 @@ public sealed class ChartAxisOptionsPlanner
             MajorUnitLabel,
             MinorUnitLabel,
             NumberFormatLabel,
+            DisplayUnitLabel,
             MajorGridlinesLabel,
             MinorGridlinesLabel,
             AxisTitleFontFamilyLabel,
@@ -236,6 +257,8 @@ public sealed class ChartAxisOptionsPlanner
     public double? MajorUnit => _majorUnit;
     public double? MinorUnit => _minorUnit;
     public string NumberFormatCode => _numberFormat;
+    public ChartAxisDisplayUnit DisplayUnit => _displayUnit;
+    public string? RawDisplayUnitToken => _rawDisplayUnitToken;
     public bool MajorGridlines => _majorGridlines;
     public bool MinorGridlines => _minorGridlines;
     public ChartTickMark? MajorTickMark => _majorTickMark;
@@ -266,6 +289,8 @@ public sealed class ChartAxisOptionsPlanner
         _majorUnit = axis.MajorUnit;
         _minorUnit = axis.MinorUnit;
         _numberFormat = axis.NumberFormatCode ?? string.Empty;
+        _displayUnit = axis.DisplayUnit;
+        _rawDisplayUnitToken = axis.RawDisplayUnitToken;
         _majorGridlines = axis.HasMajorGridlines;
         _minorGridlines = axis.HasMinorGridlines;
         _majorTickMark = axis.MajorTickMark;
@@ -293,6 +318,7 @@ public sealed class ChartAxisOptionsPlanner
     public void SetMajorUnit(double? majorUnit) => _majorUnit = majorUnit;
     public void SetMinorUnit(double? minorUnit) => _minorUnit = minorUnit;
     public void SetNumberFormatCode(string? formatCode) => _numberFormat = formatCode ?? string.Empty;
+    public void SetDisplayUnit(ChartAxisDisplayUnit value) => _displayUnit = value;
     public void SetMajorGridlines(bool show) => _majorGridlines = show;
     public void SetMinorGridlines(bool show) => _minorGridlines = show;
     public void SetMajorTickMark(ChartTickMark? value) => _majorTickMark = value;
@@ -336,7 +362,9 @@ public sealed class ChartAxisOptionsPlanner
         _autoCrossing,
         _reverseOrder,
         _minorGridlines,
-        BuildTitleStyle());
+        BuildTitleStyle(),
+        _displayUnit,
+        _displayUnit == ChartAxisDisplayUnit.Unsupported ? _rawDisplayUnitToken : null);
 
     private ChartTextStyle? BuildTitleStyle() =>
         _titleFontFamily is null && _titleFontSizePt is null && _titleBold is null &&
