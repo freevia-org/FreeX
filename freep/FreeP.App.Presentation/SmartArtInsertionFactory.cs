@@ -230,6 +230,9 @@ internal static class SmartArtInsertionFactory
         preset switch
         {
             SmartArtLayoutPreset.BasicProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/process1", SmartArtFamily.Process),
+            SmartArtLayoutPreset.AccentProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/accentProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.AscendingProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/ascendingProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.DescendingProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/descendingProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.BasicTimeline => ("urn:microsoft.com/office/officeart/2005/8/layout/basicTimeline", SmartArtFamily.Process),
             SmartArtLayoutPreset.PhasedProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/phasedProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.CircleAccentTimeline => ("urn:microsoft.com/office/officeart/2005/8/layout/circleAccentTimeline", SmartArtFamily.Process),
