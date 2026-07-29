@@ -10,7 +10,11 @@ namespace FreeP.App.Compositor;
 /// </summary>
 public static class ClipboardTablePlanner
 {
-    public static bool TryBuildStandaloneTable(TextBody body, out TableShape table)
+    public static bool TryBuildStandaloneTable(
+        TextBody body,
+        IReadOnlyList<long>? columnWidthsEmu,
+        IReadOnlyList<InCanvasRichClipboardTableCellStyle>? cellStyles,
+        out TableShape table)
     {
         ArgumentNullException.ThrowIfNull(body);
         table = new TableShape
@@ -38,25 +42,78 @@ public static class ClipboardTablePlanner
 
         const long widthEmu = 5_486_400;
         const long heightEmu = 2_743_200;
-        long columnWidth = widthEmu / columnCount;
         long rowHeight = heightEmu / cellRows.Length;
-        for (int column = 0; column < columnCount; column++)
-            table.ColumnWidthsEmu.Add(columnWidth);
+        if (columnWidthsEmu is { Count: var widthCount }
+            && widthCount == columnCount
+            && columnWidthsEmu.All(width => width > 0))
+        {
+            table.ColumnWidthsEmu.AddRange(columnWidthsEmu);
+        }
+        else
+        {
+            long columnWidth = widthEmu / columnCount;
+            for (int column = 0; column < columnCount; column++)
+                table.ColumnWidthsEmu.Add(columnWidth);
+        }
 
+        int styleIndex = 0;
         foreach (var cells in cellRows)
         {
             var row = new TableRow { HeightEmu = rowHeight };
             for (int column = 0; column < columnCount; column++)
             {
-                var cell = column < cells.Count
+                bool hasSourceCell = column < cells.Count;
+                var cellBody = hasSourceCell
                     ? cells[column]
                     : new TextBody { Paragraphs = { new Paragraph { Runs = { new Run() } } } };
-                row.Cells.Add(new TableCell { TextBody = cell });
+                var cell = new TableCell { TextBody = cellBody };
+                if (hasSourceCell && cellStyles is { Count: > 0 } && styleIndex < cellStyles.Count)
+                    ApplyCellStyle(cell, cellStyles[styleIndex]);
+                if (hasSourceCell)
+                    styleIndex++;
+                row.Cells.Add(cell);
             }
             table.Rows.Add(row);
         }
 
         return true;
+    }
+
+    private static void ApplyCellStyle(
+        TableCell cell,
+        InCanvasRichClipboardTableCellStyle style)
+    {
+        if (style.FillRgb is { } fillRgb)
+            cell.Fill = new ShapeFill.Solid(SrgbColor.FromRgb(fillRgb));
+
+        TableCellBorders? borders = null;
+        borders = AssignBorder(borders, style.Left, TableCellBorderSide.Left);
+        borders = AssignBorder(borders, style.Right, TableCellBorderSide.Right);
+        borders = AssignBorder(borders, style.Top, TableCellBorderSide.Top);
+        borders = AssignBorder(borders, style.Bottom, TableCellBorderSide.Bottom);
+        cell.Borders = borders;
+    }
+
+    private static TableCellBorders? AssignBorder(
+        TableCellBorders? borders,
+        InCanvasRichClipboardTableBorder? source,
+        TableCellBorderSide side)
+    {
+        if (source is null)
+            return borders;
+
+        borders ??= new TableCellBorders();
+        ShapeOutline outline = source.IsNone
+            ? ShapeOutline.None.Instance
+            : new ShapeOutline.Visible(SrgbColor.FromRgb(source.ColorRgb), source.WidthPt);
+        switch (side)
+        {
+            case TableCellBorderSide.Left: borders.Left = outline; break;
+            case TableCellBorderSide.Right: borders.Right = outline; break;
+            case TableCellBorderSide.Top: borders.Top = outline; break;
+            case TableCellBorderSide.Bottom: borders.Bottom = outline; break;
+        }
+        return borders;
     }
 
     private static List<TextBody> SplitCells(Paragraph source)

@@ -78,6 +78,81 @@ public static class ExternalRichTextClipboardPlanner
             public bool StartSpecified { get; set; }
         }
 
+        private sealed class CellStyleDraft
+        {
+            private TableCellBorderSide? _borderSide;
+            private bool _borderDefined;
+            private bool _borderNone;
+            private int _borderColorRgb;
+            private double _borderWidthPt = 0.75;
+
+            public int? FillRgb { get; set; }
+            public InCanvasRichClipboardTableBorder? Left { get; private set; }
+            public InCanvasRichClipboardTableBorder? Right { get; private set; }
+            public InCanvasRichClipboardTableBorder? Top { get; private set; }
+            public InCanvasRichClipboardTableBorder? Bottom { get; private set; }
+
+            public void BeginBorder(TableCellBorderSide side)
+            {
+                CommitBorder();
+                _borderSide = side;
+                _borderDefined = false;
+                _borderNone = false;
+                _borderColorRgb = 0;
+                _borderWidthPt = 0.75;
+            }
+
+            public void SetSolid() => _borderDefined = true;
+
+            public void SetNone()
+            {
+                _borderDefined = true;
+                _borderNone = true;
+            }
+
+            public void SetColor(int rgb) => _borderColorRgb = rgb;
+
+            public void SetWidth(double widthPt) => _borderWidthPt = widthPt;
+
+            public InCanvasRichClipboardTableCellStyle Snapshot()
+            {
+                CommitBorder();
+                return new(FillRgb, Left, Right, Top, Bottom);
+            }
+
+            public void Reset()
+            {
+                FillRgb = null;
+                Left = null;
+                Right = null;
+                Top = null;
+                Bottom = null;
+                _borderSide = null;
+                _borderDefined = false;
+            }
+
+            private void CommitBorder()
+            {
+                if (_borderSide is not { } side || !_borderDefined)
+                    return;
+
+                var border = new InCanvasRichClipboardTableBorder(
+                    _borderColorRgb,
+                    _borderWidthPt,
+                    _borderNone);
+                switch (side)
+                {
+                    case TableCellBorderSide.Left: Left = border; break;
+                    case TableCellBorderSide.Right: Right = border; break;
+                    case TableCellBorderSide.Top: Top = border; break;
+                    case TableCellBorderSide.Bottom: Bottom = border; break;
+                }
+
+                _borderSide = null;
+                _borderDefined = false;
+            }
+        }
+
         private sealed class State
         {
             public Destination Destination;
@@ -145,6 +220,10 @@ public static class ExternalRichTextClipboardPlanner
         private bool _tableRowActive;
         private int _tableCellCount;
         private bool _containsTable;
+        private readonly List<long> _tableCellRightEdgesTwips = new();
+        private IReadOnlyList<long>? _tableColumnWidthsEmu;
+        private readonly List<InCanvasRichClipboardTableCellStyle> _tableCellStyles = new();
+        private readonly CellStyleDraft _pendingCellStyle = new();
         private bool _sawRtfHeader;
         private bool _lastWasParagraphBreak;
         private Paragraph? _activeParagraph;
@@ -195,7 +274,9 @@ public static class ExternalRichTextClipboardPlanner
                 InCanvasTextEditPlanner.ExtractPlainText(_body),
                 ImageBytes: picture.Bytes,
                 ImageContentType: picture.ContentType,
-                ContainsTable: _containsTable);
+                ContainsTable: _containsTable,
+                TableColumnWidthsEmu: _tableColumnWidthsEmu,
+                TableCellStyles: _tableCellStyles.Count == 0 ? null : _tableCellStyles);
         }
 
         private bool ReadNext()
@@ -585,6 +666,32 @@ public static class ExternalRichTextClipboardPlanner
                 case "pnf":
                 case "pnfs":
                 case "cellx":
+                    if (_tableRowActive)
+                    {
+                        CaptureTableCellStyle();
+                        if (parameter is > 0
+                            && _tableCellRightEdgesTwips.Count < MaxTableCellsPerRow)
+                        {
+                            _tableCellRightEdgesTwips.Add(parameter.Value);
+                        }
+                    }
+                    break;
+                case "clcbpat":
+                    _pendingCellStyle.FillRgb = ResolveColorRgb(value);
+                    break;
+                case "clbrdrl": _pendingCellStyle.BeginBorder(TableCellBorderSide.Left); break;
+                case "clbrdrr": _pendingCellStyle.BeginBorder(TableCellBorderSide.Right); break;
+                case "clbrdrt": _pendingCellStyle.BeginBorder(TableCellBorderSide.Top); break;
+                case "clbrdrb": _pendingCellStyle.BeginBorder(TableCellBorderSide.Bottom); break;
+                case "brdrs": _pendingCellStyle.SetSolid(); break;
+                case "brdrnil":
+                case "brdrnone": _pendingCellStyle.SetNone(); break;
+                case "brdrw":
+                    _pendingCellStyle.SetWidth(Math.Clamp(value / 20.0, 0.05, 72.0));
+                    break;
+                case "brdrcf":
+                    _pendingCellStyle.SetColor(ResolveColorRgb(value) ?? 0);
+                    break;
                 case "trleft":
                 case "trgaph":
                 case "trrh":
@@ -759,8 +866,11 @@ public static class ExternalRichTextClipboardPlanner
                 return;
 
             FlushActiveRun();
+            if (_tableRowActive)
+                CaptureTableColumnWidths();
             _tableRowActive = true;
             _tableCellCount = 0;
+            _tableCellRightEdgesTwips.Clear();
             _containsTable = true;
             _state.InTable = true;
         }
@@ -798,8 +908,35 @@ public static class ExternalRichTextClipboardPlanner
             if (!_lastWasParagraphBreak)
                 AppendParagraphBreak();
 
+            CaptureTableColumnWidths();
             _tableRowActive = false;
             _tableCellCount = 0;
+            _tableCellRightEdgesTwips.Clear();
+        }
+
+        private void CaptureTableCellStyle()
+        {
+            _tableCellStyles.Add(_pendingCellStyle.Snapshot());
+            _pendingCellStyle.Reset();
+        }
+
+        private void CaptureTableColumnWidths()
+        {
+            if (_tableColumnWidthsEmu is not null || _tableCellRightEdgesTwips.Count < 2)
+                return;
+
+            long previousTwips = 0;
+            var widths = new List<long>(_tableCellRightEdgesTwips.Count);
+            foreach (long rightEdgeTwips in _tableCellRightEdgesTwips)
+            {
+                if (rightEdgeTwips <= previousTwips)
+                    return;
+
+                widths.Add((rightEdgeTwips - previousTwips) * 635L);
+                previousTwips = rightEdgeTwips;
+            }
+
+            _tableColumnWidthsEmu = widths;
         }
 
         private void RemoveTrailingTableDelimiter()
@@ -842,6 +979,11 @@ public static class ExternalRichTextClipboardPlanner
                 _state.ItalicSet,
                 _state.Hyperlink);
         }
+
+        private int? ResolveColorRgb(int colorIndex) =>
+            colorIndex > 0 && colorIndex < _colors.Count && _colors[colorIndex] is { } color
+                ? (color.R << 16) | (color.G << 8) | color.B
+                : null;
 
         private void FlushActiveRun()
         {

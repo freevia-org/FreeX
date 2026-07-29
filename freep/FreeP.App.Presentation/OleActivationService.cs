@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using FreeP.Core.Model;
 
@@ -9,6 +10,8 @@ namespace FreeP.App.Compositor;
 /// </summary>
 public static class OleActivationService
 {
+    private static readonly ConcurrentDictionary<int, OleActivationSession> ActiveSessions = new();
+
     private static readonly IReadOnlyDictionary<string, string> ContentTypeExtensions =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -27,27 +30,141 @@ public static class OleActivationService
     /// </summary>
     public static bool TryActivate(OleObjectInfo? oleObject)
     {
+        return BeginActivation(oleObject) is not null;
+    }
+
+    private static OleActivationSession? BeginActivation(OleObjectInfo? oleObject)
+    {
         if (oleObject is null || oleObject.EmbeddedBytes.Length == 0)
-            return false;
+            return null;
 
         string extension = ResolveExtension(oleObject);
         string directory = Path.Combine(Path.GetTempPath(), "FreeP", "Ole");
         string path = Path.Combine(directory, $"embedded-{Guid.NewGuid():N}.{extension}");
+        byte[] originalBytes = oleObject.EmbeddedBytes.ToArray();
 
         try
         {
             Directory.CreateDirectory(directory);
             File.WriteAllBytes(path, oleObject.EmbeddedBytes);
-            return Process.Start(new ProcessStartInfo
+            var startInfo = new ProcessStartInfo
             {
                 FileName = path,
                 UseShellExecute = true,
-            }) is not null;
+            };
+            var process = new Process { StartInfo = startInfo };
+            if (!process.Start())
+            {
+                process.Dispose();
+                TryDelete(path);
+                return null;
+            }
+
+            var session = new OleActivationSession(
+                process,
+                path,
+                oleObject,
+                originalBytes,
+                CompleteSession);
+            ActiveSessions[process.Id] = session;
+            session.StartWatching();
+            return session;
         }
         catch (Exception)
         {
-            try { File.Delete(path); } catch { }
+            TryDelete(path);
+            return null;
+        }
+    }
+
+    internal static bool TryCommitEditedPayload(
+        OleObjectInfo oleObject,
+        string path,
+        IReadOnlyList<byte> originalBytes)
+    {
+        try
+        {
+            if (!File.Exists(path))
+                return false;
+
+            byte[] updatedBytes = File.ReadAllBytes(path);
+            if (updatedBytes.Length == 0
+                || updatedBytes.SequenceEqual(originalBytes))
+                return false;
+
+            oleObject.EmbeddedBytes = updatedBytes;
+            return true;
+        }
+        catch
+        {
             return false;
+        }
+    }
+
+    private static void CompleteSession(OleActivationSession session)
+    {
+        try
+        {
+            TryCommitEditedPayload(session.OleObject, session.Path, session.OriginalBytes);
+        }
+        finally
+        {
+            ActiveSessions.TryRemove(session.ProcessId, out _);
+            TryDelete(session.Path);
+            session.DisposeProcess();
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { File.Delete(path); } catch { }
+    }
+
+    private sealed class OleActivationSession
+    {
+        private readonly Process _process;
+        private readonly Action<OleActivationSession> _complete;
+        private int _completed;
+
+        public OleObjectInfo OleObject { get; }
+        public string Path { get; }
+        public byte[] OriginalBytes { get; }
+        public int ProcessId => _process.Id;
+
+        public OleActivationSession(
+            Process process,
+            string path,
+            OleObjectInfo oleObject,
+            byte[] originalBytes,
+            Action<OleActivationSession> complete)
+        {
+            _process = process;
+            Path = path;
+            OleObject = oleObject;
+            OriginalBytes = originalBytes;
+            _complete = complete;
+        }
+
+        public void StartWatching()
+        {
+            _process.EnableRaisingEvents = true;
+            _process.Exited += OnExited;
+            if (_process.HasExited)
+                Complete();
+        }
+
+        private void OnExited(object? sender, EventArgs e) => Complete();
+
+        private void Complete()
+        {
+            if (Interlocked.Exchange(ref _completed, 1) == 0)
+                _complete(this);
+        }
+
+        public void DisposeProcess()
+        {
+            _process.Exited -= OnExited;
+            _process.Dispose();
         }
     }
 
