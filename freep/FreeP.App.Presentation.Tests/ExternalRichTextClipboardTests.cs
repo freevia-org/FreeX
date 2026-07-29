@@ -338,6 +338,24 @@ Three\cell Four\cell\row}";
     }
 
     [Fact]
+    public void HyperlinkField_PreservesLocalFileTargetAndRejectsRemoteFileHost()
+    {
+        const string rtf =
+            @"{\rtf1\ansi {\field{\*\fldinst HYPERLINK ""file:///C:/Reports/budget.xlsx""}{\fldrslt Open workbook}} "
+            + @"{\field{\*\fldinst HYPERLINK ""file://server/share/budget.xlsx""}{\fldrslt Remote workbook}}}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Select(run => run.Text).Should().Contain("Open workbook");
+        runs.Single(run => run.Text == "Open workbook").Hyperlink!.Url
+            .Should().Be("file:///C:/Reports/budget.xlsx");
+        runs.Single(run => run.Text.Contains("Remote workbook", StringComparison.Ordinal))
+            .Hyperlink.Should().BeNull();
+    }
+
+    [Fact]
     public void LegacyPnGroups_PreserveBulletLevelAndExplicitNumberRestart()
     {
         const string rtf =
