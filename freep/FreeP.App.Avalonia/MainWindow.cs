@@ -864,6 +864,8 @@ public sealed partial class MainWindow : Window
             LoadPresentationAsSaved(_presentation, path: null);
         }
 
+        SeedPhysicalAnimationPaneFixtureIfRequested();
+
         Content = windowFrame.Root;
         UpdateStatus();
         if (startupOpenError is not null)
@@ -883,6 +885,30 @@ public sealed partial class MainWindow : Window
         _ownerFocusRestoreCount++;
         Activate();
         Focus();
+    }
+
+    private void SeedPhysicalAnimationPaneFixtureIfRequested()
+    {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("FREEP_PHYSICAL_ANIMATION_PANE_SEED"),
+                "1",
+                StringComparison.Ordinal) ||
+            Editor.CurrentSlide is null ||
+            Editor.CurrentSlide.Animations.Count > 0)
+        {
+            return;
+        }
+
+        var shape = Editor.CurrentSlide.Shapes.FirstOrDefault() ??
+            Editor.InsertTextBox("Animation Pane sample");
+        Editor.AddAnimation(shape.Id, new ShapeAnimation
+        {
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Fade,
+            Trigger = AnimationTrigger.OnClick,
+            DurationMs = 500,
+        });
+        RefreshCanvas();
     }
 
     private void ApplyWindowIcon()

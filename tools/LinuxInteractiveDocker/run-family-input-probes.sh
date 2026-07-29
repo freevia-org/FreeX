@@ -65,6 +65,7 @@ if [[ "$app" == "FreeW" ]]; then
 else
     required_ids+=(
         "nested-keytip-prefix-deferral"
+        "animation-pane-physical-workflow"
         "slide-pane-new-slide-create"
         "slide-pane-new-slide-undo"
         "slide-pane-new-slide-redo"
@@ -2149,6 +2150,100 @@ else
     else
         record "slide-pane-delete-undo" "failed" "slide-pane-delete-undo-proof.txt" \
             "The gated delete undo did not restore the calibrated three-slide state."
+    fi
+
+    # FreeP-only physical Animation Pane evidence. The app receives an explicit
+    # harness seed so this route starts with one real shape animation while all
+    # pane state changes below are driven through the ribbon and X11 pointer.
+    focus_app
+    click_pointer 1 "$slide_thumbnail_x" "$slide_thumbnail_y"
+    send_active_key Escape || true
+    geometry="$(xdotool getwindowgeometry --shell "$window_id" 2>/dev/null || true)"
+    eval "$geometry"
+    pane_width=250
+    pane_top=$(( Y + HEIGHT * 20 / 100 ))
+    pane_height=$(( HEIGHT * 70 / 100 ))
+    pane_geometry="${pane_width}x${pane_height}+$((X + WIDTH - pane_width))+$pane_top"
+    pane_row_x=$(( X + WIDTH - pane_width / 2 ))
+    pane_row_y=$(( pane_top + 58 ))
+    pane_command_x=$(( X + WIDTH - 95 ))
+    pane_command_y=$(( Y + HEIGHT * 10 / 100 ))
+    {
+        printf 'window-geometry=%s\n' "$geometry"
+        printf 'pane-geometry=%s\n' "$pane_geometry"
+        printf 'pane-row-point=%s,%s\n' "$pane_row_x" "$pane_row_y"
+        printf 'pane-command-point=%s,%s\n' "$pane_command_x" "$pane_command_y"
+        printf 'seed=FREEP_PHYSICAL_ANIMATION_PANE_SEED=1\n'
+        printf 'open-route=physical pointer click on Animation Pane ribbon command\n'
+        printf 'interaction=pointer row selection plus ribbon close/reopen\n'
+    } > "$output/animation-pane-calibration.txt"
+
+    capture "animation-pane-before.png"
+    capture_region "animation-pane-before.png" "animation-pane-before-region.png" "$pane_geometry"
+    click_pointer 1 "$pane_command_x" "$pane_command_y"
+    capture "animation-pane-open.png"
+    capture_region "animation-pane-open.png" "animation-pane-open-region.png" "$pane_geometry"
+    pane_opened=false
+    if screen_changed "$output/animation-pane-before.png" "$output/animation-pane-open.png" 500; then
+        pane_opened=true
+    fi
+    pane_row_visible=false
+    if screen_changed "$output/animation-pane-before-region.png" "$output/animation-pane-open-region.png" 250; then
+        pane_row_visible=true
+    fi
+
+    click_pointer 1 "$pane_row_x" "$pane_row_y"
+    capture "animation-pane-row-selected.png"
+    capture_region "animation-pane-row-selected.png" "animation-pane-row-selected-region.png" "$pane_geometry"
+    row_selected=false
+    if screen_changed "$output/animation-pane-open-region.png" "$output/animation-pane-row-selected-region.png" 100; then
+        row_selected=true
+    fi
+
+    click_pointer 1 "$pane_command_x" "$pane_command_y"
+    capture "animation-pane-closed.png"
+    capture_region "animation-pane-closed.png" "animation-pane-closed-region.png" "$pane_geometry"
+    pane_closed=false
+    if screen_changed "$output/animation-pane-row-selected-region.png" "$output/animation-pane-closed-region.png" 250; then
+        pane_closed=true
+    fi
+
+    click_pointer 1 "$pane_command_x" "$pane_command_y"
+    capture "animation-pane-reopened.png"
+    capture_region "animation-pane-reopened.png" "animation-pane-reopened-region.png" "$pane_geometry"
+    pane_reopened=false
+    if screen_changed "$output/animation-pane-closed-region.png" "$output/animation-pane-reopened-region.png" 250; then
+        pane_reopened=true
+    fi
+    {
+        printf 'pane-opened=%s\n' "$pane_opened"
+        printf 'pane-row-visible=%s\n' "$pane_row_visible"
+        printf 'row-selected=%s\n' "$row_selected"
+        printf 'pane-closed=%s\n' "$pane_closed"
+        printf 'pane-reopened=%s\n' "$pane_reopened"
+        printf 'before-region=animation-pane-before-region.png\n'
+        printf 'open-region=animation-pane-open-region.png\n'
+        printf 'row-selected-region=animation-pane-row-selected-region.png\n'
+        printf 'closed-region=animation-pane-closed-region.png\n'
+        printf 'reopened-region=animation-pane-reopened-region.png\n'
+        printf 'observable-physical-workflow=%s\n' "$($pane_opened && $pane_row_visible && $row_selected && $pane_closed && $pane_reopened && echo true || echo false)"
+    } > "$output/animation-pane-physical-workflow-proof.txt"
+    if $pane_opened && $pane_row_visible && $row_selected && $pane_closed && $pane_reopened; then
+        record_evidence_set "animation-pane-physical-workflow" "passed" \
+            "The seeded real FreeP animation pane opened through a physical click on the visible ribbon command, exposed its animation row, changed state after a physical row click, then closed and reopened through the same ribbon command." \
+            "animation-pane-calibration.txt" "animation-pane-physical-workflow-proof.txt" \
+            "animation-pane-before.png" "animation-pane-open.png" "animation-pane-row-selected.png" \
+            "animation-pane-closed.png" "animation-pane-reopened.png" \
+            "animation-pane-open-region.png" "animation-pane-row-selected-region.png" \
+            "animation-pane-closed-region.png" "animation-pane-reopened-region.png"
+    else
+        record_evidence_set "animation-pane-physical-workflow" "failed" \
+            "The FreeP physical Animation Pane route did not prove open, visible seeded row, selection, close, and reopen postconditions." \
+            "animation-pane-calibration.txt" "animation-pane-physical-workflow-proof.txt" \
+            "animation-pane-before.png" "animation-pane-open.png" "animation-pane-row-selected.png" \
+            "animation-pane-closed.png" "animation-pane-reopened.png" \
+            "animation-pane-open-region.png" "animation-pane-row-selected-region.png" \
+            "animation-pane-closed-region.png" "animation-pane-reopened-region.png"
     fi
 fi
 
