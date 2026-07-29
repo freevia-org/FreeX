@@ -39,11 +39,13 @@ public sealed class AvaloniaExtraCommandIdsHygieneTests
     {
         var root = FunctionalParityMatrix.RepoRoot();
         var dir = Path.Combine(root, "src", "FreeX.App.Avalonia");
-        var files = new[] { "MainWindow.cs", "MainWindow.ContextualTabs.cs" }
+        var files = new[] { "MainWindow.cs", "MainWindow.ContextualTabs.cs", "MainWindow.HomeBorders.cs" }
             .Select(f => Path.Combine(dir, f));
 
-        // Matches dictionary-initializer keys of the form  ["..."] =  on a single line.
-        var keyPattern = new Regex("^\\s*\\[\"(?<key>(?:[^\"\\\\]|\\\\.)*)\"\\]\\s*=", RegexOptions.Compiled);
+        // Matches dictionary-initializer keys and the Home-border helper's commands["..."] assignments.
+        var keyPattern = new Regex(
+            "^\\s*(?:commands)?\\[\"(?<key>(?:[^\"\\\\]|\\\\.)*)\"\\]\\s*=",
+            RegexOptions.Compiled);
         var keys = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var file in files)

@@ -571,6 +571,9 @@ public sealed partial class MainWindowRibbonKeyTipTests
         public string? ActiveMenuItemGestureText(string header) =>
             FindActiveMenuItem(header)?.InputGestureText;
 
+        public bool? ActiveMenuItemIsEnabled(string header) =>
+            FindActiveMenuItem(header)?.IsEnabled;
+
         public bool? ActiveMenuItemIsChecked(string header) =>
             FindActiveMenuItem(header)?.IsChecked;
 
