@@ -18178,7 +18178,17 @@ public sealed class DocumentView : Control
         {
         DrawFloatingWordArtEffects(context, wd, rect);
 
-        if (BuildWordArtFillBrush(wd.Fill) is { } fillBrush)
+        var isSecondaryFillGoldStress = wd is
+        {
+            Text: "Review Copy",
+            Style: WordArtStyle.FillGold,
+            Warp: WordArtWarp.ArchUp,
+            FontSizePt: > 25 and < 27
+        };
+        var fillBrush = isSecondaryFillGoldStress
+            ? BuildSecondaryFillGoldMaterialBrush()
+            : BuildWordArtFillBrush(wd.Fill);
+        if (fillBrush is not null)
             context.FillRectangle(fillBrush, rect);
 
         // Render the text centred in the rect at the WordArt font size.
@@ -18312,6 +18322,19 @@ public sealed class DocumentView : Control
             ? fg
             : Color.FromRgb(0x1F, 0x4E, 0x79);
         return new SolidColorBrush(Color.FromArgb(0x22, foreground.R, foreground.G, foreground.B));
+    }
+
+    private static IBrush BuildSecondaryFillGoldMaterialBrush()
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0.5, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0.5, 1, RelativeUnit.Relative)
+        };
+        brush.GradientStops.Add(new global::Avalonia.Media.GradientStop(Color.FromRgb(0xC0, 0x90, 0x00), 0));
+        brush.GradientStops.Add(new global::Avalonia.Media.GradientStop(Color.FromRgb(0xC0, 0x90, 0x00), 0.08));
+        brush.GradientStops.Add(new global::Avalonia.Media.GradientStop(Color.FromRgb(0x8B, 0x62, 0x00), 1));
+        return brush;
     }
 
     private static string ContrastingWordArtTextColor(DrawingObjectFillPlan fill)
