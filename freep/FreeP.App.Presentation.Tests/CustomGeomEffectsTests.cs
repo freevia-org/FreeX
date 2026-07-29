@@ -164,6 +164,37 @@ public sealed class CustomGeomEffectsTests
         shape2.Effects.GlowColor.G.Should().Be(0xA5);
     }
 
+    [Fact]
+    public void ShapeEffects_SoftEdge_RoundTrips()
+    {
+        var shape = new SlideShape
+        {
+            Id = 3, Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 457200, OffsetYEmu = 457200,
+            ExtentCxEmu = 2743200, ExtentCyEmu = 1371600,
+            Effects = new ShapeEffects
+            {
+                HasSoftEdge = true,
+                SoftEdgeRadEmu = 152400,
+            }
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(shape);
+
+        using var ms = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var pres2 = FreeP.Core.IO.PptxPackageReader.Read(ms);
+
+        var effects = pres2.Slides[0].Shapes[0].Effects;
+        effects.Should().NotBeNull();
+        effects!.HasSoftEdge.Should().BeTrue();
+        effects.SoftEdgeRadEmu.Should().Be(152400);
+    }
+
     // ── Compositor emits Effects ───────────────────────────────────────────────
 
     [Fact]

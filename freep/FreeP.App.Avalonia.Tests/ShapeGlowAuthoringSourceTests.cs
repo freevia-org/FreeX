@@ -15,6 +15,19 @@ public sealed class ShapeGlowAuthoringSourceTests
         source.Should().Contain("Editor.SetSelectedShapeGlow(ShapeEffectAuthoringPlanner.GlowStrong())");
     }
 
+    [Fact]
+    public void Avalonia_registers_shared_shape_soft_edge_presets()
+    {
+        var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("ShapeEffectAuthoringPlanner.SoftEdgeNoneCommandId");
+        source.Should().Contain("ShapeEffectAuthoringPlanner.SoftEdgeSubtleCommandId");
+        source.Should().Contain("ShapeEffectAuthoringPlanner.SoftEdgeStrongCommandId");
+        source.Should().Contain("Editor.SetSelectedShapeSoftEdge(ShapeEffectAuthoringPlanner.SoftEdgeNone())");
+        source.Should().Contain("Editor.SetSelectedShapeSoftEdge(ShapeEffectAuthoringPlanner.SoftEdgeSubtle())");
+        source.Should().Contain("Editor.SetSelectedShapeSoftEdge(ShapeEffectAuthoringPlanner.SoftEdgeStrong())");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);

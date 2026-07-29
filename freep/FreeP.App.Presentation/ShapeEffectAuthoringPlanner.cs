@@ -17,6 +17,13 @@ public enum ShapeGlowPreset
     Strong,
 }
 
+public enum ShapeSoftEdgePreset
+{
+    None,
+    Subtle,
+    Strong,
+}
+
 /// <summary>PowerPoint-style shape shadow presets backed by the shared effect model.</summary>
 public static class ShapeEffectAuthoringPlanner
 {
@@ -26,6 +33,9 @@ public static class ShapeEffectAuthoringPlanner
     public const string GlowNoneCommandId = "freep.shape.glow.none";
     public const string GlowSubtleCommandId = "freep.shape.glow.subtle";
     public const string GlowStrongCommandId = "freep.shape.glow.strong";
+    public const string SoftEdgeNoneCommandId = "freep.shape.soft-edge.none";
+    public const string SoftEdgeSubtleCommandId = "freep.shape.soft-edge.subtle";
+    public const string SoftEdgeStrongCommandId = "freep.shape.soft-edge.strong";
 
     public static ShapeShadowValues None() => Resolve(ShapeShadowPreset.None);
     public static ShapeShadowValues Subtle() => Resolve(ShapeShadowPreset.Subtle);
@@ -33,6 +43,9 @@ public static class ShapeEffectAuthoringPlanner
     public static ShapeGlowValues GlowNone() => ResolveGlow(ShapeGlowPreset.None);
     public static ShapeGlowValues GlowSubtle() => ResolveGlow(ShapeGlowPreset.Subtle);
     public static ShapeGlowValues GlowStrong() => ResolveGlow(ShapeGlowPreset.Strong);
+    public static ShapeSoftEdgeValues SoftEdgeNone() => ResolveSoftEdge(ShapeSoftEdgePreset.None);
+    public static ShapeSoftEdgeValues SoftEdgeSubtle() => ResolveSoftEdge(ShapeSoftEdgePreset.Subtle);
+    public static ShapeSoftEdgeValues SoftEdgeStrong() => ResolveSoftEdge(ShapeSoftEdgePreset.Strong);
 
     public static ShapeShadowValues Resolve(ShapeShadowPreset preset) => preset switch
     {
@@ -48,6 +61,14 @@ public static class ShapeEffectAuthoringPlanner
         ShapeGlowPreset.Subtle => CreateGlow(alpha: 0x66, radiusPt: 4),
         ShapeGlowPreset.Strong => CreateGlow(alpha: 0xA0, radiusPt: 8),
         _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, "Unknown shape glow preset."),
+    };
+
+    public static ShapeSoftEdgeValues ResolveSoftEdge(ShapeSoftEdgePreset preset) => preset switch
+    {
+        ShapeSoftEdgePreset.None => ShapeSoftEdgeValues.None,
+        ShapeSoftEdgePreset.Subtle => new(true, PointsToEmu(4)),
+        ShapeSoftEdgePreset.Strong => new(true, PointsToEmu(8)),
+        _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, "Unknown shape soft-edge preset."),
     };
 
     private static ShapeShadowValues Create(byte alpha, double blurPt, double distancePt) => new(

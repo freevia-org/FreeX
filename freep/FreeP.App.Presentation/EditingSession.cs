@@ -922,6 +922,19 @@ public sealed class EditingSession
         return count;
     }
 
+    /// <summary>Applies one soft-edge preset to every selected shape.</summary>
+    public int SetSelectedShapeSoftEdge(ShapeSoftEdgeValues values)
+    {
+        var count = 0;
+        foreach (var id in _selectedShapeIds)
+        {
+            Bus.Execute(new SetShapeSoftEdgeCommand(_currentSlideIndex, id, values));
+            count++;
+        }
+
+        return count;
+    }
+
     /// <summary>Sets fill on all selected shapes.</summary>
     public void SetSelectedFill(ShapeFill? fill)
     {
