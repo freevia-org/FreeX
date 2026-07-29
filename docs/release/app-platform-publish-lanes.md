@@ -1,26 +1,42 @@
 # App Platform Publish Lanes
 
-This matrix is the maintainer map for tester packages. Each app/platform lane must be runnable independently; a Windows package must not depend on a macOS artifact, and Linux/macOS previews must not move the Windows latest pointer.
+Every tester release uses one predictable app/version tag and independently runnable platform jobs. The release publisher does not make a Windows package wait for macOS or Linux: it only gathers the packages selected in that dispatch.
 
-| App | Windows | Linux | macOS |
-| --- | --- | --- | --- |
-| FreeX | `.github/workflows/tester-release.yml` publishes the WPF tester release and stable Windows assets. | `.github/workflows/linux-release.yml` publishes Avalonia Linux release assets. | `.github/workflows/macos-app.yml` builds hosted Avalonia app previews; `tester-release.yml` can attach same-commit macOS assets when explicitly requested. |
-| FreeW | `.github/workflows/freew-release.yml` runs `freew/build/publish-windows.ps1` for the WPF `win-x64` zip. | `.github/workflows/freew-linux.yml` builds and smoke-tests Avalonia `linux-x64` and `linux-arm64` packages using the dispatch `release_version`. | `tools/Publish-SisterAppTesterPackages.ps1 -App FreeW` publishes Avalonia `osx-x64` and `osx-arm64` tester zips until a hosted macOS FreeW workflow is promoted. |
-| FreeP | `tools/Publish-SisterAppTesterPackages.ps1 -App FreeP -Runtimes win-x64` publishes the WPF `win-x64` tester zip. | `tools/Publish-SisterAppTesterPackages.ps1 -App FreeP -Runtimes linux-x64,linux-arm64` publishes Avalonia Linux tester zips. | `tools/Publish-SisterAppTesterPackages.ps1 -App FreeP -Runtimes osx-x64,osx-arm64` publishes Avalonia macOS tester zips. |
+## Canonical Release Contract
 
-For FreeW and FreeP all-platform tester packages from a validated commit:
+| App | Tag | Windows | Linux | macOS |
+| --- | --- | --- | --- | --- |
+| FreeX | `freex-v<version>` | `FreeX-v<version>-win-x64.exe` | `FreeX-v<version>-linux-{x64,arm64}.zip` | `FreeX-v<version>-osx-{x64,arm64}.zip` |
+| FreeW | `freew-v<version>` | `FreeW-v<version>-win-x64.exe` | `FreeW-v<version>-linux-{x64,arm64}.zip` | `FreeW-v<version>-osx-{x64,arm64}.zip` |
+| FreeP | `freep-v<version>` | `FreeP-v<version>-win-x64.exe` | `FreeP-v<version>-linux-{x64,arm64}.zip` | `FreeP-v<version>-osx-{x64,arm64}.zip` |
+
+Every release asset has an adjacent `.sha256` file. Windows artifacts are self-contained single-file WPF executables. Linux and macOS artifacts are self-contained Avalonia archives. This is a packaging distinction, not a release-lane distinction: all three platforms belong to the same app/version release.
+
+## Dispatching A Lane
+
+Use the `App Tester Release` workflow (`.github/workflows/app-tester-release.yml`) for normal tester publication. It runs the selected app's release test gate, packages the requested platform lane on its native GitHub runner, and creates or updates the matching app/version release.
+
+| Requested work | Dispatch inputs |
+| --- | --- |
+| One app, one platform | `app=<FreeX|FreeW|FreeP>`, `platform=<windows|linux|macos>` |
+| One app, all platforms | `app=<FreeX|FreeW|FreeP>`, `platform=all` |
+| All apps, one platform | `app=all`, `platform=<windows|linux|macos>` |
+| All apps, all platforms | `app=all`, `platform=all` |
+
+For example, a complete `0.8.151` tester package run is:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Publish-SisterAppTesterPackages.ps1 -App FreeW -Version <version>
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Publish-SisterAppTesterPackages.ps1 -App FreeP -Version <version>
+gh workflow run app-tester-release.yml --ref <branch> -f app=all -f platform=all -f release_version=0.8.151 -f prerelease=true
 ```
 
-The script writes versioned zips, `.sha256` files, and a manifest under `artifacts/sister-tester-release-<version>`. Publish those assets to the app-specific GitHub prerelease tag (`freew-v<version>` or `freep-v<version>`) until the remaining hosted release publishers are added.
+The workflow uses `tools/Publish-SisterAppTesterPackages.ps1` as the package contract. It accepts `-Runtimes` for local, independent package verification and now supports FreeX, FreeW, and FreeP:
 
-Before dispatching or publishing a lane, run the app's test gate:
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Publish-SisterAppTesterPackages.ps1 -App FreeP -Version 0.8.151 -Runtimes win-x64
+```
 
-| App | Gate |
-| --- | --- |
-| FreeX | `tools\Test-TesterReleaseReadiness.ps1`, `dotnet build FreeX.slnx --configuration Release`, `dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build`, and the UI lane when preparing a tester release. |
-| FreeW | `dotnet test FreeW.slnx --configuration Release` when time allows; otherwise at minimum core model, core IO, host, and Avalonia focused slices that cover the changed surface. |
-| FreeP | `.github/workflows/freep-ci.yml` or `dotnet build FreeP.slnx --configuration Release` followed by `dotnet test FreeP.slnx --configuration Release --no-build`. |
+## Existing Specialized Workflows
+
+`tester-release.yml`, `linux-release.yml`, `macos-app.yml`, `freew-release.yml`, `freew-linux.yml`, and `freep-release.yml` remain useful as focused validation or platform-preview lanes. They are not the canonical cross-platform release surface. New tester releases should use `app-tester-release.yml`, so a tester does not need to chase separate Windows, Linux, and macOS release pages for the same app/version.
+
+Before dispatching a release, freeze the intended commit and run the app's applicable test gate. The canonical workflow repeats that gate in hosted CI before it publishes any package.
