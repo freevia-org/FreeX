@@ -178,10 +178,11 @@ public static class FormulaRangeEntryPlanner
         bool useR1C1ReferenceStyle,
         string? selectedSheetName)
     {
-        var cellReferenceText = !useR1C1ReferenceStyle &&
-            TryFormatWholeRowOrColumnReference(selectedRange, out var shorthand)
-                ? shorthand
-                : SpreadsheetDisplayFormatter.FormatRangeReference(
+        var shorthand = useR1C1ReferenceStyle
+            ? null
+            : FormatWholeRowOrColumnReferenceShorthand(selectedRange);
+        var cellReferenceText = shorthand
+                ?? SpreadsheetDisplayFormatter.FormatRangeReference(
                     selectedRange.Start,
                     selectedRange.End,
                     useR1C1ReferenceStyle);
@@ -190,32 +191,27 @@ public static class FormulaRangeEntryPlanner
             : $"{SheetNameFormatter.QuoteIfNeeded(selectedSheetName)}!{cellReferenceText}";
     }
 
-    private static bool TryFormatWholeRowOrColumnReference(GridRange range, out string reference)
+    public static string? FormatWholeRowOrColumnReferenceShorthand(GridRange range)
     {
         var isWholeColumnBand = range.Start.Row == 1 && range.End.Row == CellAddress.MaxRow;
         var isWholeRowBand = range.Start.Col == 1 && range.End.Col == CellAddress.MaxCol;
 
         // A whole-sheet selection has no bare Excel shorthand; retain its full A1 extent.
         if (isWholeColumnBand == isWholeRowBand)
-        {
-            reference = "";
-            return false;
-        }
+            return null;
 
         if (isWholeColumnBand)
         {
             var firstColumn = FormatColumnReference(range.Start.Col);
             var lastColumn = FormatColumnReference(range.End.Col);
-            reference = firstColumn == lastColumn
+            return firstColumn == lastColumn
                 ? $"{firstColumn}:{firstColumn}"
                 : $"{firstColumn}:{lastColumn}";
-            return true;
         }
 
-        reference = range.Start.Row == range.End.Row
+        return range.Start.Row == range.End.Row
             ? $"{range.Start.Row}:{range.Start.Row}"
             : $"{range.Start.Row}:{range.End.Row}";
-        return true;
     }
 
     private static string FormatColumnReference(uint column) =>

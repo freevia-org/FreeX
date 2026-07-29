@@ -15,13 +15,13 @@ public sealed class R55_FormulaPointWholeAreaTests
         var columnMethod = ExtractMethod(source, "private void AddAdditionalColumnSelection");
         var rowMethod = ExtractMethod(source, "private void AddAdditionalRowSelection");
 
-        columnMethod.Should().Contain("TryAppendDisjointFormulaReference(range)");
-        rowMethod.Should().Contain("TryAppendDisjointFormulaReference(range)");
-        columnMethod.IndexOf("TryAppendDisjointFormulaReference(range)", StringComparison.Ordinal)
+        columnMethod.Should().Contain("TryAppendDisjointFormulaRangeReference(range)");
+        rowMethod.Should().Contain("TryAppendDisjointFormulaRangeReference(range)");
+        columnMethod.IndexOf("TryAppendDisjointFormulaRangeReference(range)", StringComparison.Ordinal)
             .Should().BeLessThan(columnMethod.IndexOf("TryApplyFormulaRangeSelection", StringComparison.Ordinal));
-        rowMethod.IndexOf("TryAppendDisjointFormulaReference(range)", StringComparison.Ordinal)
+        rowMethod.IndexOf("TryAppendDisjointFormulaRangeReference(range)", StringComparison.Ordinal)
             .Should().BeLessThan(rowMethod.IndexOf("TryApplyFormulaRangeSelection", StringComparison.Ordinal));
-        source.Should().Contain("private bool TryAppendDisjointFormulaReference(GridRange range)");
+        source.Should().Contain("private bool TryAppendDisjointFormulaRangeReference(GridRange range)");
         source.Should().NotContain("ApplyWholeRowOrColumnFormulaReferenceShorthand");
     }
 

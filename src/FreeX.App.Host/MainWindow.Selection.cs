@@ -70,7 +70,7 @@ public partial class MainWindow
     private void AddAdditionalColumnSelection(uint col)
     {
         var range = CreateWholeColumnRange(_currentSheetId, col);
-        if (TryAppendDisjointFormulaReference(range))
+        if (TryAppendDisjointFormulaRangeReference(range))
             return;
 
         if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
@@ -95,7 +95,7 @@ public partial class MainWindow
     private void AddAdditionalRowSelection(uint row)
     {
         var range = CreateWholeRowRange(_currentSheetId, row);
-        if (TryAppendDisjointFormulaReference(range))
+        if (TryAppendDisjointFormulaRangeReference(range))
             return;
 
         if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
@@ -169,9 +169,9 @@ public partial class MainWindow
     // reference span to append after; the very first click in point mode has no prior span and
     // falls through to the normal (replacing) path.
     private bool TryAppendDisjointFormulaReference(CellAddress newAddr)
-        => TryAppendDisjointFormulaReference(new GridRange(newAddr, newAddr));
+        => TryAppendDisjointFormulaRangeReference(new GridRange(newAddr, newAddr));
 
-    private bool TryAppendDisjointFormulaReference(GridRange range)
+    private bool TryAppendDisjointFormulaRangeReference(GridRange range)
     {
         var editor = GetFormulaRangeEntryEditor();
         if (editor is null)
