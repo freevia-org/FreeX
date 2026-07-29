@@ -566,6 +566,28 @@ public sealed class OsClipboardServiceTests
     }
 
     [StaFact]
+    public void Paste_ExternalRtfPicture_InsertsPictureAndRetainsText()
+    {
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi Caption {\pict\pngblip " + Convert.ToHexString(_minPng) + @"} After}");
+        var fake = new FakeOsClipboard { RtfBytes = rtf };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        editor.CurrentSlide.Shapes[0].Kind.Should().Be(SlideShapeKind.Picture);
+        editor.CurrentSlide.Shapes[0].Picture!.Bytes.Should().Equal(_minPng);
+        editor.CurrentSlide.Shapes[0].Picture!.ContentType.Should().Be("image/png");
+        editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
+            .Should().Contain(run => run.Text.Contains("Caption ", StringComparison.Ordinal));
+    }
+
+    [StaFact]
     public void Paste_XamlPackageTable_InsertsProjectedTextBox()
     {
         const string xaml = """
