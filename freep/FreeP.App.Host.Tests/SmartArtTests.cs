@@ -1796,9 +1796,12 @@ public sealed class SmartArtTests : IDisposable
                 new XAttribute("modelId", n.id),
                 new XAttribute("type", assistantIds.Contains(n.id) ? "asst" : "node"),
                 new XElement(dgmNs + "t",
-                    new XElement(aNs + "p",
-                        new XElement(aNs + "r",
-                            new XElement(aNs + "t", n.text))))));
+                    n.text.Replace("\r\n", "\n", StringComparison.Ordinal)
+                        .Replace('\r', '\n')
+                        .Split('\n')
+                        .Select(line => new XElement(aNs + "p",
+                            new XElement(aNs + "r",
+                                new XElement(aNs + "t", line)))))));
 
         var cxnElems = parOfConnections.Select(c =>
             new XElement(dgmNs + "cxn",
@@ -2843,6 +2846,36 @@ public sealed class SmartArtTests : IDisposable
             .SelectMany(paragraph => paragraph.Runs)
             .Select(run => run.Text)
             .Should().Contain(["CEO", "Assistant", "Director"]);
+    }
+
+    [Fact]
+    public void Reader_PreservesSmartArtNodeParagraphBoundaries()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/nameAndTitleOrgChart",
+            nodes: [("R", "Jane Doe\nChief Executive Officer")],
+            parOfConnections: []);
+        var savedPath = Path.Combine(_tempDir, "smartart-node-paragraphs-saved.pptx");
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        smartArt.Data!.Nodes.Single().Text.Should().Be("Jane Doe\nChief Executive Officer");
+
+        var rewrite = SmartArtEditingPlanner.RewriteDataPart(smartArt);
+        rewrite.Applied.Should().BeTrue();
+        PptxPackageWriter.Write(presentation, savedPath);
+
+        using var archive = ZipFile.OpenRead(savedPath);
+        var entry = archive.GetEntry("ppt/diagrams/data1.xml");
+        entry.Should().NotBeNull();
+        using var reader = new StreamReader(entry!.Open(), Encoding.UTF8);
+        var dataXml = XDocument.Parse(reader.ReadToEnd());
+        var aNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        dataXml.Descendants(aNs + "p")
+            .Select(p => string.Concat(p.Descendants(aNs + "t").Select(t => t.Value)))
+            .Should().ContainInOrder("Jane Doe", "Chief Executive Officer");
     }
 
     [Fact]

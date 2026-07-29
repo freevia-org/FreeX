@@ -824,6 +824,19 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void SmartArtLiveBoxesPreserveAuthoredNodeParagraphs()
+    {
+        var data = MakeHierarchyData("Jane Doe\nChief Executive Officer", "Sales", "Engineering");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/nameAndTitleOrgChart";
+
+        var manager = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!
+            .Single(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text == "Jane Doe");
+
+        manager.TextBody!.Paragraphs.Select(paragraph => paragraph.Runs.Single().Text)
+            .Should().Equal("Jane Doe", "Chief Executive Officer");
+    }
+
+    [Fact]
     public void OrgChart_AssistantNode_UsesSideSlotBeforeRegularReports()
     {
         var root = new SmartArtNode { Text = "CEO", Level = 0 };
