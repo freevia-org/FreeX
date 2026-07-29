@@ -551,6 +551,12 @@ public partial class MainWindow
         if (e.Key == Key.Back || e.Key == Key.Delete)
             _suppressNextCellValueAutoCompleteSuggestion = true;
 
+        if (TryToggleFormulaRangeEntrySelectionMode(e.Key, Keyboard.Modifiers))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.F2 && Keyboard.Modifiers == ModifierKeys.None && _inlineEditor is not null)
         {
             var togglePlan = FormulaEditInteractionPlanner.BuildPointModeTogglePlan(_inlineEditor.Text, _formulaRangeEntryMode);
@@ -620,9 +626,11 @@ public partial class MainWindow
                 pageSize,
                 colPageSize) is { } formulaReferenceShortcutTarget)
         {
-            if (TryApplyFormulaRangeSelection(
+            if (TryApplyFormulaRangeEntryKeyboardSelection(
+                    formulaReferenceCurrent,
                     formulaReferenceShortcutTarget,
-                    extendSelection: wpfModifiers.HasFlag(ModifierKeys.Shift)))
+                    extendSelection: _formulaRangeEntrySelectionMode == ExcelSelectionMode.Extend ||
+                        wpfModifiers.HasFlag(ModifierKeys.Shift)))
             {
                 EnsureCellVisible(formulaReferenceShortcutTarget);
                 e.Handled = true;
@@ -664,7 +672,11 @@ public partial class MainWindow
 
         if (intent.Action == ExcelEditKeyAction.SelectFormulaReference && intent.Target is { } referenceTarget)
         {
-            if (TryApplyFormulaRangeSelection(referenceTarget, extendSelection: wpfModifiers.HasFlag(ModifierKeys.Shift)))
+            if (TryApplyFormulaRangeEntryKeyboardSelection(
+                    formulaReferenceCurrent,
+                    referenceTarget,
+                    extendSelection: _formulaRangeEntrySelectionMode == ExcelSelectionMode.Extend ||
+                        wpfModifiers.HasFlag(ModifierKeys.Shift)))
             {
                 EnsureCellVisible(referenceTarget);
                 e.Handled = true;
@@ -868,6 +880,12 @@ public partial class MainWindow
         if (e.Key == Key.Back || e.Key == Key.Delete)
             _suppressNextCellValueAutoCompleteSuggestion = true;
 
+        if (TryToggleFormulaRangeEntrySelectionMode(e.Key, e.KeyboardDevice.Modifiers))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.F2 && e.KeyboardDevice.Modifiers == ModifierKeys.None)
         {
             var togglePlan = FormulaEditInteractionPlanner.BuildPointModeTogglePlan(FormulaBar.Text, _formulaRangeEntryMode);
@@ -923,9 +941,11 @@ public partial class MainWindow
                     pageSize,
                     colPageSize) is { } formulaReferenceShortcutTarget)
             {
-                if (TryApplyFormulaRangeSelection(
+                if (TryApplyFormulaRangeEntryKeyboardSelection(
+                        formulaReferenceCurrent,
                         formulaReferenceShortcutTarget,
-                        extendSelection: wpfModifiers.HasFlag(ModifierKeys.Shift)))
+                        extendSelection: _formulaRangeEntrySelectionMode == ExcelSelectionMode.Extend ||
+                            wpfModifiers.HasFlag(ModifierKeys.Shift)))
                 {
                     EnsureCellVisible(formulaReferenceShortcutTarget);
                     e.Handled = true;
@@ -960,7 +980,11 @@ public partial class MainWindow
             }
             else if (intent.Action == ExcelEditKeyAction.SelectFormulaReference && intent.Target is { } referenceTarget)
             {
-                if (TryApplyFormulaRangeSelection(referenceTarget, extendSelection: wpfModifiers.HasFlag(ModifierKeys.Shift)))
+                if (TryApplyFormulaRangeEntryKeyboardSelection(
+                        formulaReferenceCurrent,
+                        referenceTarget,
+                        extendSelection: _formulaRangeEntrySelectionMode == ExcelSelectionMode.Extend ||
+                            wpfModifiers.HasFlag(ModifierKeys.Shift)))
                 {
                     EnsureCellVisible(referenceTarget);
                     e.Handled = true;

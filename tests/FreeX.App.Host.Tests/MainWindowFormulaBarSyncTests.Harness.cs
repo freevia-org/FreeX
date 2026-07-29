@@ -43,6 +43,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _formulaBarExpandButtonClick;
         private readonly MethodInfo _editActiveCellInFormulaBar;
         private readonly MethodInfo _tryApplyFormulaRangeSelection;
+        private readonly MethodInfo _tryToggleFormulaRangeEntrySelectionMode;
         private readonly MethodInfo _selectRow;
         private readonly MethodInfo _selectColumn;
         private readonly MethodInfo _addAdditionalRowSelection;
@@ -123,6 +124,9 @@ public sealed partial class MainWindowFormulaBarSyncTests
                     types: [typeof(CellAddress), typeof(bool)],
                     modifiers: null)
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryApplyFormulaRangeSelection");
+            _tryToggleFormulaRangeEntrySelectionMode = typeof(MainWindow)
+                .GetMethod("TryToggleFormulaRangeEntrySelectionMode", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "TryToggleFormulaRangeEntrySelectionMode");
             _selectRow = typeof(MainWindow)
                 .GetMethod("SelectRow", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SelectRow");
@@ -317,6 +321,15 @@ public sealed partial class MainWindowFormulaBarSyncTests
                 [new CellAddress(sheet.Id, row, col), extend])!;
             PumpDispatcher();
             return applied;
+        }
+
+        public void ToggleFormulaRangeEntrySelectionMode(ModifierKeys modifiers)
+        {
+            var toggled = (bool)_tryToggleFormulaRangeEntrySelectionMode.Invoke(
+                _window,
+                [Key.F8, modifiers])!;
+            toggled.Should().BeTrue("F8 selection mode should be handled while formula Point mode is active");
+            PumpDispatcher();
         }
 
         public void SelectWholeRow(uint row)

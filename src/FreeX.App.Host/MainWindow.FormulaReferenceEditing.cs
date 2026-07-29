@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation;
 using FreeX.Core.Formula;
@@ -22,6 +23,7 @@ public partial class MainWindow
         _formulaEditCell = null;
         _formulaRangeSelectionAnchor = null;
         _formulaRangeEntryMode = false;
+        _formulaRangeEntrySelectionMode = ExcelSelectionMode.Normal;
         ClearFormulaReferenceEntrySpan();
         ClearFormulaReferenceHighlights();
     }
@@ -68,6 +70,85 @@ public partial class MainWindow
         var caret = Math.Clamp(editor.CaretIndex, 0, editor.Text.Length);
         if (caret < start || caret > end)
             ClearFormulaReferenceEntrySpan();
+    }
+
+    private bool TryToggleFormulaRangeEntrySelectionMode(Key key, ModifierKeys modifiers)
+    {
+        var editor = GetFormulaRangeEntryEditor();
+        if (!IsFormulaRangeEntryActive(editor) ||
+            !FormulaRangeEntryPlanner.TryToggleKeyboardSelectionMode(
+                FormulaBarWpfInputAdapter.ToFormulaEditorKey(key),
+                FormulaBarWpfInputAdapter.ToFormulaEditorModifiers(modifiers),
+                _formulaRangeEntrySelectionMode,
+                out var next))
+        {
+            return false;
+        }
+
+        _formulaRangeEntrySelectionMode = next;
+        if (next == ExcelSelectionMode.Normal)
+            SetFormulaEditStatusBarMode(pointMode: true);
+        else
+            SetStatusBarModeText(UiText.Get(ExcelSelectionModePlanner.StatusBarModeResourceKey(next)));
+        return true;
+    }
+
+    private bool TryApplyFormulaRangeEntryKeyboardSelection(
+        CellAddress current,
+        CellAddress target,
+        bool extendSelection)
+    {
+        var range = FormulaRangeEntryPlanner.GetKeyboardDisjointRange(current, target, extendSelection);
+        if (_formulaRangeEntrySelectionMode != ExcelSelectionMode.Add)
+            return TryApplyFormulaRangeSelection(target, extendSelection);
+
+        var editor = GetFormulaRangeEntryEditor();
+        var formulaCell = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
+        if (editor is null || formulaCell is null)
+            return false;
+
+        if (_formulaReferenceStart is not { } previousStart ||
+            _formulaReferenceLength is not { } previousLength)
+        {
+            return TryApplyFormulaRangeSelection(range, range.Start, target);
+        }
+
+        if (!FormulaRangeEntryPlanner.TryAppendKeyboardRangeSelection(
+                editor.Text,
+                previousStart,
+                previousLength,
+                current,
+                target,
+                extendSelection,
+                formulaCell.Value,
+                _options.UseR1C1ReferenceStyle,
+                out var edit,
+                _workbook.GetSheet(range.Start.Sheet)?.Name))
+        {
+            return false;
+        }
+
+        ApplyTextEdit(editor, edit.TextEdit);
+        if (!ReferenceEquals(editor, FormulaBar))
+            FormulaBar.Text = editor.Text;
+        else if (_inlineEditor?.IsVisible == true)
+            _inlineEditor.Text = editor.Text;
+
+        _formulaReferenceStart = edit.ReferenceStart;
+        _formulaReferenceLength = edit.ReferenceLength;
+        _formulaRangeSelectionAnchor = range.Start;
+        _selectionAnchor = range.Start;
+        _selectionCursor = range.End;
+        SheetGrid.SelectedRanges = null;
+        SheetGrid.SelectedRange = range;
+        CellAddressBox.Text = range.Start == range.End
+            ? FormatCellReference(range.Start)
+            : FormatRangeReference(range.Start, range.End);
+        RefreshStatusBar();
+        RefreshFormulaReferenceHighlights();
+        SetFormulaEditStatusBarMode(pointMode: true);
+        editor.Focus();
+        return true;
     }
 
     private bool IsFormulaRangeEntryActive(System.Windows.Controls.TextBox? editor)

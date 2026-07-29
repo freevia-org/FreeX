@@ -14,6 +14,7 @@ internal static class FormulaBarAvaloniaInputAdapter
             Key.Escape => FormulaEditorKey.Escape,
             Key.F2 => FormulaEditorKey.F2,
             Key.F4 => FormulaEditorKey.F4,
+            Key.F8 => FormulaEditorKey.F8,
             Key.Up => FormulaEditorKey.Up,
             Key.Down => FormulaEditorKey.Down,
             Key.Left => FormulaEditorKey.Left,
