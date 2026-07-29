@@ -419,14 +419,16 @@ internal static class FreePCommandInventory
             RemainingWork: "WPF/Avalonia now share mixed-run and paragraph-preserving edits, marker sequencing, selection/caret rendering, rich copy/cut/paste payloads including all modeled inline effects, plain-text clipboard interoperability, picture-bullet picker payload execution, paragraph authoring, PPTX media-part persistence, Tab/Shift+Tab navigation, focused-editor keyboard ownership, commit/cancel routing, and bounded common external RTF paste in Avalonia. Avalonia still uses a custom rich surface over a native TextBox rather than a framework-native RichTextBox. XamlPackage import, unsupported RTF destinations and controls, richer RTF lists/objects/fields, broader IME/RTL/FlowDocument behavior, and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
         new(
             EvidenceId: "freep.clipboard.external-rtf-depth",
-            Area: "External RTF list, paragraph-layout, and hyperlink paste depth",
+            Area: "External RTF list, paragraph-layout, hyperlink, and field paste depth",
             Status: "shared-planner-and-host-evidence",
             HostCoverage: "WPF/Avalonia renderer-neutral rich-text model and paste adapters consume the same bounded external RTF planner; WPF remains authoritative and no platform-specific semantic fork was added",
             EvidenceDocs:
             [
                 "docs/parity/freep-external-rtf-paste-wave18-20260727.md",
                 "docs/parity/freep-external-rtf-tables-wave19-20260727.md",
-                "docs/parity/freep-external-rtf-picture-paste-20260730.md"
+                "docs/parity/freep-external-rtf-picture-paste-20260730.md",
+                "docs/parity/freep-external-rtf-file-hyperlink-20260729.md",
+                "docs/parity/freep-external-rtf-field-runs-20260730.md"
             ],
             Verification:
             [
@@ -436,7 +438,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Rendering.Wpf/WpfRichTextClipboardAdapter.cs",
                 "freep/FreeP.App.Host.Tests/WpfRichTextClipboardAdapterTests.cs"
             ],
-            RemainingWork: "The bounded subset now preserves common Word/LibreOffice list markers, nested levels, continuation/restart intent where the existing model can represent it, paragraph alignment/indent/spacing, safe http/https/mailto HYPERLINK field results, common trowd/cellx/cell/row plus nestcell/nestrow table boundaries as WPF-compatible tab-delimited cells and paragraph-delimited rows, and validated PNG/JPEG \\pict payloads as slide-level picture shapes while retaining custom-v2 > RTF > plain-text precedence. Because TextBody has no inline table node, cell widths, borders, fills, vertical alignment, merges, nested-table structure, and table geometry are flattened rather than persisted. XamlPackage objects, unsupported RTF destinations and controls, arbitrary fields, RTL/IME nuances, complete Word list-template numbering, inline picture/object runs, and PowerPoint-authoritative external RTF visual baselines remain deferred."),
+            RemainingWork: "The bounded subset now preserves common Word/LibreOffice list markers, nested levels, continuation/restart intent where the existing model can represent it, paragraph alignment/indent/spacing, guarded http/https/mailto/file HYPERLINK field results with remote file hosts blocked, safe non-hyperlink field tokens with cached result text, common trowd/cellx/cell/row plus nestcell/nestrow table boundaries as WPF-compatible tab-delimited cells and paragraph-delimited rows, and validated PNG/JPEG \\pict payloads as slide-level picture shapes while retaining custom-v2 > RTF > plain-text precedence. Because TextBody has no inline table node, cell widths, borders, fills, vertical alignment, merges, nested-table structure, and table geometry are flattened rather than persisted. XamlPackage objects, unsupported RTF destinations and controls, complex Word field calculation, RTL/IME nuances, complete Word list-template numbering, inline picture/object runs, and PowerPoint-authoritative external RTF visual baselines remain deferred."),
         new(
             EvidenceId: "freep.header-footer.placeholder-creation",
             Area: "Header/Footer date, footer, and slide-number placeholder creation",
@@ -1926,7 +1928,8 @@ internal static class FreePCommandInventory
             HostCoverage: "WPF/Avalonia consume shared SmartArtEditingPlanner data-part rewrite output through the existing PPTX writer with no renderer-local SmartArt persistence policy",
             EvidenceDocs:
             [
-                "docs/parity/freep-smartart-data-part-authoring-2026-07-14.md"
+                "docs/parity/freep-smartart-data-part-authoring-2026-07-14.md",
+                "docs/parity/freep-smartart-nontree-connection-preservation-20260730.md"
             ],
             Verification:
             [
@@ -1934,7 +1937,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtEditingPlannerTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "Shared SmartArt outline edits can now regenerate the native diagram data part and round-trip edited node text plus parOf hierarchy through the PPTX writer/reader. PowerPoint-authored authoring baselines, text-pane UI workflows, richer assistant/org-chart editing nuance, exact PowerPoint visual baselines, and regeneration of layout/style/color/drawing-cache parts remain deferred."),
+            RemainingWork: "Shared SmartArt outline edits can now regenerate the native diagram data part, round-trip edited node text plus parOf hierarchy, and preserve authored non-tree relationships such as presOf/presParOf when their endpoints remain live. PowerPoint-authored authoring baselines, text-pane UI workflows, richer assistant/org-chart editing nuance, exact PowerPoint visual baselines, and regeneration of layout/style/color/drawing-cache parts remain deferred."),
         new(
             EvidenceId: "freep.smartart.text-pane-cache-authoring",
             Area: "SmartArt text-pane outline and cache authoring",
