@@ -246,6 +246,44 @@ public sealed class ConnectorAttachmentTests
         ConnectionSiteHelper.Resolve(homePlate, 2).Should().Be((100L, 50L));
     }
 
+    [Theory]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.RectangularCallout, 3, 45, 100)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.RoundedRectangularCallout, 3, 45, 100)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.OvalCallout, 3, 47, 100)]
+    public void ConnectionSiteHelper_CalloutSitesReachVisibleTail(
+        Free.Shared.Drawing.DrawingShapeKind kind,
+        int siteIndex,
+        int expectedX,
+        int expectedY)
+    {
+        var shape = MakeRect(1, 0, 0, 100, 100);
+        shape.AutoShapeKind = kind;
+
+        ConnectionSiteHelper.Resolve(shape, siteIndex).Should().Be((expectedX, expectedY));
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_HeartUsesNotchAndBottomExtrema()
+    {
+        var shape = MakeRect(1, 0, 0, 100, 100);
+        shape.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Heart;
+
+        ConnectionSiteHelper.Resolve(shape, 1).Should().Be((50L, 22L));
+        ConnectionSiteHelper.Resolve(shape, 3).Should().Be((50L, 100L));
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_FlowchartDataSitesFollowSlantedOutline()
+    {
+        var shape = MakeRect(1, 0, 0, 100, 100);
+        shape.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.FlowchartData;
+
+        ConnectionSiteHelper.Resolve(shape, 0).Should().Be((11L, 50L));
+        ConnectionSiteHelper.Resolve(shape, 1).Should().Be((61L, 0L));
+        ConnectionSiteHelper.Resolve(shape, 2).Should().Be((89L, 50L));
+        ConnectionSiteHelper.Resolve(shape, 3).Should().Be((39L, 100L));
+    }
+
     [Fact]
     public void ConnectionSiteHelper_DirectionalArrowSitesFollowVisibleTipAndGuides()
     {

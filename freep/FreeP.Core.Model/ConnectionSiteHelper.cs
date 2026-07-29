@@ -191,6 +191,19 @@ public static class ConnectionSiteHelper
                     _ => (midX,  midY)      // fallback: centre
                 };
 
+            // FlowchartData is the shared parallelogram with independently slanted
+            // top and bottom edges.  Use the actual polygon intersections instead
+            // of the bounding-box midpoints, which can fall outside the outline.
+            case DrawingShapeKind.FlowchartData:
+                return siteIndex switch
+                {
+                    0 => (left + (long)Math.Round(shape.ExtentCxEmu * 0.11), midY),
+                    1 => (left + (long)Math.Round(shape.ExtentCxEmu * 0.61), top),
+                    2 => (left + (long)Math.Round(shape.ExtentCxEmu * 0.89), midY),
+                    3 => (left + (long)Math.Round(shape.ExtentCxEmu * 0.39), bottom),
+                    _ => (midX, midY)
+                };
+
             // ── Isosceles Triangle ───────────────────────────────────────────────────
             // Vertices: apex (top-mid), base-left (bottom-left), base-right (bottom-right).
             // PowerPoint site mapping:
@@ -231,6 +244,49 @@ public static class ConnectionSiteHelper
                 {
                     0 => (left, top + (long)Math.Round(shape.ExtentCyEmu * 0.38)),
                     1 => (midX, top),
+                    2 => (right, top + (long)Math.Round(shape.ExtentCyEmu * 0.38)),
+                    3 => (midX, bottom),
+                    _ => (midX, midY)
+                };
+
+            // Callout tails are part of the visible outline.  The old bbox fallback
+            // placed the bottom attachment in the callout body, so an attached
+            // connector could visibly stop above the tail tip.
+            case DrawingShapeKind.RectangularCallout:
+            case DrawingShapeKind.RoundedRectangularCallout:
+            {
+                const double bodyFraction = 0.80;
+                return siteIndex switch
+                {
+                    0 => (left, top + (long)Math.Round(shape.ExtentCyEmu * bodyFraction / 2)),
+                    1 => (midX, top),
+                    2 => (right, top + (long)Math.Round(shape.ExtentCyEmu * bodyFraction / 2)),
+                    3 => (left + (long)Math.Round(shape.ExtentCxEmu * 0.45), bottom),
+                    _ => (midX, midY)
+                };
+            }
+
+            case DrawingShapeKind.OvalCallout:
+            {
+                const double bodyFraction = 0.82;
+                return siteIndex switch
+                {
+                    0 => (left, top + (long)Math.Round(shape.ExtentCyEmu * bodyFraction / 2)),
+                    1 => (midX, top),
+                    2 => (right, top + (long)Math.Round(shape.ExtentCyEmu * bodyFraction / 2)),
+                    3 => (left + (long)Math.Round(shape.ExtentCxEmu * 0.47), bottom),
+                    _ => (midX, midY)
+                };
+            }
+
+            // The heart's top connection is its inward notch, not the midpoint of
+            // the transparent bounding box.  The other three sites follow the
+            // extrema of the shared heart path.
+            case DrawingShapeKind.Heart:
+                return siteIndex switch
+                {
+                    0 => (left, top + (long)Math.Round(shape.ExtentCyEmu * 0.38)),
+                    1 => (midX, top + (long)Math.Round(shape.ExtentCyEmu * 0.22)),
                     2 => (right, top + (long)Math.Round(shape.ExtentCyEmu * 0.38)),
                     3 => (midX, bottom),
                     _ => (midX, midY)
