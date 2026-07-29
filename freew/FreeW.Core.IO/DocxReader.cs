@@ -3782,6 +3782,7 @@ public static class DocxReader
     private static void ApplyFloatingPlacement(XElement anchor, FloatingPlacement placement)
     {
         placement.Wrapping = ReadWrapping(anchor);
+        placement.WrapTextSide = ReadWrapTextSide(anchor);
 
         if (anchor.Attribute("relativeHeight")?.Value is { } relH
             && int.TryParse(relH, out var zOrder))
@@ -3799,6 +3800,7 @@ public static class DocxReader
     private static void ApplyFloatingPosition(XElement anchor, InlineImage image)
     {
         image.Wrapping = ReadWrapping(anchor);
+        image.WrapTextSide = ReadWrapTextSide(anchor);
 
         // Z-order: relativeHeight is an integer on wp:anchor; default 0 when absent or unparseable.
         if (anchor.Attribute("relativeHeight")?.Value is { } relH
@@ -4072,6 +4074,19 @@ public static class DocxReader
         // wp:wrapNone (or an unexpected/missing wrap) is a front/behind image, disambiguated by @behindDoc.
         var behindDoc = anchor.Attribute("behindDoc")?.Value;
         return behindDoc is "1" or "true" ? ImageWrapping.Behind : ImageWrapping.InFront;
+    }
+
+    private static FloatingWrapTextSide ReadWrapTextSide(XElement anchor)
+    {
+        var wrapText = anchor.Element(Wp + "wrapSquare")?.Attribute("wrapText")?.Value
+            ?? anchor.Element(Wp + "wrapTight")?.Attribute("wrapText")?.Value;
+        return wrapText switch
+        {
+            "left" => FloatingWrapTextSide.Left,
+            "right" => FloatingWrapTextSide.Right,
+            "largest" => FloatingWrapTextSide.Largest,
+            _ => FloatingWrapTextSide.BothSides
+        };
     }
 
     /// <summary>Maps a wp:positionH/@relativeFrom token to a <see cref="HorizontalAnchor"/> (default Column).</summary>

@@ -24,6 +24,18 @@ public enum ImageWrapping
 }
 
 /// <summary>
+/// The side policy for square and tight floating-object wrapping. Maps to
+/// <c>wp:wrapSquare/@wrapText</c> and <c>wp:wrapTight/@wrapText</c>.
+/// </summary>
+public enum FloatingWrapTextSide
+{
+    BothSides,
+    Left,
+    Right,
+    Largest
+}
+
+/// <summary>
 /// The horizontal frame a floating image's offset is measured from (<c>wp:positionH/@relativeFrom</c>).
 /// Maps to "column" / "margin" / "page". Defaults to <see cref="Column"/>.
 /// </summary>
@@ -265,6 +277,11 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     /// (<c>wp:anchor</c>) with the matching wrap element.
     /// </summary>
     public ImageWrapping Wrapping { get; set; } = ImageWrapping.Inline;
+
+    /// <summary>
+    /// The Word wrapping side policy for a floating square or tight image. Defaults to both sides.
+    /// </summary>
+    public FloatingWrapTextSide WrapTextSide { get; set; } = FloatingWrapTextSide.BothSides;
 
     /// <summary>True when the image is floating (i.e. not <see cref="ImageWrapping.Inline"/>).</summary>
     public bool IsFloating => Wrapping != ImageWrapping.Inline;

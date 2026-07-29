@@ -30,6 +30,7 @@ public sealed class FloatingObjectRoundTripTests
     private static FloatingPlacement TestPlacement(int zOrder = 5) => new()
     {
         Wrapping = ImageWrapping.Square,
+        WrapTextSide = FloatingWrapTextSide.Largest,
         HorizontalOffsetPt = 36,
         VerticalOffsetPt = 18,
         HorizontalAnchor = HorizontalAnchor.Margin,
@@ -63,6 +64,7 @@ public sealed class FloatingObjectRoundTripTests
         var s = ((Paragraph)recovered.Blocks[0]).Runs.Single(r => r.Shape is not null).Shape!;
         s.IsFloating.Should().BeTrue();
         s.Placement!.Wrapping.Should().Be(ImageWrapping.Square);
+        s.Placement.WrapTextSide.Should().Be(FloatingWrapTextSide.Largest);
         s.Placement.HorizontalOffsetPt.Should().BeApproximately(36, 0.5);
         s.Placement.VerticalOffsetPt.Should().BeApproximately(18, 0.5);
         s.Placement.HorizontalAnchor.Should().Be(HorizontalAnchor.Margin);
@@ -120,6 +122,7 @@ public sealed class FloatingObjectRoundTripTests
         var w = ((Paragraph)recovered.Blocks[0]).Runs.Single(r => r.WordArt is not null).WordArt!;
         w.IsFloating.Should().BeTrue();
         w.Placement!.Wrapping.Should().Be(ImageWrapping.Square);
+        w.Placement.WrapTextSide.Should().Be(FloatingWrapTextSide.Largest);
         w.Placement.ZOrderIndex.Should().Be(4);
     }
 }
