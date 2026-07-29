@@ -1,4 +1,5 @@
 using System.Text;
+using Free.Shared.AppServices;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -336,7 +337,10 @@ public static class ExternalRichTextClipboardPlanner
                         _position = _bytes.Length;
                         return true;
                     }
-                    _state = _states.Pop();
+                    State restoredState = _states.Pop();
+                    if (_hasActiveStyle && !SameStyle(_activeStyle, CurrentStyle(restoredState)))
+                        FlushActiveRun();
+                    _state = restoredState;
                     _depth--;
                     _position++;
                     return true;
@@ -983,29 +987,30 @@ public static class ExternalRichTextClipboardPlanner
                 paragraph.Runs.Remove(run);
         }
 
-        private CharacterStyle CurrentStyle()
+        private CharacterStyle CurrentStyle(State? state = null)
         {
+            state ??= _state;
             string? fontFamily = null;
-            int fontIndex = _state.FontIndex >= 0 ? _state.FontIndex : _state.DefaultFontIndex;
+            int fontIndex = state.FontIndex >= 0 ? state.FontIndex : state.DefaultFontIndex;
             if (fontIndex >= 0)
                 _fonts.TryGetValue(fontIndex, out fontFamily);
 
             SrgbColor? color = null;
-            if (_state.ColorIndex > 0 && _state.ColorIndex < _colors.Count)
-                color = _colors[_state.ColorIndex];
+            if (state.ColorIndex > 0 && state.ColorIndex < _colors.Count)
+                color = _colors[state.ColorIndex];
 
             return new CharacterStyle(
                 fontFamily,
-                _state.FontSizePt,
-                _state.Bold,
-                _state.Italic,
-                _state.Underline,
-                _state.Strikethrough,
-                _state.RunRightToLeft,
+                state.FontSizePt,
+                state.Bold,
+                state.Italic,
+                state.Underline,
+                state.Strikethrough,
+                state.RunRightToLeft,
                 color,
-                _state.BoldSet,
-                _state.ItalicSet,
-                _state.Hyperlink);
+                state.BoldSet,
+                state.ItalicSet,
+                state.Hyperlink);
         }
 
         private int? ResolveColorRgb(int colorIndex) =>
@@ -1161,8 +1166,8 @@ public static class ExternalRichTextClipboardPlanner
                 return null;
 
             string url = value[1..endQuote];
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
-                || uri.Scheme is not ("http" or "https" or "mailto"))
+            if (!ExternalUriLauncher.TryCreateAllowedUri(url, out var uri)
+                || uri.Scheme is not ("http" or "https" or "mailto" or "file"))
                 return null;
 
             return new Hyperlink { Url = uri.AbsoluteUri };
