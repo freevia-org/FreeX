@@ -3674,7 +3674,10 @@ if ($IncludeWordBaseline) {
         }
 
         $wordBaselineArgs += '-Docs'
-        $wordBaselineArgs += $wordBaselineDocs
+        # powershell.exe -File binds only the next command-line token to a
+        # string[] parameter. Pass one comma-delimited token so the baseline
+        # script can expand every selected fixture without shifting arguments.
+        $wordBaselineArgs += ($wordBaselineDocs -join ',')
     }
 
     Invoke-PowerShellStep 'Render MS Word baseline PNGs' $wordBaselineScript $wordBaselineArgs

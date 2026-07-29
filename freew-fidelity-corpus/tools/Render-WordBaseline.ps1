@@ -83,7 +83,16 @@ if (-not $rasterDll) {
 }
 
 $files =
-if ($Docs) { $Docs | ForEach-Object { Join-Path $FilesDir $_ } | Where-Object { Test-Path $_ } }
+if ($Docs) {
+    # A child powershell.exe invocation preserves each argument as one token.
+    # Accept a comma-delimited document list so a caller can pass several
+    # selected fixtures without shifting subsequent named parameters.
+    $Docs |
+        ForEach-Object { $_ -split ',' } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        ForEach-Object { Join-Path $FilesDir $_ } |
+        Where-Object { Test-Path $_ }
+}
 else { Get-ChildItem $FilesDir -Filter *.docx | Where-Object { $_.Name -notlike '~$*' } | Select-Object -ExpandProperty FullName }
 if (-not $files) { throw "No .docx found under $FilesDir" }
 if (($Width -gt 0) -ne ($Height -gt 0)) {

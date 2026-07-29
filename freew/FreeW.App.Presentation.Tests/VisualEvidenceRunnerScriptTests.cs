@@ -164,7 +164,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("if ($effectiveScenarioIds.Count -gt 0)");
         source.Should().Contain("$wordBaselineDocs = @($effectiveScenarioIds | ForEach-Object { \"$_.docx\" })");
         source.Should().Contain("$wordBaselineArgs += '-Docs'");
-        source.Should().Contain("$wordBaselineArgs += $wordBaselineDocs");
+        source.Should().Contain("$wordBaselineArgs += ($wordBaselineDocs -join ',')");
         source.Should().Contain("Selected Word baseline fixture(s) are missing");
         source.Should().Contain("$selectedWpfFixtureDir = Join-Path $runRoot 'wpf-fixtures'");
         source.Should().Contain("Copy-Item -LiteralPath (Join-Path $fixtureDir \"$scenarioId.docx\") -Destination $selectedWpfFixtureDir -Force");
@@ -451,6 +451,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Word COM is not available: COM ProgID 'Word.Application' is not registered");
         source.Should().Contain("Word baseline mode: real-word-png-render");
         source.Should().Contain("-Width and -Height must be supplied together when requesting fixed raster dimensions.");
+        source.Should().Contain("ForEach-Object { $_ -split ',' }");
     }
 
     private static string RepositoryFile(params string[] parts)
