@@ -20,6 +20,9 @@ public sealed record InCanvasRichClipboardTableCellStyle(
     double? InsetTopPt = null,
     double? InsetBottomPt = null);
 
+/// <summary>One image payload carried by an external rich clipboard fragment.</summary>
+public sealed record InCanvasRichClipboardImage(byte[] Bytes, string ContentType);
+
 /// <summary>
 /// Renderer-neutral rich clipboard payload used by both desktop editors. The model fragment is
 /// intentionally narrower than a full shape: it carries only the selected text and its run and
@@ -33,9 +36,21 @@ public sealed record InCanvasRichClipboardPayload(
     string? ImageContentType = null,
     bool ContainsTable = false,
     IReadOnlyList<long>? TableColumnWidthsEmu = null,
-    IReadOnlyList<InCanvasRichClipboardTableCellStyle>? TableCellStyles = null)
+    IReadOnlyList<InCanvasRichClipboardTableCellStyle>? TableCellStyles = null,
+    IReadOnlyList<InCanvasRichClipboardImage>? ImagePayloads = null)
 {
-    public bool HasImage => ImageBytes is { Length: > 0 };
+    public bool HasImage => ImagePayloads is { Count: > 0 }
+        || ImageBytes is { Length: > 0 };
+
+    /// <summary>Returns all images, including the legacy single-image fields.</summary>
+    public IReadOnlyList<InCanvasRichClipboardImage> GetImagePayloads()
+    {
+        if (ImagePayloads is { Count: > 0 })
+            return ImagePayloads;
+        if (ImageBytes is { Length: > 0 } && !string.IsNullOrWhiteSpace(ImageContentType))
+            return [new InCanvasRichClipboardImage(ImageBytes, ImageContentType)];
+        return Array.Empty<InCanvasRichClipboardImage>();
+    }
 
     public static InCanvasRichClipboardPayload FromPlainText(
         string? text,
@@ -71,7 +86,10 @@ public sealed record InCanvasRichClipboardPayload(
         ImageContentType,
         ContainsTable,
         TableColumnWidthsEmu?.ToArray(),
-        TableCellStyles?.ToArray());
+        TableCellStyles?.ToArray(),
+        ImagePayloads?.Select(image => new InCanvasRichClipboardImage(
+            image.Bytes.ToArray(),
+            image.ContentType)).ToArray());
 
     internal static Run? RunFromStyle(InCanvasEditorTextStyleState? style) => style is null
         ? null
@@ -148,13 +166,24 @@ public static class InCanvasRichClipboardPlanner
                 return null;
             var body = FromDto(dto.Body);
             var plainText = InCanvasTextEditPlanner.ExtractPlainText(body);
+            var imagePayloads = dto.ImagePayloads?
+                .Where(image => image.Bytes is { Length: > 0 }
+                    && !string.IsNullOrWhiteSpace(image.ContentType))
+                .Select(image => new InCanvasRichClipboardImage(
+                    image.Bytes!,
+                    image.ContentType!))
+                .ToArray();
+            var firstImage = imagePayloads?.FirstOrDefault();
             return new InCanvasRichClipboardPayload(
                 body,
                 plainText,
-                FromDto(dto.TypingRun),
+                TypingRun: FromDto(dto.TypingRun),
+                ImageBytes: firstImage?.Bytes,
+                ImageContentType: firstImage?.ContentType,
                 ContainsTable: dto.ContainsTable,
                 TableColumnWidthsEmu: dto.TableColumnWidthsEmu,
-                TableCellStyles: dto.TableCellStyles);
+                TableCellStyles: dto.TableCellStyles,
+                ImagePayloads: imagePayloads);
         }
         catch (JsonException)
         {
@@ -302,6 +331,11 @@ public static class InCanvasRichClipboardPlanner
         ContainsTable = payload.ContainsTable,
         TableColumnWidthsEmu = payload.TableColumnWidthsEmu?.ToList(),
         TableCellStyles = payload.TableCellStyles?.ToList(),
+        ImagePayloads = payload.GetImagePayloads().Select(image => new ClipboardImageDto
+        {
+            ContentType = image.ContentType,
+            Bytes = image.Bytes.ToArray(),
+        }).ToList(),
     };
 
     private static ClipboardBodyDto ToDto(TextBody body) => new()
@@ -741,6 +775,7 @@ public static class InCanvasRichClipboardPlanner
         public bool ContainsTable { get; set; }
         public List<long>? TableColumnWidthsEmu { get; set; }
         public List<InCanvasRichClipboardTableCellStyle>? TableCellStyles { get; set; }
+        public List<ClipboardImageDto>? ImagePayloads { get; set; }
     }
 
     private sealed class ClipboardBodyDto

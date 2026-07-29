@@ -588,6 +588,29 @@ public sealed class OsClipboardServiceTests
     }
 
     [StaFact]
+    public void Paste_ExternalRtfMultiplePictures_InsertsEveryPictureAndText()
+    {
+        var jpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 };
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi Before {\pict\pngblip " + Convert.ToHexString(_minPng)
+            + @"} middle {\pict\jpegblip " + Convert.ToHexString(jpeg) + @"} After}");
+        var fake = new FakeOsClipboard { RtfBytes = rtf };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        service.PasteWithResult(editor).Should().Be(PresentationClipboardPasteSource.RichText);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(3);
+        editor.CurrentSlide.Shapes[0].Picture!.Bytes.Should().Equal(_minPng);
+        editor.CurrentSlide.Shapes[1].Picture!.Bytes.Should().Equal(jpeg);
+        editor.CurrentSlide.Shapes[1].Picture!.ContentType.Should().Be("image/jpeg");
+        editor.CurrentSlide.Shapes[2].TextBody!.Paragraphs.Single().Runs
+            .Select(run => run.Text)
+            .Should().Contain(text => text.Contains("Before ", StringComparison.Ordinal));
+    }
+
+    [StaFact]
     public void Paste_ExternalRtfObject_UsesVisibleResultText()
     {
         var rtf = Encoding.ASCII.GetBytes(
