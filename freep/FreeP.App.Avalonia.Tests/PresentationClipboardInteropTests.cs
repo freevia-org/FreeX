@@ -414,6 +414,29 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task External_Rtf_picture_is_pasted_as_picture_and_text_box()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                RtfBytes: Encoding.ASCII.GetBytes(
+                    @"{\rtf1\ansi Caption {\pict\pngblip " + Convert.ToHexString(Png) + @"} After}")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        var result = await service.PasteAsync(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.RichText);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        editor.CurrentSlide.Shapes[0].Kind.Should().Be(SlideShapeKind.Picture);
+        editor.CurrentSlide.Shapes[0].Picture!.Bytes.Should().Equal(Png);
+        editor.CurrentSlide.Shapes[0].Picture!.ContentType.Should().Be("image/png");
+        editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
+            .Should().Contain(run => run.Text.Contains("Caption ", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task XamlPackage_table_is_projected_into_formatted_text_box()
     {
         var clipboard = new FakeSystemClipboard
