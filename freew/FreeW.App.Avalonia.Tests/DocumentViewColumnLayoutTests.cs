@@ -275,6 +275,60 @@ public sealed class DocumentViewColumnLayoutTests
             "trailing paragraph spacing must not offset the first line in the next column");
     }
 
+    [Fact]
+    public async Task Default_widow_control_keeps_an_ordinary_wrapped_paragraph_on_one_page()
+    {
+        double[] explicitOffY = [];
+        double[] defaultPolicyY = [];
+        var ran = await OnUiThread(() =>
+        {
+            static TextDocument BuildDocument(bool explicitWidowOff)
+            {
+                var doc = TextDocument.CreateEmpty();
+                doc.Blocks.Clear();
+                doc.Page.WidthPt = 360;
+                doc.Page.HeightPt = 216;
+                doc.Page.MarginLeftPt = 36;
+                doc.Page.MarginRightPt = 36;
+                doc.Page.MarginTopPt = 36;
+                doc.Page.MarginBottomPt = 36;
+
+                for (var index = 0; index < 8; index++)
+                    doc.Blocks.Add(new Paragraph($"Filler paragraph {index + 1}."));
+
+                var formatting = ParagraphFormatting.Default;
+                if (explicitWidowOff)
+                    formatting = formatting with { WidowControl = false, WidowControlIsSet = true };
+                doc.Blocks.Add(new Paragraph(
+                    "A wrapped paragraph that has enough words to span several measured lines and must " +
+                    "move as one unit when Word's default widow control is active at a page boundary.")
+                {
+                    Formatting = formatting
+                });
+                return doc;
+            }
+
+            var explicitOffView = new DocumentView();
+            explicitOffView.LoadDocument(BuildDocument(explicitWidowOff: true));
+            explicitOffView.Measure(new Size(600, 3000));
+            explicitOffY = explicitOffView.GetPlacedForBlock(8).Select(glyph => glyph.Y).Distinct().ToArray();
+
+            var defaultPolicyView = new DocumentView();
+            defaultPolicyView.LoadDocument(BuildDocument(explicitWidowOff: false));
+            defaultPolicyView.Measure(new Size(600, 3000));
+            defaultPolicyY = defaultPolicyView.GetPlacedForBlock(8).Select(glyph => glyph.Y).Distinct().ToArray();
+        });
+
+        if (!ran) return;
+
+        (explicitOffY.Max() - explicitOffY.Min()).Should().BeGreaterThan(150,
+            "an explicit w:widowControl=0 token permits the paragraph to split at this boundary");
+        (defaultPolicyY.Max() - defaultPolicyY.Min()).Should().BeLessThan(150,
+            "the default-on Word widow-control policy keeps the complete ordinary paragraph together");
+        defaultPolicyY.Min().Should().BeGreaterThan(explicitOffY.Min() + 100,
+            "the default-policy paragraph must move to the following page rather than leave one line behind");
+    }
+
     // ── Test 4: All glyphs land in one of the two column bands ─────────────────────────────────────
 
     [Fact]

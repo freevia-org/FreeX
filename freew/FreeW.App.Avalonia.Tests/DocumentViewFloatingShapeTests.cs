@@ -897,6 +897,55 @@ public sealed class DocumentViewFloatingShapeTests
             "a paragraph with a floating shape run and text runs must still produce placed glyphs");
     }
 
+    [Fact]
+    public async Task Floating_drawing_fallback_text_stays_out_of_the_body_flow()
+    {
+        string bodyText = string.Empty;
+        int shapeCount = 0;
+        int wordArtCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Body anchor.", RunFormatting.Default));
+
+            var shape = Shape.TextBoxWith("Shape overlay", 120, 54, "#E2F0D9");
+            shape.Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Column,
+                VerticalAnchor = VerticalAnchor.Paragraph,
+            };
+            paragraph.Runs.Add(new Run("Shape fallback text", RunFormatting.Default) { Shape = shape });
+
+            var wordArt = new WordArt("WordArt overlay", WordArtStyle.FillBlue, 24)
+            {
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.InFront,
+                    HorizontalAnchor = HorizontalAnchor.Column,
+                    VerticalAnchor = VerticalAnchor.Paragraph,
+                },
+            };
+            paragraph.Runs.Add(new Run("WordArt fallback text", RunFormatting.Default) { WordArt = wordArt });
+            doc.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            bodyText = string.Concat(view.GetPlacedForBlock(0).Select(glyph => glyph.Ch));
+            shapeCount = view.FloatingShapeCount;
+            wordArtCount = view.FloatingWordArtCount;
+        });
+
+        if (!ran) return;
+
+        bodyText.Should().Be("Body anchor.");
+        shapeCount.Should().Be(1);
+        wordArtCount.Should().Be(1);
+    }
+
     // ── Test 14: headless render capture — shape appears in PNG ──────────────────────────────────
 
     [Fact]

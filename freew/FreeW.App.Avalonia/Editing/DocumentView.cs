@@ -4778,6 +4778,74 @@ public sealed class DocumentView : Control
         _layoutContentY += spaceAfter;
     }
 
+    /// <summary>
+    /// Reserves a complete ordinary paragraph when Word's keep-lines or default widow-control
+    /// policy applies. Paragraphs taller than a page keep the normal line-by-line path.
+    /// </summary>
+    private void ReserveCompleteParagraph(double paragraphHeight)
+    {
+        if (paragraphHeight <= 0 || _layoutTextAreaHeight <= 0)
+            return;
+
+        var slot = (int)(_layoutContentY / _layoutTextAreaHeight);
+        var pageIndex = slot / _colCount;
+        var bandReservation = _footnoteBandHeightByPage.TryGetValue(pageIndex, out var bh) ? bh : 0.0;
+        var effectiveHeight = Math.Max(1, _layoutTextAreaHeight - bandReservation);
+        if (paragraphHeight > effectiveHeight)
+            return;
+
+        var posInPage = _layoutContentY % _layoutTextAreaHeight;
+        if (posInPage > 0 && posInPage + paragraphHeight > effectiveHeight)
+            _layoutContentY += _layoutTextAreaHeight - posInPage;
+    }
+
+    private static double MeasurePlainParagraphHeight(
+        IReadOnlyList<Cell> cells,
+        IReadOnlyList<double> measured,
+        IReadOnlyList<double> heights,
+        double availableWidth,
+        ParagraphFormatting pf,
+        double naturalLineHeightScale)
+    {
+        if (cells.Count == 0)
+            return ApplyLineSpacing(DefaultFontSizePt * PxPerPoint * 1.3 * naturalLineHeightScale, pf);
+
+        var totalHeight = 0.0;
+        var lineStart = 0;
+        var lineWidth = 0.0;
+        var lastBreak = -1;
+
+        void AddLine(int from, int to)
+        {
+            var naturalHeight = DefaultFontSizePt * PxPerPoint * 1.3;
+            for (var index = from; index < to; index++)
+                naturalHeight = Math.Max(naturalHeight, heights[index]);
+            totalHeight += ApplyLineSpacing(naturalHeight * naturalLineHeightScale, pf);
+        }
+
+        for (var index = 0; index < cells.Count; index++)
+        {
+            if (cells[index].Ch == ' ')
+                lastBreak = index;
+
+            if (lineWidth + measured[index] > availableWidth && index > lineStart)
+            {
+                var breakAt = lastBreak >= lineStart ? lastBreak + 1 : index;
+                AddLine(lineStart, breakAt);
+                lineStart = breakAt;
+                lineWidth = 0;
+                lastBreak = -1;
+                for (var carried = lineStart; carried < index; carried++)
+                    lineWidth += measured[carried];
+            }
+
+            lineWidth += measured[index];
+        }
+
+        AddLine(lineStart, cells.Count);
+        return totalHeight;
+    }
+
     // ── AV-WRAP: wrap-exclusion helpers ───────────────────────────────────────────────────────────────
 
     private DocumentFloatingTextWrapLinePlan BuildFloatingTextWrapLinePlan(
@@ -4945,6 +5013,20 @@ public sealed class DocumentView : Control
                     heights[c] = ft.Height;
                 }
             }
+        }
+
+        // Keep the full paragraph together for the ordinary text path. This mirrors the WPF host's
+        // default-on widow policy without changing tabs, equations, drop caps, or wrapped float layout.
+        var keepParagraphTogether = pf.KeepLinesTogether || !pf.WidowControlIsSet || pf.WidowControl;
+        var supportsCompleteParagraphPlanning = indentFirst == 0
+            && dropCapPlan is null
+            && _wrapExclusions.Count == 0
+            && cells.All(cell => cell.Ch != '\t' && cell.EquationElement is null);
+        if (keepParagraphTogether && supportsCompleteParagraphPlanning)
+        {
+            var paragraphHeight = MeasurePlainParagraphHeight(
+                cells, measured, heights, availableWidth, pf, naturalLineHeightScale);
+            ReserveCompleteParagraph(paragraphHeight);
         }
 
         var lineIndex = 0;
@@ -17525,7 +17607,16 @@ public sealed class DocumentView : Control
         // anchor render). Word keeps commented text fully editable. The textless comment-reference run has
         // empty text and contributes no cells, so it does not affect editability either.
         paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
-            && r.ComplexField is null && r.FootnoteId is null && r.EndnoteId is null && r.Control is null);
+            && r.ComplexField is null && r.FootnoteId is null && r.EndnoteId is null && r.Control is null
+            && !IsFloatingDrawingRun(r));
+
+    private static bool IsFloatingDrawingRun(Run run) =>
+        run.Image is { IsFloating: true }
+        || run.Shape is { IsFloating: true }
+        || run.Chart is { IsFloating: true }
+        || run.WordArt is { IsFloating: true }
+        || run.SmartArt is { IsFloating: true }
+        || run.DrawingGroup is { IsFloating: true };
 
     private static List<Cell> ParaCells(Paragraph paragraph)
     {
@@ -17534,6 +17625,10 @@ public sealed class DocumentView : Control
         {
             // AV-LINK: capture the run's hyperlink target so the link span survives the cell round-trip and
             // SetRuns can re-segment runs on a hyperlink boundary. null when the run carries no link.
+            // A floating drawing's fallback text belongs to its overlay, not the body flow.
+            if (IsFloatingDrawingRun(run))
+                continue;
+
             var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
                 ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
                 : (LinkInfo?)null;
@@ -17554,6 +17649,10 @@ public sealed class DocumentView : Control
         {
             // Non-editable paragraphs (including note references and fields) still need their
             // per-run display formatting. Flattening to PlainText loses superscript markers.
+            // A floating drawing's fallback text belongs to its overlay, not the body flow.
+            if (IsFloatingDrawingRun(run))
+                continue;
+
             var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
                 ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
                 : (LinkInfo?)null;
