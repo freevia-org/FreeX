@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "freew.table-properties.x11.v1",
+  "type": "object",
+  "required": ["probe", "status", "dialog", "tabsTraversed", "tabPages", "editedProperty", "expectedIndentFromLeftPt"],
+  "properties": {
+    "probe": { "const": "freew-table-properties-x11" },
+    "status": { "const": "passed" },
+    "dialog": { "const": "real" },
+    "tabsTraversed": { "const": true },
+    "tabPages": { "const": ["Table", "Row", "Column", "Cell"] },
+    "editedProperty": { "const": "IndentFromLeftPt" },
+    "expectedIndentFromLeftPt": { "const": 12 }
+  },
+  "additionalProperties": false
+}

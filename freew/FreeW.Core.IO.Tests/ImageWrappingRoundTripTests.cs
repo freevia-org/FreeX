@@ -51,6 +51,7 @@ public class ImageWrappingRoundTripTests
         var image = new InlineImage(MinimalPng(), widthPt: 100, heightPt: 80)
         {
             Wrapping = ImageWrapping.Square,
+            WrapTextSide = FloatingWrapTextSide.Right,
             HorizontalAnchor = HorizontalAnchor.Margin,
             HorizontalOffsetPt = 36,
             VerticalAnchor = VerticalAnchor.Paragraph,
@@ -60,12 +61,18 @@ public class ImageWrappingRoundTripTests
         var read = ReadBackImage(DocumentWith(image));
 
         read.Wrapping.Should().Be(ImageWrapping.Square);
+        read.WrapTextSide.Should().Be(FloatingWrapTextSide.Right);
         read.HorizontalAnchor.Should().Be(HorizontalAnchor.Margin);
         read.HorizontalOffsetPt.Should().BeApproximately(36, 0.01);
         read.VerticalAnchor.Should().Be(VerticalAnchor.Paragraph);
         read.VerticalOffsetPt.Should().BeApproximately(18, 0.01);
         read.WidthPt.Should().BeApproximately(100, 0.01);
         read.HeightPt.Should().BeApproximately(80, 0.01);
+
+        WriteDocumentXml(DocumentWith(image))
+            .Descendants(Wp + "anchor").Single()
+            .Element(Wp + "wrapSquare")!
+            .Attribute("wrapText")!.Value.Should().Be("right");
     }
 
     [Fact]

@@ -141,6 +141,35 @@ public sealed class ChartDataCommandTests
         chart.RegenerateWorkbookOnSave.Should().BeFalse();
     }
 
+    [Fact]
+    public void EditingSession_ChartProtection_ExposesDataAndFormattingCapabilities()
+    {
+        var session = MakeSession();
+        session.CanEditSelectedChartData.Should().BeTrue();
+        session.CanEditSelectedChartFormatting.Should().BeTrue();
+
+        session.SelectedChart!.ChartDataProtected = true;
+        session.CanEditSelectedChartData.Should().BeFalse();
+        session.CanEditSelectedChartFormatting.Should().BeTrue();
+
+        session.SelectedChart.ChartFormattingProtected = true;
+        session.CanEditSelectedChartFormatting.Should().BeFalse();
+
+        session.SelectedChart.ChartObjectProtected = true;
+        session.CanEditSelectedChartData.Should().BeFalse();
+        session.CanEditSelectedChartFormatting.Should().BeFalse();
+    }
+
+    [Fact]
+    public void EditingSession_ChangeSelectedChartType_ProtectedDataReturnsFalse()
+    {
+        var session = MakeSession();
+        session.SelectedChart!.ChartDataProtected = true;
+
+        session.ChangeSelectedChartType(ChartType.Line).Should().BeFalse();
+        session.SelectedChart.ChartType.Should().Be(ChartType.ColumnClustered);
+    }
+
     // ════════════════════════════════════════════════════════════════════════════════
     // SetChartCategoryLabelCommand
     // ════════════════════════════════════════════════════════════════════════════════

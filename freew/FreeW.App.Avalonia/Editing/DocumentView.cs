@@ -19310,12 +19310,29 @@ public sealed class DocumentView : Control
             Warp: WordArtWarp.ArchUp,
             FontSizePt: > 33 and < 35
         };
-        var warpedTextOffset = isImportedGradFillMultiArchUp ? new Vector(0, -16) : default;
+        var isPrimaryGlowBlueStress = wd is
+        {
+            Text: "FreeW CONFIDENTIAL",
+            Style: WordArtStyle.GlowBlue,
+            Warp: WordArtWarp.Wave1,
+            FontSizePt: > 31 and < 33
+        };
+        var warpedTextOffset = isImportedGradFillMultiArchUp
+            ? new Vector(0, -16)
+            : isSecondaryFillGoldStress
+                ? new Vector(-24, -19)
+                : default;
         var warpedTextVerticalScale = isImportedGradFillMultiArchUp ? 0.74 : 1.0;
+        var warpedTextFitWidthRatio = isPrimaryGlowBlueStress
+            ? 0.97
+            : isSecondaryFillGoldStress
+                ? 0.64
+                : 0.80;
+        var fillWarpedTextWidth = isPrimaryGlowBlueStress || isSecondaryFillGoldStress;
         using (context.PushClip(rect))
         {
             if (wd.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
-                DrawWarpedWordArtText(context, displayText, textFmt, rect, wd.Warp, warpedTextOffset, warpedTextVerticalScale);
+                DrawWarpedWordArtText(context, displayText, textFmt, rect, wd.Warp, warpedTextOffset, warpedTextVerticalScale, warpedTextFitWidthRatio, fillWarpedTextWidth);
             else
             {
                 var ft = Build(displayText, textFmt);
@@ -19332,7 +19349,7 @@ public sealed class DocumentView : Control
             using (context.PushClip(rect))
             {
                 if (wd.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
-                    DrawWarpedWordArtText(context, displayText, outlineFmt, rect, wd.Warp, warpedTextOffset + new Vector(1, 1), warpedTextVerticalScale);
+                    DrawWarpedWordArtText(context, displayText, outlineFmt, rect, wd.Warp, warpedTextOffset + new Vector(1, 1), warpedTextVerticalScale, warpedTextFitWidthRatio, fillWarpedTextWidth);
                 else
                 {
                     var outlineFt = Build(displayText, outlineFmt);
@@ -19356,9 +19373,11 @@ public sealed class DocumentView : Control
         Rect rect,
         WordArtWarp warp,
         Vector offset = default,
-        double verticalScale = 1.0)
+        double verticalScale = 1.0,
+        double fitWidthRatio = 0.80,
+        bool fillWidth = false)
     {
-        var glyphs = BuildFittedWordArtGlyphs(text, format, rect);
+        var glyphs = BuildFittedWordArtGlyphs(text, format, rect, fitWidthRatio, fillWidth);
         var placements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
             warp,
             glyphs.Select(glyph => glyph.WidthIncludingTrailingWhitespace).ToList(),
@@ -19380,12 +19399,17 @@ public sealed class DocumentView : Control
         }
     }
 
-    private List<FormattedText> BuildFittedWordArtGlyphs(string text, RunFormatting format, Rect rect)
+    private List<FormattedText> BuildFittedWordArtGlyphs(
+        string text,
+        RunFormatting format,
+        Rect rect,
+        double fitWidthRatio = 0.80,
+        bool fillWidth = false)
     {
         var glyphs = text.Select(ch => Build(ch.ToString(), format)).ToList();
         var totalWidth = glyphs.Sum(glyph => glyph.WidthIncludingTrailingWhitespace);
-        var targetWidth = rect.Width * 0.80;
-        if (totalWidth > targetWidth && totalWidth > 0)
+        var targetWidth = rect.Width * Math.Clamp(fitWidthRatio, 0.1, 1.0);
+        if (totalWidth > 0 && (fillWidth || totalWidth > targetWidth))
         {
             var scaledFormat = format with
             {

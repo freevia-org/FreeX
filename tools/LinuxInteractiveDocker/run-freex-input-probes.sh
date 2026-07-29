@@ -1008,6 +1008,150 @@ probe_formula_bar_point_mode_multi_area() {
     fi
 }
 
+drag_grid_range() {
+    local start_column="$1" start_row="$2" end_column="$3" end_row="$4"
+    focus_app
+    xdotool_mousemove_sync "$(cell_center_x "$start_column")" "$(cell_center_y "$start_row")"
+    xdotool mousedown 1
+    sleep 0.18
+    xdotool_mousemove_sync "$(cell_center_x "$end_column")" "$(cell_center_y "$end_row")"
+    sleep 0.18
+    xdotool mouseup 1
+    sleep "$settle_seconds"
+}
+
+drag_selection_border() {
+    local column="$1" start_row="$2" target_row="$3" ctrl_copy="${4:-false}"
+    local border_x border_y target_x target_y
+    border_x=$((a1_x + column * cell_width + 1))
+    border_y="$(cell_center_y "$start_row")"
+    target_x="$(cell_center_x "$column")"
+    target_y="$(cell_center_y "$target_row")"
+    focus_app
+    if [[ "$ctrl_copy" == true ]]; then
+        xdotool keydown --window "$window_id" Control_L
+    fi
+    xdotool_mousemove_sync "$border_x" "$border_y"
+    xdotool mousedown 1
+    sleep 0.22
+    xdotool_mousemove_sync "$target_x" "$target_y"
+    sleep 0.22
+    xdotool mouseup 1
+    if [[ "$ctrl_copy" == true ]]; then
+        xdotool keyup --window "$window_id" Control_L
+    fi
+    sleep "$settle_seconds"
+}
+
+probe_grid_drag_parity() {
+    local autofill_source_top autofill_source_bottom autofill_mid_one autofill_mid_two autofill_target autofill_selection
+    local move_source_top move_source_bottom move_target_top move_target_bottom move_selection
+    local copy_source_top copy_source_bottom copy_target_top copy_target_bottom copy_selection
+    local autofill_values move_source_values move_target_values copy_source_values copy_target_values
+    local autofill_passed=false move_passed=false copy_passed=false
+    local autofill_selection_passed=false move_selection_passed=false copy_selection_passed=false
+    local artifacts="grid-drag-autofill-before.png;grid-drag-autofill-after.png;grid-drag-move-before.png;grid-drag-move-after.png;grid-drag-copy-before.png;grid-drag-copy-after.png;grid-drag-postcondition.txt"
+
+    # Keep the three gestures in separate columns and seed every assertion through the real
+    # editable-cell route. The values are intentionally distinct so a move cannot pass as a copy.
+    if ! set_cell_text_without_save 2 2 C3 10 ||
+       ! set_cell_text_without_save 2 3 C4 20 ||
+       ! set_cell_text_without_save 4 2 E3 MoveTop ||
+       ! set_cell_text_without_save 4 3 E4 MoveBottom ||
+       ! set_cell_text_without_save 6 2 G3 CopyTop ||
+       ! set_cell_text_without_save 6 3 G4 CopyBottom; then
+        write_artifact "grid-drag-postcondition.txt" "seeded=false\n"
+        record "grid-autofill-handle-drag-physical" "failed" "grid-drag-postcondition.txt" "Could not seed the deterministic physical grid-drag sources." "$artifacts"
+        record "grid-selection-border-move-physical" "failed" "grid-drag-postcondition.txt" "Could not seed the deterministic physical grid-drag sources." "$artifacts"
+        record "grid-selection-border-copy-physical" "failed" "grid-drag-postcondition.txt" "Could not seed the deterministic physical grid-drag sources." "$artifacts"
+        return
+    fi
+
+    # Autofill C3:C4 to C7. The handle is the calibrated bottom-right selection corner.
+    drag_grid_range 2 2 2 3
+    capture_selection "grid-drag-autofill-before.png"
+    xdotool_mousemove_sync "$((a1_x + 3 * cell_width))" "$((a1_y + 4 * cell_height))"
+    xdotool mousedown 1
+    sleep 0.22
+    xdotool_mousemove_sync "$(cell_center_x 2)" "$(cell_center_y 6)"
+    sleep 0.22
+    xdotool mouseup 1
+    sleep "$settle_seconds"
+    wait_for_selection "$(cell_x 2)" "$(cell_y 2)" "grid-drag-autofill-after.png" || true
+    autofill_selection="$observed_x,$observed_y"
+    box_near "$(cell_x 2)" "$(cell_y 2)" 4 && autofill_selection_passed=true
+    send_key ctrl+s
+    wait_for_document_clean || true
+    autofill_source_top="$(csv_cell_value 2 2)"
+    autofill_source_bottom="$(csv_cell_value 2 3)"
+    autofill_mid_one="$(csv_cell_value 2 4)"
+    autofill_mid_two="$(csv_cell_value 2 5)"
+    autofill_target="$(csv_cell_value 2 6)"
+    if [[ "$autofill_source_top" == 10 && "$autofill_source_bottom" == 20 &&
+          "$autofill_mid_one" == 30 && "$autofill_mid_two" == 40 && "$autofill_target" == 50 ]] &&
+       $autofill_selection_passed; then
+        autofill_passed=true
+    fi
+
+    # Move E3:E4 to E6:E7 by grabbing the left selection border. The source must be cleared.
+    set_cell_text_without_save 4 5 E6 "" || true
+    set_cell_text_without_save 4 6 E7 "" || true
+    drag_grid_range 4 2 4 3
+    capture_selection "grid-drag-move-before.png"
+    drag_selection_border 4 2 5 false
+    wait_for_selection "$(cell_x 4)" "$(cell_y 5)" "grid-drag-move-after.png" || true
+    move_selection="$observed_x,$observed_y"
+    box_near "$(cell_x 4)" "$(cell_y 5)" 4 && move_selection_passed=true
+    send_key ctrl+s
+    wait_for_document_clean || true
+    move_source_top="$(csv_cell_value 4 2)"
+    move_source_bottom="$(csv_cell_value 4 3)"
+    move_target_top="$(csv_cell_value 4 5)"
+    move_target_bottom="$(csv_cell_value 4 6)"
+    if [[ -z "$move_source_top" && -z "$move_source_bottom" && "$move_target_top" == MoveTop && "$move_target_bottom" == MoveBottom ]] &&
+       $move_selection_passed; then
+        move_passed=true
+    fi
+
+    # Ctrl-drag G3:G4 to G6:G7. The source must remain intact while the destination is copied.
+    set_cell_text_without_save 6 5 G6 "" || true
+    set_cell_text_without_save 6 6 G7 "" || true
+    drag_grid_range 6 2 6 3
+    capture_selection "grid-drag-copy-before.png"
+    drag_selection_border 6 2 5 true
+    wait_for_selection "$(cell_x 6)" "$(cell_y 5)" "grid-drag-copy-after.png" || true
+    copy_selection="$observed_x,$observed_y"
+    box_near "$(cell_x 6)" "$(cell_y 5)" 4 && copy_selection_passed=true
+    send_key ctrl+s
+    wait_for_document_clean || true
+    copy_source_top="$(csv_cell_value 6 2)"
+    copy_source_bottom="$(csv_cell_value 6 3)"
+    copy_target_top="$(csv_cell_value 6 5)"
+    copy_target_bottom="$(csv_cell_value 6 6)"
+    if [[ "$copy_source_top" == CopyTop && "$copy_source_bottom" == CopyBottom && "$copy_target_top" == CopyTop && "$copy_target_bottom" == CopyBottom ]] &&
+       $copy_selection_passed; then
+        copy_passed=true
+    fi
+
+    write_artifact "grid-drag-postcondition.txt" \
+        "autofill-source=C3:C4\nautofill-values=$autofill_source_top,$autofill_source_bottom,$autofill_mid_one,$autofill_mid_two,$autofill_target\nautofill-selection=$autofill_selection\nautofill-selection-passed=$autofill_selection_passed\nautofill-passed=$autofill_passed\nmove-source=E3:E4\nmove-source-after=$move_source_top,$move_source_bottom\nmove-target=E6:E7\nmove-target-values=$move_target_top,$move_target_bottom\nmove-selection=$move_selection\nmove-selection-passed=$move_selection_passed\nmove-passed=$move_passed\ncopy-source=G3:G4\ncopy-source-values=$copy_source_top,$copy_source_bottom\ncopy-target=G6:G7\ncopy-target-values=$copy_target_top,$copy_target_bottom\ncopy-selection=$copy_selection\ncopy-selection-passed=$copy_selection_passed\ncopy-passed=$copy_passed\n"
+    if $autofill_passed; then
+        record "grid-autofill-handle-drag-physical" "passed" "grid-drag-autofill-before.png; grid-drag-autofill-after.png; selection=$autofill_selection; C3:C7 values=10,20,30,40,50" "The real X11 pointer dragged the autofill handle and produced the exact numeric series with the completed range selected." "$artifacts"
+    else
+        record "grid-autofill-handle-drag-physical" "failed" "grid-drag-autofill-before.png; grid-drag-autofill-after.png; grid-drag-postcondition.txt" "Autofill did not prove C3:C7 series values or final selection." "$artifacts"
+    fi
+    if $move_passed; then
+        record "grid-selection-border-move-physical" "passed" "grid-drag-move-before.png; grid-drag-move-after.png; source=empty; target=MoveTop,MoveBottom; selection=$move_selection" "The real X11 pointer moved E3:E4 to E6:E7 and proved the source was cleared and the target selected." "$artifacts"
+    else
+        record "grid-selection-border-move-physical" "failed" "grid-drag-move-before.png; grid-drag-move-after.png; grid-drag-postcondition.txt" "Selection-border move did not prove exact source/target values or final selection." "$artifacts"
+    fi
+    if $copy_passed; then
+        record "grid-selection-border-copy-physical" "passed" "grid-drag-copy-before.png; grid-drag-copy-after.png; source=CopyTop,CopyBottom; target=CopyTop,CopyBottom; selection=$copy_selection" "The real X11 Ctrl-drag copied G3:G4 to G6:G7 while preserving the source and selecting the target." "$artifacts"
+    else
+        record "grid-selection-border-copy-physical" "failed" "grid-drag-copy-before.png; grid-drag-copy-after.png; grid-drag-postcondition.txt" "Ctrl-drag copy did not prove exact source/target values or final selection." "$artifacts"
+    fi
+}
+
 probe_sheet_tabs() {
     local tab_y left_nav_x right_nav_x first_tab_x sheet2_x sheet3_x top
     local before_value right_value left_value before_second before_third after_second after_third
@@ -1641,6 +1785,19 @@ if [[ "$probe_selector" == "formula-multi-area-point" ]]; then
     probe_formula_bar_point_mode_multi_area
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused multi-area formula point probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "grid-drag" ]]; then
+    # Focused iteration mode for physical autofill, selection move, and Ctrl-copy drag parity.
+    probe_grid_drag_parity
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused grid-drag probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then

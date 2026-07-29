@@ -567,4 +567,37 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             return true;
         }, CancellationToken.None);
     }
+
+    [Fact]
+    public async Task SelectionMoveDrag_CtrlCopy_SelectsCompleteDestinationRange()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("CleanFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var source = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 2, 1));
+            var target = new GridRange(
+                new CellAddress(sheet.Id, 4, 1),
+                new CellAddress(sheet.Id, 5, 1));
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("top"));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("bottom"));
+            window.Session.SelectRange(source);
+
+            await window.RaiseSelectionMoveDragForTest(source, target, ctrlHeld: true);
+
+            window.Session.SelectedRange.Should().Be(target,
+                "Ctrl-drag copy must leave the complete destination range selected, matching WPF/Excel");
+            sheet.GetValue(target.Start).Should().Be(new TextValue("top"));
+            sheet.GetValue(target.End).Should().Be(new TextValue("bottom"));
+            sheet.GetValue(source.Start).Should().Be(new TextValue("top"),
+                "Ctrl-drag copy must preserve the source range");
+            sheet.GetValue(source.End).Should().Be(new TextValue("bottom"));
+
+            window.Close();
+            return true;
+        }, CancellationToken.None);
+    }
 }

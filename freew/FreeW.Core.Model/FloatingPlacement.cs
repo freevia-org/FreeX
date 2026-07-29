@@ -14,6 +14,11 @@ public sealed class FloatingPlacement
     /// </summary>
     public ImageWrapping Wrapping { get; set; } = ImageWrapping.Inline;
 
+    /// <summary>
+    /// The Word wrapping side policy for square or tight objects. Defaults to both sides.
+    /// </summary>
+    public FloatingWrapTextSide WrapTextSide { get; set; } = FloatingWrapTextSide.BothSides;
+
     /// <summary>True when the object is floating (Wrapping != Inline).</summary>
     public bool IsFloating => Wrapping != ImageWrapping.Inline;
 
@@ -39,6 +44,7 @@ public sealed class FloatingPlacement
     public FloatingPlacement Clone() => new()
     {
         Wrapping = Wrapping,
+        WrapTextSide = WrapTextSide,
         HorizontalOffsetPt = HorizontalOffsetPt,
         VerticalOffsetPt = VerticalOffsetPt,
         HorizontalAnchor = HorizontalAnchor,

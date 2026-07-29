@@ -3623,7 +3623,7 @@ public static class DocxWriter
                 new XElement(Wp + "effectExtent",
                     new XAttribute("l", 0), new XAttribute("t", 0),
                     new XAttribute("r", 0), new XAttribute("b", 0)),
-                BuildWrap(image.Wrapping),
+                BuildWrap(image.Wrapping, image.WrapTextSide),
                 BuildDocPr(part),
                 BuildPicGraphic(part, cx, cy)));
     }
@@ -3663,7 +3663,7 @@ public static class DocxWriter
                 new XElement(Wp + "effectExtent",
                     new XAttribute("l", 0), new XAttribute("t", 0),
                     new XAttribute("r", 0), new XAttribute("b", 0)),
-                BuildWrap(placement.Wrapping),
+                BuildWrap(placement.Wrapping, placement.WrapTextSide),
                 docPr,
                 graphic));
     }
@@ -3688,15 +3688,23 @@ public static class DocxWriter
     /// The single wrap element for a floating wrapping mode: wp:wrapSquare (square), wp:wrapTight (tight
     /// with a rectangular wrap polygon), wp:wrapTopAndBottom, or wp:wrapNone for the front/behind modes.
     /// </summary>
-    private static XElement BuildWrap(ImageWrapping wrapping) => wrapping switch
+    private static XElement BuildWrap(ImageWrapping wrapping, FloatingWrapTextSide wrapTextSide) => wrapping switch
     {
-        ImageWrapping.Square => new XElement(Wp + "wrapSquare", new XAttribute("wrapText", "bothSides")),
+        ImageWrapping.Square => new XElement(Wp + "wrapSquare", new XAttribute("wrapText", WrapTextSideToken(wrapTextSide))),
         ImageWrapping.Tight => new XElement(
             Wp + "wrapTight",
-            new XAttribute("wrapText", "bothSides"),
+            new XAttribute("wrapText", WrapTextSideToken(wrapTextSide)),
             BuildRectangularWrapPolygon()),
         ImageWrapping.TopAndBottom => new XElement(Wp + "wrapTopAndBottom"),
         _ => new XElement(Wp + "wrapNone"), // Behind / InFront both wrap none (distinguished by @behindDoc).
+    };
+
+    private static string WrapTextSideToken(FloatingWrapTextSide side) => side switch
+    {
+        FloatingWrapTextSide.Left => "left",
+        FloatingWrapTextSide.Right => "right",
+        FloatingWrapTextSide.Largest => "largest",
+        _ => "bothSides"
     };
 
     private static XElement BuildRectangularWrapPolygon() =>

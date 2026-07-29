@@ -15,6 +15,9 @@ public sealed record PresentationNotesPagePdfRenderPlan(
     IReadOnlyList<PresentationNotesPagePreviewPlan> PreviewPlans,
     IReadOnlyList<PdfContentPage> Pages);
 
+/// <summary>Host-supplied writer for a laid-out vector PDF content document.</summary>
+public delegate byte[] PresentationPdfContentWriter(PdfContentDocument document);
+
 /// <summary>
 /// Shared notes-page PDF rendering for FreeP. Hosts stay responsible for native picker/print
 /// surfaces; notes-page geometry, slide thumbnail placement, and speaker-note text output stay
@@ -48,6 +51,15 @@ public static class PresentationNotesPagePdfExporter
         Presentation presentation,
         PresentationNotesPagePdfExportRequest? request = null) =>
         PortablePdfWriter.WriteToBytes(BuildDocument(presentation, request), "FreeP notes page PDF");
+
+    public static byte[] ExportToBytes(
+        Presentation presentation,
+        PresentationNotesPagePdfExportRequest? request,
+        PresentationPdfContentWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        return writer(BuildDocument(presentation, request));
+    }
 
     public static void Export(
         Presentation presentation,
