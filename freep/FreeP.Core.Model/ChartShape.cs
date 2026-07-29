@@ -781,12 +781,28 @@ public sealed class ChartShape
     public string? SourcePartPath { get; set; }
 
     /// <summary>
+    /// Authored <c>c:date1904</c> chart-space flag. Null means the source omitted the token
+    /// and the workbook/application date system remains authoritative.
+    /// </summary>
+    public bool? ChartDate1904 { get; set; }
+
+    /// <summary>Authored chart-space locale from <c>c:lang/@val</c>, when present.</summary>
+    public string? ChartLanguage { get; set; }
+
+    /// <summary>
     /// Verbatim <c>c:chartSpace/c:pivotSource</c> payload from the source chart.
     /// Pivot-chart identity is package metadata even when the current model does not
     /// expose pivot-specific editing or rendering controls.
     /// </summary>
     [JsonIgnore]
     public string? PreservedPivotSourceXml { get; set; }
+
+    /// <summary>
+    /// Verbatim <c>c:chartSpace/c:protection</c> payload. Protection semantics remain
+    /// source-owned until FreeP exposes the corresponding chart editing policy.
+    /// </summary>
+    [JsonIgnore]
+    public string? PreservedChartProtectionXml { get; set; }
 
     /// <summary>
     /// Verbatim <c>c:chartSpace/c:extLst</c> payload from the source chart, retained so

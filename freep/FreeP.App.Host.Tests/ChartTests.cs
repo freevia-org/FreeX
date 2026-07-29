@@ -152,6 +152,10 @@ public sealed class ChartTests : IDisposable
             "<c:extLst xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><c:ext uri=\"urn:freep:chart-test\" /></c:extLst>";
         chart.PreservedPivotSourceXml =
             "<c:pivotSource xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><c:name>PivotTable1</c:name><c:fmtId val=\"1\" /></c:pivotSource>";
+        chart.ChartDate1904 = true;
+        chart.ChartLanguage = "en-US";
+        chart.PreservedChartProtectionXml =
+            "<c:protection xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" chartObject=\"1\" data=\"0\" />";
         slide.Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.Chart, Chart = chart });
 
         var clone = SlideCloner.CloneSlide(slide).Shapes.Single().Chart!;
@@ -177,6 +181,9 @@ public sealed class ChartTests : IDisposable
         clone.ShowNegativeBubbles.Should().BeTrue();
         clone.PreservedChartSpaceExtensionsXml.Should().Be(chart.PreservedChartSpaceExtensionsXml);
         clone.PreservedPivotSourceXml.Should().Be(chart.PreservedPivotSourceXml);
+        clone.ChartDate1904.Should().BeTrue();
+        clone.ChartLanguage.Should().Be("en-US");
+        clone.PreservedChartProtectionXml.Should().Be(chart.PreservedChartProtectionXml);
     }
 
     [Fact]
@@ -567,6 +574,34 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_ChartSpaceMetadata_PreservesDateLocaleAndProtection()
+    {
+        var chart = BuildColumnChart();
+        chart.ChartDate1904 = true;
+        chart.ChartLanguage = "fr-FR";
+        chart.PreservedChartProtectionXml =
+            "<c:protection xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" chartObject=\"1\" data=\"0\" formatting=\"1\" />";
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var root = LoadChartXml(archive, chartIndex: 1).Root!;
+            root.Elements().Select(element => element.Name.LocalName)
+                .Should().ContainInOrder("date1904", "lang", "protection", "chart");
+            root.Element(ChartNs + "date1904")?.Attribute("val")?.Value.Should().Be("1");
+            root.Element(ChartNs + "lang")?.Attribute("val")?.Value.Should().Be("fr-FR");
+            root.Element(ChartNs + "protection")?.Attribute("chartObject")?.Value.Should().Be("1");
+            root.Element(ChartNs + "protection")?.Attribute("data")?.Value.Should().Be("0");
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ChartDate1904.Should().BeTrue();
+        rt.ChartLanguage.Should().Be("fr-FR");
+        rt.PreservedChartProtectionXml.Should().Contain("formatting");
+    }
+
+    [Fact]
     public void RoundTrip_ChartLevelMetadata_DefaultsStayAbsentAndNull()
     {
         var path = WriteToPptx(BuildPresWithChart(BuildColumnChart()));
@@ -578,6 +613,9 @@ public sealed class ChartTests : IDisposable
             chartEl.Element(ChartNs + "dispBlanksAs").Should().BeNull();
             chartDoc.Root!.Element(ChartNs + "roundedCorners").Should().BeNull();
             chartDoc.Root!.Element(ChartNs + "pivotSource").Should().BeNull();
+            chartDoc.Root!.Element(ChartNs + "date1904").Should().BeNull();
+            chartDoc.Root!.Element(ChartNs + "lang").Should().BeNull();
+            chartDoc.Root!.Element(ChartNs + "protection").Should().BeNull();
             chartEl.Element(ChartNs + "showDLblsOverMax").Should().BeNull();
         }
 
@@ -586,6 +624,9 @@ public sealed class ChartTests : IDisposable
         rt.DisplayBlanksAs.Should().BeNull();
         rt.RoundedCorners.Should().BeNull();
         rt.PreservedPivotSourceXml.Should().BeNull();
+        rt.ChartDate1904.Should().BeNull();
+        rt.ChartLanguage.Should().BeNull();
+        rt.PreservedChartProtectionXml.Should().BeNull();
         rt.ShowDataLabelsOverMaximum.Should().BeNull();
     }
 

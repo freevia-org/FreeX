@@ -48,8 +48,12 @@ internal static class PptxChartReader
         var shape = new ChartShape
         {
             StyleId = ReadStyleId(chartSpace),
+            ChartDate1904 = ParseNullableBoolElement(chartSpace.Element(C + "date1904")),
+            ChartLanguage = chartSpace.Element(C + "lang")?.Attribute("val")?.Value,
             RoundedCorners = ParseNullableBoolElement(chartSpace.Element(C + "roundedCorners")),
             PreservedPivotSourceXml = chartSpace.Element(C + "pivotSource")
+                ?.ToString(SaveOptions.DisableFormatting),
+            PreservedChartProtectionXml = chartSpace.Element(C + "protection")
                 ?.ToString(SaveOptions.DisableFormatting),
             PreservedChartSpaceExtensionsXml = chartSpace.Element(C + "extLst")
                 ?.ToString(SaveOptions.DisableFormatting)
