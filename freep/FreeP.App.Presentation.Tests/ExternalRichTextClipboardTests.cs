@@ -271,7 +271,7 @@ Left\cell{\ul Right}\ul0\cell\row}";
         const string rtf =
             @"{\rtf1\ansi
 {\colortbl;\red255\green255\blue0;\red31\green78\blue121;}
-\trowd\clcbpat1\clbrdrl\brdrs\brdrw10\brdrcf2\cellx1440\cellx2880
+\trowd\clcbpat1\clvertalc\clpadl120\clpadr240\clpadt60\clpadb180\clbrdrl\brdrs\brdrw10\brdrcf2\cellx1440\cellx2880
 Header\cell Value\cell\row}";
 
         var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
@@ -283,6 +283,11 @@ Header\cell Value\cell\row}";
         left.Should().NotBeNull();
         left!.ColorRgb.Should().Be(0x1F4E79);
         left.WidthPt.Should().Be(0.5);
+        payload.TableCellStyles[0].Anchor.Should().Be(TableCellAnchor.Middle);
+        payload.TableCellStyles[0].InsetLeftPt.Should().Be(6);
+        payload.TableCellStyles[0].InsetRightPt.Should().Be(12);
+        payload.TableCellStyles[0].InsetTopPt.Should().Be(3);
+        payload.TableCellStyles[0].InsetBottomPt.Should().Be(9);
         payload.TableCellStyles[1].FillRgb.Should().BeNull();
     }
 

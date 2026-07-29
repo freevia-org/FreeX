@@ -91,6 +91,11 @@ public static class ExternalRichTextClipboardPlanner
             public InCanvasRichClipboardTableBorder? Right { get; private set; }
             public InCanvasRichClipboardTableBorder? Top { get; private set; }
             public InCanvasRichClipboardTableBorder? Bottom { get; private set; }
+            public TableCellAnchor? Anchor { get; set; }
+            public double? InsetLeftPt { get; set; }
+            public double? InsetRightPt { get; set; }
+            public double? InsetTopPt { get; set; }
+            public double? InsetBottomPt { get; set; }
 
             public void BeginBorder(TableCellBorderSide side)
             {
@@ -117,7 +122,17 @@ public static class ExternalRichTextClipboardPlanner
             public InCanvasRichClipboardTableCellStyle Snapshot()
             {
                 CommitBorder();
-                return new(FillRgb, Left, Right, Top, Bottom);
+                return new(
+                    FillRgb,
+                    Left,
+                    Right,
+                    Top,
+                    Bottom,
+                    Anchor,
+                    InsetLeftPt,
+                    InsetRightPt,
+                    InsetTopPt,
+                    InsetBottomPt);
             }
 
             public void Reset()
@@ -129,6 +144,11 @@ public static class ExternalRichTextClipboardPlanner
                 Bottom = null;
                 _borderSide = null;
                 _borderDefined = false;
+                Anchor = null;
+                InsetLeftPt = null;
+                InsetRightPt = null;
+                InsetTopPt = null;
+                InsetBottomPt = null;
             }
 
             private void CommitBorder()
@@ -692,15 +712,23 @@ public static class ExternalRichTextClipboardPlanner
                 case "brdrcf":
                     _pendingCellStyle.SetColor(ResolveColorRgb(value) ?? 0);
                     break;
+                case "clvertalt": _pendingCellStyle.Anchor = TableCellAnchor.Top; break;
+                case "clvertalc": _pendingCellStyle.Anchor = TableCellAnchor.Middle; break;
+                case "clvertalb": _pendingCellStyle.Anchor = TableCellAnchor.Bottom; break;
+                case "clpadl": _pendingCellStyle.InsetLeftPt = ToCellInsetPoints(value); break;
+                case "clpadr": _pendingCellStyle.InsetRightPt = ToCellInsetPoints(value); break;
+                case "clpadt": _pendingCellStyle.InsetTopPt = ToCellInsetPoints(value); break;
+                case "clpadb": _pendingCellStyle.InsetBottomPt = ToCellInsetPoints(value); break;
                 case "trleft":
                 case "trgaph":
                 case "trrh":
                 case "trqc":
                 case "trql":
                 case "trqr":
-                case "clvertalt":
-                case "clvertalc":
-                case "clvertalb":
+                case "clpadfl":
+                case "clpadfr":
+                case "clpadft":
+                case "clpadfb":
                 case "cltxlrtb":
                 case "cltxtbrl":
                 case "clshdrawnil":
@@ -984,6 +1012,9 @@ public static class ExternalRichTextClipboardPlanner
             colorIndex > 0 && colorIndex < _colors.Count && _colors[colorIndex] is { } color
                 ? (color.R << 16) | (color.G << 8) | color.B
                 : null;
+
+        private static double ToCellInsetPoints(int twips) =>
+            Math.Clamp(twips / 20.0, 0.0, 72.0);
 
         private void FlushActiveRun()
         {
