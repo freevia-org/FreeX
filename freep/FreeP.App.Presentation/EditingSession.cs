@@ -1884,6 +1884,33 @@ public sealed class EditingSession
         return shape;
     }
 
+    /// <summary>
+    /// Inserts a native editable table when a standalone external clipboard payload is a
+    /// tab-delimited table. Returns null for mixed prose or unsupported one-column projections,
+    /// allowing the caller to retain the existing textbox fallback.
+    /// </summary>
+    public SlideShape? InsertTableFromClipboard(TextBody body)
+    {
+        if (CurrentSlide is null || !ClipboardTablePlanner.TryBuildStandaloneTable(body, out var table))
+            return null;
+
+        long cx = table.ColumnWidthsEmu.Sum();
+        long cy = table.Rows.Sum(row => row.HeightEmu);
+        var shape = new SlideShape
+        {
+            Id = NextShapeId(),
+            Name = "Pasted Table",
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = (Presentation.SlideSizeCxEmu - cx) / 2,
+            OffsetYEmu = (Presentation.SlideSizeCyEmu - cy) / 2,
+            ExtentCxEmu = cx,
+            ExtentCyEmu = cy,
+            Table = table,
+        };
+        AddShape(shape);
+        return shape;
+    }
+
     // ── Insert chart ──────────────────────────────────────────────────────────────
 
     /// <summary>

@@ -144,6 +144,7 @@ public static class ExternalRichTextClipboardPlanner
         private int _outputCharacters;
         private bool _tableRowActive;
         private int _tableCellCount;
+        private bool _containsTable;
         private bool _sawRtfHeader;
         private bool _lastWasParagraphBreak;
         private Paragraph? _activeParagraph;
@@ -193,7 +194,8 @@ public static class ExternalRichTextClipboardPlanner
                 _body,
                 InCanvasTextEditPlanner.ExtractPlainText(_body),
                 ImageBytes: picture.Bytes,
-                ImageContentType: picture.ContentType);
+                ImageContentType: picture.ContentType,
+                ContainsTable: _containsTable);
         }
 
         private bool ReadNext()
@@ -759,6 +761,7 @@ public static class ExternalRichTextClipboardPlanner
             FlushActiveRun();
             _tableRowActive = true;
             _tableCellCount = 0;
+            _containsTable = true;
             _state.InTable = true;
         }
 

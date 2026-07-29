@@ -13,7 +13,8 @@ public sealed record InCanvasRichClipboardPayload(
     string PlainText,
     Run? TypingRun = null,
     byte[]? ImageBytes = null,
-    string? ImageContentType = null)
+    string? ImageContentType = null,
+    bool ContainsTable = false)
 {
     public bool HasImage => ImageBytes is { Length: > 0 };
 
@@ -46,7 +47,10 @@ public sealed record InCanvasRichClipboardPayload(
     internal InCanvasRichClipboardPayload DeepClone() => new(
         TextBodyModelCloner.CloneTextBody(Body)!,
         PlainText,
-        TypingRun is null ? null : TextBodyModelCloner.CloneRun(TypingRun));
+        TypingRun is null ? null : TextBodyModelCloner.CloneRun(TypingRun),
+        ImageBytes?.ToArray(),
+        ImageContentType,
+        ContainsTable);
 
     internal static Run? RunFromStyle(InCanvasEditorTextStyleState? style) => style is null
         ? null
@@ -126,7 +130,8 @@ public static class InCanvasRichClipboardPlanner
             return new InCanvasRichClipboardPayload(
                 body,
                 plainText,
-                FromDto(dto.TypingRun));
+                FromDto(dto.TypingRun),
+                ContainsTable: dto.ContainsTable);
         }
         catch (JsonException)
         {
@@ -271,6 +276,7 @@ public static class InCanvasRichClipboardPlanner
         Version = CurrentVersion,
         Body = ToDto(payload.Body),
         TypingRun = payload.TypingRun is null ? null : ToDto(payload.TypingRun),
+        ContainsTable = payload.ContainsTable,
     };
 
     private static ClipboardBodyDto ToDto(TextBody body) => new()
@@ -707,6 +713,7 @@ public static class InCanvasRichClipboardPlanner
         public int Version { get; set; }
         public ClipboardBodyDto? Body { get; set; }
         public ClipboardRunDto? TypingRun { get; set; }
+        public bool ContainsTable { get; set; }
     }
 
     private sealed class ClipboardBodyDto

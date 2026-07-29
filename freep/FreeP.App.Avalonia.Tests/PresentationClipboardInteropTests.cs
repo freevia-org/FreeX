@@ -437,7 +437,7 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
-    public async Task XamlPackage_table_is_projected_into_formatted_text_box()
+    public async Task XamlPackage_table_is_pasted_as_native_editable_table()
     {
         var clipboard = new FakeSystemClipboard
         {
@@ -458,9 +458,16 @@ public sealed class PresentationClipboardInteropTests
         var result = await service.PasteAsync(editor);
 
         result.Should().Be(PresentationClipboardPasteSource.XamlPackage);
-        var paragraph = editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Single();
-        paragraph.Runs.Select(run => run.Text).Should().ContainInOrder("Q1", "\t", "42");
-        paragraph.Runs.Single(run => run.Text == "Q1").Italic.Should().BeTrue();
+        var shape = editor.CurrentSlide!.Shapes.Single();
+        shape.Kind.Should().Be(SlideShapeKind.Table);
+        shape.Table.Should().NotBeNull();
+        shape.Table!.Rows.Should().ContainSingle();
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
+            .Single().Text.Should().Be("Q1");
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
+            .Single().Italic.Should().BeTrue();
+        shape.Table.Rows[0].Cells[1].TextBody!.Paragraphs.Single().Runs
+            .Single().Text.Should().Be("42");
     }
 
     [Fact]
