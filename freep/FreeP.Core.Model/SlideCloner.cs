@@ -190,6 +190,7 @@ public static class SlideCloner
             ValueAxis    = CloneChartAxis(src.ValueAxis),
             DataTable    = src.DataTable is null ? null : CloneChartDataTableSettings(src.DataTable),
             DisplayBlanksAs = src.DisplayBlanksAs,
+            PlotVisibleOnly = src.PlotVisibleOnly,
             ShowDataLabelsOverMaximum = src.ShowDataLabelsOverMaximum,
             BarGapWidthPercent = src.BarGapWidthPercent,
             BarOverlapPercent = src.BarOverlapPercent,

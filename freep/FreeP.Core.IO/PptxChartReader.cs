@@ -68,6 +68,7 @@ internal static class PptxChartReader
         shape.TitleOverlay = ReadTitleOverlay(titleElement);
         shape.DisplayBlanksAs = ReadDisplayBlanksAs(
             chartEl.Element(C + "dispBlanksAs")?.Attribute("val")?.Value);
+        shape.PlotVisibleOnly = ParseNullableBoolElement(chartEl.Element(C + "plotVisOnly"));
         shape.ShowDataLabelsOverMaximum = ParseNullableBoolElement(
             chartEl.Element(C + "showDLblsOverMax"));
         shape.View3D = ReadView3D(chartEl.Element(C + "view3D"));

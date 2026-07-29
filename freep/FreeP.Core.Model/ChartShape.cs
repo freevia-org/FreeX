@@ -671,6 +671,12 @@ public sealed class ChartShape
     /// <summary>Authored chart-level blank-cell display behavior from <c>c:chart/c:dispBlanksAs</c>.</summary>
     public ChartDisplayBlanksAs? DisplayBlanksAs { get; set; }
 
+    /// <summary>
+    /// Authored chart-level <c>c:plotVisOnly</c> flag. Null means the source omitted the
+    /// token and PowerPoint's default (true) applies; false includes hidden worksheet data.
+    /// </summary>
+    public bool? PlotVisibleOnly { get; set; }
+
     /// <summary>Authored chart-level <c>c:showDLblsOverMax</c> flag. Null means unspecified.</summary>
     public bool? ShowDataLabelsOverMaximum { get; set; }
 
