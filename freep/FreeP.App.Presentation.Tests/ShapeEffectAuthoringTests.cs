@@ -244,4 +244,61 @@ public sealed class ShapeEffectAuthoringTests
         shape.Effects.BevelBottom.Should().BeNull();
         shape.Effects.HasGlow.Should().BeTrue();
     }
+
+    [Fact]
+    public void Planner_UsesStablePowerPointShape3dPresets()
+    {
+        var subtle = ShapeEffectAuthoringPlanner.ResolveShape3d(Shape3dPreset.Subtle);
+        var strong = ShapeEffectAuthoringPlanner.ResolveShape3d(Shape3dPreset.Strong);
+
+        subtle.Enabled.Should().BeTrue();
+        subtle.CameraPreset.Should().Be("orthographicFront");
+        subtle.LightRig.Should().Be("flat");
+        subtle.ExtrusionHeightEmu.Should().Be(0);
+        subtle.PrstMaterial.Should().Be("matte");
+        strong.Enabled.Should().BeTrue();
+        strong.CameraPreset.Should().Be("perspectiveRelaxed");
+        strong.LightRig.Should().Be("threePt");
+        strong.ExtrusionHeightEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(3));
+    }
+
+    [Fact]
+    public void SetShape3dCommand_PreservesOtherEffectsAndSupportsUndo()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var shape = new SlideShape
+        {
+            Id = 12,
+            Kind = SlideShapeKind.AutoShape,
+            Effects = new ShapeEffects
+            {
+                HasGlow = true,
+                GlowRadiusEmu = 321,
+                BevelTop = new BevelInfo { PresetName = "circle" },
+            },
+        };
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetShape3dCommand(
+            0,
+            shape.Id,
+            ShapeEffectAuthoringPlanner.ResolveShape3d(Shape3dPreset.Strong)));
+
+        shape.Effects.Should().NotBeNull();
+        shape.Effects!.Scene3d.Should().NotBeNull();
+        shape.Effects.Scene3d!.CameraPreset.Should().Be("perspectiveRelaxed");
+        shape.Effects.ExtrusionHeightEmu.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(3));
+        shape.Effects.PrstMaterial.Should().Be("matte");
+        shape.Effects.BevelTop.Should().NotBeNull();
+        shape.Effects.HasGlow.Should().BeTrue();
+
+        bus.Undo();
+
+        shape.Effects.Should().NotBeNull();
+        shape.Effects!.Scene3d.Should().BeNull();
+        shape.Effects.ExtrusionHeightEmu.Should().Be(0);
+        shape.Effects.BevelTop!.PresetName.Should().Be("circle");
+        shape.Effects.HasGlow.Should().BeTrue();
+    }
 }

@@ -703,6 +703,24 @@
   <data name="Ribbon_Command_ShapeBevelStrong_KeyTip" xml:space="preserve">
     <value>SBH</value>
   </data>
+  <data name="Ribbon_Command_Shape3dNone_Label" xml:space="preserve">
+    <value>No Shape 3-D</value>
+  </data>
+  <data name="Ribbon_Command_Shape3dNone_KeyTip" xml:space="preserve">
+    <value>S3N</value>
+  </data>
+  <data name="Ribbon_Command_Shape3dSubtle_Label" xml:space="preserve">
+    <value>Subtle Shape 3-D</value>
+  </data>
+  <data name="Ribbon_Command_Shape3dSubtle_KeyTip" xml:space="preserve">
+    <value>S3S</value>
+  </data>
+  <data name="Ribbon_Command_Shape3dStrong_Label" xml:space="preserve">
+    <value>Strong Shape 3-D</value>
+  </data>
+  <data name="Ribbon_Command_Shape3dStrong_KeyTip" xml:space="preserve">
+    <value>S3H</value>
+  </data>
   <data name="Ribbon_Command_Picture_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>

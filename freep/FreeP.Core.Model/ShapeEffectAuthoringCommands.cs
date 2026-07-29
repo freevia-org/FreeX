@@ -56,6 +56,24 @@ public readonly record struct ShapeBevelValues(
         HeightEmu: 0);
 }
 
+/// <summary>Authoritative scene/extrusion values used by the shape 3-D authoring command.</summary>
+public readonly record struct Shape3dValues(
+    bool Enabled,
+    string CameraPreset,
+    string LightRig,
+    string LightRigDir,
+    long ExtrusionHeightEmu,
+    string PrstMaterial)
+{
+    public static Shape3dValues None { get; } = new(
+        Enabled: false,
+        CameraPreset: string.Empty,
+        LightRig: string.Empty,
+        LightRigDir: string.Empty,
+        ExtrusionHeightEmu: 0,
+        PrstMaterial: string.Empty);
+}
+
 /// <summary>Changes only a shape's outer shadow, preserving every other effect layer.</summary>
 public sealed class SetShapeShadowCommand : IPresentationCommand
 {
@@ -414,6 +432,124 @@ public sealed class SetShapeBevelCommand : IPresentationCommand
             bevel.PresetName == _values.PresetName &&
             bevel.WidthEmu == _values.WidthEmu &&
             bevel.HeightEmu == _values.HeightEmu;
+    }
+
+    private SlideShape? FindShape(Presentation presentation)
+    {
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return null;
+
+        return presentation.Slides[_slideIndex].Shapes.FirstOrDefault(shape => shape.Id == _shapeId);
+    }
+
+    private static bool HasAnyEffects(ShapeEffects effects) =>
+        effects.HasOuterShadow ||
+        effects.HasInnerShadow ||
+        effects.HasGlow ||
+        effects.HasSoftEdge ||
+        effects.BevelTop is not null ||
+        effects.BevelBottom is not null ||
+        effects.ExtrusionHeightEmu != 0 ||
+        effects.ContourWidthEmu != 0 ||
+        effects.Scene3d is not null ||
+        !string.IsNullOrWhiteSpace(effects.PrstMaterial) ||
+        effects.ExtrusionColor is not null ||
+        effects.ContourColor is not null;
+}
+
+/// <summary>Changes only a shape's scene/extrusion 3-D layer, preserving other effects.</summary>
+public sealed class SetShape3dCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly Shape3dValues _values;
+    private bool _captured;
+    private ShapeEffects? _oldEffects;
+
+    public SetShape3dCommand(int slideIndex, uint shapeId, Shape3dValues values)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _values = values;
+    }
+
+    public string Label => "Shape 3-D";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        return shape is not null && !Matches(shape.Effects);
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        if (shape is null)
+            return;
+
+        if (!_captured)
+        {
+            _captured = true;
+            _oldEffects = PresentationModelCloneHelper.CloneShapeEffects(shape.Effects);
+        }
+
+        if (!_values.Enabled && shape.Effects is null)
+            return;
+
+        if (shape.Effects is null)
+            shape.Effects = new ShapeEffects();
+
+        shape.Effects.Scene3d = _values.Enabled
+            ? new Scene3dInfo
+            {
+                CameraPreset = _values.CameraPreset,
+                LightRig = _values.LightRig,
+                LightRigDir = _values.LightRigDir,
+            }
+            : null;
+        shape.Effects.ExtrusionHeightEmu = _values.Enabled ? _values.ExtrusionHeightEmu : 0;
+        shape.Effects.PrstMaterial = _values.Enabled ? _values.PrstMaterial : string.Empty;
+        if (!_values.Enabled)
+        {
+            shape.Effects.ContourWidthEmu = 0;
+            shape.Effects.ExtrusionColor = null;
+            shape.Effects.ContourColor = null;
+        }
+
+        if (!HasAnyEffects(shape.Effects))
+            shape.Effects = null;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shape = FindShape(presentation);
+        if (shape is null || !_captured)
+            return;
+
+        shape.Effects = PresentationModelCloneHelper.CloneShapeEffects(_oldEffects);
+    }
+
+    private bool Matches(ShapeEffects? effects)
+    {
+        if (!_values.Enabled)
+        {
+            return effects is null ||
+                (effects.Scene3d is null
+                && effects.ExtrusionHeightEmu == 0
+                && effects.ContourWidthEmu == 0
+                && string.IsNullOrWhiteSpace(effects.PrstMaterial)
+                && effects.ExtrusionColor is null
+                && effects.ContourColor is null);
+        }
+
+        var scene = effects?.Scene3d;
+        return effects is not null
+            && scene is not null
+            && scene.CameraPreset == _values.CameraPreset
+            && scene.LightRig == _values.LightRig
+            && scene.LightRigDir == _values.LightRigDir
+            && effects.ExtrusionHeightEmu == _values.ExtrusionHeightEmu
+            && effects.PrstMaterial == _values.PrstMaterial;
     }
 
     private SlideShape? FindShape(Presentation presentation)

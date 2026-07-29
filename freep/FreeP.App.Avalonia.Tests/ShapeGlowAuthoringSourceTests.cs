@@ -41,6 +41,19 @@ public sealed class ShapeGlowAuthoringSourceTests
         source.Should().Contain("Editor.SetSelectedShapeBevel(ShapeEffectAuthoringPlanner.BevelStrong())");
     }
 
+    [Fact]
+    public void Avalonia_registers_shared_shape_3d_presets()
+    {
+        var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("ShapeEffectAuthoringPlanner.Shape3dNoneCommandId");
+        source.Should().Contain("ShapeEffectAuthoringPlanner.Shape3dSubtleCommandId");
+        source.Should().Contain("ShapeEffectAuthoringPlanner.Shape3dStrongCommandId");
+        source.Should().Contain("Editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dNone())");
+        source.Should().Contain("Editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dSubtle())");
+        source.Should().Contain("Editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dStrong())");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);

@@ -141,4 +141,38 @@ public sealed class ShapeShadowRibbonTests
         shape.Effects!.BevelTop!.PresetName.Should().Be("circle");
         shape.Effects.BevelBottom.Should().NotBeNull();
     }
+
+    [Fact]
+    public void Shape3dPresets_AreDefinedAndRoutedByHost()
+    {
+        var definition = FreePRibbon.Build();
+        var illustrations = definition.Tabs
+            .SelectMany(tab => tab.Groups)
+            .Single(group => group.Id == "illustrations");
+
+        foreach (var commandId in new[]
+        {
+            ShapeEffectAuthoringPlanner.Shape3dNoneCommandId,
+            ShapeEffectAuthoringPlanner.Shape3dSubtleCommandId,
+            ShapeEffectAuthoringPlanner.Shape3dStrongCommandId,
+        })
+        {
+            illustrations.Controls.Should().Contain(control => control.CommandId.Value == commandId);
+        }
+
+        var presentation = Presentation.CreateEmpty();
+        var shape = new SlideShape { Id = 505, Kind = SlideShapeKind.AutoShape };
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        var editor = new EditingSession(presentation, bus);
+        editor.Select(shape.Id);
+
+        var registry = FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+        registry.TryGet(ShapeEffectAuthoringPlanner.Shape3dSubtleCommandId, out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.Empty);
+
+        shape.Effects.Should().NotBeNull();
+        shape.Effects!.Scene3d!.CameraPreset.Should().Be("orthographicFront");
+        shape.Effects.PrstMaterial.Should().Be("matte");
+    }
 }

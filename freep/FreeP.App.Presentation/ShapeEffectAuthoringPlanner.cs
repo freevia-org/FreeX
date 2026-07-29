@@ -31,6 +31,13 @@ public enum ShapeBevelPreset
     Strong,
 }
 
+public enum Shape3dPreset
+{
+    None,
+    Subtle,
+    Strong,
+}
+
 /// <summary>PowerPoint-style shape shadow presets backed by the shared effect model.</summary>
 public static class ShapeEffectAuthoringPlanner
 {
@@ -46,6 +53,9 @@ public static class ShapeEffectAuthoringPlanner
     public const string BevelNoneCommandId = "freep.shape.bevel.none";
     public const string BevelSubtleCommandId = "freep.shape.bevel.subtle";
     public const string BevelStrongCommandId = "freep.shape.bevel.strong";
+    public const string Shape3dNoneCommandId = "freep.shape.3d.none";
+    public const string Shape3dSubtleCommandId = "freep.shape.3d.subtle";
+    public const string Shape3dStrongCommandId = "freep.shape.3d.strong";
 
     public static ShapeShadowValues None() => Resolve(ShapeShadowPreset.None);
     public static ShapeShadowValues Subtle() => Resolve(ShapeShadowPreset.Subtle);
@@ -59,6 +69,9 @@ public static class ShapeEffectAuthoringPlanner
     public static ShapeBevelValues BevelNone() => ResolveBevel(ShapeBevelPreset.None);
     public static ShapeBevelValues BevelSubtle() => ResolveBevel(ShapeBevelPreset.Subtle);
     public static ShapeBevelValues BevelStrong() => ResolveBevel(ShapeBevelPreset.Strong);
+    public static Shape3dValues Shape3dNone() => ResolveShape3d(Shape3dPreset.None);
+    public static Shape3dValues Shape3dSubtle() => ResolveShape3d(Shape3dPreset.Subtle);
+    public static Shape3dValues Shape3dStrong() => ResolveShape3d(Shape3dPreset.Strong);
 
     public static ShapeShadowValues Resolve(ShapeShadowPreset preset) => preset switch
     {
@@ -90,6 +103,14 @@ public static class ShapeEffectAuthoringPlanner
         ShapeBevelPreset.Subtle => new(true, "circle", PointsToEmu(1), PointsToEmu(1)),
         ShapeBevelPreset.Strong => new(true, "relaxedInset", PointsToEmu(3), PointsToEmu(3)),
         _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, "Unknown shape bevel preset."),
+    };
+
+    public static Shape3dValues ResolveShape3d(Shape3dPreset preset) => preset switch
+    {
+        Shape3dPreset.None => Shape3dValues.None,
+        Shape3dPreset.Subtle => new(true, "orthographicFront", "flat", "t", 0, "matte"),
+        Shape3dPreset.Strong => new(true, "perspectiveRelaxed", "threePt", "t", PointsToEmu(3), "matte"),
+        _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, "Unknown shape 3-D preset."),
     };
 
     private static ShapeShadowValues Create(byte alpha, double blurPt, double distancePt) => new(
