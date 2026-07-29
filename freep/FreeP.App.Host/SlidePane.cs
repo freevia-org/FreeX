@@ -231,6 +231,16 @@ public sealed class SlidePane : Border
                 ? new Thickness(SlidePanePlanner.DefaultSelectedBorderThickness)
                 : new Thickness(SlidePanePlanner.DefaultNormalBorderThickness);
             item.Background      = selected ? ItemSelectedBg      : ItemNormalBg;
+
+            if (_sessionProjection?.Entries.FirstOrDefault(entry =>
+                    entry.Kind == SlidePaneEntryKind.Slide && entry.SlideIndex == itemIdx) is { } entry)
+            {
+                var plan = SlidePanePlanner.BuildThumbnailVisualPlan(
+                    entry,
+                    _editor.Presentation.Slides[itemIdx],
+                    idx);
+                AutomationProperties.SetName(item, plan.AccessibleName);
+            }
         }
     }
 
@@ -294,6 +304,7 @@ public sealed class SlidePane : Border
             Focusable       = true,
             ToolTip         = plan.ToolTipText
         };
+        AutomationProperties.SetName(item, plan.AccessibleName);
 
         // Click -> SelectSlide.
         item.MouseLeftButtonDown += (sender, e) =>
@@ -481,6 +492,18 @@ public sealed class SlidePane : Border
     internal int SlidePaneSectionHeaderCount => _stack.Children
         .OfType<Border>()
         .Count(child => child.Tag is SectionHeaderTag);
+
+    internal IReadOnlyList<string?> SlidePaneThumbnailAutomationNamesForTests => _stack.Children
+        .OfType<Border>()
+        .Where(child => child.Tag is int)
+        .Select(AutomationProperties.GetName)
+        .ToArray();
+
+    internal IReadOnlyList<string?> SlidePaneSectionHeaderAutomationNamesForTests => _stack.Children
+        .OfType<Border>()
+        .Where(child => child.Tag is SectionHeaderTag)
+        .Select(AutomationProperties.GetName)
+        .ToArray();
 
     internal bool ToggleSectionForTests(int sectionIndex)
     {

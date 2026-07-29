@@ -387,6 +387,11 @@ public sealed partial class MainWindow : Window
         .Where(item => item.Tag is SlidePaneSectionHeaderTag)
         .Select(AutomationProperties.GetName)
         .ToArray();
+    internal IReadOnlyList<string?> SlidePaneThumbnailAutomationNamesForTests => _slidePaneList.Items
+        .OfType<ListBoxItem>()
+        .Where(item => item.Tag is int)
+        .Select(AutomationProperties.GetName)
+        .ToArray();
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
     internal bool IsCloseDecisionPendingForTests => _closeCoordinator.IsClosePending;
@@ -7750,6 +7755,7 @@ public sealed partial class MainWindow : Window
                     IsSelected  = plan.IsSelected,
                     ContextMenu = BuildSlidePaneContextMenu(plan.SlideIndex),
                 };
+                AutomationProperties.SetName(item, plan.AccessibleName);
                 ToolTip.SetTip(item, plan.ToolTipText);
                 WireContextMenuLifecycle(item);
                 item.KeyDown += OnSlidePaneItemKeyDown;
@@ -8430,6 +8436,7 @@ public sealed partial class MainWindow : Window
             chrome.Background = BrushFromHex(selected ? plan.ItemSelectedBackgroundHex : plan.ItemNormalBackgroundHex);
             chrome.BorderBrush = BrushFromHex(selected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex);
             chrome.BorderThickness = new Thickness(selected ? plan.SelectedBorderThickness : plan.NormalBorderThickness);
+            AutomationProperties.SetName(item, plan.AccessibleName);
         }
     }
 
