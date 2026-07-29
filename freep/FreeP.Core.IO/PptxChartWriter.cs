@@ -83,7 +83,7 @@ internal static class PptxChartWriter
         var legendEl = BuildLegendEl(chart);
 
         var titleEl = chart.Title is not null && !chart.HasAutomaticTitle
-            ? BuildTitleEl(chart.Title)
+            ? BuildTitleEl(chart.Title, overlay: chart.TitleOverlay == true)
             : null;
 
         var chartSpace = new XElement(C + "chartSpace",
@@ -151,7 +151,10 @@ internal static class PptxChartWriter
     private static XElement? OptionalBoolElement(string name, bool? value) =>
         value is { } v ? new XElement(C + name, new XAttribute("val", BoolValue(v))) : null;
 
-    private static XElement BuildTitleEl(string title, ChartTextStyle? style = null) =>
+    private static XElement BuildTitleEl(
+        string title,
+        ChartTextStyle? style = null,
+        bool overlay = false) =>
         new XElement(C + "title",
             new XElement(C + "tx",
                 new XElement(C + "rich",
@@ -161,7 +164,7 @@ internal static class PptxChartWriter
                         style is null ? null : new XElement(A + "pPr", BuildChartDefaultRunPropertiesEl(style)),
                         new XElement(A + "r",
                             new XElement(A + "t", title))))),
-            new XElement(C + "overlay", new XAttribute("val", "0")));
+            new XElement(C + "overlay", new XAttribute("val", BoolValue(overlay))));
 
     // Axis ID constants for the primary and secondary axis pairs.
     // Primary: catAx id=1, valAx id=2. Secondary: catAx id=4 (hidden), valAx id=3.

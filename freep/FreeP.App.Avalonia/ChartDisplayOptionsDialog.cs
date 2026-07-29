@@ -15,6 +15,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly EditingSession _editor;
     private readonly ChartDisplayOptionsPlanner _planner;
     private readonly TextBox _titleBox;
+    private readonly CheckBox _titleOverlayCheck;
     private readonly ComboBox _styleCombo;
     private readonly ComboBox _legendCombo;
     private readonly CheckBox _valueLabelsCheck;
@@ -59,6 +60,11 @@ internal sealed class ChartDisplayOptionsDialog : Window
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         _titleBox = new TextBox { Text = _planner.Title, MinWidth = 230 };
+        _titleOverlayCheck = new CheckBox
+        {
+            Content = surface.TitleOverlayLabel,
+            IsChecked = _planner.TitleOverlay,
+        };
         _styleCombo = new ComboBox
         {
             ItemsSource = _planner.AvailableStyleOptions.Select(option => option.Label).ToArray(),
@@ -184,6 +190,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
             Children =
             {
                 MakeRow(surface.ChartTitleLabel, _titleBox),
+                _titleOverlayCheck,
                 MakeRow(surface.ChartStyleLabel, _styleCombo),
                 MakeRow(surface.LegendLabel, _legendCombo),
                 MakeRow(surface.LabelPositionLabel, _labelPositionCombo),
@@ -223,6 +230,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
     }
 
     internal void SetVaryColorsForTests(bool value) => _varyColorsCheck.IsChecked = value;
+
+    internal void SetTitleOverlayForTests(bool value) => _titleOverlayCheck.IsChecked = value;
 
     internal void SetStyleIdForTests(int? styleId) => _styleCombo.SelectedIndex = FindStyleIndex(styleId);
 
@@ -290,6 +299,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private void UpdatePlannerFromControls()
     {
         _planner.SetTitle(_titleBox.Text);
+        _planner.SetTitleOverlay(_titleOverlayCheck.IsChecked == true);
         var styleIndex = _styleCombo.SelectedIndex;
         if (styleIndex >= 0 && styleIndex < ChartDisplayOptionsPlanner.StyleOptions.Count)
             _planner.SetStyleId(ChartDisplayOptionsPlanner.StyleOptions[styleIndex].Value);
