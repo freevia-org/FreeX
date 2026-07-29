@@ -733,12 +733,27 @@ try {
         }
     } else {
         # Phase one sends real X11 keyboard and pointer events through the production handlers.
-        $x11Session = Start-ValidationSession -AppArgument @() -DocumentPath $PhysicalDocumentPath
+        $physicalDocumentName = if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
+            ""
+        } else {
+            Split-Path -Leaf ([IO.Path]::GetFullPath($PhysicalDocumentPath))
+        }
+        $x11Session = Start-ValidationSession -AppArgument @(
+            "--freex-pivot-runtime-evidence",
+            "/work/x11-validation/pivot-runtime-evidence.jsonl"
+        ) -DocumentPath $PhysicalDocumentPath
         Ensure-ReportProvenance
 
         & docker cp $x11ProbeScript "${containerName}:/tmp/run-freex-input-probes.sh"
         if ($LASTEXITCODE -ne 0) { throw "Could not copy X11 input probes into '$containerName'." }
-        & docker exec --env DISPLAY=:99 --env "FREEX_X11_PROBE_SELECTOR=$PhysicalProbeSelector" $containerName bash /tmp/run-freex-input-probes.sh /work/x11-validation
+        $probeEnvironment = @(
+            "DISPLAY=:99",
+            "FREEX_X11_PROBE_SELECTOR=$PhysicalProbeSelector"
+        )
+        if (-not [string]::IsNullOrWhiteSpace($physicalDocumentName)) {
+            $probeEnvironment += "FREEX_X11_DOCUMENT_PATH=/documents/$physicalDocumentName"
+        }
+        & docker exec @($probeEnvironment | ForEach-Object { "--env"; $_ }) $containerName bash /tmp/run-freex-input-probes.sh /work/x11-validation
         $x11ProbeExit = $LASTEXITCODE
         $x11ManifestPath = Join-Path ([string]$x11Session.sessionDirectory) "x11-validation/x11-input-results.json"
         if (-not (Test-Path -LiteralPath $x11ManifestPath -PathType Leaf)) {

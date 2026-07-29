@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using System.Text.Json;
 using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
@@ -47,6 +48,8 @@ public sealed partial class MainWindow
 
     internal int PivotFieldPaneBuildCountForTest => _pivotFieldPaneBuildCount;
 
+    internal bool PivotFieldPaneVisibleForTest => _pivotFieldPaneHost.IsVisible;
+
     // The field currently being dragged within the pane (pointer-capture gesture), or null when idle.
     private PivotPaneDragItem? _pivotPaneDragItem;
     private readonly List<PivotDropZone> _pivotDropZones = [];
@@ -85,6 +88,7 @@ public sealed partial class MainWindow
                 _pivotPaneSearchText = string.Empty;
             }
 
+            RecordPivotRuntimeEvidence("pane-hidden");
             return;
         }
 
@@ -96,6 +100,71 @@ public sealed partial class MainWindow
         _pivotPaneSignature = signature;
         _pivotFieldPaneHost.Child = BuildPivotFieldPaneBody(pivot, headers);
         _pivotFieldPaneHost.IsVisible = true;
+        RecordPivotRuntimeEvidence("pane-visible");
+    }
+
+    private void RecordPivotRuntimeEvidence(string stage)
+    {
+        var path = FindPivotRuntimeEvidencePath(App.StartupArguments);
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        try
+        {
+            var sheet = _session.ActiveSheet;
+            var activeCell = _session.ActiveCell;
+            var pivot = PivotSourceContext.FindActivePivot(sheet, activeCell);
+            var payload = new
+            {
+                utc = DateTimeOffset.UtcNow,
+                stage,
+                activeSheet = sheet.Name,
+                activeSheetId = sheet.Id.ToString(),
+                activeCellSheetId = activeCell.Sheet.ToString(),
+                activeCellRow = activeCell.Row,
+                activeCellColumn = activeCell.Col,
+                startupArguments = App.StartupArguments.ToArray(),
+                currentFilePath = _session.CurrentFilePath,
+                workbookName = _session.Workbook.Name,
+                workbookSheets = _session.Workbook.Sheets.Select(item => new
+                {
+                    item.Name,
+                    pivotCount = item.PivotTables.Count,
+                }).ToArray(),
+                sheetPivotCount = sheet.PivotTables.Count,
+                pivots = sheet.PivotTables.Select(item => new
+                {
+                    item.Name,
+                    targetStart = item.TargetRange.Start.ToA1(),
+                    targetEnd = item.TargetRange.End.ToA1(),
+                    renderedStart = item.LastRenderedRange?.Start.ToA1(),
+                    renderedEnd = item.LastRenderedRange?.End.ToA1(),
+                }).ToArray(),
+                resolvedPivot = pivot?.Name,
+                paneVisible = _pivotFieldPaneHost.IsVisible,
+                paneWidth = _pivotFieldPaneHost.Bounds.Width,
+                userHidden = _pivotFieldPaneUserHidden,
+            };
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(directory))
+                Directory.CreateDirectory(directory);
+            File.AppendAllText(path, JsonSerializer.Serialize(payload) + Environment.NewLine);
+        }
+        catch
+        {
+            // Evidence is opt-in and must never affect worksheet behavior.
+        }
+    }
+
+    private static string? FindPivotRuntimeEvidencePath(IReadOnlyList<string> arguments)
+    {
+        for (var index = 0; index + 1 < arguments.Count; index++)
+        {
+            if (string.Equals(arguments[index], "--freex-pivot-runtime-evidence", StringComparison.OrdinalIgnoreCase))
+                return arguments[index + 1];
+        }
+
+        return null;
     }
 
     // Identity + ordered field membership; a layout change (drag, sort) shifts the signature and rebuilds.

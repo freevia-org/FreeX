@@ -492,21 +492,41 @@ pivot_bucket_chip_y() {
     # BuildPivotFieldPaneBody uses a fixed title/search preamble and then the
     # Available, Filters, Columns, Rows, Values buckets in that order.
     case "$bucket" in
-        filters) offset="${FREEX_X11_PIVOT_FILTERS_Y_OFFSET:-154}" ;;
-        rows) offset="${FREEX_X11_PIVOT_ROWS_Y_OFFSET:-296}" ;;
+        filters) offset="${FREEX_X11_PIVOT_FILTERS_Y_OFFSET:-168}" ;;
+        rows) offset="${FREEX_X11_PIVOT_ROWS_Y_OFFSET:-288}" ;;
         *) return 1 ;;
     esac
     printf '%d' "$((top + offset))"
 }
 
 pivot_layout_signature() {
-    local xml rows pages values
-    xml="$(unzip -p "$document_path" xl/pivotTables/pivotTable1.xml 2>/dev/null || true)"
-    [[ -n "$xml" ]] || return 1
-    rows="$(printf '%s' "$xml" | sed -n 's/.*<rowFields[^>]*>\(.*\)<\/rowFields>.*/\1/p' | grep -o 'x="[0-9]*"' | sed 's/[^0-9]//g' | paste -sd, - || true)"
-    pages="$(printf '%s' "$xml" | sed -n 's/.*<pageFields[^>]*>\(.*\)<\/pageFields>.*/\1/p' | grep -o 'fld="[0-9]*"' | sed 's/[^0-9]//g' | paste -sd, - || true)"
-    values="$(printf '%s' "$xml" | sed -n 's/.*<dataFields[^>]*>\(.*\)<\/dataFields>.*/\1/p' | grep -o 'fld="[0-9]*"' | sed 's/[^0-9]//g' | paste -sd, - || true)"
-    printf 'rows=%s\npages=%s\nvalues=%s' "$rows" "$pages" "$values"
+    python3 - "$document_path" <<'PY'
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+
+path = sys.argv[1]
+namespace = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+try:
+    with zipfile.ZipFile(path) as package:
+        root = ET.fromstring(package.read("xl/pivotTables/pivotTable1.xml"))
+except (OSError, KeyError, ET.ParseError):
+    raise SystemExit(1)
+
+def values(parent_name, attribute):
+    parent = root.find(namespace + parent_name)
+    if parent is None:
+        return ""
+    return ",".join(
+        child.attrib[attribute]
+        for child in list(parent)
+        if attribute in child.attrib
+    )
+
+print(f"rows={values('rowFields', 'x')}")
+print(f"pages={values('pageFields', 'fld')}")
+print(f"values={values('dataFields', 'fld')}")
+PY
 }
 
 wait_for_document_hash_change() {
@@ -524,9 +544,11 @@ wait_for_document_hash_change() {
 }
 
 drag_pivot_chip() {
-    local source_bucket="$1" target_bucket="$2" target_y
+    local source_bucket="$1" target_bucket="$2" source_index="${3:-0}" target_index="${4:-0}" target_y
     local source_x="$(pivot_chip_x)" source_y="$(pivot_bucket_chip_y "$source_bucket")"
+    source_y=$((source_y + source_index * 27))
     target_y="$(pivot_bucket_chip_y "$target_bucket")"
+    target_y=$((target_y + target_index * 27 - 22))
     focus_app
     xdotool_mousemove_sync "$source_x" "$source_y"
     xdotool mousedown 1
@@ -555,12 +577,14 @@ probe_pivot_field_list() {
     before_layout="$(pivot_layout_signature || true)"
     before_hash="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}' || true)"
 
-    # Category starts in Filters. Moving it into Rows is a real cross-bucket,
-    # positional insertion before the existing Region field.
-    drag_pivot_chip filters rows
+    # Category (source field 1) starts in Filters. Moving it into Rows is a real
+    # cross-bucket, positional insertion before the existing Region (source 0).
+    drag_pivot_chip filters rows 0 0
+    send_key ctrl+s
+    after_hash="$(wait_for_document_hash_change "$before_hash" || true)"
     capture "pivot-field-list-cross-bucket.png"
     after_layout="$(pivot_layout_signature || true)"
-    if [[ "$after_layout" == *"rows=0,1"* && "$after_layout" == *"pages="* && "$after_layout" == *"values=2"* ]]; then
+    if [[ "$after_layout" == *"rows=1,0"* && "$after_layout" == *"pages="* && "$after_layout" == *"values=2"* ]]; then
         cross_passed=true
     fi
     write_artifact "pivot-field-list-cross-postcondition.txt" \
@@ -568,7 +592,7 @@ probe_pivot_field_list() {
     if $cross_passed; then
         record "pivot-field-drag-cross-bucket-physical" "passed" \
             "pivot-field-list-before.png; pivot-field-list-cross-bucket.png; $after_layout" \
-            "Category was physically dragged from Filters into the Rows bucket and the saved PivotTable package now reports ordered row fields 0,1 with no page field." \
+            "Category was physically dragged from Filters into the Rows bucket before Region and the saved PivotTable package now reports row fields 1,0 with no page field." \
             "pivot-field-list-before.png;pivot-field-list-cross-bucket.png;pivot-field-list-cross-postcondition.txt"
     else
         record "pivot-field-drag-cross-bucket-physical" "failed" \
@@ -578,19 +602,19 @@ probe_pivot_field_list() {
     fi
 
     if $cross_passed; then
-        send_key ctrl+s
-        wait_for_document_hash_change "$before_hash" >/dev/null || true
-        before_hash="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}' || true)"
-        # Region is now the first Rows item. Dropping it after Category proves
+        before_hash="$after_hash"
+        # Category is now the first Rows item. Dropping it below Region proves
         # same-bucket reorder and positional insertion rather than mere transfer.
-        drag_pivot_chip rows rows
+        drag_pivot_chip rows rows 0 2
+        send_key ctrl+s
+        after_hash="$(wait_for_document_hash_change "$before_hash" || true)"
         capture "pivot-field-list-reorder.png"
         after_layout="$(pivot_layout_signature || true)"
-        if [[ "$after_layout" == *"rows=1,0"* && "$after_layout" == *"pages="* && "$after_layout" == *"values=2"* ]]; then
+        if [[ "$after_layout" == *"rows=0,1"* && "$after_layout" == *"pages="* && "$after_layout" == *"values=2"* ]]; then
             reorder_passed=true
         fi
         write_artifact "pivot-field-list-postcondition.txt" \
-            "cross-layout=rows=0,1;pages=;values=2\nreordered-layout=$after_layout\npane-left=$pane_left\npane-top=$pane_top\nsource=rows[0]\ntarget=rows[2]\n"
+            "cross-layout=rows=1,0;pages=;values=2\nreordered-layout=$after_layout\npane-left=$pane_left\npane-top=$pane_top\nsource=rows[0]\ntarget=rows[2]\n"
     else
         write_artifact "pivot-field-list-postcondition.txt" \
             "cross-layout=$after_layout\nreordered-layout=not-run\npane-left=$pane_left\npane-top=$pane_top\n"
@@ -598,7 +622,7 @@ probe_pivot_field_list() {
     if $reorder_passed; then
         record "pivot-field-drag-same-bucket-reorder-physical" "passed" \
             "pivot-field-list-cross-bucket.png; pivot-field-list-reorder.png; $after_layout" \
-            "Region was physically dragged within Rows past Category and the saved PivotTable package reports the reversed row-field order 1,0 while preserving Values." \
+            "Category was physically dragged within Rows below Region and the saved PivotTable package reports row fields 0,1 while preserving Values." \
             "pivot-field-list-cross-bucket.png;pivot-field-list-reorder.png;pivot-field-list-postcondition.txt"
     else
         record "pivot-field-drag-same-bucket-reorder-physical" "failed" \

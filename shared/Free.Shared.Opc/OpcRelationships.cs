@@ -183,6 +183,13 @@ public static class OpcRelationships
         if (relationship.IsExternal)
             return true;
 
+        // OPC package-root targets such as /xl/worksheets/sheet1.xml are absolute paths within
+        // the package, not URI references to the host filesystem. Uri classifying them differs
+        // by platform (Linux can expose them as file: URIs), so keep the package-root form internal.
+        if (relationship.Target.StartsWith("/", StringComparison.Ordinal) &&
+            !relationship.Target.StartsWith("//", StringComparison.Ordinal))
+            return false;
+
         return Uri.TryCreate(relationship.Target, UriKind.Absolute, out var uri) &&
                !string.IsNullOrWhiteSpace(uri.Scheme);
     }
