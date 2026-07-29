@@ -1435,6 +1435,56 @@ public sealed class MediaFieldsTests
         Assert.Equal("5", run2.Field.CachedText);
     }
 
+    [Fact]
+    public void Field_FieldRun_PreservesFontAndColor()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run
+                {
+                    Text = "2",
+                    Field = new FieldRun
+                    {
+                        FieldType = "PAGE",
+                        CachedText = "2",
+                        FontFamily = "Calibri",
+                        FontSizePt = 14,
+                        Bold = true,
+                        Color = new SrgbColor(31, 78, 121),
+                    },
+                },
+            },
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 457200,
+            TextBody = body,
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var run = PptxPackageReader.Read(ms).Slides[0].Shapes[0].TextBody!
+            .Paragraphs[0].Runs[0];
+
+        run.Field.Should().NotBeNull();
+        run.Field!.FontFamily.Should().Be("Calibri");
+        run.Field.FontSizePt.Should().Be(14);
+        run.Field.Bold.Should().BeTrue();
+        run.Field.Color.Should().Be(new SrgbColor(31, 78, 121));
+    }
+
     // II1: embedded mp4 media → [Content_Types].xml must have Default Extension="mp4"
     [Fact]
     public void ContentTypes_MediaShape_HasVideoExtensionDefault()
