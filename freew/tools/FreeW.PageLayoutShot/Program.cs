@@ -847,6 +847,8 @@ static int RenderMode(
     bitmap.Save(stream);
     var bytes = stream.ToArray();
     var capturesWordComparablePageSurface = ShouldCaptureWordComparablePageSurface(scenarioId);
+    // An isolated section surface always renders its selected source page as page one.
+    var cropPageNumber = sectionPageSurface is null ? pageNumber : 1;
     var captureWidth = width;
     var captureHeight = height;
     if (capturesWordComparablePageSurface)
@@ -856,7 +858,7 @@ static int RenderMode(
             evidencePage,
             width,
             height,
-            pageNumber,
+            cropPageNumber,
             viewportOffsetY,
             WordComparableContentOffsetY(scenarioId, pageNumber));
     }
@@ -917,7 +919,7 @@ static int RenderMode(
                 evidencePage,
                 width,
                 height,
-                pageNumber,
+                cropPageNumber,
                 viewportOffsetY,
                 WordComparableContentOffsetY(scenarioId, pageNumber));
         }

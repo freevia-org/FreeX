@@ -47,7 +47,8 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("AddNoteRegionOverlayIfNeeded(");
         source.Should().Contain("BuildEvidenceNoteRegionPlan(");
         source.Should().Contain("CropToDocumentPageSurface(");
-        source.Should().MatchRegex("CropToDocumentPageSurface\\([\\s\\S]*?pageNumber,\\s*viewportOffsetY,\\s*WordComparableContentOffsetY\\(scenarioId, pageNumber\\)\\)");
+        source.Should().Contain("var cropPageNumber = sectionPageSurface is null ? pageNumber : 1;");
+        source.Should().MatchRegex("var cropPageNumber = sectionPageSurface is null \\? pageNumber : 1;[\\s\\S]*?cropPageNumber,\\s*viewportOffsetY,\\s*WordComparableContentOffsetY\\(scenarioId, pageNumber\\)");
         source.Should().Contain("static int WordComparableContentOffsetY(string scenarioId, int pageNumber)");
         source.Should().Contain("string.Equals(scenarioId, \"f2-footnotes\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("string.Equals(scenarioId, \"f2-endnotes\", StringComparison.OrdinalIgnoreCase) && pageNumber == 1");
