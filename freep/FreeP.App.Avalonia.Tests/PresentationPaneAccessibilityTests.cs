@@ -174,6 +174,44 @@ public sealed class PresentationPaneAccessibilityTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task Representative_live_panes_follow_shared_keyboard_focus_order()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            window.ShowReviewCommentsPane();
+            window.ShowSelectionPane();
+            window.ShowAnimationPane();
+
+            var panes = new Control[]
+            {
+                window.SlidePaneForAccessibilityTests,
+                window.NotesPaneForAccessibilityTests,
+                window.CommentsPaneForAccessibilityTests,
+                window.SelectionPaneForAccessibilityTests,
+                window.AnimationPaneForAccessibilityTests,
+            };
+            var descriptors = new[]
+            {
+                PresentationPaneAccessibilityPlanner.Get(PresentationPaneAccessibilityPlanner.SlidePaneId),
+                PresentationPaneAccessibilityPlanner.Get(PresentationPaneAccessibilityPlanner.NotesPaneId),
+                PresentationPaneAccessibilityPlanner.Get(PresentationPaneAccessibilityPlanner.CommentsPaneId),
+                PresentationPaneAccessibilityPlanner.Get(PresentationPaneAccessibilityPlanner.SelectionPaneId),
+                PresentationPaneAccessibilityPlanner.Get(PresentationPaneAccessibilityPlanner.AnimationPaneId),
+            };
+
+            panes.Select(AutomationProperties.GetName).Should().Equal("Slides", "Notes", "Comments", "Selection Pane", "Animation Pane");
+            panes.Select(pane => pane.Focusable).Should().OnlyContain(value => value);
+            panes.Select(pane => pane.IsTabStop).Should().OnlyContain(value => value);
+            panes.Select(pane => pane.TabIndex).Should().Equal(descriptors.Select(descriptor => descriptor.Order + 1));
+
+            window.HideReviewCommentsPane();
+            window.CommentsPaneForAccessibilityTests.Focusable.Should().BeFalse();
+            window.CommentsPaneForAccessibilityTests.IsTabStop.Should().BeFalse();
+        }, CancellationToken.None);
+    }
+
     private static string ExpectedInitialSnapshot() => string.Join(
         Environment.NewLine,
         new[]

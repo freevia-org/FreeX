@@ -23,6 +23,12 @@ internal sealed class PresentationPaneAccessibilityAdapter
         int selectedIndex = -1)
     {
         var descriptor = PresentationPaneAccessibilityPlanner.Get(paneId);
+        // Pane hosts are keyboard landmarks in the WPF shell. Keep the
+        // Avalonia route explicit so hidden panes cannot capture Tab and the
+        // shared planner order remains observable by assistive technology.
+        control.Focusable = isVisible;
+        control.IsTabStop = isVisible;
+        control.TabIndex = descriptor.Order + 1;
         AutomationProperties.SetAutomationId(control, descriptor.AutomationId);
         AutomationProperties.SetName(control, descriptor.Name);
         AutomationProperties.SetHelpText(control, descriptor.HelpText);

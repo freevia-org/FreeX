@@ -4,9 +4,10 @@
 
 .DESCRIPTION
   Starts the production Avalonia FreeP shell, reads representative pane metadata
-  from live controls, and runs a companion AT-SPI query against the same X11
-  desktop. AT-SPI exposure is reported as not-proven when Avalonia/X11 does not
-  publish an accessibility application; that limitation is evidence, not a pass.
+  from live controls, and runs a companion AT-SPI focus-event query against the
+  same X11 desktop. The probe sends real X11 Tab key events and reports an honest
+  not-proven result when semantic exposure or deterministic focus traversal is
+  incomplete.
 #>
 [CmdletBinding()]
 param(
@@ -115,9 +116,14 @@ try {
                 throw "Live FreeP accessibility observation '$($observation.paneId)' has an empty $property."
             }
         }
+        if (-not $observation.isVisible -or -not $observation.focusable -or
+            -not $observation.isTabStop -or [int]$observation.tabIndex -lt 1) {
+            throw "Live FreeP pane '$($observation.paneId)' is not visible/focusable/tab-stoppable with a stable positive tab index."
+        }
     }
-    if ($atSpi.schemaVersion -ne 1 -or $atSpi.suite -ne "freep-atspi-accessibility" -or
+    if ($atSpi.schemaVersion -ne 2 -or $atSpi.suite -ne "freep-atspi-accessibility" -or
         $atSpi.platform -ne "linux" -or $atSpi.shell -ne "avalonia" -or $atSpi.app -ne "FreeP" -or
+        $atSpi.evidenceLevel -ne "os-atspi-x11-focus-events" -or
         $atSpi.status -notin @("passed", "not-proven")) {
         throw "Invalid AT-SPI result: $atSpiPath"
     }
@@ -130,8 +136,14 @@ try {
     }
     foreach ($target in $expectedAtSpiRoles.Keys) {
         $observation = @($atSpi.observations | Where-Object target -eq $target)
-        if ($observation.Count -ne 1) {
+        if ($observation.Count -gt 1) {
             throw "AT-SPI result did not contain exactly one '$target' observation."
+        }
+        if ($observation.Count -eq 0) {
+            if ([string]$atSpi.status -eq "passed") {
+                throw "AT-SPI passed result did not contain '$target' observation."
+            }
+            continue
         }
         foreach ($property in @("name", "role", "state")) {
             if ([string]::IsNullOrWhiteSpace([string]$observation[0].$property)) {
@@ -145,11 +157,26 @@ try {
         if ($null -eq $observation[0].PSObject.Properties["value"]) {
             throw "AT-SPI '$target' observation did not report a value field."
         }
+        foreach ($property in @("focusable", "visible", "showing", "focusEventCount")) {
+            if ($null -eq $observation[0].PSObject.Properties[$property]) {
+                throw "AT-SPI '$target' observation did not report $property."
+            }
+        }
+    }
+    $expectedFocusOrder = @("slides", "notes", "comments", "selection", "animation")
+    if ((@($atSpi.expectedFocusOrder) -join ",") -ne ($expectedFocusOrder -join ",")) {
+        throw "AT-SPI expected focus order did not match the shared pane order."
+    }
+    if ([string]$atSpi.status -eq "passed" -and @($atSpi.focusEvents).Count -lt 5) {
+        throw "AT-SPI focus event trail must contain at least five target events."
+    }
+    if ([string]$atSpi.status -eq "passed" -and ((@($atSpi.focusTraversal) -join ",") -ne ($expectedFocusOrder -join ","))) {
+        throw "AT-SPI passed result did not contain the exact shared focus traversal order."
     }
 
     $report = [ordered]@{
         schemaVersion = 1
-        suite = "freep-accessibility-wave58-report"
+        suite = "freep-accessibility-wave59-report"
         platform = "linux"
         shell = "avalonia"
         app = "FreeP"
@@ -162,6 +189,9 @@ try {
         atSpi = [ordered]@{
             status = [string]$atSpi.status
             observationCount = @($atSpi.observations).Count
+            focusEventCount = @($atSpi.focusEvents).Count
+            expectedFocusOrder = @($atSpi.expectedFocusOrder)
+            focusTraversal = @($atSpi.focusTraversal)
             resultPath = $atSpiPath
             limitation = [string]$atSpi.limitation
             applicationName = [string]$atSpi.applicationName
