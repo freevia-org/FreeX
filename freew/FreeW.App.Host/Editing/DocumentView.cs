@@ -7201,7 +7201,7 @@ public sealed class DocumentView : RichTextBox
         var pen = new Pen(Brushes.Black, 1);
         for (var column = 1; column < page.ColumnCount; column++)
         {
-            var x = contentLeftDip + column * (plan.WidthDip + plan.GapDip) - plan.GapDip / 2 + 0.5;
+            var x = contentLeftDip + column * (plan.WidthDip + plan.GapDip) - plan.GapDip / 2 - 0.5;
             drawingContext.DrawLine(pen, new Point(x, contentTopDip + 0.5), new Point(x, contentBottomDip - 0.5));
         }
     }

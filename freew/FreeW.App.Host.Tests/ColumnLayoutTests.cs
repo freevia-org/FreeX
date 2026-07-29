@@ -85,7 +85,7 @@ public sealed class ColumnLayoutTests
         var bitmap = new RenderTargetBitmap(816, 1056, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(host);
         var pixel = new byte[4];
-        bitmap.CopyPixels(new Int32Rect(408, 500, 1, 1), pixel, 4, 0);
+        bitmap.CopyPixels(new Int32Rect(407, 500, 1, 1), pixel, 4, 0);
         Assert.Equal(0, pixel[0]);
         Assert.Equal(0, pixel[1]);
         Assert.Equal(0, pixel[2]);

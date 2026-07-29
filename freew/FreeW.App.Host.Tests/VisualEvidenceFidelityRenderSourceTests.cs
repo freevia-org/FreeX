@@ -261,7 +261,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         renderSource.Should().Contain("ApplyColumnLayout(flow, page, useNativeColumnRule: false)");
         renderSource.Should().Contain("bmp.Render(DocumentView.BuildColumnRuleVisual(");
         viewSource.Should().Contain("bool useNativeColumnRule = true");
-        viewSource.Should().Contain("column * (plan.WidthDip + plan.GapDip) - plan.GapDip / 2 + 0.5");
+        viewSource.Should().Contain("column * (plan.WidthDip + plan.GapDip) - plan.GapDip / 2 - 0.5");
         viewSource.Should().Contain("ApplyColumnLayout(flow, _model.Page, useNativeColumnRule: false)");
         viewSource.Should().Contain("private sealed class ColumnRuleAdorner : Adorner");
         viewSource.Should().Contain("SyncColumnRuleAdorner();");
