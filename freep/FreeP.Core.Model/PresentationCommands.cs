@@ -892,6 +892,7 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         if (shapes is null) return;
         _capturedIndex = shapes.FindIndex(s => s.Id == _shapeId);
         if (_capturedIndex < 0) return;
+        if (!ChartHelper.IsObjectEditable(shapes[_capturedIndex])) return;
         _captured = shapes[_capturedIndex];
         shapes.RemoveAt(_capturedIndex);
     }
