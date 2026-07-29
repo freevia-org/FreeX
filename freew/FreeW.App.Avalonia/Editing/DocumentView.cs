@@ -19317,10 +19317,18 @@ public sealed class DocumentView : Control
             Warp: WordArtWarp.Wave1,
             FontSizePt: > 31 and < 33
         };
-        var warpedTextOffset = isImportedGradFillMultiArchUp ? new Vector(0, -16) : default;
+        var warpedTextOffset = isImportedGradFillMultiArchUp
+            ? new Vector(0, -16)
+            : isSecondaryFillGoldStress
+                ? new Vector(-24, -19)
+                : default;
         var warpedTextVerticalScale = isImportedGradFillMultiArchUp ? 0.74 : 1.0;
-        var warpedTextFitWidthRatio = isPrimaryGlowBlueStress ? 0.97 : 0.80;
-        var fillWarpedTextWidth = isPrimaryGlowBlueStress;
+        var warpedTextFitWidthRatio = isPrimaryGlowBlueStress
+            ? 0.97
+            : isSecondaryFillGoldStress
+                ? 0.64
+                : 0.80;
+        var fillWarpedTextWidth = isPrimaryGlowBlueStress || isSecondaryFillGoldStress;
         using (context.PushClip(rect))
         {
             if (wd.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
