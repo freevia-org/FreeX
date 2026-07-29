@@ -414,7 +414,10 @@ public sealed class OsClipboardService
             {
                 if (payload.HasImage)
                     editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
-                if (!string.IsNullOrWhiteSpace(payload.PlainText))
+                var table = payload.ContainsTable
+                    ? editor.InsertTableFromClipboard(payload.Body)
+                    : null;
+                if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
                     editor.InsertTextBox(payload.Body);
                 return source;
             }
@@ -436,7 +439,10 @@ public sealed class OsClipboardService
             {
                 if (payload.HasImage)
                     editor.InsertPicture(payload.ImageBytes!, payload.ImageContentType ?? "image/png");
-                if (!string.IsNullOrWhiteSpace(payload.PlainText))
+                var table = payload.ContainsTable
+                    ? editor.InsertTableFromClipboard(payload.Body)
+                    : null;
+                if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
                     editor.InsertTextBox(payload.Body);
                 return source;
             }
