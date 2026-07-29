@@ -12,6 +12,18 @@ Every tester release uses one predictable app/version tag and independently runn
 
 Every release asset has an adjacent `.sha256` file. Windows artifacts are self-contained single-file WPF executables. Linux and macOS artifacts are self-contained Avalonia archives. This is a packaging distinction, not a release-lane distinction: all three platforms belong to the same app/version release.
 
+## Tester Installation
+
+Use the matching app name (`FreeX`, `FreeW`, or `FreeP`) and release version in the commands below. Always download the artifact and its adjacent `.sha256` file first.
+
+| Platform | Select | Verify | Deploy and run |
+| --- | --- | --- | --- |
+| Windows | `win-x64.exe` | `Get-FileHash .\\<app>-v<version>-win-x64.exe -Algorithm SHA256` and compare it to the `.sha256` file | Move the single `.exe` to the user's chosen program directory and run it. It is self-contained; no .NET runtime or installer is required. Close it before replacing the file for an update. |
+| Linux | `linux-x64.zip` for Intel/AMD, `linux-arm64.zip` for 64-bit ARM | `sha256sum -c <app>-v<version>-linux-<architecture>.zip.sha256` | Extract into a stable user directory, run `chmod +x <directory>/<app>` once, then launch `<directory>/<app>`. Replace the extracted directory after closing the app to update. |
+| macOS | `osx-x64.zip` for Intel, `osx-arm64.zip` for Apple silicon | `shasum -a 256 -c <app>-v<version>-osx-<architecture>.zip.sha256` | Extract into a stable user directory, run `chmod +x <directory>/<app>` once, then launch `<directory>/<app>`. Replace the extracted directory after closing the app to update. |
+
+Linux and macOS packages must be extracted before first launch; do not run them from inside the zip file. The canonical workflow repeats these same instructions in every GitHub release body.
+
 ## Dispatching A Lane
 
 Use the `App Tester Release` workflow (`.github/workflows/app-tester-release.yml`) for normal tester publication. It runs the selected app's release test gate, packages the requested platform lane on its native GitHub runner, and creates or updates the matching app/version release.
