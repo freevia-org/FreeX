@@ -123,8 +123,16 @@ public partial class MainWindow
             TextOptions.SetTextHintingMode(_inlineEditor, TextHintingMode.Fixed);
             _inlineEditor.PreviewKeyDown += InlineEditor_KeyDown;
             _inlineEditor.LostFocus  += InlineEditor_LostFocus;
+            _inlineEditor.SelectionChanged += (_, _) =>
+            {
+                if (!_isApplyingFormulaEditorText && _inlineEditor is { } inlineEditor)
+                    ClearFormulaReferenceEntrySpanIfCaretLeftReference(inlineEditor);
+            };
             _inlineEditor.TextChanged += (_, _) =>
             {
+                if (_isApplyingFormulaEditorText)
+                    return;
+
                 SyncFormulaBarTextFromInlineEditor();
                 UpdateFormulaRangeEntryStateAfterTextChanged(_inlineEditor);
                 RefreshInlineEditorTextSurface();
@@ -576,7 +584,6 @@ public partial class MainWindow
         {
             if (TryCycleFormulaReference(_inlineEditor))
             {
-                FormulaBar.Text = _inlineEditor.Text;
                 e.Handled = true;
             }
             return;
@@ -1229,8 +1236,27 @@ public partial class MainWindow
                 editor.Text, caretIndex, anchor, _options.UseR1C1ReferenceStyle, out var edit))
             return false;
 
-        ApplyTextEdit(editor, edit);
+        ApplyFormulaEditorTextEdit(editor, edit);
+        _formulaReferenceStart = edit.SelectionStart;
+        _formulaReferenceLength = edit.SelectionLength;
         return true;
+    }
+
+    private void ApplyFormulaEditorTextEdit(System.Windows.Controls.TextBox editor, ExcelTextEdit edit)
+    {
+        _isApplyingFormulaEditorText = true;
+        try
+        {
+            ApplyTextEdit(editor, edit);
+            if (!ReferenceEquals(editor, FormulaBar))
+                FormulaBar.Text = editor.Text;
+            else if (_inlineEditor?.IsVisible == true)
+                _inlineEditor.Text = editor.Text;
+        }
+        finally
+        {
+            _isApplyingFormulaEditorText = false;
+        }
     }
 
     private static void ApplyTextEdit(System.Windows.Controls.TextBox editor, ExcelTextEdit edit)

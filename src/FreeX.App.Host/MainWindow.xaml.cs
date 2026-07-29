@@ -261,6 +261,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private Guid? _textBoxInlineEditingId;
     private string? _textBoxInlineOriginalText;
     private bool _syncingFormulaEditorText;
+    private bool _isApplyingFormulaEditorText;
     private System.Windows.Controls.ComboBox? _validationDropdown;
     private System.Windows.Controls.Border? _dvInputMessageBorder;
     // The modeless AutoFilter dropdown flyout (a separate window) and the sheet it was opened on,
@@ -441,8 +442,16 @@ public partial class MainWindow : Window, IWorkbookWindow
         Closing += MainWindow_Closing;
         Closed += MainWindow_Closed;
         FormulaBar.GotKeyboardFocus += (_, _) => CaptureFormulaEditCell();
+        FormulaBar.SelectionChanged += (_, _) =>
+        {
+            if (!_isApplyingFormulaEditorText)
+                ClearFormulaReferenceEntrySpanIfCaretLeftReference(FormulaBar);
+        };
         FormulaBar.TextChanged += (_, _) =>
         {
+            if (_isApplyingFormulaEditorText)
+                return;
+
             SyncInlineEditorTextFromFormulaBar();
             UpdateFormulaRangeEntryStateAfterTextChanged(FormulaBar);
 

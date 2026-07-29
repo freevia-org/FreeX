@@ -47,6 +47,7 @@ public partial class MainWindow
     {
         _formulaReferenceStart = null;
         _formulaReferenceLength = null;
+        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
     }
 
     private void UpdateFormulaRangeEntryStateAfterTextChanged(System.Windows.Controls.TextBox editor)
@@ -144,11 +145,7 @@ public partial class MainWindow
             return false;
         }
 
-        ApplyTextEdit(editor, edit.TextEdit);
-        if (!ReferenceEquals(editor, FormulaBar))
-            FormulaBar.Text = editor.Text;
-        else if (_inlineEditor?.IsVisible == true)
-            _inlineEditor.Text = editor.Text;
+        ApplyFormulaEditorTextEdit(editor, edit.TextEdit);
 
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;
@@ -273,11 +270,7 @@ public partial class MainWindow
         CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
         RefreshStatusBar();
 
-        ApplyTextEdit(editor, edit.TextEdit);
-        if (!ReferenceEquals(editor, FormulaBar))
-            FormulaBar.Text = editor.Text;
-        else if (_inlineEditor?.IsVisible == true)
-            _inlineEditor.Text = editor.Text;
+        ApplyFormulaEditorTextEdit(editor, edit.TextEdit);
 
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;

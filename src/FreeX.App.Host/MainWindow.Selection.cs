@@ -191,11 +191,8 @@ public partial class MainWindow
             return false;
         }
 
-        ApplyTextEdit(editor, edit.TextEdit);
-        if (!ReferenceEquals(editor, FormulaBar))
-            FormulaBar.Text = editor.Text;
-        else if (_inlineEditor?.IsVisible == true)
-            _inlineEditor.Text = editor.Text;
+        ApplyFormulaEditorTextEdit(editor, edit.TextEdit);
+        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
 
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;

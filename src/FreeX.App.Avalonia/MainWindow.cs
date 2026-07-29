@@ -3433,6 +3433,16 @@ public sealed partial class MainWindow : Window
         _formulaBox.BorderThickness = new Thickness(1);
         _formulaBox.GotFocus += FormulaBox_GotFocus;
         _formulaBox.KeyDown += FormulaBox_KeyDown;
+        _formulaBox.PropertyChanged += (_, args) =>
+        {
+            if (_isApplyingFormulaBoxText ||
+                (args.Property != TextBox.SelectionStartProperty && args.Property != TextBox.SelectionEndProperty))
+            {
+                return;
+            }
+
+            ClearFormulaReferenceEntrySpanIfCaretLeftReference(_formulaBox);
+        };
         _formulaBox.TextChanged += FormulaBox_TextChanged;
         AutomationProperties.SetAutomationId(_formulaBox, "FormulaBox");
         AutomationProperties.SetName(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey));
@@ -9499,6 +9509,34 @@ public sealed partial class MainWindow : Window
     {
         _formulaReferenceStart = null;
         _formulaReferenceLength = null;
+        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
+    }
+
+    private void ClearFormulaReferenceEntrySpanIfCaretLeftReference(TextBox editor)
+    {
+        if (_formulaReferenceStart is not { } start || _formulaReferenceLength is not { } length)
+            return;
+
+        var textLength = editor.Text?.Length ?? 0;
+        var end = start + length;
+        if (start < 0 || length < 0 || start > textLength || end > textLength)
+        {
+            ClearFormulaReferenceEntrySpan();
+            return;
+        }
+
+        var selectionStart = Math.Clamp(editor.SelectionStart, 0, textLength);
+        if (editor.SelectionStart != editor.SelectionEnd)
+        {
+            var selectionEnd = Math.Clamp(editor.SelectionEnd, selectionStart, textLength);
+            if (selectionStart < start || selectionEnd > end)
+                ClearFormulaReferenceEntrySpan();
+            return;
+        }
+
+        var caret = Math.Clamp(editor.CaretIndex, 0, textLength);
+        if (caret < start || caret > end)
+            ClearFormulaReferenceEntrySpan();
     }
 
     private void ClearFormulaRangeEntryState()
@@ -9583,6 +9621,9 @@ public sealed partial class MainWindow : Window
         {
             _isApplyingFormulaBoxText = false;
         }
+
+        _formulaReferenceStart = edit.SelectionStart;
+        _formulaReferenceLength = edit.SelectionLength;
 
         args.Handled = true;
         return true;
@@ -9689,6 +9730,7 @@ public sealed partial class MainWindow : Window
             _isApplyingFormulaBoxText = false;
         }
 
+        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
         _session.SelectRangeForFormulaEdit(range, formulaCell.Value);
         _formulaRangeSelectionAnchor = range.Start;
         _formulaRangeSelectionCursor = range.End;
