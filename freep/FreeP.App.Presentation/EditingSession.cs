@@ -948,6 +948,19 @@ public sealed class EditingSession
         return count;
     }
 
+    /// <summary>Applies one 3-D styling preset to every selected shape.</summary>
+    public int SetSelectedShape3d(Shape3dValues values)
+    {
+        var count = 0;
+        foreach (var id in _selectedShapeIds)
+        {
+            Bus.Execute(new SetShape3dCommand(_currentSlideIndex, id, values));
+            count++;
+        }
+
+        return count;
+    }
+
     /// <summary>Sets fill on all selected shapes.</summary>
     public void SetSelectedFill(ShapeFill? fill)
     {
