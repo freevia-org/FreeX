@@ -11,8 +11,12 @@ namespace FreeP.App.Compositor;
 public sealed record InCanvasRichClipboardPayload(
     TextBody Body,
     string PlainText,
-    Run? TypingRun = null)
+    Run? TypingRun = null,
+    byte[]? ImageBytes = null,
+    string? ImageContentType = null)
 {
+    public bool HasImage => ImageBytes is { Length: > 0 };
+
     public static InCanvasRichClipboardPayload FromPlainText(
         string? text,
         InCanvasEditorTextStyleState? typingStyle = null)
