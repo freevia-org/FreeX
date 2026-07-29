@@ -431,6 +431,49 @@ public sealed class DocumentViewFloatingShapeTests
     }
 
     [Fact]
+    public async Task Pointer_caret_placement_resolves_the_nearest_shape_text_run_and_offset()
+    {
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? caret = null;
+        string? editedText = null;
+        string? secondRunText = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
+                hOffsetPt: 0, vOffsetPt: 0,
+                fillColorHex: "#FFFFFF",
+                text: "ignored");
+            var shape = ((Paragraph)doc.Blocks[0]).Runs[1].Shape!;
+            var textParagraph = shape.TextParagraphs[0];
+            textParagraph.Runs.Clear();
+            textParagraph.Runs.Add(new Run("Bold", RunFormatting.Default with { Bold = true }));
+            textParagraph.Runs.Add(new Run("plain", RunFormatting.Default));
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            view.SelectFloating(0, 1);
+            view.EnterSelectedShapeTextEditing().Should().BeTrue();
+
+            var rect = view.FloatingShapeRects.Should().ContainSingle().Which.Rect;
+            view.PlaceShapeTextCaretForTest(new Point(rect.Right - 5, rect.Y + 8)).Should().BeTrue();
+            caret = view.ShapeTextCaretInfo;
+            view.InsertText("!");
+            editedText = shape.PlainText;
+            secondRunText = textParagraph.Runs[1].Text;
+        });
+
+        if (!ran) return;
+        caret.Should().NotBeNull();
+        caret!.Value.TextParagraphIndex.Should().Be(0);
+        caret.Value.TextRunIndex.Should().Be(1,
+            "a pointer near the right side of the text box should resolve into the second run");
+        caret.Value.Offset.Should().Be(5);
+        editedText.Should().Be("Boldplain!");
+        secondRunText.Should().Be("plain!");
+    }
+
+    [Fact]
     public async Task Selected_floating_text_box_supports_paragraph_break_merge_and_outer_text_sync()
     {
         int paragraphCountAfterBreak = -1;

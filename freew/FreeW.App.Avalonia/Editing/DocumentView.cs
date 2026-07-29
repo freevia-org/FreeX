@@ -176,6 +176,10 @@ public sealed class DocumentView : Control
     private byte[]? _watermarkBitmapCacheBytes;
     private Bitmap? _watermarkBitmapCache;
     private readonly List<(Rect Rect, int Block, int Row, int Col)> _cellHits = new();
+    // AV-SHAPETEXT2: caret stops emitted alongside floating text-box layout. Keeping the stops in
+    // page space lets pointer placement resolve the same paragraph/run/offset tuple that keyboard
+    // editing already consumes, without making the drawing surface a second text model.
+    private readonly List<ShapeTextCaretStop> _shapeTextCaretStops = new();
 
     // ── AV-TBL: in-place table cell caret ─────────────────────────────────────────────────────────
     // Non-null when the caret is inside a table cell. Stores the fully-qualified cell address and the
@@ -3383,6 +3387,7 @@ public sealed class DocumentView : Control
         _equationVisualSegments.Clear();
         _equationVisualElements.Clear();
         _cellHits.Clear();
+        _shapeTextCaretStops.Clear();
         _headerFooterItems.Clear();
         _noteItems.Clear();           // AV-NOTERENDER
         _noteSeparators.Clear();      // AV-NOTERENDER
@@ -3498,6 +3503,7 @@ public sealed class DocumentView : Control
                 _equationVisualSegments.Clear();
                 _equationVisualElements.Clear();
                 _cellHits.Clear();
+                _shapeTextCaretStops.Clear();
                 _tabLeaderSpans.Clear();
                 _layoutContentY = 0;
                 RunBodyLayoutBlocks(textWidth);
@@ -5952,6 +5958,7 @@ public sealed class DocumentView : Control
                         DrawingObjectVisualPlanner.BuildVisualPlan(shape, snapshot),
                         snapshot.BlockIndex,
                         snapshot.RunIndex));
+                    BuildShapeTextCaretStops(shape, rect, snapshot.BlockIndex, snapshot.RunIndex);
                     break;
 
                 case DocumentFloatingObjectKind.Chart when run.Chart is { IsFloating: true } chart:
@@ -5984,6 +5991,94 @@ public sealed class DocumentView : Control
             }
         }
     }
+
+    /// <summary>
+    /// Builds pointer-addressable caret stops for a horizontal floating text box. The renderer currently
+    /// uses the same 9pt text treatment for the shape body, so measuring each character with that treatment
+    /// keeps the hit map aligned with the visible text while preserving the model's paragraph/run identity.
+    /// Rotated text boxes remain keyboard-editable and are intentionally left as a follow-up because their
+    /// visible coordinate transform needs a separate vertical-layout map.
+    /// </summary>
+    private void BuildShapeTextCaretStops(Shape shape, Rect rect, int blockIndex, int runIndex)
+    {
+        if (shape.TextDirection != ShapeTextDirection.Horizontal || shape.TextParagraphs.Count == 0)
+            return;
+
+        const double TextInset = 4.0;
+        var format = new RunFormatting { FontSizePt = 9 };
+        var lineHeight = Math.Max(1, Build("Ag", format).Height);
+        var lineStartX = rect.X + TextInset;
+        var maxX = Math.Max(lineStartX + 1, rect.Right - TextInset);
+        var x = lineStartX;
+        var y = rect.Y + TextInset;
+
+        for (var paragraphIndex = 0; paragraphIndex < shape.TextParagraphs.Count; paragraphIndex++)
+        {
+            var paragraph = shape.TextParagraphs[paragraphIndex];
+            var addedStopForParagraph = false;
+
+            foreach (var (textRun, textRunIndex) in paragraph.Runs.Select((run, index) => (run, index)))
+            {
+                var text = textRun.Text ?? string.Empty;
+                if (text.Length == 0)
+                {
+                    AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
+                        0, x, y, lineHeight);
+                    addedStopForParagraph = true;
+                    continue;
+                }
+
+                for (var offset = 0; offset < text.Length; offset++)
+                {
+                    var character = text[offset];
+                    if (character == '\n' || character == '\r')
+                    {
+                        AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
+                            offset, x, y, lineHeight);
+                        x = lineStartX;
+                        y += lineHeight;
+                        addedStopForParagraph = true;
+                        continue;
+                    }
+
+                    var glyph = Build(character.ToString(), format);
+                    var glyphWidth = Math.Max(1, glyph.WidthIncludingTrailingWhitespace);
+                    if (x > lineStartX && x + glyphWidth > maxX)
+                    {
+                        x = lineStartX;
+                        y += lineHeight;
+                    }
+
+                    AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
+                        offset, x, y, lineHeight);
+                    x += glyphWidth;
+                    addedStopForParagraph = true;
+                }
+
+                AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, textRunIndex,
+                    text.Length, x, y, lineHeight);
+            }
+
+            if (!addedStopForParagraph)
+                AddShapeTextCaretStop(blockIndex, runIndex, paragraphIndex, 0, 0, x, y, lineHeight);
+
+            // A paragraph break is represented by the next line in the shape text body.
+            x = lineStartX;
+            y += lineHeight;
+        }
+    }
+
+    private void AddShapeTextCaretStop(
+        int blockIndex,
+        int runIndex,
+        int paragraphIndex,
+        int textRunIndex,
+        int offset,
+        double x,
+        double y,
+        double height) =>
+        _shapeTextCaretStops.Add(new ShapeTextCaretStop(
+            blockIndex, runIndex, paragraphIndex, textRunIndex, offset, x, y, height));
 
     private static FloatingShapeData BuildFloatingShapeData(
         DrawingObjectVisualPlan plan,
@@ -8584,6 +8679,52 @@ public sealed class DocumentView : Control
         return true;
     }
 
+    /// <summary>
+    /// Resolves a pointer inside the active horizontal text box to the nearest visible caret stop.
+    /// This mirrors the WPF RichTextBox pointer contract while keeping the existing floating-object
+    /// selection and drag routes intact when the shape is not already being edited.
+    /// </summary>
+    private bool TryPlaceShapeTextCaret(Point point,
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) active)
+    {
+        if (!TryHitTestFloat(point, out var floatHit)
+            || floatHit.BlockIndex != active.BlockIndex
+            || floatHit.RunIndex != active.RunIndex
+            || floatHit.Kind != "Shape")
+            return false;
+
+        var stop = _shapeTextCaretStops
+            .Where(candidate => candidate.BlockIndex == active.BlockIndex
+                && candidate.RunIndex == active.RunIndex)
+            .OrderBy(candidate => VerticalDistance(point.Y, candidate.Y, candidate.Height))
+            .ThenBy(candidate => Math.Abs(point.X - candidate.X))
+            .FirstOrDefault();
+        if (stop is null)
+            return false;
+
+        _shapeCaret = (
+            stop.BlockIndex,
+            stop.RunIndex,
+            stop.TextParagraphIndex,
+            stop.TextRunIndex,
+            stop.Offset);
+        Focus();
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+        return true;
+    }
+
+    private static double VerticalDistance(double pointY, double lineY, double lineHeight) =>
+        pointY < lineY
+            ? lineY - pointY
+            : pointY > lineY + lineHeight
+                ? pointY - (lineY + lineHeight)
+                : 0;
+
+    /// <summary>Test hook for the pointer-to-shape-caret parity path.</summary>
+    internal bool PlaceShapeTextCaretForTest(Point point) =>
+        _shapeCaret is { } active && TryPlaceShapeTextCaret(point, active);
+
     /// <summary>Insert a real paragraph break at the active text-box caret.</summary>
     public void InsertShapeTextParagraphBreak()
     {
@@ -10098,6 +10239,16 @@ public sealed class DocumentView : Control
         }
 
         if (updateKind == PointerUpdateKind.LeftButtonPressed && TryActivateContentControl(point))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        // AV-SHAPETEXT2: once a text box is in edit mode, a click inside its body moves the caret to
+        // the nearest paragraph/run/offset stop. Before edit mode the same click continues through the
+        // normal floating-object selection and drag path.
+        if (!shift && _shapeCaret is { } activeShapeCaret
+            && TryPlaceShapeTextCaret(point, activeShapeCaret))
         {
             e.Handled = true;
             return;
@@ -17930,6 +18081,16 @@ public sealed class DocumentView : Control
 
     // ── Floating shape data captured during layout ────────────────────────────────────────────────
     // Stores everything needed to draw a floating shape in Render() without re-touching the model.
+
+    private sealed record ShapeTextCaretStop(
+        int BlockIndex,
+        int RunIndex,
+        int TextParagraphIndex,
+        int TextRunIndex,
+        int Offset,
+        double X,
+        double Y,
+        double Height);
 
     private sealed class FloatingShapeData
     {
