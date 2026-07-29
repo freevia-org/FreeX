@@ -66,6 +66,10 @@ public sealed class SlidePane : Border
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
         Background = BackgroundBrush;
+        PresentationPaneAccessibilityAdapter.ApplyPaneMetadata(
+            this,
+            PresentationPaneAccessibilityPlanner.SlidePaneId,
+            isVisible: true);
 
         _stack = new StackPanel { Orientation = Orientation.Vertical };
 
@@ -240,6 +244,12 @@ public sealed class SlidePane : Border
                     _editor.Presentation.Slides[itemIdx],
                     idx);
                 AutomationProperties.SetName(item, plan.AccessibleName);
+                PresentationPaneAccessibilityAdapter.ApplyItem(
+                    item,
+                    PresentationPaneAccessibilityPlanner.SlidePaneId,
+                    itemIdx,
+                    plan.AccessibleName,
+                    selected ? "Selected" : "Not selected");
             }
         }
     }
@@ -305,6 +315,12 @@ public sealed class SlidePane : Border
             ToolTip         = plan.ToolTipText
         };
         AutomationProperties.SetName(item, plan.AccessibleName);
+        PresentationPaneAccessibilityAdapter.ApplyItem(
+            item,
+            PresentationPaneAccessibilityPlanner.SlidePaneId,
+            plan.SlideIndex,
+            plan.AccessibleName,
+            plan.IsSelected ? "Selected" : "Not selected");
 
         // Click -> SelectSlide.
         item.MouseLeftButtonDown += (sender, e) =>

@@ -283,6 +283,7 @@ public sealed partial class MainWindow : Window
     private StackPanel _animationPanePlaybackControlsPanel = null!;
     private StackPanel _animationPaneItemsPanel = null!;
     private Button _animationPanePreviewButton = null!;
+    private readonly PresentationPaneAccessibilityAdapter _paneAccessibility = new();
     private int _selectedAnimationIndex = -1;
     private AnimationPanePlaybackSessionPlan? _animationPanePlaybackSessionPlan;
     private AnimationPanePlaybackWorkflowEvidencePlan? _animationPanePlaybackWorkflowEvidencePlan;
@@ -612,6 +613,13 @@ public sealed partial class MainWindow : Window
     internal bool IsFindReplaceDialogVisible => _findReplaceDialog?.IsVisible == true;
     internal bool IsFindReplaceReplaceInputVisible => _findReplaceDialog?.ShowReplace == true;
     internal bool IsPrintOptionsPaneVisible => _printOptionsPaneHost?.IsVisible == true;
+    internal IReadOnlyList<PresentationPaneAccessibilitySnapshotEntry> PaneAccessibilitySnapshotForTests =>
+        _paneAccessibility.BuildSnapshot();
+    internal TextBox NotesPaneForAccessibilityTests => _notesBox;
+    internal Border CommentsPaneForAccessibilityTests => _reviewCommentsPaneHost;
+    internal SelectionPane SelectionPaneForAccessibilityTests => _selectionPane;
+    internal IReadOnlyList<Control> AnimationPaneItemsForAccessibilityTests =>
+        _animationPaneItemsPanel?.Children.OfType<Control>().ToArray() ?? Array.Empty<Control>();
     internal string PrintOptionsPaneHeading => _printOptionsPaneHeading?.Text ?? string.Empty;
     internal string PrintOptionsPaneMessage => _printOptionsPaneMessage?.Text ?? string.Empty;
     internal int PrintOptionsPaneRenderedRowCount => _printOptionsPaneRowsPanel?.Children.Count ?? 0;
@@ -1188,7 +1196,71 @@ public sealed partial class MainWindow : Window
         body.Children.Add(_animationPaneHost);
         body.Children.Add(_printOptionsPaneHost);
 
+        RefreshPaneAccessibilityMetadata();
+
         return body;
+    }
+
+    private void RefreshPaneAccessibilityMetadata()
+    {
+        if (_notesBox is null || _reviewCommentsPaneHost is null)
+            return;
+
+        var commentPlan = LastCommentPanePlan;
+        var accessibilityPlan = LastAccessibilityCheckerPanePlan;
+        var readingOrderPlan = LastReadingOrderPlan;
+        var proofingPlan = LastProofingPanePlan;
+        var captionPlan = LastMediaCaptionAuthoringPanePlan;
+        var smartArtItemCount = _smartArtTextPaneRowsPanel?.Children.Count ?? 0;
+        var selectionPlan = PresentationSelectionPanePlanner.Build(
+            Editor.CurrentSlide,
+            Editor.CurrentSlideIndex,
+            Editor.SelectedShapeIds);
+        var animationPlan = LastAnimationPaneTimelinePlan;
+        var selectedSmartArtRow = _smartArtTextPaneRowsPanel?.Children
+            .OfType<TextBox>()
+            .FirstOrDefault(box =>
+                box.Tag is SmartArtNodeOutlineItem item &&
+                StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId));
+
+        _paneAccessibility.ApplyPane(_slidePaneList, PresentationPaneAccessibilityPlanner.SlidePaneId, true,
+            _presentation.Slides.Count, Editor.CurrentSlideIndex);
+        _paneAccessibility.ApplyPane(_notesBox, PresentationPaneAccessibilityPlanner.NotesPaneId, true, 1);
+        _paneAccessibility.ApplyPane(_reviewCommentsPaneHost, PresentationPaneAccessibilityPlanner.CommentsPaneId,
+            _reviewCommentsPaneHost.IsVisible,
+            commentPlan?.Comments.Count ?? 0, commentPlan?.SelectedCommentIndex ?? -1);
+        _paneAccessibility.ApplyPane(_accessibilityCheckerPaneHost, PresentationPaneAccessibilityPlanner.AccessibilityPaneId,
+            _accessibilityCheckerPaneHost.IsVisible,
+            accessibilityPlan?.Rows.Count ?? _accessibilityCheckerRowsPanel?.Children.Count ?? 0,
+            accessibilityPlan?.SelectedRowIndex ?? -1);
+        _paneAccessibility.ApplyPane(_altTextPaneHost, PresentationPaneAccessibilityPlanner.AltTextPaneId,
+            _altTextPaneHost.IsVisible, 3);
+        _paneAccessibility.ApplyPane(_readingOrderPaneHost, PresentationPaneAccessibilityPlanner.ReadingOrderPaneId,
+            _readingOrderPaneHost.IsVisible,
+            readingOrderPlan?.Items.Count ?? _readingOrderPaneItemsPanel?.Children.Count ?? 0,
+            readingOrderPlan?.SelectedItemIndex ?? -1);
+        _paneAccessibility.ApplyPane(_proofingPaneHost, PresentationPaneAccessibilityPlanner.ProofingPaneId,
+            _proofingPaneHost.IsVisible,
+            proofingPlan?.Rows.Count ?? _proofingPaneRowsPanel?.Children.Count ?? 0,
+            proofingPlan?.SelectedRowIndex ?? -1);
+        _paneAccessibility.ApplyPane(_mediaCaptionPaneHost, PresentationPaneAccessibilityPlanner.MediaCaptionPaneId,
+            _mediaCaptionPaneHost.IsVisible,
+            captionPlan?.Tracks.Count ?? _mediaCaptionTrackBox?.Items.Count ?? 0,
+            captionPlan?.SelectedTrackIndex ?? _mediaCaptionTrackBox?.SelectedIndex ?? -1);
+        _paneAccessibility.ApplyPane(_smartArtTextPaneHost, PresentationPaneAccessibilityPlanner.SmartArtTextPaneId,
+            _smartArtTextPaneHost.IsVisible,
+            smartArtItemCount,
+            selectedSmartArtRow is null || _smartArtTextPaneRowsPanel is null
+                ? -1
+                : _smartArtTextPaneRowsPanel.Children.IndexOf(selectedSmartArtRow));
+        _paneAccessibility.ApplyPane(_selectionPane, PresentationPaneAccessibilityPlanner.SelectionPaneId,
+            _selectionPane.IsVisible,
+            selectionPlan.Items.Count,
+            Array.FindIndex(selectionPlan.Items.ToArray(), item => item.IsSelected));
+        _paneAccessibility.ApplyPane(_animationPaneHost, PresentationPaneAccessibilityPlanner.AnimationPaneId,
+            _animationPaneHost.IsVisible,
+            animationPlan?.Items.Count ?? _animationPaneItemsPanel?.Children.Count ?? 0,
+            animationPlan?.SelectedIndex ?? -1);
     }
 
     private Border BuildPrintOptionsPaneHost()
@@ -4766,7 +4838,10 @@ public sealed partial class MainWindow : Window
     }
 
     internal void RefreshReviewWorkflowPlans()
-        => _reviewWorkflowSession.RefreshReviewWorkflowPlans();
+    {
+        _reviewWorkflowSession.RefreshReviewWorkflowPlans();
+        RefreshPaneAccessibilityMetadata();
+    }
 
     internal PresentationCommentPanePlan ShowReviewCommentsPane()
     {
@@ -4795,11 +4870,21 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            foreach (var comment in plan.Comments)
-                _reviewCommentsPanePanel.Children.Add(BuildReviewCommentCard(comment));
+            foreach (var (comment, itemIndex) in plan.Comments.Select((comment, index) => (comment, index)))
+            {
+                var card = BuildReviewCommentCard(comment);
+                PresentationPaneAccessibilityAdapter.ApplyItem(
+                    card,
+                    PresentationPaneAccessibilityPlanner.CommentsPaneId,
+                    itemIndex,
+                    comment.TextPreview,
+                    comment.IsSelected ? "Selected" : "Not selected");
+                _reviewCommentsPanePanel.Children.Add(card);
+            }
         }
 
         _reviewCommentsPaneHost.IsVisible = plan.Comments.Count > 0 || _reviewCommentsPaneRequested;
+        RefreshPaneAccessibilityMetadata();
     }
 
     private Control BuildReviewCommentsPaneHeader(PresentationCommentPanePlan plan)
@@ -4856,6 +4941,7 @@ public sealed partial class MainWindow : Window
         _reviewCommentsPaneRequested = false;
         if (_reviewCommentsPaneHost is not null)
             _reviewCommentsPaneHost.IsVisible = false;
+        RefreshPaneAccessibilityMetadata();
     }
 
     private Control BuildReviewCommentActions(IReadOnlyList<PresentationReviewWorkflowActionPlan> actions)
@@ -5157,6 +5243,12 @@ public sealed partial class MainWindow : Window
         };
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, _) => SelectReviewComment(comment.CommentIndex);
+        PresentationPaneAccessibilityAdapter.ApplyItem(
+            border,
+            PresentationPaneAccessibilityPlanner.CommentsPaneId,
+            comment.CommentIndex,
+            comment.TextPreview,
+            comment.IsSelected ? "Selected" : "Not selected");
         return border;
     }
 
@@ -5414,6 +5506,7 @@ public sealed partial class MainWindow : Window
         var plan = RefreshAnimationPaneTimelinePlan(selectedAnimationIndex);
         RenderAnimationPane(plan);
         _animationPaneHost.IsVisible = true;
+        RefreshPaneAccessibilityMetadata();
         return plan;
     }
 
@@ -5421,6 +5514,7 @@ public sealed partial class MainWindow : Window
     {
         if (_animationPaneHost is not null)
             _animationPaneHost.IsVisible = false;
+        RefreshPaneAccessibilityMetadata();
     }
 
     private void RefreshVisibleAnimationPane(int selectedAnimationIndex = -1)
@@ -5448,6 +5542,12 @@ public sealed partial class MainWindow : Window
         _animationPaneTriggerControlCount = 0;
         _animationPaneDurationControlCount = 0;
         _animationPaneDelayControlCount = 0;
+        _paneAccessibility.ApplyPane(
+            _animationPaneHost,
+            PresentationPaneAccessibilityPlanner.AnimationPaneId,
+            _animationPaneHost.IsVisible,
+            plan.Items.Count,
+            plan.SelectedIndex);
         if (!plan.HasAnimations)
         {
             _animationPaneItemsPanel.Children.Add(new TextBlock
@@ -5465,7 +5565,14 @@ public sealed partial class MainWindow : Window
         {
             var item = plan.Items[i];
             _animationPaneRenderedRows.Add(viewPlan.RowSummaries[i]);
-            _animationPaneItemsPanel.Children.Add(BuildAnimationPaneItemCard(item));
+            var card = BuildAnimationPaneItemCard(item);
+            PresentationPaneAccessibilityAdapter.ApplyItem(
+                card,
+                PresentationPaneAccessibilityPlanner.AnimationPaneId,
+                i,
+                item.ShapeName,
+                item.IsSelected ? "Selected" : "Not selected");
+            _animationPaneItemsPanel.Children.Add(card);
         }
     }
 
@@ -6006,6 +6113,7 @@ public sealed partial class MainWindow : Window
         RefreshAccessibilitySummaryPlan();
         RenderAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan!);
         _accessibilityCheckerPaneHost.IsVisible = true;
+        RefreshPaneAccessibilityMetadata();
         return LastAccessibilityCheckerPanePlan!;
     }
 
@@ -6216,6 +6324,12 @@ public sealed partial class MainWindow : Window
             Child = panel,
         };
         border.PointerPressed += (_, _) => SelectAccessibilityCheckerRow(row.RowIndex);
+        PresentationPaneAccessibilityAdapter.ApplyItem(
+            border,
+            PresentationPaneAccessibilityPlanner.AccessibilityPaneId,
+            row.RowIndex,
+            row.Title,
+            row.IsSelected ? "Selected" : "Not selected");
         return border;
     }
 
@@ -6311,6 +6425,7 @@ public sealed partial class MainWindow : Window
     {
         var outline = RefreshSmartArtTextPane();
         _smartArtTextPaneHost.IsVisible = true;
+        RefreshPaneAccessibilityMetadata();
         return outline;
     }
 
@@ -6318,6 +6433,7 @@ public sealed partial class MainWindow : Window
     {
         if (_smartArtTextPaneHost is not null)
             _smartArtTextPaneHost.IsVisible = false;
+        RefreshPaneAccessibilityMetadata();
     }
 
     internal void SetSmartArtTextPaneRowText(int rowIndex, string text)
@@ -6592,8 +6708,20 @@ public sealed partial class MainWindow : Window
             foreach (var button in _smartArtTextPaneActionButtons)
                 button.IsEnabled = shape is not null && selectedItem is not null;
 
-            foreach (var item in outline)
-                _smartArtTextPaneRowsPanel.Children.Add(BuildSmartArtTextPaneRow(item));
+            for (var index = 0; index < outline.Count; index++)
+            {
+                var item = outline[index];
+                var row = BuildSmartArtTextPaneRow(item);
+                PresentationPaneAccessibilityAdapter.ApplyItem(
+                    row,
+                    PresentationPaneAccessibilityPlanner.SmartArtTextPaneId,
+                    index,
+                    item.Text,
+                    StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId)
+                        ? "Selected"
+                        : "Not selected");
+                _smartArtTextPaneRowsPanel.Children.Add(row);
+            }
         }
         finally
         {
@@ -6859,12 +6987,14 @@ public sealed partial class MainWindow : Window
         if (LastAltTextPanePlan is not null)
             RenderAltTextPane(LastAltTextPanePlan);
         _altTextPaneHost.IsVisible = true;
+        RefreshPaneAccessibilityMetadata();
     }
 
     internal void HideAltTextPane()
     {
         if (_altTextPaneHost is not null)
             _altTextPaneHost.IsVisible = false;
+        RefreshPaneAccessibilityMetadata();
     }
 
     internal PresentationMediaCaptionAuthoringPanePlan ShowMediaCaptionPane()
@@ -6872,6 +7002,7 @@ public sealed partial class MainWindow : Window
         RefreshMediaCaptionAuthoringPlans(null, null, null, null);
         RenderMediaCaptionPane(LastMediaCaptionAuthoringPanePlan!);
         _mediaCaptionPaneHost.IsVisible = true;
+        RefreshPaneAccessibilityMetadata();
         return LastMediaCaptionAuthoringPanePlan!;
     }
 
@@ -6879,6 +7010,7 @@ public sealed partial class MainWindow : Window
     {
         if (_mediaCaptionPaneHost is not null)
             _mediaCaptionPaneHost.IsVisible = false;
+        RefreshPaneAccessibilityMetadata();
     }
 
     internal void SetMediaCaptionPaneInput(
@@ -7014,9 +7146,23 @@ public sealed partial class MainWindow : Window
 
     private void RenderMediaCaptionTrackOptions(PresentationMediaCaptionAuthoringPanePlan plan)
     {
-        _mediaCaptionTrackBox.ItemsSource = plan.Tracks
-            .Select(track => $"{track.TrackIndex + 1}. {track.Label} ({FormatAvailability(!track.IsExternal)})")
-            .ToArray();
+        _mediaCaptionTrackBox.ItemsSource = null;
+        _mediaCaptionTrackBox.Items.Clear();
+        foreach (var (track, itemIndex) in plan.Tracks.Select((track, index) => (track, index)))
+        {
+            var item = new ComboBoxItem
+            {
+                Content = $"{track.TrackIndex + 1}. {track.Label} ({FormatAvailability(!track.IsExternal)})",
+                Tag = track.TrackIndex,
+            };
+            PresentationPaneAccessibilityAdapter.ApplyItem(
+                item,
+                PresentationPaneAccessibilityPlanner.MediaCaptionPaneId,
+                itemIndex,
+                track.Label,
+                track.TrackIndex == plan.SelectedTrackIndex ? "Selected" : "Not selected");
+            _mediaCaptionTrackBox.Items.Add(item);
+        }
         _mediaCaptionTrackBox.IsEnabled = plan.Tracks.Count > 0;
         var selectedIndex = -1;
         for (var index = 0; index < plan.Tracks.Count; index++)
@@ -7077,6 +7223,7 @@ public sealed partial class MainWindow : Window
         var plan = RefreshReadingOrderPlan();
         RenderReadingOrderPane(plan);
         _readingOrderPaneHost.IsVisible = true;
+        RefreshPaneAccessibilityMetadata();
         return plan;
     }
 
@@ -7084,6 +7231,7 @@ public sealed partial class MainWindow : Window
     {
         var plan = _selectionPane.Refresh();
         _selectionPane.IsVisible = true;
+        RefreshPaneAccessibilityMetadata();
         return plan;
     }
 
@@ -7240,7 +7388,16 @@ public sealed partial class MainWindow : Window
         }
 
         foreach (var item in plan.Items)
-            _readingOrderPaneItemsPanel.Children.Add(BuildReadingOrderItemCard(item));
+        {
+            var card = BuildReadingOrderItemCard(item);
+            PresentationPaneAccessibilityAdapter.ApplyItem(
+                card,
+                PresentationPaneAccessibilityPlanner.ReadingOrderPaneId,
+                item.ReadingOrderIndex,
+                item.ShapeName,
+                item.IsSelected ? "Selected" : "Not selected");
+            _readingOrderPaneItemsPanel.Children.Add(card);
+        }
     }
 
     private static PresentationReviewWorkflowActionPlan GetReadingOrderAction(
@@ -7396,6 +7553,7 @@ public sealed partial class MainWindow : Window
         var plan = _reviewWorkflowSession.ShowProofingPane();
         RenderProofingPane(plan);
         _proofingPaneHost.IsVisible = true;
+        RefreshPaneAccessibilityMetadata();
         return plan;
     }
 
@@ -7404,6 +7562,7 @@ public sealed partial class MainWindow : Window
         var plan = _reviewWorkflowSession.SelectProofingIssueRow(rowIndex);
         RenderProofingPane(plan);
         _proofingPaneHost.IsVisible = true;
+        RefreshPaneAccessibilityMetadata();
         return plan;
     }
 
@@ -7573,7 +7732,7 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        return new Border
+        var border = new Border
         {
             Background = row.IsSelected ? new SolidColorBrush(Color.FromRgb(0xE8, 0xF1, 0xFF)) : Brushes.Transparent,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
@@ -7581,6 +7740,13 @@ public sealed partial class MainWindow : Window
             Padding = new Thickness(12, 8, 12, 8),
             Child = panel,
         };
+        PresentationPaneAccessibilityAdapter.ApplyItem(
+            border,
+            PresentationPaneAccessibilityPlanner.ProofingPaneId,
+            row.RowIndex,
+            row.Text,
+            row.IsSelected ? "Selected" : "Not selected");
+        return border;
     }
 
     private async Task<bool> TryLoadPresentationFileAsync(string path)
@@ -7756,6 +7922,12 @@ public sealed partial class MainWindow : Window
                     ContextMenu = BuildSlidePaneContextMenu(plan.SlideIndex),
                 };
                 AutomationProperties.SetName(item, plan.AccessibleName);
+                PresentationPaneAccessibilityAdapter.ApplyItem(
+                    item,
+                    PresentationPaneAccessibilityPlanner.SlidePaneId,
+                    plan.SlideIndex,
+                    plan.AccessibleName,
+                    plan.IsSelected ? "Selected" : "Not selected");
                 ToolTip.SetTip(item, plan.ToolTipText);
                 WireContextMenuLifecycle(item);
                 item.KeyDown += OnSlidePaneItemKeyDown;
@@ -7775,6 +7947,12 @@ public sealed partial class MainWindow : Window
                 _slidePaneList.Items.Add(item);
             }
 
+            _paneAccessibility.ApplyPane(
+                _slidePaneList,
+                PresentationPaneAccessibilityPlanner.SlidePaneId,
+                true,
+                _presentation.Slides.Count,
+                Editor.CurrentSlideIndex);
             SelectSlidePaneItem(Editor.CurrentSlideIndex);
             if (restoreSlidePaneFocus)
             {
@@ -7843,6 +8021,12 @@ public sealed partial class MainWindow : Window
         };
         ToolTip.SetTip(item, plan.ToolTipText);
         AutomationProperties.SetName(item, plan.AccessibleName);
+        PresentationPaneAccessibilityAdapter.ApplyItem(
+            item,
+            PresentationPaneAccessibilityPlanner.SlidePaneId,
+            plan.SectionIndex,
+            plan.AccessibleName,
+            "Not selected");
         WireContextMenuLifecycle(item);
         item.PointerEntered += (_, _) => headerChrome.Background = hoverBackground;
         item.PointerExited += (_, _) => headerChrome.Background = normalBackground;
@@ -8437,7 +8621,14 @@ public sealed partial class MainWindow : Window
             chrome.BorderBrush = BrushFromHex(selected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex);
             chrome.BorderThickness = new Thickness(selected ? plan.SelectedBorderThickness : plan.NormalBorderThickness);
             AutomationProperties.SetName(item, plan.AccessibleName);
+            PresentationPaneAccessibilityAdapter.ApplyItem(
+                item,
+                PresentationPaneAccessibilityPlanner.SlidePaneId,
+                slideIndex,
+                plan.AccessibleName,
+                selected ? "Selected" : "Not selected");
         }
+        RefreshPaneAccessibilityMetadata();
     }
 
     private void OnSlidePaneSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -8475,6 +8666,7 @@ public sealed partial class MainWindow : Window
         {
             _notesRefreshing = false;
         }
+        RefreshPaneAccessibilityMetadata();
     }
 
     private void OnNotesTextChanged(object? sender, TextChangedEventArgs e)
@@ -8485,6 +8677,7 @@ public sealed partial class MainWindow : Window
         LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
             _presentation,
             Editor.CurrentSlideIndex);
+        RefreshPaneAccessibilityMetadata();
     }
 
     // ── Event handlers ─────────────────────────────────────────────────────────

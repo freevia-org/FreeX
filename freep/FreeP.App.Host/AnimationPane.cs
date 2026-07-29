@@ -73,6 +73,8 @@ public sealed class AnimationPane : Border
     internal AnimationPaneWorkflowViewPlan CurrentWorkflowViewPlanForTest => BuildWorkflowViewPlan();
     internal AnimationPaneWorkflowEvidencePlan CurrentWorkflowEvidencePlanForTest =>
         AnimationPanePlanner.BuildWorkflowEvidencePlan(BuildTimelinePlan(), _editor.CurrentSlideIndex);
+    internal IReadOnlyList<FrameworkElement> AccessibilityItemsForTests =>
+        _listPanel.Children.OfType<FrameworkElement>().ToArray();
 
     // ── Construction ──────────────────────────────────────────────────────────────
 
@@ -115,6 +117,10 @@ public sealed class AnimationPane : Border
         root.Children.Add(scroll);
 
         Child = root;
+        PresentationPaneAccessibilityAdapter.ApplyPaneMetadata(
+            this,
+            PresentationPaneAccessibilityPlanner.AnimationPaneId,
+            isVisible: false);
 
         // Subscribe to model events.
         _editor.CurrentSlideChanged += (_, _) => Rebuild();
@@ -162,6 +168,12 @@ public sealed class AnimationPane : Border
         _listPanel.Children.Clear();
 
         var plan = BuildTimelinePlan();
+        PresentationPaneAccessibilityAdapter.ApplyPaneMetadata(
+            this,
+            PresentationPaneAccessibilityPlanner.AnimationPaneId,
+            IsVisible,
+            plan.Items.Count,
+            plan.SelectedIndex);
         RenderPlaybackControls(plan);
         if (!plan.HasAnimations)
         {
@@ -598,6 +610,12 @@ public sealed class AnimationPane : Border
             Child           = innerGrid,
             Cursor          = System.Windows.Input.Cursors.Hand,
         };
+        PresentationPaneAccessibilityAdapter.ApplyItem(
+            row,
+            PresentationPaneAccessibilityPlanner.AnimationPaneId,
+            item.Index,
+            item.ShapeName,
+            selected ? "Selected" : "Not selected");
 
         // Click → select this row and select the shape on the canvas.
         row.MouseLeftButtonDown += (sender, _) =>
