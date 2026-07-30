@@ -2047,12 +2047,12 @@ public static class DocumentViewLayoutPlanner
         bool childFlipV,
         IReadOnlyList<DocumentFloatTransform> parentTransforms)
     {
+        // Build raw model-space handle centres, then apply the leaf and ancestor transforms once.
+        // Applying the leaf transform here and again through the composed helper moves handles away
+        // from the rendered corners for rotated or flipped nested children.
         return BuildFloatingHandleRects(
                 childRect,
-                handleSizeDip,
-                childRotationAngle,
-                childFlipH,
-                childFlipV)
+                handleSizeDip)
             .Select(handle =>
             {
                 var center = TransformPointThroughGroupChain(

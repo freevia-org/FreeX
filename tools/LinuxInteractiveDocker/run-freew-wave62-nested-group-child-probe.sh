@@ -53,6 +53,7 @@ center_y=$((center_y + move_dy))
 # Local bottom-right vector (32,16)pt, transformed by leaf, inner, and outer chains.
 read -r handle_dx handle_dy <<< "$(awk 'BEGIN {
     pi=atan2(0,-1); x=32*4/3; y=16*4/3;
+    x=-x;
     a=10*pi/180; t=x*cos(a)-y*sin(a); y=x*sin(a)+y*cos(a); x=t;
     y=-y;
     a=-17*pi/180; t=x*cos(a)-y*sin(a); y=x*sin(a)+y*cos(a); x=t;
@@ -77,5 +78,5 @@ title="$(xdotool getwindowname "$window_id" 2>/dev/null || true)"
 [[ "$title" != *"*"* ]] || fail "FreeW still reports unsaved changes after Ctrl+S."
 
 cat > "$output/probe-results.json" <<EOF
-{"schemaVersion":1,"suite":"freew-linux-nested-group-child-wave62-physical","platform":"linux","app":"FreeW","shell":"avalonia","results":[{"id":"nested-group-child-x11-selection","status":"passed","evidence":"02-nested-child-selected.png","note":"Nested leaf selection changed the rendered surface."},{"id":"nested-group-child-x11-move","status":"passed","evidence":"03-nested-child-moved.png","note":"Second press inside the selected nested leaf moved only the leaf."},{"id":"nested-group-child-x11-resize","status":"passed","evidence":"04-nested-child-resized-selected.png","note":"Composed bottom-right handle drag resized the nested leaf and kept handles visible."}],"summary":{"status":"passed","passed":3,"failed":0},"operation":{"childPath":"0,1","moveScreenDip":{"x":$move_dx,"y":$move_dy},"resizeHandle":"bottom-right"},"selectionPostcondition":{"visible":true,"childPath":"0,1","handleCount":8,"evidence":"04-nested-child-resized-selected.png"}}
+{"schemaVersion":1,"suite":"freew-linux-nested-group-child-wave62-physical","platform":"linux","app":"FreeW","shell":"avalonia","results":[{"id":"nested-group-child-x11-selection","status":"passed","evidence":"02-nested-child-selected.png","note":"Nested leaf selection changed the rendered surface."},{"id":"nested-group-child-x11-move","status":"passed","evidence":"03-nested-child-moved.png","note":"Second press inside the selected nested leaf moved only the leaf."},{"id":"nested-group-child-x11-resize","status":"pending","evidence":"04-nested-child-resized-selected.png","note":"The screenshot is promoted to passed only after exact DOCX geometry and transform validation."}],"summary":{"status":"pending","passed":2,"failed":0},"operation":{"childPath":"0,1","moveScreenDip":{"x":$move_dx,"y":$move_dy},"resizeHandle":"bottom-right"},"selectionPostcondition":{"visible":true,"childPath":"0,1","handleCount":8,"evidence":"04-nested-child-resized-selected.png"}}
 EOF

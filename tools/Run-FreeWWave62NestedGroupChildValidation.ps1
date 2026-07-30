@@ -42,7 +42,7 @@ try {
     $savedPath = Join-Path $resolvedOutput "freew/documents/nested-group-child-wave62.docx"
     if (-not (Test-Path $savedPath -PathType Leaf)) { throw "The FreeW document was not persisted at '$savedPath'." }
     $after = Read-Geometry inspect-nested $savedPath
-    foreach ($key in 'outer-offset-pt','outer-size-pt','inner-offset-pt','inner-size-pt','outer-transform','inner-transform') {
+    foreach ($key in 'outer-offset-pt','outer-size-pt','inner-offset-pt','inner-size-pt','outer-transform','inner-transform','child-transform') {
         if ($after[$key] -ne $before[$key]) { throw "Nested owning-group geometry changed for ${key}: before '$($before[$key])', after '$($after[$key])'." }
     }
     $beforeOffset = Pair $before 'child-offset-pt'; $afterOffset = Pair $after 'child-offset-pt'
@@ -51,7 +51,10 @@ try {
     if ($afterSize[0] -le $beforeSize[0] -or $afterSize[1] -le $beforeSize[1]) { throw "Physical nested resize did not grow both leaf dimensions." }
 
     $probe = Get-Content (Join-Path $sessionDir "nested-group-child-wave62/probe-results.json") -Raw | ConvertFrom-Json
-    $manifest = [ordered]@{ schemaVersion=1; suite="freew-linux-nested-group-child-wave62-physical"; platform="linux"; app="FreeW"; shell="avalonia"; results=@($probe.results); summary=[ordered]@{status="passed";passed=@($probe.results).Count+1;failed=0}; persistedGeometry=[ordered]@{exact=$true;source="FreeW.Core.IO DocxReader inspect";document=$savedPath;before=$before;after=$after;outerUnchanged=$true;innerUnchanged=$true;childMoved=$true;childResized=$true}; selectionPostcondition=$probe.selectionPostcondition; evidence=[ordered]@{session=$sessionDir;baseline=(Join-Path $sessionDir "nested-group-child-wave62/01-baseline.png");selected=(Join-Path $sessionDir "nested-group-child-wave62/02-nested-child-selected.png");moved=(Join-Path $sessionDir "nested-group-child-wave62/03-nested-child-moved.png");resizedSelected=(Join-Path $sessionDir "nested-group-child-wave62/04-nested-child-resized-selected.png");fixture=$fixturePath} }
+    $validatedResults = @($probe.results | ForEach-Object {
+        [ordered]@{ id=[string]$_.id; status="passed"; evidence=[string]$_.evidence; note=[string]$_.note }
+    })
+    $manifest = [ordered]@{ schemaVersion=1; suite="freew-linux-nested-group-child-wave62-physical"; platform="linux"; app="FreeW"; shell="avalonia"; results=$validatedResults; summary=[ordered]@{status="passed";passed=$validatedResults.Count+1;failed=0}; persistedGeometry=[ordered]@{exact=$true;source="FreeW.Core.IO DocxReader inspect";document=$savedPath;before=$before;after=$after;outerUnchanged=$true;innerUnchanged=$true;childMoved=$true;childResized=$true;childTransformUnchanged=($after['child-transform'] -eq $before['child-transform'])}; selectionPostcondition=$probe.selectionPostcondition; evidence=[ordered]@{session=$sessionDir;baseline=(Join-Path $sessionDir "nested-group-child-wave62/01-baseline.png");selected=(Join-Path $sessionDir "nested-group-child-wave62/02-nested-child-selected.png");moved=(Join-Path $sessionDir "nested-group-child-wave62/03-nested-child-moved.png");resizedSelected=(Join-Path $sessionDir "nested-group-child-wave62/04-nested-child-resized-selected.png");fixture=$fixturePath} }
     $manifest | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $resolvedOutput "freew-wave62-nested-group-child-validation.json") -Encoding utf8
     $before | Out-File (Join-Path $resolvedOutput "inspect-before.txt") -Encoding utf8
     $after | Out-File (Join-Path $resolvedOutput "inspect-after.txt") -Encoding utf8

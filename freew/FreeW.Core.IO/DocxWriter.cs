@@ -4829,6 +4829,7 @@ public static class DocxWriter
                 new XElement(A + "ext",
                     new XAttribute("cx", PointsToEmu(childW)),
                     new XAttribute("cy", PointsToEmu(childH))));
+            ApplyGroupChildTransform(xfrm, child);
 
             // Encode child metadata in the name attribute so the reader can reconstruct the type.
             var childName = child switch
@@ -4918,7 +4919,34 @@ public static class DocxWriter
         var localExt = xfrm.Element(A + "ext");
         nestedXfrm.Element(A + "off")?.ReplaceWith(localOff is null ? new XElement(A + "off") : new XElement(localOff));
         nestedXfrm.Element(A + "ext")?.ReplaceWith(localExt is null ? new XElement(A + "ext") : new XElement(localExt));
+        foreach (var name in new[] { "rot", "flipH", "flipV" })
+        {
+            var attribute = xfrm.Attribute(name);
+            if (attribute is not null)
+                nestedXfrm.SetAttributeValue(name, attribute.Value);
+            else
+                nestedXfrm.Attribute(name)?.Remove();
+        }
         return nested;
+    }
+
+    private static void ApplyGroupChildTransform(XElement xfrm, object child)
+    {
+        var (rotation, flipH, flipV) = child switch
+        {
+            InlineImage image => (image.RotationAngle, image.FlipH, image.FlipV),
+            Shape shape => (shape.RotationAngle, shape.FlipH, shape.FlipV),
+            WordArt wordArt => (wordArt.RotationAngle, wordArt.FlipH, wordArt.FlipV),
+            DrawingGroup group => (group.RotationAngle, group.FlipH, group.FlipV),
+            _ => (0d, false, false)
+        };
+
+        if (rotation != 0)
+            xfrm.SetAttributeValue("rot", (long)Math.Round(rotation * 60000));
+        if (flipH)
+            xfrm.SetAttributeValue("flipH", "1");
+        if (flipV)
+            xfrm.SetAttributeValue("flipV", "1");
     }
 
     private static XElement BuildDrawingGroupShapeChild(

@@ -256,6 +256,46 @@ public sealed class DocumentViewFloatingSelectionTests
         return doc;
     }
 
+    private static TextDocument MakeDocWithTwoNestedBranches(out DrawingGroup outer)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+
+        static DrawingGroup Branch()
+        {
+            var group = new DrawingGroup { WidthPt = 120, HeightPt = 70 };
+            group.Children.Add(new Shape(ShapeKind.Rectangle, 30, 20));
+            group.ChildOffsets.Add((8, 8));
+            group.Children.Add(new Shape(ShapeKind.Ellipse, 44, 28));
+            group.ChildOffsets.Add((54, 28));
+            return group;
+        }
+
+        outer = new DrawingGroup
+        {
+            WidthPt = 360,
+            HeightPt = 180,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalAnchor = HorizontalAnchor.Page,
+                VerticalAnchor = VerticalAnchor.Page,
+                HorizontalOffsetPt = 72,
+                VerticalOffsetPt = 36,
+                ZOrderIndex = 4
+            }
+        };
+        outer.Children.Add(Branch());
+        outer.ChildOffsets.Add((20, 20));
+        outer.Children.Add(Branch());
+        outer.ChildOffsets.Add((200, 100));
+
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+        doc.Blocks.Add(paragraph);
+        return doc;
+    }
+
     // ── FLSEL-1: SelectFloating sets SelectedFloatingInfo ────────────────────────────────────────────
 
     [Fact]
@@ -820,12 +860,24 @@ public sealed class DocumentViewFloatingSelectionTests
             childOffsetYAfter.Should().BeApproximately(
                 childOffsetYBefore + localDelta.YDip / PageLayout.PointsToDip(1), 0.2);
 
+            var movedLeafRect = view.FloatingGroupChildRectForPathForTest(0, 0, path)!.Value;
+            var movedLeafPlannerRect = PlannerRect(movedLeafRect);
             var handles = view.HandleRectsForSelection();
             handleCount = handles.Count;
             var bottomRight = handles[FloatHandle.BottomRight].Center;
+            var expectedBottomRight = DocumentViewLayoutPlanner.TransformPointThroughGroupChain(
+                new DocumentFloatPoint(movedLeafPlannerRect.RightDip, movedLeafPlannerRect.BottomDip),
+                movedLeafPlannerRect,
+                leaf.RotationAngle,
+                leaf.FlipH,
+                leaf.FlipV,
+                parents);
+            bottomRight.X.Should().BeApproximately(expectedBottomRight.XDip, 0.001);
+            bottomRight.Y.Should().BeApproximately(expectedBottomRight.YDip, 0.001);
             var resizeTarget = bottomRight
                 + (bottomRight - handles[FloatHandle.TopLeft].Center) * 0.5;
             view.BeginFloatDrag(bottomRight).Should().Be(FloatHandle.BottomRight);
+            view.FloatDragBaseRectForTest.Should().Be(movedLeafRect);
             view.SimulateDragTo(resizeTarget);
             view.EndFloatDrag(resizeTarget);
             leafWidthAfter = leaf.WidthPt;
@@ -841,6 +893,85 @@ public sealed class DocumentViewFloatingSelectionTests
         Assert.True(leafWidthAfter > leafWidthBefore);
         Assert.Equal(outerWidthBefore, outerWidthAfter);
         Assert.Equal(innerWidthBefore, innerWidthAfter);
+    }
+
+    [Fact]
+    public async Task Nested_branches_with_same_terminal_index_keep_child_paths_distinct()
+    {
+        var firstPath = Array.Empty<int>();
+        var secondPath = Array.Empty<int>();
+        bool secondPointMatchedFirst = true;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = MakeDocWithTwoNestedBranches(out _);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(1000, 2000));
+            view.SelectFloating(0, 0);
+
+            var firstRect = view.FloatingGroupChildRectForPathForTest(0, 0, [0, 1])!.Value;
+            var secondRect = view.FloatingGroupChildRectForPathForTest(0, 0, [1, 1])!.Value;
+            var firstPoint = firstRect.Center;
+            var secondPoint = secondRect.Center;
+            view.SelectFloatingGroupChildForTest(firstPoint).Should().BeTrue();
+            firstPath = view.SelectedFloatingGroupChildPath!.ToArray();
+            secondPointMatchedFirst = view.SelectedFloatingGroupChildMatchesPointForTest(secondPoint);
+            view.SelectFloatingGroupChildForTest(secondPoint).Should().BeTrue();
+            secondPath = view.SelectedFloatingGroupChildPath!.ToArray();
+        });
+        if (!ran) return;
+
+        Assert.Equal(new[] { 0, 1 }, firstPath);
+        Assert.False(secondPointMatchedFirst);
+        Assert.Equal(new[] { 1, 1 }, secondPath);
+    }
+
+    [Fact]
+    public async Task Nested_group_node_can_be_selected_moved_and_resized_without_mutating_outer_group()
+    {
+        double outerWidthBefore = 0, outerWidthAfter = 0;
+        double innerWidthBefore = 0, innerWidthAfter = 0;
+        double offsetBefore = 0, offsetAfter = 0;
+        var selectedPath = Array.Empty<int>();
+        var ran = await OnUiThread(() =>
+        {
+            var doc = MakeDocWithTwoNestedBranches(out var outer);
+            var inner = outer.Children[0].Should().BeOfType<DrawingGroup>().Subject;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(1000, 2000));
+            view.SelectFloating(0, 0);
+
+            var innerRect = view.FloatingGroupChildRectForPathForTest(0, 0, [0])!.Value;
+            // This point is inside the first nested group but in its empty body area,
+            // outside both leaf children.
+            var bodyPoint = new Point(innerRect.X + 80, innerRect.Y + 20);
+            view.SelectFloatingGroupChildForTest(bodyPoint).Should().BeTrue();
+            selectedPath = view.SelectedFloatingGroupChildPath!.ToArray();
+            outerWidthBefore = outer.WidthPt;
+            innerWidthBefore = inner.WidthPt;
+            offsetBefore = outer.ChildOffsets[0].X;
+
+            var movedPoint = bodyPoint + new Vector(20, 12);
+            view.BeginFloatDrag(bodyPoint).Should().Be(FloatHandle.Body);
+            view.SimulateDragTo(movedPoint);
+            view.EndFloatDrag(movedPoint);
+            offsetAfter = outer.ChildOffsets[0].X;
+
+            var bottomRight = view.HandleRectsForSelection()[FloatHandle.BottomRight].Center;
+            var resizeTarget = bottomRight + new Vector(24, 16);
+            view.BeginFloatDrag(bottomRight).Should().Be(FloatHandle.BottomRight);
+            view.SimulateDragTo(resizeTarget);
+            view.EndFloatDrag(resizeTarget);
+            innerWidthAfter = inner.WidthPt;
+            outerWidthAfter = outer.WidthPt;
+        });
+        if (!ran) return;
+
+        Assert.Equal(new[] { 0 }, selectedPath);
+        Assert.NotEqual(offsetBefore, offsetAfter);
+        Assert.True(innerWidthAfter > innerWidthBefore);
+        Assert.Equal(outerWidthBefore, outerWidthAfter);
     }
 
     [Fact]

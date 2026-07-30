@@ -75,6 +75,8 @@ if (string.Equals(args[0], "inspect-nested", StringComparison.OrdinalIgnoreCase)
     Console.WriteLine($"child-offset-pt={leafOffset.X:R},{leafOffset.Y:R}");
     Console.WriteLine($"child-size-pt={inner.ChildWidthPt(1):R},{inner.ChildHeightPt(1):R}");
     Console.WriteLine($"child-kind={leaf.GetType().Name}");
+    if (leaf is Shape leafShape)
+        Console.WriteLine($"child-transform={leafShape.RotationAngle:R}deg,flipH={leafShape.FlipH},flipV={leafShape.FlipV}");
     return 0;
 }
 
@@ -171,7 +173,8 @@ static TextDocument BuildNestedFixture()
     {
         FillColorHex = "#FCE4D6",
         OutlineColorHex = "#C65911",
-        RotationAngle = 10
+        RotationAngle = 10,
+        FlipH = true
     });
     inner.ChildOffsets.Add((8, 8));
     inner.ChildOffsets.Add((34, 21));

@@ -578,7 +578,12 @@ public sealed class DrawingGroupRoundTripTests
         };
         inner.Children.Add(new Shape(ShapeKind.Rectangle, 36, 22));
         inner.ChildOffsets.Add((10, 8));
-        inner.Children.Add(new Shape(ShapeKind.Ellipse, 82, 52));
+        inner.Children.Add(new Shape(ShapeKind.Ellipse, 82, 52)
+        {
+            RotationAngle = 13,
+            FlipH = true,
+            FlipV = true
+        });
         inner.ChildOffsets.Add((79, 43));
 
         var outer = new DrawingGroup
@@ -606,6 +611,9 @@ public sealed class DrawingGroupRoundTripTests
         readInner.ChildOffsets[1].Y.Should().BeApproximately(43, 0.001);
         readLeaf.WidthPt.Should().BeApproximately(82, 0.001);
         readLeaf.HeightPt.Should().BeApproximately(52, 0.001);
+        readLeaf.RotationAngle.Should().BeApproximately(13, 0.001);
+        readLeaf.FlipH.Should().BeTrue();
+        readLeaf.FlipV.Should().BeTrue();
     }
 
     [Fact]

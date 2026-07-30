@@ -8519,13 +8519,27 @@ public sealed class DocumentView : Control
         if (_selectedFloating is not { } sel) return FloatHandle.None;
         var handle = HitTestHandle(start);
         if (handle == FloatHandle.None) return FloatHandle.None;
-        var dragRect = _selectedFloatingGroupChild is { } child
-            && child.BlockIndex == sel.BlockIndex
-            && child.RunIndex == sel.RunIndex
-                ? child.Rect
-                : sel.Rect;
+        var dragRect = SelectedFloatingDragRect(sel);
         _floatDragState = (start, dragRect, handle);
         return handle;
+    }
+
+    internal Rect? FloatDragBaseRectForTest => _floatDragState?.FloatRect;
+
+    private Rect SelectedFloatingDragRect(
+        (int BlockIndex, int RunIndex, string Kind, Rect Rect) selection)
+    {
+        if (_selectedFloatingGroupChild is { } child
+            && child.BlockIndex == selection.BlockIndex
+            && child.RunIndex == selection.RunIndex
+            && TryGetFloatingGroupChildGeometry(
+                child.BlockIndex,
+                child.RunIndex,
+                child.ChildPath,
+                out var geometry))
+            return geometry.Child.Rect;
+
+        return selection.Rect;
     }
 
     /// <summary>
@@ -8911,6 +8925,19 @@ public sealed class DocumentView : Control
                         path,
                         out hit))
                     return true;
+
+                var nestedGroupRect = ToPlannerRect(child.Rect);
+                if (DocumentViewLayoutPlanner.ContainsFloatingGroupChildPointThroughGroupChain(
+                        nestedGroupRect,
+                        ToPlannerPoint(point),
+                        child.RotationAngle,
+                        child.FlipH,
+                        child.FlipV,
+                        parentTransforms))
+                {
+                    hit = (path, child);
+                    return true;
+                }
                 continue;
             }
 
@@ -9929,6 +9956,18 @@ public sealed class DocumentView : Control
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateVisual();
     }
+
+    private static bool IsSameFloatingGroupChild(
+        FloatingGroupChildSelection selected,
+        FloatingGroupChildSelection hit) =>
+        selected.BlockIndex == hit.BlockIndex
+        && selected.RunIndex == hit.RunIndex
+        && selected.ChildPath.SequenceEqual(hit.ChildPath);
+
+    internal bool SelectedFloatingGroupChildMatchesPointForTest(Point point) =>
+        _selectedFloatingGroupChild is { } selected
+        && TryHitTestFloatingGroupChild(point, out var hit)
+        && IsSameFloatingGroupChild(selected, hit);
 
     internal bool SelectFloatingGroupChildForTest(Point point)
     {
@@ -11373,7 +11412,7 @@ public sealed class DocumentView : Control
             var handle = HitTestHandle(point);
             if (handle is not FloatHandle.None and not FloatHandle.Body)
             {
-                _floatDragState = (point, curSel.Rect, handle);
+                _floatDragState = (point, SelectedFloatingDragRect(curSel), handle);
                 Cursor = CursorForHandle(handle);
                 InvalidateVisual();
                 e.Handled = true;
@@ -11386,9 +11425,7 @@ public sealed class DocumentView : Control
         if (!extendFloatingSelection && TryHitTestFloatingGroupChild(point, out var groupChildHit))
         {
             if (_selectedFloatingGroupChild is { } selectedChild
-                && selectedChild.BlockIndex == groupChildHit.BlockIndex
-                && selectedChild.RunIndex == groupChildHit.RunIndex
-                && selectedChild.ChildIndex == groupChildHit.ChildIndex)
+                && IsSameFloatingGroupChild(selectedChild, groupChildHit))
             {
                 _floatDragState = (point, groupChildHit.Rect, FloatHandle.Body);
                 Cursor = CursorForHandle(FloatHandle.Body);
