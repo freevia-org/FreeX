@@ -46,6 +46,27 @@ file static class ShapeHelper12A
             : null;
     }
 
+    internal static uint NextShapeId(Presentation p)
+    {
+        uint max = 0;
+        foreach (var shape in EnumerateShapes(p.Slides.SelectMany(slide => slide.Shapes)))
+            max = Math.Max(max, shape.Id);
+        return max == uint.MaxValue ? 1u : max + 1u;
+    }
+
+    private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            yield return shape;
+            if (shape.Children.Count > 0)
+            {
+                foreach (var child in EnumerateShapes(shape.Children))
+                    yield return child;
+            }
+        }
+    }
+
     private static List<SlideShape>? FindContainingList(List<SlideShape> shapes, uint shapeId)
     {
         if (shapes.Any(shape => shape.Id == shapeId)) return shapes;
@@ -115,6 +136,9 @@ public sealed class GroupShapesCommand : IPresentationCommand
     // Captured on Apply for Revert.
     private SlideShape?          _group;
     private List<(int zIdx, SlideShape shape)>? _removed;
+    private List<SlideShape>? _parentShapes;
+
+    public uint? GroupId => _group?.Id;
 
     public GroupShapesCommand(int slideIndex, IEnumerable<uint> selectedIds)
     {
@@ -126,15 +150,16 @@ public sealed class GroupShapesCommand : IPresentationCommand
 
     public bool HasEffect(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.CommonContainingShapes(p, _slideIndex, _selectedIds);
         return shapes is not null && _selectedIds.Count >= 2
             && _selectedIds.All(id => shapes.Any(s => s.Id == id));
     }
 
     public void Apply(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.CommonContainingShapes(p, _slideIndex, _selectedIds);
         if (shapes is null || _selectedIds.Count < 2) return;
+        _parentShapes = shapes;
 
         // Collect selected shapes and their z-indices (in z-order).
         var selected = new List<(int zIdx, SlideShape shape)>();
@@ -154,7 +179,7 @@ public sealed class GroupShapesCommand : IPresentationCommand
         long maxY = selected.Max(t => t.shape.OffsetYEmu + t.shape.ExtentCyEmu);
 
         // Build the group shape.
-        uint newId = shapes.Count == 0 ? 1u : shapes.Max(s => s.Id) + 1u;
+        uint newId = ShapeHelper12A.NextShapeId(p);
         _group = new SlideShape
         {
             Id          = newId,
@@ -181,7 +206,7 @@ public sealed class GroupShapesCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = _parentShapes;
         if (shapes is null || _group is null || _removed is null) return;
 
         // Remove the group.
@@ -196,6 +221,7 @@ public sealed class GroupShapesCommand : IPresentationCommand
 
         _group   = null;
         _removed = null;
+        _parentShapes = null;
     }
 }
 

@@ -987,7 +987,6 @@ public sealed class EditingSessionTests
         shape.FlipV.Should().BeTrue();
     }
 
-    [Fact]
     public void GroupSelectedShapes_GroupsNestedChildrenAndUndoRestoresParentList()
     {
         var sess = Make();

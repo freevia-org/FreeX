@@ -3379,12 +3379,10 @@ public sealed class EditingSession
         var cmd = new GroupShapesCommand(_currentSlideIndex, _selectedShapeIds);
         Bus.Execute(cmd);
 
-        // After grouping, select the new group (it is the last shape added
-        // at the lowest-z-index slot of the originals; find by Kind=Group + max Id).
-        var group = CurrentSlide.Shapes
-            .Where(s => s.Kind == SlideShapeKind.Group)
-            .OrderByDescending(s => s.Id)
-            .FirstOrDefault();
+        // Select the command's group wherever it was inserted, including inside a parent group.
+        var group = cmd.GroupId is { } groupId
+            ? FindShape(CurrentSlide.Shapes, groupId)
+            : null;
         if (group is not null)
         {
             _selectedShapeIds.Clear();
