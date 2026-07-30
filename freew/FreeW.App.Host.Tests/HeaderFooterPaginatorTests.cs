@@ -146,6 +146,38 @@ public sealed class HeaderFooterPaginatorTests
     }
 
     [StaFact]
+    public void FootnotePageOwnership_UsesMarkersFromTheRenderedPaginator()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Footnotes[1] = new Footnote(1, "first note");
+        model.Footnotes[2] = new Footnote(2, "second note");
+
+        var first = new FreeW.Core.Model.Paragraph();
+        first.Runs.Add(new FreeW.Core.Model.Run("first page reference"));
+        first.Runs.Add(FreeW.Core.Model.Run.FootnoteReference(1));
+        model.Blocks.Add(first);
+        for (var i = 0; i < 180; i++)
+            model.Blocks.Add(new FreeW.Core.Model.Paragraph("filler paragraph forcing the second footnote onto a later page"));
+        var second = new FreeW.Core.Model.Paragraph();
+        second.Runs.Add(new FreeW.Core.Model.Run("second page reference"));
+        second.Runs.Add(FreeW.Core.Model.Run.FootnoteReference(2));
+        model.Blocks.Add(second);
+
+        var view = new DocumentView();
+        view.LoadModel(model);
+        var flow = view.Document;
+        flow.PagePadding = new Thickness(48);
+        var paginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
+        paginator.PageSize = new Size(360, 480);
+
+        var ownership = PaginationEngine.ComputeFootnotePageOwnership(flow, paginator);
+
+        ownership[0].Should().Contain(1);
+        ownership.Where(pair => pair.Key > 0).SelectMany(pair => pair.Value).Should().Contain(2);
+    }
+
+    [StaFact]
     public void MultiPageEndnotes_DrawOnTheFinalPage()
     {
         var model = TextDocument.CreateEmpty();

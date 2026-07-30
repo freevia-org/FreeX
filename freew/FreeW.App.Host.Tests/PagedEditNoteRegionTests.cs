@@ -105,6 +105,30 @@ public sealed class PagedEditNoteRegionTests
         allFootnoteIds.Should().Contain(7, "footnote ID 7 must be collected from the body run");
     }
 
+    [StaFact]
+    public void FootnoteMarkers_ExposeIdsAlongsideTheirPaginatorPositions()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Footnotes[3] = new Footnote(3, "Footnote three.");
+        doc.Footnotes[7] = new Footnote(7, "Footnote seven.");
+
+        var body = new Paragraph();
+        body.Runs.Add(new Run("First"));
+        body.Runs.Add(Run.FootnoteReference(3));
+        body.Runs.Add(new Run(" second"));
+        body.Runs.Add(Run.FootnoteReference(7));
+        doc.Blocks.Add(body);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var markers = DocumentView.CollectFootnoteMarkers(view.Document.Blocks);
+
+        markers.Select(marker => marker.FootnoteId).Should().Equal(3, 7);
+        Assert.All(markers, marker => Assert.NotNull(marker.Position));
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────────────────────
     // 2. Endnotes synthetic page
     // ─────────────────────────────────────────────────────────────────────────────────────────────

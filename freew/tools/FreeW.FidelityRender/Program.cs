@@ -405,6 +405,10 @@ static void RenderDocumentComposite(
     // particular, PAGE/NUMPAGES fields must keep reporting the full paginator result.
     int actualPageCount = Math.Max(1, paginator.PageCount);
     int pageCount = Math.Min(actualPageCount, maxPages);
+    var footnoteIdsByPaginatorPage = doc.Footnotes.Count > 0
+        ? PaginationEngine.ComputeFootnotePageOwnership(flow, paginator)
+        : new Dictionary<int, IReadOnlyList<int>>();
+    var hasPaginatorFootnoteOwnership = footnoteIdsByPaginatorPage.Count > 0;
 
     // ═══ LAYER 4: Floating objects ════════════════════════════════════════════════════════════════
     // Build the floating-objects canvas exactly as the live editor does, then rasterize its
@@ -566,14 +570,14 @@ static void RenderDocumentComposite(
         PageSettings thisPageSettings = page;
         string? headerSlotName = null;
         string? footerSlotName = null;
-        var hasFootnotes = false;
+        IReadOnlyList<int> pageFootnoteIds = [];
         if (panel is not null && i < panel.PageBoxes.Count)
         {
             var pageBox = panel.PageBoxes[i];
             thisPageSettings = pageBox.PageGeometry;
             headerSlotName = pageBox.HeaderSlotName;
             footerSlotName = pageBox.FooterSlotName;
-            hasFootnotes = pageBox.FootnoteIds.Count > 0;
+            pageFootnoteIds = pageBox.FootnoteIds;
         }
         else if (hasMultiPageTable && panel is not null && panel.PageBoxes.Count > 0)
         {
@@ -586,6 +590,9 @@ static void RenderDocumentComposite(
                 differentOddEvenHeaderFooterPages);
             footerSlotName = generatedSegmentSlots.FooterSlotName;
         }
+        if (hasPaginatorFootnoteOwnership)
+            pageFootnoteIds = footnoteIdsByPaginatorPage.GetValueOrDefault(i, []);
+        var hasFootnotes = pageFootnoteIds.Count > 0;
 
         var (thisPageWDip, thisPageHDip) = PageLayout.PageSizeDip(thisPageSettings);
         var (thisMarginLeft, thisMarginTop, thisMarginRight, thisMarginBottom) =
@@ -785,9 +792,9 @@ static void RenderDocumentComposite(
             // ─ Layer 6: footnote region (separator + footnote texts above footer) ─────────────────
             // Render footnotes that appear on this page.  We draw them above the footer zone using
             // the same TextBlock approach as PageBox.BuildNoteRegion.
-            if (box.FootnoteIds.Count > 0)
+            if (pageFootnoteIds.Count > 0)
             {
-                var footnoteBmp = RenderNoteRegion(doc, box.FootnoteIds, Array.Empty<int>(),
+                var footnoteBmp = RenderNoteRegion(doc, pageFootnoteIds, Array.Empty<int>(),
                     thisPageWDip, thisMarginLeft, thisMarginRight, isEndnotePage: false);
                 if (footnoteBmp is not null)
                 {

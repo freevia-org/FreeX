@@ -10944,53 +10944,65 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Returns the text positions of footnote reference runs inside the supplied blocks.  A
-    /// paragraph can begin on one page and place its reference on the next; callers that assign
-    /// whole blocks to page boxes should therefore use these positions when a footnote is present.
+    /// Identifies one footnote reference at its concrete text position. A paragraph can begin on one
+    /// page and place its reference on the next, so paginator consumers must use the marker position
+    /// rather than assigning the entire block to a page.
     /// </summary>
-    internal static IReadOnlyList<TextPointer> CollectFootnoteMarkerPositions(
+    internal sealed record FootnoteMarkerPosition(int FootnoteId, TextPointer Position);
+
+    /// <summary>
+    /// Returns the ordered footnote marker IDs and text positions inside the supplied blocks.
+    /// </summary>
+    internal static IReadOnlyList<FootnoteMarkerPosition> CollectFootnoteMarkers(
         IEnumerable<System.Windows.Documents.Block> blocks)
     {
-        var positions = new List<TextPointer>();
+        var markers = new List<FootnoteMarkerPosition>();
         foreach (var block in blocks)
-            CollectFootnoteMarkerPositionsFromBlock(block, positions);
-        return positions;
+            CollectFootnoteMarkersFromBlock(block, markers);
+        return markers;
     }
 
-    private static void CollectFootnoteMarkerPositionsFromBlock(
+    /// <summary>
+    /// Returns only footnote marker positions for existing page-assignment callers.
+    /// </summary>
+    internal static IReadOnlyList<TextPointer> CollectFootnoteMarkerPositions(
+        IEnumerable<System.Windows.Documents.Block> blocks) =>
+        CollectFootnoteMarkers(blocks).Select(marker => marker.Position).ToList();
+
+    private static void CollectFootnoteMarkersFromBlock(
         System.Windows.Documents.Block block,
-        List<TextPointer> positions)
+        List<FootnoteMarkerPosition> markers)
     {
         switch (block)
         {
             case WpfParagraph paragraph:
-                CollectFootnoteMarkerPositionsFromInlines(paragraph.Inlines, positions);
+                CollectFootnoteMarkersFromInlines(paragraph.Inlines, markers);
                 break;
             case WpfList list:
                 foreach (var item in list.ListItems)
                     foreach (var itemBlock in item.Blocks)
-                        CollectFootnoteMarkerPositionsFromBlock(itemBlock, positions);
+                        CollectFootnoteMarkersFromBlock(itemBlock, markers);
                 break;
             case System.Windows.Documents.Table table:
                 foreach (var rg in table.RowGroups)
                     foreach (var row in rg.Rows)
                         foreach (var cell in row.Cells)
                             foreach (var cellBlock in cell.Blocks)
-                                CollectFootnoteMarkerPositionsFromBlock(cellBlock, positions);
+                                CollectFootnoteMarkersFromBlock(cellBlock, markers);
                 break;
         }
     }
 
-    private static void CollectFootnoteMarkerPositionsFromInlines(
+    private static void CollectFootnoteMarkersFromInlines(
         InlineCollection inlines,
-        List<TextPointer> positions)
+        List<FootnoteMarkerPosition> markers)
     {
         foreach (var inline in inlines)
         {
-            if (inline is WpfRun run && run.Tag is FootnoteMarker)
-                positions.Add(run.ContentStart);
+            if (inline is WpfRun run && run.Tag is FootnoteMarker marker)
+                markers.Add(new FootnoteMarkerPosition(marker.FootnoteId, run.ContentStart));
             else if (inline is Span span)
-                CollectFootnoteMarkerPositionsFromInlines(span.Inlines, positions);
+                CollectFootnoteMarkersFromInlines(span.Inlines, markers);
         }
     }
 

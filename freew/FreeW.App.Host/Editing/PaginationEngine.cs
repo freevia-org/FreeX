@@ -45,6 +45,43 @@ internal static class PaginationEngine
     }
 
     /// <summary>
+    /// Resolves each rendered footnote marker to the physical page owned by the supplied paginator.
+    /// This must use the exact FlowDocument that a compositor renders: a separately paginated editor
+    /// surface may use different page padding and therefore assign the same marker to a different page.
+    /// </summary>
+    internal static IReadOnlyDictionary<int, IReadOnlyList<int>> ComputeFootnotePageOwnership(
+        FlowDocument flow,
+        DocumentPaginator paginator)
+    {
+        ArgumentNullException.ThrowIfNull(flow);
+        ArgumentNullException.ThrowIfNull(paginator);
+
+        paginator.ComputePageCount();
+        if (paginator is not DynamicDocumentPaginator dynamicPaginator)
+            return new Dictionary<int, IReadOnlyList<int>>();
+
+        var pageCount = Math.Max(1, paginator.PageCount);
+        try
+        {
+            return DocumentView.CollectFootnoteMarkers(flow.Blocks)
+                .Select(marker => (marker.FootnoteId, PageIndex: dynamicPaginator.GetPageNumber(marker.Position)))
+                .Where(marker => marker.PageIndex >= 0 && marker.PageIndex < pageCount)
+                .GroupBy(marker => marker.PageIndex)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlyList<int>)group.Select(marker => marker.FootnoteId).Distinct().ToList());
+        }
+        catch (NotSupportedException)
+        {
+            return new Dictionary<int, IReadOnlyList<int>>();
+        }
+        catch (InvalidOperationException)
+        {
+            return new Dictionary<int, IReadOnlyList<int>>();
+        }
+    }
+
+    /// <summary>
     /// Paginates <paramref name="editor"/>'s current content at the model's page geometry and returns
     /// the page count and inter-page Y offsets in the editor's DIP coordinate space.
     ///
