@@ -44,11 +44,45 @@ public sealed class WindowsNativePrintHandoffTests
             return;
 
         var capability = WindowsNativePrintOutput.Detect().Video;
+        var devices = new WindowsRecordingDeviceCatalog().EnumerateDevices();
 
         capability.CanEncodeMp4.Should().BeTrue();
         capability.ExecutablePath.Should().Be(WindowsNativeVideoExportAdapter.ExecutablePath);
         capability.EncoderName.Should().Be("Windows MediaComposition");
+        capability.CanCaptureNarration.Should().Be(devices.Any(device =>
+            device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone && device.IsAvailable));
+        capability.CanCaptureCameraAndMedia.Should().Be(devices.Any(device =>
+            device.Kind == SlideShowRecordingCaptureDeviceKind.Camera && device.IsAvailable));
+    }
+
+    [Fact]
+    public void WindowsVideoCapabilityReflectsEachEnumeratedCaptureDevice()
+    {
+        var capability = WindowsNativePrintOutput.DetectWindowsVideoCapability(
+            new FakeWindowsRecordingDeviceCatalog(
+                new(SlideShowRecordingCaptureDeviceKind.Microphone, "mic", "Mic", true, true, "audio/wav"),
+                new(SlideShowRecordingCaptureDeviceKind.Camera, "camera", "Camera", true, false, "video/mp4"),
+                new(SlideShowRecordingCaptureDeviceKind.Camera, "camera-2", "Camera 2", true, true, "video/mp4")));
+
+        capability.CanEncodeMp4.Should().BeTrue();
         capability.CanCaptureNarration.Should().BeTrue();
+        capability.CanCaptureCameraAndMedia.Should().BeTrue();
+        capability.Reason.Should().Contain("multi-track narration");
+        capability.Reason.Should().Contain("camera PIP");
+    }
+
+    [Fact]
+    public void WindowsVideoCapabilityDoesNotAdvertiseUnavailableDevices()
+    {
+        var capability = WindowsNativePrintOutput.DetectWindowsVideoCapability(
+            new FakeWindowsRecordingDeviceCatalog(
+                new(SlideShowRecordingCaptureDeviceKind.Microphone, "mic", "Mic", true, false, "audio/wav"),
+                new(SlideShowRecordingCaptureDeviceKind.Camera, "camera", "Camera", true, false, "video/mp4")));
+
+        capability.CanCaptureNarration.Should().BeFalse();
+        capability.CanCaptureCameraAndMedia.Should().BeFalse();
+        capability.Reason.Should().Contain("no microphone device");
+        capability.Reason.Should().Contain("no camera device");
     }
 
     [Fact]
@@ -209,5 +243,11 @@ public sealed class WindowsNativePrintHandoffTests
         "data"u8.CopyTo(wav.AsSpan(36));
         BinaryPrimitives.WriteUInt32LittleEndian(wav.AsSpan(40), (uint)dataLength);
         return wav;
+    }
+
+    private sealed class FakeWindowsRecordingDeviceCatalog(
+        params SlideShowRecordingCaptureDeviceDescriptor[] devices) : IWindowsRecordingDeviceCatalog
+    {
+        public IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> EnumerateDevices() => devices;
     }
 }

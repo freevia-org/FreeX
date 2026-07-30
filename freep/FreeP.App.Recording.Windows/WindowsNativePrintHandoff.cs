@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using FreeP.App.Compositor;
 using FreeP.App.Recording;
 
 namespace FreeP.App.Recording.Windows;
@@ -22,13 +23,57 @@ public static class WindowsNativePrintOutput
         var print = DetectPrint();
         return new LinuxNativeOutputCapabilities(
             print,
-            new LinuxVideoEncoderCapability(
+            DetectWindowsVideoCapability(new WindowsRecordingDeviceCatalog()));
+    }
+
+    /// <summary>
+    /// Builds the Windows MediaComposition capability from the devices that the host can
+    /// actually enumerate. Keeping this injectable makes the advertised capture surface
+    /// testable without requiring a microphone or camera on the test machine.
+    /// </summary>
+    public static LinuxVideoEncoderCapability DetectWindowsVideoCapability(
+        IWindowsRecordingDeviceCatalog deviceCatalog)
+    {
+        ArgumentNullException.ThrowIfNull(deviceCatalog);
+
+        try
+        {
+            var devices = deviceCatalog.EnumerateDevices();
+            var hasMicrophone = devices.Any(device =>
+                device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone &&
+                device.IsAvailable);
+            var hasCamera = devices.Any(device =>
+                device.Kind == SlideShowRecordingCaptureDeviceKind.Camera &&
+                device.IsAvailable);
+
+            return new LinuxVideoEncoderCapability(
                 CanEncodeMp4: true,
                 ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
                 EncoderName: "Windows MediaComposition",
-                CanCaptureNarration: true,
-                Reason: "Windows video export can encode the shared frame package, delayed multi-track narration, and captured camera PIP through MediaComposition."));
+                CanCaptureNarration: hasMicrophone,
+                Reason: BuildWindowsVideoCapabilityReason(hasMicrophone, hasCamera),
+                CanCaptureCameraAndMedia: hasCamera);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return new LinuxVideoEncoderCapability(
+                CanEncodeMp4: true,
+                ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
+                EncoderName: "Windows MediaComposition",
+                CanCaptureNarration: false,
+                Reason: $"Windows MediaComposition video export is available, but recording device detection failed: {ex.Message}",
+                CanCaptureCameraAndMedia: false);
+        }
     }
+
+    private static string BuildWindowsVideoCapabilityReason(bool hasMicrophone, bool hasCamera) =>
+        (hasMicrophone, hasCamera) switch
+        {
+            (true, true) => "Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available.",
+            (true, false) => "Windows MediaComposition video export and narration capture are available; no camera device is currently available for camera PIP.",
+            (false, true) => "Windows MediaComposition video export and camera PIP are available; no microphone device is currently available for narration.",
+            _ => "Windows MediaComposition video export is available; no microphone device is currently available for narration, and no camera device is currently available for camera PIP."
+        };
 
     public static LinuxNativePrintCapability DetectPrint()
     {
