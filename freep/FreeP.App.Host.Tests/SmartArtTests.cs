@@ -2826,6 +2826,41 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesHorizontalBlockListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/horizontalBlockList",
+            nodes: [("id1", "One"), ("id2", "Two"), ("id3", "Three")],
+            parOfConnections: []);
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "the imported ID should reach the existing horizontal block-list planner");
+
+        var liveShapes = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+        liveShapes.Should().HaveCount(3);
+        liveShapes.Select(shape => shape.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("One", "Two", "Three");
+        liveShapes.Select(shape => shape.BoundsDip.X)
+            .Should().BeInAscendingOrder();
+
+        var savedPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        reopened.Data.Should().NotBeNull();
+        reopened.Data!.LayoutUniqueId.Should().EndWith("/horizontalBlockList");
+        reopened.Data.Family.Should().Be(SmartArtFamily.List);
+        reopened.Data.IsLiveLayoutSupported.Should().BeTrue();
+    }
+
+    [Fact]
     public void Reader_ParsesBlockCycleAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
