@@ -40,6 +40,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     // tracked separately from _chartSnapshot above, which only tracks DataRange.
     private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
+    // R92-commands-undo-structural-format-5-1: see RebandTablesAfterRowDelete.
+    private List<(CellAddress Address, Cell? OldCell)>? _tableRebandSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
     private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
@@ -205,6 +207,15 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         _dvFormulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteRuleFormulas(sheet, new DeleteRowsOp(sheet.Name, _startRow, _count), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
+        // R92-commands-undo-structural-format-5-1: mirror InsertRowsCommand's RebandTable call
+        // (R90-io-table-style-banding-5-3) on the delete side. MoveCellsForDelete above relocates
+        // every shifted cell (and its baked-in StyleId/fill) intact to its new row -- it never
+        // repaints banding -- so a row-banded structured table's alternating stripe fill is left at
+        // its PRE-delete parity for every row below the deleted band, inverted relative to each
+        // row's new position. Real Excel's table banding is purely positional and reflows
+        // immediately after any row delete just like it does after an insert.
+        _tableRebandSnapshot = RebandTablesAfterRowDelete(ctx.Workbook, sheet);
+
         return new CommandOutcome(
             true,
             AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
@@ -237,10 +248,73 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         }
     }
 
+    // R92-commands-undo-structural-format-5-1: re-flows every row-banded/column-banded structured
+    // table's stripe fill after the physical row shift above, matching InsertRowsCommand's
+    // FillGrownCalculatedColumnsForInsertedRows -> RebandTable call (R90-io-table-style-banding-5-3)
+    // for the delete side. Only a table whose OWN rows were removed by this delete (Start.Row
+    // unchanged, End.Row pulled up) has its internal row parity disturbed -- a table that shifted up
+    // as a whole (its Start.Row moved too, because the deleted band sat entirely above it) or one
+    // entirely unaffected keeps its pre-existing internal offsets and needs no repaint.
+    private List<(CellAddress Address, Cell? OldCell)> RebandTablesAfterRowDelete(Workbook workbook, Sheet sheet)
+    {
+        var captured = new List<(CellAddress Address, Cell? OldCell)>();
+        if (_addressStateSnapshot is null)
+            return captured;
+
+        foreach (var resizedTable in sheet.StructuredTables)
+        {
+            var previousTable = _addressStateSnapshot.StructuredTables.FirstOrDefault(t => t.Id == resizedTable.Id);
+            if (previousTable is null ||
+                previousTable.Range.Start.Row != resizedTable.Range.Start.Row ||
+                resizedTable.Range.End.Row >= previousTable.Range.End.Row)
+                continue;
+
+            var (firstDataRow, lastDataRow) = StructuredTableEditEffects.GetDataBodyRowBounds(resizedTable);
+            if (lastDataRow >= firstDataRow)
+            {
+                // Capture the pre-reband state of every data-body cell before RebandTable below
+                // repaints its stripe fill onto them. MoveCellsForDelete above relocates only
+                // previously-OCCUPIED cells (already captured/restored via _shiftedSnapshot) -- a
+                // cell that was blank both before and after the shift has no other undo coverage,
+                // so without this a blank cell RebandTable materializes purely to hold a repainted
+                // stripe (R90's no-materialize rule still lets it create a cell when the computed
+                // style is a genuine visible change) would survive undo as a permanent leftover.
+                for (var row = firstDataRow; row <= lastDataRow; row++)
+                {
+                    for (var col = resizedTable.Range.Start.Col; col <= resizedTable.Range.End.Col; col++)
+                    {
+                        var address = new CellAddress(sheet.Id, row, col);
+                        captured.Add((address, sheet.GetCell(address)?.Clone()));
+                    }
+                }
+            }
+
+            StructuredTableStyleService.RebandTable(workbook, sheet, resizedTable);
+        }
+
+        return captured;
+    }
+
     public void Revert(ICommandContext ctx)
     {
         if (_deletedSnapshot is null || _shiftedSnapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
+
+        // R92-commands-undo-structural-format-5-1: undo the reband repaint FIRST -- it was the very
+        // last effect Apply performed. A cell RebandTable materialized purely to hold a repainted
+        // stripe has no other undo coverage (see RebandTablesAfterRowDelete); a cell that already
+        // held content is also captured here but is harmlessly re-overwritten (with the same value)
+        // by the general shifted/deleted-cell restore below.
+        if (_tableRebandSnapshot is not null)
+        {
+            foreach (var (address, oldCell) in _tableRebandSnapshot)
+            {
+                if (oldCell is null)
+                    sheet.ClearCell(address);
+                else
+                    sheet.SetCell(address, oldCell);
+            }
+        }
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);

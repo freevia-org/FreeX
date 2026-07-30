@@ -190,6 +190,18 @@ public static partial class PrintRenderer
                 gridLeft,
                 gridTop,
                 measurement);
+
+            // R92-consumer-wiring-sweep-1: gated on !draftQuality like charts above -- Excel's Draft
+            // Quality print option skips "most graphics" (raster pictures included), unlike text boxes
+            // (vector text content), which this renderer already draws unconditionally below.
+            var pictureBlocks = PagePictureLayoutPlanner.Build(
+                sheet.Pictures,
+                pageRows,
+                pageColumns,
+                gridLeft,
+                gridTop,
+                measurement);
+            DrawPrintedPictures(dc, pictureBlocks);
         }
 
         var textBoxBlocks = PageTextBoxLayoutPlanner.Build(

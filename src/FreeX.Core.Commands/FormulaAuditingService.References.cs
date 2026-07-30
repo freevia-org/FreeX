@@ -39,12 +39,17 @@ public static partial class FormulaAuditingService
                 break;
 
             case NamedRangeNode namedRange:
-                // Sheet-scope-first: a sheet-scoped named FORMULA of the same name shadows a
-                // workbook-global named RANGE (mirrors RecalcEngine.CollectReferences's
-                // NamedRangeNode handling), so a bare scope-unaware range lookup must not run
-                // when the host sheet has its own scoped formula of this name.
-                if (!workbook.ScopedNamedFormulas.ContainsKey((namedRange.Name, hostSheetId)) &&
-                    workbook.TryGetNamedRange(namedRange.Name, hostSheetId, out var range))
+                // Sheet-qualification-aware: an explicit qualifier (e.g. "Sheet2" in
+                // "Sheet2!Data") must resolve against THAT sheet's own scope, not hostSheetId
+                // (the formula's own sheet) -- otherwise a formula like "=SUM(Sheet2!Data)"
+                // written on Sheet1, where Sheet1 ALSO has its own local "Data", would trace
+                // precedents against Sheet1's "Data" instead of Sheet2's
+                // (R92-io-defined-name-scope-eval-5-3). Also preserves the existing sheet-scope-
+                // first precedence (a sheet-scoped named FORMULA shadows a same-named
+                // workbook-global named RANGE at the resolved scope -- mirrors
+                // RecalcEngine.CollectReferences's NamedRangeNode handling). See
+                // NamedRangeNodeScopeResolver for the shared rule.
+                if (NamedRangeNodeScopeResolver.TryResolveNamedRange(workbook, namedRange, hostSheetId, out var range))
                     foreach (var address in range.AllCells())
                         result.Add(address);
                 break;
@@ -124,9 +129,9 @@ public static partial class FormulaAuditingService
                 break;
 
             case NamedRangeNode namedRange:
-                // Sheet-scope-first, mirrors CollectReferences's NamedRangeNode handling above.
-                if (!workbook.ScopedNamedFormulas.ContainsKey((namedRange.Name, hostSheetId)) &&
-                    workbook.TryGetNamedRange(namedRange.Name, hostSheetId, out var range))
+                // Sheet-qualification-aware, mirrors CollectReferences's NamedRangeNode handling
+                // above (R92-io-defined-name-scope-eval-5-3).
+                if (NamedRangeNodeScopeResolver.TryResolveNamedRange(workbook, namedRange, hostSheetId, out var range))
                     result.Add(range);
                 break;
 
@@ -246,12 +251,9 @@ public static partial class FormulaAuditingService
                        RangeContainsBlankPrecedent(workbook, rangeSheet.Id, rangeRef);
 
             case NamedRangeNode namedRange:
-                // Sheet-scope-first: mirrors CollectReferences's NamedRangeNode handling above —
-                // a sheet-scoped named FORMULA of the same name shadows a workbook-global named
-                // RANGE, and sheet-scoped named RANGES must be resolved via the 3-arg,
-                // scope-aware overload rather than the workbook-global-only 2-arg one.
-                return !workbook.ScopedNamedFormulas.ContainsKey((namedRange.Name, hostSheetId)) &&
-                       workbook.TryGetNamedRange(namedRange.Name, hostSheetId, out var range) &&
+                // Sheet-qualification-aware: mirrors CollectReferences's NamedRangeNode handling
+                // above (R92-io-defined-name-scope-eval-5-3).
+                return NamedRangeNodeScopeResolver.TryResolveNamedRange(workbook, namedRange, hostSheetId, out var range) &&
                        RangeContainsBlankPrecedent(workbook, range);
 
             case StructuredReferenceNode structured:

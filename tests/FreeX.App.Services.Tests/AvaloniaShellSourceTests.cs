@@ -3200,7 +3200,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.ExecuteRemoveDuplicatesPlan(plan);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Remove Duplicates failed.\");");
         source.Should().Contain("RefreshShell(status);");
-        source.Should().Contain("ShowTextDialogAsync(\"Remove Duplicates\", status, 420, 220)");
+        source.Should().Contain("ShowTextDialogAsync(UiText.Get(\"MainWindowMessage_RemoveDuplicatesTitle\"), status, 420, 220)");
 
         source.Should().Contain("private async Task<RemoveDuplicatesPlan?> ShowRemoveDuplicatesInputDialogAsync(bool? forceHasHeaders = null)");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"RemoveDuplicatesCompactDialog\");");

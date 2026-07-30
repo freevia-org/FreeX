@@ -86,6 +86,21 @@ public sealed class WorkbookOpenService
                     return result.Workbook;
                 }
 
+                // R92-io-legacy-format-read-5-1/5-2/5-3: a legacy .xls/.xlsb open never gets an
+                // XlsxFeatureReport (isOpenXmlExcelPackage above is false for these extensions), so
+                // this Warnings list is the ONLY open-time signal the shell has for lossy legacy
+                // features (values-only BIFF12/parse-failure fallback, undroppable VBA macros,
+                // dropped embedded charts). ShowXlsxLoadWarningsIfNeeded already displays
+                // loadWarnings unconditionally regardless of extension, so populating it here is
+                // enough to wire the warning through to the user.
+                if (adapter is LegacyXlsFileAdapter legacyAdapter)
+                {
+                    var legacyResult = legacyAdapter.LoadWithWarnings(fileStream);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    loadWarnings = legacyResult.Warnings;
+                    return legacyResult.Workbook;
+                }
+
                 var loadedWorkbook = adapter.Load(fileStream);
                 cancellationToken.ThrowIfCancellationRequested();
                 return loadedWorkbook;

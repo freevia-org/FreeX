@@ -67,9 +67,27 @@ public partial class MainWindow : IAutosaveWorkbookSource
     /// Called by the autosave service after startup recovery loads a workbook into this window.
     /// Sets the original file path association from the sidecar so Save goes to the right place.
     /// </summary>
+    /// <remarks>
+    /// OpenRecoverySnapshotAsync (run just before this) captured
+    /// <c>_currentFileSourceLastWriteTimeUtc</c> from the SNAPSHOT file (a temp .fxl under the
+    /// autosave directory), not from <paramref name="originalFilePath"/>. Left uncorrected, the
+    /// save-conflict guard in SaveWorkbookToTargetAsync would compare the original file's real
+    /// on-disk write time against the unrelated snapshot's write time — a mismatch on every save,
+    /// firing a spurious "modified by someone else" warning on the ordinary recover-then-save
+    /// workflow. Reconcile here by re-capturing the expected write time from the ORIGINAL file as
+    /// it stands right now: this preserves the guard's purpose (still catches a genuine edit to
+    /// the original file between recovery and save) while dropping the bogus snapshot-vs-original
+    /// comparison. If the original file no longer exists (e.g. it was moved/deleted since the
+    /// crash), null it so the guard is skipped — there is nothing to compare against, matching
+    /// Excel's own behavior of not conflict-checking a save target that isn't there yet.
+    /// </remarks>
     internal void SetCurrentFilePathForRecovery(string? originalFilePath)
     {
         _currentFilePath = originalFilePath;
+        _currentFileSourceLastWriteTimeUtc =
+            originalFilePath is not null && System.IO.File.Exists(originalFilePath)
+                ? System.IO.File.GetLastWriteTimeUtc(originalFilePath)
+                : null;
     }
 
     private void OnAutosaveCleanClose()

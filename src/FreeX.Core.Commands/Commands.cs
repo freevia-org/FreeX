@@ -108,8 +108,13 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             // still arrive with StyleId.Default and fall through to the old preserve-style
             // behavior unchanged (R87-formula-number-parse-locale-5-3).
             var appliedCell = newCell.Clone();
-            if (oldCell is not null && appliedCell.StyleId == StyleId.Default)
-                appliedCell.StyleId = oldCell.StyleId;
+            if (appliedCell.StyleId == StyleId.Default)
+            {
+                if (oldCell is not null)
+                    appliedCell.StyleId = oldCell.StyleId;
+                else if (sheet.GetStyleOnly(addr.Row, addr.Col) is { } styleOnly)
+                    appliedCell.StyleId = styleOnly;
+            }
             sheet.SetCell(addr, appliedCell);
 
             // The cell's content is being replaced, so any rich-text runs, hyperlink, and phonetic

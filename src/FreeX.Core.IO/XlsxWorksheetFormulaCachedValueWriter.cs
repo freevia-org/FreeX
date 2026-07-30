@@ -38,6 +38,22 @@ namespace FreeX.Core.IO;
 /// </summary>
 internal static class XlsxWorksheetFormulaCachedValueWriter
 {
+    // R92-app-large-workbook-memory-5-1 test seam: counts how many worksheets this writer actually
+    // attempts to DOM-load (via XlsxWorksheetXmlEditSession.TryGetWorksheet) in the most recent
+    // Save() call on the CURRENT THREAD. Production code never reads this; it exists purely so a
+    // test can assert -- via a deterministic counter rather than wall-clock timing -- that a sheet
+    // with no formulas and no live spill values is skipped entirely rather than fully parsed into an
+    // XDocument for nothing. [ThreadStatic] rather than a plain static: xUnit runs test classes in
+    // this assembly in parallel, and several sibling test classes also drive XlsxFileAdapter.Save
+    // through formula-bearing workbooks, so a shared counter would race across concurrently-running
+    // tests on different threads. Each xUnit test method runs synchronously start-to-finish on a
+    // single thread, so a thread-local counter is exactly as deterministic as a global one would be
+    // if this writer's tests ran alone, without requiring the whole assembly to run serially.
+    [ThreadStatic]
+    internal static int DiagnosticsWorksheetLoadAttempts;
+
+    internal static void ResetDiagnosticsForTests() => DiagnosticsWorksheetLoadAttempts = 0;
+
     public static void Save(
         Stream packageStream,
         Workbook workbook,
@@ -49,6 +65,21 @@ internal static class XlsxWorksheetFormulaCachedValueWriter
         using var session = new XlsxWorksheetXmlEditSession(packageStream, worksheetPathMap);
         foreach (var sheet in workbook.Sheets)
         {
+            // R92-app-large-workbook-memory-5-1: a sheet with no formula cells and no live spill
+            // values can never have anything for ApplyCachedValues to patch -- every branch below
+            // (formula-cell cache, spill-member cache, legacy-array-member cache) only ever touches
+            // a cell that descends from a formula somewhere on the sheet. Skipping such a sheet here
+            // avoids DOM-loading its ENTIRE worksheet part (XlsxWorksheetXmlEditSession.TryGetWorksheet
+            // -> XlsxPackageXmlEditor.LoadXml, a full System.Xml.Linq parse of every <row>/<c>) just to
+            // walk every cell and find nothing to do -- a multi-hundred-MB/multi-GB cost on a large
+            // sheet that happens to sit in the same workbook as an unrelated formula elsewhere (the
+            // workbook-wide featurePlan.HasCellFormulas gate that reaches this method only tells us
+            // SOME sheet has a formula, not this one).
+            if (!sheet.HasFormulas && !sheet.HasSpillValues)
+                continue;
+
+            DiagnosticsWorksheetLoadAttempts++;
+
             if (!session.TryGetWorksheet(sheet, out var edit))
                 continue;
 

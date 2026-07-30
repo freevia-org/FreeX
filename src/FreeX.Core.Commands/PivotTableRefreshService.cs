@@ -71,18 +71,33 @@ public static partial class PivotTableRefreshService
             }
         }
 
-        ClearRefreshRanges(targetSheet, pivotTable);
-
         var headers = ReadHeaders(sourceSheet, pivotTable.SourceRange);
-        var columnFields = pivotTable.ColumnFields.ToList();
-        if (!pivotTable.RowFields.All(field => IsValidField(field.SourceFieldIndex, headers.Count)) ||
-            !pivotTable.PageFields.All(field => IsValidField(field.SourceFieldIndex, headers.Count)) ||
-            !columnFields.All(field => IsValidField(field.SourceFieldIndex, headers.Count)) ||
-            !pivotTable.DataFields.All(field => IsValidDataField(field, pivotTable, headers.Count)))
+
+        // R92-app-pivot-drilldown-5-3: a source shrink (columns deleted, or an entire field's
+        // backing column gone) can leave some fields' SourceFieldIndex pointing past the new
+        // header count. Excel drops those now-invalid fields from the layout and recomputes
+        // cleanly rather than leaving the previous stale render in place or erroring -- so prune
+        // them from the *live* field lists (mirroring a field falling out of the layout) before
+        // anything on the sheet is touched. This must happen before ClearRefreshRanges: computing
+        // validity first (rather than clearing unconditionally and only then checking) is what
+        // stops a still-renderable pivot from ending up as a permanently blank hole when nothing
+        // actually needed to be dropped, or from being cleared and abandoned when everything did.
+        pivotTable.RowFields.RemoveAll(field => !IsValidField(field.SourceFieldIndex, headers.Count));
+        pivotTable.PageFields.RemoveAll(field => !IsValidField(field.SourceFieldIndex, headers.Count));
+        pivotTable.ColumnFields.RemoveAll(field => !IsValidField(field.SourceFieldIndex, headers.Count));
+        pivotTable.DataFields.RemoveAll(field => !IsValidDataField(field, pivotTable, headers.Count));
+
+        if (pivotTable.DataFields.Count == 0)
         {
-            pivotTable.LastRenderedRange = null;
+            // Nothing left to compute a values grid from (every data field's source column is
+            // gone). Matches the "no data fields configured" guard at the top of this method:
+            // leave whatever is already rendered on the sheet untouched rather than blanking it.
             return;
         }
+
+        var columnFields = pivotTable.ColumnFields.ToList();
+
+        ClearRefreshRanges(targetSheet, pivotTable);
 
         var rows = ReadSourceRows(sourceSheet, pivotTable.SourceRange, headers.Count)
             .Where(row => MatchesFieldSelections(row, pivotTable.PageFields))

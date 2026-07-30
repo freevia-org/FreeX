@@ -166,23 +166,32 @@ public static class SelectDataSourcePlanner
     /// </summary>
     public static SelectDataSourcePreview InferPreviewEntries(
         string sourceRangeText,
-        bool firstColumnIsCategories) =>
+        bool firstColumnIsCategories,
+        bool switchRowColumn = false) =>
         InferPreviewEntries(
             sourceRangeText,
             firstColumnIsCategories,
             FormatSeriesName,
             FormatCategoryName,
-            CategoryLabelsFallback);
+            CategoryLabelsFallback,
+            switchRowColumn);
 
     /// <summary>
     /// Builds preview entries while letting a shell supply localized display text for generated labels.
+    /// <paramref name="switchRowColumn"/> mirrors the dialog's "Switch Row/Column" checkbox
+    /// (<c>chart.SeriesInRows</c>): when set, every row/column role below is transposed -- series are
+    /// derived from ROWS (one series per row, spanning columns) and categories from COLUMNS, exactly
+    /// swapping the roles the non-transposed branch gives them. This lets toggling the checkbox refresh
+    /// the dialog's own Series/Axis-Labels preview lists (R92-app-chart-data-edit-5-2) instead of only
+    /// taking effect once OK applies <c>ChangeChartSourceCommand</c>'s <c>SeriesInRows</c>.
     /// </summary>
     public static SelectDataSourcePreview InferPreviewEntries(
         string sourceRangeText,
         bool firstColumnIsCategories,
         Func<int, string> formatSeriesName,
         Func<int, string> formatCategoryName,
-        string categoryLabelsFallback)
+        string categoryLabelsFallback,
+        bool switchRowColumn = false)
     {
         ArgumentNullException.ThrowIfNull(formatSeriesName);
         ArgumentNullException.ThrowIfNull(formatCategoryName);
@@ -201,6 +210,27 @@ public static class SelectDataSourcePlanner
         }
 
         var range = parsed.Value;
+        if (switchRowColumn)
+        {
+            // Transposed: series iterate ROWS (skipping the category row when firstColumnIsCategories),
+            // categories iterate COLUMNS starting where each series' data begins -- the literal
+            // row<->col swap of the branch below.
+            var firstSeriesRow = firstColumnIsCategories && range.EndRow > range.StartRow
+                ? range.StartRow + 1
+                : range.StartRow;
+            var firstDataCol = firstColumnIsCategories && range.EndCol > range.StartCol
+                ? range.StartCol + 1
+                : range.StartCol;
+
+            var transposedSeries = BuildSeriesEntriesTransposed(sourceRangeText, range, firstSeriesRow, firstDataCol, formatSeriesName);
+            var transposedCategories = BuildCategoryEntriesTransposed(range, firstDataCol, formatCategoryName, categoryLabelsFallback);
+            var transposedCategoryRange = firstColumnIsCategories
+                ? FormatRangeReference(range.SheetName, firstDataCol, range.StartRow, range.EndCol, range.StartRow)
+                : string.Empty;
+
+            return new SelectDataSourcePreview(transposedSeries, transposedCategories, transposedCategoryRange);
+        }
+
         var firstSeriesColumn = firstColumnIsCategories && range.EndCol > range.StartCol
             ? range.StartCol + 1
             : range.StartCol;
@@ -359,6 +389,48 @@ public static class SelectDataSourcePlanner
     {
         var entries = new List<SelectDataSourceCategoryEntry>();
         for (var row = categoryStartRow; row <= range.EndRow; row++)
+            entries.Add(new SelectDataSourceCategoryEntry(formatCategoryName(entries.Count + 1)));
+
+        if (entries.Count == 0)
+            entries.Add(new SelectDataSourceCategoryEntry(categoryLabelsFallback));
+
+        return entries;
+    }
+
+    // ---- Transposed (Switch Row/Column) variants --------------------------------------------------
+    // Literal row<->col swap of BuildSeriesEntries/BuildCategoryEntries above: a "series" is now one
+    // ROW (spanning the data columns), and "categories" are counted per data COLUMN instead of per
+    // data row. See InferPreviewEntries' switchRowColumn branch for how the skip offsets are derived.
+
+    private static IReadOnlyList<SelectDataSourceSeriesEntry> BuildSeriesEntriesTransposed(
+        string sourceRangeText,
+        ParsedRange range,
+        uint firstSeriesRow,
+        uint firstDataCol,
+        Func<int, string> formatSeriesName)
+    {
+        var entries = new List<SelectDataSourceSeriesEntry>();
+        for (var row = firstSeriesRow; row <= range.EndRow; row++)
+        {
+            entries.Add(new SelectDataSourceSeriesEntry(
+                formatSeriesName(entries.Count + 1),
+                FormatRangeReference(range.SheetName, firstDataCol, row, range.EndCol, row)));
+        }
+
+        if (entries.Count == 0)
+            entries.Add(new SelectDataSourceSeriesEntry(formatSeriesName(1), sourceRangeText.Trim()));
+
+        return entries;
+    }
+
+    private static IReadOnlyList<SelectDataSourceCategoryEntry> BuildCategoryEntriesTransposed(
+        ParsedRange range,
+        uint categoryStartCol,
+        Func<int, string> formatCategoryName,
+        string categoryLabelsFallback)
+    {
+        var entries = new List<SelectDataSourceCategoryEntry>();
+        for (var col = categoryStartCol; col <= range.EndCol; col++)
             entries.Add(new SelectDataSourceCategoryEntry(formatCategoryName(entries.Count + 1)));
 
         if (entries.Count == 0)

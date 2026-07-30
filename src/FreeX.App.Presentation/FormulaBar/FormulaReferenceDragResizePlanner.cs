@@ -17,6 +17,14 @@ namespace FreeX.App.Presentation.FormulaBar;
 /// qualifier already present in the reference token. This matters for formulas that qualify even a
 /// same-sheet reference, such as <c>'Revenue Data'!B2:C3</c>.
 /// </remarks>
+/// <remarks>
+/// R92-meta-2: as of this writing only one desktop shell's host window
+/// (<c>MainWindow.FormulaReferenceEditing.cs</c>) hooks the pointer-drag events on its highlight
+/// overlay into this planner. The cross-platform shell's own host window already renders the same
+/// range-highlight boxes (<c>AddFormulaReferenceHighlightOverlay</c>) but has no drag-grip/
+/// pointer-capture wiring onto them yet -- adding that is tracked as a follow-up rather than
+/// claimed as already shipped here.
+/// </remarks>
 public static class FormulaReferenceDragResizePlanner
 {
     /// <summary>

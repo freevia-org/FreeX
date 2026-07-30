@@ -49,6 +49,11 @@ public sealed class FreeXOptions : IStatusBarOptionVisibilityStore
     public bool UseR1C1ReferenceStyle { get; set; }
     public bool ErrorCheckingEnabled { get; set; } = true;
 
+    // Parity with Excel's "Use GetPivotData functions for PivotTable references"
+    // (File > Options > Formulas). When off, clicking a pivot cell while building a formula
+    // inserts a plain A1-style reference instead of a GETPIVOTDATA(...) call.
+    public bool GenerateGetPivotData { get; set; } = true;
+
     // Proofing — ignore rules
     public bool ProofingIgnoreUppercase { get; set; } = true;
     public bool ProofingIgnoreNumbers { get; set; } = true;
@@ -164,6 +169,7 @@ public sealed class FreeXOptions : IStatusBarOptionVisibilityStore
             AutoCalculate = AutoCalculate,
             UseR1C1ReferenceStyle = UseR1C1ReferenceStyle,
             ErrorCheckingEnabled = ErrorCheckingEnabled,
+            GenerateGetPivotData = GenerateGetPivotData,
             ProofingIgnoreUppercase = ProofingIgnoreUppercase,
             ProofingIgnoreNumbers = ProofingIgnoreNumbers,
             ShowFormulaBar = ShowFormulaBar,
@@ -216,6 +222,7 @@ public sealed class FreeXOptions : IStatusBarOptionVisibilityStore
         AutoCalculate = options.AutoCalculate;
         UseR1C1ReferenceStyle = options.UseR1C1ReferenceStyle;
         ErrorCheckingEnabled = options.ErrorCheckingEnabled;
+        GenerateGetPivotData = options.GenerateGetPivotData;
         ProofingIgnoreUppercase = options.ProofingIgnoreUppercase;
         ProofingIgnoreNumbers = options.ProofingIgnoreNumbers;
         ShowFormulaBar = options.ShowFormulaBar;

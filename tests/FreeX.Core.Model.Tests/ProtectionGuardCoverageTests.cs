@@ -512,6 +512,51 @@ public class ProtectionGuardCoverageTests
                     transpose: false);
             },
 
+            // R92: chart analogue of PastePicturesCommand. ChartCommandGuards.RejectIfEditObjectsBlocked
+            // runs on the destination sheet before any source lookup or chart math, so an empty
+            // carried-chart list still exercises the guard.
+            ["PasteChartsCommand"] = (wb, sheet) =>
+            {
+                var anchor = new CellAddress(sheet.Id, 1, 1);
+                return new PasteChartsCommand(
+                    sheet.Id,
+                    sheet.Id,
+                    new GridRange(anchor, anchor),
+                    new CellAddress(sheet.Id, 5, 5),
+                    [],
+                    transpose: false);
+            },
+
+            // R92: DrawingShape/TextBox analogues of PastePicturesCommand. Each runs its
+            // <Kind>CommandGuards.RejectIfEditObjectsBlocked on the destination sheet before any
+            // geometry math, so an empty carried-object list still exercises the guard.
+            ["PasteShapesCommand"] = (wb, sheet) =>
+            {
+                var anchor = new CellAddress(sheet.Id, 1, 1);
+                return new PasteShapesCommand(
+                    sheet.Id,
+                    new GridRange(anchor, anchor),
+                    new CellAddress(sheet.Id, 5, 5),
+                    [],
+                    transpose: false);
+            },
+
+            ["PasteTextBoxesCommand"] = (wb, sheet) =>
+            {
+                var anchor = new CellAddress(sheet.Id, 1, 1);
+                return new PasteTextBoxesCommand(
+                    sheet.Id,
+                    new GridRange(anchor, anchor),
+                    new CellAddress(sheet.Id, 5, 5),
+                    [],
+                    transpose: false);
+            },
+
+            // R92: removing a chart series is governed by the EditObjects protection bit
+            // (ChartCommandGuards.RejectIfEditObjectsBlocked runs before the chart lookup).
+            ["RemoveChartSeriesCommand"] = (wb, sheet) =>
+                new RemoveChartSeriesCommand(sheet.Id, Guid.NewGuid(), seriesIndex: 0),
+
             // ---- Goal Seek ----
             ["GoalSeekCommand"] = (wb, sheet) =>
                 new GoalSeekCommand(new CellAddress(sheet.Id, 1, 1), 42.0),
@@ -656,6 +701,16 @@ public class ProtectionGuardCoverageTests
                     new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
                     new CellAddress(sheet.Id, 1, 2),
                     SparklineKind.Line),
+
+            // R92: the Select-Data dialog's Hidden-and-Empty-Cells setting is a chart mutation and is
+            // governed by the EditObjects protection bit (ChartCommandGuards.RejectIfEditObjectsBlocked
+            // runs before the chart lookup, so no seeded chart is required here).
+            ["ConfigureChartHiddenEmptyCellsCommand"] = (wb, sheet) =>
+                new ConfigureChartHiddenEmptyCellsCommand(
+                    sheet.Id,
+                    Guid.NewGuid(),
+                    ChartBlankDisplayMode.Gap,
+                    showDataInHiddenRowsAndColumns: false),
 
             // R91: duplicating a drawing object is governed by the EditObjects protection bit
             // (DrawingShapeCommandGuards/ChartCommandGuards.RejectIfEditObjectsBlocked). The command

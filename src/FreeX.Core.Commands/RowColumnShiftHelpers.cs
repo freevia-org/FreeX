@@ -103,4 +103,113 @@ internal static partial class RowColumnShiftHelpers
             new CellAddress(range.Start.Sheet, range.Start.Row, newStartCol),
             new CellAddress(range.End.Sheet, range.End.Row, newEndCol));
     }
+
+    // ── Vacated-band format inheritance for whole-row/whole-column insert (R92-render-cellstyle-
+    // inheritance-5-2) ────────────────────────────────────────────────────────────────────────
+    // Excel's Insert Sheet Rows/Columns default ("Insert Options" smart-tag) copies the formatting
+    // of the row above (row insert) / column to the left (column insert) into every new blank cell
+    // of the inserted band, instead of leaving it at General/default formatting. This mirrors the
+    // identical feature InsertDeleteCellsCommand already implements for the band-scoped Insert
+    // Cells command (InheritVacatedFormatShiftRight/Down there) — that fix was never carried over
+    // to the far more commonly used whole-row/whole-column insert commands.
+    //
+    // Must run AFTER ShiftAddressBearingRowsUp/ColumnsUp (which calls ApplyShiftedStyleOnlyEntries,
+    // clearing and rebuilding the entire style-only store from the pre-insert snapshot) — otherwise
+    // the newly-inherited entries this creates would be wiped out by that rebuild. The neighbor row/
+    // column is never touched by the insert itself, so it is safe to read directly off the sheet at
+    // any point after the shift.
+
+    /// <summary>
+    /// For each newly-inserted row in [<paramref name="beforeRow"/>..<paramref name="beforeRow"/>+
+    /// <paramref name="count"/>-1], applies the effective StyleId of the row immediately above
+    /// (<paramref name="beforeRow"/>-1) to every blank cell, column-by-column — a no-op if the
+    /// insert is at the top of the sheet (no row above) or a given column has no formatting above.
+    /// </summary>
+    internal static void InheritVacatedRowFormatFromAbove(Sheet sheet, uint beforeRow, uint count)
+    {
+        if (beforeRow <= 1)
+            return;
+
+        var neighborRow = beforeRow - 1;
+        HashSet<uint>? columns = null;
+        foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+        {
+            if (row != neighborRow || cell.StyleId == StyleId.Default)
+                continue;
+            (columns ??= []).Add(col);
+        }
+
+        if (sheet.HasStyleOnlyCells)
+        {
+            foreach (var (key, _) in sheet.GetStyleOnlyEntries())
+            {
+                if (key.Row == neighborRow)
+                    (columns ??= []).Add(key.Col);
+            }
+        }
+
+        if (columns is null)
+            return;
+
+        foreach (var col in columns)
+        {
+            if (GetEffectiveStyleIdForFormatInherit(sheet, neighborRow, col) is not { } style)
+                continue;
+
+            for (var row = beforeRow; row < beforeRow + count; row++)
+                sheet.SetStyleOnly(row, col, style);
+        }
+    }
+
+    /// <summary>Column-insert analogue of <see cref="InheritVacatedRowFormatFromAbove"/>: inherits from the column to the left.</summary>
+    internal static void InheritVacatedColumnFormatFromLeft(Sheet sheet, uint beforeCol, uint count)
+    {
+        if (beforeCol <= 1)
+            return;
+
+        var neighborCol = beforeCol - 1;
+        HashSet<uint>? rows = null;
+        foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+        {
+            if (col != neighborCol || cell.StyleId == StyleId.Default)
+                continue;
+            (rows ??= []).Add(row);
+        }
+
+        if (sheet.HasStyleOnlyCells)
+        {
+            foreach (var (key, _) in sheet.GetStyleOnlyEntries())
+            {
+                if (key.Col == neighborCol)
+                    (rows ??= []).Add(key.Row);
+            }
+        }
+
+        if (rows is null)
+            return;
+
+        foreach (var row in rows)
+        {
+            if (GetEffectiveStyleIdForFormatInherit(sheet, row, neighborCol) is not { } style)
+                continue;
+
+            for (var col = beforeCol; col < beforeCol + count; col++)
+                sheet.SetStyleOnly(row, col, style);
+        }
+    }
+
+    /// <summary>
+    /// Returns the effective StyleId of a cell for format-inheritance purposes: its live
+    /// Cell.StyleId if occupied (unless that is the default style), else its style-only override
+    /// if any, else null (fully default — nothing to propagate). Mirrors
+    /// InsertDeleteCellsCommand.GetEffectiveStyleId (the band-scoped Insert Cells equivalent).
+    /// </summary>
+    private static StyleId? GetEffectiveStyleIdForFormatInherit(Sheet sheet, uint row, uint col)
+    {
+        var cell = sheet.GetCell(row, col);
+        if (cell is not null)
+            return cell.StyleId == StyleId.Default ? null : cell.StyleId;
+
+        return sheet.GetStyleOnly(row, col);
+    }
 }

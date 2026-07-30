@@ -53,6 +53,11 @@ public sealed class AppOptions : INormalizableApplicationOptions, IStatusBarOpti
     public bool AutoCalculate { get; set; } = true;
     public bool UseR1C1ReferenceStyle { get; set; }
 
+    // Formulas — parity with Excel's "Use GetPivotData functions for PivotTable references"
+    // (File > Options > Formulas). When off, clicking a pivot cell while building a formula
+    // inserts a plain A1-style reference instead of a GETPIVOTDATA(...) call.
+    public bool GenerateGetPivotData { get; set; } = true;
+
     // Formulas — error checking. When off, the green error-checking triangles and the
     // background error scan are suppressed (parity with Excel's "Enable background error checking").
     public bool ErrorCheckingEnabled { get; set; } = true;

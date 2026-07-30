@@ -139,7 +139,9 @@ public partial class MainWindow
             request => ApplySelectDataSourceRangeSelection(dialog, request),
             sheetId: _currentSheetId,
             resolveSheetId: ResolveSheetIdByName,
-            switchRowColumn: chart.SeriesInRows)
+            switchRowColumn: chart.SeriesInRows,
+            blankDisplayMode: chart.BlankDisplayMode,
+            showDataInHiddenRowsAndColumns: chart.ShowDataInHiddenRowsAndColumns)
         {
             Owner = this
         };
@@ -164,6 +166,35 @@ public partial class MainWindow
                     seriesInRows: dialog.Result.SwitchRowColumn),
                 command.Label))
             return;
+
+        // R92-app-chart-data-edit-5-1: replay each Remove Series click, in the SAME order the user
+        // clicked them, as a real RemoveChartSeriesCommand -- each recorded index is relative to the
+        // dialog's OWN series list at click time (see SelectDataSourceDialog.Actions.cs's
+        // RemoveSeriesButton_Click), which by the time OK is clicked matches the range/orientation
+        // just applied above, so replaying in click order against the now-updated chart reproduces
+        // the same end column set the dialog showed. Each call is its own (independently undoable)
+        // command; a single removal failing (e.g. "must keep at least one series") does not block
+        // applying the rest.
+        if (dialog.Result.PendingSeriesRemovals is { Count: > 0 } pendingRemovals)
+        {
+            foreach (var seriesIndex in pendingRemovals)
+                TryExecuteCommand(new RemoveChartSeriesCommand(_currentSheetId, chart.Id, seriesIndex), command.Label);
+        }
+
+        // R92-app-chart-data-edit-5-3: only issue a Hidden/Empty Cell Settings undo step when the
+        // user actually changed something in that sub-dialog -- it's always seeded from the chart's
+        // live values, so most OK clicks leave both fields unchanged.
+        if (dialog.Result.BlankDisplayMode != chart.BlankDisplayMode ||
+            dialog.Result.ShowDataInHiddenRowsAndColumns != chart.ShowDataInHiddenRowsAndColumns)
+        {
+            TryExecuteCommand(
+                new ConfigureChartHiddenEmptyCellsCommand(
+                    _currentSheetId,
+                    chart.Id,
+                    dialog.Result.BlankDisplayMode,
+                    dialog.Result.ShowDataInHiddenRowsAndColumns),
+                command.Label);
+        }
 
         UpdateViewport();
     }

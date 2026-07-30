@@ -139,6 +139,14 @@ public static class PrintPreviewInstructionBuilder
     /// <summary>White page background painted under every page.</summary>
     public static readonly PresentationRgb PageBackground = new(255, 255, 255);
 
+    /// <summary>
+    /// Neutral gray bounded-box fill this canvas-only preview paints for a picture in place of the
+    /// actual raster image (this preview has no image paint primitive -- see the "9. Pictures" build
+    /// step). Print/XPS and PDF export paint the real image; only this in-app preview canvas falls
+    /// back to a placeholder, the same scoped gap the chart layer above already has here.
+    /// </summary>
+    public static readonly PresentationRgb PicturePlaceholderFill = new(225, 225, 225);
+
     /// <summary>Font used for heading labels and header/footer bands, matching the page-content builder.</summary>
     public static readonly PageTextFont BandFont = new(
         PageContentRenderModelBuilder.PrintFontFamily,
@@ -228,7 +236,19 @@ public static class PrintPreviewInstructionBuilder
             }
         }
 
-        // 9. Text boxes over the grid/cell text and chart layer.
+        // 9. Pictures over the grid/cell text and chart layer, below text-box annotations.
+        // R92-consumer-wiring-sweep-1: this preview canvas has no image paint primitive (only
+        // rectangle/line/text -- the same reason a chart above only ever gets a placeholder box, never
+        // an actual rendered chart), so a picture is drawn the same bounded-placeholder way rather than
+        // being silently absent as it was before this pass.
+        foreach (var picture in layout.Pictures)
+        {
+            instructions.Add(PrintPreviewPaintInstruction.Rectangle(
+                picture.Bounds,
+                PicturePlaceholderFill));
+        }
+
+        // 10. Text boxes over the grid/cell text and chart layer.
         foreach (var textBox in layout.TextBoxes)
         {
             instructions.Add(PrintPreviewPaintInstruction.Rectangle(
@@ -249,7 +269,7 @@ public static class PrintPreviewInstructionBuilder
                     PageTextAlignment.Left));
         }
 
-        // 10. Header / footer bands.
+        // 11. Header / footer bands.
         foreach (var run in layout.HeaderRuns)
             instructions.Add(PrintPreviewPaintInstruction.TextRun(
                 run.TextOrigin, run.Bounds.Width, run.Text, BandFont, run.Alignment));

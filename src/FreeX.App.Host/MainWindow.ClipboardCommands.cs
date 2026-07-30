@@ -247,12 +247,12 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// R91-io-clipboard-image-formats-5-1: captures a selected chart/shape into
+    /// R91-io-clipboard-image-formats-5-1 (Chart/Shape), completed for Picture/TextBox by
+    /// R92-consumer-wiring-sweep-2: captures a selected chart/shape/picture/text box into
     /// <see cref="_internalObjectClipboard"/> instead of the cell-range clipboard, when
     /// SheetGrid currently has an object (not a plain cell) selected. Returns false (leaving both
-    /// clipboards untouched) for any other selection kind -- Picture/TextBox included, since those
-    /// aren't wired to <see cref="DuplicateDrawingObjectCommand"/> yet (see round summary) and must
-    /// keep falling through to the pre-existing cell-range copy behavior unchanged.
+    /// clipboards untouched) for any other selection kind, which keeps falling through to the
+    /// pre-existing cell-range copy behavior unchanged.
     /// </summary>
     private bool TryCopySelectedDrawingObject()
     {
@@ -260,6 +260,8 @@ public partial class MainWindow
         {
             FreeX.App.UI.ObjectKind.Chart => SelectionPaneObjectKind.Chart,
             FreeX.App.UI.ObjectKind.Shape => SelectionPaneObjectKind.Shape,
+            FreeX.App.UI.ObjectKind.Picture => SelectionPaneObjectKind.Picture,
+            FreeX.App.UI.ObjectKind.TextBox => SelectionPaneObjectKind.TextBox,
             _ => null
         };
         if (kind is null || SheetGrid.SelectedObjectId == Guid.Empty)
@@ -311,6 +313,20 @@ public partial class MainWindow
                     .Find(shape => shape.Id == newObjectId)?.Anchor
                     ?? new CellAddress(destinationSheetId, 1, 1);
                 SelectInsertedDrawingObject(newObjectId, FreeX.App.UI.ObjectKind.Shape, newAnchor);
+            }
+            else if (objectClip.Kind == SelectionPaneObjectKind.Picture)
+            {
+                var newAnchor = _workbook.GetSheet(destinationSheetId)?.Pictures
+                    .Find(picture => picture.Id == newObjectId)?.Anchor
+                    ?? new CellAddress(destinationSheetId, 1, 1);
+                SelectInsertedDrawingObject(newObjectId, FreeX.App.UI.ObjectKind.Picture, newAnchor);
+            }
+            else if (objectClip.Kind == SelectionPaneObjectKind.TextBox)
+            {
+                var newAnchor = _workbook.GetSheet(destinationSheetId)?.TextBoxes
+                    .Find(textBox => textBox.Id == newObjectId)?.Anchor
+                    ?? new CellAddress(destinationSheetId, 1, 1);
+                SelectInsertedDrawingObject(newObjectId, FreeX.App.UI.ObjectKind.TextBox, newAnchor);
             }
         }
 

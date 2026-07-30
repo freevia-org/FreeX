@@ -3386,6 +3386,9 @@
   <data name="MainLoc_ReplacedCells" xml:space="preserve">
     <value>Replaced {0} cells</value>
   </data>
+  <data name="MainLoc_CellsCount" xml:space="preserve">
+    <value>{0} cells</value>
+  </data>
   <data name="MainLoc_ReplacedRangeOfCount" xml:space="preserve">
     <value>Replaced {0} ({1} of {2})</value>
   </data>
@@ -7812,6 +7815,21 @@ Changing cell value: {2}</value>
   </data>
   <data name="SelectDataSource_HiddenEmptyCellsMessage" xml:space="preserve">
     <value>Hidden rows and columns are not plotted. Empty cells are shown as gaps.</value>
+  </data>
+  <data name="SelectDataSource_HiddenEmptyCells_ShowEmptyCellsAsLabel" xml:space="preserve">
+    <value>Show empty cells as</value>
+  </data>
+  <data name="SelectDataSource_HiddenEmptyCells_GapsOption" xml:space="preserve">
+    <value>_Gaps</value>
+  </data>
+  <data name="SelectDataSource_HiddenEmptyCells_ZeroOption" xml:space="preserve">
+    <value>_Zero</value>
+  </data>
+  <data name="SelectDataSource_HiddenEmptyCells_ConnectOption" xml:space="preserve">
+    <value>_Connect data points with line</value>
+  </data>
+  <data name="SelectDataSource_HiddenEmptyCells_ShowHiddenDataOption" xml:space="preserve">
+    <value>Show _data in hidden rows and columns</value>
   </data>
   <data name="Protection_WorkbookUnprotectedMessage" xml:space="preserve">
     <value>Workbook structure is now unprotected.</value>

@@ -17,7 +17,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class MainWindowFormulaBarSyncTests
 {
-    private sealed class MainWindowHarness : IDisposable
+    internal sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
         private readonly ICommandBus _commandBus;
@@ -324,6 +324,10 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         public Sheet AddSheet(string name) => Workbook.AddSheet(name);
 
+        /// <summary>The workbook's first sheet, for tests that need direct model access (e.g. to
+        /// register a <see cref="PivotTableModel"/>) beyond what the cell/formula helpers expose.</summary>
+        public Sheet FirstSheet => Workbook.Sheets[0];
+
         public void SelectFormulaSheetTab(SheetId sheetId, ModifierKeys modifiers)
         {
             ((bool)_tryHandleFormulaSheetTabClick.Invoke(_window, [sheetId, modifiers])!).Should().BeTrue();
@@ -548,7 +552,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
             PumpDispatcher();
         }
 
-        public static MainWindowHarness Create()
+        public static MainWindowHarness Create(FreeXOptions? options = null)
         {
             var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");
@@ -564,7 +568,8 @@ public sealed partial class MainWindowFormulaBarSyncTests
                 [],
                 workbookRef,
                 workbook,
-                NullUserMessageService.Instance)
+                NullUserMessageService.Instance,
+                options: options)
             {
                 WindowState = WindowState.Normal,
                 Width = 1280,

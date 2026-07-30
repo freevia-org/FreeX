@@ -38,6 +38,8 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     // Down — tracked separately from _chartSnapshot above, which only tracks DataRange.
     private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
+    // R92-commands-undo-structural-format-5-2: see RebandTablesAfterColumnInsert.
+    private List<(CellAddress Address, Cell? OldCell)>? _tableRebandSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
     private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
@@ -144,6 +146,12 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftChartPositionColumnsUp(sheet, _beforeCol, _count);
         RowColumnShiftHelpers.ShiftAddressBearingColumnsUp(ctx.Workbook, sheet, _addressStateSnapshot, _beforeCol, _count);
 
+        // R92-render-cellstyle-inheritance-5-2: Excel's Insert Sheet Columns default ("Insert
+        // Options") inherits the format of the column to the left into the newly-vacated band.
+        // Must run after the ShiftAddressBearingColumnsUp call above, which rebuilds the whole
+        // style-only store from the pre-insert snapshot and would otherwise wipe these new entries.
+        RowColumnShiftHelpers.InheritVacatedColumnFormatFromLeft(sheet, _beforeCol, _count);
+
         _mergeSnapshot = sheet.MergedRegions.ToList();
         sheet.ReplaceMergedRegions(RowColumnShiftHelpers.InsertColumnsIntoMergedRegions(
             sheet.MergedRegions,
@@ -161,11 +169,66 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         _dvFormulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteRuleFormulas(sheet, new InsertColsOp(sheet.Name, _beforeCol, _count), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
+        // R92-commands-undo-structural-format-5-2: mirror InsertRowsCommand's RebandTable call
+        // (R90-io-table-style-banding-5-3) on the column axis. MoveCellsForInsert above relocates
+        // every shifted cell (and its baked-in StyleId/fill) intact to its new column -- it never
+        // repaints banding -- so a column-banded structured table's alternating stripe fill is left
+        // at its PRE-insert column position for every column after the insert point. Excel's table
+        // banding is purely positional on both axes and reflows immediately after any structural
+        // edit.
+        _tableRebandSnapshot = RebandTablesAfterColumnInsert(ctx.Workbook, sheet);
+
         return new CommandOutcome(
             true,
             AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
                 RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _formulaSnapshot),
                 _formulaSnapshot));
+    }
+
+    // R92-commands-undo-structural-format-5-2: re-flows every column-banded structured table's
+    // stripe fill after the physical column shift above, matching InsertRowsCommand's row-axis
+    // RebandTable call (R90) and DeleteColumnsCommand's RebandTablesAfterColumnDelete (below) for
+    // axis symmetry. Only a table whose insert point fell strictly inside it (Start.Col unchanged,
+    // End.Col pushed right) has its internal column parity disturbed -- a table that shifted right
+    // as a whole (its Start.Col moved too, because the insert landed at or before its first column)
+    // or one entirely unaffected keeps its pre-existing internal offsets and needs no repaint.
+    private List<(CellAddress Address, Cell? OldCell)> RebandTablesAfterColumnInsert(Workbook workbook, Sheet sheet)
+    {
+        var captured = new List<(CellAddress Address, Cell? OldCell)>();
+        if (_addressStateSnapshot is null)
+            return captured;
+
+        foreach (var resizedTable in sheet.StructuredTables)
+        {
+            var previousTable = _addressStateSnapshot.StructuredTables.FirstOrDefault(t => t.Id == resizedTable.Id);
+            if (previousTable is null ||
+                previousTable.Range.Start.Col != resizedTable.Range.Start.Col ||
+                resizedTable.Range.End.Col <= previousTable.Range.End.Col)
+                continue;
+
+            var (firstDataRow, lastDataRow) = StructuredTableEditEffects.GetDataBodyRowBounds(resizedTable);
+            if (lastDataRow >= firstDataRow)
+            {
+                // Capture the pre-reband state of every data-body cell before RebandTable below
+                // repaints its stripe fill onto them. MoveCellsForInsert above only relocates
+                // previously-OCCUPIED cells (already captured/restored via _movedSnapshot) -- every
+                // cell in the newly-inserted column band is brand new (no prior existence anywhere),
+                // so without this a cell RebandTable materializes purely to hold a repainted stripe
+                // would have no undo coverage at all and would survive undo as a permanent leftover.
+                for (var row = firstDataRow; row <= lastDataRow; row++)
+                {
+                    for (var col = resizedTable.Range.Start.Col; col <= resizedTable.Range.End.Col; col++)
+                    {
+                        var address = new CellAddress(sheet.Id, row, col);
+                        captured.Add((address, sheet.GetCell(address)?.Clone()));
+                    }
+                }
+            }
+
+            StructuredTableStyleService.RebandTable(workbook, sheet, resizedTable);
+        }
+
+        return captured;
     }
 
     // R69-calc-dependency-insert-6-1: mirror InsertRowsCommand's
@@ -197,6 +260,24 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     {
         if (_movedSnapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
+
+        // R92-commands-undo-structural-format-5-2: undo the reband repaint FIRST -- it was the very
+        // last effect Apply performed (after the physical column move below). Every address here
+        // falls strictly inside the newly-inserted column band, which the moved-cell restore below
+        // is about to repopulate with the original pre-insert content (moved cells always restore
+        // back to their pre-shift address, i.e. this same band's neighbors) -- undoing the fill
+        // afterward would instead clobber that just-restored data. A cell that already held content
+        // is also captured here but is harmlessly re-overwritten by the general restore.
+        if (_tableRebandSnapshot is not null)
+        {
+            foreach (var (address, oldCell) in _tableRebandSnapshot)
+            {
+                if (oldCell is null)
+                    sheet.ClearCell(address);
+                else
+                    sheet.SetCell(address, oldCell);
+            }
+        }
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
@@ -387,6 +468,8 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     // Down — tracked separately from _chartSnapshot above, which only tracks DataRange.
     private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
+    // R92-commands-undo-structural-format-5-2: see RebandTablesAfterColumnDelete.
+    private List<(CellAddress Address, Cell? OldCell)>? _tableRebandSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
     private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
@@ -512,11 +595,67 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         _dvFormulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteRuleFormulas(sheet, new DeleteColsOp(sheet.Name, _startCol, _count), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
+        // R92-commands-undo-structural-format-5-2: mirror DeleteRowsCommand's
+        // RebandTablesAfterRowDelete (R92-commands-undo-structural-format-5-1) on the column axis.
+        // MoveCellsForDelete above relocates every shifted cell (and its baked-in StyleId/fill)
+        // intact to its new column -- it never repaints banding -- so a column-banded structured
+        // table's alternating stripe fill is left at its PRE-delete column position for every
+        // column after the deleted band. Excel's table banding is purely positional on both axes
+        // and reflows immediately after any structural edit.
+        _tableRebandSnapshot = RebandTablesAfterColumnDelete(ctx.Workbook, sheet);
+
         return new CommandOutcome(
             true,
             AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
                 RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _formulaSnapshot),
                 _formulaSnapshot));
+    }
+
+    // R92-commands-undo-structural-format-5-2: re-flows every column-banded structured table's
+    // stripe fill after the physical column shift above, matching InsertColumnsCommand's
+    // RebandTablesAfterColumnInsert (above) and DeleteRowsCommand's row-axis RebandTablesAfterRowDelete
+    // (R92-commands-undo-structural-format-5-1) for axis symmetry. Only a table whose OWN columns
+    // were removed by this delete (Start.Col unchanged, End.Col pulled left) has its internal column
+    // parity disturbed -- a table that shifted left as a whole (its Start.Col moved too, because the
+    // deleted band sat entirely before it) or one entirely unaffected keeps its pre-existing internal
+    // offsets and needs no repaint.
+    private List<(CellAddress Address, Cell? OldCell)> RebandTablesAfterColumnDelete(Workbook workbook, Sheet sheet)
+    {
+        var captured = new List<(CellAddress Address, Cell? OldCell)>();
+        if (_addressStateSnapshot is null)
+            return captured;
+
+        foreach (var resizedTable in sheet.StructuredTables)
+        {
+            var previousTable = _addressStateSnapshot.StructuredTables.FirstOrDefault(t => t.Id == resizedTable.Id);
+            if (previousTable is null ||
+                previousTable.Range.Start.Col != resizedTable.Range.Start.Col ||
+                resizedTable.Range.End.Col >= previousTable.Range.End.Col)
+                continue;
+
+            var (firstDataRow, lastDataRow) = StructuredTableEditEffects.GetDataBodyRowBounds(resizedTable);
+            if (lastDataRow >= firstDataRow)
+            {
+                // Capture the pre-reband state of every data-body cell before RebandTable below
+                // repaints its stripe fill onto them. MoveCellsForDelete above relocates only
+                // previously-OCCUPIED cells (already captured/restored via _shiftedSnapshot) -- a
+                // cell that was blank both before and after the shift has no other undo coverage,
+                // so without this a blank cell RebandTable materializes purely to hold a repainted
+                // stripe would survive undo as a permanent leftover.
+                for (var row = firstDataRow; row <= lastDataRow; row++)
+                {
+                    for (var col = resizedTable.Range.Start.Col; col <= resizedTable.Range.End.Col; col++)
+                    {
+                        var address = new CellAddress(sheet.Id, row, col);
+                        captured.Add((address, sheet.GetCell(address)?.Clone()));
+                    }
+                }
+            }
+
+            StructuredTableStyleService.RebandTable(workbook, sheet, resizedTable);
+        }
+
+        return captured;
     }
 
     // R69-calc-dependency-insert-6-1: mirror InsertRowsCommand's
@@ -548,6 +687,22 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     {
         if (_deletedSnapshot is null || _shiftedSnapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
+
+        // R92-commands-undo-structural-format-5-2: undo the reband repaint FIRST -- it was the very
+        // last effect Apply performed. A cell RebandTable materialized purely to hold a repainted
+        // stripe has no other undo coverage (see RebandTablesAfterColumnDelete); a cell that already
+        // held content is also captured here but is harmlessly re-overwritten (with the same value)
+        // by the general shifted/deleted-cell restore below.
+        if (_tableRebandSnapshot is not null)
+        {
+            foreach (var (address, oldCell) in _tableRebandSnapshot)
+            {
+                if (oldCell is null)
+                    sheet.ClearCell(address);
+                else
+                    sheet.SetCell(address, oldCell);
+            }
+        }
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);

@@ -20,7 +20,7 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly StyleDiff _diff;
-    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, StyleOnlySource? OldStyleOnlySource)>? _snapshot;
     private List<(CellAddress Address, IReadOnlyList<CellTextRun> OldRuns)>? _richTextSnapshot;
 
     private const int BytesPerCell = 200;
@@ -61,15 +61,26 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
         // style-only entries outside the clamp zone are still processed below.
         var styleOnlyCreateZone = StyleOnlyCreateZone(sheet, _range);
 
+        // R92-render-cellstyle-inheritance-5-3: classify THIS command as a whole-row format op
+        // (unbounded columns, bounded rows -- e.g. a row-header selection), a whole-column format
+        // op (unbounded rows, bounded columns -- e.g. a column-header selection), or neither (a
+        // bounded cell-range selection, or a fully-unbounded select-all) so the style-only passes
+        // below can enforce Excel's fixed row-beats-column precedence at a row/column intersection
+        // instead of the previous "whichever command ran last wins" behavior.
+        var commandSource = DetermineStyleOnlySource(_range);
+
         // --- Pass 1: content cells anywhere in the selection ---
         // Iterate the occupied-cell dictionary (O(cellCount), not O(rangeSize)).
+        // A cell that already has real content always carries its own cell-level xf (the highest
+        // rung of Excel's cell > row > column precedence chain), so row/column provenance never
+        // applies here -- the diff always merges directly onto the cell's existing StyleId.
         foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
         {
             if (row < _range.Start.Row || row > _range.End.Row) continue;
             if (col < _range.Start.Col || col > _range.End.Col) continue;
 
             var addr = new CellAddress(_sheetId, row, col);
-            _snapshot.Add((addr, cell.Clone(), null));
+            _snapshot.Add((addr, cell.Clone(), null, null));
             cell.StyleId = StyleDiffStyleCache.GetOrRegister(ctx.Workbook, _diff, cell.StyleId, styleCache);
 
             // Whole-cell font-formatting commands (Bold/Italic/Underline/Strikethrough/Font Name/
@@ -98,16 +109,35 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
                     if (sheet.GetCell(r, c) is not null)
                         continue;
 
-                    var addr = new CellAddress(_sheetId, r, c);
                     var oldStyleOnly = sheet.GetStyleOnly(r, c);
-                    _snapshot.Add((addr, null, oldStyleOnly));
+                    var oldSource = sheet.GetStyleOnlySource(r, c);
+
+                    // R92-render-cellstyle-inheritance-5-3: a column-format op must never touch a
+                    // cell whose style-only entry is already row-sourced -- the row's format always
+                    // wins at that intersection, regardless of which op ran more recently.
+                    if (commandSource == StyleOnlySource.Column && oldSource == StyleOnlySource.Row)
+                        continue;
+
+                    var addr = new CellAddress(_sheetId, r, c);
+                    _snapshot.Add((addr, null, oldStyleOnly, oldSource));
+
+                    // A row-format op overtaking a column-sourced entry REPLACES it outright
+                    // (matching Excel: the row's own format is what renders, not a merge of the
+                    // two) rather than layering its diff on top of the column-derived style.
+                    var baseStyleId = commandSource == StyleOnlySource.Row && oldSource == StyleOnlySource.Column
+                        ? StyleId.Default
+                        : oldStyleOnly ?? StyleId.Default;
 
                     var newStyleId = StyleDiffStyleCache.GetOrRegister(
                         ctx.Workbook,
                         _diff,
-                        oldStyleOnly ?? StyleId.Default,
+                        baseStyleId,
                         styleCache);
                     sheet.SetStyleOnly(r, c, newStyleId);
+                    if (commandSource.HasValue)
+                        sheet.SetStyleOnlySource(r, c, commandSource.Value);
+                    else
+                        sheet.ClearStyleOnlySource(r, c);
                 }
             }
         }
@@ -137,15 +167,29 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
             if (sheet.GetCell(row, col) is not null)
                 continue;
 
+            var existingSource = sheet.GetStyleOnlySource(row, col);
+
+            // R92-render-cellstyle-inheritance-5-3: same row-beats-column precedence as Pass 2.
+            if (commandSource == StyleOnlySource.Column && existingSource == StyleOnlySource.Row)
+                continue;
+
             var addr = new CellAddress(_sheetId, row, col);
-            _snapshot.Add((addr, null, existingStyleId));
+            _snapshot.Add((addr, null, existingStyleId, existingSource));
+
+            var baseStyleId = commandSource == StyleOnlySource.Row && existingSource == StyleOnlySource.Column
+                ? StyleId.Default
+                : existingStyleId;
 
             var newStyleId = StyleDiffStyleCache.GetOrRegister(
                 ctx.Workbook,
                 _diff,
-                existingStyleId,
+                baseStyleId,
                 styleCache);
             sheet.SetStyleOnly(row, col, newStyleId);
+            if (commandSource.HasValue)
+                sheet.SetStyleOnlySource(row, col, commandSource.Value);
+            else
+                sheet.ClearStyleOnlySource(row, col);
         }
 
         // Report the affected cells (mirroring PropagateCalculatedColumnCommand's use of its own
@@ -160,14 +204,25 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
     {
         if (_snapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (addr, oldCell, oldStyleOnly) in _snapshot)
+        foreach (var (addr, oldCell, oldStyleOnly, oldStyleOnlySource) in _snapshot)
         {
             if (oldCell is null)
             {
                 if (oldStyleOnly.HasValue)
+                {
                     sheet.SetStyleOnly(addr.Row, addr.Col, oldStyleOnly.Value);
+                    // R92-render-cellstyle-inheritance-5-3: restore the pre-existing entry's
+                    // provenance tag too, so undoing this command doesn't leave a stale Row/Column
+                    // tag (or lose one) at this address.
+                    if (oldStyleOnlySource.HasValue)
+                        sheet.SetStyleOnlySource(addr.Row, addr.Col, oldStyleOnlySource.Value);
+                    else
+                        sheet.ClearStyleOnlySource(addr.Row, addr.Col);
+                }
                 else
+                {
                     sheet.ClearStyleOnly(addr.Row, addr.Col);
+                }
             }
             else
             {
@@ -220,6 +275,27 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
             });
         }
         return result;
+    }
+
+    /// <summary>
+    /// Classifies <paramref name="range"/> as a whole-row format op, a whole-column format op, or
+    /// neither, for the row-beats-column style-only precedence enforced in <see cref="Apply"/>
+    /// (R92-render-cellstyle-inheritance-5-3). A whole-row selection (e.g. a row-header click)
+    /// spans every column but a bounded set of rows; a whole-column selection (e.g. a
+    /// column-header click) spans every row but a bounded set of columns. A bounded cell-range
+    /// selection, or a fully-unbounded select-all (both dimensions unbounded), is neither -- both
+    /// fall back to the pre-existing plain merge-on-top behavior.
+    /// </summary>
+    private static StyleOnlySource? DetermineStyleOnlySource(GridRange range)
+    {
+        var isUnboundedRows = range.End.Row >= CellAddress.MaxRow;
+        var isUnboundedCols = range.End.Col >= CellAddress.MaxCol;
+
+        if (isUnboundedRows && !isUnboundedCols)
+            return StyleOnlySource.Column; // every row, bounded columns -- a column-header selection
+        if (isUnboundedCols && !isUnboundedRows)
+            return StyleOnlySource.Row; // every column, bounded rows -- a row-header selection
+        return null;
     }
 
     /// <summary>
