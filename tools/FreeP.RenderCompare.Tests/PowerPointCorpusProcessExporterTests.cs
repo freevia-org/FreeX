@@ -45,6 +45,16 @@ public sealed class PowerPointCorpusProcessExporterTests
     }
 
     [Fact]
+    public void SelectOwnedPowerPointProcessIds_excludes_preexisting_user_processes()
+    {
+        PowerPointCorpusProcessExporter.SelectOwnedPowerPointProcessIds(
+                [101, 202, 303],
+                new HashSet<int> { 101, 303 })
+            .Should()
+            .Equal(202);
+    }
+
+    [Fact]
     public void EnsureOutputDirectory_creates_missing_directory_for_direct_exports()
     {
         var root = Path.Combine(Path.GetTempPath(), "FreeP.RenderCompare.Tests", Guid.NewGuid().ToString("N"));

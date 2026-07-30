@@ -81,9 +81,7 @@ internal static class PowerPointInterop
         try
         {
             app = CreatePowerPointApplication();
-            ownedPids = GetPowerPointProcessIds()
-                .Where(pid => !beforePids.Contains(pid))
-                .ToHashSet();
+            ownedPids = WaitForNewPowerPointProcessIds(beforePids);
 
             Console.WriteLine("  PowerPoint started.");
 
@@ -165,9 +163,7 @@ internal static class PowerPointInterop
         try
         {
             app = CreatePowerPointApplication();
-            ownedPids = GetPowerPointProcessIds()
-                .Where(pid => !beforePids.Contains(pid))
-                .ToHashSet();
+            ownedPids = WaitForNewPowerPointProcessIds(beforePids);
 
             presentation = OpenPresentation(app, pptxPath);
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? ".");
@@ -342,6 +338,27 @@ internal static class PowerPointInterop
         Process.GetProcessesByName(PowerPointProcessName)
                .Select(p => p.Id)
                .ToHashSet();
+
+    private static HashSet<int> WaitForNewPowerPointProcessIds(
+        IReadOnlySet<int> beforePids,
+        int timeoutMs = 5_000)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (Environment.TickCount64 < deadline)
+        {
+            var newPids = GetPowerPointProcessIds()
+                .Where(pid => !beforePids.Contains(pid))
+                .ToHashSet();
+            if (newPids.Count > 0)
+                return newPids;
+
+            Thread.Sleep(100);
+        }
+
+        return GetPowerPointProcessIds()
+            .Where(pid => !beforePids.Contains(pid))
+            .ToHashSet();
+    }
 
     private static void WaitForPowerPointToExit(HashSet<int> ownedPids, int timeoutMs)
     {

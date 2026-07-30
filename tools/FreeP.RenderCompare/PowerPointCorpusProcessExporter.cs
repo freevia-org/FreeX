@@ -12,6 +12,7 @@ namespace FreeP.RenderCompare;
 internal static class PowerPointCorpusProcessExporter
 {
     internal static readonly TimeSpan DefaultDeckTimeout = TimeSpan.FromMinutes(3);
+    private const string PowerPointProcessName = "POWERPNT";
 
     internal static PowerPointExportResult Export(
         string pptxPath,
@@ -24,6 +25,7 @@ internal static class PowerPointCorpusProcessExporter
         var resultPath = Path.Combine(
             outDir,
             $".freep-powerpoint-export-{Guid.NewGuid():N}.json");
+        var beforePowerPointPids = GetPowerPointProcessIds();
 
         try
         {
@@ -52,6 +54,11 @@ internal static class PowerPointCorpusProcessExporter
                 {
                     Console.Error.WriteLine($"  Failed to stop timed-out PowerPoint deck worker: {ex.Message}");
                 }
+
+                // COM can launch POWERPNT outside the worker's process tree.
+                // Reap only instances created after this deck began so a timed-out
+                // deck cannot leak an automation-owned PowerPoint into the next one.
+                KillNewPowerPointProcesses(beforePowerPointPids);
 
                 Console.Error.WriteLine(
                     $"  PowerPoint deck timed out after {timeout.TotalSeconds:0}s: {Path.GetFileName(pptxPath)}");
@@ -169,6 +176,48 @@ internal static class PowerPointCorpusProcessExporter
         Directory.Exists(outDir)
             ? Directory.GetFiles(outDir, "slide-*.png", SearchOption.TopDirectoryOnly).Length
             : 0;
+
+    private static HashSet<int> GetPowerPointProcessIds() =>
+        Process.GetProcessesByName(PowerPointProcessName)
+            .Select(process => process.Id)
+            .ToHashSet();
+
+    private static void KillNewPowerPointProcesses(IReadOnlySet<int> beforePids)
+    {
+        var processes = Process.GetProcessesByName(PowerPointProcessName);
+        var ownedPids = SelectOwnedPowerPointProcessIds(
+            processes.Select(process => process.Id),
+            beforePids);
+
+        foreach (var process in processes)
+        {
+            if (!ownedPids.Contains(process.Id))
+            {
+                process.Dispose();
+                continue;
+            }
+
+            try
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(5_000);
+                Console.Error.WriteLine($"  Killed orphan POWERPNT PID {process.Id} from timed-out deck worker.");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"  Failed to stop orphan POWERPNT PID {process.Id}: {ex.Message}");
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+    }
+
+    internal static IReadOnlySet<int> SelectOwnedPowerPointProcessIds(
+        IEnumerable<int> currentPids,
+        IReadOnlySet<int> beforePids) =>
+        currentPids.Where(pid => !beforePids.Contains(pid)).ToHashSet();
 
     internal sealed record ChildResult(
         int ExitCode,
