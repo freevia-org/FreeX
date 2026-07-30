@@ -20517,6 +20517,22 @@ public sealed class DocumentView : Control
 
         var rect = sd.Rect;
 
+        // Word's native Basic Pyramid has no generic SmartArt frame or kind caption. Its measured
+        // polygon coordinates consume the full authored rectangle, so reserving our diagnostic
+        // header would shrink the cached Word geometry before it reaches the shared layout plan.
+        if (string.Equals(sd.LayoutId, "pyramid1", StringComparison.OrdinalIgnoreCase)
+            && sd.LayoutGeometry is { Kind: SmartArtLayoutGeometryKind.Pyramid, Nodes.Count: > 0 } nativePyramid)
+        {
+            const double nativeWordPyramidBaselineOffsetDip = 22;
+            var nativePyramidTarget = new Rect(
+                rect.X,
+                rect.Y + nativeWordPyramidBaselineOffsetDip,
+                rect.Width,
+                rect.Height);
+            DrawSmartArtLayoutGeometry(context, sd, nativePyramid, nativePyramidTarget);
+            return;
+        }
+
         // Frame.
         context.FillRectangle(ChartFrameFill, rect);
         context.DrawRectangle(null, ChartFramePen, rect);

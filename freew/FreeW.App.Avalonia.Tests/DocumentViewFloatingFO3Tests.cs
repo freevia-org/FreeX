@@ -68,6 +68,9 @@ public sealed class DocumentViewFloatingFO3Tests
         source.Should().Contain("ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt, _doc.Theme)");
         source.Should().Contain("RenderChartScene(context, cd.Scene)");
         source.Should().Contain("DrawFloatingSmartArt(context, smartArt)");
+        source.Should().Contain("sd.LayoutGeometry is { Kind: SmartArtLayoutGeometryKind.Pyramid, Nodes.Count: > 0 } nativePyramid");
+        source.Should().Contain("const double nativeWordPyramidBaselineOffsetDip = 22;");
+        source.Should().Contain("DrawSmartArtLayoutGeometry(context, sd, nativePyramid, nativePyramidTarget);");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────────
