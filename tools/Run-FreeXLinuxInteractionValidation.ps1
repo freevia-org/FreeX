@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "sheet-tabs", "pivot-field-list", "autofilter-recalculation", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag")]
+    [ValidateSet("all", "sheet-tabs", "name-box-dropdown", "pivot-field-list", "autofilter-recalculation", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -812,10 +812,14 @@ try {
         } else {
             Split-Path -Leaf ([IO.Path]::GetFullPath($PhysicalDocumentPath))
         }
-        $x11Session = Start-ValidationSession -AppArgument @(
+        $x11AppArguments = @(
             "--freex-pivot-runtime-evidence",
             "/work/x11-validation/pivot-runtime-evidence.jsonl"
-        ) -DocumentPath $PhysicalDocumentPath
+        )
+        if ($PhysicalProbeSelector -eq "name-box-dropdown") {
+            $x11AppArguments += "--freex-name-box-dropdown-physical"
+        }
+        $x11Session = Start-ValidationSession -AppArgument $x11AppArguments -DocumentPath $PhysicalDocumentPath
         Ensure-ReportProvenance
 
         & docker cp $x11ProbeScript "${containerName}:/tmp/run-freex-input-probes.sh"
@@ -838,7 +842,12 @@ try {
         & $harness -Action Stop -App FreeX -Port $Port
     }
 
-    $requiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "pivot-field-list") {
+    $requiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "name-box-dropdown") {
+        @(
+            "name-box-dropdown-defined-name-physical",
+            "name-box-dropdown-table-physical"
+        )
+    } elseif ($PhysicalProbeSelector -eq "pivot-field-list") {
         @(
             "pivot-field-drag-cross-bucket-physical",
             "pivot-field-drag-same-bucket-reorder-physical"
@@ -913,7 +922,12 @@ try {
         [string]$_.status -notin @("passed", "failed") -or
         [string]::IsNullOrWhiteSpace([string]$_.evidence)
     })
-    $artifactRequiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "pivot-field-list") {
+    $artifactRequiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "name-box-dropdown") {
+        @(
+            "name-box-dropdown-defined-name-physical",
+            "name-box-dropdown-table-physical"
+        )
+    } elseif ($PhysicalProbeSelector -eq "pivot-field-list") {
         @(
             "pivot-field-drag-cross-bucket-physical",
             "pivot-field-drag-same-bucket-reorder-physical"

@@ -6,6 +6,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FluentAssertions;
 using FreeX.App.UI;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -141,6 +142,42 @@ public sealed class NameBoxSheetScopedNavigationTests
         names.Should().NotContain("OtherSheetScopedName");
     }
 
+    [Fact]
+    public void NameBoxDropDownSelection_NavigatesToTableAndSelectsNamedObjectThroughHostRoutes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet = harness.Workbook.Sheets[0];
+            var table = new StructuredTableModel
+            {
+                Id = 17,
+                Name = "OrdersTable",
+                DisplayName = "OrdersTable",
+                Range = new GridRange(
+                    new CellAddress(sheet.Id, 1, 1),
+                    new CellAddress(sheet.Id, 4, 2)),
+            };
+            sheet.StructuredTables.Add(table);
+            var shape = new DrawingShapeModel
+            {
+                Name = "OrdersShape",
+                Anchor = new CellAddress(sheet.Id, 8, 3),
+            };
+            sheet.DrawingShapes.Add(shape);
+
+            harness.SelectCellAddressBoxDropdownItem("OrdersTable", NameBoxNavigationItemKind.Table);
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(sheet.Id, 2, 1),
+                new CellAddress(sheet.Id, 4, 2)));
+
+            harness.SelectCellAddressBoxDropdownItem("OrdersShape", NameBoxNavigationItemKind.Object);
+            harness.SelectedObjectId.Should().Be(shape.Id);
+            harness.SelectedObjectKind.Should().Be(ObjectKind.Shape);
+            harness.CurrentSheetId.Should().Be(sheet.Id);
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -189,6 +226,10 @@ public sealed class NameBoxSheetScopedNavigationTests
         public SheetId CurrentSheetId => (SheetId)_currentSheetIdField.GetValue(_window)!;
 
         public GridRange? SelectedRange => ((SheetGridView)_window.FindName("SheetGrid")).SelectedRange;
+
+        public Guid SelectedObjectId => ((SheetGridView)_window.FindName("SheetGrid")).SelectedObjectId;
+
+        public ObjectKind SelectedObjectKind => ((SheetGridView)_window.FindName("SheetGrid")).SelectedObjectKind;
 
         private ComboBox CellAddressBox => (ComboBox)_window.FindName("CellAddressBox");
 
@@ -245,19 +286,26 @@ public sealed class NameBoxSheetScopedNavigationTests
         {
             _cellAddressBoxDropDownOpened.Invoke(_window, [CellAddressBox, EventArgs.Empty]);
             PumpDispatcher();
-            return ((IEnumerable<string>)CellAddressBox.ItemsSource).ToList();
+            return ((IEnumerable<NameBoxNavigationItem>)CellAddressBox.ItemsSource)
+                .Select(item => item.Name)
+                .ToList();
         }
 
-        public void SelectCellAddressBoxDropdownItem(string name)
+        public void SelectCellAddressBoxDropdownItem(
+            string name,
+            NameBoxNavigationItemKind kind = NameBoxNavigationItemKind.DefinedName)
         {
             var comboBox = CellAddressBox;
-            comboBox.ItemsSource = OpenCellAddressBoxDropdown();
+            var items = NameBoxDropdownPlanner.Build(Workbook, CurrentSheetId);
+            comboBox.ItemsSource = items;
             comboBox.IsDropDownOpen = true;
-            comboBox.SelectedItem = name;
+            var item = items.Single(item =>
+                item.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && item.Kind == kind);
+            comboBox.SelectedItem = item;
             var args = new SelectionChangedEventArgs(
                 Selector.SelectionChangedEvent,
                 new List<object>(),
-                new List<object> { name });
+                new List<object> { item });
             _cellAddressBoxSelectionChanged.Invoke(_window, [comboBox, args]);
             comboBox.IsDropDownOpen = false;
             PumpDispatcher();

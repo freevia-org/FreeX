@@ -310,7 +310,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("EnsureFormulaBarNameBoxTourContext");
         source.Should().Contain("_workbook.DefineNamedRange(\"Sales\", namedRange);");
         source.Should().Contain("CellAddressBox.IsDropDownOpen = true;");
-        source.Should().Contain("CellAddressBox.SelectedItem = \"Sales\";");
+        source.Should().Contain("NameBoxDropdownPlanner");
         source.Should().Contain("BeginFormulaBarFormulaEdit(\"=SUM(B2:C3)\");");
         source.Should().Contain("FormulaBarCancelButton_Click(FormulaBarCancelButton");
         source.Should().Contain("FormulaBarEnterButton_Click(FormulaBarEnterButton");

@@ -4367,7 +4367,9 @@ public partial class MainWindow
                 nameBoxPopup.ActualHeight,
                 "Name Box dropdown lists workbook defined names including Sales."));
 
-            CellAddressBox.SelectedItem = "Sales";
+            CellAddressBox.SelectedItem = NameBoxDropdownPlanner
+                .Build(_workbook, _currentSheetId)
+                .First(item => item.Name == "Sales");
             CellAddressBox.IsDropDownOpen = false;
             await Task.Delay(250);
             UpdateLayout();

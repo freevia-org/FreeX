@@ -137,6 +137,14 @@ send_key() {
     sleep "$settle_seconds"
 }
 
+send_flyout_key() {
+    # Keep the popup's focus owner. Calling send_key here would reactivate the
+    # workbook top-level window and can dismiss an Avalonia MenuFlyout before
+    # the key reaches its MenuItem selection model.
+    xdotool key --clearmodifiers --delay "$input_delay_ms" "$@"
+    sleep "$settle_seconds"
+}
+
 type_text() {
     local value="$1"
     focus_app
@@ -255,6 +263,67 @@ copy_cell_formula() {
     value="$(clipboard_text)"
     send_key Escape
     printf '%s' "$value"
+}
+
+probe_name_box_dropdown() {
+    local dropdown_x dropdown_y defined_clipboard table_clipboard
+    local defined_passed=false table_passed=false
+    local artifacts="name-box-dropdown-open.png;name-box-dropdown-open-root.png;name-box-dropdown-defined-name.png;name-box-dropdown-table.png;name-box-dropdown-postcondition.txt"
+
+    # The name-box button is immediately above the grid's A column. Deriving both
+    # coordinates from the calibrated A1 cell keeps this lane valid across the
+    # supported Docker resolutions without relying on child-window discovery.
+    dropdown_x="$((a1_x + cell_width * 78 / 100))"
+    dropdown_y="$((a1_y - cell_height / 2 - 29))"
+
+    focus_app
+    xdotool_mousemove_sync "$dropdown_x" "$dropdown_y" click 1
+    sleep "$settle_seconds"
+    capture "name-box-dropdown-open.png"
+    scrot "$output/name-box-dropdown-open-root.png"
+
+    # The fixture orders entries as PhysicalName, PhysicalShape, PhysicalTable.
+    # Click the first and third visible MenuItems so this lane proves pointer input
+    # to the actual flyout, rather than relying on a test-only item selector.
+    xdotool_mousemove_sync "$dropdown_x" "$((dropdown_y + 36))" click 1
+    sleep "$settle_seconds"
+    capture "name-box-dropdown-defined-name.png"
+    send_key ctrl+c
+    defined_clipboard="$(clipboard_text)"
+    [[ "$defined_clipboard" == *"Region"* ]] && defined_passed=true
+
+    focus_app
+    xdotool_mousemove_sync "$dropdown_x" "$dropdown_y" click 1
+    sleep "$settle_seconds"
+    xdotool_mousemove_sync "$dropdown_x" "$((dropdown_y + 36 + 64))" click 1
+    sleep "$settle_seconds"
+    capture "name-box-dropdown-table.png"
+    send_key ctrl+c
+    table_clipboard="$(clipboard_text)"
+    if [[ "$table_clipboard" == *"North"* && "$table_clipboard" == *"East"* && "$table_clipboard" == *$'\t'* ]]; then
+        table_passed=true
+    fi
+
+    write_artifact "name-box-dropdown-postcondition.txt" \
+        "dropdown-x=$dropdown_x\ndropdown-y=$dropdown_y\nexpected-order=PhysicalName,PhysicalShape,PhysicalTable\ndefined-clipboard=$defined_clipboard\ntable-clipboard=$table_clipboard\ndefined-name-passed=$defined_passed\ntable-passed=$table_passed\n"
+    if $defined_passed; then
+        record "name-box-dropdown-defined-name-physical" "passed" \
+            "name-box-dropdown-open.png; name-box-dropdown-defined-name.png; defined-clipboard=$defined_clipboard" \
+            "The defined-name entry was selected through the production Avalonia Name Box flyout and the resulting range copied the expected Region header." \
+            "$artifacts"
+    else
+        record "name-box-dropdown-defined-name-physical" "failed" "$artifacts" \
+            "The defined-name flyout selection did not produce the expected Region clipboard value (observed '$defined_clipboard')." "$artifacts"
+    fi
+    if $table_passed; then
+        record "name-box-dropdown-table-physical" "passed" \
+            "name-box-dropdown-open.png; name-box-dropdown-table.png; table-clipboard=$table_clipboard" \
+            "The non-defined-name table entry was selected through the same production flyout and the resulting table body copied North and East values." \
+            "$artifacts"
+    else
+        record "name-box-dropdown-table-physical" "failed" "$artifacts" \
+            "The non-defined-name table flyout selection did not produce the expected North/East table-body clipboard values (observed '$table_clipboard')." "$artifacts"
+    fi
 }
 
 capture() {
@@ -2285,6 +2354,19 @@ if [[ "$probe_selector" == "sheet-tabs" ]]; then
     probe_sheet_tabs
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused sheet-tab probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "name-box-dropdown" ]]; then
+    # Focused bounded lane for defined-name plus non-defined-name Name Box navigation.
+    probe_name_box_dropdown
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused Name Box dropdown probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then

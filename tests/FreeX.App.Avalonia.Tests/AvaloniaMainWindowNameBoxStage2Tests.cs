@@ -4,6 +4,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using FluentAssertions;
 
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -279,6 +280,54 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
 
             window.Session.ActiveCell.Should().Be(namedRange.Start);
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task DropdownSelection_NavigatesToTableAndSelectsNamedObjectAcrossSheets()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var first = window.Session.Workbook.AddSheet("First");
+            var second = window.Session.Workbook.AddSheet("Second");
+            window.Session.SelectSheet(first.Id);
+            var table = new StructuredTableModel
+            {
+                Id = 31,
+                Name = "OrdersTable",
+                DisplayName = "OrdersTable",
+                Range = new GridRange(
+                    new CellAddress(second.Id, 1, 1),
+                    new CellAddress(second.Id, 4, 2)),
+            };
+            second.StructuredTables.Add(table);
+            var shape = new DrawingShapeModel
+            {
+                Name = "OrdersShape",
+                Anchor = new CellAddress(second.Id, 8, 3),
+            };
+            second.DrawingShapes.Add(shape);
+
+            var items = NameBoxDropdownPlanner.Build(window.Session.Workbook, first.Id);
+            var tableItem = items.Single(item => item.Name == "OrdersTable");
+            tableItem.Kind.Should().Be(NameBoxNavigationItemKind.Table);
+            window.SelectCellAddressBoxItemForTest(tableItem).Should().BeTrue();
+            window.Session.ActiveSheet.Id.Should().Be(second.Id);
+            window.Session.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(second.Id, 2, 1),
+                new CellAddress(second.Id, 4, 2)));
+
+            var objectItem = NameBoxDropdownPlanner
+                .Build(window.Session.Workbook, second.Id)
+                .Single(item => item.Name == "OrdersShape");
+            objectItem.Kind.Should().Be(NameBoxNavigationItemKind.Object);
+            window.SelectCellAddressBoxItemForTest(objectItem).Should().BeTrue();
+            window.SelectedDrawingObjectKindForTest.Should().Be(SelectionPaneObjectKind.Shape);
+            window.SelectedDrawingObjectIdForTest.Should().Be(shape.Id);
+            window.Session.ActiveSheet.Id.Should().Be(second.Id);
 
             window.Close();
         }, CancellationToken.None);

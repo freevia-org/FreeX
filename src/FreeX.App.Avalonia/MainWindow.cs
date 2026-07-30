@@ -528,6 +528,7 @@ public sealed partial class MainWindow : Window
     private int _functionAutocompleteTokenStart;
     private int _functionAutocompleteTokenLength;
     private bool FunctionAutocompleteIsOpen => _functionAutocompletePopup?.IsOpen == true;
+    private MenuFlyout? _cellAddressAutocompleteFlyout;
 
     // R93-formula-editing-assist-5-2: the live argument-signature tooltip driven by
     // FormulaSignatureHelpPlanner (FreeX.App.Presentation.FormulaBar) -- ported from the WPF host's
@@ -902,6 +903,13 @@ public sealed partial class MainWindow : Window
     /// without needing to open a real Avalonia flyout. Not used by production code paths.
     /// </summary>
     internal IReadOnlyList<string> CellAddressAutocompleteNamesForTest() => BuildCellAddressAutocompleteNames();
+
+    internal SelectionPaneObjectKind? SelectedDrawingObjectKindForTest => _selectedDrawingObjectKind;
+
+    internal Guid? SelectedDrawingObjectIdForTest => _selectedDrawingObjectId;
+
+    internal bool SelectCellAddressBoxItemForTest(NameBoxNavigationItem item) =>
+        SelectCellAddressBoxItem(item);
 
     /// <summary>
     /// Test-only accessor for the Formula Bar's current text, so headless tests can seed typed
@@ -1288,6 +1296,14 @@ public sealed partial class MainWindow : Window
 
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
         _session.WorkbookChanged += Session_WorkbookChanged;
+
+        if (startupArguments.Any(argument => string.Equals(
+                argument,
+                InteractionValidationOptions.NameBoxDropdownPhysicalFixtureArgument,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            SeedNameBoxDropdownPhysicalFixture();
+        }
 
         Title = FormatWindowWorkbookTitle();
         ApplyWindowIcon();
@@ -3603,7 +3619,14 @@ public sealed partial class MainWindow : Window
         _cellAddressDropDownButton.Padding = new Thickness(0);
         _cellAddressDropDownButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Center;
         _cellAddressDropDownButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
-        _cellAddressDropDownButton.Flyout = CreateCellAddressAutocompleteFlyout();
+        _cellAddressAutocompleteFlyout = CreateCellAddressAutocompleteFlyout();
+        // Avalonia's DropDownButton template does not consistently invoke the assigned
+        // MenuFlyout on the Linux X11 backend. Show the same production flyout explicitly
+        // from the button route so pointer activation is reliable on every host.
+        _cellAddressDropDownButton.Click += (_, _) =>
+        {
+            _cellAddressAutocompleteFlyout.ShowAt(_cellAddressDropDownButton);
+        };
         AutomationProperties.SetAutomationId(_cellAddressDropDownButton, "CellAddressDropDownButton");
         AutomationProperties.SetName(_cellAddressDropDownButton, "Name Box list");
         AutomationProperties.SetHelpText(_cellAddressDropDownButton, "Shows defined names to navigate to.");
@@ -18839,15 +18862,7 @@ public sealed partial class MainWindow : Window
             if (table is null)
                 continue;
 
-            var rowCount = checked((int)table.Range.RowCount);
-            var headerRows = (uint)Math.Clamp(table.HeaderRowCount ?? 1, 0, rowCount);
-            var startRow = table.Range.Start.Row + headerRows;
-            var endRow = table.TotalsRowShown ? table.Range.End.Row - 1 : table.Range.End.Row;
-            range = startRow > endRow
-                ? table.Range
-                : new GridRange(
-                    new CellAddress(table.Range.Start.Sheet, startRow, table.Range.Start.Col),
-                    new CellAddress(table.Range.Start.Sheet, endRow, table.Range.End.Col));
+            range = NameBoxDropdownPlanner.GetTableDataBodyRange(table);
             return true;
         }
 
@@ -18922,39 +18937,102 @@ public sealed partial class MainWindow : Window
     // Basic Name Box autocomplete: the workbook's defined names, merged with names scoped to the
     // active sheet, deduplicated and alphabetized — mirrors the WPF host's
     // CellAddressBox_DropDownOpened (MainWindow.Editing.cs).
+    private IReadOnlyList<NameBoxNavigationItem> BuildCellAddressAutocompleteItems() =>
+        NameBoxDropdownPlanner.Build(_session.Workbook, _session.ActiveSheet.Id);
+
     private IReadOnlyList<string> BuildCellAddressAutocompleteNames() =>
-        _session.Workbook.NamedRanges.Keys
-            .Concat(_session.Workbook.ScopedNamedRanges.Keys
-                .Where(key => key.Sheet.Equals(_session.ActiveSheet.Id))
-                .Select(key => key.Name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        BuildCellAddressAutocompleteItems().Select(item => item.Name).ToArray();
 
     private MenuFlyout CreateCellAddressAutocompleteFlyout()
     {
         var flyout = new MenuFlyout();
         flyout.Opening += (_, _) =>
         {
-            var names = BuildCellAddressAutocompleteNames();
-            flyout.ItemsSource = names.Count == 0
+            var items = BuildCellAddressAutocompleteItems();
+            flyout.ItemsSource = items.Count == 0
                 ? new[] { new MenuItem { Header = "(No defined names)", IsEnabled = false } }
-                : names.Select(name =>
+                : items.Select(item =>
                 {
-                    var item = new MenuItem { Header = name };
-                    item.Click += (_, _) =>
+                    var menuItem = new MenuItem { Header = item.Name };
+                    AutomationProperties.SetName(menuItem, item.AccessibleDescription);
+                    menuItem.Click += (_, _) =>
                     {
-                        _cellAddressText.Text = name;
-                        if (TryParseCellAddressBoxReferenceRange(name, out var selectedRange))
-                            NavigateCellAddressBoxTo(selectedRange);
-
+                        SelectCellAddressBoxItem(item);
                         FocusShellRegion(ShellFocusTarget.Worksheet);
                     };
-                    return item;
+                    return menuItem;
                 }).ToArray();
         };
 
         return flyout;
+    }
+
+    // The X11 lane needs stable non-defined-name entries without relying on a user-authored file.
+    // This fixture only runs behind the explicit interaction-validation argument; normal documents
+    // continue to enumerate their own workbook model unchanged.
+    private void SeedNameBoxDropdownPhysicalFixture()
+    {
+        var sheet = _session.ActiveSheet;
+        var firstCell = new CellAddress(sheet.Id, 1, 1);
+        var lastCell = new CellAddress(sheet.Id, 4, 2);
+        _session.Workbook.NamedRanges["PhysicalName"] = new GridRange(firstCell, lastCell);
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 6701,
+            Name = "PhysicalTable",
+            DisplayName = "PhysicalTable",
+            Range = new GridRange(firstCell, lastCell),
+            HeaderRowCount = 1,
+            TotalsRowCount = 0,
+            HasAutoFilter = true,
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Id = Guid.Parse("67000000-0000-0000-0000-000000000001"),
+            Name = "PhysicalShape",
+            Anchor = new CellAddress(sheet.Id, 2, 4),
+            Width = 96,
+            Height = 48,
+            IsVisible = true,
+        });
+    }
+
+    private bool SelectCellAddressBoxItem(NameBoxNavigationItem item)
+    {
+        _cellAddressText.Text = item.Name;
+        if (item.Range is { } selectedRange)
+        {
+            NavigateCellAddressBoxTo(selectedRange);
+            return true;
+        }
+
+        return TrySelectCellAddressBoxObject(item);
+    }
+
+    private bool TrySelectCellAddressBoxObject(NameBoxNavigationItem item)
+    {
+        if (item.Kind != NameBoxNavigationItemKind.Object ||
+            item.ObjectKind is not { } objectKind ||
+            item.ObjectId is not { } objectId ||
+            item.Anchor is not { } anchor)
+        {
+            return false;
+        }
+
+        if (!TryCommitPendingFormulaEdit())
+            return false;
+
+        if (!_session.ActiveSheet.Id.Equals(item.SheetId))
+            _session.SelectSheet(item.SheetId);
+
+        _session.SelectCell(anchor);
+        _selectedDrawingObjectKind = objectKind;
+        _selectedDrawingObjectId = objectId;
+        _ribbonContextSource.OnDrawingObjectSelected(objectKind);
+        RefreshTableContextualTab();
+        RefreshPivotContextualTab();
+        RefreshShell($"Selected {FormatDrawingObjectKind(objectKind)}: {item.Name}");
+        return true;
     }
 
     private void ApplyFormulaBoxTextEdit(ExcelTextEdit edit)
