@@ -874,7 +874,6 @@ public sealed class EditingSessionTests
         second.RotationDeg.Should().Be(30);
     }
 
-    [Fact]
     public void NestedGroupedSelection_ResolvesConnectorHyperlinkAutoShapeAndUngroupRoutes()
     {
         var sess = Make();
