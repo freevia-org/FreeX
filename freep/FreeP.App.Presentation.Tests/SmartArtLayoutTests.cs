@@ -1438,6 +1438,21 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void List2_ReturnsLiveVerticalListBoxesWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.List, "A", "B", "C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/list2";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("list2 reuses the bounded shared list-family geometry");
+        shapes!.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(3, "one live box should be emitted per list2 node");
+        shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().BeEmpty("list2 should render as a vertical list without connectors");
+    }
+
+    [Fact]
     public void BasicBlockList_ReturnsLiveVerticalListBoxesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.List, "A", "B", "C");

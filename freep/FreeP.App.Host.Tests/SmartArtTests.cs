@@ -2791,7 +2791,7 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ParsesKnownListFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    public void Reader_ParsesList2AsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/list2",
@@ -2803,10 +2803,26 @@ public sealed class SmartArtTests : IDisposable
 
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.List,
-            "unsupported list siblings still retain broad family metadata for future layout slices");
-        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
-            "list-family layouts outside the bounded allow-list should keep cached-drawing fallback");
+            "list2 remains a list-family layout for shared live regeneration");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "list2 uses the existing shared vertical-list geometry and should remain editable");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Item 1", "Item 2");
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var liveShapes = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+        liveShapes.Should().HaveCount(2);
+        liveShapes.Select(shape => shape.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Item 1", "Item 2");
+
+        var savedPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        reopened.Data.Should().NotBeNull();
+        reopened.Data!.LayoutUniqueId.Should().EndWith("/list2");
+        reopened.Data.IsLiveLayoutSupported.Should().BeTrue();
     }
 
     [Fact]
