@@ -1957,6 +1957,30 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void DivergingRadial_EmitsCentralNodeOuterNodesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "Central", "North", "East", "South");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/divergingRadial";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("divergingRadial should remain live for editable relationship nodes");
+        shapes!.Should().HaveCount(7, "one central node, three connectors, and three outer nodes");
+        shapes.Count(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse).Should().Be(4);
+        shapes.Count(shape => shape.AutoShapeKind == DrawingShapeKind.Line).Should().Be(3);
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Where(text => text is not null)
+            .Should().Equal("Central", "North", "East", "South");
+        foreach (var shape in shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse))
+        {
+            shape.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            shape.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
+    }
+
+    [Fact]
     public void BasicVenn_ReturnsOverlappingTranslucentEllipsesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.Relationship, "Audience", "Need", "Offer");

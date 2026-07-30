@@ -113,6 +113,7 @@ public enum SmartArtLayoutPreset
     BasicRelationship,
     OpposingIdeas,
     ConvergingRadial,
+    DivergingRadial,
     BasicVenn,
     RadialVenn,
     TargetList,
@@ -258,6 +259,7 @@ public static class SmartArtAuthoringPlanner
     public const string BasicRelationshipLayoutCommandId = "freep.smartart.layout.basic-relationship";
     public const string OpposingIdeasLayoutCommandId = "freep.smartart.layout.opposing-ideas";
     public const string ConvergingRadialLayoutCommandId = "freep.smartart.layout.converging-radial";
+    public const string DivergingRadialLayoutCommandId = "freep.smartart.layout.diverging-radial";
     public const string BasicVennLayoutCommandId = "freep.smartart.layout.basic-venn";
     public const string RadialVennLayoutCommandId = "freep.smartart.layout.radial-venn";
     public const string TargetListLayoutCommandId = "freep.smartart.layout.target-list";
@@ -650,6 +652,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/opposingIdeas", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.ConvergingRadial =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/convergingRadial", SmartArtFamily.Relationship),
+            SmartArtLayoutPreset.DivergingRadial =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/divergingRadial", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.BasicVenn =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.RadialVenn =>

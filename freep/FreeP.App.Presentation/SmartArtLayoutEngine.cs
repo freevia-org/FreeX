@@ -198,6 +198,8 @@ public static class SmartArtLayoutEngine
                     ? LayoutOpposingIdeas(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                 : IsConvergingRadialLayout(data.LayoutUniqueId)
                     ? LayoutConvergingRadial(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
+                : IsDivergingRadialLayout(data.LayoutUniqueId)
+                    ? LayoutDivergingRadial(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                 : IsRadialVennLayout(data.LayoutUniqueId)
                     ? LayoutRadialVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                     : IsTargetListLayout(data.LayoutUniqueId)
@@ -2002,6 +2004,86 @@ public static class SmartArtLayoutEngine
         return shapes;
     }
 
+    /// <summary>
+    /// Diverging Radial geometry: the first logical node is the central idea and
+    /// the remaining nodes radiate outward as equal circles. This keeps the
+    /// native relationship layout live and editable in both hosts instead of
+    /// falling back to the cached SmartArt drawing.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutDivergingRadial(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Count < 2)
+            return null;
+
+        long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long padY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);
+        long innerCx = Math.Max(fcx - 2 * padX, 1L);
+        long innerCy = Math.Max(fcy - 2 * padY, 1L);
+        double centerX = fx + padX + innerCx / 2.0;
+        double centerY = fy + padY + innerCy / 2.0;
+
+        long centerDiameter = Math.Max((long)(Math.Min(innerCx, innerCy) * 0.27), 1L);
+        uint idCounter = 548;
+        var shapes = new List<SlideShape>(1 + (nodes.Count - 1) * 2);
+        var centerStyle = stylePlan.GetNodeStyle(0, nodes[0].Level, SmartArtFamily.Relationship);
+        shapes.Add(MakeBox(
+            idCounter++, nodes[0].Text, centerStyle,
+            (long)(centerX - centerDiameter / 2.0),
+            (long)(centerY - centerDiameter / 2.0),
+            centerDiameter,
+            centerDiameter,
+            NodeFontSizeLargePt,
+            DrawingShapeKind.Ellipse));
+
+        int outerCount = nodes.Count - 1;
+        double angleStep = 360.0 / outerCount;
+        double radiusX = innerCx / 2.0 * 0.70;
+        double radiusY = innerCy / 2.0 * 0.70;
+        double halfChord = Math.Sin(Math.PI / outerCount);
+        double outerDiameterFrac = outerCount == 1
+            ? 0.20
+            : Math.Min(0.20, halfChord * 0.62);
+        long outerDiameter = Math.Max(
+            (long)(Math.Min(innerCx, innerCy) * outerDiameterFrac),
+            1L);
+        var outerCenters = new (double x, double y)[outerCount];
+
+        for (int i = 0; i < outerCount; i++)
+        {
+            double angle = (-90 + i * angleStep) * Math.PI / 180.0;
+            outerCenters[i] = (
+                centerX + radiusX * Math.Cos(angle),
+                centerY + radiusY * Math.Sin(angle));
+            shapes.Add(MakeConnector(
+                idCounter++,
+                (long)centerX,
+                (long)centerY,
+                (long)outerCenters[i].x,
+                (long)outerCenters[i].y,
+                stylePlan.Connector));
+        }
+
+        for (int i = 0; i < outerCount; i++)
+        {
+            var node = nodes[i + 1];
+            var nodeStyle = stylePlan.GetNodeStyle(i + 1, node.Level, SmartArtFamily.Relationship);
+            shapes.Add(MakeBox(
+                idCounter++, node.Text,
+                nodeStyle,
+                (long)(outerCenters[i].x - outerDiameter / 2.0),
+                (long)(outerCenters[i].y - outerDiameter / 2.0),
+                outerDiameter,
+                outerDiameter,
+                NodeFontSizePt,
+                DrawingShapeKind.Ellipse));
+        }
+
+        return shapes;
+    }
+
     private static IReadOnlyList<SlideShape>? LayoutBasicRelationship(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
@@ -3539,6 +3621,14 @@ public static class SmartArtLayoutEngine
             return false;
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "convergingradial", StringComparison.Ordinal);
+    }
+
+    private static bool IsDivergingRadialLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "divergingradial", StringComparison.Ordinal);
     }
 
     private static bool IsRadialVennLayout(string uniqueId)

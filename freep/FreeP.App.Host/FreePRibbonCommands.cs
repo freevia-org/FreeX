@@ -338,6 +338,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.OpposingIdeas)));
         registry.Register(SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.ConvergingRadial)));
+        registry.Register(SmartArtAuthoringPlanner.DivergingRadialLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.DivergingRadial)));
         registry.Register(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicVenn)));
         registry.Register(SmartArtAuthoringPlanner.RadialVennLayoutCommandId,

@@ -224,6 +224,7 @@ public class RibbonEditorCompleteness5BTests
             [SmartArtAuthoringPlanner.InterlockingRingsLayoutCommandId] = SmartArtLayoutPreset.InterlockingRings,
             [SmartArtAuthoringPlanner.OpposingIdeasLayoutCommandId] = SmartArtLayoutPreset.OpposingIdeas,
             [SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId] = SmartArtLayoutPreset.ConvergingRadial,
+            [SmartArtAuthoringPlanner.DivergingRadialLayoutCommandId] = SmartArtLayoutPreset.DivergingRadial,
             [SmartArtAuthoringPlanner.Hierarchy3LayoutCommandId] = SmartArtLayoutPreset.Hierarchy3,
             [SmartArtAuthoringPlanner.GearCycleLayoutCommandId] = SmartArtLayoutPreset.GearCycle,
             [SmartArtAuthoringPlanner.Cycle2LayoutCommandId] = SmartArtLayoutPreset.Cycle2,

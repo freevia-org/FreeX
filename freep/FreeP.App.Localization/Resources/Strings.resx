@@ -1666,6 +1666,12 @@
   <data name="Ribbon_Command_SmartArtConvergingRadial_KeyTip" xml:space="preserve">
     <value>CR</value>
   </data>
+  <data name="Ribbon_Command_SmartArtDivergingRadial_Label" xml:space="preserve">
+    <value>Diverging Radial</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtDivergingRadial_KeyTip" xml:space="preserve">
+    <value>DR</value>
+  </data>
   <data name="Ribbon_Command_SmartArtBasicVenn_Label" xml:space="preserve">
     <value>Basic Venn</value>
   </data>

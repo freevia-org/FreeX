@@ -955,6 +955,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId,
                 FreePRibbonText.SmartArtConvergingRadialCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtConvergingRadialCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.DivergingRadialLayoutCommandId,
+                FreePRibbonText.SmartArtDivergingRadialCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtDivergingRadialCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
                 FreePRibbonText.SmartArtBasicVennCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.SmartArtBasicVennCommand.KeyTip);

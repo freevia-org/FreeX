@@ -6289,6 +6289,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.BasicRelationshipLayoutCommandId,
                 SmartArtAuthoringPlanner.OpposingIdeasLayoutCommandId,
                 SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId,
+                SmartArtAuthoringPlanner.DivergingRadialLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialVennLayoutCommandId,
                 SmartArtAuthoringPlanner.TargetListLayoutCommandId,
