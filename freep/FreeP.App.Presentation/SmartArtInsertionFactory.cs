@@ -246,6 +246,7 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.AlternatingProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.ArrowRibbon => ("urn:microsoft.com/office/officeart/2005/8/layout/arrowRibbon", SmartArtFamily.Process),
             SmartArtLayoutPreset.CircleProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/circleProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.CircleArrowProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/circleArrowProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.FunnelProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.VerticalProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.VerticalBoxList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList", SmartArtFamily.List),

@@ -126,6 +126,9 @@ public static class SmartArtLayoutEngine
         if (IsCircleProcessLayout(data.LayoutUniqueId))
             return LayoutCircleProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsCircleArrowProcessLayout(data.LayoutUniqueId))
+            return LayoutCircleArrowProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsFunnelProcessLayout(data.LayoutUniqueId))
             return LayoutFunnelProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -979,6 +982,18 @@ public static class SmartArtLayoutEngine
 
         return shapes;
     }
+
+    /// <summary>
+    /// Circle Arrow Process keeps its native layout identity for authoring,
+    /// save/reopen, and cache regeneration. The current line-shape model cannot
+    /// express PowerPoint's curved arrowheads, so it reuses live circular stage
+    /// geometry until that connector primitive exists.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutCircleArrowProcess(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan) =>
+        LayoutCircleProcess(nodes, fx, fy, fcx, fcy, stylePlan);
 
     /// <summary>
     /// Funnel process geometry: ordered stages stack vertically and narrow toward
@@ -3356,6 +3371,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "circleprocess", StringComparison.Ordinal);
+    }
+
+    private static bool IsCircleArrowProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "circlearrowprocess", StringComparison.Ordinal);
     }
 
     private static bool IsFunnelProcessLayout(string uniqueId)

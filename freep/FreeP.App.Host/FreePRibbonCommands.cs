@@ -268,6 +268,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.ArrowRibbon)));
         registry.Register(SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.CircleProcess)));
+        registry.Register(SmartArtAuthoringPlanner.CircleArrowProcessLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.CircleArrowProcess)));
         registry.Register(SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.FunnelProcess)));
         registry.Register(SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,

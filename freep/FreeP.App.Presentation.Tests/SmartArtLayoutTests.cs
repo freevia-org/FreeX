@@ -1492,6 +1492,24 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void CircleArrowProcess_RegeneratesLiveCircularStagesUnderNativeLayoutIdentity()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Discover", "Plan", "Build", "Review");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/circleArrowProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("circleArrowProcess is a live authoring layout, not a cached-only fallback");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(4, "the live process loop must remain connected after text edits and cache regeneration");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Discover", "Plan", "Build", "Review");
+    }
+
+    [Fact]
     public void FunnelProcess_ReturnsNarrowingStageSegmentsAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C", "D");

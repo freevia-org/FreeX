@@ -78,6 +78,10 @@ public sealed class PptxPackageReaderSourceTests
             .And.Contain("isLiveLayoutSupported = false;")
             .And.Contain("IsLiveLayoutSupported = isLiveLayoutSupported");
 
+        ExtractMethod(source, "private static bool IsLiveSmartArtLayoutSupported(")
+            .Should()
+            .Contain("\"circlearrowprocess\"");
+
         ExtractMethod(source, "private static void TryAttachPictureNodePictures(")
             .Should()
             .Contain("if (pictures.Count != nodes.Count)")

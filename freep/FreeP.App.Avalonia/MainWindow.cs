@@ -2859,6 +2859,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ArrowRibbon)));
         r.Register(SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.CircleProcess)));
+        r.Register(SmartArtAuthoringPlanner.CircleArrowProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.CircleArrowProcess)));
         r.Register(SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.FunnelProcess)));
         r.Register(SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,
