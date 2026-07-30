@@ -57,7 +57,9 @@ public sealed class AverageFilterCommand : IWorkbookCommand
 
         var filterCol = _range.Start.Col + _filterColOffset;
         var firstDataRow = _range.Start.Row + 1;
-        var lastDataRow = _range.End.Row;
+        // R100-commands-filter-totalsrow-1: see FilterCommand.RecomputeHiddenRows -- exclude a
+        // structured table's shown Totals Row from the Above/Below-Average data set and statistic.
+        var lastDataRow = StructuredTableEditEffects.GetFilterableLastRow(sheet, _range);
         if (firstDataRow > lastDataRow)
             return new CommandOutcome(true);
 

@@ -229,6 +229,7 @@ public static class PageContentRenderModelBuilder
             pageH,
             marginLeft,
             marginRight,
+            marginBottom,
             headerMarginPx,
             sheet.FooterMargin * Dpi,
             workbook.Name,
@@ -772,6 +773,7 @@ public static class PageContentRenderModelBuilder
         double pageH,
         double marginLeft,
         double marginRight,
+        double marginBottom,
         double headerMargin,
         double footerMargin,
         string workbookName,
@@ -787,7 +789,13 @@ public static class PageContentRenderModelBuilder
         // split into left/center/right thirds, with the inset following the align-with-margins flag.
         const double lineHeight = 16.0;
         var headerY = Math.Max(4, headerMargin - lineHeight);
-        var footerY = Math.Max(4, pageH - footerMargin - lineHeight);
+        // R100-presentation-footer-margin-overlap-1: mirrors the WPF/PDF fix -- the grid's own bottom
+        // edge sits at pageH - Math.Max(marginBottom, footerMargin) (PagePaginationPlanner's
+        // bodyBottomInches), so once FooterMargin exceeds BottomMargin the unclamped footer band would
+        // land inside the grid's own span, printing on top of the last row(s) in both shells' shared
+        // print-preview canvas. Clamp so the footer band never starts above the grid's bottom edge.
+        var gridBottomEdge = pageH - Math.Max(marginBottom, footerMargin);
+        var footerY = Math.Max(Math.Max(4, pageH - footerMargin - lineHeight), gridBottomEdge);
         var leftInset = sheet.HeaderFooterAlignWithMargins ? marginLeft : 0.3 * Dpi;
         var rightInset = sheet.HeaderFooterAlignWithMargins ? marginRight : 0.3 * Dpi;
 

@@ -541,6 +541,18 @@ internal static class NamedDefinitionRecalcHelper
         var result = new List<CellAddress>();
         var scopeSheetName = scopeSheetId is { } scope ? workbook.GetSheet(scope)?.Name : null;
 
+        // Memoizes ReferencesNameTransitively's per-name expansion result (whether a given named
+        // formula, resolved on a given sheet and expanded relative to a given scanning sheet,
+        // transitively reaches `name`) across sibling AST branches AND across every cell/sheet in
+        // this single scan. Without this, a formula chain reachable from multiple positions (e.g.
+        // "=NameA+NameA", or a helper name reused on both sides of an operator at each level of a
+        // deep chain) re-parses and re-walks the same nested chain once per occurrence — O(2^depth)
+        // for a chain where each level references the next name twice. The cache key includes both
+        // the resolved sheet the named formula lives on AND the scanning sheet (scanSheetId is held
+        // constant through the recursion and can affect how nested unqualified names resolve), so
+        // reuse is only ever applied where the recursive answer is provably identical.
+        var transitiveMemo = new Dictionary<(string Name, SheetId ResolveSheetId, SheetId ScanSheetId), bool>();
+
         foreach (var sheet in workbook.Sheets)
         {
             var isScopeSheet = scopeSheetId is { } scopeId && sheet.Id.Equals(scopeId);
@@ -551,7 +563,7 @@ internal static class NamedDefinitionRecalcHelper
                 if (cell?.FormulaText is not { } formulaText)
                     continue;
 
-                if (ReferencesName(formulaText, name, workbook, sheet.Id, scopeSheetId, isScopeSheet, scopeSheetName))
+                if (ReferencesName(formulaText, name, workbook, sheet.Id, scopeSheetId, isScopeSheet, scopeSheetName, transitiveMemo))
                     result.Add(address);
             }
         }
@@ -565,13 +577,14 @@ internal static class NamedDefinitionRecalcHelper
         SheetId scanSheetId,
         SheetId? scopeSheetId,
         bool isScopeSheet,
-        string? scopeSheetName)
+        string? scopeSheetName,
+        Dictionary<(string Name, SheetId ResolveSheetId, SheetId ScanSheetId), bool> transitiveMemo)
     {
         try
         {
             var ast = new Parser(new Lexer(formulaText).Tokenize()).Parse();
             var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            return ReferencesName(ast, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited);
+            return ReferencesName(ast, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited, transitiveMemo);
         }
         catch (FormulaParseException)
         {
@@ -587,17 +600,18 @@ internal static class NamedDefinitionRecalcHelper
         SheetId? scopeSheetId,
         bool isScopeSheet,
         string? scopeSheetName,
-        HashSet<string> visited) => node switch
+        HashSet<string> visited,
+        Dictionary<(string Name, SheetId ResolveSheetId, SheetId ScanSheetId), bool> transitiveMemo) => node switch
     {
         NamedRangeNode named =>
             (string.Equals(named.Name, name, StringComparison.OrdinalIgnoreCase)
                 && MatchesScope(named, scopeSheetId, isScopeSheet, scopeSheetName))
-            || ReferencesNameTransitively(named, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited),
-        BinaryOpNode binary => ReferencesName(binary.Left, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited)
-            || ReferencesName(binary.Right, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited),
-        UnaryOpNode unary => ReferencesName(unary.Operand, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited),
+            || ReferencesNameTransitively(named, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited, transitiveMemo),
+        BinaryOpNode binary => ReferencesName(binary.Left, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited, transitiveMemo)
+            || ReferencesName(binary.Right, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited, transitiveMemo),
+        UnaryOpNode unary => ReferencesName(unary.Operand, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited, transitiveMemo),
         FunctionCallNode function => function.Arguments.Any(arg =>
-            ReferencesName(arg, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited)),
+            ReferencesName(arg, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited, transitiveMemo)),
         _ => false
     };
 
@@ -614,7 +628,10 @@ internal static class NamedDefinitionRecalcHelper
     /// the USING cell's sheet, not the sheet the name happens to be scoped to.
     /// <paramref name="visited"/> is a cycle guard (by name text, matching RecalcEngine's
     /// <c>namedFormulaStack</c>) so a formula that (illegally, but possibly present in a malformed
-    /// file) refers to itself directly or indirectly can't recurse forever.
+    /// file) refers to itself directly or indirectly can't recurse forever. <paramref name="transitiveMemo"/>
+    /// caches the (non-cyclic) boolean result of expanding a given (name, resolved sheet, scanning
+    /// sheet) triple so the same nested chain is walked at most once per redefinition scan no matter
+    /// how many sibling AST positions or how many cells reach it.
     /// </summary>
     private static bool ReferencesNameTransitively(
         NamedRangeNode named,
@@ -624,7 +641,8 @@ internal static class NamedDefinitionRecalcHelper
         SheetId? scopeSheetId,
         bool isScopeSheet,
         string? scopeSheetName,
-        HashSet<string> visited)
+        HashSet<string> visited,
+        Dictionary<(string Name, SheetId ResolveSheetId, SheetId ScanSheetId), bool> transitiveMemo)
     {
         var resolveSheetId = scanSheetId;
         if (named.SheetQualifier is { } sheetQualifier)
@@ -643,16 +661,23 @@ internal static class NamedDefinitionRecalcHelper
         if (string.IsNullOrWhiteSpace(formulaText))
             return false;
 
+        var memoKey = (named.Name, resolveSheetId, scanSheetId);
+        if (transitiveMemo.TryGetValue(memoKey, out var memoized))
+            return memoized;
+
         if (!visited.Add(named.Name))
-            return false;
+            return false; // Cycle: not memoized — the answer here isn't the true (unguarded) answer for this key.
 
         try
         {
             var nestedAst = new Parser(new Lexer(formulaText).Tokenize()).Parse();
-            return ReferencesName(nestedAst, targetName, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited);
+            var result = ReferencesName(nestedAst, targetName, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited, transitiveMemo);
+            transitiveMemo[memoKey] = result;
+            return result;
         }
         catch (FormulaParseException)
         {
+            transitiveMemo[memoKey] = false;
             return false;
         }
         finally

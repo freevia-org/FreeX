@@ -409,4 +409,87 @@ public sealed class DSheetObjectsRegressionTests
 
         cache.SourceSheetName.Should().Be("Data");
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // R100 — RemoveSheet must clear ChartModel.PivotSourceSheetName when the sheet it names is
+    // deleted, mirroring the PivotCache/Slicer/Picture/Timeline clears above (same field
+    // RenameSheetCommand's T6 block rewrites on rename instead of clearing).
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void R100_RemoveSheet_ClearsChartPivotSourceSheetName()
+    {
+        // A pivot chart lives on 'Dashboard' but its source PivotTable lives on 'Data' — a common
+        // layout (chart sheet separate from the pivot data sheet). Deleting 'Data' must not leave
+        // the surviving chart naming a worksheet absent from the workbook.
+        var wb = new Workbook("test");
+        var data = wb.AddSheet("Data");
+        var dashboard = wb.AddSheet("Dashboard");
+        var ctx = new TestCommandContext(wb);
+        var chart = new ChartModel
+        {
+            Name = "PivotChart1",
+            Type = ChartType.Column,
+            PivotSourceSheetName = "Data",
+            PivotTableName = "PivotTable1"
+        };
+        dashboard.Charts.Add(chart);
+
+        var command = new RemoveSheetCommand(data.Id);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.PivotSourceSheetName.Should().BeNull(
+            because: "a pivot chart must not keep naming a deleted sheet as its PivotTable's source, or " +
+                     "XlsxChartXmlWriter would emit a <c:pivotSource><c:name> referencing a nonexistent " +
+                     "worksheet, and the stale name could silently reattach to an unrelated later sheet " +
+                     "with the same name");
+    }
+
+    [Fact]
+    public void R100_RemoveSheetRevert_RestoresChartPivotSourceSheetName()
+    {
+        var wb = new Workbook("test");
+        var data = wb.AddSheet("Data");
+        var dashboard = wb.AddSheet("Dashboard");
+        var ctx = new TestCommandContext(wb);
+        var chart = new ChartModel
+        {
+            Name = "PivotChart1",
+            Type = ChartType.Column,
+            PivotSourceSheetName = "Data",
+            PivotTableName = "PivotTable1"
+        };
+        dashboard.Charts.Add(chart);
+
+        var command = new RemoveSheetCommand(data.Id);
+        command.Apply(ctx);
+        command.Revert(ctx);
+
+        chart.PivotSourceSheetName.Should().Be("Data");
+    }
+
+    [Fact]
+    public void R100_RemoveSheet_DoesNotTouchChartPivotSourceSheetNameOfUnrelatedSheet()
+    {
+        // Sibling/no-regression case: deleting 'Old' must not clear a chart's PivotSourceSheetName
+        // pointing at a differently-named surviving sheet.
+        var wb = new Workbook("test");
+        var oldSheet = wb.AddSheet("Old");
+        var dashboard = wb.AddSheet("Dashboard");
+        wb.AddSheet("Data");
+        var ctx = new TestCommandContext(wb);
+        var chart = new ChartModel
+        {
+            Name = "PivotChart1",
+            Type = ChartType.Column,
+            PivotSourceSheetName = "Data",
+            PivotTableName = "PivotTable1"
+        };
+        dashboard.Charts.Add(chart);
+
+        var command = new RemoveSheetCommand(oldSheet.Id);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.PivotSourceSheetName.Should().Be("Data");
+    }
 }

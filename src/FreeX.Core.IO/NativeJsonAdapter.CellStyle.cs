@@ -70,9 +70,12 @@ public sealed partial class NativeJsonAdapter
             Superscript = dto.Superscript,
             Subscript = dto.Subscript,
             FontColor = dto.FontColor,
+            FontThemeColor = NativeJsonColorMapper.ToThemeColorReference(dto.FontThemeColor),
             FillColor = dto.FillColor,
+            FillThemeColor = NativeJsonColorMapper.ToThemeColorReference(dto.FillThemeColor),
             FillPatternStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(dto.FillPatternStyle, CellFillPatternStyle.None),
             FillPatternColor = dto.FillPatternColor,
+            FillPatternThemeColor = NativeJsonColorMapper.ToThemeColorReference(dto.FillPatternThemeColor),
             GradientFill = ToCellGradientFill(dto.GradientFill),
             BorderTop = ToCellBorder(dto.BorderTop),
             BorderRight = ToCellBorder(dto.BorderRight),
@@ -121,9 +124,12 @@ public sealed partial class NativeJsonAdapter
             Superscript = style.Superscript,
             Subscript = style.Subscript,
             FontColor = style.FontColor,
+            FontThemeColor = NativeJsonColorMapper.FromThemeColorReference(style.FontThemeColor),
             FillColor = style.FillColor,
+            FillThemeColor = NativeJsonColorMapper.FromThemeColorReference(style.FillThemeColor),
             FillPatternStyle = style.FillPatternStyle,
             FillPatternColor = style.FillPatternColor,
+            FillPatternThemeColor = NativeJsonColorMapper.FromThemeColorReference(style.FillPatternThemeColor),
             GradientFill = FromCellGradientFill(style.GradientFill),
             BorderTop = FromCellBorder(style.BorderTop),
             BorderRight = FromCellBorder(style.BorderRight),
@@ -164,9 +170,12 @@ public sealed partial class NativeJsonAdapter
             Superscript = safeStyle.Superscript,
             Subscript = safeStyle.Subscript,
             FontColor = safeStyle.FontColor,
+            FontThemeColor = NativeJsonColorMapper.FromThemeColorReference(safeStyle.FontThemeColor),
             FillColor = safeStyle.FillColor,
+            FillThemeColor = NativeJsonColorMapper.FromThemeColorReference(safeStyle.FillThemeColor),
             FillPatternStyle = safeStyle.FillPatternStyle,
             FillPatternColor = safeStyle.FillPatternColor,
+            FillPatternThemeColor = NativeJsonColorMapper.FromThemeColorReference(safeStyle.FillPatternThemeColor),
             GradientFill = FromCellGradientFill(safeStyle.GradientFill),
             BorderTop = FromCellBorder(safeStyle.BorderTop),
             BorderRight = FromCellBorder(safeStyle.BorderRight),
@@ -274,9 +283,12 @@ public sealed partial class NativeJsonAdapter
                 && x.Superscript == y.Superscript
                 && x.Subscript == y.Subscript
                 && x.FontColor == y.FontColor
+                && ThemeColorRefEquals(x.FontThemeColor, y.FontThemeColor)
                 && x.FillColor == y.FillColor
+                && ThemeColorRefEquals(x.FillThemeColor, y.FillThemeColor)
                 && x.FillPatternStyle == y.FillPatternStyle
                 && x.FillPatternColor == y.FillPatternColor
+                && ThemeColorRefEquals(x.FillPatternThemeColor, y.FillPatternThemeColor)
                 && GradientFillDtoEquals(x.GradientFill, y.GradientFill)
                 && BorderEquals(x.BorderTop, y.BorderTop)
                 && BorderEquals(x.BorderRight, y.BorderRight)
@@ -318,9 +330,15 @@ public sealed partial class NativeJsonAdapter
             hash.Add(obj.Superscript);
             hash.Add(obj.Subscript);
             hash.Add(obj.FontColor);
+            hash.Add(obj.FontThemeColor?.Slot);
+            hash.Add(obj.FontThemeColor?.Tint);
             hash.Add(obj.FillColor);
+            hash.Add(obj.FillThemeColor?.Slot);
+            hash.Add(obj.FillThemeColor?.Tint);
             hash.Add(obj.FillPatternStyle);
             hash.Add(obj.FillPatternColor);
+            hash.Add(obj.FillPatternThemeColor?.Slot);
+            hash.Add(obj.FillPatternThemeColor?.Tint);
             hash.Add(GetGradientFillDtoHashCode(obj.GradientFill));
             AddBorderHash(ref hash, obj.BorderTop);
             AddBorderHash(ref hash, obj.BorderRight);
@@ -377,6 +395,9 @@ public sealed partial class NativeJsonAdapter
             foreach (var stop in dto.Stops) { h.Add(stop.Position); h.Add(stop.Color); }
             return h.ToHashCode();
         }
+
+        private static bool ThemeColorRefEquals(ThemeColorReferenceDto? x, ThemeColorReferenceDto? y) =>
+            ReferenceEquals(x, y) || (x is not null && y is not null && x.Slot == y.Slot && x.Tint == y.Tint);
 
         private static bool BorderEquals(CellBorderDto? x, CellBorderDto? y) =>
             ReferenceEquals(x, y) || (x is not null && y is not null && x.Style == y.Style && x.Color == y.Color

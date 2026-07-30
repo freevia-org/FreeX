@@ -151,6 +151,12 @@ public sealed class RecalcEngine
         // has no edge in the graph yet, and the topological sort can run it before that precedent.
         EnsureChangedFormulaDependenciesRegistered(workbook, changedFormulaCells);
 
+        // Clear stale graph entries for any changed address that is no longer a formula (e.g. a
+        // row/column/cell insert-delete relocated its formula's Cell object elsewhere, leaving this
+        // address blank -- R100). This must scan the FULL changedCells list, not changedFormulaCells,
+        // since CollectChangedFormulaCells deliberately drops now-blank addresses.
+        ClearVacatedFormulaDependencies(workbook, changedCells);
+
         // Include volatile cells in the dependency traversal so their dependents appear in the plan
         var changedForTraversal = BuildChangedSetForTraversal(changedCells);
         var plan = _graph.GetRecalcOrder(changedForTraversal);
@@ -791,10 +797,22 @@ public sealed class RecalcEngine
 
             if (cell.CachedAst is FormulaNode existingAst)
             {
-                // Cached AST present, but this address may still be unregistered (shared-reference
-                // clone case above) — register it under its own address without re-parsing.
-                if (!_graph.HasDependencies(addr))
-                    RegisterFormulaDependencies(addr, existingAst, addr.Sheet, workbook);
+                // Always (re-)register from the cell's own current AST rather than trusting
+                // _graph.HasDependencies(addr) as a proxy for "this address is already correctly
+                // registered". A structural command (row/column/cell insert-delete) can relocate a
+                // formula's Cell object -- CachedAst intact -- onto an address that was already
+                // registered from a DIFFERENT, now-relocated-or-cleared occupant's formula (R100:
+                // e.g. inserting rows moves A13's "=B2" out and A10's "=B1" into (sheet,13,A), which
+                // already carries a stale {B2} precedent entry from the pre-insert A13). Skipping
+                // registration here because *some* entry already exists leaves the graph believing
+                // this address still depends on the OLD occupant's precedents forever, so edits to
+                // the relocated formula's real precedent never dirty it, while edits to the stale
+                // precedent spuriously do.
+                // RegisterFormulaDependencies calls DependencyGraph.SetDependencies, which always
+                // fully REPLACES (never merges with) whatever precedents were previously registered
+                // for this address, so re-registering here is safe even when the existing entry
+                // already happened to be correct -- it is a no-op re-derivation in that case.
+                RegisterFormulaDependencies(addr, existingAst, addr.Sheet, workbook);
                 continue;
             }
 
@@ -808,6 +826,31 @@ public sealed class RecalcEngine
             {
                 // Invalid text is surfaced as #VALUE! by the evaluation loop; it has no dependencies.
             }
+        }
+    }
+
+    /// <summary>
+    /// Clear stale dependency-graph entries for any changed address that no longer holds a formula
+    /// (blank, or now holds a plain value/other content). A structural command (row/column/cell
+    /// insert-delete) can move a formula's Cell object off of an address in-place via Sheet.SetCell,
+    /// leaving the vacated address blank but its OLD precedents/range-precedents entry untouched in
+    /// the graph (R100). <see cref="CollectChangedFormulaCells"/> only surfaces addresses whose LIVE
+    /// cell currently has a formula, so a vacated address is otherwise never visited by
+    /// <see cref="EnsureChangedFormulaDependenciesRegistered"/> and its phantom edge (pointing at an
+    /// address that can never fire again) would persist for the lifetime of the workbook.
+    /// </summary>
+    private void ClearVacatedFormulaDependencies(Workbook workbook, IReadOnlyList<CellAddress> changedCells)
+    {
+        for (var i = 0; i < changedCells.Count; i++)
+        {
+            var addr = changedCells[i];
+            var sheet = workbook.GetSheet(addr.Sheet);
+            var cell = sheet?.GetCell(addr);
+            if (cell is not null && cell.HasFormula)
+                continue;
+
+            if (_graph.HasDependencies(addr))
+                ClearFormulaDependencies(addr);
         }
     }
 

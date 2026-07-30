@@ -262,4 +262,107 @@ public sealed class XlsxWorksheetPrimaryViewMetadataWriterTabSelectedZoomTests
             .Should()
             .Be("150", "Page Layout's remembered zoom is unrelated to a Normal-mode zoom change and must stay untouched");
     }
+
+    [Fact]
+    public void R100_ZoomChangedToCoincidentallyMatchingOtherModeValue_StillPersistsToCurrentModesAttribute()
+    {
+        // Regression (round-100 finding): source remembers zoomScaleNormal="100" and
+        // zoomScalePageLayoutView="150" (an independently-remembered Page Layout zoom from a previous
+        // Excel session). The user NEVER switches view mode -- stays in Normal throughout -- and
+        // genuinely sets the zoom to 150%, which happens to coincide with Page Layout's remembered
+        // value. RefreshPerViewModeZoom's "matches another mode's loaded zoom" heuristic previously
+        // misclassified this as "merely inherited from a mode switch" (there was none) and skipped
+        // writing zoomScaleNormal, silently leaving it stale at 100 even though the user is genuinely
+        // viewing Normal at 150%.
+        var sourceBytes = SetSheetViewAttributes(
+            CreateTwoSheetSourcePackage(),
+            "xl/worksheets/sheet1.xml",
+            new Dictionary<string, string?>
+            {
+                ["zoomScale"] = "100",
+                ["zoomScaleNormal"] = "100",
+                ["zoomScalePageLayoutView"] = "150",
+            });
+
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet1 = workbook.GetSheetAt(0);
+        sheet1.ViewMode.Should().Be(WorksheetViewMode.Normal);
+        sheet1.ZoomPercent.Should().Be(100);
+
+        // Genuine same-mode zoom change to a value that coincidentally matches Page Layout's stored
+        // zoom -- no view-mode switch at all.
+        sheet1.ZoomPercent = 150;
+        sheet1.SetCell(new CellAddress(sheet1.Id, 2, 1), new TextValue("patched value"));
+        workbook.DefineNamedRange("ZoomCollisionUnrelatedName", new GridRange(
+            new CellAddress(sheet1.Id, 5, 5),
+            new CellAddress(sheet1.Id, 5, 5)));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+
+        ReadPrimarySheetViewAttribute(savedBytes, "xl/worksheets/sheet1.xml", "zoomScaleNormal")
+            .Should()
+            .Be("150", "the user genuinely changed Normal's zoom to 150%, even though that coincides with Page Layout's remembered value");
+        ReadPrimarySheetViewAttribute(savedBytes, "xl/worksheets/sheet1.xml", "zoomScalePageLayoutView")
+            .Should()
+            .Be("150", "Page Layout's own remembered zoom is untouched (was already 150 and was never visited this session)");
+    }
+
+    [Fact]
+    public void R100_ModeSwitchedThenZoomCollidesWithSourceMode_StillTreatedAsInheritedNotPersisted()
+    {
+        // Sibling no-regression case: this time the user DOES switch view mode (Normal -> Page
+        // Layout) without ever touching zoom, and the two modes' remembered zoom values happen to be
+        // IDENTICAL to begin with (both 100). The inherited live zoom (100) trivially "coincides" with
+        // Page Layout's own already-loaded value too, but since nothing was genuinely changed in Page
+        // Layout, the fix must still leave its remembered attribute alone (harmless either way since
+        // the values are equal, but this exercises the mode-switched branch explicitly to prove the
+        // new "mode unchanged since load" short-circuit does not fire when the mode DID change).
+        var sourceBytes = SetSheetViewAttributes(
+            CreateTwoSheetSourcePackage(),
+            "xl/worksheets/sheet1.xml",
+            new Dictionary<string, string?>
+            {
+                ["zoomScale"] = "100",
+                ["zoomScaleNormal"] = "100",
+                ["zoomScalePageLayoutView"] = "100",
+            });
+
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet1 = workbook.GetSheetAt(0);
+        sheet1.ViewMode.Should().Be(WorksheetViewMode.Normal);
+        sheet1.ZoomPercent.Should().Be(100);
+
+        sheet1.ViewMode = WorksheetViewMode.PageLayout;
+        sheet1.SetCell(new CellAddress(sheet1.Id, 2, 1), new TextValue("patched value"));
+        workbook.DefineNamedRange("ZoomCollisionModeSwitchUnrelatedName", new GridRange(
+            new CellAddress(sheet1.Id, 5, 5),
+            new CellAddress(sheet1.Id, 5, 5)));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+
+        ReadPrimarySheetViewAttribute(savedBytes, "xl/worksheets/sheet1.xml", "zoomScalePageLayoutView")
+            .Should()
+            .Be("100", "Page Layout's remembered zoom was never genuinely changed this session");
+        ReadPrimarySheetViewAttribute(savedBytes, "xl/worksheets/sheet1.xml", "zoomScaleNormal")
+            .Should()
+            .Be("100", "Normal mode's remembered zoom is untouched by switching away from it");
+    }
 }

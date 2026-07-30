@@ -292,7 +292,10 @@ public sealed class FilterConditionCommand : IWorkbookCommand
                     NativeFilterXmls: []));
         }
 
-        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
+        // R100-commands-filter-totalsrow-1: see FilterCommand.RecomputeHiddenRows -- exclude a
+        // structured table's shown Totals Row from the custom-condition data set.
+        var lastDataRow = StructuredTableEditEffects.GetFilterableLastRow(sheet, _range);
+        for (uint row = _range.Start.Row + 1; row <= lastDataRow; row++)
         {
             var value = sheet.GetValue(row, filterCol);
             FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, _criterion.Matches(value));

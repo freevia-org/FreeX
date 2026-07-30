@@ -63,12 +63,37 @@ internal static class XlsxWorksheetLayoutMetadataReader
             "filterMode" or
             "enableFormatConditionsCalculation";
 
+    // Internal bookkeeping key (NOT a real OOXML attribute name) used to stash the view mode this
+    // sheetView was actually loaded with, alongside -- but independent of -- the "sheetView" residual-
+    // XML entry above. "view" itself is excluded from that residual entry (IsModeledPrimaryViewAttribute)
+    // because it is modeled directly onto Sheet.ViewMode, which is then free to change during the
+    // session; XlsxWorksheetPrimaryViewMetadataWriter.RefreshPerViewModeZoom needs the ORIGINAL loaded
+    // mode (distinct from the live, possibly-since-changed Sheet.ViewMode) to tell a genuine same-mode
+    // zoom change from a value merely inherited by switching modes. This entry is never applied back
+    // onto live XML (nothing iterates unfiltered bag keys as attribute names) and is not round-tripped
+    // through native JSON (NativeJsonAdapter's From/ToWorksheetPrimaryViewMetadata only ever read/write
+    // the fixed "sheetView" key), so it is purely a same-process, XLSX-load-time signal.
+    internal const string LoadedViewModeBagKey = "loadedViewMode";
+
     public static NativeXmlPreserveBag? ReadWorksheetPrimaryViewMetadata(XElement? sheetView)
-        => ReadMetadata(
+    {
+        var bag = ReadMetadata(
             sheetView,
             "sheetView",
             attribute => !IsModeledPrimaryViewAttribute(attribute.Name.LocalName),
             element => !IsModeledPrimaryViewElement(element.Name.LocalName));
+
+        // Only stash the loaded-mode signal when a bag already exists for some other reason (e.g. a
+        // preserved zoomScale<Mode> attribute): the coincidental-zoom-collision bug this enables fixing
+        // can only occur when at least one per-view-mode zoom attribute was already captured above, so
+        // gating on "bag is not null" costs no real coverage while guaranteeing this addition never
+        // flips a plain sheet's PrimaryViewMetadata from null to non-null (which would force the whole
+        // metadata-writer pipeline to run for sheets that previously skipped it entirely).
+        if (bag is not null && sheetView is not null)
+            bag.Set(LoadedViewModeBagKey, sheetView.Attribute("view")?.Value ?? string.Empty);
+
+        return bag;
+    }
 
     // rightToLeft is modeled on Sheet.IsRightToLeft (see XlsxFileAdapter.SheetXmlLayout.cs and
     // XlsxWorksheetViewWriter) but, unlike the other modeled attributes here, it is also kept in
