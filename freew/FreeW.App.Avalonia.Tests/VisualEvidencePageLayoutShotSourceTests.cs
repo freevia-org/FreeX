@@ -234,7 +234,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("FontSizePt: > 33 and < 35");
         source.Should().Contain("isPrimaryGlowBlueStress || isImportedGradFillMultiArchUp");
         source.Should().Contain("new Vector(0, -16)");
-        source.Should().Contain("? 0.74 : 1.0");
+        source.Should().Contain("? 0.74 : isPrimaryGlowBlueStress ? 1.125 : 1.0");
     }
 
     [Fact]
@@ -295,6 +295,8 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("Style: WordArtStyle.GlowBlue");
         source.Should().Contain("new Rect(wd.Rect.X - 1, wd.Rect.Y - 1, wd.Rect.Width + 1, wd.Rect.Height + 1)");
         source.Should().Contain("Warp: WordArtWarp.Wave1");
+        source.Should().Contain("? new Vector(0, 3)");
+        source.Should().Contain("isPrimaryGlowBlueStress ? 1.125 : 1.0");
         source.Should().Contain("foreach (var (spread, opacity) in new (double Spread, double Opacity)[]");
         source.Should().Contain("OffsetAndInflate(rect, 0, 0, spread)");
         source.Should().Contain("EffectBrush(glowColor, opacity)");
