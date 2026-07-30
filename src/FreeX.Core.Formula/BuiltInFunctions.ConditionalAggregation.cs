@@ -257,6 +257,28 @@ public static partial class BuiltInFunctions
 
     // ── MAXIFS ─────────────────────────────────────────────────────────────────
 
+    // R97-union-deferred-backlog: MAXIFS/MINIFS (like SUMIFS/COUNTIFS/AVERAGEIFS) pair max_range
+    // with one or more criteria_range arguments that must be the EXACT SAME SHAPE, then evaluate
+    // element-by-element at matching (r,c) positions (TryCreateConditionalCriteriaSet below). A
+    // parenthesized union argument (e.g. (A1:A5,C1:C5)) is deliberately NOT in
+    // FormulaEvaluator.FunctionClassification.cs's UnionMaterializableRangeFunctions for these:
+    // MaterializeUnionRangeValue collapses every area into one synthetic Nx1 column, which would
+    // only be shape-safe if EVERY range argument (max_range AND every criteria_range) were
+    // independently materialized from an IDENTICALLY-shaped union (same area boundaries, same
+    // area order) -- the per-argument choke point in FormulaEvaluator.Functions.cs has no way to
+    // enforce or even detect that cross-argument agreement, so materializing one argument at a
+    // time (the mechanism every other UnionMaterializableRangeFunctions member relies on) could
+    // silently misalign max_range's synthetic row N against a same-shaped-only-by-coincidence
+    // criteria_range's row N belonging to a different original area. Real per-area pairing would
+    // need a bespoke union-aware loop (materialize only when every argument's union has matching
+    // area shapes, else #VALUE!) -- out of scope for the shared choke point.
+    // A union max_range/criteria_range argument therefore still reaches this function body as a
+    // raw UnionValue (not a RangeValue), which the `args[0] is not RangeValue` guard below turns
+    // into #VALUE!. This engine has no live-Excel access to reverify interactively here, but it
+    // matches Microsoft's documented constraint that every criteria_range must be the "same size
+    // and shape" as max_range/sum_range -- a bare multi-area union has no single well-defined
+    // shape to compare against, so #VALUE! is the Excel-consistent outcome pending a real-Excel
+    // spot-check. See R97_MaxifsMinifsUnionDeferredTests for the pinned current behavior.
     private static ScalarValue Maxifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue maxRangeError) return maxRangeError;

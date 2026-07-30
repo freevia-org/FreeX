@@ -164,6 +164,11 @@ internal static class DuplicateSheetDrawingCloner
             TextThemeColor = textBox.TextThemeColor,
             TextHAlign = textBox.TextHAlign,
             TextVAnchor = textBox.TextVAnchor,
+            // R97-model-drawing-hyperlink-2-2: carry the object-level hyperlink forward -- without
+            // this, a text box's hyperlink was only ever preserved by re-reading it from the SOURCE
+            // package keyed by cNvPr@name (XlsxWorksheetDrawingObjectWriter's R95 mechanism), which a
+            // duplicate (never present in the source package under its own sheet name) can't reach.
+            Hyperlink = textBox.Hyperlink,
             // A source-loaded text box's on-disk part is preserved by keying source drawing parts
             // by sheet NAME (XlsxFileAdapter.SavePostProcessing.GetSourceDrawingPathsBySheet); the
             // duplicate always gets a brand-new sheet name (e.g. "Sheet1 (2)") that is absent from
@@ -207,6 +212,8 @@ internal static class DuplicateSheetDrawingCloner
             HasShadowEffect = shape.HasShadowEffect,
             EffectPreset = shape.EffectPreset,
             UsesThemeEffects = shape.UsesThemeEffects,
+            // R97-model-drawing-hyperlink-2-2: see the matching comment on CloneTextBox's Hyperlink copy.
+            Hyperlink = shape.Hyperlink,
             // A source-loaded shape's on-disk part is preserved by keying source drawing parts by
             // sheet NAME (XlsxFileAdapter.SavePostProcessing.GetSourceDrawingPathsBySheet); the
             // duplicate always gets a brand-new sheet name (e.g. "Sheet1 (2)") that is absent from
@@ -311,6 +318,8 @@ internal static class DuplicateSheetDrawingCloner
             CropTop = picture.CropTop,
             CropRight = picture.CropRight,
             CropBottom = picture.CropBottom,
+            // R97-model-drawing-hyperlink-2-2: see the matching comment on CloneTextBox's Hyperlink copy.
+            Hyperlink = picture.Hyperlink,
             // A source-loaded picture's on-disk part is preserved by keying source drawing parts by
             // sheet NAME (XlsxFileAdapter.SavePostProcessing.GetSourceDrawingPathsBySheet); the
             // duplicate always gets a brand-new name (e.g. "Sheet1 (2)") that is absent from the

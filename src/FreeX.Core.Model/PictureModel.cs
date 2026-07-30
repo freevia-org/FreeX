@@ -58,6 +58,16 @@ public sealed class PictureModel
     public bool IsSourceLoaded { get; set; }
 
     /// <summary>
+    /// R97-model-drawing-hyperlink-2-2: this picture's object-level hyperlink (an
+    /// <c>&lt;a:hlinkClick&gt;</c> on its <c>cNvPr</c>), populated on load and carried through
+    /// clone/paste (<c>DuplicateSheetDrawingCloner</c>, <c>PastePicturesCommand</c>) so a copy of a
+    /// hyperlinked picture keeps its hyperlink even when the copy is not itself source-loaded (and
+    /// so has nothing for <c>XlsxWorksheetDrawingObjectWriter</c> to re-read from the source
+    /// package). <see langword="null"/> means "no hyperlink".
+    /// </summary>
+    public DrawingObjectHyperlink? Hyperlink { get; set; }
+
+    /// <summary>
     /// R94 fix: this picture's <see cref="Width"/>/<see cref="Height"/> as they stood immediately after
     /// LOAD -- either the size computed from the source anchor's original cell span
     /// (<c>XlsxDrawingAnchorApplier.GetAnchorSize</c>) or, when that computation yields 0 for an axis
