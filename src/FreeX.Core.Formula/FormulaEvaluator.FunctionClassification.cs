@@ -233,6 +233,27 @@ public sealed partial class FormulaEvaluator
     // -- unlike VLOOKUP/INDEX/MATCH/FILTER/SORT/MMULT and the rest of StructuredRangeFunctions,
     // which index by row/column shape or pair multiple same-shaped ranges and are NOT safe to
     // treat this way without per-function verification (left as siblingLeads).
+    //
+    // R97-union-deferred-backlog additions:
+    //  - DEVSQ: its variadic loop (BuiltInFunctions.StatisticalCore.Variance.cs) has its own
+    //    "args[i] is RangeValue rv -> CollectRangeNumbers(rv)" case-by-case switch with NO
+    //    range-wrap fallback for anything else -- a raw UnionValue argument matched none of the
+    //    switch's arms and was silently skipped (contributed zero numbers) rather than misread,
+    //    a differently-shaped bug from LARGE/SMALL's "zero across the board" #NUM!. DEVSQ only
+    //    ever flattens its arguments (same as SUM/AVERAGE's shape-agnostic bag, just without
+    //    AggregateFunctions' variadic-scalar-spread contract because DEVSQ is a
+    //    StructuredRangeFunction), so materializing here is exactly as safe as for LARGE/SMALL.
+    //  - FREQUENCY: takes two INDEPENDENT array arguments, data_array and bins_array, each of
+    //    which is separately flattened into a flat list of numbers (BuiltInFunctions.
+    //    StatisticalDistributions.Descriptive.cs's Frequency: "args[0] is RangeValue rvd" and
+    //    "args[1] is RangeValue rvb" are two unrelated checks, never paired/shape-compared against
+    //    each other unlike MAXIFS/MINIFS's range+criteria pairing below). The per-argument
+    //    expansion loop in FormulaEvaluator.Functions.cs that consults this set runs once per
+    //    argument position independently, so adding FREQUENCY here materializes data_array and/or
+    //    bins_array separately, whichever one(s) are unions -- safe for the same reason DEVSQ is.
+    //    Before this fix a union data_array/bins_array matched neither Frequency's
+    //    "is RangeValue"/"TryCellNumber" branches and silently contributed nothing (an empty
+    //    data set / zero bins) instead of erroring or computing the right answer.
     private static readonly HashSet<string> UnionMaterializableRangeFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
         "LARGE", "SMALL", "RANK", "RANK.EQ", "RANK.AVG",
@@ -240,7 +261,8 @@ public sealed partial class FormulaEvaluator
         "QUARTILE", "QUARTILE.INC", "QUARTILE.EXC",
         "TRIMMEAN",
         "PERCENTRANK", "PERCENTRANK.INC", "PERCENTRANK.EXC",
-        "COUNTBLANK"
+        "COUNTBLANK",
+        "DEVSQ", "FREQUENCY"
     };
 
     private static bool IsUnionMaterializableRangeFunction(string name) =>

@@ -149,7 +149,12 @@ public sealed partial class XlsxFileAdapter
                 // R80-io-drawing-image-5-3: carry the vector SVG fallback (if any) onto the model so
                 // the writer can re-emit the asvg:svgBlip extension instead of permanently downgrading
                 // the picture to a flat PNG the first time it is edited.
-                SvgImageBytes = picturePart.SvgImageBytes
+                SvgImageBytes = picturePart.SvgImageBytes,
+                // R97-model-drawing-hyperlink-2-2: populate the model's own hyperlink field so a later
+                // clone/paste of this picture (which clears IsSourceLoaded and so can't lean on the
+                // source-package hyperlink re-read in XlsxWorksheetDrawingObjectWriter) still has a
+                // hyperlink to carry forward.
+                Hyperlink = picturePart.Hyperlink
             };
             XlsxDrawingAnchorApplier.ApplyToPicture(picture, picturePart.Anchor, sheet);
             picture.IsSourceLoaded = true;
@@ -193,7 +198,9 @@ public sealed partial class XlsxFileAdapter
                 TextColor = textBoxPart.TextColor,
                 TextThemeColor = textBoxPart.TextThemeColor,
                 TextHAlign = textBoxPart.TextHAlign,
-                TextVAnchor = textBoxPart.TextVAnchor
+                TextVAnchor = textBoxPart.TextVAnchor,
+                // R97-model-drawing-hyperlink-2-2: see the matching comment on the picture path above.
+                Hyperlink = textBoxPart.Hyperlink
             };
             XlsxDrawingAnchorApplier.ApplyToTextBox(textBox, textBoxPart.Anchor, sheet);
             textBox.IsSourceLoaded = true;
@@ -256,7 +263,9 @@ public sealed partial class XlsxFileAdapter
                 ShapeTextOutlineColor = shapePart.ShapeTextOutlineColor,
                 ShapeTextOutlineThemeColor = shapePart.ShapeTextOutlineThemeColor,
                 ShapeTextOutlineWidthPoints = shapePart.ShapeTextOutlineWidthPoints,
-                AdjustValues = shapePart.AdjustValues
+                AdjustValues = shapePart.AdjustValues,
+                // R97-model-drawing-hyperlink-2-2: see the matching comment on the picture path above.
+                Hyperlink = shapePart.Hyperlink
             };
             XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet,
                 shapePart.XfrmWidthPixels, shapePart.XfrmHeightPixels);

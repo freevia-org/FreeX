@@ -179,6 +179,9 @@ public sealed class PastePicturesCommand : IWorkbookCommand
             CropTop = picture.CropTop,
             CropRight = picture.CropRight,
             CropBottom = picture.CropBottom,
+            // R97-model-drawing-hyperlink-2-2: carry the object-level hyperlink into the pasted copy
+            // -- mirrors DuplicateSheetDrawingCloner.ClonePicture's identical Hyperlink copy.
+            Hyperlink = picture.Hyperlink,
             IsSourceLoaded = false
         };
 

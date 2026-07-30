@@ -57,7 +57,12 @@ internal sealed record XlsxPicturePackagePart(
     // "Mark as decorative" extension (see XlsxWorksheetDrawingParts.ReadNonVisualDecorative). Must
     // round-trip on save (XlsxWorksheetDrawingObjectWriter) or a decorative picture would incorrectly
     // become a real Missing-Alt-Text finding (in FreeX and in real Excel) after opening and resaving.
-    bool IsDecorative = false);
+    bool IsDecorative = false,
+    // R97-model-drawing-hyperlink-2-2: the picture's object-level hyperlink (<a:hlinkClick> on its
+    // cNvPr), resolved via the drawing part's own relationships. Populated for EVERY loaded picture
+    // (not just ones that stay source-loaded) so DuplicateSheetDrawingCloner/PastePicturesCommand
+    // have something to carry forward once IsSourceLoaded is cleared. Null = no hyperlink.
+    DrawingObjectHyperlink? Hyperlink = null);
 
 internal sealed record XlsxTextBoxPackagePart(
     string Text,
@@ -89,7 +94,9 @@ internal sealed record XlsxTextBoxPackagePart(
     // R91-commands-insert-object-5-1: true when &lt;a:ln&gt;&lt;a:noFill/&gt; is present -- explicitly
     // no border. Mirrors XlsxShapePackagePart.OutlineHasNoFill; without this an authored borderless
     // text box always regained a gray border on load (and permanently baked it in on re-save).
-    bool OutlineHasNoFill = false);
+    bool OutlineHasNoFill = false,
+    // R97-model-drawing-hyperlink-2-2: see the matching field on XlsxPicturePackagePart.
+    DrawingObjectHyperlink? Hyperlink = null);
 
 internal sealed record XlsxShapePackagePart(
     DrawingShapeKind Kind,
@@ -171,7 +178,9 @@ internal sealed record XlsxShapePackagePart(
     WorkbookThemeColorReference? ShapeTextOutlineThemeColor,
     double ShapeTextOutlineWidthPoints,
     /// <summary>Adjust-handle values from &lt;a:avLst&gt;&lt;a:gd .../&gt;; null/empty = geometry defaults.</summary>
-    IReadOnlyList<DrawingShapeAdjustValue>? AdjustValues = null);
+    IReadOnlyList<DrawingShapeAdjustValue>? AdjustValues = null,
+    // R97-model-drawing-hyperlink-2-2: see the matching field on XlsxPicturePackagePart.
+    DrawingObjectHyperlink? Hyperlink = null);
 
 internal sealed record XlsxWorksheetDrawingPackageParts(
     IReadOnlyList<XlsxChartPackagePart> ChartParts,
@@ -215,8 +224,63 @@ internal static partial class XlsxWorksheetDrawingPartReader
 
         var charts = ReadChartParts(archive, drawingPath, drawingXml, drawingRelsXml);
         var pictures = ReadPictureParts(archive, drawingPath, drawingXml, drawingRelsXml);
-        var (textBoxes, shapes) = ReadShapeParts(drawingXml);
+        var (textBoxes, shapes) = ReadShapeParts(drawingXml, drawingRelsXml);
         return new XlsxWorksheetDrawingPackageParts(charts, pictures, textBoxes, shapes);
+    }
+
+    /// <summary>
+    /// R97-model-drawing-hyperlink-2-2: reads every relationship in a drawing part's own <c>.rels</c>,
+    /// keeping BOTH the Target and TargetMode (unlike <see cref="ReadRelationshipTargetsById"/>, which
+    /// only the blip-embed/blip-link callers need and which drops TargetMode). Used to resolve an
+    /// <c>a:hlinkClick@r:id</c> on a picture/shape/text-box's <c>cNvPr</c> into the (Target,
+    /// TargetMode) pair <see cref="DrawingObjectHyperlink"/> carries -- mirrors
+    /// <c>XlsxWorksheetDrawingObjectWriter.ReadOldDrawingObjectHyperlinksByName</c>'s identical
+    /// relationship-resolution shape (that one resolves by object NAME across a save's pre-rebuild
+    /// bytes; this one resolves by r:id at LOAD time so the model itself carries the hyperlink).
+    /// </summary>
+    private static Dictionary<string, (string Target, string? TargetMode)> ReadRelationshipsWithTargetModeById(
+        XElement? relationshipRoot, XNamespace packageRelNs)
+    {
+        var rels = new Dictionary<string, (string, string?)>(StringComparer.Ordinal);
+        if (relationshipRoot is null)
+            return rels;
+
+        foreach (var relationship in relationshipRoot.Elements(packageRelNs + "Relationship"))
+        {
+            var id = relationship.Attribute("Id")?.Value;
+            var target = relationship.Attribute("Target")?.Value;
+            if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(target))
+                rels.TryAdd(id, (target, relationship.Attribute("TargetMode")?.Value));
+        }
+
+        return rels;
+    }
+
+    /// <summary>
+    /// R97-model-drawing-hyperlink-2-2: reads the object-level hyperlink (<c>&lt;a:hlinkClick&gt;</c>)
+    /// off the FIRST <c>cNvPr</c> descendant of <paramref name="element"/> -- the same descendant
+    /// <see cref="ReadNonVisualProperties"/> reads name/title/descr from -- and resolves its
+    /// <c>r:id</c> via <paramref name="hyperlinkRelsById"/>. Returns null when the element has no
+    /// hlinkClick, or its r:id doesn't resolve (a malformed/missing rels part).
+    /// </summary>
+    private static DrawingObjectHyperlink? ReadObjectHyperlink(
+        XElement element,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        XNamespace relNs,
+        IReadOnlyDictionary<string, (string Target, string? TargetMode)> hyperlinkRelsById)
+    {
+        var cNvPr = element.Descendants(spreadsheetDrawingNs + "cNvPr").FirstOrDefault();
+        var hlinkClick = cNvPr?.Element(drawingNs + "hlinkClick");
+        var relId = hlinkClick?.Attribute(relNs + "id")?.Value;
+        if (string.IsNullOrEmpty(relId) || !hyperlinkRelsById.TryGetValue(relId, out var resolved))
+            return null;
+
+        var tooltip = hlinkClick!.Attribute("tooltip")?.Value;
+        return new DrawingObjectHyperlink(
+            resolved.Target,
+            resolved.TargetMode,
+            string.IsNullOrWhiteSpace(tooltip) ? null : tooltip);
     }
 
     private static IReadOnlyList<XlsxChartPackagePart> ReadChartParts(
@@ -326,6 +390,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return [];
 
         var relationshipTargets = ReadRelationshipTargetsById(drawingRelsXml.Root, packageRelNs);
+        // R97-model-drawing-hyperlink-2-2: TargetMode-carrying sibling of relationshipTargets above,
+        // used only to resolve a:hlinkClick/@r:id (blip embed/link resolution above never needs
+        // TargetMode, so it keeps using the lighter relationshipTargets dict).
+        var hyperlinkRelsById = ReadRelationshipsWithTargetModeById(drawingRelsXml.Root, packageRelNs);
         var pictures = new List<XlsxPicturePackagePart>(relationshipTargets.Count);
 
         foreach (var pictureElement in drawingXml.Descendants(spreadsheetDrawingNs + "pic"))
@@ -435,7 +503,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 anchorElement is null ? -1 : ReadAnchorOrderIndex(anchorElement, spreadsheetDrawingNs),
                 linkTarget,
                 svgImageBytes,
-                isDecorative));
+                isDecorative,
+                ReadObjectHyperlink(pictureElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById)));
         }
 
         return pictures;
@@ -529,13 +598,18 @@ internal static partial class XlsxWorksheetDrawingPartReader
     }
 
     internal static (IReadOnlyList<XlsxTextBoxPackagePart> TextBoxes, IReadOnlyList<XlsxShapePackagePart> Shapes) ReadShapeParts(
-        XDocument drawingXml)
+        XDocument drawingXml, XDocument? drawingRelsXml = null)
     {
         var textBoxes = new List<XlsxTextBoxPackagePart>();
         var shapes = new List<XlsxShapePackagePart>();
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+        // R97-model-drawing-hyperlink-2-2: resolves a shape/text-box's a:hlinkClick/@r:id into a
+        // DrawingObjectHyperlink -- see ReadObjectHyperlink/ReadRelationshipsWithTargetModeById.
+        var hyperlinkRelsById = ReadRelationshipsWithTargetModeById(drawingRelsXml?.Root, packageRelNs);
 
         // R78-io-shape-geometry-5-2: walk <xdr:sp> and <xdr:cxnSp> together in a single
         // document-order pass (rather than one full pass per element name) so a drawing part that
@@ -549,7 +623,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 if (element.Ancestors(markupCompatNs + "Fallback").Any())
                     continue;
 
-                ReadSpElement(element, spreadsheetDrawingNs, drawingNs, textBoxes, shapes);
+                ReadSpElement(element, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById, textBoxes, shapes);
             }
             else if (element.Name == spreadsheetDrawingNs + "cxnSp")
             {
@@ -557,7 +631,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 if (element.Ancestors(markupCompatNs + "Fallback").Any())
                     continue;
 
-                ReadCxnSpElement(element, spreadsheetDrawingNs, drawingNs, shapes);
+                ReadCxnSpElement(element, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById, shapes);
             }
         }
 
@@ -568,12 +642,15 @@ internal static partial class XlsxWorksheetDrawingPartReader
         XElement shapeElement,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
+        XNamespace relNs,
+        IReadOnlyDictionary<string, (string Target, string? TargetMode)> hyperlinkRelsById,
         List<XlsxTextBoxPackagePart> textBoxes,
         List<XlsxShapePackagePart> shapes)
     {
         var name = ReadNonVisualName(shapeElement);
         var title = ReadNonVisualTitle(shapeElement);
         var altText = ReadNonVisualDescription(shapeElement);
+        var hyperlink = ReadObjectHyperlink(shapeElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById);
         var spPr = shapeElement.Element(spreadsheetDrawingNs + "spPr");
         var transform = spPr?.Element(drawingNs + "xfrm");
         var groupTransform = ComputeGroupTransform(shapeElement, spreadsheetDrawingNs, drawingNs);
@@ -659,7 +736,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 txBoxThemeColor,
                 txBoxHAlign,
                 txBoxVAnchor,
-                outlineHasNoFill));
+                outlineHasNoFill,
+                hyperlink));
             return;
         }
 
@@ -729,7 +807,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             textOutlineColor,
             textOutlineThemeColor,
             textOutlineWidthPt,
-            ReadShapeAdjustValues(spPr, drawingNs)));
+            ReadShapeAdjustValues(spPr, drawingNs),
+            hyperlink));
     }
 
     /// <summary>
@@ -937,11 +1016,14 @@ internal static partial class XlsxWorksheetDrawingPartReader
         XElement cxnSpElement,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
+        XNamespace relNs,
+        IReadOnlyDictionary<string, (string Target, string? TargetMode)> hyperlinkRelsById,
         List<XlsxShapePackagePart> shapes)
     {
         var name = ReadNonVisualName(cxnSpElement);
         var title = ReadNonVisualTitle(cxnSpElement);
         var altText = ReadNonVisualDescription(cxnSpElement);
+        var hyperlink = ReadObjectHyperlink(cxnSpElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById);
         var spPr = cxnSpElement.Element(spreadsheetDrawingNs + "spPr");
         var transform = spPr?.Element(drawingNs + "xfrm");
         var groupTransform = ComputeGroupTransform(cxnSpElement, spreadsheetDrawingNs, drawingNs);
@@ -1027,7 +1109,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             ShapeTextOutlineColor: null,
             ShapeTextOutlineThemeColor: null,
             ShapeTextOutlineWidthPoints: 0,
-            AdjustValues: ReadShapeAdjustValues(spPr, drawingNs)));
+            AdjustValues: ReadShapeAdjustValues(spPr, drawingNs),
+            Hyperlink: hyperlink));
     }
 
     private static bool ReadUsesThemeEffectStyle(

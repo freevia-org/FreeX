@@ -19,50 +19,86 @@ public static partial class BuiltInFunctions
         var numeric = new SubtotalNumericAccumulator();
         List<double>? statisticalValues = IsSubtotalStatisticalFunction(baseFunc) ? [] : null;
         int countaCount = 0;
+
+        // Processes one genuine worksheet-range argument (or one area of a union argument --
+        // see the UnionValue branch below) against the accumulators above, honoring
+        // hidden-row-skip and nested-SUBTOTAL/AGGREGATE exclusion. Extracted to a local function
+        // so a UnionValue's areas can each run through the identical logic a plain RangeValue
+        // argument does (R97-union-deferred-backlog).
+        ErrorValue? ProcessSubtotalRange(RangeValue rv)
+        {
+            // A computed/virtual array (e.g. the result of FILTER, SORT, SEQUENCE, MAP, ...)
+            // has no real position on the sheet, so RangeValue defaults its StartRow/StartCol
+            // to 1 and leaves SheetName null (see RangeValue in FreeX.Core.Model/ScalarValue.cs
+            // and its construction sites in BuiltInFunctions.DynamicArrays.*.cs). Only a genuine
+            // worksheet REFERENCE carries coordinates meaningful enough to look up hidden-row
+            // state or nested SUBTOTAL/AGGREGATE formulas. We gate on the explicit
+            // RangeValue.IsSheetReference provenance flag (set only at the reference-
+            // materialization sites — BuildRangeValue / OFFSET / INDIRECT) rather than guessing
+            // from the coordinates: a computed array's default (1,1)/null-SheetName is field-for-
+            // field identical to a genuine same-sheet A1-anchored reference, so no coordinate
+            // heuristic can tell them apart without wrongly dropping elements for one of them
+            // (e.g. =SUBTOTAL(107,A1:A4) with a hidden row 2 must still exclude that row).
+            // See R19-formula-functions-edge-1 and R25-aggregate-subtotal-deep-3.
+            bool isReference = rv.IsSheetReference;
+
+            for (int r = 0; r < rv.RowCount; r++)
+            {
+                uint absRow = rv.StartRow + (uint)r;
+                if (isReference && ShouldSkipSubtotalRow(ctx, rv, absRow, skipHidden)) continue;
+                for (int c = 0; c < rv.ColCount; c++)
+                {
+                    uint absCol = rv.StartCol + (uint)c;
+                    if (isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                    var cell = rv.Cells[r, c];
+                    if (cell is ErrorValue err)
+                    {
+                        // COUNT (2) ignores error cells; COUNTA (3) counts them as non-blank.
+                        // All other aggregating functions propagate the error immediately.
+                        if (baseFunc == 2) continue;
+                        if (baseFunc == 3) { countaCount++; continue; }
+                        return err;
+                    }
+                    if (TryCellNumber(cell, out double value))
+                    {
+                        numeric.Add(value, baseFunc);
+                        statisticalValues?.Add(value);
+                    }
+                    if (cell is not BlankValue) countaCount++;
+                }
+            }
+            return null;
+        }
+
         for (int i = 1; i < args.Count; i++)
         {
             if (args[i] is ErrorValue ei) return ei;
             if (args[i] is RangeValue rv)
             {
-                // A computed/virtual array (e.g. the result of FILTER, SORT, SEQUENCE, MAP, ...)
-                // has no real position on the sheet, so RangeValue defaults its StartRow/StartCol
-                // to 1 and leaves SheetName null (see RangeValue in FreeX.Core.Model/ScalarValue.cs
-                // and its construction sites in BuiltInFunctions.DynamicArrays.*.cs). Only a genuine
-                // worksheet REFERENCE carries coordinates meaningful enough to look up hidden-row
-                // state or nested SUBTOTAL/AGGREGATE formulas. We gate on the explicit
-                // RangeValue.IsSheetReference provenance flag (set only at the reference-
-                // materialization sites — BuildRangeValue / OFFSET / INDIRECT) rather than guessing
-                // from the coordinates: a computed array's default (1,1)/null-SheetName is field-for-
-                // field identical to a genuine same-sheet A1-anchored reference, so no coordinate
-                // heuristic can tell them apart without wrongly dropping elements for one of them
-                // (e.g. =SUBTOTAL(107,A1:A4) with a hidden row 2 must still exclude that row).
-                // See R19-formula-functions-edge-1 and R25-aggregate-subtotal-deep-3.
-                bool isReference = rv.IsSheetReference;
-
-                for (int r = 0; r < rv.RowCount; r++)
+                var rangeError = ProcessSubtotalRange(rv);
+                if (rangeError is not null) return rangeError;
+            }
+            else if (args[i] is UnionValue uv)
+            {
+                // R97-union-deferred-backlog: a parenthesized union argument (e.g.
+                // SUBTOTAL(109,(A1:A5,C1:C5))) is semantically the same as Excel's native
+                // variadic ref1,ref2,... support (SUBTOTAL(109,A1:A5,C1:C5) -- SUBTOTAL already
+                // accepts multiple disjoint range arguments). Each area inside the union is a
+                // genuine RangeValue carrying its own real IsSheetReference/StartRow/SheetName
+                // (EvaluateUnionNode in FormulaEvaluator.References.cs evaluates every area via
+                // EvaluateArrayOperand, the same path a plain range argument takes), so the
+                // hidden-row-skip and nested-SUBTOTAL/AGGREGATE exclusion are just as well-defined
+                // per area as they are for a plain range -- process each area individually with
+                // the exact same ProcessSubtotalRange logic rather than materializing the union
+                // into one synthetic Nx1 RangeValue (MaterializeUnionRangeValue), which would
+                // collapse every area's cells into a single computed-array-shaped RangeValue with
+                // IsSheetReference=false and lose the per-area row/sheet provenance those checks
+                // require -- exactly the reason SUBTOTAL/AGGREGATE are deliberately absent from
+                // FormulaEvaluator.FunctionClassification.cs's UnionMaterializableRangeFunctions.
+                foreach (var area in uv.Areas)
                 {
-                    uint absRow = rv.StartRow + (uint)r;
-                    if (isReference && ShouldSkipSubtotalRow(ctx, rv, absRow, skipHidden)) continue;
-                    for (int c = 0; c < rv.ColCount; c++)
-                    {
-                        uint absCol = rv.StartCol + (uint)c;
-                        if (isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
-                        var cell = rv.Cells[r, c];
-                        if (cell is ErrorValue err)
-                        {
-                            // COUNT (2) ignores error cells; COUNTA (3) counts them as non-blank.
-                            // All other aggregating functions propagate the error immediately.
-                            if (baseFunc == 2) continue;
-                            if (baseFunc == 3) { countaCount++; continue; }
-                            return err;
-                        }
-                        if (TryCellNumber(cell, out double value))
-                        {
-                            numeric.Add(value, baseFunc);
-                            statisticalValues?.Add(value);
-                        }
-                        if (cell is not BlankValue) countaCount++;
-                    }
+                    var areaError = ProcessSubtotalRange(area);
+                    if (areaError is not null) return areaError;
                 }
             }
             else if (TryCellNumber(args[i], out double scalarNum))
