@@ -2589,6 +2589,8 @@ public sealed partial class MainWindow : Window
         {
             r.Register(route.CommandId, new ActionRibbonCommand(() => route.Execute(Editor)));
         }
+        r.Register(RotationOptionsPlanner.CommandId,
+            new ActionRibbonCommand(OpenRotationOptionsDialog));
         r.Register(OleActivationPlanner.OpenEmbeddedObjectCommandId,
             new ActionRibbonCommand(() =>
             {
@@ -3872,6 +3874,21 @@ public sealed partial class MainWindow : Window
             return;
 
         var dialog = new ChartProtectionOptionsDialog(Editor);
+        if (IsVisible)
+        {
+            _ = dialog.ShowDialog<bool?>(this);
+            return;
+        }
+
+        dialog.Show();
+    }
+
+    internal void OpenRotationOptionsDialog()
+    {
+        if (Editor.SelectedShapeIds.Count == 0)
+            return;
+
+        var dialog = new RotationOptionsDialog(Editor);
         if (IsVisible)
         {
             _ = dialog.ShowDialog<bool?>(this);

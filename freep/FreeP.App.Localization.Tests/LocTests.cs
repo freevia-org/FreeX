@@ -390,6 +390,8 @@ public sealed class LocTests
             "Ribbon_Command_ArrangeRotateLeft90_KeyTip",
             "Ribbon_Command_ArrangeRotateRight90_Label",
             "Ribbon_Command_ArrangeRotateRight90_KeyTip",
+            "Ribbon_Command_ArrangeRotationOptions_Label",
+            "Ribbon_Command_ArrangeRotationOptions_KeyTip",
             "Ribbon_Command_ArrangeAlignLeft_Label",
             "Ribbon_Command_ArrangeAlignLeft_KeyTip",
             "Ribbon_Command_ArrangeAlignCenterHorizontal_Label",

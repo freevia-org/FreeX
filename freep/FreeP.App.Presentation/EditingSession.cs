@@ -846,6 +846,28 @@ public sealed class EditingSession
         Bus.Execute(new RotateShapeCommand(_currentSlideIndex, shapeId, newRotationDeg));
     }
 
+    /// <summary>Sets the rotation of every selected editable shape as one undoable operation.</summary>
+    public bool SetSelectedRotation(double newRotationDeg)
+    {
+        if (CurrentSlide is null || !double.IsFinite(newRotationDeg))
+            return false;
+
+        var normalized = RotationOptionsPlanner.Normalize(newRotationDeg);
+        var commands = _selectedShapeIds
+            .Select(id => CurrentSlide.Shapes.FirstOrDefault(shape => shape.Id == id))
+            .Where(shape => shape is not null)
+            .Where(shape => Math.Abs(shape!.RotationDeg - normalized) > 0.0001)
+            .Select(shape => (IPresentationCommand)new RotateShapeCommand(
+                _currentSlideIndex, shape!.Id, normalized))
+            .ToList();
+
+        if (commands.Count == 0)
+            return false;
+
+        Bus.Execute(new BatchCommand("Set Rotation", commands));
+        return true;
+    }
+
     /// <summary>Toggles a single shape's horizontal or vertical mirror state.</summary>
     public void FlipShape(uint shapeId, bool horizontal)
     {

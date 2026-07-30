@@ -123,6 +123,7 @@ internal static class FreePRibbonCommands
         Action?             onEditChartTextOptions = null,
         Action?             onEditChartAreaOptions = null,
         Action?             onEditChartProtectionOptions = null,
+        Action?             onEditRotationOptions = null,
         Action?             onInsertEmbeddedObject = null,
         Action<OleObjectInfo>? onOpenEmbeddedObject = null,
         Action?             onTransitionSound = null)
@@ -825,6 +826,9 @@ internal static class FreePRibbonCommands
 
         registry.Register("freep.arrange.rotate-right-90",
             new ActionRibbonCommand(() => editor.RotateSelectedRight90()));
+
+        registry.Register(RotationOptionsPlanner.CommandId,
+            new ActionRibbonCommand(() => onEditRotationOptions?.Invoke()));
 
         registry.Register("freep.arrange.align-left",
             new ActionRibbonCommand(() => editor.AlignLeft()));

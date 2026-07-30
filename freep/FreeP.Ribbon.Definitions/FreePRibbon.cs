@@ -321,6 +321,8 @@ public static class FreePRibbon
             RibbonCommandIconKind.Rotate, FreePRibbonText.ArrangeRotateLeft90Command.KeyTip);
         group.Medium("freep.arrange.rotate-right-90", FreePRibbonText.ArrangeRotateRight90Command.Label,
             RibbonCommandIconKind.Rotate, FreePRibbonText.ArrangeRotateRight90Command.KeyTip);
+        group.Medium(RotationOptionsPlanner.CommandId, FreePRibbonText.ArrangeRotationOptionsCommand.Label,
+            RibbonCommandIconKind.Rotate, FreePRibbonText.ArrangeRotationOptionsCommand.KeyTip);
         group.Separator();
         group.Medium("freep.arrange.align-left", FreePRibbonText.ArrangeAlignLeftCommand.Label,
             RibbonCommandIconKind.AlignLeft, FreePRibbonText.ArrangeAlignLeftCommand.KeyTip);

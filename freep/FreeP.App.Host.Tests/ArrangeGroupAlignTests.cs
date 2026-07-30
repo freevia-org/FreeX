@@ -459,6 +459,24 @@ public sealed class ArrangeGroupAlignTests
     }
 
     [Fact]
+    public void SetSelectedRotation_AppliesToAllSelectedAndUndoRestores()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 100, 0, 200, 100));
+        slide.Shapes.Add(MakeRect(11, 300, 0, 100, 100));
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+
+        session.SetSelectedRotation(-90).Should().BeTrue();
+        slide.Shapes.ForEach(shape => shape.RotationDeg.Should().Be(270));
+
+        session.Undo();
+        slide.Shapes.ForEach(shape => shape.RotationDeg.Should().Be(0));
+    }
+
+    [Fact]
     public void DistributeHorizontally_ThreeShapes_EvensSpacing()
     {
         var (pres, session) = CreateSession();

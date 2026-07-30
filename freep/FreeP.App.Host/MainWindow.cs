@@ -470,6 +470,7 @@ public sealed partial class MainWindow : Window
             onEditChartTextOptions: () => OpenChartTextOptionsDialog(),
             onEditChartAreaOptions: () => OpenChartAreaOptionsDialog(),
             onEditChartProtectionOptions: () => OpenChartProtectionOptionsDialog(),
+            onEditRotationOptions: () => OpenRotationOptionsDialog(),
             onInsertEmbeddedObject: () => InsertEmbeddedObjectFromFile(),
             getSlideCanvas:     () => SlideCanvas,
             onEditPoints:       () => SlideCanvas.SetEditPointsMode(!SlideCanvas.EditPointsEnabled),
@@ -4326,6 +4327,15 @@ public sealed partial class MainWindow : Window
         var dialog = new ChartProtectionOptionsDialog(Editor);
         if (IsVisible)
             dialog.Owner = this;
+        dialog.ShowDialog();
+    }
+
+    internal void OpenRotationOptionsDialog()
+    {
+        if (Editor.SelectedShapeIds.Count == 0)
+            return;
+
+        var dialog = new RotationOptionsDialog(Editor) { Owner = this };
         dialog.ShowDialog();
     }
 

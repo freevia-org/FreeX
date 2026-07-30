@@ -1150,6 +1150,12 @@
   <data name="Ribbon_Command_ArrangeRotateRight90_KeyTip" xml:space="preserve">
     <value>T</value>
   </data>
+  <data name="Ribbon_Command_ArrangeRotationOptions_Label" xml:space="preserve">
+    <value>More Rotation Options</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeRotationOptions_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
   <data name="Ribbon_Command_ArrangeAlignLeft_Label" xml:space="preserve">
     <value>Align Left</value>
   </data>

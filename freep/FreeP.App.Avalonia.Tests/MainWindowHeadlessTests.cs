@@ -6745,6 +6745,7 @@ public sealed class MainWindowHeadlessTests
     [InlineData("freep.arrange.flip-vertical")]
     [InlineData("freep.arrange.rotate-left-90")]
     [InlineData("freep.arrange.rotate-right-90")]
+    [InlineData("freep.arrange.rotation-options")]
     [InlineData("freep.arrange.align-left")]
     [InlineData("freep.arrange.align-center-h")]
     [InlineData("freep.arrange.align-right")]
