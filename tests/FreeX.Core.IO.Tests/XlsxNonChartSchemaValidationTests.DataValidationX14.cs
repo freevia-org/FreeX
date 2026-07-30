@@ -167,7 +167,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 new CellAddress(sheet1.Id, 2, 2),
                 new CellAddress(sheet1.Id, 2, 2)),
             Type = DvType.List,
-            Formula1 = "Sheet2!$A$1:$A$5",
+            // The leading '=' is the in-memory marker Load() always adds for a genuine range/
+            // cross-sheet reference (see XlsxDataValidationClosedXmlMapper.Load and
+            // XlsxX14DataValidationReader.NormalizeX14ListFormula1) -- NormalizeListFormulaForSave
+            // treats this as the ONLY literal-vs-reference authority (R95/R96), so a hand-built
+            // model must carry it too in order to reflect a real reference instead of a literal
+            // whose text happens to look like one.
+            Formula1 = "=Sheet2!$A$1:$A$5",
             AllowBlank = true,
             ShowDropdown = true,
             IsX14 = true,
@@ -213,7 +219,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 new CellAddress(sheet1.Id, 3, 1),
                 new CellAddress(sheet1.Id, 3, 1)),
             Type = DvType.List,
-            Formula1 = "Sheet2!$A$1:$A$3",
+            // See the marker note in X14DataValidation_Save_EmitsX14ExtLstBlock above.
+            Formula1 = "=Sheet2!$A$1:$A$3",
             AllowBlank = true,
             IsX14 = true,
         });

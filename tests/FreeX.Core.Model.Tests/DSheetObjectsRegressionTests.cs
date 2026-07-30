@@ -1,3 +1,5 @@
+using System.Linq;
+using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -189,6 +191,123 @@ public sealed class DSheetObjectsRegressionTests
         command.Revert(ctx);
 
         cache.SourceSheetName.Should().Be("Data");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // R96 — RemoveSheet must preserve a WorksheetRange pivot cache's records into
+    // RawRecordsXml when its source sheet is deleted, not just null SourceSheetName. Without this,
+    // XlsxPivotTableWriter.Cache.cs's ToPivotCacheRecordsXml can neither re-resolve a live range
+    // (source sheet gone) nor find preserved records (RawRecordsXml was never populated for
+    // WorksheetRange sources), so the pivot table's cache silently truncates to
+    // <pivotCacheRecords count="0"/> on the very next save — real Excel keeps the last-refreshed
+    // cache intact after the source sheet disappears.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void R96_RemoveSheet_PreservesPivotCacheRecordsInRawRecordsXml()
+    {
+        var wb = new Workbook("test");
+        var data = wb.AddSheet("Data");
+        wb.AddSheet("Report");
+        data.SetCell(new CellAddress(data.Id, 1, 1), new TextValue("Region"));
+        data.SetCell(new CellAddress(data.Id, 1, 2), new TextValue("Amount"));
+        data.SetCell(new CellAddress(data.Id, 2, 1), new TextValue("East"));
+        data.SetCell(new CellAddress(data.Id, 2, 2), new NumberValue(10));
+        data.SetCell(new CellAddress(data.Id, 3, 1), new TextValue("West"));
+        data.SetCell(new CellAddress(data.Id, 3, 2), new NumberValue(20));
+
+        var ctx = new TestCommandContext(wb);
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Data",
+            SourceReference = "A1:B3"
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Region", ContainsString: true));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount", ContainsNumber: true));
+        wb.PivotCaches.Add(cache);
+
+        var command = new RemoveSheetCommand(data.Id);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        cache.SourceSheetName.Should().BeNull();
+        cache.RawRecordsXml.Should().NotBeNullOrWhiteSpace(
+            because: "the deleted sheet's last-known records must be captured as a fallback the " +
+                     "writer can serve once it can no longer re-derive them from a live range");
+
+        var recordsDoc = System.Xml.Linq.XDocument.Parse(cache.RawRecordsXml!);
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        recordsDoc.Root!.Name.Should().Be(ns + "pivotCacheRecords");
+        var records = recordsDoc.Root.Elements(ns + "r").ToList();
+        records.Should().HaveCount(2, because: "two data rows (East/10, West/20) existed at delete time");
+        records[0].Elements().Select(e => e.Name.LocalName).Should().Equal("s", "n");
+        records[0].Elements().ElementAt(0).Attribute("v")!.Value.Should().Be("East");
+        records[0].Elements().ElementAt(1).Attribute("v")!.Value.Should().Be("10");
+        records[1].Elements().ElementAt(0).Attribute("v")!.Value.Should().Be("West");
+        records[1].Elements().ElementAt(1).Attribute("v")!.Value.Should().Be("20");
+    }
+
+    [Fact]
+    public void R96_RemoveSheetRevert_RestoresRawRecordsXmlToNull()
+    {
+        var wb = new Workbook("test");
+        var data = wb.AddSheet("Data");
+        wb.AddSheet("Report");
+        data.SetCell(new CellAddress(data.Id, 1, 1), new TextValue("Region"));
+        data.SetCell(new CellAddress(data.Id, 1, 2), new TextValue("Amount"));
+        data.SetCell(new CellAddress(data.Id, 2, 1), new TextValue("East"));
+        data.SetCell(new CellAddress(data.Id, 2, 2), new NumberValue(10));
+        data.SetCell(new CellAddress(data.Id, 3, 1), new TextValue("West"));
+        data.SetCell(new CellAddress(data.Id, 3, 2), new NumberValue(20));
+
+        var ctx = new TestCommandContext(wb);
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Data",
+            SourceReference = "A1:B3"
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Region", ContainsString: true));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount", ContainsNumber: true));
+        wb.PivotCaches.Add(cache);
+
+        var command = new RemoveSheetCommand(data.Id);
+        command.Apply(ctx);
+        cache.RawRecordsXml.Should().NotBeNullOrWhiteSpace(); // sanity: capture happened
+
+        command.Revert(ctx);
+
+        cache.SourceSheetName.Should().Be("Data");
+        cache.RawRecordsXml.Should().BeNull(
+            because: "undoing the delete must not leave a cache carrying preserved records it never " +
+                     "had before the delete happened");
+    }
+
+    [Fact]
+    public void R96_RemoveSheet_NoSourceReference_DoesNotSynthesizeRawRecordsXml()
+    {
+        // Sibling/no-regression case: a cache with no SourceReference (e.g. table-sourced, or never
+        // fully resolved) has nothing to capture a live range from -- must not throw, and must leave
+        // RawRecordsXml untouched (still null), matching pre-fix behavior for this shape of cache.
+        var wb = new Workbook("test");
+        var data = wb.AddSheet("Data");
+        wb.AddSheet("Report");
+        var ctx = new TestCommandContext(wb);
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Data"
+        };
+        wb.PivotCaches.Add(cache);
+
+        var command = new RemoveSheetCommand(data.Id);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        cache.SourceSheetName.Should().BeNull();
+        cache.RawRecordsXml.Should().BeNull();
     }
 
     [Fact]

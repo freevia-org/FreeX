@@ -2,6 +2,7 @@ using System.Globalization;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.Sparklines;
 using FreeX.App.Presentation.Text;
 using FreeX.Core.Calc;
 using FreeX.Core.Formula;
@@ -48,6 +49,17 @@ public static class WorkbookPdfContentBuilder
     private const double HeadingGutterWidthPx  = 40.0;
     private const double HeadingGutterHeightPx = 20.0;
     private const double HeadingFontSize = 9.0;
+
+    // R96-render-cf-databar-iconset-1 / R96-render-sparkline-pdf-1: fixed 96dpi(px)->72dpi(pt)
+    // conversion for the "device pixels at 100% zoom" constants the portable conditional-format
+    // (ConditionalDataBarLayoutPlanner/ConditionalIconCellLayoutPlanner) and sparkline
+    // (GridView.Overlays.Sparklines.cs's 3px cell inset) layout planners use -- independent of any
+    // sheet Scale%/Fit-to-pages ratio, matching the identical ptPerPx conversion already used for the
+    // heading gutter and indent above.
+    private const double PixelToPointRatio = SheetPdfPageSetupResolver.PdfPointsPerInch / 96.0;
+    private static readonly PdfColor CfIconOutlineColor = new(96, 96, 96);
+    private static readonly PdfColor SparklineDefaultPositiveColor = new(33, 115, 70);
+    private static readonly PdfColor SparklineDefaultNegativeColor = new(192, 0, 0);
 
     // -----------------------------------------------------------------------
     // Page-setup-aware path (new)
@@ -167,6 +179,18 @@ public static class WorkbookPdfContentBuilder
         var colXs  = BuildCumulative(colWidths,  gridLeft);
         var rowYs  = BuildCumulativeDown(rowHeights, gridTop);  // row y-bottom (PDF y-up, going down)
 
+        // R96-render-sparkline-pdf-1: precompute this page's sparkline lookup (by anchor cell) and the
+        // group axis-scaling bounds once, mirroring GridView.RenderSparklines'/PrintRenderer.GridCells.cs's
+        // DrawPrintedSparklines' own pre-compute step, so the Avalonia/portable PDF export draws the
+        // exact same sparklines the interactive grid and the WPF print path already show instead of
+        // silently omitting them.
+        var sparklinesByCell = BuildSparklinesByCell(sheet);
+        var sparklineValues = sparklinesByCell.Count > 0
+            ? SparklineSeriesReader.BuildValues(sheet)
+            : EmptySparklineValues;
+        BuildSparklineGroupScalingBounds(
+            sheet.Sparklines, sparklineValues, out var groupMinValues, out var groupMaxValues, out var groupMaxAbsValues);
+
         // ── Draw cell fills and text ───────────────────────────────────────────
         foreach (var cell in contentPlan.Cells)
         {
@@ -195,6 +219,33 @@ public static class WorkbookPdfContentBuilder
             var bw = sheet.PrintBlackAndWhite;
             if (!bw && (fill is not null || cell.IsTitle))
                 ops.Add(new PdfFillRect(x, y, w, h, fill is { } fillColor ? ToPdfColor(fillColor) : TitleFillColor));
+
+            var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+                style.ReadingOrder, sheet.IsRightToLeft);
+
+            // R96-render-cf-databar-iconset-1: a data-bar or icon-set conditional format is a separate
+            // per-cell overlay from the style-merged fill above (PortablePdfPageCell.DataBar/IconSet are
+            // populated independently of ConditionalFillColor, matching DisplayCell's own separate
+            // ConditionalDataBar/ConditionalIcon fields) -- without these calls the bar/glyph a user sees
+            // on screen (ConditionalDataBarPanel.cs/ConditionalFormatIconGlyphFactory.cs) silently never
+            // appeared in the exported PDF or Avalonia print preview, even though the plain fill/text CF
+            // gap was already fixed (R72).
+            var iconGutterPt = 0.0;
+            if (!bw && cell.DataBar is { } dataBar)
+                DrawConditionalDataBar(ops, dataBar, x, y, w, h);
+            if (!bw && cell.IconSet is { } iconSet)
+                iconGutterPt = DrawConditionalIconSet(ops, iconSet, x, y, w, h, isEffectivelyRightToLeft);
+
+            // R96-render-sparkline-pdf-1: a sparkline anchored on this cell is a screen-only overlay
+            // above the grid on every shell -- draw it into the cell rect the same 3px-inset way
+            // PrintRenderer.GridCells.cs's DrawPrintedSparklines does for the WPF print path.
+            if (sparklinesByCell.TryGetValue((cell.Row, cell.Column), out var sparkline) &&
+                sparklineValues.TryGetValue(sparkline.Id, out var sparklineSeries) &&
+                sparklineSeries.Count > 0)
+            {
+                DrawSparklineIntoCell(
+                    ops, sparkline, sparklineSeries, x, y, w, h, groupMinValues, groupMaxValues, groupMaxAbsValues);
+            }
 
             if (!string.IsNullOrEmpty(cell.DisplayText))
             {
@@ -229,8 +280,6 @@ public static class WorkbookPdfContentBuilder
                 // fix-one-path-miss-twin-sweep-4).
                 var rawCell = sheet.GetCell(cell.Row, cell.Column);
                 var isNumeric = rawCell?.Value is NumberValue or DateTimeValue;
-                var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
-                    style.ReadingOrder, sheet.IsRightToLeft);
                 var effectiveAlign = CellTextOrientationLayoutPlanner.ResolveEffectiveHorizontalAlignment(
                     style.HorizontalAlignment, isNumeric, isEffectivelyRightToLeft);
 
@@ -257,7 +306,12 @@ public static class WorkbookPdfContentBuilder
                     // no indent term) -- Excel's Format Cells indent stepper is disabled for Fill, so any
                     // leftover nonzero IndentLevel on a Fill-aligned cell must not shift the text.
                     HorizontalAlignment.Fill => x + (2.0 * textScale),
-                    _ => x + (2.0 * textScale) + indentPt
+                    // R96-render-cf-databar-iconset-1: an icon-set glyph with ShowValue reserves a
+                    // left gutter the same way the on-screen grid does (ConditionalIconCellLayoutPlanner),
+                    // so left-anchored text doesn't overlap the glyph. Scoped to the common default/Left
+                    // case rather than every alignment -- Center/Right/Justify/Distributed text sharing a
+                    // cell with an icon set is a rarer combination left for a follow-up.
+                    _ => x + (2.0 * textScale) + indentPt + iconGutterPt
                 };
 
                 // Text inset/baseline scale with the grid so text stays proportionally placed
@@ -428,6 +482,16 @@ public static class WorkbookPdfContentBuilder
                 ops.Add(new PdfFillRect(x, y, columnWidth, options.RowHeightPoints, fill is { } fillColor ? ToPdfColor(fillColor) : TitleFillColor));
 
             ops.Add(new PdfStrokeRect(x, y, columnWidth, options.RowHeightPoints, GridStrokeColor, 0.5));
+
+            // R96-render-cf-databar-iconset-1: same data-bar/icon-set overlay as the page-setup-aware
+            // path above -- this legacy fixed-geometry path shares the same PortablePdfPageCell fields,
+            // so it must not silently drop them either.
+            var iconGutterPt = 0.0;
+            if (cell.DataBar is { } dataBar)
+                DrawConditionalDataBar(ops, dataBar, x, y, columnWidth, options.RowHeightPoints);
+            if (cell.IconSet is { } iconSet)
+                iconGutterPt = DrawConditionalIconSet(ops, iconSet, x, y, columnWidth, options.RowHeightPoints, isRightToLeft: false);
+
             if (string.IsNullOrEmpty(cell.DisplayText))
                 continue;
 
@@ -435,7 +499,7 @@ public static class WorkbookPdfContentBuilder
             var fontFace = cell.IsTitle || style.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
             var fontColor = ToPdfColor(style.ResolveFontColor(workbook.Theme));
             ops.Add(new PdfText(
-                x + 4,
+                x + 4 + iconGutterPt,
                 y + Math.Max(7, options.RowHeightPoints - 14),
                 fontSize,
                 fontFace,
@@ -1374,6 +1438,380 @@ public static class WorkbookPdfContentBuilder
             return (sheet.EvenPageHeaderPictures, sheet.EvenPageFooterPictures);
 
         return (sheet.PageHeaderPictures, sheet.PageFooterPictures);
+    }
+
+    // -----------------------------------------------------------------------
+    // Conditional-format data bar / icon set drawing — R96-render-cf-databar-iconset-1
+    // -----------------------------------------------------------------------
+    //
+    // Reuses the exact portable geometry the Avalonia grid itself draws with
+    // (ConditionalDataBarLayoutPlanner / ConditionalIconCellLayoutPlanner / ConditionalIconGlyphGeometry
+    // / ConditionalIconGlyphResolver, all framework-free types in FreeX.App.Presentation), converting
+    // their neutral primitives into PDF draw ops instead of reimplementing the layout math a second
+    // time. Two icon-set glyph kinds (Quarter's pie wedge, Star's partial-fill clip) fall back to a
+    // full-icon-color fill rather than reproducing the exact clipped/arc geometry -- the Star fallback
+    // is the one the geometry emitter's own doc comment explicitly sanctions; see the inline comments
+    // at each call site.
+
+    /// <summary>Draws one cell's data bar into its cell rect, or does nothing if it would be empty.</summary>
+    private static void DrawConditionalDataBar(List<PdfDrawOp> ops, DataBarLayout dataBar, double x, double y, double w, double h)
+    {
+        if (ConditionalDataBarLayoutPlanner.Plan(dataBar.StartFraction, dataBar.EndFraction) is not { } bar)
+            return;
+
+        var hInsetPt = bar.HorizontalInset * PixelToPointRatio;
+        var vInsetPt = bar.VerticalInset * PixelToPointRatio;
+        var innerWidth = Math.Max(0.0, w - (2 * hInsetPt));
+        var innerHeight = Math.Max(0.0, h - (2 * vInsetPt));
+        var barWidth = bar.FractionWidth * innerWidth;
+        if (innerWidth <= 0 || innerHeight <= 0 || barWidth <= 0)
+            return;
+
+        var barX = x + hInsetPt + (bar.Start * innerWidth);
+        var barY = y + vInsetPt;
+        ops.Add(new PdfFillRect(barX, barY, barWidth, innerHeight, ToPdfColor(dataBar.FillColor)));
+    }
+
+    /// <summary>
+    /// Draws one cell's icon-set glyph into its cell rect, returning the point-space text gutter width
+    /// the caller should reserve before the cell's own text (0 when the rule hides the value).
+    /// </summary>
+    private static double DrawConditionalIconSet(
+        List<PdfDrawOp> ops, IconSetResult iconSet, double x, double y, double w, double h, bool isRightToLeft)
+    {
+        var layout = ConditionalIconCellLayoutPlanner.CalculateCellLayout(
+            0, 0, w / PixelToPointRatio, h / PixelToPointRatio, iconSet.ShowValue, isRightToLeft);
+        if (layout.IconSize <= 0)
+            return 0.0;
+
+        var iconSizePt = layout.IconSize * PixelToPointRatio;
+        var iconLeftPt = x + (layout.IconLeft * PixelToPointRatio);
+        // layout.IconTop is measured down from the cell's own top edge in pixel space; the cell's PDF
+        // top edge (y-up) is y + h, so subtracting that pixel offset (converted to points) lands on
+        // the glyph's PDF-space top edge.
+        var iconTopPt = y + h - (layout.IconTop * PixelToPointRatio);
+
+        var iconColor = ParseHexColor(ConditionalIconGlyphResolver.ResolveIconColor(iconSet.Style, iconSet.BucketIndex, iconSet.IconCount));
+        var glyphKind = ConditionalIconGlyphResolver.ResolveGlyphKind(iconSet.Style);
+        var isAlternateVariant = ConditionalIconGlyphResolver.IsAlternateGlyphVariant(iconSet.Style);
+        var glyphOps = ConditionalIconGlyphGeometry.Build(
+            glyphKind, iconSet.BucketIndex, iconSet.IconCount, 0, 0, iconSizePt, iconSizePt, isAlternateVariant);
+
+        AddIconGlyphOps(ops, glyphOps, iconColor, iconLeftPt, iconTopPt);
+
+        return iconSet.ShowValue ? ConditionalIconCellLayoutPlanner.GutterWidth * PixelToPointRatio : 0.0;
+    }
+
+    /// <summary>
+    /// Converts one glyph's neutral <see cref="CfGlyphOp"/> primitives (local space: origin top-left,
+    /// y grows downward, matching <see cref="LayoutPoint"/>'s convention) into PDF draw ops anchored at
+    /// (<paramref name="originLeftPt"/>, <paramref name="originTopPt"/>) in PDF's bottom-left/y-up space.
+    /// </summary>
+    private static void AddIconGlyphOps(
+        List<PdfDrawOp> ops, IReadOnlyList<CfGlyphOp> glyphOps, PdfColor iconColor, double originLeftPt, double originTopPt)
+    {
+        const double outlineWidth = 0.5;
+        const double whiteThinWidth = 0.75;
+        const double whiteMediumWidth = 0.9;
+        var whiteColor = new PdfColor(255, 255, 255);
+
+        PdfPathPoint ToPdfPoint(LayoutPoint p) => new(originLeftPt + p.X, originTopPt - p.Y);
+
+        PdfColor? ResolveFill(CfGlyphFill fill) => fill switch
+        {
+            CfGlyphFill.Icon => iconColor,
+            CfGlyphFill.White => whiteColor,
+            _ => null,
+        };
+
+        (PdfColor? Color, double Width) ResolveStroke(CfGlyphStroke stroke) => stroke switch
+        {
+            CfGlyphStroke.Outline => (CfIconOutlineColor, outlineWidth),
+            CfGlyphStroke.WhiteThin => (whiteColor, whiteThinWidth),
+            CfGlyphStroke.WhiteMedium => (whiteColor, whiteMediumWidth),
+            _ => (null, 0.0),
+        };
+
+        foreach (var op in glyphOps)
+        {
+            switch (op.Kind)
+            {
+                case CfGlyphPrimitiveKind.Ellipse:
+                {
+                    var fillColor = ResolveFill(op.Fill);
+                    var (strokeColor, strokeWidth) = ResolveStroke(op.Stroke);
+                    var boundsX = originLeftPt + op.Center.X - op.RadiusX;
+                    var boundsY = originTopPt - op.Center.Y - op.RadiusY;
+                    var width = op.RadiusX * 2;
+                    var height = op.RadiusY * 2;
+                    if (fillColor is { } fc)
+                        ops.Add(new PdfFillEllipse(boundsX, boundsY, width, height, fc));
+                    if (strokeColor is { } sc)
+                        ops.Add(new PdfStrokeEllipse(boundsX, boundsY, width, height, sc, strokeWidth));
+                    break;
+                }
+                case CfGlyphPrimitiveKind.Line:
+                {
+                    var (strokeColor, strokeWidth) = ResolveStroke(op.Stroke);
+                    if (strokeColor is { } sc && op.Points.Count >= 2)
+                    {
+                        var a = ToPdfPoint(op.Points[0]);
+                        var b = ToPdfPoint(op.Points[1]);
+                        ops.Add(new PdfLine(a.X, a.Y, b.X, b.Y, sc, strokeWidth));
+                    }
+                    break;
+                }
+                case CfGlyphPrimitiveKind.Box:
+                {
+                    var fillColor = ResolveFill(op.Fill);
+                    var (strokeColor, strokeWidth) = ResolveStroke(op.Stroke);
+                    var boundsX = originLeftPt + op.Rect.Left;
+                    var boundsY = originTopPt - op.Rect.Bottom;
+                    if (fillColor is { } fc)
+                        ops.Add(new PdfFillRect(boundsX, boundsY, op.Rect.Width, op.Rect.Height, fc));
+                    if (strokeColor is { } sc)
+                        ops.Add(new PdfStrokeRect(boundsX, boundsY, op.Rect.Width, op.Rect.Height, sc, strokeWidth));
+                    break;
+                }
+                case CfGlyphPrimitiveKind.Polygon:
+                case CfGlyphPrimitiveKind.Polyline:
+                {
+                    if (op.Points.Count < 2)
+                        break;
+                    var fillColor = op.Kind == CfGlyphPrimitiveKind.Polygon ? ResolveFill(op.Fill) : null;
+                    var (strokeColor, strokeWidth) = ResolveStroke(op.Stroke);
+                    AddPolyPath(ops, op.Points, fillColor, strokeColor, strokeWidth, closed: op.Kind == CfGlyphPrimitiveKind.Polygon, ToPdfPoint);
+                    break;
+                }
+                case CfGlyphPrimitiveKind.Pie:
+                {
+                    // R96 fallback: draw the pie wedge as a full filled circle rather than reproducing
+                    // its exact clockwise sweep-arc geometry -- PdfPath has no native arc segment, and
+                    // the Quarter icon-set style (the only user of this primitive) is a low-frequency
+                    // Excel gallery choice, so a full disc in the bucket's resolved color is an
+                    // acceptable approximation. Every other icon-set family (arrows, traffic lights,
+                    // signs, symbols, flags, rating bars, boxes) draws its exact shape above.
+                    var boundsX = originLeftPt + op.Center.X - op.RadiusX;
+                    var boundsY = originTopPt - op.Center.Y - op.RadiusY;
+                    ops.Add(new PdfFillEllipse(boundsX, boundsY, op.RadiusX * 2, op.RadiusY * 2, iconColor));
+                    break;
+                }
+                case CfGlyphPrimitiveKind.StarFillFraction:
+                {
+                    // R96 fallback: fill the whole star with the icon color instead of clipping to
+                    // RadiusX's fill fraction -- explicitly sanctioned by
+                    // ConditionalIconGlyphGeometry.Build's own doc comment ("Renderers that do not
+                    // support the clip may fall back to a full (icon-colored) fill").
+                    AddPolyPath(ops, op.Points, iconColor, CfIconOutlineColor, outlineWidth, closed: true, ToPdfPoint);
+                    break;
+                }
+            }
+        }
+    }
+
+    private static void AddPolyPath(
+        List<PdfDrawOp> ops,
+        IReadOnlyList<LayoutPoint> points,
+        PdfColor? fillColor,
+        PdfColor? strokeColor,
+        double strokeWidth,
+        bool closed,
+        Func<LayoutPoint, PdfPathPoint> toPdfPoint)
+    {
+        if (points.Count < 2)
+            return;
+
+        var start = toPdfPoint(points[0]);
+        var segments = new List<PdfPathSegment>(points.Count - 1);
+        for (var i = 1; i < points.Count; i++)
+            segments.Add(PdfPathSegment.LineTo(toPdfPoint(points[i])));
+
+        var contour = new PdfPathContour(start, segments, closed);
+        ops.Add(new PdfPath([contour], fillColor, strokeColor, strokeColor is null ? 0.0 : strokeWidth));
+    }
+
+    private static PdfColor ParseHexColor(string hex)
+    {
+        var span = hex.AsSpan();
+        if (span.Length > 0 && span[0] == '#')
+            span = span[1..];
+
+        if (span.Length < 6 ||
+            !byte.TryParse(span[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) ||
+            !byte.TryParse(span.Slice(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) ||
+            !byte.TryParse(span.Slice(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
+        {
+            return CfIconOutlineColor;
+        }
+
+        return new PdfColor(r, g, b);
+    }
+
+    // -----------------------------------------------------------------------
+    // Sparkline drawing — R96-render-sparkline-pdf-1
+    // -----------------------------------------------------------------------
+    //
+    // Reuses the portable FreeX.App.Presentation.Sparklines.SparklineLayoutEngine/SparklineSeriesReader
+    // (the same framework-free math the Avalonia grid's SparklineCellPanel.cs draws with) so this path
+    // never re-derives axis/scaling math independently. Group axis-scaling bounds are recomputed here
+    // with the identical algorithm GridView.Overlays.Sparklines.cs's BuildSparklineGroupScalingBounds
+    // uses for the WPF print/PDF path -- that method itself is pure Dictionary&lt;int,double&gt; math with
+    // no WPF types, but it lives in a WPF-only assembly (FreeX.App.UI) this portable exporter cannot
+    // reference, so the same algorithm is duplicated here rather than shared. Markers, axis lines, and
+    // date-axis spacing are not drawn -- the line/column/win-loss body is the primary visual signal a
+    // user needs to see a sparkline at all in the exported PDF instead of nothing.
+
+    private static readonly IReadOnlyDictionary<Guid, IReadOnlyList<double>> EmptySparklineValues =
+        new Dictionary<Guid, IReadOnlyList<double>>();
+
+    private static Dictionary<(uint Row, uint Col), SparklineModel> BuildSparklinesByCell(Sheet sheet)
+    {
+        var lookup = new Dictionary<(uint, uint), SparklineModel>();
+        foreach (var sparkline in sheet.Sparklines)
+            lookup[(sparkline.Location.Row, sparkline.Location.Col)] = sparkline;
+        return lookup;
+    }
+
+    private static void BuildSparklineGroupScalingBounds(
+        IEnumerable<SparklineModel> sparklines,
+        IReadOnlyDictionary<Guid, IReadOnlyList<double>> sparklineValues,
+        out Dictionary<int, double> groupMinValues,
+        out Dictionary<int, double> groupMaxValues,
+        out Dictionary<int, double> groupMaxAbsValues)
+    {
+        groupMinValues = new Dictionary<int, double>();
+        groupMaxValues = new Dictionary<int, double>();
+        groupMaxAbsValues = new Dictionary<int, double>();
+
+        foreach (var sp in sparklines)
+        {
+            if ((sp.MinAxisType != SparklineAxisScaling.Group && sp.MaxAxisType != SparklineAxisScaling.Group) ||
+                !sparklineValues.TryGetValue(sp.Id, out var vals) || vals.Count == 0)
+            {
+                continue;
+            }
+
+            if (!groupMinValues.ContainsKey(sp.GroupId))
+            {
+                groupMinValues[sp.GroupId] = double.MaxValue;
+                groupMaxValues[sp.GroupId] = double.MinValue;
+                groupMaxAbsValues[sp.GroupId] = 0;
+            }
+
+            foreach (var v in vals)
+            {
+                if (!double.IsFinite(v))
+                    continue;
+                if (v < groupMinValues[sp.GroupId]) groupMinValues[sp.GroupId] = v;
+                if (v > groupMaxValues[sp.GroupId]) groupMaxValues[sp.GroupId] = v;
+                var abs = Math.Abs(v);
+                if (abs > groupMaxAbsValues[sp.GroupId]) groupMaxAbsValues[sp.GroupId] = abs;
+            }
+        }
+    }
+
+    private static double? ResolveSparklineAxisMin(SparklineModel sp, Dictionary<int, double> groupMin) =>
+        sp.MinAxisType switch
+        {
+            SparklineAxisScaling.Custom => sp.ManualMin,
+            SparklineAxisScaling.Group => groupMin.TryGetValue(sp.GroupId, out var v) && v != double.MaxValue ? v : null,
+            _ => null,
+        };
+
+    private static double? ResolveSparklineAxisMax(SparklineModel sp, Dictionary<int, double> groupMax) =>
+        sp.MaxAxisType switch
+        {
+            SparklineAxisScaling.Custom => sp.ManualMax,
+            SparklineAxisScaling.Group => groupMax.TryGetValue(sp.GroupId, out var v) && v != double.MinValue ? v : null,
+            _ => null,
+        };
+
+    private static double? ResolveSparklineAxisMaxAbs(SparklineModel sp, Dictionary<int, double> groupMaxAbs)
+    {
+        double? customAbs = null;
+        if (sp.MaxAxisType == SparklineAxisScaling.Custom && sp.ManualMax.HasValue)
+            customAbs = Math.Abs(sp.ManualMax.Value);
+        if (sp.MinAxisType == SparklineAxisScaling.Custom && sp.ManualMin.HasValue)
+        {
+            var absMin = Math.Abs(sp.ManualMin.Value);
+            customAbs = customAbs.HasValue ? Math.Max(customAbs.Value, absMin) : absMin;
+        }
+
+        double? groupAbs = null;
+        if (sp.MaxAxisType == SparklineAxisScaling.Group || sp.MinAxisType == SparklineAxisScaling.Group)
+            groupAbs = groupMaxAbs.TryGetValue(sp.GroupId, out var v) ? v : null;
+
+        if (customAbs.HasValue && groupAbs.HasValue)
+            return Math.Max(customAbs.Value, groupAbs.Value);
+        return customAbs ?? groupAbs;
+    }
+
+    /// <summary>
+    /// Draws one sparkline's line/column/win-loss body into its cell rect, using the same 3px inset
+    /// the interactive grid and WPF print path use.
+    /// </summary>
+    private static void DrawSparklineIntoCell(
+        List<PdfDrawOp> ops,
+        SparklineModel sparkline,
+        IReadOnlyList<double> values,
+        double x,
+        double y,
+        double w,
+        double h,
+        Dictionary<int, double> groupMinValues,
+        Dictionary<int, double> groupMaxValues,
+        Dictionary<int, double> groupMaxAbsValues)
+    {
+        var insetPt = 3.0 * PixelToPointRatio;
+        var innerWidth = Math.Max(1.0, w - (2 * insetPt));
+        var innerHeight = Math.Max(1.0, h - (2 * insetPt));
+        var originLeftPt = x + insetPt;
+        var originTopPt = y + h - insetPt;
+
+        var rect = new LayoutRect(0, 0, innerWidth, innerHeight);
+        var seriesColor = sparkline.SeriesColor is { } sc ? ToPdfColor(sc) : SparklineDefaultPositiveColor;
+        var negativeColor = sparkline.ShowNegativePoints
+            ? (sparkline.NegativeColor is { } nc ? ToPdfColor(nc) : SparklineDefaultNegativeColor)
+            : seriesColor;
+
+        if (sparkline.Kind == SparklineKind.Line)
+        {
+            var overrideMin = ResolveSparklineAxisMin(sparkline, groupMinValues);
+            var overrideMax = ResolveSparklineAxisMax(sparkline, groupMaxValues);
+            var layout = SparklineLayoutEngine.CalculateLineLayout(sparkline, values, rect, overrideMin, overrideMax);
+
+            foreach (var segment in layout.Segments)
+            {
+                ops.Add(new PdfLine(
+                    originLeftPt + segment.Start.X, originTopPt - segment.Start.Y,
+                    originLeftPt + segment.End.X, originTopPt - segment.End.Y,
+                    seriesColor, 0.75));
+            }
+
+            if (layout.SinglePoint is { } single)
+            {
+                const double dotRadius = 1.2;
+                ops.Add(new PdfFillEllipse(
+                    originLeftPt + single.X - dotRadius, originTopPt - single.Y - dotRadius,
+                    dotRadius * 2, dotRadius * 2, seriesColor));
+            }
+        }
+        else
+        {
+            var overrideMaxAbs = ResolveSparklineAxisMaxAbs(sparkline, groupMaxAbsValues);
+            var layout = SparklineLayoutEngine.CalculateColumnLayout(sparkline, values, rect, overrideMaxAbs);
+
+            foreach (var bar in layout.Bars)
+            {
+                if (bar.Rect.Width <= 0 || bar.Rect.Height <= 0)
+                    continue;
+
+                var color = bar.IsNegative ? negativeColor : seriesColor;
+                ops.Add(new PdfFillRect(
+                    originLeftPt + bar.Rect.Left, originTopPt - bar.Rect.Bottom,
+                    bar.Rect.Width, bar.Rect.Height, color));
+            }
+        }
     }
 
     // -----------------------------------------------------------------------

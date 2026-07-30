@@ -334,4 +334,102 @@ public sealed partial class XlsxFileAdapter
                 session.MarkDirty(edit);
         }
     }
+
+    /// <summary>
+    /// True when <paramref name="sheet"/> has at least one EXTERNAL hyperlink (LinkType other than
+    /// PlaceInThisDocument) whose <see cref="HyperlinkMetadata.Bookmark"/> ("location" sub-address --
+    /// Excel's "Existing File &gt; Bookmark..." feature) is non-empty. Gates
+    /// <see cref="FixExternalHyperlinkBookmarkLocations"/>.
+    /// </summary>
+    internal static bool HasExternalHyperlinkBookmarks(Sheet sheet)
+    {
+        foreach (var metadata in sheet.HyperlinkMetadata.Values)
+        {
+            if (metadata.LinkType != HyperlinkTargetKind.PlaceInThisDocument &&
+                !string.IsNullOrWhiteSpace(metadata.Bookmark))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// R96-io-hyperlink-external-bookmark: backfills the "location" attribute onto an EXTERNAL
+    /// hyperlink's saved &lt;hyperlink&gt; element on a FULL (ClosedXML) save. ClosedXML's
+    /// XLHyperlink writer branches exclusively on IsExternal (decompiled from
+    /// ClosedXML.Excel.IO.WorksheetPartWriter): when IsExternal is true it emits ONLY an r:id
+    /// relationship, never "location"; when false it emits ONLY "location", never r:id. The
+    /// InternalAddress/ExternalAddress property setters are likewise mutually exclusive -- each one
+    /// flips IsExternal as a side effect, so whichever is assigned LAST silently discards the other
+    /// -- meaning CreateXlsxHyperlink has no way to hand ClosedXML both an r:id AND a "location" for
+    /// the same element, however it orders the assignments. (The suggested fix of simply also
+    /// setting XLHyperlink.InternalAddress for an external link with a Bookmark was verified against
+    /// the real ClosedXML 0.105.0 assembly to silently DROP the r:id/external relationship instead --
+    /// it does not work.) Post-processing is therefore the only way to emit both: look up each
+    /// affected hyperlink's freshly-regenerated &lt;hyperlink&gt; element by its CURRENT cell address
+    /// straight from the live model, rather than by string-matching a pre-edit source XML snapshot's
+    /// "ref" (the approach XlsxWorksheetMetadataPreserver.MergeWorksheetHyperlinkMetadata uses, which
+    /// misses the moment the anchor cell moves to a new address via a row/column insert or delete,
+    /// or a cut-and-paste move) -- both the model's Sheet.HyperlinkMetadata key and the regenerated
+    /// worksheet's "ref" always reflect the SAME current address, since ClosedXML writes each
+    /// hyperlink's <c>ref</c> from the current IXLCell it was attached to (see
+    /// XlsxFileAdapter.Save.cs, which sets one hyperlink per model cell address). This closes the gap
+    /// unconditionally, independent of whether the anchor cell ever moved.
+    /// </summary>
+    internal static void FixExternalHyperlinkBookmarkLocations(
+        Stream packageStream,
+        Workbook workbook,
+        XlsxWorkbookWorksheetPathMap? worksheetPathMap)
+    {
+        if (worksheetPathMap is null)
+            return;
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        using var session = new XlsxWorksheetXmlEditSession(packageStream, worksheetPathMap);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (!HasExternalHyperlinkBookmarks(sheet))
+                continue;
+
+            if (!session.TryGetWorksheet(sheet, out var edit))
+                continue;
+
+            var hyperlinksElement = edit.Root.Element(worksheetNs + "hyperlinks");
+            if (hyperlinksElement is null)
+                continue;
+
+            var changed = false;
+            foreach (var (address, metadata) in sheet.HyperlinkMetadata)
+            {
+                if (metadata.LinkType == HyperlinkTargetKind.PlaceInThisDocument ||
+                    string.IsNullOrWhiteSpace(metadata.Bookmark))
+                {
+                    continue;
+                }
+
+                var reference = address.ToA1();
+                var hyperlinkElement = hyperlinksElement
+                    .Elements(worksheetNs + "hyperlink")
+                    .FirstOrDefault(element =>
+                        string.Equals(element.Attribute("ref")?.Value, reference, StringComparison.OrdinalIgnoreCase));
+
+                if (hyperlinkElement is null)
+                    continue;
+
+                // Defensive: never overwrite a "location" a future ClosedXML version might already
+                // have written for this element.
+                if (hyperlinkElement.Attribute("location") is not null)
+                    continue;
+
+                hyperlinkElement.SetAttributeValue("location", metadata.Bookmark);
+                changed = true;
+            }
+
+            if (changed)
+                session.MarkDirty(edit);
+        }
+    }
 }

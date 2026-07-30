@@ -60,30 +60,10 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
 
         var filterCol = _range.Start.Col + _filterColOffset;
 
-        _previousAutoFilterColumns = WorksheetAutoFilterColumnSync.Apply(
-            sheet,
-            _range,
-            (int)_filterColOffset,
-            _count == 0
-                ? null
-                : new WorksheetAutoFilterColumnModel(
-                    ColumnId: (int)_filterColOffset,
-                    Values: [],
-                    IncludeBlank: false,
-                    CustomFilters: [],
-                    CustomFiltersAnd: false,
-                    CustomFiltersAndRaw: null,
-                    NativeCustomFiltersAttributes: null,
-                    Top10: new WorksheetAutoFilterTop10Model(Top: _top, Percent: _percent, Value: _count),
-                    DynamicFilter: null,
-                    ColorFilter: null,
-                    IconFilter: null,
-                    DateGroups: [],
-                    NativeFiltersAttributes: null,
-                    NativeFilterXmls: []));
-
         if (_count == 0)
         {
+            _previousAutoFilterColumns = WorksheetAutoFilterColumnSync.Apply(sheet, _range, (int)_filterColOffset, null);
+
             if (!sheet.ColumnFilterOwnedRows.TryGetValue(filterCol, out var ownedRows) || ownedRows.Count == 0)
                 return new CommandOutcome(true);
 
@@ -94,33 +74,72 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
 
         var firstDataRow = _range.Start.Row + 1;
         var lastDataRow = _range.End.Row;
-        if (firstDataRow > lastDataRow)
-            return new CommandOutcome(true);
 
-        var dataRowCount = (int)Math.Min(lastDataRow - firstDataRow + 1, (uint)int.MaxValue);
-        var keepCount = _percent
-            ? GetPercentKeepCount(sheet, filterCol, firstDataRow, lastDataRow)
-            : (int)Math.Min(_count, (uint)dataRowCount);
+        // R96-commands-topbottom-filterval-1: compute the boundary value (and the kept-row mask)
+        // BEFORE building the persisted Top10 criterion below, so the boundary Excel's tie-inclusive
+        // Top-N semantics computed (see SelectBestRows) can be carried into the model's FilterValue
+        // instead of being discarded once ApplyKeptRowVisibility runs.
+        double? filterValue = null;
+        bool[]? keptRows = null;
+        var allNumericVisible = false;
 
-        if (keepCount >= dataRowCount)
+        if (firstDataRow <= lastDataRow)
         {
-            ApplyNumericVisibility(sheet, filterCol, firstDataRow, lastDataRow);
-            return new CommandOutcome(true);
+            var dataRowCount = (int)Math.Min(lastDataRow - firstDataRow + 1, (uint)int.MaxValue);
+            var keepCount = _percent
+                ? GetPercentKeepCount(sheet, filterCol, firstDataRow, lastDataRow)
+                : (int)Math.Min(_count, (uint)dataRowCount);
+
+            if (keepCount >= dataRowCount)
+            {
+                allNumericVisible = true;
+            }
+            else
+            {
+                keptRows = ArrayPool<bool>.Shared.Rent(dataRowCount);
+                Array.Clear(keptRows, 0, dataRowCount);
+
+                if (keepCount > 0)
+                    filterValue = SelectBestRows(sheet, filterCol, firstDataRow, lastDataRow, keepCount, _top, keptRows);
+            }
         }
 
-        var keptRows = ArrayPool<bool>.Shared.Rent(dataRowCount);
-        Array.Clear(keptRows, 0, dataRowCount);
+        // R96-commands-topbottom-filterval-1: persist the boundary value as the Top10 criterion's
+        // FilterValue so it round-trips through XlsxWorksheetAutoFilterXmlMapper.ToTop10Xml's
+        // <top10 filterVal=.../> attribute -- without it, XlsxWorksheetAutoFilterMaterializer.
+        // BuildTop10KeptRows falls back to a naive Take(N) on reload that arbitrarily drops tied
+        // rows past the Nth position that this live apply correctly kept visible.
+        _previousAutoFilterColumns = WorksheetAutoFilterColumnSync.Apply(
+            sheet,
+            _range,
+            (int)_filterColOffset,
+            new WorksheetAutoFilterColumnModel(
+                ColumnId: (int)_filterColOffset,
+                Values: [],
+                IncludeBlank: false,
+                CustomFilters: [],
+                CustomFiltersAnd: false,
+                CustomFiltersAndRaw: null,
+                NativeCustomFiltersAttributes: null,
+                Top10: new WorksheetAutoFilterTop10Model(Top: _top, Percent: _percent, Value: _count, FilterValue: filterValue),
+                DynamicFilter: null,
+                ColorFilter: null,
+                IconFilter: null,
+                DateGroups: [],
+                NativeFiltersAttributes: null,
+                NativeFilterXmls: []));
 
         try
         {
-            if (keepCount > 0)
-                SelectBestRows(sheet, filterCol, firstDataRow, lastDataRow, keepCount, _top, keptRows);
-
-            ApplyKeptRowVisibility(sheet, filterCol, firstDataRow, lastDataRow, keptRows);
+            if (allNumericVisible)
+                ApplyNumericVisibility(sheet, filterCol, firstDataRow, lastDataRow);
+            else if (keptRows is not null)
+                ApplyKeptRowVisibility(sheet, filterCol, firstDataRow, lastDataRow, keptRows);
         }
         finally
         {
-            ArrayPool<bool>.Shared.Return(keptRows);
+            if (keptRows is not null)
+                ArrayPool<bool>.Shared.Return(keptRows);
         }
 
         return new CommandOutcome(true);
@@ -154,7 +173,13 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
         return (int)Math.Ceiling(numericCount * (Math.Min(_count, 100u) / 100.0));
     }
 
-    private static void SelectBestRows(
+    /// <summary>
+    /// Selects the Top-N/Bottom-N rows into <paramref name="keptRows"/> and returns the boundary
+    /// (Nth-best) value used, or <c>null</c> when fewer numeric/visible rows exist than
+    /// <paramref name="keepCount"/> (in which case every one of them qualifies and there is no
+    /// meaningful cutoff to persist).
+    /// </summary>
+    private static double? SelectBestRows(
         Sheet sheet,
         uint filterCol,
         uint firstDataRow,
@@ -201,6 +226,8 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
                     if (sheet.GetValue(row, filterCol) is NumberValue)
                         keptRows[(int)(row - firstDataRow)] = true;
                 }
+
+                return null;
             }
             else
             {
@@ -219,6 +246,8 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
                     if (keep)
                         keptRows[(int)(row - firstDataRow)] = true;
                 }
+
+                return boundary;
             }
         }
         finally

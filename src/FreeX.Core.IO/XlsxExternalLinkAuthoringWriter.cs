@@ -1,0 +1,286 @@
+using System.IO.Compression;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
+
+using FreeX.Core.Model;
+
+namespace FreeX.Core.IO;
+
+/// <summary>
+/// R96-io-external-link-writer-1: FreeX's formula lexer/parser fully accepts a freshly TYPED
+/// bracketed external-workbook reference (e.g. <c>='[Budget.xlsx]Sheet1'!A1</c>), but until this
+/// writer nothing ever synthesized the supporting OOXML infrastructure Excel always writes
+/// alongside such a formula -- the <c>xl/externalLinks/externalLinkN.xml</c> part (with its
+/// <c>externalBook</c>/<c>sheetNames</c> scaffolding), that part's own <c>_rels</c>
+/// <c>externalLinkPath</c> relationship, the <c>xl/_rels/workbook.xml.rels</c> <c>externalLink</c>
+/// relationship, the <c>workbook.xml</c> <c>&lt;externalReferences&gt;</c>/<c>&lt;externalReference&gt;</c>
+/// entry, and the <c>[Content_Types].xml</c> Override. Without this, a save emitted the literal
+/// bracketed formula text with none of that backing -- a shape real Excel never produces on its own
+/// (Excel always writes the externalLink part the moment such a formula is entered) -- leaving Edit
+/// Links with nothing to show and the reference permanently orphaned.
+/// <para>
+/// Scoped to the realistic "typed directly into a cell" shape: the quoted FILENAME form
+/// <c>'[Book.xlsx]Sheet1'!A1</c>. The sibling numeric unquoted/quoted form (<c>[1]Sheet1!A1</c> /
+/// <c>'[1]Sheet1'!A1</c>) only ever addresses an ALREADY-existing external reference by its 1-based
+/// position; with none existing there is no filename to synthesize a backing part for (and if one
+/// does exist, it is already backed), so purely-numeric bracket content is left untouched -- still
+/// resolving to #REF! exactly as before, same as any other genuinely dangling reference. Likewise
+/// the external DEFINED-NAME shape (<c>'[Book.xlsx]'!TaxRate</c>, zero-length sheet segment) is left
+/// for a follow-up; only the sheet-qualified cell/range shape is synthesized here.
+/// </para>
+/// <para>
+/// Idempotent by construction: before synthesizing a new part for a given book name, this scans the
+/// package's OWN already-written external-link infrastructure (freshly merged in by
+/// <see cref="XlsxExternalLinkReferencePreserver"/> when the workbook has a source package, or simply
+/// absent for a brand-new workbook) rather than any in-memory model, so a book already backed by a
+/// part -- whether carried forward from a prior save or added earlier in this same pass -- is left
+/// alone instead of accumulating a duplicate externalLinkN.xml on every subsequent save.
+/// </para>
+/// </summary>
+internal static class XlsxExternalLinkAuthoringWriter
+{
+    private static readonly XNamespace WorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+    private const string ExternalLinkRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink";
+    private const string ExternalLinkPathRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath";
+    private const string ExternalLinkContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
+
+    // Matches the shape Lexer.ReadQuotedSheetQualifier accepts and reduces to a bracketed
+    // "[Book]Sheet" SheetQualifier token: a quoted span opening with "[", closing with "]", a sheet
+    // name run (permitting the "''" doubled-apostrophe escape), and the closing quote immediately
+    // followed by "!". The book segment deliberately excludes "'" -- a book name containing an
+    // escaped apostrophe is a rare edge case this best-effort scan leaves unsynthesized rather than
+    // mis-splitting (matches the class of heuristic RecalcEngine.ExternalWorkbookReferencePattern
+    // already uses for the sibling "is this even shaped like an external reference" check).
+    private static readonly Regex QuotedExternalReferencePattern = new(
+        @"'\[([^\[\]']+)\]((?:[^']|'')*)'!",
+        RegexOptions.Compiled);
+
+    /// <summary>Fresh-workbook (no source package) entry point -- opens its own archive.</summary>
+    public static void Save(Stream packageStream, Workbook workbook)
+    {
+        var references = CollectDistinctReferences(workbook);
+        if (references.Count == 0)
+            return;
+
+        packageStream.Position = 0;
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        Save(archive, references);
+    }
+
+    /// <summary>
+    /// Source-package entry point -- called from <c>PreserveSourcePackageParts</c> against the
+    /// already-open generated archive, right after <see cref="XlsxExternalLinkReferencePreserver"/>
+    /// carries forward any pre-existing external links (so this pass's "already backed" scan sees
+    /// them).
+    /// </summary>
+    public static void Save(ZipArchive archive, Workbook workbook)
+    {
+        var references = CollectDistinctReferences(workbook);
+        if (references.Count == 0)
+            return;
+
+        Save(archive, references);
+    }
+
+    private static void Save(ZipArchive archive, List<ExternalReferenceGroup> references)
+    {
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (workbookEntry is null || workbookRelsEntry is null)
+            return;
+
+        var workbookRelsXml = XlsxPackageXmlEditor.LoadXml(workbookRelsEntry);
+        var alreadyBacked = CollectAlreadyBackedBookNames(archive, workbookRelsXml);
+        var newReferences = references.Where(reference => !alreadyBacked.Contains(reference.BookKey)).ToList();
+        if (newReferences.Count == 0)
+            return;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var externalReferencesElement = root.Element(WorkbookNs + "externalReferences");
+        if (externalReferencesElement is null)
+        {
+            externalReferencesElement = new XElement(WorkbookNs + "externalReferences");
+            // Position doesn't need to be schema-exact here: both call sites (PreserveSourcePackageParts
+            // and the fresh-workbook post-processing path) always run XlsxWorkbookSchemaNormalizer
+            // afterward, which reorders every CT_Workbook child -- including externalReferences -- into
+            // its required sequence position.
+            root.Add(externalReferencesElement);
+        }
+
+        var nextPartNumber = GetNextExternalLinkPartNumber(archive);
+        foreach (var reference in newReferences)
+        {
+            var partPath = $"xl/externalLinks/externalLink{nextPartNumber}.xml";
+            nextPartNumber++;
+
+            var relId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
+                workbookRelsXml,
+                PackageRelNs,
+                "xl/workbook.xml",
+                partPath,
+                ExternalLinkRelationshipType);
+            externalReferencesElement.Add(new XElement(
+                WorkbookNs + "externalReference",
+                new XAttribute(RelNs + "id", relId)));
+
+            WriteExternalLinkPart(archive, partPath, reference);
+            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, partPath, ExternalLinkContentType);
+        }
+
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/_rels/workbook.xml.rels", workbookRelsXml);
+    }
+
+    private static void WriteExternalLinkPart(ZipArchive archive, string partPath, ExternalReferenceGroup reference)
+    {
+        const string bookRelId = "rId1";
+        var externalBook = new XElement(
+            WorkbookNs + "externalBook",
+            new XAttribute(RelNs + "id", bookRelId));
+
+        if (reference.SheetNames.Count > 0)
+        {
+            externalBook.Add(new XElement(
+                WorkbookNs + "sheetNames",
+                reference.SheetNames.Select(name => new XElement(
+                    WorkbookNs + "sheetName",
+                    new XAttribute("val", name)))));
+        }
+
+        var externalLinkXml = new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(
+                WorkbookNs + "externalLink",
+                new XAttribute(XNamespace.Xmlns + "r", RelNs),
+                externalBook));
+        XlsxPackageXmlEditor.ReplaceXml(archive, partPath, externalLinkXml);
+
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(partPath);
+        var relsXml = new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(
+                PackageRelNs + "Relationships",
+                new XElement(
+                    PackageRelNs + "Relationship",
+                    new XAttribute("Id", bookRelId),
+                    new XAttribute("Type", ExternalLinkPathRelationshipType),
+                    new XAttribute("Target", reference.Book),
+                    new XAttribute("TargetMode", "External"))));
+        XlsxPackageXmlEditor.ReplaceXml(archive, relsPath, relsXml);
+    }
+
+    private static HashSet<string> CollectAlreadyBackedBookNames(ZipArchive archive, XDocument workbookRelsXml)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var externalLinkRelationships = workbookRelsXml.Root?
+            .Elements(PackageRelNs + "Relationship")
+            .Where(relationship =>
+                string.Equals(relationship.Attribute("Type")?.Value?.Trim(), ExternalLinkRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(relationship.Attribute("TargetMode")?.Value?.Trim(), "External", StringComparison.OrdinalIgnoreCase))
+            .ToList() ?? [];
+
+        foreach (var relationship in externalLinkRelationships)
+        {
+            var target = relationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target))
+                continue;
+
+            var partPath = XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", target.Trim());
+            var relsPath = XlsxPackagePath.GetRelationshipPartPath(partPath);
+            var relsEntry = archive.GetEntry(relsPath);
+            if (relsEntry is null)
+                continue;
+
+            var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+            foreach (var pathRelationship in relsXml.Root?.Elements(PackageRelNs + "Relationship") ?? [])
+            {
+                if (!string.Equals(pathRelationship.Attribute("Type")?.Value?.Trim(), ExternalLinkPathRelationshipType, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var bookTarget = pathRelationship.Attribute("Target")?.Value;
+                if (!string.IsNullOrWhiteSpace(bookTarget))
+                    result.Add(NormalizeBookKey(bookTarget));
+            }
+        }
+
+        return result;
+    }
+
+    private static int GetNextExternalLinkPartNumber(ZipArchive archive)
+    {
+        const string prefix = "xl/externalLinks/externalLink";
+        const string suffix = ".xml";
+        var highestExisting = archive.Entries
+            .Select(entry => entry.FullName)
+            .Where(name =>
+                name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            .Select(name => int.TryParse(name[prefix.Length..^suffix.Length], out var number) ? number : 0)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return highestExisting + 1;
+    }
+
+    private static List<ExternalReferenceGroup> CollectDistinctReferences(Workbook workbook)
+    {
+        var order = new List<string>();
+        var groups = new Dictionary<string, (string Book, List<string> SheetNames)>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var pair in sheet.GetOccupiedCellMap())
+            {
+                var formulaText = pair.Value.FormulaText;
+                if (string.IsNullOrEmpty(formulaText))
+                    continue;
+
+                foreach (Match match in QuotedExternalReferencePattern.Matches(formulaText))
+                {
+                    var book = match.Groups[1].Value;
+                    var sheetName = match.Groups[2].Value.Replace("''", "'");
+                    if (book.Length == 0 || sheetName.Length == 0)
+                        continue;
+
+                    // Purely-numeric bracket content ("[1]Sheet1'!A1") addresses an EXISTING external
+                    // reference by 1-based position -- there is no filename to synthesize a backing
+                    // part for when none exists, and when one does exist it's already backed. See the
+                    // class doc comment.
+                    if (book.All(char.IsAsciiDigit))
+                        continue;
+
+                    var key = NormalizeBookKey(book);
+                    if (!groups.TryGetValue(key, out var group))
+                    {
+                        group = (book, new List<string>());
+                        groups[key] = group;
+                        order.Add(key);
+                    }
+
+                    if (!group.SheetNames.Contains(sheetName, StringComparer.OrdinalIgnoreCase))
+                        group.SheetNames.Add(sheetName);
+                }
+            }
+        }
+
+        return order
+            .Select(key => new ExternalReferenceGroup(key, groups[key].Book, groups[key].SheetNames))
+            .ToList();
+    }
+
+    private static string NormalizeBookKey(string book)
+    {
+        var trimmed = book.Trim();
+        var separatorIndex = trimmed.LastIndexOfAny(['/', '\\']);
+        return separatorIndex >= 0 ? trimmed[(separatorIndex + 1)..] : trimmed;
+    }
+
+    private readonly record struct ExternalReferenceGroup(string BookKey, string Book, List<string> SheetNames);
+}

@@ -226,10 +226,15 @@ internal static class XlsxDataValidationClosedXmlMapper
             return unmarked;
 
         var trimmed = unmarked.Trim();
-        if (trimmed.Length < 2 || !trimmed.Contains(',', StringComparison.Ordinal))
+        if (trimmed.Length == 0)
             return unmarked;
 
-        if ((trimmed.StartsWith('"') && trimmed.EndsWith('"')) || trimmed.StartsWith('='))
+        // A single-item literal (no comma at all, e.g. "Approved") is just as much a literal as a
+        // comma-separated one -- the '=' marker above is the ONLY authority this function trusts for
+        // literal-vs-reference, so gating the quoting step on the presence of a comma left every
+        // ordinary one-choice dropdown (and any x14 List source that happens to be exactly one item)
+        // unquoted on disk, which Excel cannot parse back as a literal (R96 regression coverage).
+        if ((trimmed.Length > 1 && trimmed.StartsWith('"') && trimmed.EndsWith('"')) || trimmed.StartsWith('='))
             return unmarked;
 
         return $"\"{trimmed.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";

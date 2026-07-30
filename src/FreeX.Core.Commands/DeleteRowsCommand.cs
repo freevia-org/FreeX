@@ -5,7 +5,7 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Deletes <paramref name="count"/> rows starting at <paramref name="startRow"/>.</summary>
-public sealed class DeleteRowsCommand : IWorkbookCommand
+public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
 {
     private const uint FullSnapshotCapacityThreshold = 32;
     private readonly SheetId _sheetId;
@@ -13,6 +13,12 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private readonly uint _count;
     private List<CellStateSnapshot>? _deletedSnapshot;
     private List<CellStateSnapshot>? _shiftedSnapshot;
+    // R96-commands-undo-affected-cells-1: mutated by both Apply (post-shift addresses) and Revert
+    // (original, pre-delete addresses of both the shifted-back and the restored-deleted formula
+    // cells) so CommandBus.Undo can report the CURRENT set of formula cells needing dependency-graph
+    // re-registration instead of the frozen forward payload -- see
+    // RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress.
+    private IReadOnlyList<CellAddress> _affectedCells = [];
     private List<GridRange>? _mergeSnapshot;
     private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;
     private List<uint>? _hiddenRowsSnapshot;
@@ -50,6 +56,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
 
     public string Label => $"Delete {_count} Row(s)";
+
+    public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
 
     public DeleteRowsCommand(SheetId sheetId, uint startRow, uint count = 1)
     {
@@ -216,11 +224,10 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         // immediately after any row delete just like it does after an insert.
         _tableRebandSnapshot = RebandTablesAfterRowDelete(ctx.Workbook, sheet);
 
-        return new CommandOutcome(
-            true,
-            AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-                RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _formulaSnapshot),
-                _formulaSnapshot));
+        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+            RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _formulaSnapshot),
+            _formulaSnapshot);
+        return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
     // R69-calc-dependency-insert-6-1: mirror InsertRowsCommand's
@@ -316,6 +323,12 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
             }
         }
 
+        // R96-commands-undo-affected-cells-1: RestoreFormulas below clears _formulaSnapshot as its
+        // last step, so capture its keys (the post-delete addresses of every stationary-or-shifted
+        // formula cell whose text was rewritten by Apply) now, before that happens -- needed to
+        // recompute _affectedCells at the end of this method.
+        var formulaSnapshotAddressesBeforeRestore = _formulaSnapshot.Keys.ToList();
+
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
         RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
@@ -371,6 +384,19 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
+
+        // R96-commands-undo-affected-cells-1: recompute AffectedCells to reflect where every
+        // formula cell ACTUALLY ended up after this Revert -- the shifted-back cells' original
+        // (pre-delete) address AND the restored-deleted cells' original address (the latter never
+        // appeared in Apply's own AffectedCells at all, since forward Apply only needs to report
+        // the shifted set -- the deleted cells didn't exist yet). CommandBus.Undo reads this live
+        // property instead of the frozen forward payload.
+        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+            RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_shiftedSnapshot, _sheetId)
+                .Concat(RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_deletedSnapshot, _sheetId))
+                .Concat(_tableRebandSnapshot?.Select(f => f.Address) ?? [])
+                .Concat(formulaSnapshotAddressesBeforeRestore),
+            []);
     }
 
     private (List<CellStateSnapshot> Deleted, List<CellStateSnapshot> Shifted)

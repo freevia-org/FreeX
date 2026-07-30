@@ -91,6 +91,11 @@ public sealed partial class NativeJsonAdapter
             ReadingOrder = NativeJsonValueSanitizer.ValidEnumOrDefault(dto.ReadingOrder, CellReadingOrder.Context),
             Locked = dto.Locked,
             Hidden = dto.Hidden,
+            DxfBold = dto.DxfBold,
+            DxfItalic = dto.DxfItalic,
+            DxfUnderline = dto.DxfUnderline,
+            DxfStrikethrough = dto.DxfStrikethrough,
+            DxfFontColor = dto.DxfFontColor,
             NativeDifferentialAttributes = dto.NativeDifferentialAttributes,
             NativeDifferentialChildXmls = dto.NativeDifferentialChildXmls,
             NativeDifferentialElementXmls = dto.NativeDifferentialElementXmls,
@@ -137,6 +142,11 @@ public sealed partial class NativeJsonAdapter
             ReadingOrder = style.ReadingOrder,
             Locked = style.Locked,
             Hidden = style.Hidden,
+            DxfBold = style.DxfBold,
+            DxfItalic = style.DxfItalic,
+            DxfUnderline = style.DxfUnderline,
+            DxfStrikethrough = style.DxfStrikethrough,
+            DxfFontColor = style.DxfFontColor,
             NativeDifferentialAttributes = style.NativeDifferentialAttributes,
             NativeDifferentialChildXmls = style.NativeDifferentialChildXmls,
             NativeDifferentialElementXmls = style.NativeDifferentialElementXmls
@@ -175,6 +185,11 @@ public sealed partial class NativeJsonAdapter
             ReadingOrder = safeStyle.ReadingOrder,
             Locked = safeStyle.Locked,
             Hidden = safeStyle.Hidden,
+            DxfBold = safeStyle.DxfBold,
+            DxfItalic = safeStyle.DxfItalic,
+            DxfUnderline = safeStyle.DxfUnderline,
+            DxfStrikethrough = safeStyle.DxfStrikethrough,
+            DxfFontColor = safeStyle.DxfFontColor,
             NativeDifferentialAttributes = safeStyle.NativeDifferentialAttributes,
             NativeDifferentialChildXmls = safeStyle.NativeDifferentialChildXmls,
             NativeDifferentialElementXmls = safeStyle.NativeDifferentialElementXmls
@@ -280,6 +295,11 @@ public sealed partial class NativeJsonAdapter
                 && x.ReadingOrder == y.ReadingOrder
                 && x.Locked == y.Locked
                 && x.Hidden == y.Hidden
+                && x.DxfBold == y.DxfBold
+                && x.DxfItalic == y.DxfItalic
+                && x.DxfUnderline == y.DxfUnderline
+                && x.DxfStrikethrough == y.DxfStrikethrough
+                && x.DxfFontColor == y.DxfFontColor
                 && DictionaryEquals(x.NativeDifferentialAttributes, y.NativeDifferentialAttributes)
                 && ListEquals(x.NativeDifferentialChildXmls, y.NativeDifferentialChildXmls)
                 && DictionaryEquals(x.NativeDifferentialElementXmls, y.NativeDifferentialElementXmls);
@@ -319,6 +339,11 @@ public sealed partial class NativeJsonAdapter
             hash.Add(obj.ReadingOrder);
             hash.Add(obj.Locked);
             hash.Add(obj.Hidden);
+            hash.Add(obj.DxfBold);
+            hash.Add(obj.DxfItalic);
+            hash.Add(obj.DxfUnderline);
+            hash.Add(obj.DxfStrikethrough);
+            hash.Add(obj.DxfFontColor);
             hash.Add(GetDictionaryHashCode(obj.NativeDifferentialAttributes));
             hash.Add(GetListHashCode(obj.NativeDifferentialChildXmls));
             hash.Add(GetDictionaryHashCode(obj.NativeDifferentialElementXmls));

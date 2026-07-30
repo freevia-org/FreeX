@@ -13018,16 +13018,34 @@ public partial class FileAdapterSmokeTests
         externalReferences.Should().NotBeNull();
         externalReferences!.Attribute("customExternalReferencesFlag").Should().BeNull();
         externalReferences.Element(workbookNs + "nativeExternalReferencesChild").Should().BeNull();
-        var externalReference = externalReferences
+        // R96-io-external-link-preserver-1: the fixture's THIRD entry (a literal duplicate of the
+        // first, resolved, r:id) still collapses into the first entry -- that pre-existing dedup
+        // behavior is unchanged. But the SECOND entry (a blank r:id, unresolvable) must now reserve
+        // its own ordinal slot instead of being silently dropped, exactly like
+        // XlsxExternalLinkMetadataReader already does on the read side for the same shape of input
+        // (see R96_ExternalLinkOrdinalPositionAfterUnresolvedReferenceTests) -- dropping it would
+        // shift any later externalReference's Excel '[n]' bracket-index down by one relative to what
+        // the source file encoded.
+        var externalReferenceElements = externalReferences
             .Elements(workbookNs + "externalReference")
-            .Should()
-            .ContainSingle()
-            .Subject;
+            .ToList();
+        externalReferenceElements.Should().HaveCount(2, "the blank second entry must reserve an empty placeholder ordinal slot, not be dropped");
+
+        var externalReference = externalReferenceElements[0];
         externalReference.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXExternalLink");
         externalReference.Attribute("customExternalReferenceFlag").Should().BeNull();
         externalReference.Elements().Should().BeEmpty();
         var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
         workbookRelsXml.ToString().Should().Contain("externalLink1.xml");
+
+        var placeholder = externalReferenceElements[1];
+        var placeholderRelId = placeholder.Attribute(relNs + "id")!.Value;
+        placeholderRelId.Should().NotBeNullOrWhiteSpace();
+        placeholder.Elements().Should().BeEmpty();
+        workbookRelsXml.Root!
+            .Elements(XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships") + "Relationship")
+            .Any(relationship => relationship.Attribute("Id")?.Value == placeholderRelId)
+            .Should().BeFalse("the reserved placeholder slot must stay unbacked by any relationship, exactly like the blank r:id already was in the source");
     }
 
     [Fact]

@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Xml.Linq;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -531,6 +533,9 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // dangling deleted-sheet reference remains (mirrors RenameSheetCommand's T6 block, but the
     // sheet has no new name to rewrite onto, so these are nulled instead of renamed).
     private List<(PivotCacheModel Cache, string OldValue)>? _pivotCacheNameDeleteSnapshot;
+    // R96: WorksheetRange/Table pivot caches whose records we captured into RawRecordsXml because
+    // their source sheet is about to disappear -- see TryCapturePivotCacheRecordsXml for why.
+    private List<(PivotCacheModel Cache, string? OldValue)>? _pivotCacheRawRecordsDeleteSnapshot;
     private List<(SlicerModel Slicer, string OldValue)>? _slicerNameDeleteSnapshot;
     // P84: mirrors _slicerNameDeleteSnapshot above for TimelineModel.SourceSheetName — a timeline
     // anchored on the deleted sheet must have its dangling sheet-name ref cleared too, or it can
@@ -719,12 +724,33 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         // never silently reattach to an unrelated sheet later re-created/renamed with the same name
         // — mirrors RenameSheetCommand's T6 block, which uses the same three fields.
         _pivotCacheNameDeleteSnapshot = [];
+        _pivotCacheRawRecordsDeleteSnapshot = [];
         foreach (var cache in ctx.Workbook.PivotCaches)
         {
             if (cache.SourceSheetName is not null &&
                 string.Equals(cache.SourceSheetName, deletedSheetName, StringComparison.OrdinalIgnoreCase))
             {
                 _pivotCacheNameDeleteSnapshot.Add((cache, cache.SourceSheetName));
+
+                // R96: a WorksheetRange/Table cache's <pivotCacheRecords> are always regenerated
+                // live from its source range on save (XlsxPivotTableWriter.Cache.cs). Once
+                // SourceSheetName is nulled below, that live regeneration can never resolve a range
+                // again, and the writer's only fallback (RawRecordsXml -- previously populated only
+                // for External/Consolidation/Scenario sources) is blank for this cache, so the
+                // pivot table's cached records would silently truncate to
+                // <pivotCacheRecords count="0"/> on the very next save. Snapshot the cache's CURRENT
+                // records now, while `sheet`'s cell data is still live (it has already been unlinked
+                // from ctx.Workbook.Sheets above, but the in-memory Sheet object itself is untouched),
+                // into RawRecordsXml so that fallback has real data to serve -- matching real Excel,
+                // which keeps a pivot table's last-refreshed cache after its source sheet disappears
+                // (only a subsequent manual Refresh against the missing source then fails).
+                if (string.IsNullOrWhiteSpace(cache.RawRecordsXml) &&
+                    TryCapturePivotCacheRecordsXml(cache, sheet, out var capturedRecordsXml))
+                {
+                    _pivotCacheRawRecordsDeleteSnapshot.Add((cache, cache.RawRecordsXml));
+                    cache.RawRecordsXml = capturedRecordsXml;
+                }
+
                 cache.SourceSheetName = null;
             }
         }
@@ -912,6 +938,13 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
                 foreach (var (cache, oldValue) in _pivotCacheNameDeleteSnapshot)
                     cache.SourceSheetName = oldValue;
 
+            // R96 restore: undo the RawRecordsXml capture from the Apply-side T6 pass above so a
+            // redo/undo cycle doesn't leave a cache carrying preserved records it never had before
+            // the delete (matches the SourceSheetName restore immediately above it).
+            if (_pivotCacheRawRecordsDeleteSnapshot is not null)
+                foreach (var (cache, oldValue) in _pivotCacheRawRecordsDeleteSnapshot)
+                    cache.RawRecordsXml = oldValue;
+
             if (_slicerNameDeleteSnapshot is not null)
                 foreach (var (slicer, oldValue) in _slicerNameDeleteSnapshot)
                     slicer.SourceSheetName = oldValue;
@@ -948,6 +981,99 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             }
         }
     }
+
+    /// <summary>
+    /// R96: attempts to render the CURRENT (pre-delete) records of a WorksheetRange/Table pivot
+    /// cache into the same &lt;pivotCacheRecords&gt; XML shape XlsxPivotTableWriter.Cache.cs's
+    /// ToPivotCacheRecordsXml/ToPivotCacheRecordValueXml produce, so it can be stashed into
+    /// <see cref="PivotCacheModel.RawRecordsXml"/> before the cache's SourceSheetName is nulled out
+    /// below. That writer's preserved-records fallback (TryGetPreservedPivotCacheRecordsXml) already
+    /// exists for External/Consolidation/Scenario cache sources, whose live worksheet range can
+    /// never be resolved in the first place -- this reuses the exact same fallback for a
+    /// WorksheetRange/Table cache that COULD normally resolve a live range, but is about to lose the
+    /// ability to because its source sheet is being deleted here.
+    /// </summary>
+    private static bool TryCapturePivotCacheRecordsXml(PivotCacheModel cache, Sheet sourceSheet, out string? recordsXml)
+    {
+        recordsXml = null;
+
+        // Mirrors TryGetPivotCacheSourceRange's own early-out: these source types never resolve a
+        // live worksheet range, so there's nothing here for RawRecordsXml to gain that the reader
+        // (XlsxPivotCacheReader) wouldn't already have captured at load time.
+        if (cache.SourceType is PivotCacheSourceType.External or PivotCacheSourceType.Consolidation or PivotCacheSourceType.Scenario)
+            return false;
+
+        if (string.IsNullOrWhiteSpace(cache.SourceReference) || cache.Fields.Count == 0)
+            return false;
+
+        GridRange sourceRange;
+        try
+        {
+            sourceRange = GridRange.Parse(NormalizePivotCacheSourceReference(cache.SourceReference), sourceSheet.Id);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+
+        if (sourceRange.RowCount <= 1)
+            return false; // header row only (or empty range) -- no cached records to lose
+
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var fieldCount = Math.Min(cache.Fields.Count, (int)sourceRange.ColCount);
+        var records = new List<XElement>();
+        for (var row = sourceRange.Start.Row + 1; row <= sourceRange.End.Row; row++)
+        {
+            var values = new List<XElement>(fieldCount);
+            for (var index = 0; index < fieldCount; index++)
+            {
+                var col = sourceRange.Start.Col + (uint)index;
+                values.Add(ToPivotCacheRecordValueXml(sourceSheet.GetValue(row, col), ns));
+            }
+
+            records.Add(new XElement(ns + "r", values));
+        }
+
+        if (records.Count == 0)
+            return false;
+
+        recordsXml = new XElement(
+            ns + "pivotCacheRecords",
+            new XAttribute("count", records.Count.ToString(CultureInfo.InvariantCulture)),
+            records).ToString(SaveOptions.DisableFormatting);
+        return true;
+    }
+
+    // Mirrors XlsxPivotTableWriter.Cache.cs's NormalizePivotCacheSourceReference: per
+    // CT_WorksheetSource (ECMA-376 18.10.2.42) the @ref attribute is an unqualified range like
+    // "A1:C10", but defensively strip a sheet-qualifier/$ signs in case one ever creeps in here too.
+    private static string NormalizePivotCacheSourceReference(string reference)
+    {
+        var normalized = reference.Trim();
+        var sheetSeparator = normalized.LastIndexOf('!');
+        if (sheetSeparator >= 0 && sheetSeparator + 1 < normalized.Length)
+            normalized = normalized[(sheetSeparator + 1)..];
+
+        return normalized.Replace("$", "", StringComparison.Ordinal);
+    }
+
+    // Mirrors XlsxPivotTableWriter.Cache.cs's ToPivotCacheRecordValueXml exactly (same element
+    // names/attribute shape) so a records XML captured here round-trips identically through the
+    // writer's TryGetPreservedPivotCacheRecordsXml fallback.
+    private static XElement ToPivotCacheRecordValueXml(ScalarValue value, XNamespace ns) =>
+        value switch
+        {
+            TextValue text => new XElement(ns + "s", new XAttribute("v", text.Value)),
+            NumberValue number => new XElement(ns + "n", new XAttribute("v", number.Value.ToString(CultureInfo.InvariantCulture))),
+            DateTimeValue date => new XElement(ns + "d", new XAttribute("v", date.ToDateTime().ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture))),
+            BoolValue boolean => new XElement(ns + "b", new XAttribute("v", boolean.Value ? "1" : "0")),
+            ErrorValue error => new XElement(ns + "e", new XAttribute("v", error.Code)),
+            _ => new XElement(ns + "m")
+        };
 
     private static Dictionary<string, string> RewriteNamedFormulasForDeletedSheet(
         Workbook workbook, string deletedSheetName, IReadOnlyList<string> deletedTableNames)

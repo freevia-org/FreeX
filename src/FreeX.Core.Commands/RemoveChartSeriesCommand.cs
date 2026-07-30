@@ -50,6 +50,12 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
     private int _previousErrorBarSeriesIndex;
     private bool _previousShowLinearTrendline;
     private bool _previousShowErrorBars;
+    private List<ChartSeriesFormat>? _previousSeriesFormats;
+    private List<ChartPointFillFormat>? _previousPointFillColors;
+    private List<ChartSeriesDataLabelFormat>? _previousSeriesDataLabelFormats;
+    private List<ChartPointDataLabelFormat>? _previousPointDataLabelFormats;
+    private List<ChartSeriesRawXmlEntry>? _previousAdditionalSeriesErrorBarsXml;
+    private List<ChartSeriesRawXmlEntry>? _previousAdditionalSeriesTrendlinesXml;
 
     public string Label => "Remove Chart Series";
 
@@ -101,6 +107,12 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         _previousErrorBarSeriesIndex = chart.ErrorBarSeriesIndex;
         _previousShowLinearTrendline = chart.ShowLinearTrendline;
         _previousShowErrorBars = chart.ShowErrorBars;
+        _previousSeriesFormats = chart.SeriesFormats;
+        _previousPointFillColors = chart.PointFillColors;
+        _previousSeriesDataLabelFormats = chart.SeriesDataLabelFormats;
+        _previousPointDataLabelFormats = chart.PointDataLabelFormats;
+        _previousAdditionalSeriesErrorBarsXml = chart.AdditionalSeriesErrorBarsXml;
+        _previousAdditionalSeriesTrendlinesXml = chart.AdditionalSeriesTrendlinesXml;
         _applied = true;
 
         var remainingColumns = new List<(int SeriesIndex, uint Column)>(columns.Count - 1);
@@ -141,6 +153,30 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         chart.SecondaryAxisSeriesIndexes = RemapIndexList(chart.SecondaryAxisSeriesIndexes, removedSeriesIndex);
         chart.ComboLineSeriesIndexes = RemapIndexList(chart.ComboLineSeriesIndexes, removedSeriesIndex);
         chart.ComboScatterSeriesIndexes = RemapIndexList(chart.ComboScatterSeriesIndexes, removedSeriesIndex);
+        chart.SeriesFormats = chart.SeriesFormats
+            .Where(f => f.SeriesIndex != removedSeriesIndex)
+            .Select(f => f.SeriesIndex > removedSeriesIndex ? f with { SeriesIndex = f.SeriesIndex - 1 } : f)
+            .ToList();
+        chart.PointFillColors = chart.PointFillColors
+            .Where(p => p.SeriesIndex != removedSeriesIndex)
+            .Select(p => p.SeriesIndex > removedSeriesIndex ? p with { SeriesIndex = p.SeriesIndex - 1 } : p)
+            .ToList();
+        chart.SeriesDataLabelFormats = chart.SeriesDataLabelFormats
+            .Where(f => f.SeriesIndex != removedSeriesIndex)
+            .Select(f => f.SeriesIndex > removedSeriesIndex ? f with { SeriesIndex = f.SeriesIndex - 1 } : f)
+            .ToList();
+        chart.PointDataLabelFormats = chart.PointDataLabelFormats
+            .Where(f => f.SeriesIndex != removedSeriesIndex)
+            .Select(f => f.SeriesIndex > removedSeriesIndex ? f with { SeriesIndex = f.SeriesIndex - 1 } : f)
+            .ToList();
+        chart.AdditionalSeriesErrorBarsXml = chart.AdditionalSeriesErrorBarsXml
+            .Where(x => x.SeriesIndex != removedSeriesIndex)
+            .Select(x => x.SeriesIndex > removedSeriesIndex ? x with { SeriesIndex = x.SeriesIndex - 1 } : x)
+            .ToList();
+        chart.AdditionalSeriesTrendlinesXml = chart.AdditionalSeriesTrendlinesXml
+            .Where(x => x.SeriesIndex != removedSeriesIndex)
+            .Select(x => x.SeriesIndex > removedSeriesIndex ? x with { SeriesIndex = x.SeriesIndex - 1 } : x)
+            .ToList();
 
         if (chart.TrendlineSeriesIndex == removedSeriesIndex)
             chart.ShowLinearTrendline = false;
@@ -177,6 +213,12 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         chart.ErrorBarSeriesIndex = _previousErrorBarSeriesIndex;
         chart.ShowLinearTrendline = _previousShowLinearTrendline;
         chart.ShowErrorBars = _previousShowErrorBars;
+        chart.SeriesFormats = _previousSeriesFormats ?? [];
+        chart.PointFillColors = _previousPointFillColors ?? [];
+        chart.SeriesDataLabelFormats = _previousSeriesDataLabelFormats ?? [];
+        chart.PointDataLabelFormats = _previousPointDataLabelFormats ?? [];
+        chart.AdditionalSeriesErrorBarsXml = _previousAdditionalSeriesErrorBarsXml ?? [];
+        chart.AdditionalSeriesTrendlinesXml = _previousAdditionalSeriesTrendlinesXml ?? [];
 
         _applied = false;
         _previousSeriesColumnMappings = null;
@@ -189,6 +231,12 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         _previousSecondaryAxisSeriesIndexes = null;
         _previousComboLineSeriesIndexes = null;
         _previousComboScatterSeriesIndexes = null;
+        _previousSeriesFormats = null;
+        _previousPointFillColors = null;
+        _previousSeriesDataLabelFormats = null;
+        _previousPointDataLabelFormats = null;
+        _previousAdditionalSeriesErrorBarsXml = null;
+        _previousAdditionalSeriesTrendlinesXml = null;
     }
 
     private static List<int> RemapIndexList(List<int> indexes, int removedSeriesIndex) =>

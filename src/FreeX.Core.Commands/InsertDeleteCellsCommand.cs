@@ -16,12 +16,17 @@ public enum DeleteCellsShiftDirection
     Up
 }
 
-public sealed class InsertCellsCommand : IWorkbookCommand
+public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly InsertCellsShiftDirection _direction;
     private CellShiftSnapshot? _snapshot;
+    // R96-commands-undo-affected-cells-2: the raw captured (original-address, cell) pairs behind
+    // _snapshot, kept alongside it so Revert can recompute AffectedCells at the CURRENT (post-Revert)
+    // address of every relocated formula cell -- see RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress.
+    private IReadOnlyList<(CellAddress Address, Cell Cell)>? _capturedCells;
+    private IReadOnlyList<CellAddress> _affectedCells = [];
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
     private List<CellAddress>? _shownCommentsSnapshot;
@@ -55,6 +60,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private List<SparklineBandSnapshot>? _sparklineSnapshot;
 
     public string Label => "Insert Cells";
+
+    public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
 
     public InsertCellsCommand(SheetId sheetId, GridRange range, InsertCellsShiftDirection direction)
     {
@@ -122,6 +129,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last column ({CellAddress.MaxCol}).");
 
             _snapshot = capture.Snapshot;
+            _capturedCells = capture.Cells;
 
             // Snapshot and shift annotations (comments, hyperlinks, style-only) in the band
             _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
@@ -238,6 +246,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last row ({CellAddress.MaxRow}).");
 
             _snapshot = capture.Snapshot;
+            _capturedCells = capture.Cells;
 
             // Snapshot and shift annotations in the band
             _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
@@ -313,17 +322,22 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, insertDownOp);
         }
 
-        return new CommandOutcome(
-            true,
-            AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-                _range.AllCells().Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>()),
-                _formulaSnapshot));
+        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+            _range.AllCells().Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>()),
+            _formulaSnapshot);
+        return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
     public void Revert(ICommandContext ctx)
     {
         if (_snapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
+
+        // R96-commands-undo-affected-cells-2: RestoreFormulas below clears _formulaSnapshot as its
+        // last step, so capture its keys (the post-shift addresses of every stationary formula cell
+        // whose text was rewritten by Apply) now, before that happens -- needed to recompute
+        // _affectedCells at the end of this method.
+        var formulaSnapshotAddressesBeforeRestore = _formulaSnapshot.Keys.ToList();
 
         // ORDER IS REQUIRED: restore formulas before restoring cell positions.
         //
@@ -361,6 +375,16 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
         RestoreSparklines(sheet, _sparklineSnapshot);
+
+        // R96-commands-undo-affected-cells-2: recompute AffectedCells to reflect where every
+        // relocated formula cell ACTUALLY ended up after this Revert -- its original, pre-shift
+        // address (mirroring InsertRowsCommand/InsertColumnsCommand's own Revert-time recompute).
+        // CommandBus.Undo reads this live property instead of the frozen forward payload.
+        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+            RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_capturedCells ?? [])
+                .Concat(formulaSnapshotAddressesBeforeRestore),
+            []);
+        _capturedCells = null;
     }
 
     private void InsertShiftRight(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
@@ -1637,12 +1661,17 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     }
 }
 
-public sealed class DeleteCellsCommand : IWorkbookCommand
+public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly DeleteCellsShiftDirection _direction;
     private CellShiftSnapshot? _snapshot;
+    // R96-commands-undo-affected-cells-2: see InsertCellsCommand's field of the same name. Here the
+    // captured list covers BOTH the shifted-back survivors and the restored-deleted cells (a single
+    // unified capture over the whole shift region, unlike DeleteRowsCommand's two separate lists).
+    private IReadOnlyList<(CellAddress Address, Cell Cell)>? _capturedCells;
+    private IReadOnlyList<CellAddress> _affectedCells = [];
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
     private List<CellAddress>? _shownCommentsSnapshot;
@@ -1671,6 +1700,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private List<InsertCellsCommand.SparklineBandSnapshot>? _sparklineSnapshot;
 
     public string Label => "Delete Cells";
+
+    public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
 
     public DeleteCellsCommand(SheetId sheetId, GridRange range, DeleteCellsShiftDirection direction)
     {
@@ -1717,6 +1748,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
                     ? new CellAddress(orig.Sheet, orig.Row, orig.Col - _range.ColCount)
                     : (CellAddress?)null);
             _snapshot = capture.Snapshot;
+            _capturedCells = capture.Cells;
 
             uint width = _range.ColCount;
 
@@ -1823,6 +1855,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
                     ? new CellAddress(orig.Sheet, orig.Row - _range.RowCount, orig.Col)
                     : (CellAddress?)null);
             _snapshot = capture.Snapshot;
+            _capturedCells = capture.Cells;
 
             uint height = _range.RowCount;
 
@@ -1898,17 +1931,19 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, deleteUpOp);
         }
 
-        return new CommandOutcome(
-            true,
-            AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-                _range.AllCells().Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>()),
-                _formulaSnapshot));
+        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+            _range.AllCells().Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>()),
+            _formulaSnapshot);
+        return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
     public void Revert(ICommandContext ctx)
     {
         if (_snapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
+
+        // R96-commands-undo-affected-cells-2: see InsertCellsCommand.Revert above.
+        var formulaSnapshotAddressesBeforeRestore = _formulaSnapshot.Keys.ToList();
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
@@ -1937,6 +1972,17 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         InsertCellsCommand.RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
         InsertCellsCommand.RestoreSparklines(sheet, _sparklineSnapshot);
+
+        // R96-commands-undo-affected-cells-2: recompute AffectedCells to reflect where every
+        // formula cell ACTUALLY ended up after this Revert -- covers both the shifted-back
+        // survivors AND the restored-deleted cells (both are in the single unified _capturedCells
+        // list, unlike DeleteRowsCommand's separate _shiftedSnapshot/_deletedSnapshot).
+        // CommandBus.Undo reads this live property instead of the frozen forward payload.
+        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+            RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_capturedCells ?? [])
+                .Concat(formulaSnapshotAddressesBeforeRestore),
+            []);
+        _capturedCells = null;
     }
 
     private void DeleteShiftLeft(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
