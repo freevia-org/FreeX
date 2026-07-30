@@ -1325,54 +1325,63 @@ probe_formula_bar_point_mode_multi_area_edit() {
 }
 
 probe_formula_reference_grip_multi_area() {
-    local committed_formula="" committed_result="" expected_formula="=SUM('Revenue Data'!B2:C3,'Revenue Data'!D4:F6)"
-    local formula_passed=false result_passed=false save_passed=false rename_passed=false
-    local artifacts="formula-reference-grip-rename.png;formula-reference-grip-before.png;formula-reference-grip-dragging.png;formula-reference-grip-committed.png;formula-reference-grip-postcondition.txt"
+    local committed_formula="" committed_result="" expected_formula="=SUM('Sheet2'!B2:C3,'Sheet2'!D4:F6)"
+    local formula_passed=false result_passed=false save_passed=false setup_passed=false
+    local artifacts="formula-reference-grip-setup.png;formula-reference-grip-source.png;formula-reference-grip-target.png;formula-reference-grip-before.png;formula-reference-grip-dragging.png;formula-reference-grip-committed.png;formula-reference-grip-postcondition.txt"
 
-    # Keep the worksheet name quoted even though it is the active sheet. The second reference is
-    # then resized through its visible bottom-right grip; both qualifiers must survive verbatim.
+    # Keep the formula source on the first worksheet and create a real second worksheet. The
+    # reference is explicitly quoted and qualified, so the production tab switch must preserve
+    # Edit mode instead of committing before the referenced sheet becomes active.
     select_sheet_tab 0
     rename_sheet_tab 0
-    capture_sheet_tab_strip "formula-reference-grip-rename.png"
+    capture_sheet_tab_strip "formula-reference-grip-setup.png"
     if ! calibrate_geometry; then
-        write_artifact "formula-reference-grip-postcondition.txt" "renamed=true\nrecalibration=false\n"
-        record "formula-reference-grip-multi-area-physical" "failed" "formula-reference-grip-rename.png; formula-reference-grip-postcondition.txt" "Could not recalibrate after renaming the active worksheet to Revenue Data." "$artifacts"
+        write_artifact "formula-reference-grip-postcondition.txt" "setup=true\nrecalibration=false\n"
+        record "formula-reference-grip-multi-area-physical" "failed" "formula-reference-grip-setup.png; formula-reference-grip-postcondition.txt" "Could not recalibrate after renaming the source worksheet." "$artifacts"
         return
     fi
-    rename_passed=true
 
-    # Seed an authored two-area same-sheet formula through the real edit path. The second
-    # reference is then resized through its visible bottom-right grip; the first area and both
-    # quoted qualifiers must survive byte-for-byte in the committed formula.
-    if ! set_cell_text_without_save 1 1 B2 0 ||
-       ! set_cell_text_without_save 1 2 C2 0 ||
-       ! set_cell_text_without_save 2 1 B3 0 ||
-       ! set_cell_text_without_save 2 2 C3 0 ||
-       ! set_cell_text_without_save 3 3 D4 0 ||
-       ! set_cell_text_without_save 3 4 E4 0 ||
-       ! set_cell_text_without_save 3 5 F4 0 ||
-       ! set_cell_text_without_save 4 3 D5 0 ||
-       ! set_cell_text_without_save 4 4 E5 0 ||
-       ! set_cell_text_without_save 4 5 F5 0 ||
-       ! set_cell_text_without_save 5 3 D6 0 ||
-       ! set_cell_text_without_save 5 4 E6 0 ||
-       ! set_cell_text_without_save 5 5 F6 0 ||
-       ! set_cell_text_without_save 1 1 B2 1 ||
+    # After the source rename, the real + button is adjacent to its shorter tab. A new Sheet2 is
+    # active immediately after the click; its tab center is derived by the calibrated geometry
+    # used by the other physical formula lanes.
+    local target_tab_x=$((a1_x + 123)) target_tab_center_x=$((a1_x + 139))
+    focus_app
+    xdotool_mousemove_sync "$target_tab_x" "$(sheet_tab_y)" click 1
+    sleep "$settle_seconds"
+    setup_passed=true
+    capture_sheet_tab_strip "formula-reference-grip-target.png"
+
+    # Seed the referenced worksheet through the production edit path, then return to the source
+    # worksheet and author the formula there.
+    if ! set_cell_text_without_save 1 1 B2 1 ||
        ! set_cell_text_without_save 2 2 C3 2 ||
        ! set_cell_text_without_save 3 3 D4 3 ||
        ! set_cell_text_without_save 4 4 E5 4 ||
-       ! set_cell_text_without_save 5 5 F6 5 ||
-       ! set_cell_text_without_save 6 7 G8 "=SUM('Revenue Data'!B2:C3,'Revenue Data'!D4:E5)"; then
+       ! set_cell_text_without_save 5 5 F6 5; then
         write_artifact "formula-reference-grip-postcondition.txt" "seeded=false\n"
-        record "formula-reference-grip-multi-area-physical" "failed" "formula-reference-grip-rename.png; formula-reference-grip-postcondition.txt" "Could not seed the authored same-sheet multi-area formula." "formula-reference-grip-rename.png;formula-reference-grip-postcondition.txt"
+        record "formula-reference-grip-multi-area-physical" "failed" "$artifacts" "Could not seed the referenced worksheet." "$artifacts"
         return
     fi
 
-    if ! select_cell 6 7 G8 || ! send_key F2; then
-        write_artifact "formula-reference-grip-postcondition.txt" "seeded=true\neditor-open=false\n"
-        record "formula-reference-grip-multi-area-physical" "failed" "formula-reference-grip-rename.png; formula-reference-grip-postcondition.txt" "Could not open the existing formula in the production inline editor." "formula-reference-grip-rename.png;formula-reference-grip-postcondition.txt"
+    select_sheet_tab 0
+    if ! set_cell_text_without_save 6 7 G8 "=SUM('Sheet2'!B2:C3,'Sheet2'!D4:E5)"; then
+        write_artifact "formula-reference-grip-postcondition.txt" "seeded=true\nsource-formula=false\n"
+        record "formula-reference-grip-multi-area-physical" "failed" "$artifacts" "Could not seed the qualified source formula." "$artifacts"
         return
     fi
+    capture_sheet_tab_strip "formula-reference-grip-source.png"
+
+    if ! select_cell 6 7 G8 || ! send_key F2; then
+        write_artifact "formula-reference-grip-postcondition.txt" "seeded=true\neditor-open=false\n"
+        record "formula-reference-grip-multi-area-physical" "failed" "$artifacts" "Could not open the existing qualified formula in the production inline editor." "$artifacts"
+        return
+    fi
+
+    # This is the key cross-sheet transition: Edit mode must remain open while the target tab is
+    # clicked, and the second reference's overlay/grip must move to that worksheet.
+    focus_app
+    xdotool_mousemove_sync "$target_tab_center_x" "$(sheet_tab_y)" click 1
+    sleep "$settle_seconds"
     capture "formula-reference-grip-before.png"
 
     # D4:E5's visible grip is rendered just inside the lower-right edge. Keep the probe point
@@ -1387,9 +1396,19 @@ probe_formula_reference_grip_multi_area() {
     capture "formula-reference-grip-dragging.png"
     xdotool mouseup 1
     sleep "$settle_seconds"
+    # Pointer capture can leave the inline editor visually active while the grid owns focus.
+    # Click the real Formula Bar before Enter so this physical lane proves the production
+    # formula-commit route, not a grid navigation keystroke.
+    focus_app
+    xdotool_mousemove_sync 500 198 click 1
+    sleep "$settle_seconds"
     send_key Return
     capture "formula-reference-grip-committed.png"
 
+    # The edit commits to the source worksheet while the referenced worksheet remains visible.
+    # Return to the source before reading the formula/result through the normal physical copy path.
+    select_sheet_tab 0
+    sleep "$settle_seconds"
     committed_formula="$(copy_cell_formula 6 7 G8 || true)"
     committed_result="$(copy_cell_display 6 7 G8 || true)"
     send_key ctrl+s
@@ -1398,11 +1417,11 @@ probe_formula_reference_grip_multi_area() {
     [[ "$committed_result" =~ ^15([.]0+)?$ ]] && result_passed=true
 
     write_artifact "formula-reference-grip-postcondition.txt" \
-        "renamed=$rename_passed\nexpected-formula=$expected_formula\ncommitted-formula=$committed_formula\ncommitted-result=$committed_result\nsave-clean=$save_passed\nformula-passed=$formula_passed\nresult-passed=$result_passed\n"
-    if $formula_passed && $result_passed && $save_passed && $rename_passed; then
+        "setup=$setup_passed\nexpected-formula=$expected_formula\ncommitted-formula=$committed_formula\ncommitted-result=$committed_result\nsave-clean=$save_passed\nformula-passed=$formula_passed\nresult-passed=$result_passed\n"
+    if $formula_passed && $result_passed && $save_passed && $setup_passed; then
         record "formula-reference-grip-multi-area-physical" "passed" \
-            "formula-reference-grip-rename.png; formula-reference-grip-before.png; formula-reference-grip-dragging.png; formula-reference-grip-committed.png; formula=$committed_formula; result=$committed_result; save-clean=$save_passed" \
-            "Physical X11 input renamed the active worksheet to Revenue Data, opened an existing quoted same-sheet two-area formula, dragged only the second reference grip from D4:E5 to D4:F6, preserved both qualifiers and B2:C3, committed the exact formula, calculated 15, and reached a clean saved document." "$artifacts"
+            "formula-reference-grip-setup.png; formula-reference-grip-source.png; formula-reference-grip-target.png; formula-reference-grip-before.png; formula-reference-grip-dragging.png; formula-reference-grip-committed.png; formula=$committed_formula; result=$committed_result; save-clean=$save_passed" \
+            "Physical X11 input kept an existing quoted cross-sheet formula open while switching from Revenue Data to Sheet2, moved the reference overlay to Sheet2, dragged only the second reference grip from D4:E5 to D4:F6, preserved both qualifiers and B2:C3, committed the exact formula, calculated 15, and reached a clean saved document." "$artifacts"
     else
         record "formula-reference-grip-multi-area-physical" "failed" "$artifacts" "Expected formula '$expected_formula', result 15, and a clean save; observed formula '$committed_formula', result '$committed_result', save-clean=$save_passed." "$artifacts"
     fi

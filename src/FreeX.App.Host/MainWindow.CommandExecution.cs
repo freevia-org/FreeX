@@ -198,10 +198,15 @@ public partial class MainWindow
         string title,
         out CommandOutcome outcome)
     {
+        // A formula edit can remain open while the user switches to a referenced worksheet. In
+        // that state the displayed sheet is the pointing surface, while the edit addresses still
+        // belong to the original formula sheet; route the command by the addresses instead of
+        // accidentally writing the formula into the visible target sheet.
+        var editSheetId = edits.Count > 0 ? edits[0].Address.Sheet : _currentSheetId;
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        IWorkbookCommand command = targetSheetIds.Count > 1
+        IWorkbookCommand command = editSheetId == _currentSheetId && targetSheetIds.Count > 1
             ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
-            : new EditCellsCommand(_currentSheetId, edits);
+            : new EditCellsCommand(editSheetId, edits);
         var executed = TryExecuteCommand(command, title, out outcome);
 
         // R54-render-copy-cut-marquee-4-1: Excel cancels an active Copy/Cut marching-ants mode

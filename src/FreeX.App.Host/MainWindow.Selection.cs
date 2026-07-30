@@ -1172,7 +1172,7 @@ public partial class MainWindow
 
     private void SetActiveCell(CellAddress addr)
     {
-        if (GetFormulaRangeEntryEditor() is null)
+        if (GetFormulaRangeEntryEditor() is null && GetFormulaReferenceHighlightEditor() is null)
             ClearFormulaRangeEntryState();
 
         // If the cell belongs to a merged region, select the whole region

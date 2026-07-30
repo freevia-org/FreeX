@@ -190,6 +190,9 @@ public partial class MainWindow
 
     private System.Windows.Controls.TextBox? GetFormulaReferenceHighlightEditor()
     {
+        if (FormulaBar.IsFocused && IsFormulaReferenceHighlightActive(FormulaBar))
+            return FormulaBar;
+
         if (_inlineEditor?.IsVisible == true && IsFormulaReferenceHighlightActive(_inlineEditor))
             return _inlineEditor;
 

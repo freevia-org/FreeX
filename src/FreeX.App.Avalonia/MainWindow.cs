@@ -937,6 +937,20 @@ public sealed partial class MainWindow : Window
         return TryApplyFormulaReferenceResize(editor, highlights[highlightIndex], newRange);
     }
 
+    /// <summary>
+    /// Test-only seam for the production sheet-tab route. Existing formulas are edited in Edit
+    /// mode, so this intentionally exercises <see cref="SelectSheet"/> rather than the lower-level
+    /// session transition directly.
+    /// </summary>
+    internal bool SelectFormulaReferenceSheetForTest(SheetId sheetId)
+    {
+        if (GetFormulaReferenceHighlightEditor() is null)
+            return false;
+
+        SelectSheet(sheetId, selectRange: false, toggle: false);
+        return _session.ActiveSheet.Id == sheetId && _session.FormulaEditAddress is not null;
+    }
+
     internal bool FormulaPointModeForTest => _formulaRangeEntryMode;
 
     internal ExcelSelectionMode FormulaRangeEntrySelectionModeForTest => _formulaRangeEntrySelectionMode;
@@ -12827,7 +12841,10 @@ public sealed partial class MainWindow : Window
 
     private void SelectSheet(SheetId sheetId, bool selectRange, bool toggle)
     {
-        if (GetFormulaRangeEntryEditor() is not null)
+        // Preserve both Point-mode and existing formula Edit-mode sessions. A qualified formula
+        // reference can only be resized after its referenced sheet becomes active, and ending an
+        // existing formula edit here would commit before the user can reach that sheet.
+        if (GetFormulaReferenceHighlightEditor() is not null)
         {
             var changed = _session.SelectSheetForFormulaEdit(sheetId, selectRange, toggle);
             CloseAutoFilterFlyout();
@@ -18856,6 +18873,11 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
+        // Formula Bar commits can be initiated after a cross-sheet grip drag left the in-cell
+        // editor focused. Clear that editor after the model commit succeeds; otherwise its stale
+        // overlay remains visible and subsequent physical readback can observe the pre-commit
+        // edit surface instead of the committed cell value.
+        ClearInlineCellEditorState();
         _formulaBoxEditOriginalText = null;
         ClearFormulaRangeEntryState();
         HideFormulaFunctionAutocomplete();
