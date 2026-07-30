@@ -778,6 +778,9 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("AnimationPanePlanner.TryApplyReorderMutation(");
         source.Should().Contain("AnimationPanePlanner.BuildRemoveMutationPlan(");
         source.Should().Contain("AnimationPanePlanner.TryApplyRemoveMutation(");
+        source.Should().Contain("AnimationPanePlanner.BuildParagraphBuildMutationPlan(");
+        source.Should().Contain("AnimationPanePlanner.TryApplyParagraphBuildMutation(");
+        source.Should().Contain("ToggleParagraphBuildForTests(");
         source.Should().Contain("BuildAnimationPaneActionButton(");
         source.Should().NotContain("Editor.MoveAnimation(");
         source.Should().NotContain("BuildAnimationPaneRowSummary(");
@@ -3301,6 +3304,48 @@ public sealed class MainWindowHeadlessTests
             "Rows: 2; selected: 2; timing editors: 2; effect-option rows: 0; reorderable rows: 2",
             "Playback controls: Preview: available; Play From Selected: available; Play All: available; Stop: unavailable",
             "Selected row: Caption box - In: Fade; trigger After Previous; duration 0.5s; delay 0.5s");
+    }
+
+    [Fact]
+    public async Task Animation_pane_toggles_paragraph_build_through_shared_mutation_plan()
+    {
+        AnimationPaneParagraphBuildMutationPlan? enablePlan = null;
+        AnimationPaneParagraphBuildMutationPlan? disablePlan = null;
+        var paragraphBuildAfterEnable = false;
+        var paragraphBuildAfterDisable = true;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = window.Editor.InsertTextBox("First paragraph");
+            var secondParagraph = new Paragraph();
+            secondParagraph.Runs.Add(new Run { Text = "Second paragraph" });
+            shape.TextBody!.Paragraphs.Add(secondParagraph);
+            window.Editor.Select(shape.Id);
+
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.entrance.fade", out var fade).Should().BeTrue();
+            fade!.Execute(RibbonCommandContext.Empty);
+
+            enablePlan = window.ToggleParagraphBuildForTests(shape.Id);
+            paragraphBuildAfterEnable = SlideShowAnimationBuildPlanner.IsParagraphBuild(
+                window.Editor.CurrentSlide!, shape.Id);
+            disablePlan = window.ToggleParagraphBuildForTests(shape.Id);
+            paragraphBuildAfterDisable = SlideShowAnimationBuildPlanner.IsParagraphBuild(
+                window.Editor.CurrentSlide!, shape.Id);
+        });
+
+        if (!ran) return;
+        enablePlan.Should().NotBeNull();
+        enablePlan!.ShouldApply.Should().BeTrue();
+        enablePlan.EnableParagraphBuild.Should().BeTrue();
+        enablePlan.DisplayText.Should().Be("Build text all at once");
+        disablePlan.Should().NotBeNull();
+        disablePlan!.ShouldApply.Should().BeTrue();
+        disablePlan.EnableParagraphBuild.Should().BeFalse();
+        disablePlan.UpdatedBuildListXml.Should().BeNull();
+        paragraphBuildAfterEnable.Should().BeTrue();
+        paragraphBuildAfterDisable.Should().BeFalse();
     }
 
     [Fact]

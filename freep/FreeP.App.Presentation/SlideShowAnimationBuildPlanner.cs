@@ -39,6 +39,70 @@ public static class SlideShowAnimationBuildPlanner
     }
 
     /// <summary>
+    /// Adds or removes the paragraph-build entry for one animated text shape while
+    /// preserving the other timing entries in the slide's raw build list.
+    /// </summary>
+    public static bool TrySetParagraphBuild(
+        Slide slide,
+        uint shapeId,
+        bool enabled,
+        out string? updatedXml)
+    {
+        ArgumentNullException.ThrowIfNull(slide);
+        updatedXml = slide.AnimationBuildListXml;
+        if (shapeId == 0)
+            return false;
+
+        try
+        {
+            var root = string.IsNullOrWhiteSpace(slide.AnimationBuildListXml)
+                ? new XElement(P + "bldLst")
+                : XElement.Parse(slide.AnimationBuildListXml, LoadOptions.PreserveWhitespace);
+            if (root.Name != P + "bldLst")
+                return false;
+
+            var entries = root.Elements(P + "bldP")
+                .Where(build => uint.TryParse(
+                    build.Attribute("spid")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var spid) && spid == shapeId)
+                .ToArray();
+
+            if (enabled)
+            {
+                var entry = entries.FirstOrDefault();
+                if (entry is null)
+                {
+                    root.Add(new XElement(
+                        P + "bldP",
+                        new XAttribute("spid", shapeId.ToString(CultureInfo.InvariantCulture)),
+                        new XAttribute("grpId", "0"),
+                        new XAttribute("build", "p")));
+                }
+                else
+                {
+                    entry.SetAttributeValue("build", "p");
+                }
+            }
+            else
+            {
+                foreach (var entry in entries)
+                    entry.Remove();
+            }
+
+            updatedXml = root.Elements().Any()
+                ? root.ToString(SaveOptions.DisableFormatting)
+                : null;
+            return true;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Creates one renderable copy per authored paragraph. Each copy retains the
     /// shape geometry and text formatting but contributes no shape-owned paint,
     /// allowing the host to compose it above a single background overlay.

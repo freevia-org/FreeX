@@ -557,6 +557,32 @@ public sealed class AnimationPane : Border
             ApplyRemoveMutation(capturedIndex);
         };
 
+        var paragraphBuildPlan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
+            _editor.CurrentSlide,
+            item.ShapeId);
+        var paragraphBuildBtn = new Button
+        {
+            Content             = "¶",
+            FontSize            = 10,
+            Width               = 18,
+            Height              = 18,
+            Padding             = new Thickness(0),
+            Margin              = new Thickness(1),
+            Background          = ButtonBg,
+            BorderThickness     = new Thickness(1),
+            IsEnabled           = paragraphBuildPlan.ShouldApply,
+            ToolTip             = paragraphBuildPlan.DisabledReason ?? paragraphBuildPlan.DisplayText,
+            VerticalAlignment   = VerticalAlignment.Center,
+        };
+        paragraphBuildBtn.Click += (_, _) =>
+        {
+            var plan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
+                _editor.CurrentSlide,
+                item.ShapeId);
+            if (AnimationPanePlanner.TryApplyParagraphBuildMutation(_editor, plan))
+                Rebuild();
+        };
+
         // ── Assemble button cluster ──────────────────────────────────────────────
         var btnPanel = new StackPanel
         {
@@ -565,6 +591,7 @@ public sealed class AnimationPane : Border
         };
         btnPanel.Children.Add(upBtn);
         btnPanel.Children.Add(downBtn);
+        btnPanel.Children.Add(paragraphBuildBtn);
         btnPanel.Children.Add(removeBtn);
 
         // ── Inner content panel ──────────────────────────────────────────────────

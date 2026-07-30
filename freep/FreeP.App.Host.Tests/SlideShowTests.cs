@@ -90,6 +90,66 @@ public sealed class SlideShowControllerTests
         overlays[0].Effects.Should().BeNull();
     }
 
+    [Fact]
+    public void ParagraphBuildPlanner_TogglesOneShapeAndPreservesOtherBuildEntries()
+    {
+        var slide = new Slide
+        {
+            AnimationBuildListXml =
+                "<p:bldLst xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">" +
+                "<p:bldP spid=\"7\" grpId=\"0\" build=\"p\" />" +
+                "<p:bldP spid=\"9\" grpId=\"2\" build=\"all\" />" +
+                "</p:bldLst>"
+        };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 9,
+            TextBody = new TextBody
+            {
+                Paragraphs = { new Paragraph { Runs = { new Run { Text = "Build me" } } } }
+            }
+        });
+
+        SlideShowAnimationBuildPlanner.TrySetParagraphBuild(slide, 9, true, out var updated)
+            .Should().BeTrue();
+        updated.Should().Contain("spid=\"7\"");
+        updated.Should().Contain("grpId=\"2\"");
+        updated.Should().Contain("spid=\"9\"");
+        updated.Should().Contain("build=\"p\"");
+    }
+
+    [Fact]
+    public void ParagraphBuildPlanner_DisablingBuildRemovesOnlyTargetEntry()
+    {
+        var slide = new Slide
+        {
+            AnimationBuildListXml =
+                "<p:bldLst xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">" +
+                "<p:bldP spid=\"7\" grpId=\"0\" build=\"p\" />" +
+                "<p:bldP spid=\"9\" grpId=\"0\" build=\"p\" />" +
+                "</p:bldLst>"
+        };
+
+        SlideShowAnimationBuildPlanner.TrySetParagraphBuild(slide, 7, false, out var updated)
+            .Should().BeTrue();
+        updated.Should().NotContain("spid=\"7\"");
+        updated.Should().Contain("spid=\"9\"");
+    }
+
+    [Fact]
+    public void SetSlideAnimationBuildListCommand_ApplyRevert()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].AnimationBuildListXml = "<p:bldLst />";
+        var command = new SetSlideAnimationBuildListCommand(0, "<p:bldLst><p:bldP /></p:bldLst>");
+
+        command.Apply(presentation);
+        presentation.Slides[0].AnimationBuildListXml.Should().Contain("bldP");
+
+        command.Revert(presentation);
+        presentation.Slides[0].AnimationBuildListXml.Should().Be("<p:bldLst />");
+    }
+
     // ── BuildSteps: grouping rules ────────────────────────────────────────────────
 
     [Fact]

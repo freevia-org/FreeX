@@ -82,6 +82,14 @@ public sealed record AnimationPaneTimelinePlan(
         SelectedIndex >= 0 && SelectedIndex < Items.Count ? Items[SelectedIndex] : null;
 }
 
+public sealed record AnimationPaneParagraphBuildMutationPlan(
+    bool ShouldApply,
+    uint ShapeId,
+    bool EnableParagraphBuild,
+    string? UpdatedBuildListXml,
+    string DisplayText,
+    string? DisabledReason);
+
 public sealed record AnimationPaneTimelineItemPlan(
     int Index,
     string OrderText,
@@ -303,6 +311,11 @@ public static class AnimationPanePlanner
     public const string MissingEffectOptionMessage = "Select an animation to edit effect options.";
     public const string UnsupportedEffectOptionMessage = "This effect has no shared effect options yet.";
     public const string InvalidEffectOptionMessage = "Choose a valid effect option.";
+    public const string ParagraphBuildLabel = "Build text by paragraph";
+    public const string ParagraphBuildDisabledMessage =
+        "Select an animated text shape with at least one paragraph.";
+    public const string ParagraphBuildInvalidXmlMessage =
+        "The slide build list is not valid PowerPoint timing XML.";
     public const string InvalidReorderMessage = "Select an animation row that can move in that direction.";
     public const string InvalidRemoveMessage = "Select an animation row to remove.";
 
@@ -314,6 +327,70 @@ public static class AnimationPanePlanner
     ];
 
     public static IReadOnlyList<string> TriggerLabels => TriggerLabelValues;
+
+    public static AnimationPaneParagraphBuildMutationPlan BuildParagraphBuildMutationPlan(
+        Slide? slide,
+        uint shapeId)
+    {
+        if (slide is null || shapeId == 0)
+        {
+            return new(
+                false,
+                shapeId,
+                false,
+                slide?.AnimationBuildListXml,
+                ParagraphBuildLabel,
+                ParagraphBuildDisabledMessage);
+        }
+
+        var shape = ShapeHitTester.FindShape(slide, shapeId);
+        if (shape?.TextBody is null || shape.TextBody.Paragraphs.Count == 0)
+        {
+            return new(
+                false,
+                shapeId,
+                false,
+                slide.AnimationBuildListXml,
+                ParagraphBuildLabel,
+                ParagraphBuildDisabledMessage);
+        }
+
+        var enable = !SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, shapeId);
+        if (!SlideShowAnimationBuildPlanner.TrySetParagraphBuild(
+                slide,
+                shapeId,
+                enable,
+                out var updatedXml))
+        {
+            return new(
+                false,
+                shapeId,
+                enable,
+                slide.AnimationBuildListXml,
+                ParagraphBuildLabel,
+                ParagraphBuildInvalidXmlMessage);
+        }
+
+        return new(
+            true,
+            shapeId,
+            enable,
+            updatedXml,
+            enable ? "Build text all at once" : ParagraphBuildLabel,
+            null);
+    }
+
+    public static bool TryApplyParagraphBuildMutation(
+        EditingSession editor,
+        AnimationPaneParagraphBuildMutationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        if (!plan.ShouldApply)
+            return false;
+
+        editor.SetCurrentSlideAnimationBuildList(plan.UpdatedBuildListXml);
+        return true;
+    }
 
     public static AnimationPaneTimelinePlan BuildTimelinePlan(
         Slide? slide,
