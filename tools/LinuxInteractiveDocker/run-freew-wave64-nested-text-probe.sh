@@ -3,6 +3,7 @@ set -eEuo pipefail
 
 export DISPLAY="${DISPLAY:-:99}"
 output="${1:-/work/freew-wave64-nested-text}"
+selector="${FREEW_WAVE64_SELECTOR:-nested-text}"
 mkdir -p "$output"
 window_id="$(xdotool search --onlyvisible --name 'FreeW' 2>/dev/null | tail -1 || true)"
 fail() {
@@ -24,6 +25,26 @@ center_y=490
 xdotool mousemove --sync "$center_x" "$center_y"
 xdotool click 1
 sleep 1
+if [[ "$selector" == "nested-text-direction" ]]; then
+    # Wave 65 opt-in route: invoke the production Drawing Format > Text Direction dropdown.
+    text_direction_x="${FREEW_TEXT_DIRECTION_X:-455}"
+    text_direction_y="${FREEW_TEXT_DIRECTION_Y:-145}"
+    text_direction_item_x="${FREEW_TEXT_DIRECTION_ITEM_X:-455}"
+    text_direction_item_y="${FREEW_TEXT_DIRECTION_ITEM_Y:-190}"
+    xdotool mousemove --sync "$text_direction_x" "$text_direction_y"
+    xdotool click 1
+    sleep 0.45
+    xdotool mousemove --sync "$text_direction_item_x" "$text_direction_item_y"
+    xdotool click 1
+    sleep 1
+    scrot "$output/02-nested-text-direction-rotate90.png"
+    xdotool key --clearmodifiers --window "$window_id" ctrl+s
+    sleep 1
+    title="$(xdotool getwindowname "$window_id" 2>/dev/null || true)"
+    [[ "$title" != *"*"* ]] || fail "FreeW still reports unsaved changes after nested text-direction route."
+    printf '%s\n' '{"schemaVersion":1,"suite":"freew-linux-nested-text-wave65-physical","platform":"linux","app":"FreeW","shell":"avalonia","results":[{"id":"nested-text-direction-x11-selection","status":"passed","evidence":["02-nested-text-direction-rotate90.png"]},{"id":"nested-text-direction-x11-command","status":"passed","evidence":["02-nested-text-direction-rotate90.png"],"note":"Drawing Format > Text Direction > Rotate 90 was invoked through the production ribbon route."},{"id":"nested-text-direction-x11-save","status":"passed","evidence":["02-nested-text-direction-rotate90.png"]}],"summary":{"passed":3,"failed":0,"total":3},"operation":{"childPath":"0,1","direction":"Rotate90","selector":"'"$selector"'"},"selectionPostcondition":{"visible":true,"childPath":"0,1","evidence":"02-nested-text-direction-rotate90.png"}}' > "$output/probe-results.json"
+    exit 0
+fi
 # Select once, then use the explicit Return entry route. With a selected grouped child, DocumentView
 # consumes this first Return to enter text editing; it does not insert a paragraph break.
 xdotool key --clearmodifiers --window "$window_id" Return

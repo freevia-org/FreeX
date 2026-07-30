@@ -2175,7 +2175,19 @@ public sealed class DocumentView : RichTextBox
     // ── Shape selection (mirrors SelectedImage / SelectedChart) ──────────────────────────────────
 
     /// <summary>The inline shape targeted by the current selection/caret, or null if none is selected.</summary>
-    public Shape? SelectedShape() => SelectedShapeLocation().Shape;
+    public Shape? SelectedShape()
+    {
+        if (_selectedFloatingGroupChild is { } selectedChild
+            && DrawingGroupChildPathResolver.TryGetChild(
+                selectedChild.RootGroup,
+                selectedChild.ChildPath,
+                out _,
+                out var nestedChild)
+            && nestedChild is Shape nestedShape)
+            return nestedShape;
+
+        return SelectedShapeLocation().Shape;
+    }
 
     // Locate the model paragraph/run index of the inline shape under the selection, plus the shape itself.
     private (int BlockIndex, int RunIndex, Shape? Shape) SelectedShapeLocation()
@@ -2462,6 +2474,25 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedShapeTextDirection(ShapeTextDirection direction)
     {
         CommitToModel();
+        if (_selectedFloatingGroupChild is { } selectedChild
+            && DrawingGroupChildPathResolver.TryGetChild(
+                selectedChild.RootGroup,
+                selectedChild.ChildPath,
+                out _,
+                out var nestedChild)
+            && nestedChild is Shape
+            && FindFloatingObjectLocation(selectedChild.RootGroup) is var groupLocation
+            && groupLocation.BlockIndex >= 0)
+        {
+            _commands.Execute(new SetShapeTextDirectionCommand(
+                groupLocation.BlockIndex,
+                groupLocation.RunIndex,
+                direction,
+                selectedChild.ChildPath));
+            Render();
+            return;
+        }
+
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
         _commands.Execute(new SetShapeTextDirectionCommand(blockIndex, runIndex, direction));

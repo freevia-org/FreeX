@@ -2040,7 +2040,11 @@ public sealed class SetShapeAltTextCommand(int paragraphIndex, int runIndex, str
 /// Set the text direction on the inline text-box shape at the given paragraph/run indices,
 /// snapshotting the prior value for undo. No-op for non-text-box shapes.
 /// </summary>
-public sealed class SetShapeTextDirectionCommand(int paragraphIndex, int runIndex, ShapeTextDirection direction) : IDocumentCommand
+public sealed class SetShapeTextDirectionCommand(
+    int paragraphIndex,
+    int runIndex,
+    ShapeTextDirection direction,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private ShapeTextDirection _previous;
     private bool _applied;
@@ -2049,7 +2053,9 @@ public sealed class SetShapeTextDirectionCommand(int paragraphIndex, int runInde
 
     public void Apply(IDocumentCommandContext context)
     {
-        if (ShapeAt(context) is not { } shape) return;
+        if (!ShapeTextTargetResolver.TryGetShape(
+                context, paragraphIndex, runIndex, childPath, out var shape))
+            return;
         _previous = shape.TextDirection;
         shape.TextDirection = direction;
         _applied = true;
@@ -2057,14 +2063,13 @@ public sealed class SetShapeTextDirectionCommand(int paragraphIndex, int runInde
 
     public void Revert(IDocumentCommandContext context)
     {
-        if (!_applied || ShapeAt(context) is not { } shape) return;
+        if (!_applied
+            || !ShapeTextTargetResolver.TryGetShape(
+                context, paragraphIndex, runIndex, childPath, out var shape))
+            return;
         shape.TextDirection = _previous;
         _applied = false;
     }
-
-    private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
 }
 
 /// <summary>Resolves direct and nested grouped text-box targets for shared text commands.</summary>

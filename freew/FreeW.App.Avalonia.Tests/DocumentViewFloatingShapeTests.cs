@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using SkiaSharp;
 
@@ -824,6 +825,89 @@ public sealed class DocumentViewFloatingShapeTests
         afterRotate.Should().Be(ShapeTextDirection.Rotate90);
         afterUndo.Should().Be(ShapeTextDirection.Horizontal);
         afterRedo.Should().Be(ShapeTextDirection.Rotate90);
+    }
+
+    [Fact]
+    public async Task Selected_nested_floating_text_box_text_direction_uses_child_path_and_preserves_transforms()
+    {
+        ShapeTextDirection? direction = null;
+        ShapeTextDirection? siblingDirection = null;
+        IReadOnlyList<int>? selectedPath = null;
+        bool undoRestored = false;
+        bool redoRestored = false;
+        bool rotate270Applied = false;
+        bool horizontalApplied = false;
+        var ran = await OnUiThread(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var leaf = Shape.TextBoxWith("Nested direction", 120, 60);
+            leaf.RotationAngle = 17;
+            leaf.FlipH = true;
+            var sibling = Shape.TextBoxWith("Sibling", 90, 40);
+            var inner = new DrawingGroup { WidthPt = 160, HeightPt = 80, RotationAngle = 23 };
+            inner.Children.Add(new Shape(ShapeKind.Rectangle, 20, 20));
+            inner.ChildOffsets.Add((0, 0));
+            inner.Children.Add(leaf);
+            inner.ChildOffsets.Add((30, 10));
+            var outer = new DrawingGroup { WidthPt = 240, HeightPt = 120, RotationAngle = 31, FlipV = true };
+            outer.Children.Add(inner);
+            outer.ChildOffsets.Add((12, 8));
+            outer.Children.Add(sibling);
+            outer.ChildOffsets.Add((180, 70));
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(0, 0);
+            var groupRect = view.SelectedFloatingInfo!.Value.Rect;
+            var leafRect = view.FloatingGroupChildRectForPathForTest(0, 0, [0, 1])!.Value;
+            var innerRect = view.FloatingGroupChildRectForPathForTest(0, 0, [0])!.Value;
+            var visibleCenter = DocumentViewLayoutPlanner.TransformPointThroughGroupChain(
+                new DocumentFloatPoint(leafRect.Center.X, leafRect.Center.Y),
+                new DocumentFloatRect(leafRect.X, leafRect.Y, leafRect.Width, leafRect.Height),
+                leaf.RotationAngle,
+                leaf.FlipH,
+                leaf.FlipV,
+                [
+                    new DocumentFloatTransform(
+                        new DocumentFloatRect(innerRect.X, innerRect.Y, innerRect.Width, innerRect.Height),
+                        inner.RotationAngle,
+                        inner.FlipH,
+                        inner.FlipV),
+                    new DocumentFloatTransform(
+                        new DocumentFloatRect(groupRect.X, groupRect.Y, groupRect.Width, groupRect.Height),
+                        outer.RotationAngle,
+                        outer.FlipH,
+                        outer.FlipV),
+                ]);
+            view.SelectFloatingGroupChildForTest(
+                new Point(visibleCenter.XDip, visibleCenter.YDip)).Should().BeTrue();
+            selectedPath = view.SelectedFloatingGroupChildPath?.ToArray();
+
+            view.SetSelectedShapeTextDirection(ShapeTextDirection.Rotate90);
+            direction = leaf.TextDirection;
+            siblingDirection = sibling.TextDirection;
+            view.Undo();
+            undoRestored = leaf.TextDirection == ShapeTextDirection.Horizontal;
+            view.Redo();
+            redoRestored = leaf.TextDirection == ShapeTextDirection.Rotate90;
+            view.SetSelectedShapeTextDirection(ShapeTextDirection.Rotate270);
+            rotate270Applied = leaf.TextDirection == ShapeTextDirection.Rotate270;
+            view.SetSelectedShapeTextDirection(ShapeTextDirection.Horizontal);
+            horizontalApplied = leaf.TextDirection == ShapeTextDirection.Horizontal;
+        });
+        if (!ran) return;
+        selectedPath.Should().Equal(0, 1);
+        direction.Should().Be(ShapeTextDirection.Rotate90);
+        siblingDirection.Should().Be(ShapeTextDirection.Horizontal);
+        undoRestored.Should().BeTrue();
+        redoRestored.Should().BeTrue();
+        rotate270Applied.Should().BeTrue();
+        horizontalApplied.Should().BeTrue();
     }
 
     [Fact]

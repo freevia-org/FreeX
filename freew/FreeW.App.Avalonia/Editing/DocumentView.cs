@@ -9680,8 +9680,21 @@ public sealed class DocumentView : Control
     /// Returns the selected floating shape or text box, or null when the current drawing selection is
     /// a non-shape object such as WordArt or a group.
     /// </summary>
-    public Shape? SelectedFloatingShape() =>
-        SelectedFloatingShapeLocation()?.Shape;
+    public Shape? SelectedFloatingShape()
+    {
+        if (_selectedFloatingGroupChild is { Kind: "Shape" } selectedChild
+            && TryGetRun(selectedChild.BlockIndex, selectedChild.RunIndex, out var groupRun)
+            && groupRun.DrawingGroup is { } rootGroup
+            && DrawingGroupChildPathResolver.TryGetChild(
+                rootGroup,
+                selectedChild.ChildPath,
+                out _,
+                out var nestedChild)
+            && nestedChild is Shape nestedShape)
+            return nestedShape;
+
+        return SelectedFloatingShapeLocation()?.Shape;
+    }
 
     /// <summary>True while keyboard input is editing the first text run of a selected text box.</summary>
     public bool IsShapeTextEditing => _shapeCaret is not null;
@@ -10911,6 +10924,29 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetSelectedShapeTextDirection(ShapeTextDirection direction)
     {
+        if (_selectedFloatingGroupChild is { Kind: "Shape" } selectedChild
+            && TryGetRun(selectedChild.BlockIndex, selectedChild.RunIndex, out var groupRun)
+            && groupRun.DrawingGroup is { } rootGroup
+            && DrawingGroupChildPathResolver.TryGetChild(
+                rootGroup,
+                selectedChild.ChildPath,
+                out _,
+                out var nestedChild)
+            && nestedChild is Shape)
+        {
+            _bus.Execute(new SetShapeTextDirectionCommand(
+                selectedChild.BlockIndex,
+                selectedChild.RunIndex,
+                direction,
+                selectedChild.ChildPath));
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(
+                selectedChild.BlockIndex,
+                selectedChild.RunIndex,
+                "Group");
+            return;
+        }
+
         if (SelectedFloatingShapeLocation() is not { } selected)
             return;
 

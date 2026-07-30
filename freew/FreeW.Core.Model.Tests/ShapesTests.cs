@@ -141,6 +141,50 @@ public class ShapesTests
         leaf.PlainText.Should().Be("hello");
     }
 
+    [Fact]
+    public void SetShapeTextDirectionCommand_targets_nested_leaf_and_restores_group_state()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var leaf = Shape.TextBoxWith("rotated leaf", 120, 50);
+        leaf.RotationAngle = 17;
+        leaf.FlipH = true;
+        leaf.FlipV = true;
+        var sibling = Shape.TextBoxWith("sibling", 90, 40);
+        var inner = new DrawingGroup { WidthPt = 160, HeightPt = 80, RotationAngle = 23 };
+        inner.Children.Add(new Shape(ShapeKind.Rectangle, 20, 20));
+        inner.ChildOffsets.Add((0, 0));
+        inner.Children.Add(leaf);
+        inner.ChildOffsets.Add((30, 10));
+        var outer = new DrawingGroup { WidthPt = 240, HeightPt = 120, RotationAngle = 31, FlipV = true };
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((12, 8));
+        outer.Children.Add(sibling);
+        outer.ChildOffsets.Add((180, 70));
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+        document.Blocks.Add(paragraph);
+        var context = new ShapeTestContext(document);
+        var path = new[] { 0, 1 };
+        var transforms = (outer.RotationAngle, outer.FlipH, outer.FlipV,
+            inner.RotationAngle, inner.FlipH, inner.FlipV,
+            leaf.RotationAngle, leaf.FlipH, leaf.FlipV);
+
+        foreach (var direction in new[]
+                 { ShapeTextDirection.Horizontal, ShapeTextDirection.Rotate90, ShapeTextDirection.Rotate270 })
+        {
+            var command = new SetShapeTextDirectionCommand(0, 0, direction, path);
+            command.Apply(context);
+            leaf.TextDirection.Should().Be(direction);
+            sibling.TextDirection.Should().Be(ShapeTextDirection.Horizontal);
+            (outer.RotationAngle, outer.FlipH, outer.FlipV,
+                inner.RotationAngle, inner.FlipH, inner.FlipV,
+                leaf.RotationAngle, leaf.FlipH, leaf.FlipV).Should().Be(transforms);
+            command.Revert(context);
+            leaf.TextDirection.Should().Be(ShapeTextDirection.Horizontal);
+        }
+    }
+
     // ── W26: Body rotation / flip properties ─────────────────────────────────────────────────────
 
     [Fact]

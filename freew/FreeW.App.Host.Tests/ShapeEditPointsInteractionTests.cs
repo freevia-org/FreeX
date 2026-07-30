@@ -1,6 +1,8 @@
+using System.IO;
 using System.Windows.Documents;
 using System.Windows;
 using FreeW.App.Host.Editing;
+using FreeW.Core.IO;
 
 namespace FreeW.App.Host.Tests;
 
@@ -28,6 +30,62 @@ public sealed class ShapeEditPointsInteractionTests
         view.SetSelectedShapeTextDirection(ShapeTextDirection.Rotate90);
 
         shape.TextDirection.Should().Be(ShapeTextDirection.Rotate90);
+    }
+
+    [StaFact]
+    public void SetSelectedShapeTextDirection_targets_nested_group_child_and_docx_round_trips_it()
+    {
+        var leaf = Shape.TextBoxWith("Nested direction", 120, 60);
+        leaf.RotationAngle = 17;
+        leaf.FlipH = true;
+        var sibling = Shape.TextBoxWith("Sibling", 90, 40);
+        var inner = new DrawingGroup { WidthPt = 160, HeightPt = 80, RotationAngle = 23 };
+        inner.Children.Add(new Shape(ShapeKind.Rectangle, 20, 20));
+        inner.ChildOffsets.Add((0, 0));
+        inner.Children.Add(leaf);
+        inner.ChildOffsets.Add((30, 10));
+        var outer = new DrawingGroup { WidthPt = 240, HeightPt = 120, RotationAngle = 31, FlipV = true };
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((12, 8));
+        outer.Children.Add(sibling);
+        outer.ChildOffsets.Add((180, 70));
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.SelectFloatingGroupChild(outer, [0, 1]);
+        view.SetSelectedShapeTextDirection(ShapeTextDirection.Rotate90);
+        leaf.TextDirection.Should().Be(ShapeTextDirection.Rotate90);
+        sibling.TextDirection.Should().Be(ShapeTextDirection.Horizontal);
+        view.Undo();
+        leaf.TextDirection.Should().Be(ShapeTextDirection.Horizontal);
+        view.Redo();
+        leaf.TextDirection.Should().Be(ShapeTextDirection.Rotate90);
+
+        view.SelectFloatingGroupChild(outer, [0, 1]);
+        view.SetSelectedShapeTextDirection(ShapeTextDirection.Rotate270);
+        leaf.TextDirection.Should().Be(ShapeTextDirection.Rotate270);
+        view.SelectFloatingGroupChild(outer, [0, 1]);
+        view.SetSelectedShapeTextDirection(ShapeTextDirection.Horizontal);
+        leaf.TextDirection.Should().Be(ShapeTextDirection.Horizontal);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+        var reopenedOuter = ((Paragraph)reopened.Blocks[0]).Runs[0].DrawingGroup!;
+        var reopenedInner = (DrawingGroup)reopenedOuter.Children[0];
+        var reopenedLeaf = (Shape)reopenedInner.Children[1];
+        reopenedLeaf.TextDirection.Should().Be(ShapeTextDirection.Horizontal);
+        reopenedOuter.RotationAngle.Should().Be(31);
+        reopenedOuter.FlipV.Should().BeTrue();
+        reopenedInner.RotationAngle.Should().Be(23);
+        reopenedLeaf.RotationAngle.Should().Be(17);
+        reopenedLeaf.FlipH.Should().BeTrue();
     }
 
     [StaFact]
