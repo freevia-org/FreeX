@@ -291,8 +291,14 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("git merge-base --is-ancestor origin/main HEAD");
         workflow.Should().Contain("Full release branches must contain the current origin/main commit.");
         workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release");
-        workflow.Should().Contain("dotnet test FreeX.DefaultTests.slnx");
-        workflow.Should().Contain("dotnet test FreeX.UiTests.slnx");
+        workflow.Should().Contain("FullyQualifiedName~ReleaseAutomationWorkflowTests");
+        workflow.Should().Contain("FullyQualifiedName~TesterReleaseSmokeTests");
+        workflow.Should().Contain("FullyQualifiedName~RibbonNativeRegistryTests");
+        workflow.Should().Contain("DeclarativeHomeMenuChoices_AreEnabledAcrossFormattingFamilies");
+        workflow.Should().Contain("FullyQualifiedName~BorderRenderTests");
+        workflow.Should().Contain("FullyQualifiedName~R74_SlantDashDotBorderThicknessTests");
+        workflow.Should().Contain("FullyQualifiedName~BorderStrokePixelSnapperTests");
+        workflow.Should().Contain("FullyQualifiedName~CellBorderPanelNeighborResolutionTests");
         workflow.Should().Contain("dotnet build FreeW.slnx --configuration Release");
         workflow.Should().Contain("dotnet build FreeP.slnx --configuration Release");
         workflow.Should().Contain("-Runtimes \"${{ matrix.runtime }}\"");

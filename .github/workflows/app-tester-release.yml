@@ -138,14 +138,26 @@ jobs:
             "FreeX" {
               powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1
               dotnet build FreeX.slnx --configuration Release
-              dotnet test FreeX.DefaultTests.slnx `
+              dotnet test tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj `
                 --configuration Release `
                 --no-build `
-                --logger "trx;LogFileName=freex-default-tests.trx"
-              dotnet test FreeX.UiTests.slnx `
+                --filter "FullyQualifiedName~ReleaseAutomationWorkflowTests|FullyQualifiedName~TesterReleaseSmokeTests|FullyQualifiedName~RibbonNativeRegistryTests|FullyQualifiedName=FreeX.App.Host.Tests.MainWindowRibbonKeyTipTests.DeclarativeHomeMenuChoices_AreEnabledAcrossFormattingFamilies" `
+                --logger "trx;LogFileName=freex-release-focused-tests.trx"
+              dotnet test tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj `
                 --configuration Release `
                 --no-build `
-                --logger "trx;LogFileName=freex-ui-tests.trx"
+                --filter "FullyQualifiedName~BorderRenderTests|FullyQualifiedName~R74_SlantDashDotBorderThicknessTests" `
+                --logger "trx;LogFileName=freex-border-tests.trx"
+              dotnet test tests/FreeX.App.Presentation.Tests/FreeX.App.Presentation.Tests.csproj `
+                --configuration Release `
+                --no-build `
+                --filter "FullyQualifiedName~BorderStrokePixelSnapperTests" `
+                --logger "trx;LogFileName=freex-border-presentation-tests.trx"
+              dotnet test tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj `
+                --configuration Release `
+                --no-build `
+                --filter "FullyQualifiedName~CellBorderPanelNeighborResolutionTests" `
+                --logger "trx;LogFileName=freex-avalonia-release-focused-tests.trx"
             }
             "FreeW" {
               dotnet build FreeW.slnx --configuration Release
