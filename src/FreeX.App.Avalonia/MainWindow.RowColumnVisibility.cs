@@ -113,14 +113,20 @@ public sealed partial class MainWindow
     /// </summary>
     private void SelectEntireRow(uint row, bool extend = false)
     {
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        ClearSelectedDrawingObject();
         var anchorRow = extend ? _session.ActiveCell.Row : row;
         var sheet = _session.ActiveSheet.Id;
         var range = SelectionRangeService.GetWholeRows(
             new GridRange(new CellAddress(sheet, anchorRow, 1), new CellAddress(sheet, row, 1)));
+
+        // Match the WPF SelectRow route: a row-header click is a formula reference
+        // while point mode is active, not a request to commit the edit first.
+        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
         _session.SelectRange(range);
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
@@ -157,14 +163,19 @@ public sealed partial class MainWindow
     /// </summary>
     private void SelectEntireColumn(uint col, bool extend = false)
     {
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        ClearSelectedDrawingObject();
         var anchorCol = extend ? _session.ActiveCell.Col : col;
         var sheet = _session.ActiveSheet.Id;
         var range = SelectionRangeService.GetWholeColumns(
             new GridRange(new CellAddress(sheet, 1, anchorCol), new CellAddress(sheet, 1, col)));
+
+        // Keep column-header point selection on the shared formula-entry path, as WPF does.
+        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
         _session.SelectRange(range);
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();

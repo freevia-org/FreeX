@@ -23907,14 +23907,17 @@ public sealed partial class MainWindow : Window
         if (_isOpening || _isSaving)
             return;
 
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        ClearSelectedDrawingObject();
         var sheetId = _session.ActiveSheet.Id;
         var range = new GridRange(
             new CellAddress(sheetId, 1, 1),
             new CellAddress(sheetId, CellAddress.MaxRow, CellAddress.MaxCol));
+        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
         _session.SelectRange(range);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }

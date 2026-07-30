@@ -345,6 +345,85 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
     }
 
     [Fact]
+    public async Task FormulaBarPointMode_HeaderClicks_InsertWholeColumnAndWholeRowReferencesAndRoundTrip()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = CreateShownWindow(out var sheet);
+            try
+            {
+                sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10)); // B2
+                sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20)); // B3
+                sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(30)); // C3
+
+                var columnFormulaAddress = new CellAddress(sheet.Id, 10, 7); // G10
+                window.BeginFormulaEditForTest(columnFormulaAddress, "=SUM(");
+                InvokeHeaderSelection(window, "SelectEntireColumn", 2u, false);
+
+                window.FormulaBoxTextForTest.Should().Be("=SUM(B:B)");
+                window.Session.SelectedRange.Should().Be(new GridRange(
+                    new CellAddress(sheet.Id, 1, 2),
+                    new CellAddress(sheet.Id, CellAddress.MaxRow, 2)));
+                CommitFormulaBar(window);
+                sheet.GetCell(columnFormulaAddress)!.FormulaText.Should().Be("SUM(B:B)");
+                sheet.GetValue(columnFormulaAddress).Should().Be(new NumberValue(30));
+
+                var rowFormulaAddress = new CellAddress(sheet.Id, 11, 7); // G11
+                window.BeginFormulaEditForTest(rowFormulaAddress, "=SUM(");
+                InvokeHeaderSelection(window, "SelectEntireRow", 3u, false);
+
+                window.FormulaBoxTextForTest.Should().Be("=SUM(3:3)");
+                window.Session.SelectedRange.Should().Be(new GridRange(
+                    new CellAddress(sheet.Id, 3, 1),
+                    new CellAddress(sheet.Id, 3, CellAddress.MaxCol)));
+                CommitFormulaBar(window);
+                sheet.GetCell(rowFormulaAddress)!.FormulaText.Should().Be("SUM(3:3)");
+                sheet.GetValue(rowFormulaAddress).Should().Be(new NumberValue(50));
+
+                using var stream = new MemoryStream();
+                new NativeJsonAdapter().Save(window.Session.Workbook, stream);
+                stream.Position = 0;
+                var reopened = new NativeJsonAdapter().Load(stream);
+                var reopenedSheet = reopened.Sheets.Single(candidate => candidate.Name == sheet.Name);
+                reopenedSheet.GetCell(new CellAddress(reopenedSheet.Id, 10, 7))!.FormulaText.Should().Be("SUM(B:B)");
+                reopenedSheet.GetCell(new CellAddress(reopenedSheet.Id, 11, 7))!.FormulaText.Should().Be("SUM(3:3)");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task FormulaBarPointMode_SelectAllCorner_InsertsWholeGridReferenceAndKeepsEditing()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = CreateShownWindow(out var sheet);
+            try
+            {
+                var formulaAddress = new CellAddress(sheet.Id, 2, 2);
+                window.BeginFormulaEditForTest(formulaAddress, "=SUM(");
+                typeof(MainWindow).GetMethod("SelectAllCells", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(window, null);
+
+                window.FormulaBoxTextForTest.Should().Be("=SUM(A1:XFD1048576");
+                GetField<TextBox>(window, "_formulaBox").IsFocused.Should().BeTrue();
+                sheet.GetCell(formulaAddress)?.HasFormula.Should().BeFalse(
+                    "whole-grid selection must not commit formula editing");
+                window.Session.SelectedRange.Should().Be(new GridRange(
+                    new CellAddress(sheet.Id, 1, 1),
+                    new CellAddress(sheet.Id, CellAddress.MaxRow, CellAddress.MaxCol)));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task FormulaReferenceAdornment_RemainsAttachedAndClearsOnCancel()
     {
         await Session.Dispatch(async () =>
@@ -516,6 +595,11 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
             .SetValue(window, value);
 
+    private static T GetField<T>(MainWindow window, string name) where T : class =>
+        (T)typeof(MainWindow)
+            .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(window)!;
+
     private static T FindByAutomationId<T>(MainWindow window, string automationId)
         where T : Control =>
         window.GetVisualDescendants()
@@ -532,5 +616,23 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
     {
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+    }
+
+    private static void InvokeHeaderSelection(MainWindow window, string methodName, uint index, bool extend)
+    {
+        var method = typeof(MainWindow).GetMethod(
+            methodName,
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        method!.Invoke(window, [index, extend]);
+    }
+
+    private static void CommitFormulaBar(MainWindow window)
+    {
+        window.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs
+        {
+            Key = Key.Enter,
+            PhysicalKey = PhysicalKey.Enter,
+        });
     }
 }

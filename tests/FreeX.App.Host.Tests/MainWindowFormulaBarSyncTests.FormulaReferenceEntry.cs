@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -7,6 +8,7 @@ using FreeX.App.UI;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
+using FreeX.Core.IO;
 using FreeX.Core.Model;
 using Microsoft.Extensions.Logging.Abstractions;
 using SheetGridView = FreeX.App.UI.GridView;
@@ -454,6 +456,54 @@ public sealed partial class MainWindowFormulaBarSyncTests
             harness.SelectedRange.Should().Be(new GridRange(
                 new CellAddress(targetSheet.Id, 3, 1),
                 new CellAddress(targetSheet.Id, 3, CellAddress.MaxCol)));
+        });
+    }
+
+    [Fact]
+    public void FormulaBarPointMode_HeaderClicks_InsertWholeColumnAndWholeRowReferencesAndRoundTrip()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SetCellNumber(2, 2, 10); // B2
+            harness.SetCellNumber(3, 2, 20); // B3
+            harness.SetCellNumber(3, 3, 30); // C3
+
+            harness.SetFormulaEditCell(10, 7);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("=SUM(");
+            harness.SetFormulaBarCaretIndex("=SUM(".Length);
+            harness.SelectWholeColumn(2);
+
+            harness.FormulaBarText.Should().Be("=SUM(B:B)");
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 2),
+                new CellAddress(harness.CurrentSheetId, CellAddress.MaxRow, 2)));
+            harness.CommitEdit().Should().BeTrue();
+            harness.CellFormula(10, 7).Should().Be("SUM(B:B)");
+            harness.CellValue(10, 7).Should().Be(new NumberValue(30));
+
+            harness.SetFormulaEditCell(11, 7);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("=SUM(");
+            harness.SetFormulaBarCaretIndex("=SUM(".Length);
+            harness.SelectWholeRow(3);
+
+            harness.FormulaBarText.Should().Be("=SUM(3:3)");
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 3, 1),
+                new CellAddress(harness.CurrentSheetId, 3, CellAddress.MaxCol)));
+            harness.CommitEdit().Should().BeTrue();
+            harness.CellFormula(11, 7).Should().Be("SUM(3:3)");
+            harness.CellValue(11, 7).Should().Be(new NumberValue(50));
+
+            using var stream = new MemoryStream();
+            new NativeJsonAdapter().Save(harness.ActiveWorkbook, stream);
+            stream.Position = 0;
+            var reopened = new NativeJsonAdapter().Load(stream);
+            var reopenedSheet = reopened.Sheets.Single(sheet => sheet.Name == harness.FirstSheet.Name);
+            reopenedSheet.GetCell(new CellAddress(reopenedSheet.Id, 10, 7))!.FormulaText.Should().Be("SUM(B:B)");
+            reopenedSheet.GetCell(new CellAddress(reopenedSheet.Id, 11, 7))!.FormulaText.Should().Be("SUM(3:3)");
         });
     }
 
