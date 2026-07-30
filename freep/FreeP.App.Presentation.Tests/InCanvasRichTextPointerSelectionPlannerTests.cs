@@ -1,6 +1,6 @@
 using FreeP.App.Compositor;
 
-namespace FreeP.App.Presentation.Tests;
+namespace FreeP.App.Compositor.Tests;
 
 public sealed class InCanvasRichTextPointerSelectionPlannerTests
 {
@@ -32,10 +32,10 @@ public sealed class InCanvasRichTextPointerSelectionPlannerTests
 
         var range = InCanvasRichTextPointerSelectionPlanner.Normalize(
             anchor: 8,
-            caret: newline + 4,
+            caret: newline + 5,
             text.Length);
 
-        range.Should().Be((8, newline + 4));
+        range.Should().Be((8, newline + 5));
         text[range.Start..range.End].Should().Be("wrapped visual lines\npara");
     }
 
