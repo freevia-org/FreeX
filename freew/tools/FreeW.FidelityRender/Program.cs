@@ -1839,11 +1839,26 @@ static RenderTargetBitmap? RenderNoteRegion(
     double marginRight,
     bool isEndnotePage)
 {
-    double textSizePx = 9.0 * (96.0 / 72.0);   // 9 pt footnote text
     var contentWidth = Math.Max(0, pageWDip - marginLeft - marginRight);
     var notePlan = footnoteIds.Count > 0
         ? DocumentNoteRegionPlanner.BuildFootnoteRegion(doc, footnoteIds, pageNumber: 1, contentWidth)
         : DocumentNoteRegionPlanner.BuildEndnoteRegion(doc, endnoteIds, pageNumber: 1, contentWidth, isEndnotePage);
+
+    return RenderNoteRegionPlan(notePlan, pageWDip, marginLeft, marginRight);
+}
+
+/// <summary>
+/// Renders one already-planned note fragment. Long-footnote pagination supplies a fragment plan per
+/// physical page, while the existing short-note path above still builds one plan from the model IDs.
+/// </summary>
+static RenderTargetBitmap? RenderNoteRegionPlan(
+    DocumentNoteRegionPlan notePlan,
+    double pageWDip,
+    double marginLeft,
+    double marginRight)
+{
+    ArgumentNullException.ThrowIfNull(notePlan);
+    double textSizePx = 9.0 * (96.0 / 72.0);   // 9 pt footnote text
 
     // Build a StackPanel mirroring PageBox.BuildNoteRegion and measure it.
     var panel = new System.Windows.Controls.StackPanel
@@ -1887,7 +1902,7 @@ static RenderTargetBitmap? RenderNoteRegion(
 
     if (notePlan.Kind == DocumentNoteRegionKind.Endnotes && notePlan.Rows.Count > 0)
     {
-        if (isEndnotePage)
+        if (!string.IsNullOrEmpty(notePlan.Heading))
         {
             panel.Children.Add(new System.Windows.Controls.TextBlock
             {
