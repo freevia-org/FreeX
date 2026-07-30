@@ -1324,6 +1324,79 @@ probe_formula_bar_point_mode_multi_area_edit() {
     send_key Escape || true
 }
 
+probe_formula_reference_grip_multi_area() {
+    local committed_formula="" committed_result="" expected_formula="=SUM(B2:C3,D4:F6)"
+    local formula_passed=false result_passed=false save_passed=false
+    local artifacts="formula-reference-grip-before.png;formula-reference-grip-dragging.png;formula-reference-grip-committed.png;formula-reference-grip-postcondition.txt"
+
+    # Seed an authored two-area same-sheet formula through the real edit path. The second
+    # reference is then resized through its visible bottom-right grip; the first area must survive
+    # byte-for-byte in the committed formula.
+    if ! set_cell_text_without_save 1 1 B2 0 ||
+       ! set_cell_text_without_save 1 2 C2 0 ||
+       ! set_cell_text_without_save 2 1 B3 0 ||
+       ! set_cell_text_without_save 2 2 C3 0 ||
+       ! set_cell_text_without_save 3 3 D4 0 ||
+       ! set_cell_text_without_save 3 4 E4 0 ||
+       ! set_cell_text_without_save 3 5 F4 0 ||
+       ! set_cell_text_without_save 4 3 D5 0 ||
+       ! set_cell_text_without_save 4 4 E5 0 ||
+       ! set_cell_text_without_save 4 5 F5 0 ||
+       ! set_cell_text_without_save 5 3 D6 0 ||
+       ! set_cell_text_without_save 5 4 E6 0 ||
+       ! set_cell_text_without_save 5 5 F6 0 ||
+       ! set_cell_text_without_save 1 1 B2 1 ||
+       ! set_cell_text_without_save 2 2 C3 2 ||
+       ! set_cell_text_without_save 3 3 D4 3 ||
+       ! set_cell_text_without_save 4 4 E5 4 ||
+       ! set_cell_text_without_save 5 5 F6 5 ||
+       ! set_cell_text_without_save 6 7 G8 "=SUM(B2:C3,D4:E5)"; then
+        write_artifact "formula-reference-grip-postcondition.txt" "seeded=false\n"
+        record "formula-reference-grip-multi-area-physical" "failed" "formula-reference-grip-postcondition.txt" "Could not seed the authored same-sheet multi-area formula." "$artifacts"
+        return
+    fi
+
+    if ! select_cell 6 7 G8 || ! send_key F2; then
+        write_artifact "formula-reference-grip-postcondition.txt" "seeded=true\neditor-open=false\n"
+        record "formula-reference-grip-multi-area-physical" "failed" "formula-reference-grip-postcondition.txt" "Could not open the existing formula in the production inline editor." "$artifacts"
+        return
+    fi
+    capture "formula-reference-grip-before.png"
+
+    # D4:E5's visible grip is rendered just inside the lower-right edge. Keep the probe point
+    # derived from the calibrated cell geometry, but account for that inset so the click remains
+    # inside Avalonia's forgiving hit target instead of selecting E5 itself.
+    focus_app
+    xdotool_mousemove_sync "$((a1_x + 5 * cell_width - 22))" "$((a1_y + 5 * cell_height - 6))"
+    xdotool mousedown 1
+    sleep 0.22
+    xdotool_mousemove_sync "$(cell_center_x 5)" "$(cell_center_y 5)"
+    sleep 0.22
+    capture "formula-reference-grip-dragging.png"
+    xdotool mouseup 1
+    sleep "$settle_seconds"
+    send_key Return
+    capture "formula-reference-grip-committed.png"
+
+    committed_formula="$(copy_cell_formula 6 7 G8 || true)"
+    committed_result="$(copy_cell_display 6 7 G8 || true)"
+    send_key ctrl+s
+    if wait_for_document_clean; then save_passed=true; fi
+    [[ "$committed_formula" == "$expected_formula" ]] && formula_passed=true
+    [[ "$committed_result" =~ ^15([.]0+)?$ ]] && result_passed=true
+
+    write_artifact "formula-reference-grip-postcondition.txt" \
+        "expected-formula=$expected_formula\ncommitted-formula=$committed_formula\ncommitted-result=$committed_result\nsave-clean=$save_passed\nformula-passed=$formula_passed\nresult-passed=$result_passed\n"
+    if $formula_passed && $result_passed && $save_passed; then
+        record "formula-reference-grip-multi-area-physical" "passed" \
+            "formula-reference-grip-before.png; formula-reference-grip-dragging.png; formula-reference-grip-committed.png; formula=$committed_formula; result=$committed_result; save-clean=$save_passed" \
+            "Physical X11 input opened an existing same-sheet two-area formula, dragged only the second reference grip from D4:E5 to D4:F6, preserved B2:C3, committed the exact formula, calculated 15, and reached a clean saved document." "$artifacts"
+    else
+        record "formula-reference-grip-multi-area-physical" "failed" "$artifacts" "Expected formula '$expected_formula', result 15, and a clean save; observed formula '$committed_formula', result '$committed_result', save-clean=$save_passed." "$artifacts"
+    fi
+    send_key Escape || true
+}
+
 probe_sheet_tabs() {
     local tab_y left_nav_x right_nav_x first_tab_x sheet2_x sheet3_x top
     local before_value right_value left_value before_second before_third after_second after_third
@@ -1957,6 +2030,20 @@ if [[ "$probe_selector" == "formula-multi-area-point" ]]; then
     probe_formula_bar_point_mode_multi_area
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused multi-area formula point probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "formula-reference-grip" ]]; then
+    # Focused iteration mode for editing an existing same-sheet multi-area formula through a
+    # reference highlight resize grip.
+    probe_formula_reference_grip_multi_area
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused formula-reference grip probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
