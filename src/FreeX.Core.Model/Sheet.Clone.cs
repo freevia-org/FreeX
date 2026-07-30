@@ -132,9 +132,27 @@ public sealed partial class Sheet
         foreach (var (address, comment) in ThreadedComments)
             copy.ThreadedComments[RemapAddress(address, newId)] = comment;
         foreach (var (address, hyperlink) in Hyperlinks)
-            copy.Hyperlinks[RemapAddress(address, newId)] = hyperlink;
+        {
+            // R95: a 'Place in This Document' hyperlink target is a sheet-qualified reference
+            // (e.g. "Sheet1!A1" or "'Sheet 1'!A1") stored verbatim in this string when no
+            // Bookmark is set (see HyperlinkNavigationPlanner). Rebase it onto the copy exactly
+            // like ConditionalFormat.FormulaText / DataValidation.Formula1-2 below, or a
+            // duplicated sheet's internal link keeps jumping back to the source sheet.
+            var linkType = HyperlinkMetadata.TryGetValue(address, out var metaForTarget)
+                ? metaForTarget.LinkType
+                : HyperlinkTargetKind.ExistingFileOrWebPage;
+            copy.Hyperlinks[RemapAddress(address, newId)] = linkType == HyperlinkTargetKind.PlaceInThisDocument
+                ? RewriteSameSheetQualifiedFormula(hyperlink, Name, newName)!
+                : hyperlink;
+        }
         foreach (var (address, metadata) in HyperlinkMetadata)
-            copy.HyperlinkMetadata[RemapAddress(address, newId)] = metadata;
+        {
+            // R95: same rebase for the explicit Bookmark field, mirroring RenameSheetCommand's
+            // O25/P113 rewrite of this exact field on sheet rename (SheetCommands.cs).
+            copy.HyperlinkMetadata[RemapAddress(address, newId)] = metadata.LinkType == HyperlinkTargetKind.PlaceInThisDocument
+                ? metadata with { Bookmark = RewriteSameSheetQualifiedFormula(metadata.Bookmark, Name, newName)! }
+                : metadata;
+        }
         foreach (var (address, runs) in RichTextRuns)
             copy.RichTextRuns[RemapAddress(address, newId)] = runs;
         foreach (var (address, guide) in CellPhoneticGuides)

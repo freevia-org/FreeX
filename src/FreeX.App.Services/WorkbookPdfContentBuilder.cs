@@ -932,8 +932,8 @@ public static class WorkbookPdfContentBuilder
 
         var sheetPlan = exportPlan.ExportPrintPlan.SheetPlans[request.SheetIndex];
         var pagePlan = new PagePaginationResult(
-            BuildSegments(sheetPlan.RowPagePlans, static plan => plan.BodyRows, static plan => plan.TitleRows),
-            BuildSegments(sheetPlan.ColumnPagePlans, static plan => plan.BodyColumns, static plan => plan.TitleColumns),
+            PagePaginationPlanner.BuildSegments(sheetPlan.RowPagePlans),
+            PagePaginationPlanner.BuildSegments(sheetPlan.ColumnPagePlans),
             PagePaginationPlanner.CalculateEffectiveScalePercent(
                 sheet.ScaleToFit,
                 sheetPlan.RowPageCount,
@@ -966,26 +966,6 @@ public static class WorkbookPdfContentBuilder
         }
 
         return -1;
-    }
-
-    private static IReadOnlyList<PageAxisSegment> BuildSegments<TPlan>(
-        IReadOnlyList<TPlan> plans,
-        Func<TPlan, IReadOnlyList<uint>> getBodyIndexes,
-        Func<TPlan, IReadOnlyList<uint>> getTitleIndexes)
-    {
-        var segments = new List<PageAxisSegment>(plans.Count);
-        foreach (var plan in plans)
-        {
-            var indexes = getBodyIndexes(plan);
-            if (indexes.Count == 0)
-                indexes = getTitleIndexes(plan);
-            if (indexes.Count == 0)
-                continue;
-
-            segments.Add(new PageAxisSegment(indexes[0], indexes[^1]));
-        }
-
-        return segments;
     }
 
     private static void AddFillRect(

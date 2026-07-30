@@ -133,7 +133,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
         SchemaErrors(saved).Should().BeEmpty();
-        AssertExternalLinkPackage(saved);
+        // This fixture pads the cached sheetName/@val to " LinkedSheet " -- unlike the other
+        // padding it sweeps up alongside (rIds, defined-name text, etc.), the leading/trailing
+        // spaces here are legitimate Excel content that must survive verbatim, not get trimmed.
+        AssertExternalLinkPackage(saved, expectedSheetName: " LinkedSheet ");
         AssertExternalLinkGraph(saved);
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -151,7 +154,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var sheetNames = externalBook.Element(workbookNs + "sheetNames")!;
         sheetNames.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration).Should().BeEmpty();
         var sheetName = sheetNames.Elements(workbookNs + "sheetName").Should().ContainSingle().Subject;
-        sheetName.Attribute("val")!.Value.Should().Be("LinkedSheet");
+        // Leading/trailing spaces in a cached sheetName/@val are legitimate Excel content (Excel
+        // permits them in sheet names) and must survive normalization verbatim, because the same
+        // untrimmed name is separately embedded in any dependent formula's quoted sheet qualifier
+        // (e.g. '[1]Sheet 1 '!A1) -- trimming just this cached copy would desync the two
+        // representations and break external-reference resolution on the next load.
+        sheetName.Attribute("val")!.Value.Should().Be(" LinkedSheet ");
         sheetName.Attribute("customSheetNameFlag").Should().BeNull();
         sheetName.Elements().Should().BeEmpty();
 
@@ -267,7 +275,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             insertionPoint.AddBeforeSelf(externalReferences);
     }
 
-    private static void AssertExternalLinkPackage(Stream stream)
+    private static void AssertExternalLinkPackage(Stream stream, string expectedSheetName = "LinkedSheet")
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -290,6 +298,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Should()
             .ContainSingle();
 
+        // Leading/trailing spaces (when the fixture pads the cached name -- see
+        // SetExternalLinkSidecarInvalidPayload) are legitimate Excel content and must survive
+        // normalization verbatim; see NormalizeSheetNameValueAttribute for why.
         ReadPackageRootElement(stream, "xl/externalLinks/externalLink1.xml")
             .Element(workbookNs + "externalBook")!
             .Element(workbookNs + "sheetNames")!
@@ -297,7 +308,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Attribute("val")!
             .Value
             .Should()
-            .Be("LinkedSheet");
+            .Be(expectedSheetName);
 
         ReadPackageRootElement(stream, "xl/externalLinks/_rels/externalLink1.xml.rels")
             .Elements(packageRelNs + "Relationship")

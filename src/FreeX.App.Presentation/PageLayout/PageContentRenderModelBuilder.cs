@@ -93,8 +93,8 @@ public static class PageContentRenderModelBuilder
             return null;
 
         var (rowSegment, colSegment) = ResolvePageSegments(sheet.PageOrder, pagePlan, pageIndex);
-        var pageRows = BuildAxisIndexes(sheet.PrintTitleRows, rowSegment);
-        var pageColumns = BuildAxisIndexes(sheet.PrintTitleColumns, colSegment);
+        var pageRows = BuildAxisIndexes(sheet.PrintTitleRows, rowSegment, sheet.IsRowEffectivelyHidden);
+        var pageColumns = BuildAxisIndexes(sheet.PrintTitleColumns, colSegment, sheet.IsColEffectivelyHidden);
         if (pageRows.Count == 0 || pageColumns.Count == 0)
             return null;
 
@@ -231,23 +231,32 @@ public static class PageContentRenderModelBuilder
         return (pagePlan.RowSegments[page.RowPageIndex], pagePlan.ColumnSegments[page.ColumnPageIndex]);
     }
 
-    private static IReadOnlyList<uint> BuildAxisIndexes(WorksheetRepeatRange? repeat, PageAxisSegment segment)
+    private static IReadOnlyList<uint> BuildAxisIndexes(
+        WorksheetRepeatRange? repeat,
+        PageAxisSegment segment,
+        Func<uint, bool> isHidden)
     {
         // Title (repeat) rows/columns are reprinted ahead of the page body. The pagination segment
         // already spans the page's whole printed extent; reprint only the repeat indexes that fall
-        // before the segment so they are not duplicated when the segment itself includes them.
+        // before the segment so they are not duplicated when the segment itself includes them. A
+        // hidden/filtered/group-collapsed row or column inside the repeat range is excluded, matching
+        // PrintLayoutPlanner.BuildTitleIndexes (the source of truth the WPF print path reads from).
         var indexes = new List<uint>();
         if (repeat is { } range && range.Start >= 1 && range.End >= range.Start)
         {
             for (var index = range.Start; index <= range.End; index++)
             {
-                if (index < segment.Start)
+                if (index < segment.Start && !isHidden(index))
                     indexes.Add(index);
             }
         }
 
-        for (var index = segment.Start; index <= segment.End; index++)
-            indexes.Add(index);
+        // segment.Indexes is the page's explicit, gap-aware body index list -- already hidden/
+        // filtered/group-collapsed-excluded by PrintLayoutPlanner.BuildRowPlans/BuildColumnPlans.
+        // Do NOT reconstruct this by iterating segment.Start..segment.End: that range assumes
+        // contiguity and would silently reinstate any hidden row/column sitting in the interior of
+        // the page (see PageAxisSegment's doc comment).
+        indexes.AddRange(segment.Indexes);
 
         return indexes;
     }
@@ -527,13 +536,10 @@ public static class PageContentRenderModelBuilder
         return blocks;
     }
 
-    private static IReadOnlyList<uint> BuildSegmentIndexes(PageAxisSegment segment)
-    {
-        var indexes = new List<uint>((int)Math.Min(segment.End - segment.Start + 1, int.MaxValue));
-        for (var index = segment.Start; index <= segment.End; index++)
-            indexes.Add(index);
-        return indexes;
-    }
+    // segment.Indexes is already the page's explicit, gap-aware body index list (hidden/filtered/
+    // group-collapsed rows or columns already excluded) -- see BuildAxisIndexes above for why this
+    // must never be reconstructed by iterating segment.Start..segment.End.
+    private static IReadOnlyList<uint> BuildSegmentIndexes(PageAxisSegment segment) => segment.Indexes;
 
     private static bool ShouldPrintChart(ChartModel chart, LayoutRect pageGridRect)
     {

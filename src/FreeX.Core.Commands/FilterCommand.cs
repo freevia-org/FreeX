@@ -17,6 +17,12 @@ public sealed class FilterCommand : IWorkbookCommand
     private readonly IReadOnlyList<string> _allowedValues;
 
     private FilterUndoSnapshot _undoSnapshot;
+    // R95-commands-filter-table-reband-undo-1: see StructuredTableBandingReflow.ReflowIfMatched --
+    // RebandTable always repaints the table's ENTIRE data body with forceFill:true (MergeStyleOntoCell's
+    // keepExistingFill is unconditionally false under forceFill), unconditionally overwriting any
+    // explicit FillColor a user set on a body cell. Mirrors InsertRowsCommand/DeleteRowsCommand/
+    // SortCommand's own _tableRebandSnapshot fields, which exist for the exact same reason.
+    private List<(CellAddress Address, Cell? OldCell)>? _tableRebandSnapshot;
     // H18: when _range is a structured table's range, table.FilterColumns (the model
     // XlsxStructuredTableWriter actually serializes into the table's <autoFilter>/<filterColumn> XML)
     // must be kept in sync with the interactive filter, otherwise the filter is visibly applied but
@@ -96,7 +102,10 @@ public sealed class FilterCommand : IWorkbookCommand
         // table's stripes must re-flow around the newly-hidden rows exactly like they already do
         // after an Insert or a Sort (StructuredTableStyleService.RebandTable) — otherwise the
         // remaining visible rows keep their stale pre-filter stripe.
-        StructuredTableBandingReflow.ReflowIfMatched(ctx.Workbook, sheet, _range);
+        // R95-commands-filter-table-reband-undo-1: capture the table's full data body immediately
+        // before the reband repaints it (mirrors InsertRowsCommand/DeleteRowsCommand/SortCommand),
+        // so Revert can restore any explicit user fill the reband's forceFill just overwrote.
+        _tableRebandSnapshot = StructuredTableBandingReflow.ReflowIfMatched(ctx.Workbook, sheet, _range);
 
         return new CommandOutcome(true);
     }
@@ -212,8 +221,13 @@ public sealed class FilterCommand : IWorkbookCommand
         }
 
         // R91-meta-3: undoing a filter restores the previous hidden-row set, which just as much
-        // changes which rows are visible as applying it did — re-flow banding here too.
-        StructuredTableBandingReflow.ReflowIfMatched(ctx.Workbook, sheet, _range);
+        // changes which rows are visible as applying it did — the pre-reband cell snapshot captured
+        // in Apply already reflects exactly the correct banding for that restored visibility (nothing
+        // between the snapshot and the reband it preceded touches cell fills), so restoring it here
+        // is both sufficient and — unlike re-running RebandTable a second time, which R95-commands-
+        // filter-table-reband-undo-1 found would just as destructively re-overwrite any explicit user
+        // fill Revert is trying to restore — non-destructive.
+        StructuredTableBandingReflow.Restore(sheet, _tableRebandSnapshot);
     }
 }
 
@@ -563,16 +577,61 @@ internal static class StructuredTableBandingReflow
     /// (mirrors <see cref="FilterCommand.ApplyToStructuredTableIfMatched"/>'s lookup). A no-op when
     /// <paramref name="range"/> is a plain worksheet AutoFilter range with no owning table.
     /// </summary>
-    public static void ReflowIfMatched(Workbook workbook, Sheet sheet, GridRange range)
+    /// <remarks>
+    /// R95-commands-filter-table-reband-undo-1: <see cref="StructuredTableStyleService.RebandTable"/>
+    /// always repaints the table's ENTIRE data body with forceFill:true (MergeStyleOntoCell's
+    /// keepExistingFill is unconditionally false under forceFill), which unconditionally overwrites
+    /// any explicit FillColor a user set on a body cell — the same overwrite mechanism r90/r92/r94
+    /// already fixed for InsertRowsCommand/DeleteRowsCommand/SortCommand by snapshotting the table's
+    /// full data body immediately before calling RebandTable. Returning that same snapshot here (in
+    /// this one choke point, rather than duplicating the capture logic at each of FilterCommand's two
+    /// call sites) lets the caller restore it on undo instead of destroying the fill permanently.
+    /// Returns <c>null</c> when no table matched (nothing to restore).
+    /// </remarks>
+    public static List<(CellAddress Address, Cell? OldCell)>? ReflowIfMatched(Workbook workbook, Sheet sheet, GridRange range)
     {
         foreach (var table in sheet.StructuredTables)
         {
             if (table.Range.Equals(range))
             {
+                var captured = CaptureDataBody(sheet, table);
                 StructuredTableStyleService.RebandTable(workbook, sheet, table);
-                return;
+                return captured;
             }
         }
+
+        return null;
+    }
+
+    /// <summary>Restores a snapshot captured by <see cref="ReflowIfMatched"/>. A no-op when <paramref name="snapshot"/> is <c>null</c>.</summary>
+    public static void Restore(Sheet sheet, List<(CellAddress Address, Cell? OldCell)>? snapshot)
+    {
+        if (snapshot is null)
+            return;
+
+        foreach (var (address, oldCell) in snapshot)
+        {
+            if (oldCell is null)
+                sheet.ClearCell(address);
+            else
+                sheet.SetCell(address, oldCell);
+        }
+    }
+
+    private static List<(CellAddress Address, Cell? OldCell)> CaptureDataBody(Sheet sheet, StructuredTableModel table)
+    {
+        var captured = new List<(CellAddress Address, Cell? OldCell)>();
+        var (firstDataRow, lastDataRow) = StructuredTableEditEffects.GetDataBodyRowBounds(table);
+        for (var row = firstDataRow; row <= lastDataRow; row++)
+        {
+            for (var col = table.Range.Start.Col; col <= table.Range.End.Col; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                captured.Add((address, sheet.GetCell(address)?.Clone()));
+            }
+        }
+
+        return captured;
     }
 }
 
