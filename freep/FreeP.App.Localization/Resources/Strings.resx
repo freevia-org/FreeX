@@ -1528,6 +1528,12 @@
   <data name="Ribbon_Command_SmartArtHorizontalBlockList_KeyTip" xml:space="preserve">
     <value>HBL</value>
   </data>
+  <data name="Ribbon_Command_SmartArtTrapezoidList_Label" xml:space="preserve">
+    <value>Trapezoid List</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtTrapezoidList_KeyTip" xml:space="preserve">
+    <value>TL</value>
+  </data>
   <data name="Ribbon_Command_SmartArtBasicCycle_Label" xml:space="preserve">
     <value>Basic Cycle</value>
   </data>
