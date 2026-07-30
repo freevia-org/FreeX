@@ -416,6 +416,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtVerticalBulletListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBulletList_Label", "Ribbon_Command_SmartArtVerticalBulletList_KeyTip");
     public static RibbonText SmartArtHorizontalBulletListCommand { get; } = new("Ribbon_Command_SmartArtHorizontalBulletList_Label", "Ribbon_Command_SmartArtHorizontalBulletList_KeyTip");
     public static RibbonText SmartArtHorizontalBlockListCommand { get; } = new("Ribbon_Command_SmartArtHorizontalBlockList_Label", "Ribbon_Command_SmartArtHorizontalBlockList_KeyTip");
+    public static RibbonText SmartArtTrapezoidListCommand { get; } = new("Ribbon_Command_SmartArtTrapezoidList_Label", "Ribbon_Command_SmartArtTrapezoidList_KeyTip");
     public static RibbonText SmartArtBasicCycleCommand { get; } = new("Ribbon_Command_SmartArtBasicCycle_Label", "Ribbon_Command_SmartArtBasicCycle_KeyTip");
     public static RibbonText SmartArtCycle2Command { get; } = new("Ribbon_Command_SmartArtCycle2_Label", "Ribbon_Command_SmartArtCycle2_KeyTip");
     public static RibbonText SmartArtContinuousCycleCommand { get; } = new("Ribbon_Command_SmartArtContinuousCycle_Label", "Ribbon_Command_SmartArtContinuousCycle_KeyTip");
