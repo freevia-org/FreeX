@@ -66,6 +66,42 @@ public sealed class R91_FormulaReferenceDragResizePlannerTests
         newText.Should().Be("=SUM(R1C1:R3C3)");
     }
 
+    [Fact]
+    public void ApplyResize_PreservesQuotedSheetQualifier()
+    {
+        var text = "=SUM('Revenue Data'!B2:E3)";
+        var referenceStart = text.IndexOf("'Revenue Data'!", StringComparison.Ordinal);
+        var referenceLength = text.IndexOf(')', referenceStart) - referenceStart;
+        var newRange = new GridRange(new CellAddress(Sheet, 2, 2), new CellAddress(Sheet, 6, 6));
+
+        var (newText, _) = FormulaReferenceDragResizePlanner.ApplyResize(
+            text,
+            referenceStart,
+            referenceLength,
+            newRange,
+            useR1C1ReferenceStyle: false);
+
+        newText.Should().Be("=SUM('Revenue Data'!B2:F6)");
+    }
+
+    [Fact]
+    public void ApplyResize_PreservesEscapedQuoteInQuotedSheetQualifier()
+    {
+        var text = "=SUM('O''Brien Data'!B2:E3)";
+        var referenceStart = text.IndexOf("'O''Brien Data'!", StringComparison.Ordinal);
+        var referenceLength = text.IndexOf(')', referenceStart) - referenceStart;
+        var newRange = new GridRange(new CellAddress(Sheet, 2, 2), new CellAddress(Sheet, 6, 6));
+
+        var (newText, _) = FormulaReferenceDragResizePlanner.ApplyResize(
+            text,
+            referenceStart,
+            referenceLength,
+            newRange,
+            useR1C1ReferenceStyle: false);
+
+        newText.Should().Be("=SUM('O''Brien Data'!B2:F6)");
+    }
+
     // ── No-regression sibling ────────────────────────────────────────────────
 
     [Fact]

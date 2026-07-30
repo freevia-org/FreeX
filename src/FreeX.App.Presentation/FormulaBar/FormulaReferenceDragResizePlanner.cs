@@ -12,8 +12,10 @@ namespace FreeX.App.Presentation.FormulaBar;
 /// Kept free of any shell/UI-framework type so the shell only needs to translate a mouse-drag's target
 /// cell into a <see cref="CellAddress"/> and hand it here; the reference-text rewrite mirrors
 /// <see cref="FormulaRangeEntryPlanner.TryApplyRangeSelection"/> (used for the "drag to pick a new
-/// range" point-mode flow) so a resized reference always renders with the same bare, current-sheet,
-/// non-absolute style as a freshly re-picked one.
+/// range" point-mode flow) so a resized reference normally renders with the same bare,
+/// current-sheet, non-absolute style as a freshly re-picked one, while retaining an explicit sheet
+/// qualifier already present in the reference token. This matters for formulas that qualify even a
+/// same-sheet reference, such as <c>'Revenue Data'!B2:C3</c>.
 /// </remarks>
 public static class FormulaReferenceDragResizePlanner
 {
@@ -48,12 +50,45 @@ public static class FormulaReferenceDragResizePlanner
         if (textStart < 0 || textLength < 0 || textStart + textLength > text.Length)
             throw new ArgumentOutOfRangeException(nameof(textStart));
 
-        var referenceText = SpreadsheetDisplayFormatter.FormatRangeReference(
+        var formattedRange = SpreadsheetDisplayFormatter.FormatRangeReference(
             newRange.Start, newRange.End, useR1C1ReferenceStyle);
+        var originalReferenceText = text.Substring(textStart, textLength);
+        var qualifier = ExtractSheetQualifier(originalReferenceText);
+        var referenceText = string.Concat(qualifier, formattedRange);
         var newText = string.Concat(
             text.AsSpan(0, textStart),
             referenceText,
             text.AsSpan(textStart + textLength));
         return (newText, textStart + referenceText.Length);
+    }
+
+    private static string ExtractSheetQualifier(string referenceText)
+    {
+        if (referenceText.Length == 0)
+            return "";
+
+        if (referenceText[0] == '\'')
+        {
+            for (var index = 1; index < referenceText.Length; index++)
+            {
+                if (referenceText[index] != '\'')
+                    continue;
+
+                if (index + 1 < referenceText.Length && referenceText[index + 1] == '\'')
+                {
+                    index++;
+                    continue;
+                }
+
+                return index + 1 < referenceText.Length && referenceText[index + 1] == '!'
+                    ? referenceText[..(index + 2)]
+                    : "";
+            }
+
+            return "";
+        }
+
+        var bangIndex = referenceText.IndexOf('!');
+        return bangIndex >= 0 ? referenceText[..(bangIndex + 1)] : "";
     }
 }

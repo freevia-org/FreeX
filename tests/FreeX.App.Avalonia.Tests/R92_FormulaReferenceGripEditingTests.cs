@@ -18,7 +18,7 @@ public sealed class R92_FormulaReferenceGripEditingTests
         await Session.Dispatch(() =>
         {
             var window = new MainWindow([]);
-            var sheet = window.Session.Workbook.AddSheet("FormulaGripFixture");
+            var sheet = window.Session.Workbook.AddSheet("Revenue Data");
             window.Session.SelectSheet(sheet.Id);
             window.Show();
             window.Measure(new Size(1120, 720));
@@ -34,12 +34,12 @@ public sealed class R92_FormulaReferenceGripEditingTests
                 var formulaAddress = new CellAddress(sheet.Id, 8, 7); // G8
                 sheet.SetCell(formulaAddress, new Cell
                 {
-                    FormulaText = "SUM(B2:C3,D4:E5)",
+                    FormulaText = "SUM('Revenue Data'!B2:C3,'Revenue Data'!D4:E5)",
                     Value = new NumberValue(10),
                 });
 
                 window.Session.SelectCell(formulaAddress);
-                window.BeginFormulaEditForTest(formulaAddress, "=SUM(B2:C3,D4:E5)");
+                window.BeginFormulaEditForTest(formulaAddress, "=SUM('Revenue Data'!B2:C3,'Revenue Data'!D4:E5)");
 
                 // Existing formulas open in Edit mode; WPF still exposes reference highlights and
                 // resize grips in that mode, so this must not depend on Point mode being active.
@@ -51,7 +51,7 @@ public sealed class R92_FormulaReferenceGripEditingTests
                     new CellAddress(sheet.Id, 6, 6)); // Drag D4:E5's bottom-right grip to F6.
 
                 resized.Should().BeTrue();
-                window.FormulaBoxTextForTest.Should().Be("=SUM(B2:C3,D4:F6)");
+                window.FormulaBoxTextForTest.Should().Be("=SUM('Revenue Data'!B2:C3,'Revenue Data'!D4:F6)");
 
                 window.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs
                 {
@@ -59,7 +59,7 @@ public sealed class R92_FormulaReferenceGripEditingTests
                     PhysicalKey = PhysicalKey.Enter,
                 });
 
-                sheet.GetCell(formulaAddress)!.FormulaText.Should().Be("SUM(B2:C3,D4:F6)");
+                sheet.GetCell(formulaAddress)!.FormulaText.Should().Be("SUM('Revenue Data'!B2:C3,'Revenue Data'!D4:F6)");
                 sheet.GetValue(formulaAddress).Should().Be(new NumberValue(15));
             }
             finally

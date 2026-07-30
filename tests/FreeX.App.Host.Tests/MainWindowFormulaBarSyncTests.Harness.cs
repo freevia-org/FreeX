@@ -43,6 +43,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _formulaBarExpandButtonClick;
         private readonly MethodInfo _editActiveCellInFormulaBar;
         private readonly MethodInfo _tryApplyFormulaRangeSelection;
+        private readonly MethodInfo _raiseFormulaReferenceGripDragForTest;
         private readonly MethodInfo _tryHandleFormulaSheetTabClick;
         private readonly MethodInfo _tryToggleFormulaRangeEntrySelectionMode;
         private readonly MethodInfo _selectRow;
@@ -125,6 +126,9 @@ public sealed partial class MainWindowFormulaBarSyncTests
                     types: [typeof(CellAddress), typeof(bool)],
                     modifiers: null)
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryApplyFormulaRangeSelection");
+            _raiseFormulaReferenceGripDragForTest = typeof(MainWindow)
+                .GetMethod("RaiseFormulaReferenceGripDragForTest", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "RaiseFormulaReferenceGripDragForTest");
             _tryHandleFormulaSheetTabClick = typeof(MainWindow)
                 .GetMethod("TryHandleFormulaSheetTabClick", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleFormulaSheetTabClick");
@@ -218,6 +222,12 @@ public sealed partial class MainWindowFormulaBarSyncTests
             sheet.SetCell(new CellAddress(sheet.Id, row, col), Cell.FromFormula(formulaText));
         }
 
+        public void SetCellNumber(uint row, uint col, double value)
+        {
+            var sheet = Workbook.Sheets[0];
+            sheet.SetCell(new CellAddress(sheet.Id, row, col), Cell.FromValue(new NumberValue(value)));
+        }
+
         public string? CellText(uint row, uint col) => CellText(row, col, Workbook.Sheets[0].Id);
 
         public string? CellText(uint row, uint col, SheetId sheetId)
@@ -233,6 +243,18 @@ public sealed partial class MainWindowFormulaBarSyncTests
         {
             var sheet = Workbook.Sheets[0];
             return sheet.GetCell(new CellAddress(sheet.Id, row, col))?.FormulaText;
+        }
+
+        public ScalarValue? CellValue(uint row, uint col)
+        {
+            var sheet = Workbook.Sheets[0];
+            return sheet.GetValue(new CellAddress(sheet.Id, row, col));
+        }
+
+        public void RenameFirstSheet(string name)
+        {
+            Workbook.Sheets[0].Name = name;
+            PumpDispatcher();
         }
 
         public GridRange NamedRange(string name)
@@ -340,6 +362,15 @@ public sealed partial class MainWindowFormulaBarSyncTests
             var applied = (bool)_tryApplyFormulaRangeSelection.Invoke(
                 _window,
                 [new CellAddress(sheetId, row, col), extend])!;
+            PumpDispatcher();
+            return applied;
+        }
+
+        public bool RaiseFormulaReferenceGripDrag(int highlightIndex, uint row, uint col)
+        {
+            var applied = (bool)_raiseFormulaReferenceGripDragForTest.Invoke(
+                _window,
+                [highlightIndex, new CellAddress(CurrentSheetId, row, col)])!;
             PumpDispatcher();
             return applied;
         }

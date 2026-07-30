@@ -294,6 +294,25 @@ public partial class MainWindow
             sheetName => _workbook.GetSheet(sheetName)?.Id,
             ResolveStructuredFormulaReference);
 
+    internal bool RaiseFormulaReferenceGripDragForTest(int highlightIndex, CellAddress target)
+    {
+        var editor = GetFormulaReferenceHighlightEditor();
+        var highlights = editor is null
+            ? []
+            : GetFormulaReferenceHighlights(editor.Text);
+        if (editor is null || highlightIndex < 0 || highlightIndex >= highlights.Count ||
+            highlights[highlightIndex].Range is not { } originalRange ||
+            originalRange.Start.Sheet != target.Sheet)
+        {
+            return false;
+        }
+
+        var newRange = FormulaReferenceDragResizePlanner.ComputeResizedRange(originalRange.Start, target);
+        ApplyFormulaReferenceResize(editor, highlights[highlightIndex], newRange);
+        RefreshFormulaReferenceHighlights();
+        return true;
+    }
+
     private GridRange? ResolveStructuredFormulaReference(string tableName, string selector)
     {
         var currentSheet = _workbook.GetSheet(_currentSheetId);
@@ -564,14 +583,7 @@ public partial class MainWindow
         if (TryResolveDragTargetCell(e.GetPosition(EditOverlay), originalRange.Start.Sheet, out var targetCell))
         {
             var newRange = FormulaReferenceDragResizePlanner.ComputeResizedRange(originalRange.Start, targetCell);
-            var (newText, caretIndex) = FormulaReferenceDragResizePlanner.ApplyResize(
-                editor.Text, highlight!.TextStart, highlight.TextLength, newRange, _options.UseR1C1ReferenceStyle);
-
-            ApplyTextEdit(editor, new ExcelTextEdit(newText, caretIndex, 0));
-            if (ReferenceEquals(editor, _inlineEditor))
-                FormulaBar.Text = newText;
-            else if (_inlineEditor?.IsVisible == true)
-                _inlineEditor.Text = newText;
+            ApplyFormulaReferenceResize(editor, highlight!, newRange);
         }
 
         // Whether or not the drag actually changed anything, rebuild the overlays from the (possibly
@@ -579,6 +591,21 @@ public partial class MainWindow
         // preview rect rather than the committed one.
         RefreshFormulaReferenceHighlights();
         e.Handled = true;
+    }
+
+    private void ApplyFormulaReferenceResize(
+        System.Windows.Controls.TextBox editor,
+        FormulaReferenceHighlight highlight,
+        GridRange newRange)
+    {
+        var (newText, caretIndex) = FormulaReferenceDragResizePlanner.ApplyResize(
+            editor.Text, highlight.TextStart, highlight.TextLength, newRange, _options.UseR1C1ReferenceStyle);
+
+        ApplyTextEdit(editor, new ExcelTextEdit(newText, caretIndex, 0));
+        if (ReferenceEquals(editor, _inlineEditor))
+            FormulaBar.Text = newText;
+        else if (_inlineEditor?.IsVisible == true)
+            _inlineEditor.Text = newText;
     }
 
     /// <summary>
