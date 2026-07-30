@@ -69,6 +69,20 @@ public sealed class ShapeGlowAuthoringSourceTests
         compactSource.Should().Contain("Editor.SetSelectedShapeFillTransparency(ShapeFillAuthoringPlanner.TransparentAlpha)");
     }
 
+    [Fact]
+    public void Avalonia_registers_shared_shape_outline_transparency_presets()
+    {
+        var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("ShapeOutlineAuthoringPlanner.OpaqueCommandId");
+        source.Should().Contain("ShapeOutlineAuthoringPlanner.HalfCommandId");
+        source.Should().Contain("ShapeOutlineAuthoringPlanner.TransparentCommandId");
+        var compactSource = string.Concat(source.Where(c => !char.IsWhiteSpace(c)));
+        compactSource.Should().Contain("Editor.SetSelectedShapeOutlineTransparency(ShapeOutlineAuthoringPlanner.OpaqueAlpha)");
+        compactSource.Should().Contain("Editor.SetSelectedShapeOutlineTransparency(ShapeOutlineAuthoringPlanner.HalfTransparentAlpha)");
+        compactSource.Should().Contain("Editor.SetSelectedShapeOutlineTransparency(ShapeOutlineAuthoringPlanner.TransparentAlpha)");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);

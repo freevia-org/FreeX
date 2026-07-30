@@ -751,6 +751,24 @@
   <data name="Ribbon_Command_ShapeFillTransparent_KeyTip" xml:space="preserve">
     <value>FT</value>
   </data>
+  <data name="Ribbon_Command_ShapeOutlineOpaque_Label" xml:space="preserve">
+    <value>Opaque Outline</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOutlineOpaque_KeyTip" xml:space="preserve">
+    <value>OO</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOutlineHalfTransparent_Label" xml:space="preserve">
+    <value>50% Transparent Outline</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOutlineHalfTransparent_KeyTip" xml:space="preserve">
+    <value>O5</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOutlineTransparent_Label" xml:space="preserve">
+    <value>Transparent Outline</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOutlineTransparent_KeyTip" xml:space="preserve">
+    <value>OT</value>
+  </data>
   <data name="Ribbon_Command_Picture_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
