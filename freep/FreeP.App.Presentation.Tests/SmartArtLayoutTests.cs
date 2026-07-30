@@ -1658,6 +1658,23 @@ public sealed class SmartArtLayoutTests
             .Should().BeInAscendingOrder("verticalChevronList preserves the authored node order");
     }
 
+    [Fact]
+    public void VerticalArrowList_ReturnsOrderedLiveDownArrowsWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.List, "A", "B", "C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("verticalArrowList is admitted to the shared list-family layout planner");
+        shapes!.Should().HaveCount(3);
+        shapes.Select(s => s.AutoShapeKind).Should().AllBeEquivalentTo(DrawingShapeKind.DownArrow);
+        shapes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("A", "B", "C");
+        shapes.Select(s => s.OffsetYEmu)
+            .Should().BeInAscendingOrder("verticalArrowList preserves the authored node order");
+    }
+
     [Theory]
     [InlineData(13)]
     [InlineData(20)]

@@ -141,6 +141,9 @@ public static class SmartArtLayoutEngine
         if (IsVerticalChevronListLayout(data.LayoutUniqueId))
             return LayoutVerticalChevronList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsVerticalArrowListLayout(data.LayoutUniqueId))
+            return LayoutVerticalArrowList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsHorizontalBulletListLayout(data.LayoutUniqueId))
             return LayoutHorizontalBulletList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1088,6 +1091,42 @@ public static class SmartArtLayoutEngine
         {
             var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
             shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, leftX, curY, boxW, boxH));
+            curY += boxH + gapY;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Vertical Arrow List geometry: editable down-arrow stages stack from top
+    /// to bottom and use the shared list style plan. The arrow bodies carry the
+    /// progression cue, so no separate connector shapes are emitted.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutVerticalArrowList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>(n);
+        if (n == 0)
+            return shapes;
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapY = Math.Max((long)(fcy * GapFrac * 0.65), 1L);
+        long boxW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long availableH = Math.Max(fcy - 2 * outerPadY - (n - 1) * gapY, 1L);
+        long boxH = Math.Max(availableH / n, 1L);
+        long curY = fy + outerPadY;
+
+        for (int i = 0; i < n; i++)
+        {
+            var style = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
+            shapes.Add(MakeBox(
+                (uint)(760 + i), nodes[i].Text, style,
+                fx + outerPadX, curY, boxW, boxH,
+                NodeFontSizePt, DrawingShapeKind.DownArrow));
             curY += boxH + gapY;
         }
 
@@ -3364,6 +3403,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "verticalchevronlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsVerticalArrowListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "verticalarrowlist", StringComparison.Ordinal);
     }
 
     private static bool IsVerticalBulletListLayout(string uniqueId)
