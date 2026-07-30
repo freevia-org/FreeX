@@ -18,7 +18,9 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     private const double PtToDip = 96.0 / 72.0;
     private const double CaretWidth = 1.25;
     private const double NativeEditorRightInset = 3;
-    private static readonly Thickness ContentPadding = new(4, 3, 4, 3);
+    // WPF's RichTextBox places the first glyph at the editor's top content edge.
+    // Keep the horizontal inset, but do not add a vertical offset to the custom surface.
+    private static readonly Thickness ContentPadding = new(4, 0, 4, 3);
     private static readonly IBrush DefaultForeground = Brushes.Black;
     // WPF's native RichTextBox applies the system selection theme over its opaque
     // selection properties. These are the realized WPF raster colors at the shared
