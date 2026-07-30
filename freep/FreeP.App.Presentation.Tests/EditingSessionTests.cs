@@ -881,6 +881,34 @@ public sealed class EditingSessionTests
         inner.Children[0].Id.Should().Be(first.Id);
     }
 
+    [Fact]
+    public void GroupSelectedShapes_GroupsNestedChildrenAndUndoRestoresParentList()
+    {
+        var sess = Make();
+        var first = MakeShape(41);
+        var second = MakeShape(42);
+        second.OffsetXEmu = 400;
+        var parent = new SlideShape { Id = 43, Kind = SlideShapeKind.Group };
+        parent.Children.Add(first);
+        parent.Children.Add(second);
+        sess.CurrentSlide!.Shapes.Add(parent);
+
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+        sess.GroupSelectedShapes();
+
+        sess.SelectedShapeIds.Should().ContainSingle();
+        parent.Children.Should().ContainSingle();
+        var nestedGroup = parent.Children[0];
+        nestedGroup.Kind.Should().Be(SlideShapeKind.Group);
+        nestedGroup.Children.Select(shape => shape.Id).Should().Equal(first.Id, second.Id);
+
+        sess.Undo();
+        parent.Children.Select(shape => shape.Id).Should().Equal(first.Id, second.Id);
+        sess.Redo();
+        parent.Children.Should().ContainSingle(shape => shape.Id == nestedGroup.Id);
+    }
+
     [Theory]
     [InlineData(DrawingShapeKind.ElbowConnector)]
     [InlineData(DrawingShapeKind.CurvedConnector)]
