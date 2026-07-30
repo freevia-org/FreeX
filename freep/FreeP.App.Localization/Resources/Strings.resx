@@ -733,6 +733,24 @@
   <data name="Ribbon_Command_Shape3dStrong_KeyTip" xml:space="preserve">
     <value>S3H</value>
   </data>
+  <data name="Ribbon_Command_ShapeFillOpaque_Label" xml:space="preserve">
+    <value>Opaque Fill</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFillOpaque_KeyTip" xml:space="preserve">
+    <value>FO</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFillHalfTransparent_Label" xml:space="preserve">
+    <value>50% Transparent Fill</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFillHalfTransparent_KeyTip" xml:space="preserve">
+    <value>F5</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFillTransparent_Label" xml:space="preserve">
+    <value>Transparent Fill</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFillTransparent_KeyTip" xml:space="preserve">
+    <value>FT</value>
+  </data>
   <data name="Ribbon_Command_Picture_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>

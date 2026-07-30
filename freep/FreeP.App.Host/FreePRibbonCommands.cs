@@ -207,6 +207,18 @@ internal static class FreePRibbonCommands
         registry.Register(
             ShapeEffectAuthoringPlanner.Shape3dStrongCommandId,
             new ActionRibbonCommand(() => editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dStrong())));
+        registry.Register(
+            ShapeFillAuthoringPlanner.OpaqueCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedShapeFillTransparency(
+                ShapeFillAuthoringPlanner.OpaqueAlpha)));
+        registry.Register(
+            ShapeFillAuthoringPlanner.HalfCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedShapeFillTransparency(
+                ShapeFillAuthoringPlanner.HalfTransparentAlpha)));
+        registry.Register(
+            ShapeFillAuthoringPlanner.TransparentCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedShapeFillTransparency(
+                ShapeFillAuthoringPlanner.TransparentAlpha)));
         RegisterHeaderFooterCommands(registry, editor, onHeaderFooter);
         registry.Register(SmartArtAuthoringPlanner.ThemeAccentsCommandId,
             new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.ThemeAccents)));

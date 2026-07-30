@@ -573,6 +573,15 @@ public static class FreePRibbon
             group.Medium(ShapeEffectAuthoringPlanner.Shape3dStrongCommandId,
                 FreePRibbonText.Shape3dStrongCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.Shape3dStrongCommand.KeyTip);
+            group.Medium(ShapeFillAuthoringPlanner.OpaqueCommandId,
+                FreePRibbonText.ShapeFillOpaqueCommand.Label, RibbonCommandIconKind.Fill,
+                FreePRibbonText.ShapeFillOpaqueCommand.KeyTip);
+            group.Medium(ShapeFillAuthoringPlanner.HalfCommandId,
+                FreePRibbonText.ShapeFillHalfTransparentCommand.Label, RibbonCommandIconKind.Fill,
+                FreePRibbonText.ShapeFillHalfTransparentCommand.KeyTip);
+            group.Medium(ShapeFillAuthoringPlanner.TransparentCommandId,
+                FreePRibbonText.ShapeFillTransparentCommand.Label, RibbonCommandIconKind.Fill,
+                FreePRibbonText.ShapeFillTransparentCommand.KeyTip);
             group.Medium(OleInsertionPlanner.InsertEmbeddedObjectCommandId,
                 FreePRibbonText.InsertEmbeddedObjectCommand.Label, RibbonCommandIconKind.RibbonShape,
                 FreePRibbonText.InsertEmbeddedObjectCommand.KeyTip);
