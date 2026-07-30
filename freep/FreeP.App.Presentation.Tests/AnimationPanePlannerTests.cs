@@ -141,6 +141,29 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Fact]
+    public void BuildTimelinePlan_ResolvesGroupedChildAnimationName()
+    {
+        var slide = new Slide();
+        var group = new SlideShape { Id = 100u, Name = "Group" };
+        group.Children.Add(new SlideShape { Id = 101u, Name = "Grouped Caption" });
+        slide.Shapes.Add(group);
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 101u,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Appear,
+            Trigger = AnimationTrigger.OnClick,
+            DurationMs = 500,
+        });
+
+        var plan = AnimationPanePlanner.BuildTimelinePlan(slide, displayCulture: Invariant);
+
+        plan.Items.Should().ContainSingle();
+        plan.Items[0].ShapeId.Should().Be(101u);
+        plan.Items[0].ShapeName.Should().Be("Grouped Caption");
+    }
+
+    [Fact]
     public void BuildTimelinePlan_EmptySlideDisablesPreview()
     {
         var plan = AnimationPanePlanner.BuildTimelinePlan(new Slide(), displayCulture: Invariant);
