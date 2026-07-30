@@ -385,6 +385,8 @@ public sealed class WindowsRecordingCaptureBackendTests
         avaloniaSource.Should().Contain("new LinuxNarrationCaptureBackend(");
         avaloniaSource.Should().Contain("new LinuxRecordingHostMetadata(");
         avaloniaSource.Should().Contain("new WindowsNativeRecordingCaptureEngine(");
+        avaloniaSource.Should().Contain("new WindowsNativeRecordingCaptureEngine(windowsMetadata.AdapterName)");
+        avaloniaSource.Should().NotContain("new WindowsNativeRecordingCaptureEngine(metadata.AdapterName)");
         wpfSource.Should().NotContain("LinuxNarrationCaptureBackend");
         wpfSource.Should().Contain("new WindowsHostRecordingCaptureEngine(");
 

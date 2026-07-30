@@ -533,7 +533,7 @@ public sealed class SlideShowWindow : Window
         return new WindowsRecordingCaptureBackend(
             windowsMetadata,
             new WindowsRecordingDeviceCatalog(),
-            new WindowsNativeRecordingCaptureEngine(metadata.AdapterName));
+            new WindowsNativeRecordingCaptureEngine(windowsMetadata.AdapterName));
 #else
         return new WindowsRecordingCaptureBackend(windowsMetadata);
 #endif
