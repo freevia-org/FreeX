@@ -825,8 +825,16 @@ calibrate_geometry() {
         "$((window_width - 160))" "$((window_height - 160))" click 1
     sleep "$settle_seconds"
     send_key ctrl+Home
-    sleep "$settle_seconds"
-    if ! capture_selection "calibration-a1.png"; then
+    local home_ready=false
+    for _ in $(seq 1 20); do
+        if capture_selection "calibration-a1.png" &&
+           (( observed_x < window_x + 60 && observed_y < window_y + 300 )); then
+            home_ready=true
+            break
+        fi
+        sleep 0.15
+    done
+    if ! $home_ready; then
         calibration_reason="Could not isolate the active-cell selection outline after Ctrl+Home."
         return 1
     fi
@@ -835,17 +843,15 @@ calibrate_geometry() {
     local a1_width="$observed_width" a1_height="$observed_height"
 
     local moved=false
-    for _ in $(seq 1 2); do
-        send_key Right
-        for _ in $(seq 1 8); do
-            if capture_selection "calibration-b1.png" &&
-               (( observed_x > a1_x + 20 && observed_x < a1_x + 240 )) &&
-               (( observed_y >= a1_y - 3 && observed_y <= a1_y + 3 )); then
-                moved=true
-                break 2
-            fi
-            sleep 0.12
-        done
+    send_key Right
+    for _ in $(seq 1 20); do
+        if capture_selection "calibration-b1.png" &&
+           (( observed_x > a1_x + 20 && observed_x < a1_x + 240 )) &&
+           (( observed_y >= a1_y - 3 && observed_y <= a1_y + 3 )); then
+            moved=true
+            break
+        fi
+        sleep 0.15
     done
     if ! $moved; then
         calibration_reason="The paced Right key did not produce a measurable A1-to-B1 selection transition."
@@ -860,17 +866,15 @@ calibrate_geometry() {
     fi
 
     moved=false
-    for _ in $(seq 1 2); do
-        send_key Down
-        for _ in $(seq 1 8); do
-            if capture_selection "calibration-a2.png" &&
-               (( observed_y > a1_y + 10 && observed_y < a1_y + 120 )) &&
-               (( observed_x >= a1_x - 3 && observed_x <= a1_x + 3 )); then
-                moved=true
-                break 2
-            fi
-            sleep 0.12
-        done
+    send_key Down
+    for _ in $(seq 1 20); do
+        if capture_selection "calibration-a2.png" &&
+           (( observed_y > a1_y + 10 && observed_y < a1_y + 120 )) &&
+           (( observed_x >= a1_x - 3 && observed_x <= a1_x + 3 )); then
+            moved=true
+            break
+        fi
+        sleep 0.15
     done
     if ! $moved; then
         calibration_reason="The paced Down key did not produce a measurable A1-to-A2 selection transition."

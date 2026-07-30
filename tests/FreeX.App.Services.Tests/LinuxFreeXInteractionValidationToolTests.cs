@@ -132,7 +132,9 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("name-box-dropdown-parity-before-x11.txt");
         probe.Should().Contain("name-box-dropdown-parity-open-x11.txt");
         probe.Should().Contain("xdotool mousemove --window \"$window_id\"");
-        probe.Should().Contain("send_key ctrl+Home\n    sleep \"$settle_seconds\"\n    if ! capture_selection");
+        probe.Should().Contain("local home_ready=false");
+        probe.Should().Contain("for _ in $(seq 1 20)");
+        probe.Should().Contain("if ! $home_ready");
         probe.Should().Contain("if len(candidates) == 1");
         probe.Should().Contain("-crop \"208x136+${popup_x}+${popup_y}\" +repage");
         probe.Should().Contain("\"evidenceProvenance\": \"native-x11-root-crop\"");
