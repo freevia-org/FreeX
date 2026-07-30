@@ -1543,7 +1543,7 @@ public sealed class EditingSession
         long cy;
 
         var selected = _selectedShapeIds
-            .Select(id => slide.Shapes.FirstOrDefault(shape => shape.Id == id))
+            .Select(id => FindShape(slide.Shapes, id))
             .Where(shape => shape is not null && shape.Kind != SlideShapeKind.Connector)
             .Cast<SlideShape>()
             .Take(2)
@@ -1713,7 +1713,7 @@ public sealed class EditingSession
         if (slide is null || _selectedShapeIds.Count == 0) return;
 
         _shapeClipboard = _selectedShapeIds
-            .Select(id => slide.Shapes.FirstOrDefault(s => s.Id == id))
+            .Select(id => FindShape(slide.Shapes, id))
             .Where(s => s is not null)
             .Select(s => SlideCloner.CloneShape(s!))
             .ToList();
@@ -2110,7 +2110,7 @@ public sealed class EditingSession
         {
             if (CurrentSlide is null || _selectedShapeIds.Count == 0) return null;
             var firstId = _selectedShapeIds[0];
-            var shape   = CurrentSlide.Shapes.FirstOrDefault(s => s.Id == firstId);
+            var shape   = FindShape(CurrentSlide.Shapes, firstId);
             return shape?.Hyperlink;
         }
     }
@@ -2811,7 +2811,7 @@ public sealed class EditingSession
     {
         var slide = CurrentSlide;
         if (slide is null || _selectedShapeIds.Count == 0) return null;
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == _selectedShapeIds[0]);
+        var shape = FindShape(slide.Shapes, _selectedShapeIds[0]);
         return shape?.Kind == SlideShapeKind.Table ? shape.Table : null;
     }
 
@@ -2819,7 +2819,7 @@ public sealed class EditingSession
     {
         var slide = CurrentSlide;
         if (slide is null || _selectedShapeIds.Count == 0) return (0, null);
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == _selectedShapeIds[0]);
+        var shape = FindShape(slide.Shapes, _selectedShapeIds[0]);
         if (shape?.Kind != SlideShapeKind.Table || shape.Table is null) return (0, null);
         return (shape.Id, shape.Table);
     }
@@ -3297,7 +3297,7 @@ public sealed class EditingSession
     {
         if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
         var id     = _selectedShapeIds[0];
-        var shape  = CurrentSlide.Shapes.FirstOrDefault(s => s.Id == id);
+        var shape  = FindShape(CurrentSlide.Shapes, id);
         if (shape?.Kind != SlideShapeKind.Group) return;
 
         var childIds = shape.Children.Select(c => c.Id).ToList();
@@ -3319,7 +3319,7 @@ public sealed class EditingSession
         if (CurrentSlide is null || _selectedShapeIds.Count != 1)
             return false;
 
-        var shape = CurrentSlide.Shapes.FirstOrDefault(candidate => candidate.Id == _selectedShapeIds[0]);
+        var shape = FindShape(CurrentSlide.Shapes, _selectedShapeIds[0]);
         if (shape is not { Kind: SlideShapeKind.AutoShape } || shape.AutoShapeKind == kind)
             return false;
 

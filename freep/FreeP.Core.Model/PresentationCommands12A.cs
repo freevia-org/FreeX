@@ -13,7 +13,37 @@ file static class ShapeHelper12A
     internal static SlideShape? Find(Presentation p, int slideIndex, uint shapeId)
     {
         if (slideIndex < 0 || slideIndex >= p.Slides.Count) return null;
-        return p.Slides[slideIndex].Shapes.FirstOrDefault(s => s.Id == shapeId);
+        return Find(p.Slides[slideIndex].Shapes, shapeId);
+    }
+
+    private static SlideShape? Find(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId) return shape;
+            if (shape.Children.Count > 0 && Find(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
+    }
+
+    internal static List<SlideShape>? ContainingShapes(Presentation p, int slideIndex, uint shapeId)
+    {
+        if (slideIndex < 0 || slideIndex >= p.Slides.Count) return null;
+        return FindContainingList(p.Slides[slideIndex].Shapes, shapeId);
+    }
+
+    private static List<SlideShape>? FindContainingList(List<SlideShape> shapes, uint shapeId)
+    {
+        if (shapes.Any(shape => shape.Id == shapeId)) return shapes;
+        foreach (var shape in shapes)
+        {
+            if (shape.Children.Count > 0 && FindContainingList(shape.Children, shapeId) is { } childList)
+                return childList;
+        }
+
+        return null;
     }
 
     internal static List<SlideShape>? Shapes(Presentation p, int slideIndex)
@@ -172,6 +202,7 @@ public sealed class UngroupShapeCommand : IPresentationCommand
     private SlideShape?        _group;
     private int                _groupZIdx;
     private List<SlideShape>?  _children;
+    private List<SlideShape>?  _parentShapes;
 
     public UngroupShapeCommand(int slideIndex, uint groupId)
     {
@@ -189,7 +220,7 @@ public sealed class UngroupShapeCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.ContainingShapes(p, _slideIndex, _groupId);
         if (shapes is null) return;
 
         _groupZIdx = shapes.FindIndex(s => s.Id == _groupId);
@@ -199,6 +230,7 @@ public sealed class UngroupShapeCommand : IPresentationCommand
         if (_group.Kind != SlideShapeKind.Group) return;
 
         _children = _group.Children.ToList();
+        _parentShapes = shapes;
         shapes.RemoveAt(_groupZIdx);
 
         // Insert children at the group's former z-position (in order).
@@ -211,7 +243,7 @@ public sealed class UngroupShapeCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = _parentShapes;
         if (shapes is null || _group is null || _children is null) return;
 
         // Remove freed children.
@@ -224,6 +256,7 @@ public sealed class UngroupShapeCommand : IPresentationCommand
 
         _group    = null;
         _children = null;
+        _parentShapes = null;
     }
 }
 
