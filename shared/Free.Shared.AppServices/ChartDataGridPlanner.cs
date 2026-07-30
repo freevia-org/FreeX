@@ -115,6 +115,26 @@ public sealed class ChartDataGridPlanner
         return true;
     }
 
+    public bool MoveCategory(int categoryIndex, int targetIndex)
+    {
+        if (!IsValidCategoryIndex(categoryIndex) || !IsValidCategoryIndex(targetIndex) ||
+            categoryIndex == targetIndex)
+            return false;
+
+        var category = _categories[categoryIndex];
+        _categories.RemoveAt(categoryIndex);
+        _categories.Insert(targetIndex, category);
+
+        foreach (var values in _values)
+        {
+            var value = values[categoryIndex];
+            values.RemoveAt(categoryIndex);
+            values.Insert(targetIndex, value);
+        }
+
+        return true;
+    }
+
     public void AddCategory(string category)
     {
         _categories.Add(NormalizeLabel(category));

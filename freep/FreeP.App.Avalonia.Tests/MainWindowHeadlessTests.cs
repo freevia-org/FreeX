@@ -6806,6 +6806,29 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartDataDialog_reorders_selected_category()
+    {
+        ChartDataDialogCommitPlan? commit = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.Scatter);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartDataDialog(window.Editor, CultureInfo.InvariantCulture);
+            dialog.MoveCategoryForTests(0, right: true);
+            commit = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        commit.Should().NotBeNull();
+        commit!.Categories.Should().Equal("Q2", "Q1", "Q3");
+        commit.Values[0].Should().Equal(new double?[] { 2.5, 4.3, 3.5 });
+    }
+
+    [Fact]
     public async Task ChartDataDialog_scatter_projection_exposes_coordinate_columns()
     {
         int valueCells = -1;
