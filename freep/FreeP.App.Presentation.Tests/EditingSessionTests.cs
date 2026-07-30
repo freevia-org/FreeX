@@ -755,6 +755,81 @@ public sealed class EditingSessionTests
         sess.CurrentSlide.Shapes.Should().HaveCount(2);
     }
 
+    [Fact]
+    public void FlipSelectedShapes_TogglesAxisAndUndoRestoresIt()
+    {
+        var sess = Make();
+        var first = MakeShape(51);
+        var second = MakeShape(52);
+        sess.CurrentSlide!.Shapes.Add(first);
+        sess.CurrentSlide.Shapes.Add(second);
+
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+        sess.FlipSelectedHorizontal();
+
+        first.FlipH.Should().BeTrue();
+        second.FlipH.Should().BeTrue();
+        first.FlipV.Should().BeFalse();
+        second.FlipV.Should().BeFalse();
+
+        sess.Undo();
+        first.FlipH.Should().BeFalse();
+        second.FlipH.Should().BeFalse();
+        sess.Redo();
+        first.FlipH.Should().BeTrue();
+        second.FlipH.Should().BeTrue();
+
+        sess.FlipSelectedVertical();
+        first.FlipV.Should().BeTrue();
+        second.FlipV.Should().BeTrue();
+        sess.Undo();
+        first.FlipV.Should().BeFalse();
+        second.FlipV.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FlipShape_TogglesExistingStateAndCanBeUndone()
+    {
+        var sess = Make();
+        var shape = MakeShape(53);
+        shape.FlipV = true;
+        sess.CurrentSlide!.Shapes.Add(shape);
+
+        sess.FlipShape(shape.Id, horizontal: false);
+        shape.FlipV.Should().BeFalse();
+        sess.Undo();
+        shape.FlipV.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RotateSelectedShapes_RotatesBothDirectionsAsOneUndoableOperation()
+    {
+        var sess = Make();
+        var first = MakeShape(54);
+        first.RotationDeg = 15;
+        var second = MakeShape(55);
+        second.RotationDeg = 30;
+        sess.CurrentSlide!.Shapes.Add(first);
+        sess.CurrentSlide.Shapes.Add(second);
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+
+        sess.RotateSelectedRight90();
+        first.RotationDeg.Should().Be(105);
+        second.RotationDeg.Should().Be(120);
+        sess.Undo();
+        first.RotationDeg.Should().Be(15);
+        second.RotationDeg.Should().Be(30);
+
+        sess.RotateSelectedLeft90();
+        first.RotationDeg.Should().Be(-75);
+        second.RotationDeg.Should().Be(-60);
+        sess.Undo();
+        first.RotationDeg.Should().Be(15);
+        second.RotationDeg.Should().Be(30);
+    }
+
     [Theory]
     [InlineData(DrawingShapeKind.ElbowConnector)]
     [InlineData(DrawingShapeKind.CurvedConnector)]

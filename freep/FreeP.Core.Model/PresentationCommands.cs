@@ -1680,6 +1680,66 @@ public sealed class RotateShapeCommand : IPresentationCommand
     }
 }
 
+/// <summary>
+/// Toggles a shape's horizontal or vertical mirror state and re-routes attached connectors.
+/// The flip flags are serialized shape semantics; this command supplies the missing authoring path.
+/// </summary>
+public sealed class FlipShapeCommand : IPresentationCommand
+{
+    private readonly int  _slideIndex;
+    private readonly uint _shapeId;
+    private readonly bool _horizontal;
+    private bool _oldFlip;
+    private bool _applied;
+
+    private List<(uint id, long ox, long oy, long ocx, long ocy, List<(long X, long Y)>? oroute, long nx, long ny, long ncx, long ncy)>?
+        _rerouteCapture;
+
+    public FlipShapeCommand(int slideIndex, uint shapeId, bool horizontal)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _horizontal = horizontal;
+    }
+
+    public string Label => _horizontal ? "Flip Horizontal" : "Flip Vertical";
+
+    public bool HasEffect(Presentation p)
+    {
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        return shape is not null && ChartHelper.IsObjectEditable(shape);
+    }
+
+    public void Apply(Presentation p)
+    {
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (shape is null || !ChartHelper.IsObjectEditable(shape)) return;
+
+        _oldFlip = _horizontal ? shape.FlipH : shape.FlipV;
+        if (_horizontal)
+            shape.FlipH = !_oldFlip;
+        else
+            shape.FlipV = !_oldFlip;
+
+        _applied = true;
+        _rerouteCapture = MoveShapeCommand.ApplyReroute(p, _slideIndex, _shapeId);
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (!_applied) return;
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (shape is null) return;
+
+        if (_horizontal)
+            shape.FlipH = _oldFlip;
+        else
+            shape.FlipV = _oldFlip;
+
+        MoveShapeCommand.RevertReroute(p, _slideIndex, _rerouteCapture);
+    }
+}
+
 /// <summary>Replaces the fill of a shape; captures old fill for undo.</summary>
 public sealed class SetShapeFillCommand : IPresentationCommand
 {

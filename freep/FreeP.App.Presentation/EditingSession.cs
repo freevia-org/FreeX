@@ -846,6 +846,48 @@ public sealed class EditingSession
         Bus.Execute(new RotateShapeCommand(_currentSlideIndex, shapeId, newRotationDeg));
     }
 
+    /// <summary>Toggles a single shape's horizontal or vertical mirror state.</summary>
+    public void FlipShape(uint shapeId, bool horizontal)
+    {
+        if (CurrentSlide is null) return;
+        Bus.Execute(new FlipShapeCommand(_currentSlideIndex, shapeId, horizontal));
+    }
+
+    /// <summary>Flips all selected shapes horizontally in one undoable operation.</summary>
+    public void FlipSelectedHorizontal() => FlipSelected(horizontal: true);
+
+    /// <summary>Flips all selected shapes vertically in one undoable operation.</summary>
+    public void FlipSelectedVertical() => FlipSelected(horizontal: false);
+
+    private void FlipSelected(bool horizontal)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        var commands = _selectedShapeIds
+            .Select(id => (IPresentationCommand)new FlipShapeCommand(_currentSlideIndex, id, horizontal));
+        Bus.Execute(new BatchCommand(horizontal ? "Flip Horizontal" : "Flip Vertical", commands));
+    }
+
+    /// <summary>Rotates all selected shapes 90 degrees counter-clockwise in one undoable operation.</summary>
+    public void RotateSelectedLeft90() => RotateSelectedBy(-90);
+
+    /// <summary>Rotates all selected shapes 90 degrees clockwise in one undoable operation.</summary>
+    public void RotateSelectedRight90() => RotateSelectedBy(90);
+
+    private void RotateSelectedBy(double deltaDegrees)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+
+        var commands = _selectedShapeIds.Select(id =>
+        {
+            var shape = FindShape(CurrentSlide.Shapes, id);
+            var rotation = shape?.RotationDeg ?? 0;
+            return (IPresentationCommand)new RotateShapeCommand(
+                _currentSlideIndex, id, rotation + deltaDegrees);
+        });
+        Bus.Execute(new BatchCommand(
+            deltaDegrees < 0 ? "Rotate Left 90" : "Rotate Right 90", commands));
+    }
+
     /// <summary>Sets the source crop fractions on a picture and records one undoable edit.</summary>
     public bool SetPictureCrop(uint shapeId, PictureCropValues values)
     {
