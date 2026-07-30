@@ -905,6 +905,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     internal IReadOnlyList<string> CellAddressAutocompleteNamesForTest() => BuildCellAddressAutocompleteNames();
 
+    internal bool CellAddressAutocompleteOpenForTest => _cellAddressAutocompletePopup?.IsOpen == true;
+
     internal SelectionPaneObjectKind? SelectedDrawingObjectKindForTest => _selectedDrawingObjectKind;
 
     internal Guid? SelectedDrawingObjectIdForTest => _selectedDrawingObjectId;
@@ -18847,6 +18849,17 @@ public sealed partial class MainWindow : Window
 
     private void CellAddressBox_KeyDown(object? sender, KeyEventArgs e)
     {
+        // WPF's editable ComboBox opens its popup from the standard dropdown gestures before
+        // applying text-entry semantics. Keep the Name Box on that route so the window-level
+        // Alt+Down command does not fall through to the worksheet's data-validation dropdowns.
+        if ((e.Key == Key.Down && e.KeyModifiers == KeyModifiers.Alt) ||
+            (e.Key == Key.F4 && e.KeyModifiers == KeyModifiers.None))
+        {
+            ShowCellAddressAutocompletePopup();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Escape)
         {
             RestoreCellAddressBoxText();
@@ -26992,9 +27005,19 @@ public sealed partial class MainWindow : Window
     }
 
     private bool OpenActiveDropdown() =>
+        OpenActiveNameBoxDropdown() ||
         OpenActiveDataValidationDropdown() ||
         OpenActiveAutoFilterDropdown() ||
         OpenTextEntryPickListDropdown();
+
+    private bool OpenActiveNameBoxDropdown()
+    {
+        if (!_cellAddressText.IsFocused)
+            return false;
+
+        ShowCellAddressAutocompletePopup();
+        return true;
+    }
 
     private bool OpenTextEntryPickListDropdown()
     {

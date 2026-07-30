@@ -465,6 +465,29 @@ function Assert-NameBoxDropdownParityNativeContract {
     }
 }
 
+function Assert-NameBoxDropdownInteractionPostcondition {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    $postconditionPath = Join-Path $EvidenceDirectory "name-box-dropdown-interaction-postcondition.txt"
+    if (-not (Test-Path -LiteralPath $postconditionPath -PathType Leaf)) {
+        throw "Name Box interaction probe did not emit its required postcondition: $postconditionPath"
+    }
+
+    $lines = @(Get-Content -LiteralPath $postconditionPath)
+    $expected = @(
+        "keyboard-opened=true",
+        "keyboard-gesture=Alt+Down,Home,Down,Down,Down,Down,Enter",
+        "keyboard-clipboard=North`t120",
+        "mouse-opened=true",
+        "mouse-gesture=NameBoxChevron,PhysicalTableRow",
+        "mouse-clipboard=North`t120"
+    )
+    $missing = @($expected | Where-Object { $_ -notin $lines })
+    if ($missing.Count -ne 0) {
+        throw "Name Box interaction postcondition failed native keyboard/mouse contract: $($missing -join '; ')."
+    }
+}
+
 function Start-ValidationSession {
     param(
         [string[]]$AppArgument = @(),
@@ -1080,6 +1103,8 @@ try {
         @("name-box-dropdown-parity-native-crop")
     } elseif ($PhysicalProbeSelector -eq "name-box-dropdown") {
         @(
+            "name-box-dropdown-keyboard-physical",
+            "name-box-dropdown-mouse-physical",
             "name-box-dropdown-defined-name-physical",
             "name-box-dropdown-table-physical",
             "name-box-dropdown-chart-physical",
@@ -1166,6 +1191,8 @@ try {
         @("name-box-dropdown-parity-native-crop")
     } elseif ($PhysicalProbeSelector -eq "name-box-dropdown") {
         @(
+            "name-box-dropdown-keyboard-physical",
+            "name-box-dropdown-mouse-physical",
             "name-box-dropdown-defined-name-physical",
             "name-box-dropdown-table-physical",
             "name-box-dropdown-chart-physical",
@@ -1288,6 +1315,7 @@ try {
     }
     if ($PhysicalProbeSelector -eq "name-box-dropdown") {
         Assert-NameBoxDropdownObjectPostcondition -EvidenceDirectory $x11EvidenceDirectory
+        Assert-NameBoxDropdownInteractionPostcondition -EvidenceDirectory $x11EvidenceDirectory
     }
     if ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
         Assert-NameBoxDropdownParityNativeContract -EvidenceDirectory $x11EvidenceDirectory

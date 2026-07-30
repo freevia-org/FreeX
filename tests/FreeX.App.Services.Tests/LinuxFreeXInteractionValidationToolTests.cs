@@ -77,6 +77,23 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
+    public void NameBoxInteractionLaneRequiresNativeKeyboardAndPointerCommitEvidence()
+    {
+        var runner = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+
+        runner.Should().Contain("Assert-NameBoxDropdownInteractionPostcondition");
+        runner.Should().Contain("name-box-dropdown-keyboard-physical");
+        runner.Should().Contain("name-box-dropdown-mouse-physical");
+        probe.Should().Contain("send_key alt+Down");
+        probe.Should().Contain("keyboard-gesture=Alt+Down,Home,Down,Down,Down,Down,Enter");
+        probe.Should().Contain("mouse-gesture=NameBoxChevron,PhysicalTableRow");
+        probe.Should().Contain("name-box-dropdown-interaction-postcondition.txt");
+    }
+
+    [Fact]
     public void NameBoxObjectEventsPreserveEmptyFieldsAndCaptureTheSettledPointerSelection()
     {
         var probe = File.ReadAllText(RepositoryFileLocator.Find(

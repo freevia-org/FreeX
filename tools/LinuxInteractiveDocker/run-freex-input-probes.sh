@@ -270,12 +270,85 @@ probe_name_box_dropdown() {
     local before_root after_root window_count_before window_count_open
     local popup_open=false defined_popup_open=false table_popup_open=false defined_passed=false table_passed=false
     local artifacts="name-box-dropdown-defined-before.png;name-box-dropdown-defined-before-root.png;name-box-dropdown-defined-before-x11.txt;name-box-dropdown-open-root.png;name-box-dropdown-defined-open-x11.txt;name-box-dropdown-defined-windows.txt;name-box-dropdown-defined-name.png;name-box-dropdown-table-before.png;name-box-dropdown-table-before-root.png;name-box-dropdown-table-before-x11.txt;name-box-dropdown-table-open-root.png;name-box-dropdown-table-open-x11.txt;name-box-dropdown-table-windows.txt;name-box-dropdown-table.png;name-box-dropdown-postcondition.txt"
+    local keyboard_open=false keyboard_passed=false keyboard_clipboard=""
+    local mouse_open=false mouse_passed=false mouse_clipboard=""
+    local interaction_artifacts="name-box-dropdown-keyboard-open.png;name-box-dropdown-mouse-before.png;name-box-dropdown-mouse-open.png;name-box-dropdown-mouse-selected.png;name-box-dropdown-interaction-postcondition.txt"
 
     # The name-box button is immediately above the grid's A column. Deriving both
     # coordinates from the calibrated A1 cell keeps this lane valid across the
     # supported Docker resolutions without relying on child-window discovery.
     dropdown_x="$((a1_x + cell_width * 78 / 100))"
     dropdown_y="$((a1_y - cell_height / 2 - 29))"
+
+    # Wave70 interaction evidence: WPF's editable ComboBox opens from Alt+Down and commits the
+    # highlighted item with Enter. The Linux route must do the same on the production popup.
+    select_cell 9 19 J20 || true
+    focus_app
+    xdotool_mousemove_sync "$((a1_x + cell_width * 35 / 100))" "$dropdown_y" click 1
+    sleep "$settle_seconds"
+    window_count_before="$(x11_visible_window_count)"
+    send_key alt+Down
+    sleep "$settle_seconds"
+    capture "name-box-dropdown-keyboard-open.png"
+    window_count_open="$(x11_visible_window_count)"
+    if (( window_count_open > window_count_before )); then
+        keyboard_open=true
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Home Down Down Down Down Return
+        sleep "$settle_seconds"
+        send_key ctrl+c
+        keyboard_clipboard="$(clipboard_text || true)"
+    else
+        keyboard_clipboard="popup-not-open"
+    fi
+    if $keyboard_open && [[ "$keyboard_clipboard" == $'North\t120' ]]; then
+        keyboard_passed=true
+    fi
+
+    # The pointer path must select the row under the pointer and commit it, rather than only
+    # moving the list cursor. The fifth fixture row is PhysicalTable (zero-based row 4).
+    select_cell 9 19 J20 || true
+    capture "name-box-dropdown-mouse-before.png"
+    window_count_before="$(x11_visible_window_count)"
+    focus_app
+    xdotool_mousemove_sync "$dropdown_x" "$dropdown_y" click 1
+    sleep "$settle_seconds"
+    capture "name-box-dropdown-mouse-open.png"
+    window_count_open="$(x11_visible_window_count)"
+    if (( window_count_open > window_count_before )); then
+        mouse_open=true
+    fi
+    # The popup is immediately below the 16px Name Box button; row centers are 27px apart.
+    xdotool_mousemove_sync "$dropdown_x" "$((dropdown_y + 130))" click 1
+    sleep "$settle_seconds"
+    capture "name-box-dropdown-mouse-selected.png"
+    send_key ctrl+c
+    mouse_clipboard="$(clipboard_text || true)"
+    if $mouse_open && [[ "$mouse_clipboard" == $'North\t120' ]]; then
+        mouse_passed=true
+    fi
+
+    write_artifact "name-box-dropdown-interaction-postcondition.txt" \
+        "keyboard-opened=$keyboard_open\nkeyboard-gesture=Alt+Down,Home,Down,Down,Down,Down,Enter\nkeyboard-clipboard=$keyboard_clipboard\nmouse-opened=$mouse_open\nmouse-gesture=NameBoxChevron,PhysicalTableRow\nmouse-clipboard=$mouse_clipboard\n"
+    if $keyboard_passed; then
+        record "name-box-dropdown-keyboard-physical" "passed" \
+            "$interaction_artifacts; keyboard-clipboard=$keyboard_clipboard" \
+            "Native X11 Alt+Down opened the production Name Box popup and Home/Down/Enter committed PhysicalTable as North/120." \
+            "$interaction_artifacts"
+    else
+        record "name-box-dropdown-keyboard-physical" "failed" "$interaction_artifacts" \
+            "Native X11 Name Box keyboard interaction expected a popup and North/120, observed open=$keyboard_open clipboard='$keyboard_clipboard'." \
+            "$interaction_artifacts"
+    fi
+    if $mouse_passed; then
+        record "name-box-dropdown-mouse-physical" "passed" \
+            "$interaction_artifacts; mouse-clipboard=$mouse_clipboard" \
+            "Native X11 pointer selection committed the PhysicalTable row as North/120." \
+            "$interaction_artifacts"
+    else
+        record "name-box-dropdown-mouse-physical" "failed" "$interaction_artifacts" \
+            "Native X11 Name Box pointer interaction expected PhysicalTable/North/120, observed open=$mouse_open clipboard='$mouse_clipboard'." \
+            "$interaction_artifacts"
+    fi
 
     # Start from a neutral blank cell so clipboard data cannot be inherited from
     # a prior selection or mistaken for dropdown navigation.

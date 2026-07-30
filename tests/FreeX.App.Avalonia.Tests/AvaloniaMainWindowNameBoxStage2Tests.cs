@@ -350,6 +350,26 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
     }
 
     [Fact]
+    public async Task AltDown_FromNameBox_OpensTheProductionAutocompletePopup()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow(
+                [InteractionValidationOptions.NameBoxDropdownParityPhysicalFixtureArgument]);
+
+            window.CellAddressBoxTextForTest = "Sales";
+            window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs
+            {
+                Key = Key.Down,
+                KeyModifiers = KeyModifiers.Alt,
+            });
+
+            window.CellAddressAutocompleteOpenForTest.Should().BeTrue();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task DropdownSelection_NavigatesToTableAndSelectsNamedObjectAcrossSheets()
     {
         await Session.Dispatch(() =>
