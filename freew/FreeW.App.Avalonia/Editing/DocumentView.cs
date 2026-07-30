@@ -163,6 +163,7 @@ public sealed class DocumentView : Control
     // the map is deliberately kept separate from _pageCount because body layout still advances in
     // logical page slots while its rendered coordinates use the physical page map.
     private readonly Dictionary<int, DocumentFootnoteContinuationPlan> _footnoteContinuationByBodyPage = new();
+    private DocumentFootnotePhysicalPagePlan _footnotePhysicalPagePlan = DocumentFootnotePhysicalPagePlan.Empty;
     private int _bodyPageCount;
     // FO4: inline (non-floating) charts, WordArt, SmartArt — rendered in the text flow like inline images.
     private readonly List<FloatingChartData>    _inlineCharts    = new();
@@ -3429,6 +3430,7 @@ public sealed class DocumentView : Control
         _endnoteExtentDip = 0;        // AV-NOTERENDER
         _footnoteBandHeightByPage.Clear(); // DB1/DB2
         _footnoteContinuationByBodyPage.Clear();
+        _footnotePhysicalPagePlan = DocumentFootnotePhysicalPagePlan.Empty;
         _bodyPageCount = 0;
         _tabLeaderSpans.Clear(); // AV-TAB
 
@@ -3519,6 +3521,7 @@ public sealed class DocumentView : Control
             if (_doc.Footnotes.Count > 0)
             {
                 ComputeFootnoteContinuationPlans();
+                RebuildFootnotePhysicalPagePlan();
 
                 // DB1 second pass: re-flow the body with per-page footnote reservations active.
                 // ReserveContentY now consults _footnoteBandHeightByPage to shrink each page's
@@ -3550,7 +3553,8 @@ public sealed class DocumentView : Control
                 lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
                 totalSlots = lastSlot + 1;
                 _bodyPageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
-                _pageCount = _bodyPageCount + _footnoteContinuationByBodyPage.Sum(pair => Math.Max(0, pair.Value.Pages.Count - 1));
+                RebuildFootnotePhysicalPagePlan();
+                _pageCount = _footnotePhysicalPagePlan.PhysicalPageCount;
                 _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
             }
         }
@@ -4785,14 +4789,7 @@ public sealed class DocumentView : Control
 
     private int PhysicalPageForBodyPage(int logicalBodyPage)
     {
-        var physical = Math.Max(0, logicalBodyPage);
-        foreach (var (bodyPage, continuation) in _footnoteContinuationByBodyPage)
-        {
-            if (bodyPage >= logicalBodyPage)
-                continue;
-            physical += Math.Max(0, continuation.Pages.Count - 1);
-        }
-        return physical;
+        return _footnotePhysicalPagePlan.PhysicalPageForBodyPage(logicalBodyPage);
     }
 
     private int PhysicalPageForFootnoteFragment(int logicalBodyPage, int fragmentPageIndex) =>
@@ -4800,15 +4797,21 @@ public sealed class DocumentView : Control
 
     private int LogicalBodyPageForPhysicalPage(int physicalPage)
     {
-        for (var logicalBodyPage = 0; logicalBodyPage < Math.Max(1, _bodyPageCount); logicalBodyPage++)
-        {
-            if (PhysicalPageForBodyPage(logicalBodyPage) == physicalPage)
-                return logicalBodyPage;
-        }
+        var page = _footnotePhysicalPagePlan.Pages
+            .FirstOrDefault(candidate => candidate.PhysicalPageIndex == physicalPage);
+        if (page?.LogicalBodyPageIndex is int logicalBodyPage)
+            return logicalBodyPage;
 
         // A note reference cannot normally land inside a continuation-only page. Keep the nearest
         // preceding body page as a defensive fallback for unusual zero-width source runs.
         return Math.Clamp(physicalPage, 0, Math.Max(0, _bodyPageCount - 1));
+    }
+
+    private void RebuildFootnotePhysicalPagePlan()
+    {
+        _footnotePhysicalPagePlan = DocumentNoteRegionPlanner.BuildFootnotePhysicalPagePlan(
+            _bodyPageCount,
+            _footnoteContinuationByBodyPage);
     }
 
     /// <summary>
