@@ -696,6 +696,7 @@ manifest = {
             "transcripts": [
                 "pointer-selection-forward",
                 "pointer-selection-reverse",
+                "pointer-paragraph-selection",
             ],
             "geometryProof": "pointer-selection-calibration.txt",
         }
