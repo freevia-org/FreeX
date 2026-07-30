@@ -229,7 +229,7 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
     // ── Basic autocomplete: the name list merges workbook-global and current-sheet-scoped names ──
 
     [Fact]
-    public async Task AutocompleteNames_MergesGlobalAndActiveSheetScopedNames_DedupedAndSorted()
+    public async Task AutocompleteNames_MergesGlobalAndActiveSheetScopedNamesIntoFullNavigationProjection()
     {
         await Session.Dispatch(() =>
         {
@@ -254,7 +254,11 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
 
             var names = window.CellAddressAutocompleteNamesForTest();
 
-            names.Should().Equal("Apple", "Zebra");
+            names.Should().Contain("Apple");
+            names.Should().Contain("Zebra");
+            names.Should().NotContain("OtherSheetOnly");
+            names.Should().OnlyHaveUniqueItems();
+            names.Should().BeInAscendingOrder(StringComparer.OrdinalIgnoreCase);
 
             window.Close();
         }, CancellationToken.None);

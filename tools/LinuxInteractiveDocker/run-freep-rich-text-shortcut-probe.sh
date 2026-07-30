@@ -1193,6 +1193,10 @@ if [[ "$app_surface" == "in-canvas-grouped-child-caret" && "$redo_checkpoint" ==
         send_owner_key ctrl+a || input_commands_ok=false
         sleep 0.35
         focus_owner
+        # The reopened editor's first routed copy activates its native text
+        # clipboard path on X11. The bounded helper then performs and verifies
+        # the authoritative copy instead of accepting a stale earlier payload.
+        send_owner_key ctrl+c || input_commands_ok=false
         if copy_selection_and_assert_clipboard \
             "grouped-caret-reopened" $'Child 1 has\n speaker notes'; then
             reopen_clipboard_readback=true
