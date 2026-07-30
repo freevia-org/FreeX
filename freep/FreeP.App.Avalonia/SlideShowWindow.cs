@@ -105,6 +105,7 @@ public sealed class SlideShowWindow : Window
     // Per-shape animation state for the current slide.
     // Maps shapeId → the Image element in _animOverlay that represents that shape.
     private readonly Dictionary<uint, Control> _animElements = new();
+    private readonly Dictionary<uint, IReadOnlyList<Control>> _paragraphAnimElements = new();
 
     // Track which shapes have been revealed.
     private readonly HashSet<uint> _revealedShapes = new();
@@ -3494,6 +3495,7 @@ public sealed class SlideShowWindow : Window
     {
         _animOverlay.Children.Clear();
         _animElements.Clear();
+        _paragraphAnimElements.Clear();
         _revealedShapes.Clear();
 
         // DA1: clear any suppression from the previous slide.
@@ -3526,6 +3528,57 @@ public sealed class SlideShowWindow : Window
         {
             var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
             if (shape is null) continue;
+
+            if (SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, shapeId))
+            {
+                var paragraphShapes = SlideShowAnimationBuildPlanner.CreateParagraphShapes(shape);
+                if (paragraphShapes.Count > 0)
+                {
+                    var background = SlideCloner.CloneShape(shape);
+                    background.TextBody = null;
+                    var backgroundBitmap = RenderShapeToOverlayBitmap(slide, background, w, h);
+                    if (backgroundBitmap is not null)
+                    {
+                        _animOverlay.Children.Add(new Image
+                        {
+                            Source = backgroundBitmap,
+                            Width = w,
+                            Height = h,
+                            Stretch = Stretch.None,
+                            Opacity = 1,
+                            IsHitTestVisible = false,
+                        });
+                    }
+
+                    var paragraphElements = new List<Control>(paragraphShapes.Count);
+                    foreach (var paragraphShape in paragraphShapes)
+                    {
+                        var paragraphBitmap = RenderShapeToOverlayBitmap(slide, paragraphShape, w, h);
+                        if (paragraphBitmap is null) continue;
+
+                        var paragraphImage = new Image
+                        {
+                            Source = paragraphBitmap,
+                            Width = w,
+                            Height = h,
+                            Stretch = Stretch.None,
+                            Opacity = _entranceShapeIds.Contains(shapeId) ? 0 : 1,
+                            IsHitTestVisible = false,
+                        };
+                        Canvas.SetLeft(paragraphImage, 0);
+                        Canvas.SetTop(paragraphImage, 0);
+                        _animOverlay.Children.Add(paragraphImage);
+                        paragraphElements.Add(paragraphImage);
+                    }
+
+                    if (paragraphElements.Count > 0)
+                    {
+                        _paragraphAnimElements[shapeId] = paragraphElements;
+                        _slideCanvas.SuppressedShapeIds.Add(shapeId);
+                        continue;
+                    }
+                }
+            }
 
             var shapeBitmap = RenderShapeToOverlayBitmap(slide, shape, w, h);
             if (shapeBitmap is null) continue;
@@ -3561,6 +3614,9 @@ public sealed class SlideShowWindow : Window
     /// </summary>
     private void RevealShape(uint shapeId)
     {
+        if (_paragraphAnimElements.ContainsKey(shapeId))
+            return;
+
         if (_slideCanvas.SuppressedShapeIds.Remove(shapeId))
             _slideCanvas.Refresh();
     }
@@ -3611,6 +3667,20 @@ public sealed class SlideShowWindow : Window
         foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step))
         {
             var anim = plan.Animation;
+            if (_paragraphAnimElements.TryGetValue(anim.ShapeId, out var paragraphElements))
+            {
+                for (var index = 0; index < paragraphElements.Count; index++)
+                {
+                    var paragraphPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+                        anim,
+                        plan.DelayMs + index * plan.DurationMs);
+                    PlayShapeAnimationWithTiming(paragraphElements[index], paragraphPlan, onReveal: null);
+                }
+
+                _revealedShapes.Add(anim.ShapeId);
+                continue;
+            }
+
             if (!_animElements.TryGetValue(anim.ShapeId, out var element))
             {
                 PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));
