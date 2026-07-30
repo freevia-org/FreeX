@@ -310,6 +310,9 @@ public sealed partial class FormulaEvaluator
                         AddRangeValues(expandedArgs, flatRv.Flatten(), preservesReferenceProvenance);
                     else if (!isStructured && isAggregate && lambdaBound is UnionValue lambdaUnion)
                         AddRangeValues(expandedArgs, FlattenUnionAreas(lambdaUnion), preservesReferenceProvenance);
+                    else if (isStructured && lambdaBound is UnionValue lambdaStructuredUnion &&
+                             IsUnionMaterializableRangeFunction(functionName))
+                        expandedArgs.Add(MaterializeUnionRangeValue(lambdaStructuredUnion));
                     else
                         expandedArgs.Add(lambdaBound);
                 }
@@ -373,6 +376,9 @@ public sealed partial class FormulaEvaluator
                             AddRangeValues(expandedArgs, namedRv.Flatten(), preservesReferenceProvenance);
                         else if (!isStructured && isAggregate && namedFormulaArg is UnionValue namedUnion)
                             AddRangeValues(expandedArgs, FlattenUnionAreas(namedUnion), preservesReferenceProvenance);
+                        else if (isStructured && namedFormulaArg is UnionValue namedStructuredUnion &&
+                                 IsUnionMaterializableRangeFunction(functionName))
+                            expandedArgs.Add(MaterializeUnionRangeValue(namedStructuredUnion));
                         else
                             expandedArgs.Add(namedFormulaArg);
                     }
@@ -399,6 +405,18 @@ public sealed partial class FormulaEvaluator
                     // counted/summed/collected twice -- matching Excel's own double-counting of
                     // overlapping union areas (e.g. SUM((A1:A2,A1:A2)) double-counts A1 and A2).
                     AddRangeValues(expandedArgs, FlattenUnionAreas(union), preservesReferenceProvenance);
+                else if (isStructured && value is UnionValue structuredUnion &&
+                         IsUnionMaterializableRangeFunction(functionName))
+                    // R94-formula-union-selection-range: LARGE/SMALL/RANK/RANK.EQ/RANK.AVG/
+                    // PERCENTILE(.INC/.EXC)/QUARTILE(.INC/.EXC)/TRIMMEAN/PERCENTRANK(.INC/.EXC)/
+                    // COUNTBLANK are StructuredRangeFunctions (isAggregate is false), so the
+                    // aggregate-flatten branches above never run for them and a UnionValue
+                    // argument would otherwise reach the function body as an opaque scalar (see
+                    // IsUnionMaterializableRangeFunction's doc comment). Unlike the aggregate
+                    // case, these functions expect a single RangeValue argument at a fixed
+                    // position (not a variadic scalar list), so materialize the union into one
+                    // synthetic RangeValue here instead of spreading it across expandedArgs.
+                    expandedArgs.Add(MaterializeUnionRangeValue(structuredUnion));
                 else
                     expandedArgs.Add(value);
             }

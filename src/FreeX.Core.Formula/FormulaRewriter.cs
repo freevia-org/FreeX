@@ -300,13 +300,13 @@ public static class FormulaRewriter
         // the structural edit (correct for edits on sheets outside the span; potentially stale — same
         // as Excel would need to fully re-resolve — for edits on a spanned sheet whose row/col shift
         // should have shown up in this reference). Full span-aware rewriting (per-sheet shift math) is
-        // intentionally out of scope for this change. DeleteSheetOp contracting the span when an
-        // endpoint sheet is removed is also still TODO (needs sheet-order/membership machinery beyond
-        // this file); a delete of an endpoint sheet leaves the span's sheet name stale rather than
-        // contracting it, which the caller compensates for by forcing a recalc (see R30-...-3dref-1).
-        // RenameSheetOp, however, is purely textual — the span's endpoint sheet *names* live directly
-        // on rr.SheetName/rr.EndSheetName, so a rename can (and must) be applied without touching the
-        // per-cell shift math at all.
+        // intentionally out of scope for this change. RenameSheetOp, however, is purely textual — the
+        // span's endpoint sheet *names* live directly on rr.SheetName/rr.EndSheetName, so a rename can
+        // (and must) be applied without touching the per-cell shift math at all. DeleteSheetOp on a
+        // span endpoint is likewise handled below (freezing the whole span to #REF!, mirroring
+        // RewriteSheetQualifiedRefDeleteSheet) — see R94-Core.Formula-3dspan-deletesheet: leaving the
+        // stale sheet name in place let TryExpandSheetSpanAggregateRange silently re-resolve it against
+        // any future sheet that happened to reuse the deleted name.
         if (rr.EndSheetName is not null)
         {
             if (op is RenameSheetOp renameSpan)
@@ -333,6 +333,24 @@ public static class FormulaRewriter
                     changed = true;
                     return rr with { SheetName = newStartSheet, EndSheetName = newEndSheet };
                 }
+            }
+
+            // Deleting either endpoint sheet of the span permanently collapses the whole span to
+            // #REF!, mirroring RewriteSheetQualifiedRefDeleteSheet's treatment of an ordinary
+            // sheet-qualified reference. This is deliberate (not "TODO" like the row/col-shift
+            // ops above): unlike a shift, a delete has no span-aware math to defer -- the sheet
+            // named by rr.SheetName/rr.EndSheetName is simply gone. Freezing the text to #REF!
+            // (instead of leaving the original sheet name in place) matches Excel and prevents the
+            // span from silently re-resolving against an unrelated future sheet that happens to
+            // reuse the same name (TryExpandSheetSpanAggregateRange re-resolves both endpoints by
+            // NAME on every recalculation, so a stale name is a live landmine, not an inert one).
+            if (op is DeleteSheetOp deleteSpanSheet &&
+                ((rr.SheetName is not null &&
+                  string.Equals(rr.SheetName, deleteSpanSheet.SheetName, StringComparison.OrdinalIgnoreCase)) ||
+                 string.Equals(rr.EndSheetName, deleteSpanSheet.SheetName, StringComparison.OrdinalIgnoreCase)))
+            {
+                changed = true;
+                return new ErrorNode(ErrorValue.Ref);
             }
 
             return rr;

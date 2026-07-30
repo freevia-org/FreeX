@@ -39,7 +39,7 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
             var address = new CellAddress(_sheetId, totalsRow, table.Range.Start.Col + (uint)index);
             affectedCells.Add(address);
             _previousCells[address] = sheet.GetCell(address.Row, address.Col)?.Clone();
-            if (ResolveTotalsCell(table.Columns[index]) is { } cell)
+            if (ResolveTotalsCell(sheet, table, index) is { } cell)
                 sheet.SetCell(address, cell);
             else
                 sheet.SetCell(address, BlankValue.Instance);
@@ -85,8 +85,9 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         ["var"] = 110,
     };
 
-    private static Cell? ResolveTotalsCell(StructuredTableColumnModel column)
+    private static Cell? ResolveTotalsCell(Sheet sheet, StructuredTableModel table, int columnIndex)
     {
+        var column = table.Columns[columnIndex];
         if (!string.IsNullOrWhiteSpace(column.TotalsRowLabel))
             return Cell.FromValue(new TextValue(column.TotalsRowLabel));
         if (!string.IsNullOrWhiteSpace(column.TotalsRowFormula))
@@ -98,8 +99,32 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         if (!TotalsRowFunctionSubtotalNumbers.TryGetValue(function, out var subtotalNumber))
             return null;
 
-        var escapedColumnName = EscapeStructuredReferenceColumnName(column.Name);
+        // R94: an ordinary header-cell edit renames a table column in Excel semantics but only
+        // ever updates the sheet cell text -- nothing syncs StructuredTableColumnModel.Name back
+        // to match (see StructuredReferenceResolver.ColumnHeaderText for the same gap on the
+        // resolve side). Regenerating this cell's own SUBTOTAL(...) reference against the
+        // possibly-stale stored Name would silently write a formula that resolves to #NAME? the
+        // moment it's recalculated, even though the header the user sees is fine. Mirror the
+        // resolver's live-header-first lookup so a freshly (re)generated totals formula always
+        // spells the column exactly as it currently reads on the sheet.
+        var liveColumnName = ColumnHeaderText(sheet, table, columnIndex);
+        var escapedColumnName = EscapeStructuredReferenceColumnName(liveColumnName);
         return Cell.FromFormula($"SUBTOTAL({subtotalNumber.ToString(CultureInfo.InvariantCulture)},[{escapedColumnName}])");
+    }
+
+    // Mirrors StructuredReferenceResolver.ColumnHeaderText: resolves the column's EFFECTIVE
+    // name using the live header-row cell text when one exists, falling back to the stored
+    // model name for a headerless table or a blank header cell.
+    private static string ColumnHeaderText(Sheet sheet, StructuredTableModel table, int columnIndex)
+    {
+        var storedName = table.Columns[columnIndex].Name;
+        if (table.HeaderRowCount is 0)
+            return storedName;
+
+        var headerCol = table.Range.Start.Col + (uint)columnIndex;
+        return sheet.GetCell(table.Range.Start.Row, headerCol)?.Value is TextValue { Value.Length: > 0 } text
+            ? text.Value
+            : storedName;
     }
 
     // R12-xlsx-tables-3: a column header containing '[', ']', '#', or an apostrophe must have each

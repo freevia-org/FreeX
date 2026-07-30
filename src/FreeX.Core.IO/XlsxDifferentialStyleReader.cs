@@ -76,19 +76,33 @@ internal static class XlsxDifferentialStyleReader
             // cells). Mirrors XlsxStructuredTableStyleMetadataReader.ReadDifferentialStyleDiff, which
             // reads the same dxf font shape correctly via ReadBoolAttribute(defaultValue: true).
             if (font.Element(workbookNs + "b") is { } boldElement)
+            {
                 style.Bold = XlsxXmlAttributeReader.ReadBoolAttribute(boldElement, "val", defaultValue: true);
+                // Record the dxf's explicit on/off decision separately from the plain bool above so a
+                // conditional-format merge can tell "this dxf turns bold off" apart from "this dxf never
+                // mentions bold" (both of which read as Bold=false). See CellStyle.DxfBold.
+                style.DxfBold = style.Bold;
+            }
             if (font.Element(workbookNs + "i") is { } italicElement)
+            {
                 style.Italic = XlsxXmlAttributeReader.ReadBoolAttribute(italicElement, "val", defaultValue: true);
+                style.DxfItalic = style.Italic;
+            }
             var underlineElement = font.Element(workbookNs + "u");
             var underlineVal = underlineElement?.Attribute("val")?.Value;
             // CT_UnderlineProperty's val is an enum (single/double/.../none), not a plain boolean --
             // val="none" is the explicit "turn underline off" form, so it must not be read as "on".
             style.Underline = underlineElement is not null
                 && !string.Equals(underlineVal, "none", StringComparison.OrdinalIgnoreCase);
+            if (underlineElement is not null)
+                style.DxfUnderline = style.Underline;
             style.DoubleUnderline = string.Equals(underlineVal, "double", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(underlineVal, "doubleAccounting", StringComparison.OrdinalIgnoreCase);
             if (font.Element(workbookNs + "strike") is { } strikeElement)
+            {
                 style.Strikethrough = XlsxXmlAttributeReader.ReadBoolAttribute(strikeElement, "val", defaultValue: true);
+                style.DxfStrikethrough = style.Strikethrough;
+            }
             var verticalAlignment = font.Element(workbookNs + "vertAlign")?.Attribute("val")?.Value;
             style.Superscript = string.Equals(verticalAlignment, "superscript", StringComparison.OrdinalIgnoreCase);
             style.Subscript = string.Equals(verticalAlignment, "subscript", StringComparison.OrdinalIgnoreCase);
@@ -103,7 +117,13 @@ internal static class XlsxDifferentialStyleReader
                 style.FontName = fontName;
 
             if (TryReadColor(font.Element(workbookNs + "color"), theme, indexedColors, out var fontColor))
+            {
                 style.FontColor = fontColor;
+                // Record that this dxf explicitly specified a font color (even black) separately
+                // from the plain FontColor above, which cannot distinguish an explicit black choice
+                // from "never mentioned". See CellStyle.DxfFontColor.
+                style.DxfFontColor = fontColor;
+            }
         }
 
         var patternFill = dxf

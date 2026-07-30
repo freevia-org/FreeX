@@ -109,8 +109,26 @@ public static partial class NumberFormatter
 
     private static string ApplyQuestionIntegerSpacing(string zeroInteger, string hashInteger, string integerFormat)
     {
+        // A negative value's rendered text carries a leading '-' (e.g. "-05"), which is not a
+        // digit position and has no counterpart in integerFormat. If left in place it shifts
+        // every digit's index right by one, desyncing the textIndex-vs-missingCount comparison
+        // below (missingCount is a pure digit-count difference, computed after the sign -- which
+        // is identical in both zeroInteger/hashInteger for the same value -- cancels out) so the
+        // leading-zero-turned-space substitution silently never fires for negative values. Strip
+        // the sign from both operands up front and reattach it to the result, so the rest of this
+        // method only ever walks the digit sequence, exactly as it does for positive values.
+        var sign = "";
+        if (zeroInteger.Length > 0 && zeroInteger[0] == '-')
+        {
+            sign = "-";
+            zeroInteger = zeroInteger[1..];
+        }
+
+        if (hashInteger.Length > 0 && hashInteger[0] == '-')
+            hashInteger = hashInteger[1..];
+
         if (zeroInteger.Length <= hashInteger.Length)
-            return zeroInteger;
+            return sign + zeroInteger;
 
         var chars = zeroInteger.ToCharArray();
         var missingCount = zeroInteger.Length - hashInteger.Length;
@@ -132,7 +150,7 @@ public static partial class NumberFormatter
                 chars[textIndex] = ' ';
         }
 
-        return new string(chars);
+        return sign + new string(chars);
     }
 
     private static char? NextIntegerFormatChar(string integerFormat, ref int index)

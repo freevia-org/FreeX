@@ -58,6 +58,26 @@ public sealed class PictureModel
     public bool IsSourceLoaded { get; set; }
 
     /// <summary>
+    /// R94 fix: this picture's <see cref="Width"/>/<see cref="Height"/> as they stood immediately after
+    /// LOAD -- either the size computed from the source anchor's original cell span
+    /// (<c>XlsxDrawingAnchorApplier.GetAnchorSize</c>) or, when that computation yields 0 for an axis
+    /// because the anchor's own span falls entirely within hidden rows/columns, the class-default
+    /// <see cref="Width"/>/<see cref="Height"/> the model retains in that case (R94-hidden-span fix) --
+    /// captured by that same applier call and never touched afterward except by a fresh reload. Used by
+    /// <c>XlsxSourceDrawingGeometryRewriter</c> to tell a genuine user resize (<see cref="Width"/>/
+    /// <see cref="Height"/> diverging from this baseline) apart from an incidental sheet layout change --
+    /// a row/column elsewhere hidden or resized between load and save -- which would otherwise make the
+    /// SAME never-touched anchor appear to need its <c>to</c> marker rewritten, because the marker's
+    /// pixel-to-cell walk is evaluated against the CURRENT sheet layout while these fields freeze the
+    /// layout as of load. Always non-null once the picture has been through <c>ApplyToPicture</c>; null
+    /// only when the picture was never source-loaded (e.g. freshly inserted).
+    /// </summary>
+    public double? SourceLoadedWidthPixels { get; set; }
+
+    /// <summary>See <see cref="SourceLoadedWidthPixels"/>; the same baseline for <see cref="Height"/>.</summary>
+    public double? SourceLoadedHeightPixels { get; set; }
+
+    /// <summary>
     /// The external relationship target (verbatim, e.g. an absolute path/URI such as
     /// <c>"file:///C:/Images/photo.png"</c>) for a picture inserted via Excel's "Link to File" — an
     /// <c>&lt;xdr:pic&gt;</c> whose <c>&lt;a:blip&gt;</c> carries <c>r:link</c> instead of <c>r:embed</c>,

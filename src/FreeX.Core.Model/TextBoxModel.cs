@@ -47,6 +47,26 @@ public sealed class TextBoxModel
 
     public bool IsSourceLoaded { get; set; }
 
+    /// <summary>
+    /// R94 fix: this text box's <see cref="Width"/>/<see cref="Height"/> as they stood immediately after
+    /// LOAD -- either the size computed from the source anchor's original cell span
+    /// (<c>XlsxDrawingAnchorApplier.GetAnchorSize</c>) or, when that computation yields 0 for an axis
+    /// because the anchor's own span falls entirely within hidden rows/columns, the class-default
+    /// <see cref="Width"/>/<see cref="Height"/> the model retains in that case (R94-hidden-span fix) --
+    /// captured by that same applier call and never touched afterward except by a fresh reload. Used by
+    /// <c>XlsxSourceDrawingGeometryRewriter</c> to tell a genuine user resize (<see cref="Width"/>/
+    /// <see cref="Height"/> diverging from this baseline) apart from an incidental sheet layout change --
+    /// a row/column elsewhere hidden or resized between load and save -- which would otherwise make the
+    /// SAME never-touched anchor appear to need its <c>to</c> marker rewritten, because the marker's
+    /// pixel-to-cell walk is evaluated against the CURRENT sheet layout while these fields freeze the
+    /// layout as of load. Always non-null once the text box has been through <c>ApplyToTextBox</c>; null
+    /// only when the text box was never source-loaded (e.g. freshly inserted).
+    /// </summary>
+    public double? SourceLoadedWidthPixels { get; set; }
+
+    /// <summary>See <see cref="SourceLoadedWidthPixels"/>; the same baseline for <see cref="Height"/>.</summary>
+    public double? SourceLoadedHeightPixels { get; set; }
+
     // ── Text formatting (txBody) ────────────────────────────────────────────
     // Mirrors DrawingShapeModel's ShapeText* fields (same flattened, first-run-only
     // simplification -- see XlsxWorksheetDrawingParts.ReadShapeTextFormatting) so a text box's

@@ -959,6 +959,26 @@ public sealed partial class FormulaEvaluator
         return flattened;
     }
 
+    /// <summary>
+    /// Materializes a <see cref="UnionValue"/> argument into one synthetic Nx1
+    /// <see cref="RangeValue"/> holding every area's cells concatenated in order (via
+    /// <see cref="FlattenUnionAreas"/>, so overlapping areas double-count exactly like the
+    /// aggregate-function union unwrap above), for functions in
+    /// <c>UnionMaterializableRangeFunctions</c> whose own "args[i] is RangeValue r : wrap-as-1x1"
+    /// fallback would otherwise misread the whole UnionValue as one opaque scalar cell (see
+    /// R94-formula-union-selection-range in FormulaEvaluator.FunctionClassification.cs). These
+    /// functions only ever flatten their range argument's cells, never index into 2-D shape, so
+    /// collapsing every area into a single column is a safe, sufficient representation.
+    /// </summary>
+    private static RangeValue MaterializeUnionRangeValue(UnionValue union)
+    {
+        var flat = FlattenUnionAreas(union);
+        var cells = new ScalarValue[flat.Count, 1];
+        for (var i = 0; i < flat.Count; i++)
+            cells[i, 0] = flat[i];
+        return new RangeValue(cells);
+    }
+
     private static void AddRangeValues(
         List<ScalarValue> expandedArgs,
         IReadOnlyList<ScalarValue> values,

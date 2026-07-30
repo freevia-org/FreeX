@@ -48,6 +48,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     // color filter is hiding (sheet.ColumnFilterOwnedRows) must be permuted in lockstep with
     // FilterHiddenRows/ValueFilterHiddenRows, or it keeps naming the pre-sort row positions.
     private Dictionary<uint, HashSet<uint>>? _columnFilterOwnedRowsSnapshot;
+    // R94-commands-sort-partial-reband-1: see RebandOwningTableIfAny -- a table-scoped sort whose
+    // _range is only a proper subset of the table's data body (reachable via the quick ribbon Sort
+    // buttons on an arbitrary row selection) still calls RebandTable on the table's WHOLE data
+    // body, so rows outside _range need their own undo coverage independent of _snapshot.
+    private List<(CellAddress Address, Cell? OldCell)>? _tableRebandSnapshot;
     private IReadOnlyList<CellAddress> _affectedCells = [];
     // Undo snapshot for sheet.SortState (R19: Apply must record the sort it just performed so
     // the persisted <sortState> matches the data on disk, and Revert must restore whatever was
@@ -461,13 +466,34 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     // continuously re-flows after a sort — the rows just moved, but StructuredTableStyleService's
     // load-time bake travels WITH each Cell (StyleId included) rather than recomputing, so without
     // this the alternating fill would reflect the PRE-sort row order instead of the new one.
-    // Every cell this can touch already falls inside _snapshot's capture (the sort range, which is
-    // always contained in the table's own range for a table-scoped sort), so Revert's existing
-    // full-range restore already undoes this call with no extra bookkeeping needed.
+    //
+    // R94-commands-sort-partial-reband-1: RebandTable always repaints the table's ENTIRE data body
+    // with forceFill:true (MergeStyleOntoCell's keepExistingFill is unconditionally false under
+    // forceFill), not just _range. FindOwningStructuredTableIndex only requires _range's row span
+    // to be CONTAINED WITHIN the table (table.Range.Contains(range)), not equal to its full data
+    // body -- the quick ribbon Sort Ascending/Descending buttons pass an arbitrary user selection
+    // straight through, so _range can be a genuine proper subset of the table. _snapshot only
+    // covers _range, so without this wider capture a row's explicit FillColor outside _range could
+    // be silently overwritten by the reband with no undo coverage at all.
     private void RebandOwningTableIfAny(Workbook workbook, Sheet sheet)
     {
-        if (_structuredTableIndex >= 0 && _structuredTableIndex < sheet.StructuredTables.Count)
-            StructuredTableStyleService.RebandTable(workbook, sheet, sheet.StructuredTables[_structuredTableIndex]);
+        if (_structuredTableIndex < 0 || _structuredTableIndex >= sheet.StructuredTables.Count)
+            return;
+
+        var table = sheet.StructuredTables[_structuredTableIndex];
+        var captured = new List<(CellAddress Address, Cell? OldCell)>();
+        var (firstDataRow, lastDataRow) = StructuredTableEditEffects.GetDataBodyRowBounds(table);
+        for (var row = firstDataRow; row <= lastDataRow; row++)
+        {
+            for (var col = table.Range.Start.Col; col <= table.Range.End.Col; col++)
+            {
+                var address = new CellAddress(_sheetId, row, col);
+                captured.Add((address, sheet.GetCell(address)?.Clone()));
+            }
+        }
+
+        _tableRebandSnapshot = captured;
+        StructuredTableStyleService.RebandTable(workbook, sheet, table);
     }
 
     private CommandOutcome ApplyLeftToRight(
@@ -787,6 +813,21 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     {
         if (_snapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
+
+        // R94-commands-sort-partial-reband-1: undo the reband repaint FIRST -- it was the very
+        // last effect Apply performed (see RebandOwningTableIfAny). A row outside _range that
+        // RebandTable touched has no other undo coverage; a row inside _range is also captured
+        // here but is harmlessly re-overwritten (with the same value) by RestoreCellSnapshot below.
+        if (_tableRebandSnapshot is not null)
+        {
+            foreach (var (address, oldCell) in _tableRebandSnapshot)
+            {
+                if (oldCell is null)
+                    sheet.ClearCell(address);
+                else
+                    sheet.SetCell(address, oldCell);
+            }
+        }
 
         RestoreCellSnapshot(sheet, _snapshot);
         RestoreCommentSnapshots(sheet);
@@ -1254,15 +1295,21 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             if (!TryEvaluateSimpleConditionalFormatRule(rule, cell, out var matches) || !matches)
                 continue;
 
-            // FontColor is a non-nullable CellStyle member defaulting to Black, so (matching the
-            // convention already used by ViewportConditionalFormatEvaluator.MergeStyles/
-            // StackDifferentialStyle) a dxf whose FontColor is still the default Black is treated
-            // as "this rule doesn't override font color" rather than "this rule sets font color to
-            // black" — otherwise a fill-only CF rule (font color untouched) would wrongly stomp
-            // the effective font color to black for every FontColor sort.
+            // FontColor is a non-nullable CellStyle member defaulting to Black, so a plain
+            // (non-dxf) FontColor value can't by itself distinguish "this rule sets font color to
+            // black" from "this rule doesn't override font color". ViewportConditionalFormatEvaluator
+            // resolves that ambiguity via the tri-state CellStyle.DxfFontColor field, which the xlsx
+            // dxf reader populates with the rule's actual explicit color (including an explicit
+            // black) — mirror that same resolution here (ViewportConditionalFormatEvaluator.
+            // EffectiveFontColor) so Sort/Filter On Font Color agrees with what the grid renders:
+            // DxfFontColor wins when present (even black), otherwise fall back to the legacy
+            // "non-black plain FontColor means explicitly set" heuristic for CF styles built
+            // without going through the dxf reader (tests, UI/paste-built rules).
             CellColor? ruleColor = wantFill
                 ? rule.FormatIfTrue?.FillColor
-                : rule.FormatIfTrue is { } fmt && fmt.FontColor != CellColor.Black ? fmt.FontColor : null;
+                : rule.FormatIfTrue is { } fmt
+                    ? fmt.DxfFontColor ?? (fmt.FontColor != CellColor.Black ? fmt.FontColor : null)
+                    : null;
             if (ruleColor is not null)
             {
                 effective = ruleColor;
