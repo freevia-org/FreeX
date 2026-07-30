@@ -251,6 +251,68 @@ public sealed class AvaloniaInteractionCoverageTests
     }
 
     [Fact]
+    public void LinuxPhysicalProbe_WholeRangeFormulaPoint_HasClosedSemanticContract()
+    {
+        var probe = File.ReadAllText(RepoFile("tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+        var runner = File.ReadAllText(RepoFile("tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+
+        Assert.Contains("formula-whole-range-point", runner, StringComparison.Ordinal);
+        Assert.Contains("probe_formula_bar_point_mode_whole_range", probe, StringComparison.Ordinal);
+        Assert.Contains("probe_selector\" == \"formula-whole-range-point\"", probe, StringComparison.Ordinal);
+        Assert.Contains("Assert-FormulaWholeRangePointPostcondition", runner, StringComparison.Ordinal);
+        Assert.Contains("read_active_formula_bar", probe, StringComparison.Ordinal);
+        Assert.Contains("xdotool_mousemove_sync \"$column_header_x\" \"$column_header_y\" click 1", probe, StringComparison.Ordinal);
+        Assert.Contains("xdotool_mousemove_sync \"$row_header_x\" \"$row_header_y\" click 1", probe, StringComparison.Ordinal);
+        Assert.Contains("xdotool_mousemove_sync \"$corner_x\" \"$corner_y\" click 1", probe, StringComparison.Ordinal);
+        Assert.Contains("column-header-formula-bar-clipboard=$column_formula_bar", probe, StringComparison.Ordinal);
+        Assert.Contains("row-header-formula-bar-clipboard=$row_formula_bar", probe, StringComparison.Ordinal);
+        Assert.Contains("select-all-formula-bar-clipboard=$select_all_formula_bar", probe, StringComparison.Ordinal);
+        Assert.Contains("column-header-cell-package-formula=$column_cell_formula", probe, StringComparison.Ordinal);
+        Assert.Contains("row-header-cell-package-formula=$row_cell_formula", probe, StringComparison.Ordinal);
+        Assert.Contains("select-all-cell-package-formula-after-cancel=$select_all_cell_formula", probe, StringComparison.Ordinal);
+
+        string[] requiredProbeIds =
+        [
+            "formula-bar-point-mode-whole-column-header",
+            "formula-bar-point-mode-whole-row-header",
+            "formula-bar-point-mode-whole-select-all-corner"
+        ];
+        foreach (var id in requiredProbeIds)
+        {
+            Assert.Contains($"\"{id}\"", probe, StringComparison.Ordinal);
+            Assert.Contains($"\"{id}\"", runner, StringComparison.Ordinal);
+            Assert.True(
+                runner.Split($"\"{id}\"", StringSplitOptions.None).Length - 1 >= 2,
+                $"Runner must require '{id}' in both physical probe contract lists.");
+        }
+
+        string[] requiredArtifacts =
+        [
+            "formula-whole-range-column-before.png",
+            "formula-whole-range-column-editing.png",
+            "formula-whole-range-column-committed.png",
+            "formula-whole-range-row-before.png",
+            "formula-whole-range-row-editing.png",
+            "formula-whole-range-row-committed.png",
+            "formula-whole-range-select-all-before.png",
+            "formula-whole-range-select-all-editing.png",
+            "formula-whole-range-select-all-canceled.png",
+            "formula-whole-range-point-postcondition.txt"
+        ];
+        foreach (var artifact in requiredArtifacts)
+        {
+            Assert.Contains(artifact, probe, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("formula-whole-range-point-postcondition.txt", runner, StringComparison.Ordinal);
+        Assert.Contains("column-header-expected=B:B", runner, StringComparison.Ordinal);
+        Assert.Contains("row-header-expected=3:3", runner, StringComparison.Ordinal);
+        Assert.Contains("select-all-expected=A1:XFD1048576", runner, StringComparison.Ordinal);
+        Assert.Contains("select-all-edit-active-before-cancel=true", runner, StringComparison.Ordinal);
+        Assert.Contains("select-all-cell-package-formula-after-cancel=", runner, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task LiveWindow_AllRibbonCommandsAreFunctionalOrExplicitlyDisabled()
     {
         await Session.Dispatch(() =>

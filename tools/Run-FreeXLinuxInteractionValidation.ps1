@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "autofilter-recalculation", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag")]
+    [ValidateSet("all", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -485,6 +485,42 @@ function Assert-NameBoxDropdownInteractionPostcondition {
     $missing = @($expected | Where-Object { $_ -notin $lines })
     if ($missing.Count -ne 0) {
         throw "Name Box interaction postcondition failed native keyboard/mouse contract: $($missing -join '; ')."
+    }
+}
+
+function Assert-FormulaWholeRangePointPostcondition {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    $postconditionPath = Join-Path $EvidenceDirectory "formula-whole-range-point-postcondition.txt"
+    if (-not (Test-Path -LiteralPath $postconditionPath -PathType Leaf)) {
+        throw "Whole-range formula point probe did not emit its required postcondition: $postconditionPath"
+    }
+
+    $lines = @(Get-Content -LiteralPath $postconditionPath)
+    $expected = @(
+        "schema-version=1",
+        "selector=formula-whole-range-point",
+        "column-header-expected=B:B",
+        "column-header-formula-bar-clipboard==SUM(B:B)",
+        "column-header-cell-formula==SUM(B:B)",
+        "column-header-cell-package-formula==SUM(B:B)",
+        "column-header-edit-active-before-commit=true",
+        "column-header-passed=true",
+        "row-header-expected=3:3",
+        "row-header-formula-bar-clipboard==SUM(3:3)",
+        "row-header-cell-formula==SUM(3:3)",
+        "row-header-cell-package-formula==SUM(3:3)",
+        "row-header-edit-active-before-commit=true",
+        "row-header-passed=true",
+        "select-all-expected=A1:XFD1048576",
+        "select-all-formula-bar-clipboard==SUM(A1:XFD1048576",
+        "select-all-cell-package-formula-after-cancel=",
+        "select-all-edit-active-before-cancel=true",
+        "select-all-passed=true"
+    )
+    $missing = @($expected | Where-Object { $_ -notin $lines })
+    if ($missing.Count -ne 0) {
+        throw "Whole-range formula point postcondition failed exact semantic contract: $($missing -join '; ')."
     }
 }
 
@@ -1129,6 +1165,12 @@ try {
         @(
             "formula-bar-point-mode-3d-native-xlsx"
         )
+    } elseif ($PhysicalProbeSelector -eq "formula-whole-range-point") {
+        @(
+            "formula-bar-point-mode-whole-column-header",
+            "formula-bar-point-mode-whole-row-header",
+            "formula-bar-point-mode-whole-select-all-corner"
+        )
     } elseif ($PhysicalProbeSelector -eq "formula-multi-area-point") {
         @(
             "formula-bar-point-mode-multi-area-keyboard",
@@ -1216,6 +1258,12 @@ try {
     } elseif ($PhysicalProbeSelector -eq "formula-3d-native-xlsx") {
         @(
             "formula-bar-point-mode-3d-native-xlsx"
+        )
+    } elseif ($PhysicalProbeSelector -eq "formula-whole-range-point") {
+        @(
+            "formula-bar-point-mode-whole-column-header",
+            "formula-bar-point-mode-whole-row-header",
+            "formula-bar-point-mode-whole-select-all-corner"
         )
     } elseif ($PhysicalProbeSelector -eq "formula-multi-area-point") {
         @(
@@ -1312,6 +1360,9 @@ try {
     }
     if ($PhysicalProbeSelector -eq "formula-3d-native-xlsx") {
         Assert-Native3DPostcondition -EvidenceDirectory $x11EvidenceDirectory
+    }
+    if ($PhysicalProbeSelector -eq "formula-whole-range-point") {
+        Assert-FormulaWholeRangePointPostcondition -EvidenceDirectory $x11EvidenceDirectory
     }
     if ($PhysicalProbeSelector -eq "name-box-dropdown") {
         Assert-NameBoxDropdownObjectPostcondition -EvidenceDirectory $x11EvidenceDirectory
