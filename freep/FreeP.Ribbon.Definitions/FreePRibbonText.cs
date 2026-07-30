@@ -454,6 +454,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtInvertedPyramidCommand { get; } = new("Ribbon_Command_SmartArtInvertedPyramid_Label", "Ribbon_Command_SmartArtInvertedPyramid_KeyTip");
     public static RibbonText SmartArtRadialCycleCommand { get; } = new("Ribbon_Command_SmartArtRadialCycle_Label", "Ribbon_Command_SmartArtRadialCycle_KeyTip");
     public static RibbonText SmartArtBasicRadialCommand { get; } = new("Ribbon_Command_SmartArtBasicRadial_Label", "Ribbon_Command_SmartArtBasicRadial_KeyTip");
+    public static RibbonText SmartArtRadialClusterCommand { get; } = new("Ribbon_Command_SmartArtRadialCluster_Label", "Ribbon_Command_SmartArtRadialCluster_KeyTip");
     public static RibbonText SmartArtRadialListCommand { get; } = new("Ribbon_Command_SmartArtRadialList_Label", "Ribbon_Command_SmartArtRadialList_KeyTip");
     public static RibbonText SmartArtBasicMatrixCommand { get; } = new("Ribbon_Command_SmartArtBasicMatrix_Label", "Ribbon_Command_SmartArtBasicMatrix_KeyTip");
     public static RibbonText SmartArtTitledMatrixCommand { get; } = new("Ribbon_Command_SmartArtTitledMatrix_Label", "Ribbon_Command_SmartArtTitledMatrix_KeyTip");

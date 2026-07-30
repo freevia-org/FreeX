@@ -725,6 +725,24 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void RadialCluster_ReturnsCentralAndSurroundingLiveGeometry()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Theme", "North", "East", "South");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2008/layout/RadialCluster";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("RadialCluster should remain live for editable central and Level 2 nodes");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Should().HaveCount(4);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(3);
+        shapes.Where(s => s.TextBody is not null)
+            .Select(s => s.TextBody!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Theme", "North", "East", "South");
+    }
+
+    [Fact]
     public void GearCycle_ReturnsLiveCircularBoxesAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Cycle, "Initiate", "Coordinate", "Deliver", "Improve");

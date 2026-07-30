@@ -114,6 +114,9 @@ public static class SmartArtLayoutEngine
         if (IsBasicRadialLayout(data.LayoutUniqueId))
             return LayoutBasicRadial(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsRadialClusterLayout(data.LayoutUniqueId))
+            return LayoutRadialCluster(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsRadialListLayout(data.LayoutUniqueId))
             return LayoutRadialList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -2469,6 +2472,17 @@ public static class SmartArtLayoutEngine
     }
 
     /// <summary>
+    /// Radial Cluster shares the authored central-idea/outer-node contract with
+    /// Diverging Radial, while keeping its native layout identity distinct for
+    /// Change Layout and package round-trip operations.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutRadialCluster(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+        => LayoutDivergingRadial(nodes, fx, fy, fcx, fcy, stylePlan);
+
+    /// <summary>
     /// Radial List geometry: every list item radiates from the shared center while
     /// the center remains an implicit routing point. This keeps the list items equal
     /// and editable, unlike the generic cycle plan which links adjacent items into a
@@ -3417,6 +3431,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "radial1", StringComparison.Ordinal);
+    }
+
+    private static bool IsRadialClusterLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "radialcluster", StringComparison.Ordinal);
     }
 
     private static bool IsRadialListLayout(string uniqueId)

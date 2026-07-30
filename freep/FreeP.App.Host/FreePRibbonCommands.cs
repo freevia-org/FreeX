@@ -324,6 +324,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.RadialCycle)));
         registry.Register(SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicRadial)));
+        registry.Register(SmartArtAuthoringPlanner.RadialClusterLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.RadialCluster)));
         registry.Register(SmartArtAuthoringPlanner.RadialListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.RadialList)));
         registry.Register(SmartArtAuthoringPlanner.BasicMatrixLayoutCommandId,

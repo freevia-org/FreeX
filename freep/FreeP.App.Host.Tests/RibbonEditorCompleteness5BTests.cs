@@ -236,6 +236,7 @@ public class RibbonEditorCompleteness5BTests
             [SmartArtAuthoringPlanner.List2LayoutCommandId] = SmartArtLayoutPreset.List2,
             [SmartArtAuthoringPlanner.BasicRadialLayoutCommandId] = SmartArtLayoutPreset.BasicRadial,
             [SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId] = SmartArtLayoutPreset.InvertedPyramid,
+            [SmartArtAuthoringPlanner.RadialClusterLayoutCommandId] = SmartArtLayoutPreset.RadialCluster,
             [SmartArtAuthoringPlanner.RadialListLayoutCommandId] = SmartArtLayoutPreset.RadialList,
         };
 
