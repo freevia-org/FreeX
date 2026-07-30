@@ -29,15 +29,16 @@ https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos
 
 GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build. If a macOS latest link is absent, use the independent `macOS App Preview` lane or rerun `Tester Release` with `include_macos_preview=true` after a successful same-commit macOS preview run; do not rerun Windows solely to unblock macOS preview validation.
 
-Historical verified tester release reference:
+Current verified tester release reference:
 
-- Release: [FreeX (Test Release) v0.8.127](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-127-2026-06-20-19-57-44-run127-attempt1%2B1790d2ab)
-- Tag: `v0-8-127-2026-06-20-19-57-44-run127-attempt1+1790d2ab`
-- GitHub Actions run: [27881901112](https://github.com/tony-xmelon/FreeX/actions/runs/27881901112), run number 127 attempt 1, completed successfully
-- Target commit: `1790d2abdc7112047382c3f19fcb417eb0227059`
+- Release: [FreeX (Test Release) v0.8.163](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-163-2026-07-30-09-23-12-run163-attempt1%2Bc01c7bd3)
+- Tag: `v0-8-163-2026-07-30-09-23-12-run163-attempt1+c01c7bd3`
+- GitHub Actions run: [30528717243](https://github.com/tony-xmelon/FreeX/actions/runs/30528717243), run number 163 attempt 1, completed successfully on July 30, 2026
+- Target commit: `c01c7bd3d1e76790603215c91287027d52ea256f`
+- Source lane: `codex/daily-tester-release-20260730-stable-r2`, a frozen known-good candidate selected after current moving `main` failed the hosted UI release gate
 - Release posture: stable latest internal tester release; not a public-preview candidate because live keyboard-only, screen-reader, UIA catalog, and known-issues accessibility gate evidence was not recorded
-- Asset check: versioned Windows `.exe`, stable-name Windows `.exe`, versioned MSIX, stable-name MSIX, stable macOS arm64/x64 preview zips, Velopack-style assets, and matching checksum assets were published by the workflow after successful hosted release-gate verification. GitHub marked this non-prerelease as latest, so the stable latest Windows and macOS download links resolve through this release.
-- Prior reference point: the older v0.8.114/run 114 release remains a June 12 historical baseline. Current release decisions should use the newest successful tester workflow and GitHub Release, not this historical reference, when a later successful tester release supersedes it.
+- Asset check: versioned Windows `.exe`, stable-name Windows `.exe`, versioned MSIX, stable-name MSIX, Velopack installer, portable ZIP, NuGet package, RELEASES metadata, and matching checksum/metadata assets were published by the workflow after successful hosted release-gate verification. GitHub marked this non-prerelease as latest, so the stable latest Windows download links resolve through this release.
+- Prior reference point: the older v0.8.127/run 127 and v0.8.150/run 157 releases remain historical baselines. Current release decisions should use the newest successful tester workflow and GitHub Release, not those historical references, when a later successful tester release supersedes them.
 
 The `Tester Release` GitHub Actions workflow runs repository preflight, restore, build, the default test lane, and the UI test lane before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. Windows tester releases are standalone by default: `include_macos_preview=false` means the workflow does not require or query macOS App Preview artifacts. When `include_macos_preview=true`, it finds or uses the requested successful `macOS App Preview` run for the same commit, downloads both runtime app artifacts, and attaches stable macOS internal-preview assets to the same GitHub Release. It uses normal .NET restore/build caching and parallelism for speed, preserves `default-tests.trx` and `ui-tests.trx` results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
 
