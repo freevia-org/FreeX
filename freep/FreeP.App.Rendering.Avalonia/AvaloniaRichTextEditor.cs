@@ -35,6 +35,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private readonly double _fallbackFontSizePt;
     private bool _synchronizing;
     private int _pointerSelectionAnchor;
+    private int? _keyboardSelectionAnchor;
+    private int? _keyboardSelectionCaret;
 
     internal AvaloniaRichTextEditor(
         TextBody? body,
@@ -361,6 +363,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
         if (_synchronizing)
             return;
 
+        _keyboardSelectionAnchor = null;
+        _keyboardSelectionCaret = null;
         _buffer.ReplacePlainText(InputBox.Text);
         RenderBody();
     }
@@ -404,12 +408,16 @@ internal sealed class AvaloniaRichTextEditor : Grid
         else if ((e.KeyModifiers & KeyModifiers.Shift) != 0)
         {
             _pointerSelectionAnchor = CurrentSelectionAnchor();
+            _keyboardSelectionAnchor = _pointerSelectionAnchor;
+            _keyboardSelectionCaret = logicalPosition;
             InputBox.SelectionStart = _pointerSelectionAnchor;
             InputBox.SelectionEnd = logicalPosition;
         }
         else
         {
             _pointerSelectionAnchor = logicalPosition;
+            _keyboardSelectionAnchor = logicalPosition;
+            _keyboardSelectionCaret = logicalPosition;
             InputBox.SelectionStart = logicalPosition;
             InputBox.SelectionEnd = logicalPosition;
         }
@@ -428,6 +436,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
         int logicalPosition = _richTextView.HitTestLogicalPosition(e.GetPosition(_richTextView));
         InputBox.SelectionStart = _pointerSelectionAnchor;
         InputBox.SelectionEnd = logicalPosition;
+        _keyboardSelectionAnchor = _pointerSelectionAnchor;
+        _keyboardSelectionCaret = logicalPosition;
         e.Handled = true;
         UpdateSurfaceSelection();
     }
@@ -443,7 +453,10 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
     private async void OnInputNavigationKeyDown(object? sender, KeyEventArgs e)
     {
-        if ((e.KeyModifiers & KeyModifiers.Control) != 0)
+        bool control = (e.KeyModifiers & KeyModifiers.Control) != 0;
+        bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+
+        if (control)
         {
             switch (e.Key)
             {
@@ -463,20 +476,40 @@ internal sealed class AvaloniaRichTextEditor : Grid
         }
 
         if (e.Key == Key.Enter
-            && (e.KeyModifiers & KeyModifiers.Shift) != 0
+            && shift
             && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) == 0)
         {
             e.Handled = InsertSoftBreak();
             return;
         }
 
-        if ((e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) != 0)
+        if ((e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Meta)) != 0)
             return;
 
         int target = e.Key switch
         {
             Key.Up => _richTextView.MoveCaretVertically(InputBox.CaretIndex, -1),
             Key.Down => _richTextView.MoveCaretVertically(InputBox.CaretIndex, 1),
+            Key.Left => InCanvasRichTextNavigationPlanner.MoveCaret(
+                Text,
+                InputBox.CaretIndex,
+                InCanvasTextNavigationKey.Left,
+                control),
+            Key.Right => InCanvasRichTextNavigationPlanner.MoveCaret(
+                Text,
+                InputBox.CaretIndex,
+                InCanvasTextNavigationKey.Right,
+                control),
+            Key.Home when control => InCanvasRichTextNavigationPlanner.MoveCaret(
+                Text,
+                InputBox.CaretIndex,
+                InCanvasTextNavigationKey.Home,
+                control: true),
+            Key.End when control => InCanvasRichTextNavigationPlanner.MoveCaret(
+                Text,
+                InputBox.CaretIndex,
+                InCanvasTextNavigationKey.End,
+                control: true),
             Key.Home => _richTextView.MoveCaretToVisualLineBoundary(InputBox.CaretIndex, end: false),
             Key.End => _richTextView.MoveCaretToVisualLineBoundary(InputBox.CaretIndex, end: true),
             _ => -1,
@@ -484,15 +517,31 @@ internal sealed class AvaloniaRichTextEditor : Grid
         if (target < 0)
             return;
 
-        if ((e.KeyModifiers & KeyModifiers.Shift) != 0)
+        if (shift)
         {
-            _pointerSelectionAnchor = CurrentSelectionAnchor();
-            InputBox.SelectionStart = _pointerSelectionAnchor;
+            if (!_keyboardSelectionAnchor.HasValue
+                || !_keyboardSelectionCaret.HasValue
+                || !SelectionMatches(
+                    _keyboardSelectionAnchor.Value,
+                    _keyboardSelectionCaret.Value))
+            {
+                _keyboardSelectionAnchor =
+                    InCanvasRichTextNavigationPlanner.ResolveSelectionAnchor(
+                        SelectionStart,
+                        SelectionEnd,
+                        InputBox.CaretIndex);
+            }
+
+            _pointerSelectionAnchor = _keyboardSelectionAnchor.Value;
+            InputBox.SelectionStart = _keyboardSelectionAnchor.Value;
             InputBox.SelectionEnd = target;
+            _keyboardSelectionCaret = target;
         }
         else
         {
             _pointerSelectionAnchor = target;
+            _keyboardSelectionAnchor = target;
+            _keyboardSelectionCaret = target;
             InputBox.SelectionStart = target;
             InputBox.SelectionEnd = target;
         }
@@ -611,11 +660,19 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
     private int CurrentSelectionAnchor()
     {
-        if (InputBox.SelectionStart == InputBox.SelectionEnd)
-            return InputBox.CaretIndex;
-        return InputBox.CaretIndex == InputBox.SelectionStart
-            ? InputBox.SelectionEnd
-            : InputBox.SelectionStart;
+        return InCanvasRichTextNavigationPlanner.ResolveSelectionAnchor(
+            InputBox.SelectionStart,
+            InputBox.SelectionEnd,
+            InputBox.CaretIndex);
+    }
+
+    private bool SelectionMatches(int anchor, int caret)
+    {
+        int start = Math.Min(anchor, caret);
+        int end = Math.Max(anchor, caret);
+        return SelectionStart == start
+            && SelectionEnd == end
+            && InputBox.CaretIndex == caret;
     }
 
     private void ApplyInputMetrics(InCanvasEditorTextStyleState style)

@@ -5,6 +5,70 @@ namespace FreeP.App.Compositor.Tests;
 
 public sealed class InCanvasRichTextEditBufferTests
 {
+    [Theory]
+    [InlineData(0, 0, 0)]
+    [InlineData(1, 0, 0)]
+    [InlineData(4, 2, 2)]
+    [InlineData(9, 9, 9)]
+    public void LogicalNavigation_CtrlHomeAndEndUseDocumentBoundaries(
+        int textLength,
+        int caret,
+        int expectedHome)
+    {
+        string text = new string('x', textLength);
+
+        InCanvasRichTextNavigationPlanner.MoveCaret(
+            text,
+            caret,
+            InCanvasTextNavigationKey.Home,
+            control: true).Should().Be(0);
+        InCanvasRichTextNavigationPlanner.MoveCaret(
+            text,
+            caret,
+            InCanvasTextNavigationKey.End,
+            control: true).Should().Be(textLength);
+        InCanvasRichTextNavigationPlanner.MoveCaret(
+            text,
+            caret,
+            InCanvasTextNavigationKey.Left).Should().Be(expectedHome == 0 ? Math.Max(0, caret - 1) : caret - 1);
+    }
+
+    [Fact]
+    public void LogicalNavigation_SelectionAnchorSurvivesRepeatedShiftMovement()
+    {
+        InCanvasRichTextNavigationPlanner.ResolveSelectionAnchor(2, 8, 8).Should().Be(2);
+        InCanvasRichTextNavigationPlanner.ResolveSelectionAnchor(2, 6, 2).Should().Be(6);
+        InCanvasRichTextNavigationPlanner.ResolveSelectionAnchor(2, 8, 5).Should().Be(2);
+    }
+
+    [Fact]
+    public void CrossParagraphReplacement_DeletesSeparatorAndRetainsRunLineage()
+    {
+        var source = new TextBody();
+        source.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = "Alpha", Bold = true } },
+        });
+        source.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = "Beta", Italic = true } },
+        });
+        var buffer = new InCanvasRichTextEditBuffer(source);
+
+        buffer.ReplaceSelectionWithPlainText(
+            new InCanvasEditorTextSelection(3, 8),
+            "X",
+            out int caret).Should().BeTrue();
+
+        caret.Should().Be(4);
+        buffer.PlainText.Should().Be("AlpXta");
+        buffer.Body.Paragraphs.Should().ContainSingle();
+        buffer.Body.Paragraphs[0].Runs.Select(run => run.Text)
+            .Should().Equal("AlpX", "ta");
+        buffer.Body.Paragraphs[0].Runs[0].Bold.Should().BeTrue();
+        buffer.Body.Paragraphs[0].Runs[1].Italic.Should().BeTrue();
+    }
+
     [Fact]
     public void MultiCharacterReplacement_PreservesMixedRunsAndUsesSelectedRunFormat()
     {

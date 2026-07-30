@@ -18,6 +18,7 @@ param(
     [switch]$SkipPublish,
     [switch]$SkipImageBuild,
     [switch]$GroupedChild,
+    [switch]$GroupedCaret,
     [switch]$Replace,
     [switch]$KeepContainer
 )
@@ -28,10 +29,21 @@ $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetF
 $fixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx"
 $surface = "in-canvas-rich-text-soft-break"
 $scope = "physical FreeP rich-editor soft-break evidence lane"
+if ($GroupedChild -and $GroupedCaret) { throw "GroupedChild and GroupedCaret are mutually exclusive." }
 if ($GroupedChild) {
     $fixturePath = Join-Path $resolvedOutputRoot "fixtures/21-comments-notes-grouped-child.pptx"
     $surface = "in-canvas-grouped-child-rich-text"
     $scope = "physical FreeP grouped-child rich-editor edit-save-reopen lane"
+    $generator = Join-Path $repoRoot "tools/FreeP.RenderCompare/Generate-GroupedTextFixture.ps1"
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $generator `
+        -Source (Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx") `
+        -Destination $fixturePath
+    if ($LASTEXITCODE -ne 0) { throw "Grouped-child fixture generation failed with exit code $LASTEXITCODE." }
+}
+elseif ($GroupedCaret) {
+    $fixturePath = Join-Path $resolvedOutputRoot "fixtures/21-comments-notes-grouped-child.pptx"
+    $surface = "in-canvas-grouped-child-caret"
+    $scope = "physical FreeP grouped-child caret navigation selection edit-save-reopen lane"
     $generator = Join-Path $repoRoot "tools/FreeP.RenderCompare/Generate-GroupedTextFixture.ps1"
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $generator `
         -Source (Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx") `
@@ -138,7 +150,16 @@ try {
     if ($probeOutput.Count -gt 0) { $probeOutput | Set-Content -LiteralPath $probeLog -Encoding utf8 } else { "docker exec produced no stdout/stderr; inspect the manifest and runtime evidence." | Set-Content -LiteralPath $probeLog -Encoding utf8 }
     (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath $sourceAfter -Encoding ascii
     $mountedDocument = Join-Path $resolvedOutputRoot "freep/documents/$fixtureFileName"; $mountedAfter = Join-Path $evidenceDirectory "fixture-host-mounted-after.sha256.txt"
-    if (Test-Path -LiteralPath $mountedDocument -PathType Leaf) { (Get-FileHash -LiteralPath $mountedDocument -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath $mountedAfter -Encoding ascii } else { "MISSING mounted document: $mountedDocument" | Set-Content -LiteralPath $mountedAfter -Encoding utf8 }
+    $hostMountedAfterAvailable = $false
+    try {
+        if (Test-Path -LiteralPath $mountedDocument -PathType Leaf) {
+            $mountedHash = (Get-FileHash -LiteralPath $mountedDocument -Algorithm SHA256).Hash.ToLowerInvariant()
+            Set-Content -LiteralPath $mountedAfter -Value $mountedHash -Encoding ascii -ErrorAction Stop
+            $hostMountedAfterAvailable = $true
+        }
+    } catch {
+        Write-Warning "Optional host-mounted-after hash unavailable: $($_.Exception.Message)"
+    }
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
         $failureEvidenceName = "probe-runner-failure.txt"; @("The dedicated FreeP rich-text probe exited without writing its manifest.", "docker-exit-code=$probeExitCode", "probe-log=$probeLog", "probe-output=$([string]::Join([Environment]::NewLine, @($probeOutput)))") | Set-Content -LiteralPath (Join-Path $evidenceDirectory $failureEvidenceName) -Encoding utf8
         $failureResults = @($requiredIds | ForEach-Object { [ordered]@{ id = $_; category = "physical-x11-rich-text-shortcut"; status = "failed"; evidenceLevel = "physical-x11-input"; evidence = @($failureEvidenceName); note = "Probe runner exited before producing row-specific evidence." } })
@@ -151,8 +172,10 @@ try {
         $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
         $savedResult = @($manifest.results | Where-Object { $_.id -eq "saved-soft-break-native-package" })[0]
         if ($null -eq $savedResult) { throw "Probe manifest is missing saved-soft-break-native-package." }
-        Add-ResultEvidence -Result $savedResult -Names @("fixture-source-before.sha256.txt", "fixture-source-after.sha256.txt", "fixture-mounted-before.sha256.txt", "fixture-mounted-after.sha256.txt", "fixture-host-mounted-after.sha256.txt")
-        $hashPaths = [ordered]@{ "source-before" = $sourceBefore; "source-after" = $sourceAfter; "mounted-before" = (Join-Path $evidenceDirectory "fixture-mounted-before.sha256.txt"); "mounted-after" = (Join-Path $evidenceDirectory "fixture-mounted-after.sha256.txt"); "host-mounted-after" = $mountedAfter }
+        $evidenceNames = @("fixture-source-before.sha256.txt", "fixture-source-after.sha256.txt", "fixture-mounted-before.sha256.txt", "fixture-mounted-after.sha256.txt")
+        $hashPaths = [ordered]@{ "source-before" = $sourceBefore; "source-after" = $sourceAfter; "mounted-before" = (Join-Path $evidenceDirectory "fixture-mounted-before.sha256.txt"); "mounted-after" = (Join-Path $evidenceDirectory "fixture-mounted-after.sha256.txt") }
+        if ($hostMountedAfterAvailable) { $evidenceNames += "fixture-host-mounted-after.sha256.txt"; $hashPaths["host-mounted-after"] = $mountedAfter }
+        Add-ResultEvidence -Result $savedResult -Names $evidenceNames
         $hashes = @{}; $hashFailures = [System.Collections.Generic.List[string]]::new()
         foreach ($entry in $hashPaths.GetEnumerator()) { if (-not (Test-Path -LiteralPath $entry.Value -PathType Leaf)) { $hashFailures.Add("$($entry.Key) hash artifact is missing"); continue }; if ((Get-Item -LiteralPath $entry.Value).Length -le 0) { $hashFailures.Add("$($entry.Key) hash artifact is empty"); continue }; $value = (Get-Content -LiteralPath $entry.Value -Raw).Trim(); if ($value -notmatch '^[0-9a-f]{64}$') { $hashFailures.Add("$($entry.Key) hash is not an exact lowercase 64-hex value"); continue }; $hashes[$entry.Key] = $value }
         foreach ($pair in @(@("source-before", "source-after"), @("source-before", "mounted-before"), @("mounted-after", "host-mounted-after"))) { if ($hashes.ContainsKey($pair[0]) -and $hashes.ContainsKey($pair[1]) -and $hashes[$pair[0]] -ne $hashes[$pair[1]]) { $hashFailures.Add("$($pair[0]) does not equal $($pair[1])") } }

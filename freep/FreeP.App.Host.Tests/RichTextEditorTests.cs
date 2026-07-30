@@ -821,6 +821,50 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void InCanvasTextEditor_NestedChild_SelectsLogicalRangeAcrossParagraphBoundary()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var child = new SlideShape
+        {
+            Id = 12,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 1828800,
+            ExtentCyEmu = 914400,
+            RotationDeg = 22,
+            FlipV = true,
+            TextBody = MakeMultiParagraphRichBody(),
+        };
+        var inner = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        inner.Children.Add(child);
+        var outer = new SlideShape { Id = 9, Kind = SlideShapeKind.Group };
+        outer.Children.Add(inner);
+        slide.Shapes.Add(outer);
+
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var canvas = new SlideCanvas { Presentation = presentation, Slide = slide };
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+
+        canvas.TextEditor!.Activate(child.Id);
+        canvas.TextEditor.TrySelectTextRange(3, 13).Should().BeTrue();
+        canvas.TextEditor.SelectedText
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Should().Be("ha Beta\nGa");
+
+        var box = overlay.Children.OfType<System.Windows.Controls.RichTextBox>().Single();
+        box.Selection.Text = "X";
+        canvas.TextEditor.Commit();
+
+        InCanvasTextEditPlanner.ExtractPlainText(child.TextBody)
+            .Should().Be("AlpXmma Delta");
+        child.RotationDeg.Should().BeApproximately(22, 0.001);
+        child.FlipV.Should().BeTrue();
+    }
+
+    [StaFact]
     public void InCanvasTextEditor_ActiveShapeSuppression_FollowsEditorLifecycle()
     {
         var p = Presentation.CreateEmpty();

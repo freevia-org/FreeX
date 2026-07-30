@@ -717,6 +717,77 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task LogicalNavigation_CtrlBoundariesAndShiftAnchorCrossParagraphs()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run { Text = "Alpha", Bold = true },
+                    new Run { Text = "One", Italic = true },
+                },
+            });
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run { Text = "Beta", Underline = true },
+                    new Run { Text = "Two" },
+                },
+            });
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 140,
+            };
+            var window = Show(editor, 320, 140);
+            try
+            {
+                editor.FocusEditor().Should().BeTrue();
+                editor.SelectionStart = 6;
+                editor.SelectionEnd = 6;
+
+                Press(window, Key.End, PhysicalKey.End, RawInputModifiers.Control);
+                await DrainInputAsync();
+                editor.SelectionStart.Should().Be(editor.Text.Length);
+                editor.SelectionEnd.Should().Be(editor.Text.Length);
+
+                Press(window, Key.Home, PhysicalKey.Home, RawInputModifiers.Control);
+                await DrainInputAsync();
+                editor.InputBox.CaretIndex.Should().Be(0);
+
+                editor.SelectionStart = 4;
+                editor.SelectionEnd = 4;
+                Press(window, Key.Right, PhysicalKey.ArrowRight, RawInputModifiers.Shift);
+                await DrainInputAsync();
+                Press(window, Key.Right, PhysicalKey.ArrowRight, RawInputModifiers.Shift);
+                await DrainInputAsync();
+                new[] { editor.SelectionStart, editor.SelectionEnd }
+                    .Order().Should().Equal(4, 6);
+
+                editor.SelectionStart = 3;
+                editor.SelectionEnd = 8;
+                RaiseRawTextInput(editor.InputBox, "X");
+                await DrainInputAsync();
+
+                editor.Text.Should().Be("AlXta\nBetaTwo");
+                editor.EditedBody.Paragraphs.Should().HaveCount(2);
+                editor.EditedBody.Paragraphs[0].Runs
+                    .Select(run => run.Text).Should().Equal("AlX", "ta");
+                editor.EditedBody.Paragraphs[1].Runs
+                    .Select(run => run.Text).Should().Equal("Beta", "Two");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task SplitContinuation_ResolvesSharedMarkersAfterExplicitStart()
     {
         await Session.Dispatch(async () =>

@@ -131,7 +131,10 @@ import sys
 
 data = json.load(open(sys.argv[1], encoding="utf-8"))
 shape = data["shapeId2"]
-grouped = os.environ.get("FREEP_APP_SURFACE") == "in-canvas-grouped-child-rich-text"
+grouped = os.environ.get("FREEP_APP_SURFACE") in (
+    "in-canvas-grouped-child-rich-text",
+    "in-canvas-grouped-child-caret",
+)
 valid = (
     data["shapeId2Count"] == 1
     and shape is not None
@@ -187,6 +190,32 @@ valid = (
     and not second_paragraph_runs[-1]["bold"]
     and not second_paragraph_runs[-1]["italic"]
     and not second_paragraph_runs[-1]["underline"]
+    and data["pPicCount"] == 0
+    and data["pGraphicFrameCount"] == 0
+)
+raise SystemExit(0 if valid else 1)
+PY
+}
+
+assert_grouped_caret_inspection() {
+    python3 - "$1" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+shape = data["shapeId2"]
+valid = (
+    data["shapeId2Count"] == 1
+    and shape is not None
+    and shape["id"] == 2
+    and shape["name"] == "Notes marker"
+    and shape["bounds"] == {"x": 914400, "y": 914400, "cx": 2743200, "cy": 914400}
+    and shape["paragraphCount"] == 2
+    and shape["text"] == "Child 1 has speaker notes"
+    and shape["paragraphs"][0]["text"] == "Child 1 has"
+    and shape["paragraphs"][1]["text"] == " speaker notes"
+    and len(shape["paragraphs"][0]["runs"]) >= 1
+    and len(shape["paragraphs"][1]["runs"]) >= 1
     and data["pPicCount"] == 0
     and data["pGraphicFrameCount"] == 0
 )
@@ -331,6 +360,47 @@ send_owner_key() {
     focus_owner
     timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
         xdotool key --clearmodifiers --delay "$input_delay_ms" "$@"
+    sleep "$settle_seconds"
+}
+
+send_owner_document_boundary() {
+    local key="$1"
+    focus_owner
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool keydown ctrl
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool key "$key"
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool keyup ctrl
+    sleep "$settle_seconds"
+}
+
+send_owner_rights() {
+    local count="$1"
+    focus_owner
+    for ((index = 0; index < count; index++)); do
+        timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+            xdotool key Right || return 1
+        sleep 0.06
+    done
+    sleep "$settle_seconds"
+}
+
+send_owner_shift_rights() {
+    local count="$1"
+    focus_owner
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool keydown Shift || return 1
+    for ((index = 0; index < count; index++)); do
+        timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+            xdotool key Right || {
+                xdotool keyup Shift >/dev/null 2>&1 || true
+                return 1
+            }
+        sleep 0.06
+    done
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool keyup Shift || return 1
     sleep "$settle_seconds"
 }
 
@@ -611,25 +681,53 @@ fi
 
 input_commands_ok=true
 grouped_formatting=false
+grouped_caret=false
 focus_owner
 xdotool mousemove --sync "$shape_center_x" "$shape_center_y" >/dev/null 2>&1 ||
     input_commands_ok=false
 xdotool click --clearmodifiers --repeat 2 --delay 120 1 >/dev/null 2>&1 ||
     input_commands_ok=false
 sleep "$settle_seconds"
-if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
+if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ||
+      "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
     # Select fourteen characters from the start of the grouped child. The fixture
     # places the selection across its two native paragraphs and four runs.
-    send_owner_key ctrl+Home || input_commands_ok=false
-    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
-        xdotool keydown Shift || input_commands_ok=false
-    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
-        xdotool key --delay "$input_delay_ms" --repeat 14 Right ||
-        input_commands_ok=false
-    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
-        xdotool keyup Shift || input_commands_ok=false
-    send_owner_key ctrl+b || input_commands_ok=false
+    send_owner_document_boundary Home || input_commands_ok=false
+    send_owner_shift_rights 14 || input_commands_ok=false
+    if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+        # Keep the first proof selection across both native paragraphs, then
+        # exercise Delete and Backspace at the paragraph separator. Undo each
+        # boundary edit before the final in-paragraph type-to-replace edit.
+        if capture "grouped-caret-selection.png"; then :; else input_commands_ok=false; fi
+        send_owner_document_boundary End || input_commands_ok=false
+        send_owner_document_boundary Home || input_commands_ok=false
+        send_owner_document_boundary Home || input_commands_ok=false
+        send_owner_rights 11 || input_commands_ok=false
+        send_owner_key Delete || input_commands_ok=false
+        if capture "grouped-caret-after-delete.png"; then :; else input_commands_ok=false; fi
+        send_owner_key ctrl+z || input_commands_ok=false
+        send_owner_document_boundary Home || input_commands_ok=false
+        send_owner_rights 12 || input_commands_ok=false
+        send_owner_key BackSpace || input_commands_ok=false
+        if capture "grouped-caret-after-backspace.png"; then :; else input_commands_ok=false; fi
+        send_owner_key ctrl+z || input_commands_ok=false
+        send_owner_key ctrl+a || input_commands_ok=false
+        timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+            xdotool type --clearmodifiers --delay "$input_delay_ms" "Child 1 has" ||
+            input_commands_ok=false
+        timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+            xdotool key --clearmodifiers --delay "$input_delay_ms" Return ||
+            input_commands_ok=false
+        timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+            xdotool type --clearmodifiers --delay "$input_delay_ms" " speaker notes" ||
+            input_commands_ok=false
+        if capture "grouped-caret-type-replace.png"; then :; else input_commands_ok=false; fi
+        grouped_caret=true
+    else
+        send_owner_key ctrl+b || input_commands_ok=false
+    fi
 
+    if [[ "$app_surface" != "in-canvas-grouped-child-caret" ]]; then
     # Commit the shortcut pass, then reopen the same child and range for the
     # actual Home ribbon key-tip route. FreeP's shared ribbon assigns Home=H
     # and Bold=1; the route may commit the overlay as focus moves to the bar.
@@ -669,6 +767,7 @@ if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
     send_owner_key ctrl+i || input_commands_ok=false
     send_owner_key ctrl+u || input_commands_ok=false
     grouped_formatting=true
+    fi
 else
     send_owner_key ctrl+a || input_commands_ok=false
     timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
@@ -698,11 +797,18 @@ fi
 capture_window_state "soft-break-committed-state.txt"
 {
     printf 'editor-entry=physical double click at shape ID2 center\n'
-    if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
+    if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ||
+          "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
         printf 'selection=physical Ctrl+Home then fourteen Shift+Right keys across the paragraph boundary\n'
-        printf 'formatting=physical Ctrl+B, Home-ribbon Bold key-tip, Ctrl+I, Ctrl+U\n'
-        printf 'ribbon-route-commands-ok=%s\n' "${ribbon_route_commands_ok:-false}"
-        printf 'grouped-formatting=%s\n' "$grouped_formatting"
+        if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+            printf 'navigation=physical Ctrl+Home/Ctrl+End, Shift selection, Delete and Backspace across paragraph boundary\n'
+            printf 'type-replace=physical selection replacement with Child\n'
+            printf 'grouped-caret=%s\n' "$grouped_caret"
+        else
+            printf 'formatting=physical Ctrl+B, Home-ribbon Bold key-tip, Ctrl+I, Ctrl+U\n'
+            printf 'ribbon-route-commands-ok=%s\n' "${ribbon_route_commands_ok:-false}"
+            printf 'grouped-formatting=%s\n' "$grouped_formatting"
+        fi
     else
         printf 'replacement=Ctrl+A then ASCII SoftBefore\n'
         printf 'soft-break=physical Shift+Enter\n'
@@ -733,6 +839,8 @@ fi
 save_predicate=assert_soft_break_inspection
 if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
     save_predicate=assert_grouped_format_inspection
+elif [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+    save_predicate=assert_grouped_caret_inspection
 fi
 saved_checkpoint=false
 if save_checkpoint "after-soft-break" "$save_predicate"; then
@@ -744,6 +852,11 @@ fi
     if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
         printf 'paragraph-count=2\n'
         printf 'selection-formatting=bold italic underline across multiple native runs\n'
+    elif [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+        printf 'paragraph-count=2\n'
+        printf 'selection-navigation=Ctrl+Home/Ctrl+End and Shift selection across multiple native runs and paragraphs\n'
+        printf 'boundary-edit=Delete and Backspace were each undone before type-to-replace\n'
+        printf 'type-replace=Child 1 has / speaker notes\n'
     else
         printf 'paragraph-count=1\n'
         printf 'ordered-children=a:t SoftBefore; a:br; a:t SoftAfter\n'
@@ -773,6 +886,8 @@ if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
     for _ in 1 2 3; do
         send_owner_key ctrl+z || undo_key_sent=false
     done
+elif [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+    send_owner_key ctrl+z || undo_key_sent=false
 else
     send_owner_key ctrl+z || undo_key_sent=false
 fi
@@ -790,6 +905,8 @@ fi
     printf 'key-sent=%s\n' "$undo_key_sent"
     if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
         printf 'expected-original-formatting=three Ctrl+Z transactions restore the original grouped runs\n'
+    elif [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+        printf 'expected-original-text=Slide 1 has speaker notes with two paragraphs and four runs\n'
     else
         printf 'expected-original-text=Slide 1 has speaker notes\n'
     fi
@@ -818,6 +935,8 @@ if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
     for _ in 1 2 3; do
         send_owner_key ctrl+y || redo_key_sent=false
     done
+elif [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+    send_owner_key ctrl+y || redo_key_sent=false
 else
     send_owner_key ctrl+shift+z || redo_key_sent=false
 fi
@@ -829,6 +948,8 @@ capture_window_state "redo-soft-break-state.txt"
 redo_predicate=assert_soft_break_inspection
 if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
     redo_predicate=assert_grouped_format_inspection
+elif [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+    redo_predicate=assert_grouped_caret_inspection
 fi
 redo_checkpoint=false
 if save_checkpoint "after-redo" "$redo_predicate"; then
@@ -839,6 +960,8 @@ fi
     printf 'key-sent=%s\n' "$redo_key_sent"
     if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
         printf 'expected-formatted-runs=three Ctrl+Y transactions restore Bold+Italic+Underline\n'
+    elif [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+        printf 'expected-edited-text=Child 1 has speaker notes with two paragraphs and four runs\n'
     else
         printf 'expected-ordered-children=a:t SoftBefore; a:br; a:t SoftAfter\n'
     fi
