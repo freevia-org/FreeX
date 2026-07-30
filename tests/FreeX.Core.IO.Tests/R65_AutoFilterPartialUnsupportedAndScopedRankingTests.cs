@@ -66,8 +66,14 @@ public sealed class R65_AutoFilterPartialUnsupportedAndScopedRankingTests
     }
 
     [Fact]
-    public void MaterializeFilters_SingleUnsupportedColumn_PreservesRawHiddenRowBitsAndHidesNothingItself()
+    public void MaterializeFilters_SingleUnsupportedColumn_ReclassifiesRawHiddenRowAsFilterHidden()
     {
+        // R98-io-autofilter-unsupported-hiddenrows-1: this test used to assert the pre-fix (buggy)
+        // behavior -- that a row hidden purely by an unsupported customFilter stayed stranded in
+        // sheet.HiddenRows forever, since no filter-clearing path (FilterCommand.RecomputeHiddenRows,
+        // ToggleWorksheetAutoFilterCommand.Apply) ever mutates HiddenRows. Real Excel always un-hides
+        // such a row on Clear Filter / Toggle AutoFilter off regardless of which filter mechanism hid
+        // it, so the row must now be reclassified into FilterHiddenRows on load instead.
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
 
@@ -93,11 +99,12 @@ public sealed class R65_AutoFilterPartialUnsupportedAndScopedRankingTests
 
         XlsxWorksheetAutoFilterMaterializer.MaterializeFilters(sheet);
 
-        // Nothing supported was built, so nothing should be freshly hidden by this mechanism...
-        sheet.FilterHiddenRows.Should().BeEmpty();
+        // Nothing supported was built, so no *value-list* ownership is registered...
         sheet.ActiveValueFilterColumns.Should().BeEmpty();
-        // ...and, crucially, the raw hidden-row bit loaded from the row XML must not be un-hidden.
-        sheet.HiddenRows.Should().Contain(3u);
+        // ...but the raw hidden-row bit -- fully explained by the skipped customFilter column -- must
+        // be reclassified as filter-hidden so Clear Filter / Toggle AutoFilter off can restore it.
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u]);
+        sheet.HiddenRows.Should().NotContain(3u);
     }
 
     // -----------------------------------------------------------------------------------------

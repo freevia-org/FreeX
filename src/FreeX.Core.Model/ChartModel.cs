@@ -21,6 +21,42 @@ public sealed class ChartModel
     /// Text) was silently dropped on open+save round-trip through FreeX.
     /// </summary>
     public string? AltTextDescription { get; set; }
+
+    /// <summary>
+    /// R98-io-chart-hyperlink-model-field: the chart's OBJECT-level hyperlink (an
+    /// <c>&lt;a:hlinkClick&gt;</c> on the chart graphicFrame's <c>xdr:cNvPr</c>), populated on load and
+    /// carried through clone/paste/move (<see cref="DuplicateSheetDrawingCloner.CloneChart"/>,
+    /// <c>MoveChartCommand</c>/<c>MoveChartToNewSheetCommand</c> -- which relocate this SAME
+    /// <see cref="ChartModel"/> instance, so the field simply travels with it) -- mirrors
+    /// <see cref="DrawingShapeModel.Hyperlink"/>/<see cref="TextBoxModel.Hyperlink"/>/
+    /// <see cref="PictureModel.Hyperlink"/> (R97-model-drawing-hyperlink-2-2).
+    /// <para>
+    /// Before this field existed, <c>XlsxWorksheetChartWriter</c> re-attached a chart's hyperlink at
+    /// SAVE time purely by re-reading the TRUE source package, keyed by (current host sheet name -&gt;
+    /// chart <c>cNvPr@name</c>) -- see <c>XlsxFileAdapter.GetSourceChartHyperlinksBySheet</c>. That
+    /// lookup silently DROPPED the hyperlink when a chart moved to a different sheet (the destination
+    /// sheet's OWN original dictionary never contained it), or MISATTRIBUTED a different chart's
+    /// hyperlink when the destination sheet happened to already have a chart with the same
+    /// auto-generated name (e.g. two sheets each with their own "Chart 1"). Populating this field at
+    /// load time -- per chart, from that chart's OWN graphicFrame, not a sheet-name-keyed guess -- and
+    /// preferring it at save fixes both: the field is tied to the chart OBJECT's identity and simply
+    /// travels wherever the object goes.
+    /// </para>
+    /// <para>
+    /// The chart TITLE's own hyperlink (an <c>a:hlinkClick</c> on the title's first run's <c>a:rPr</c>)
+    /// deliberately stays on the OLD source-package-keyed mechanism (<c>ChartHyperlinkPair.TitleHyperlink</c>)
+    /// rather than getting a matching model field -- see the R41-io-hyperlink-drawing-rels-3-2 doc
+    /// comment on <c>XlsxChartXmlWriter.ApplyVerbatimTitleHyperlink</c>: unlike this object-level
+    /// hyperlink (which lives on a graphicFrame the writer always rebuilds structurally the same way),
+    /// the title is written purely from <see cref="Title"/> as a plain string with no rich-run model at
+    /// all, so there is nowhere on <see cref="ChartModel"/> to hang a title-run hyperlink without
+    /// inventing new rich-text infrastructure the title pipeline doesn't otherwise have. This is a
+    /// pre-existing, deliberate R41 tradeoff, not new to R98; the move/duplicate misattribution finding
+    /// this field fixes remains a known residual gap for the title hyperlink specifically.
+    /// </para>
+    /// </summary>
+    public DrawingObjectHyperlink? Hyperlink { get; set; }
+
     public ChartType Type { get; set; } = ChartType.Column;
     public GridRange DataRange { get; set; }
     public bool IsVisible { get; set; } = true;

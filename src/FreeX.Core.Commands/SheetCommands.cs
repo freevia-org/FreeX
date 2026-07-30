@@ -568,6 +568,15 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         if (ctx.Workbook.Sheets.Count <= 1)
             return new CommandOutcome(false, "Cannot delete the only sheet.");
 
+        // R98: Real Excel refuses to delete a sheet if doing so would leave the workbook with
+        // zero visible sheets, even when other (hidden/very-hidden) sheets remain -- a workbook
+        // must always retain at least one visible sheet (mirrors SetSheetHiddenCommand's
+        // symmetric "Cannot hide the only visible sheet." guard above, and the same invariant
+        // XlsxWorkbookMetadataWriter.ClampToVisibleSheetIndex assumes on write). Checking here in
+        // Core.Commands guards every caller (WPF ribbon, WPF tab context menu, Avalonia) at once.
+        if (!ctx.Workbook.Sheets.Any(s => s.Id != _sheetId && !s.IsHidden && !s.IsVeryHidden))
+            return new CommandOutcome(false, "Cannot delete the only visible sheet.");
+
         var sheet = ctx.GetSheet(_sheetId);
         _removedSheet = sheet;
         var sheets = ctx.Workbook.Sheets;

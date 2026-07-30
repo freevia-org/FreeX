@@ -186,9 +186,32 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         _tableRebandSnapshot = RebandTablesAfterColumnInsert(ctx.Workbook, sheet);
 
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-            RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _formulaSnapshot),
+            RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _formulaSnapshot)
+                .Concat(VacatedAddressesForRelocatedFormulaCells(_sheetId, movedSnapshot)),
             _formulaSnapshot);
         return new CommandOutcome(true, AffectedCells: _affectedCells);
+    }
+
+    // R98-commands-dependency-vacated-1: mirror InsertRowsCommand's
+    // VacatedAddressesForRelocatedFormulaCells fix (InsertDeleteRowsCommand.cs) on the
+    // insert-columns axis. MoveCellsForInsert above physically relocates every movedSnapshot formula
+    // cell from its captured (Row, Col) to (Row, Col + count), always leaving the OLD (pre-shift)
+    // address blank afterward -- Insert only ever shifts columns RIGHT, so nothing to the left of
+    // _beforeCol can move right into the vacated slot. Neither
+    // RelocatedFormulaCellsPendingDependencyRefresh (new-address only) nor _formulaSnapshot
+    // (also new-address only) ever surfaced this OLD address in AffectedCells, so
+    // WorkbookCellEditService.UpdateFormulaDependencies (driven purely off AffectedCells) never
+    // purged the stale dependency-graph entry left behind there.
+    private static IEnumerable<CellAddress> VacatedAddressesForRelocatedFormulaCells(
+        SheetId sheetId, IEnumerable<CellStateSnapshot> movedSnapshot)
+    {
+        foreach (var snapshot in movedSnapshot)
+        {
+            if (snapshot.FormulaText is null)
+                continue;
+
+            yield return new CellAddress(sheetId, snapshot.Row, snapshot.Col);
+        }
     }
 
     // R92-commands-undo-structural-format-5-2: re-flows every column-banded structured table's
@@ -349,11 +372,30 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         // address (mirroring Apply's own AffectedCells, which reports the post-shift address for
         // the forward direction). CommandBus.Undo reads this live property instead of the frozen
         // forward payload.
+        // R98-commands-dependency-vacated-1: symmetric to the Apply-side fix above -- Revert
+        // physically moves each movedSnapshot formula cell back from its current (post-shift)
+        // address (Row, Col + _count) to its restored, pre-shift address (Row, Col), always leaving
+        // (Row, Col + _count) blank afterward (undo of an Insert only ever shifts columns LEFT, so
+        // nothing to the right can move left into it). That vacated address was never included in
+        // AffectedCells either, leaving the identical stale dependency-graph entry behind after Undo.
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
             RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_movedSnapshot, _sheetId)
                 .Concat(_tableRebandSnapshot?.Select(f => f.Address) ?? [])
-                .Concat(formulaSnapshotAddressesBeforeRestore),
+                .Concat(formulaSnapshotAddressesBeforeRestore)
+                .Concat(VacatedAddressesAfterRevert(_sheetId, _movedSnapshot, _count)),
             []);
+    }
+
+    private static IEnumerable<CellAddress> VacatedAddressesAfterRevert(
+        SheetId sheetId, IEnumerable<CellStateSnapshot> movedSnapshot, uint count)
+    {
+        foreach (var snapshot in movedSnapshot)
+        {
+            if (snapshot.FormulaText is null)
+                continue;
+
+            yield return new CellAddress(sheetId, snapshot.Row, snapshot.Col + count);
+        }
     }
 
     private (uint MaxOccupied, List<CellStateSnapshot> Moved) CaptureMovedCells(Sheet sheet)
@@ -636,9 +678,29 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         _tableRebandSnapshot = RebandTablesAfterColumnDelete(ctx.Workbook, sheet);
 
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-            RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _formulaSnapshot),
+            RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _formulaSnapshot)
+                .Concat(VacatedAddressesForShiftedFormulaCells(_sheetId, shiftedSnapshot)),
             _formulaSnapshot);
         return new CommandOutcome(true, AffectedCells: _affectedCells);
+    }
+
+    // R98-commands-dependency-vacated-1: mirror DeleteRowsCommand's
+    // VacatedAddressesForShiftedFormulaCells fix on the delete-columns axis. MoveCellsForDelete above
+    // physically relocates every shiftedSnapshot formula cell from its captured (Row, Col) to
+    // (Row, Col - count), always leaving the OLD (pre-delete) address blank afterward -- Delete only
+    // ever shifts columns LEFT, so nothing to the right of endCol can move left into the vacated
+    // slot. Neither RelocatedFormulaCellsPendingDependencyRefresh (new-address only) nor
+    // _formulaSnapshot (also new-address only) ever surfaced this OLD address in AffectedCells.
+    private static IEnumerable<CellAddress> VacatedAddressesForShiftedFormulaCells(
+        SheetId sheetId, IEnumerable<CellStateSnapshot> shiftedSnapshot)
+    {
+        foreach (var snapshot in shiftedSnapshot)
+        {
+            if (snapshot.FormulaText is null)
+                continue;
+
+            yield return new CellAddress(sheetId, snapshot.Row, snapshot.Col);
+        }
     }
 
     // R92-commands-undo-structural-format-5-2: re-flows every column-banded structured table's
@@ -802,12 +864,32 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         // appeared in Apply's own AffectedCells at all, since forward Apply only needs to report
         // the shifted set -- the deleted cells didn't exist yet). CommandBus.Undo reads this live
         // property instead of the frozen forward payload.
+        // R98-commands-dependency-vacated-1: symmetric to the Apply-side fix above -- Revert
+        // physically moves each shiftedSnapshot formula cell back from its current (post-delete,
+        // shifted-left) address (Row, Col - _count) to its restored, pre-delete address (Row, Col),
+        // always leaving (Row, Col - _count) blank afterward (undo of a Delete only ever shifts
+        // columns RIGHT, so nothing to the left can move right into it). That vacated address was
+        // never included in AffectedCells either, leaving the identical stale dependency-graph entry
+        // behind after Undo.
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
             RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_shiftedSnapshot, _sheetId)
                 .Concat(RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_deletedSnapshot, _sheetId))
                 .Concat(_tableRebandSnapshot?.Select(f => f.Address) ?? [])
-                .Concat(formulaSnapshotAddressesBeforeRestore),
+                .Concat(formulaSnapshotAddressesBeforeRestore)
+                .Concat(VacatedAddressesAfterRevertForShiftedCells(_sheetId, _shiftedSnapshot, _count)),
             []);
+    }
+
+    private static IEnumerable<CellAddress> VacatedAddressesAfterRevertForShiftedCells(
+        SheetId sheetId, IEnumerable<CellStateSnapshot> shiftedSnapshot, uint count)
+    {
+        foreach (var snapshot in shiftedSnapshot)
+        {
+            if (snapshot.FormulaText is null)
+                continue;
+
+            yield return new CellAddress(sheetId, snapshot.Row, snapshot.Col - count);
+        }
     }
 
     private (List<CellStateSnapshot> Deleted, List<CellStateSnapshot> Shifted)

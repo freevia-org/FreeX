@@ -313,7 +313,24 @@ internal static class XlsxCustomViewMapper
             autoFilterXml is not null ? new XAttribute("showAutoFilter", "1") : null,
             new XAttribute("state", "visible"));
 
-        if (hasFrozenPanes || splitRow.HasValue || splitColumn.HasValue)
+        var hasPanes = hasFrozenPanes || splitRow.HasValue || splitColumn.HasValue;
+        var activeCell = ToCellReference(state.ActiveRow, state.ActiveCol);
+
+        // Matches XlsxWorksheetViewWriter.UpdateSheetView's treatment of the primary sheetView:
+        // when the view is frozen/split and the captured active cell falls outside the topLeft
+        // quadrant, Excel always tags the <pane> with @activePane and the matching <selection>
+        // with @pane naming that same quadrant (a <selection> with no @pane, or a <pane> with no
+        // @activePane, both default to "topLeft" per ECMA-376 §18.3.1.66/§18.3.1.90). Computing
+        // this from the same ComputeActivePaneName the primary writer uses keeps a Custom View
+        // capture of a scrolled-past-the-freeze-line cursor from being recorded as though it were
+        // sitting in the topLeft pane. Only computed when activeCell itself is valid (matches
+        // ToCellReference's own row/col range check), so an out-of-range ActiveRow/ActiveCol never
+        // tags the <pane> with an activePane whose corresponding <selection> was never written.
+        string? activePaneName = hasPanes && activeCell is not null
+            ? XlsxWorksheetViewWriter.ComputeActivePaneName(frozenRows, frozenCols, splitRow, splitColumn, state.ActiveRow!.Value, state.ActiveCol!.Value)
+            : null;
+
+        if (hasPanes)
         {
             // Mirrors ReadWorksheetViews above: both state="frozen" and state="split" are written
             // as the literal row/column index here (SplitRow/SplitColumn already model the index,
@@ -324,13 +341,19 @@ internal static class XlsxCustomViewMapper
                 !hasFrozenPanes && splitRow is { } splitRowValue ? new XAttribute("ySplit", splitRowValue) : null,
                 frozenCols > 0 ? new XAttribute("xSplit", frozenCols) : null,
                 frozenRows > 0 ? new XAttribute("ySplit", frozenRows) : null,
-                new XAttribute("state", hasFrozenPanes ? "frozen" : "split")));
+                new XAttribute("state", hasFrozenPanes ? "frozen" : "split"),
+                activePaneName is not null && !string.Equals(activePaneName, "topLeft", StringComparison.Ordinal)
+                    ? new XAttribute("activePane", activePaneName)
+                    : null));
         }
 
-        if (ToCellReference(state.ActiveRow, state.ActiveCol) is { } activeCell)
+        if (activeCell is not null)
         {
             customSheetView.Add(new XElement(
                 workbookNs + "selection",
+                activePaneName is not null && !string.Equals(activePaneName, "topLeft", StringComparison.Ordinal)
+                    ? new XAttribute("pane", activePaneName)
+                    : null,
                 new XAttribute("activeCell", activeCell),
                 new XAttribute("sqref", activeCell)));
         }

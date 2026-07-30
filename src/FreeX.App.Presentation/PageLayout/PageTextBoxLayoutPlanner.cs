@@ -24,6 +24,14 @@ public static class PageTextBoxLayoutPlanner
     /// <summary>Alpha used for text-box fills by the source desktop print renderer.</summary>
     public const byte FillAlpha = 242;
 
+    /// <param name="scaleRatio">
+    /// The page's resolved Scale%/Fit-to-pages ratio (see <see cref="PageContentRenderModelBuilder"/>'s
+    /// own scaleRatio doc). <paramref name="gridLeft"/>/<paramref name="gridTop"/>/<paramref name="measurement"/>
+    /// already carry this ratio when called from that builder, so only the text box's own intrinsic
+    /// width/height/font size (unrelated to the grid measurement) need it applied here too. Defaults to
+    /// 1.0 (unscaled) for the source desktop print renderer's direct call, which applies its own scale
+    /// via a drawing-surface transform instead.
+    /// </param>
     public static IReadOnlyList<PageTextBoxBlock> Build(
         IReadOnlyList<TextBoxModel> textBoxes,
         WorkbookTheme workbookTheme,
@@ -31,7 +39,8 @@ public static class PageTextBoxLayoutPlanner
         IReadOnlyList<uint> pageColumns,
         double gridLeft,
         double gridTop,
-        PrintGridMeasurement measurement)
+        PrintGridMeasurement measurement,
+        double scaleRatio = 1.0)
     {
         ArgumentNullException.ThrowIfNull(textBoxes);
         ArgumentNullException.ThrowIfNull(workbookTheme);
@@ -57,8 +66,8 @@ public static class PageTextBoxLayoutPlanner
             var layout = TextBoxFrameLayoutPlanner.CreateNormalized(new LayoutRect(
                 gridLeft + measurement.ColumnOffset(columnIndex),
                 gridTop + measurement.RowOffset(rowIndex),
-                textBox.Width,
-                textBox.Height));
+                textBox.Width * scaleRatio,
+                textBox.Height * scaleRatio));
             var fill = textBox.ResolveFillColor(workbookTheme, CellColor.White);
             var outline = textBox.GetEffectiveOutlineColor(workbookTheme, new CellColor(89, 89, 89));
 
@@ -75,7 +84,7 @@ public static class PageTextBoxLayoutPlanner
                 OutlineThickness: 1,
                 new PageTextFont(
                     PageContentRenderModelBuilder.PrintFontFamily,
-                    PageContentRenderModelBuilder.PrintFontSize,
+                    PageContentRenderModelBuilder.PrintFontSize * scaleRatio,
                     Bold: false,
                     Italic: false,
                     new PresentationRgb(0, 0, 0))));

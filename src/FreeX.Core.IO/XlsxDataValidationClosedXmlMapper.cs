@@ -162,8 +162,21 @@ internal static class XlsxDataValidationClosedXmlMapper
                 // For x14 rules the real formula lives in the worksheet extLst x14 block;
                 // the legacy <dataValidation> intentionally carries an empty formula1 so
                 // that older readers gracefully ignore it. Pass empty strings here.
-                var f1 = dv.IsX14 ? "" : (NormalizeNumericFormulaForSave(dv.Type, dv.Formula1) ?? "");
-                var f2 = dv.IsX14 ? "" : (NormalizeNumericFormulaForSave(dv.Type, dv.Formula2) ?? "");
+                //
+                // NormalizeNumericFormulaForSave exists ONLY to canonicalize Date/Time/Decimal/
+                // WholeNumber bounds (see its own doc comment) -- it must never run for List or
+                // Custom. Its number-parse attempt falls back to CultureInfo.CurrentCulture, and on
+                // any comma-decimal-separator locale (de-DE, fr-FR, es-ES, it-IT, ru-RU, pt-BR,
+                // nl-NL, ...) a List rule's literal Formula1 text that looks like "digits,digits"
+                // (e.g. a two-item literal list "1000,2000") gets silently reparsed as the single
+                // decimal number 1000.2000 and reformatted to invariant dot notation BEFORE
+                // NormalizeListFormulaForSave (below) ever sees the original text -- corrupting a
+                // two-item dropdown into a single mangled literal on save. Custom formulas are
+                // arbitrary boolean expressions, not numeric bounds, so they must be left untouched
+                // too. Only WholeNumber/Decimal/Date/Time bounds ever need this canonicalization.
+                var appliesNumericNormalization = dv.Type is DvType.WholeNumber or DvType.Decimal or DvType.Date or DvType.Time;
+                var f1 = dv.IsX14 ? "" : ((appliesNumericNormalization ? NormalizeNumericFormulaForSave(dv.Type, dv.Formula1) : dv.Formula1) ?? "");
+                var f2 = dv.IsX14 ? "" : ((appliesNumericNormalization ? NormalizeNumericFormulaForSave(dv.Type, dv.Formula2) : dv.Formula2) ?? "");
 
                 switch (dv.Type)
                 {

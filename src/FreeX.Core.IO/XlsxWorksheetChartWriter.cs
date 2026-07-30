@@ -139,7 +139,18 @@ internal static class XlsxWorksheetChartWriter
             var sourceChartHyperlinks = sourceChartHyperlinksBySheet?.TryGetValue(name, out var sheetHyperlinks) == true
                 ? sheetHyperlinks
                 : null;
-            WriteWorksheetCharts(archive, worksheetPath, workbook, sheet, supportedCharts, drawingPath, reusesOwnSourceDrawingPath, ref chartIndex, createChartXml, getChartContentType, getChartRelationshipType, sourceChartHyperlinks);
+            // R98-io-chart-hyperlink-model-field: whether the CALLER is the real XlsxFileAdapter save
+            // pipeline at all -- distinct from sourceChartHyperlinks (which is this SHEET's own
+            // per-sheet lookup and goes null just as easily because this sheet's true source simply has
+            // no chart hyperlinks recorded, e.g. a brand-new sheet). See WriteWorksheetCharts for why
+            // this distinction matters: whenever the real pipeline is driving, ChartModel.Hyperlink was
+            // reliably populated (possibly to null) at load for EVERY chart, so it must be trusted
+            // outright -- falling back to sourceChartHyperlinks/oldChartHyperlinksByPosition when the
+            // model says "no hyperlink" would resurrect exactly the sheet-name-keyed misattribution bug
+            // this field exists to fix (e.g. a moved chart with no hyperlink of its own landing on a
+            // sheet whose OWN same-named native chart DOES have one).
+            var isRealPipeline = sourceChartHyperlinksBySheet is not null;
+            WriteWorksheetCharts(archive, worksheetPath, workbook, sheet, supportedCharts, drawingPath, reusesOwnSourceDrawingPath, ref chartIndex, createChartXml, getChartContentType, getChartRelationshipType, sourceChartHyperlinks, isRealPipeline);
         }
     }
 
@@ -177,7 +188,8 @@ internal static class XlsxWorksheetChartWriter
         Func<ChartModel, Workbook, Sheet, XDocument> createChartXml,
         Func<ChartModel, string> getChartContentType,
         Func<ChartModel, string> getChartRelationshipType,
-        IReadOnlyDictionary<string, ChartHyperlinkPair>? sourceChartHyperlinks)
+        IReadOnlyDictionary<string, ChartHyperlinkPair>? sourceChartHyperlinks,
+        bool isRealPipeline = false)
     {
         var worksheetEntry = archive.GetEntry(worksheetPath);
         if (worksheetEntry is null)
@@ -277,19 +289,56 @@ internal static class XlsxWorksheetChartWriter
                 new XAttribute("Type", chartRelationshipType),
                 new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, chartPath))));
 
-            string? objectHyperlinkRelId = null;
-            var objectHyperlink = sourceChartHyperlinks is not null
-                ? sourceHyperlinkPair?.ObjectHyperlink
-                : (chartPosition < oldChartHyperlinksByPosition!.Count ? oldChartHyperlinksByPosition[chartPosition] : null);
-            if (objectHyperlink is { } resolvedObjectHyperlink)
+            // R98-io-chart-hyperlink-model-field: PREFER chart.Hyperlink -- populated at load PER
+            // CHART (from that chart's own graphicFrame, never a sheet-name-keyed guess) and carried
+            // through clone/paste (DuplicateSheetDrawingCloner.CloneChart) and move
+            // (MoveChartCommand/MoveChartToNewSheetCommand relocate this SAME ChartModel instance) --
+            // over the OLD sourceChartHyperlinks/oldChartHyperlinksByPosition mechanism below, which is
+            // keyed by the chart's CURRENT host sheet's OWN original source dictionary and so silently
+            // drops the hyperlink when a chart moves to a different sheet (that sheet's dictionary
+            // never contained it) or misattributes a different chart's hyperlink when the destination
+            // sheet already has its own same-named chart.
+            //
+            // Falling back to the old mechanism whenever chart.Hyperlink is merely null is NOT safe:
+            // through the real pipeline (isRealPipeline), load ALWAYS populates chart.Hyperlink --
+            // including to null, for a chart that genuinely has none -- so null is a fully trustworthy
+            // answer, not "unknown, go check elsewhere". Falling through in that case resurrects the
+            // exact misattribution bug this field fixes (a moved chart with NO hyperlink of its own
+            // landing on a sheet whose OWN same-named native chart has one). The old
+            // sourceChartHyperlinks/oldChartHyperlinksByPosition fallback is therefore reserved for
+            // isRealPipeline == false only -- direct-call unit tests that hand-seed a package and call
+            // this method without ever going through XlsxFileAdapter.Load, so ChartModel.Hyperlink was
+            // never populated by anything at all.
+            (string Target, string? TargetMode, string? Tooltip)? resolvedObjectHyperlink;
+            if (chart.Hyperlink is { } modelHyperlink)
             {
-                objectHyperlinkRelId = "rIdFreeXChartHyperlink" + currentChartIndex;
+                resolvedObjectHyperlink = (modelHyperlink.Target, modelHyperlink.TargetMode, modelHyperlink.Tooltip);
+            }
+            else if (isRealPipeline)
+            {
+                resolvedObjectHyperlink = null;
+            }
+            else
+            {
+                var oldObjectHyperlink = sourceChartHyperlinks is not null
+                    ? sourceHyperlinkPair?.ObjectHyperlink
+                    : (chartPosition < oldChartHyperlinksByPosition!.Count ? oldChartHyperlinksByPosition[chartPosition] : null);
+                resolvedObjectHyperlink = oldObjectHyperlink is { } resolvedOld
+                    ? (resolvedOld.Target, resolvedOld.TargetMode, (string?)null)
+                    : null;
+            }
+
+            (string RelId, string? Tooltip)? objectHyperlinkRelId = null;
+            if (resolvedObjectHyperlink is { } resolved)
+            {
+                var relId = "rIdFreeXChartHyperlink" + currentChartIndex;
                 drawingRelsXml.Root!.Add(new XElement(
                     packageRelNs + "Relationship",
-                    new XAttribute("Id", objectHyperlinkRelId),
+                    new XAttribute("Id", relId),
                     new XAttribute("Type", HyperlinkRelationshipType),
-                    new XAttribute("Target", resolvedObjectHyperlink.Target),
-                    string.IsNullOrWhiteSpace(resolvedObjectHyperlink.TargetMode) ? null : new XAttribute("TargetMode", resolvedObjectHyperlink.TargetMode)));
+                    new XAttribute("Target", resolved.Target),
+                    string.IsNullOrWhiteSpace(resolved.TargetMode) ? null : new XAttribute("TargetMode", resolved.TargetMode)));
+                objectHyperlinkRelId = (relId, resolved.Tooltip);
             }
 
             anchors.Add(ToChartAnchor(chart, sheet, currentChartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs));
@@ -803,7 +852,11 @@ internal static class XlsxWorksheetChartWriter
         int chartIndex,
         string chartRelId,
         string chartRelationshipType,
-        string? objectHyperlinkRelId,
+        // R98-io-chart-hyperlink-model-field: RelId + Tooltip pair -- was a bare string? before this
+        // field carried a Tooltip to re-emit (mirrors DrawingObjectHyperlink.Tooltip -- see
+        // XlsxWorksheetDrawingObjectWriter's identical hlinkClick@tooltip re-emit for
+        // pictures/shapes/text-boxes, R97-model-drawing-hyperlink-2-2).
+        (string RelId, string? Tooltip)? objectHyperlinkRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
@@ -827,7 +880,7 @@ internal static class XlsxWorksheetChartWriter
         int chartIndex,
         string chartRelId,
         string chartRelationshipType,
-        string? objectHyperlinkRelId,
+        (string RelId, string? Tooltip)? objectHyperlinkRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
@@ -850,7 +903,7 @@ internal static class XlsxWorksheetChartWriter
         int chartIndex,
         string chartRelId,
         string chartRelationshipType,
-        string? objectHyperlinkRelId,
+        (string RelId, string? Tooltip)? objectHyperlinkRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
@@ -874,7 +927,7 @@ internal static class XlsxWorksheetChartWriter
         int chartIndex,
         string chartRelId,
         string chartRelationshipType,
-        string? objectHyperlinkRelId,
+        (string RelId, string? Tooltip)? objectHyperlinkRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
@@ -896,7 +949,7 @@ internal static class XlsxWorksheetChartWriter
         int chartIndex,
         string chartRelId,
         string chartRelationshipType,
-        string? objectHyperlinkRelId,
+        (string RelId, string? Tooltip)? objectHyperlinkRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
@@ -923,7 +976,11 @@ internal static class XlsxWorksheetChartWriter
         int chartIndex,
         string chartRelId,
         string chartRelationshipType,
-        string? objectHyperlinkRelId,
+        // R98-io-chart-hyperlink-model-field: RelId + Tooltip pair -- was a bare string? before this
+        // field carried a Tooltip to re-emit (mirrors DrawingObjectHyperlink.Tooltip -- see
+        // XlsxWorksheetDrawingObjectWriter's identical hlinkClick@tooltip re-emit for
+        // pictures/shapes/text-boxes, R97-model-drawing-hyperlink-2-2).
+        (string RelId, string? Tooltip)? objectHyperlinkRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
@@ -943,11 +1000,19 @@ internal static class XlsxWorksheetChartWriter
                     // chart's alt text was silently dropped on every open+save round-trip.
                     string.IsNullOrWhiteSpace(chart.AltTextTitle) ? null : new XAttribute("title", chart.AltTextTitle),
                     string.IsNullOrWhiteSpace(chart.AltTextDescription) ? null : new XAttribute("descr", chart.AltTextDescription),
-                    // R41-io-hyperlink-drawing-rels-3-1: re-attach the chart-object hyperlink captured
-                    // from the pre-rebuild drawing part (see ReadOldChartGraphicFrameHyperlinks).
-                    objectHyperlinkRelId is null
+                    // R41-io-hyperlink-drawing-rels-3-1 / R98-io-chart-hyperlink-model-field: re-attach
+                    // the chart-object hyperlink, PREFERRING ChartModel.Hyperlink (see the caller,
+                    // WriteWorksheetCharts) and falling back to the pre-rebuild drawing part only when
+                    // the model carries none. Tooltip re-emitted to match
+                    // XlsxWorksheetDrawingObjectWriter's identical hlinkClick@tooltip for
+                    // pictures/shapes/text-boxes (R97-model-drawing-hyperlink-2-2) -- the OLD chart
+                    // writer never emitted this attribute at all.
+                    objectHyperlinkRelId is not { } resolvedRel
                         ? null
-                        : new XElement(drawingNs + "hlinkClick", new XAttribute(relNs + "id", objectHyperlinkRelId))),
+                        : new XElement(
+                            drawingNs + "hlinkClick",
+                            new XAttribute(relNs + "id", resolvedRel.RelId),
+                            string.IsNullOrWhiteSpace(resolvedRel.Tooltip) ? null : new XAttribute("tooltip", resolvedRel.Tooltip))),
                 new XElement(spreadsheetDrawingNs + "cNvGraphicFramePr")),
             new XElement(spreadsheetDrawingNs + "xfrm",
                 isChartEx

@@ -257,19 +257,26 @@ internal static class XlsxWorksheetViewWriter
     // still part of the top/left pane, while a genuine split's SplitRow/SplitColumn model the
     // first row/column BELOW/RIGHT of the divider (see SplitRowToTwips/SplitColumnToTwips above),
     // so its boundary (the last row/column still in the top/left pane) is one less.
-    private static string ComputeActivePaneName(Sheet sheet, uint row, uint col)
+    private static string ComputeActivePaneName(Sheet sheet, uint row, uint col) =>
+        ComputeActivePaneName(sheet.FrozenRows, sheet.FrozenCols, sheet.SplitRow, sheet.SplitColumn, row, col);
+
+    // Shared with XlsxCustomViewMapper.ToCustomSheetViewXml, which must tag a Custom View's
+    // <pane>/<selection> pair with the same activePane a live sheetView save would compute for
+    // the identical freeze/split geometry and active cell (see R98_CustomViewActivePaneTests) --
+    // duplicating this logic there would silently drift the two writers apart.
+    internal static string ComputeActivePaneName(uint frozenRows, uint frozenCols, uint? splitRow, uint? splitColumn, uint row, uint col)
     {
         uint boundaryRow;
         uint boundaryCol;
-        if (sheet.FrozenRows > 0 || sheet.FrozenCols > 0)
+        if (frozenRows > 0 || frozenCols > 0)
         {
-            boundaryRow = sheet.FrozenRows;
-            boundaryCol = sheet.FrozenCols;
+            boundaryRow = frozenRows;
+            boundaryCol = frozenCols;
         }
         else
         {
-            boundaryRow = sheet.SplitRow is > 0 ? sheet.SplitRow.Value - 1 : 0;
-            boundaryCol = sheet.SplitColumn is > 0 ? sheet.SplitColumn.Value - 1 : 0;
+            boundaryRow = splitRow is > 0 ? splitRow.Value - 1 : 0;
+            boundaryCol = splitColumn is > 0 ? splitColumn.Value - 1 : 0;
         }
 
         var isBottom = boundaryRow > 0 && row > boundaryRow;

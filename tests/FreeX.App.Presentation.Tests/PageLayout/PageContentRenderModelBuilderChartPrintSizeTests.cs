@@ -25,9 +25,14 @@ public sealed class PageContentRenderModelBuilderChartPrintSizeTests
     {
         var (workbook, sheet) = CreateWorkbook();
         PopulateChartSource(sheet);
+        // R98: the print area spans exactly the 10 explicitly-widened columns below (10 * 64px
+        // grid-space = 640px), comfortably inside the default A4 page's printable width (~659.52px)
+        // so this unit-conversion fixture doesn't also trip PageContentRenderModelBuilder's
+        // Scale%/Fit-to-pages defensive residual-overflow shrink -- that shrink is exercised by its
+        // own dedicated PageContentRenderModelBuilderScalePercentTests instead of incidentally here.
         sheet.PrintArea = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
-            new CellAddress(sheet.Id, 20, 12));
+            new CellAddress(sheet.Id, 20, 10));
 
         // Wide, uniform default-width columns so the anchor-space (*8) vs grid-space (*7+5) ratio is
         // stable and large: default width 8.43 chars -> 67.44px/col anchor-space vs 64px/col grid-space.
@@ -77,9 +82,14 @@ public sealed class PageContentRenderModelBuilderChartPrintSizeTests
     {
         var (workbook, sheet) = CreateWorkbook();
         PopulateChartSource(sheet);
+        // R98: the print area spans exactly the 8 explicitly-widened columns below (8 * 64px
+        // grid-space = 512px), comfortably inside the default A4 page's printable width (~659.52px)
+        // so this unit-conversion fixture doesn't also trip PageContentRenderModelBuilder's
+        // Scale%/Fit-to-pages defensive residual-overflow shrink -- that shrink is exercised by its
+        // own dedicated PageContentRenderModelBuilderScalePercentTests instead of incidentally here.
         sheet.PrintArea = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
-            new CellAddress(sheet.Id, 20, 12));
+            new CellAddress(sheet.Id, 20, 8));
 
         for (uint col = 1; col <= 8; col++)
             sheet.ColumnWidths[col] = 8.43;

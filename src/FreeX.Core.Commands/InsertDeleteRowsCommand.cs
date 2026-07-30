@@ -210,9 +210,39 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
 
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
             RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _formulaSnapshot)
-                .Concat(_tableCalculatedColumnFillSnapshot.Select(f => f.Address)),
+                .Concat(_tableCalculatedColumnFillSnapshot.Select(f => f.Address))
+                .Concat(VacatedAddressesForRelocatedFormulaCells(_sheetId, movedSnapshot)),
             _formulaSnapshot);
         return new CommandOutcome(true, AffectedCells: _affectedCells);
+    }
+
+    // R98-commands-dependency-vacated-1: every snapshot in movedSnapshot with a formula physically
+    // relocates from its captured (Row, Col) to (Row + count, Col) by MoveCellsForInsert above --
+    // regardless of whether RewriteAllFormulas needed to touch its formula TEXT. The OLD address is
+    // therefore always left blank afterward (Insert only ever shifts rows DOWN, so nothing below the
+    // insert point can move up into it), yet neither RelocatedFormulaCellsPendingDependencyRefresh
+    // (new-address only) nor _formulaSnapshot (also new-address only, since RewriteAllFormulas runs
+    // AFTER the physical move) ever surfaced it in AffectedCells. WorkbookCellEditService's
+    // UpdateFormulaDependencies (and MainWindow.Editing's mirror) drives RecalcEngine purely off
+    // AffectedCells: for each affected address it either re-registers dependencies or, if the cell
+    // there is blank, calls ClearFormulaDependencies -- so the OLD address's dependency-graph entry
+    // was never purged, leaving a phantom precedent/dependent edge keyed at an address that no
+    // longer holds any formula. Surfacing it here lets UpdateFormulaDependencies's existing
+    // `cell?.FormulaText is null -> ClearFormulaDependencies` branch reclaim it with no other
+    // pipeline changes. (If some other relocated cell or a calculated-column fill happens to have
+    // repopulated this same address by the time AffectedCells is consumed, BuildAffectedCellsForFormulaRewrite's
+    // de-dup plus UpdateFormulaDependencies reading LIVE cell state means this is still handled
+    // correctly -- it just re-registers whatever formula actually ended up there instead of clearing.)
+    private static IEnumerable<CellAddress> VacatedAddressesForRelocatedFormulaCells(
+        SheetId sheetId, IEnumerable<CellStateSnapshot> movedSnapshot)
+    {
+        foreach (var snapshot in movedSnapshot)
+        {
+            if (snapshot.FormulaText is null)
+                continue;
+
+            yield return new CellAddress(sheetId, snapshot.Row, snapshot.Col);
+        }
     }
 
     // R26-table-structured-ref-deep-2: fills each structured table's calculated-column formula into
@@ -432,11 +462,31 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         // address (mirroring Apply's own AffectedCells, which reports the post-shift address for
         // the forward direction). CommandBus.Undo reads this live property instead of the frozen
         // forward payload.
+        // R98-commands-dependency-vacated-1: symmetric to the Apply-side fix above -- Revert
+        // physically moves each formula cell in _movedSnapshot back from its current (post-shift)
+        // address (Row + _count, Col) to its restored, pre-shift address (Row, Col), always leaving
+        // the post-shift address blank afterward (undo of an Insert only ever shifts rows UP, so
+        // nothing above the insert point can move down into it). That vacated post-shift address was
+        // never included in AffectedCells either, leaving the identical stale dependency-graph entry
+        // behind after an Undo.
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
             RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_movedSnapshot, _sheetId)
                 .Concat(_tableCalculatedColumnFillSnapshot?.Select(f => f.Address) ?? [])
-                .Concat(formulaSnapshotAddressesBeforeRestore),
+                .Concat(formulaSnapshotAddressesBeforeRestore)
+                .Concat(VacatedAddressesAfterRevert(_sheetId, _movedSnapshot, _count)),
             []);
+    }
+
+    private static IEnumerable<CellAddress> VacatedAddressesAfterRevert(
+        SheetId sheetId, IEnumerable<CellStateSnapshot> movedSnapshot, uint count)
+    {
+        foreach (var snapshot in movedSnapshot)
+        {
+            if (snapshot.FormulaText is null)
+                continue;
+
+            yield return new CellAddress(sheetId, snapshot.Row + count, snapshot.Col);
+        }
     }
 
     private (uint MaxOccupied, List<CellStateSnapshot> Moved) CaptureMovedCells(Sheet sheet)
