@@ -82,7 +82,7 @@ public sealed class PptxPackageReaderSourceTests
             .Should()
             .Contain("if (pictures.Count != nodes.Count)")
             .And.Contain("data.IsLiveLayoutSupported = false;")
-            .And.Contain("nodes[i].Picture = pictures[i];")
+            .And.Contain("nodes[i].Picture = pictures[i].Picture;")
             .And.Contain("data.IsLiveLayoutSupported = true;");
 
         ExtractMethod(source, "private static SmartArtData? ReadSmartArtData(")

@@ -2450,9 +2450,10 @@ public static class PptxPackageReader
         }
         if (IsPictureNodeLayout(layoutUniqueId))
         {
-            // Final admission for this picture layout depends on deterministic
-            // node-level image import from the cached diagram drawing.
-            isLiveLayoutSupported = false;
+            // A valid picture layout may intentionally contain no images yet: PowerPoint
+            // exposes those nodes as editable "Add picture" placeholders. Relationship
+            // validation below still rejects ambiguous partial media mappings.
+            isLiveLayoutSupported = true;
         }
 
         var data = new SmartArtData
@@ -2594,11 +2595,58 @@ public static class PptxPackageReader
         }
 
         var pictures = ReadSmartArtDrawingPictures(smart, archive)
-            .Where(p => p.Bytes.Length > 0)
+            .Where(p => p.Picture.Bytes.Length > 0)
             .ToList();
 
-        // This bounded slice maps cached drawing pictures to data nodes by document order only
-        // when the fixture/deck supplies a one-to-one mapping. Anything ambiguous keeps fallback.
+        // An empty drawing is the valid placeholder-only state. Tagged pictures can be mapped
+        // by model identity, while an entirely untagged complete drawing retains the legacy
+        // document-order mapping. Any ambiguous partial identity remains on the cached fallback.
+        if (pictures.Count == 0)
+        {
+            data.IsLiveLayoutSupported = true;
+            return;
+        }
+
+        var taggedPictures = pictures
+            .Where(p => !string.IsNullOrWhiteSpace(p.ModelId))
+            .ToList();
+        if (taggedPictures.Count == pictures.Count)
+        {
+            var nodeById = new Dictionary<string, SmartArtNode>(StringComparer.OrdinalIgnoreCase);
+            var identitiesAreValid = true;
+            foreach (var node in nodes)
+            {
+                if (string.IsNullOrWhiteSpace(node.ModelId) || !nodeById.TryAdd(node.ModelId!, node))
+                {
+                    identitiesAreValid = false;
+                    break;
+                }
+            }
+            var mappedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var mappings = new List<(SmartArtNode Node, ImagePart Picture)>();
+            if (identitiesAreValid)
+            {
+                foreach (var (modelId, picture) in taggedPictures)
+                {
+                    if (modelId is null || !nodeById.TryGetValue(modelId, out var node) || !mappedIds.Add(modelId))
+                    {
+                        identitiesAreValid = false;
+                        break;
+                    }
+
+                    mappings.Add((node, picture));
+                }
+            }
+
+            if (identitiesAreValid)
+            {
+                foreach (var (node, picture) in mappings)
+                    node.Picture = picture;
+                data.IsLiveLayoutSupported = true;
+                return;
+            }
+        }
+
         if (pictures.Count != nodes.Count)
         {
             data.IsLiveLayoutSupported = false;
@@ -2606,7 +2654,7 @@ public static class PptxPackageReader
         }
 
         for (var i = 0; i < nodes.Count; i++)
-            nodes[i].Picture = pictures[i];
+            nodes[i].Picture = pictures[i].Picture;
 
         data.IsLiveLayoutSupported = true;
     }
@@ -2626,9 +2674,9 @@ public static class PptxPackageReader
         }
     }
 
-    private static List<ImagePart> ReadSmartArtDrawingPictures(SmartArtShape smart, ZipArchive archive)
+    private static List<(string? ModelId, ImagePart Picture)> ReadSmartArtDrawingPictures(SmartArtShape smart, ZipArchive archive)
     {
-        var pictures = new List<ImagePart>();
+        var pictures = new List<(string? ModelId, ImagePart Picture)>();
         if (string.IsNullOrWhiteSpace(smart.DrawingPartPath))
             return pictures;
 
@@ -2653,7 +2701,13 @@ public static class PptxPackageReader
             var blip = blipFill?.Descendants().FirstOrDefault(e => e.Name == A + "blip" || e.Name.LocalName == "blip");
             var image = LoadImageFromBlip(blip, rels, drawingDir, archive);
             if (image is not null)
-                pictures.Add(image);
+            {
+                var modelId = (string?)el.Attribute("modelId")
+                    ?? el.Elements().FirstOrDefault(e => e.Name.LocalName is "nvSpPr" or "nvPicPr")
+                        ?.Elements().FirstOrDefault(e => e.Name.LocalName is "cNvPr")
+                        ?.Attribute("modelId")?.Value;
+                pictures.Add((modelId, image));
+            }
         }
 
         return pictures;
@@ -2723,7 +2777,7 @@ public static class PptxPackageReader
         return family switch
         {
             SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "accentprocess" or "ascendingprocess" or "descendingprocess" or "basictimeline" or "phasedprocess" or "circleaccenttimeline" or "stepdownprocess" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess" or "basicchevronprocess" or "closedchevronprocess" or "bendingprocess" or "alternatingprocess" or "arrowribbon" or "circleprocess" or "funnelprocess" or "verticalprocess",
-            SmartArtFamily.List => layoutId is "list1" or "basicblocklist" or "verticalboxlist" or "verticalchevronlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "horizontalbulletlist" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "continuouspicturelist" or "picturegrid",
+            SmartArtFamily.List => layoutId is "list1" or "list2" or "basicblocklist" or "verticalboxlist" or "verticalchevronlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "horizontalbulletlist" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "continuouspicturelist" or "picturegrid",
             SmartArtFamily.Cycle => layoutId is "cycle1" or "radial1" or "basiccycle" or "radialcycle" or "radiallist" or "gearcycle" or "textcycle" or "blockcycle" or "nondirectionalcycle" or "continuouscycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "hierarchy3" or "basichierarchy" or "horizontalhierarchy" or "labeledhierarchy" or "tablehierarchy" or "verticalbulletlist" or "orgchart" or "nameandtitleorgchart",
             SmartArtFamily.Matrix => layoutId is "matrix1" or "basicmatrix" or "titledmatrix" or "gridmatrix",

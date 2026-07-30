@@ -53,6 +53,7 @@ public sealed class SmartArtTests : IDisposable
         bool continuousPictureList = false,
         bool pictureGrid = false,
         bool includeNodeImage = false,
+        IReadOnlySet<int>? pictureNodeIndexes = null,
         bool includeColors = true)
     {
         var path = Path.Combine(_tempDir, $"smartart_{Guid.NewGuid():N}.pptx");
@@ -80,12 +81,16 @@ public sealed class SmartArtTests : IDisposable
         // Build dsp:drawing XML with fallback shapes
         int shapeIdx = 1;
         var fallbackEls = new List<XElement>();
-        foreach (var text in nodeTexts)
+        for (var nodeIndex = 0; nodeIndex < nodeTexts.Length; nodeIndex++)
         {
+            var text = nodeTexts[nodeIndex];
             int idx = shapeIdx++;
-            if ((pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || continuousPictureList || pictureGrid) && includeNodeImage)
+            if ((pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || continuousPictureList || pictureGrid)
+                && includeNodeImage
+                && (pictureNodeIndexes is null || pictureNodeIndexes.Contains(nodeIndex)))
             {
                 fallbackEls.Add(new XElement(dspNs + "pic",
+                    new XAttribute("modelId", $"n{nodeIndex + 1}"),
                     new XElement(dspNs + "nvPicPr",
                         new XElement(dspNs + "cNvPr", new XAttribute("id", idx), new XAttribute("name", $"Picture{idx}")),
                         new XElement(dspNs + "cNvPicPr")),
@@ -570,7 +575,7 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_SmartArt_PictureCaptionList_WithoutImage_KeepsLiveLayoutDisabled()
+    public void Reader_SmartArt_PictureCaptionList_WithoutImage_UsesLivePlaceholders()
     {
         var pptxPath = MakeSmartArtPptx(["Caption only"], pictureCaptionList: true, includeNodeImage: false);
         var pres = PptxPackageReader.Read(pptxPath);
@@ -580,11 +585,47 @@ public sealed class SmartArtTests : IDisposable
             .SmartArt!;
 
         smart.Data.Should().NotBeNull();
-        smart.Data!.IsLiveLayoutSupported.Should().BeFalse(
-            "pictureCaptionList must not claim live layout when node images cannot be resolved");
+        smart.Data!.IsLiveLayoutSupported.Should().BeTrue(
+            "PowerPoint exposes an empty picture layout as editable Add picture placeholders");
         smart.Data.Nodes.Should().ContainSingle();
         smart.Data.Nodes[0].Picture.Should().BeNull();
-        smart.FallbackShapes.Should().NotBeEmpty("cached drawing remains the render fallback");
+
+        var liveText = SlideCompositor.Compose(pres, pres.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .SelectMany(shape => shape.Text?.Paragraphs ?? [])
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.Text)
+            .ToArray();
+        liveText.Should().Contain("Add picture");
+    }
+
+    [Fact]
+    public void Reader_SmartArt_PictureCaptionList_PartialTaggedPictures_UsesPlaceholdersForMissingNodes()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["First caption", "Second caption"],
+            pictureCaptionList: true,
+            includeNodeImage: true,
+            pictureNodeIndexes: new HashSet<int> { 1 });
+        var pres = PptxPackageReader.Read(pptxPath);
+
+        var smart = pres.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smart.Data.Should().NotBeNull();
+        smart.Data!.IsLiveLayoutSupported.Should().BeTrue(
+            "modelId tags identify the populated node without making the missing node fall back to cached SmartArt");
+        smart.Data.Nodes[0].Picture.Should().BeNull();
+        smart.Data.Nodes[1].Picture.Should().NotBeNull();
+
+        var liveText = SlideCompositor.Compose(pres, pres.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .SelectMany(shape => shape.Text?.Paragraphs ?? [])
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.Text)
+            .ToArray();
+        liveText.Should().Contain("Add picture");
     }
 
     [Fact]
@@ -2750,10 +2791,10 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ParsesKnownListFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    public void Reader_ParsesList2AsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
-            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList",
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/list2",
             nodes: [("id1", "Item 1"), ("id2", "Item 2")],
             parOfConnections: []);
 
@@ -2762,10 +2803,26 @@ public sealed class SmartArtTests : IDisposable
 
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.List,
-            "unsupported list siblings still retain broad family metadata for future layout slices");
-        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
-            "list-family layouts outside the bounded allow-list should keep cached-drawing fallback");
+            "list2 remains a list-family layout for shared live regeneration");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "list2 uses the existing shared vertical-list geometry and should remain editable");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Item 1", "Item 2");
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var liveShapes = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+        liveShapes.Should().HaveCount(2);
+        liveShapes.Select(shape => shape.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Item 1", "Item 2");
+
+        var savedPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        reopened.Data.Should().NotBeNull();
+        reopened.Data!.LayoutUniqueId.Should().EndWith("/list2");
+        reopened.Data.IsLiveLayoutSupported.Should().BeTrue();
     }
 
     [Fact]

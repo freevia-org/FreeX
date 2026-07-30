@@ -118,6 +118,9 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("string.Equals(scenarioId, \"equation-structures\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("string.Equals(scenarioId, \"chart-smartart-complex\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("string.Equals(scenarioId, \"object-format-position-size-style\", StringComparison.OrdinalIgnoreCase)");
+        source.Should().Contain("string.Equals(scenarioId, \"table-layout-complex\", StringComparison.OrdinalIgnoreCase)");
+        source.Should().Contain("string.Equals(scenarioId, \"table-pagination-repeat-header\", StringComparison.OrdinalIgnoreCase)");
+        source.Should().Contain("string.Equals(scenarioId, \"table-page-composition-stress\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("string.Equals(scenarioId, \"wordart-watermark-stress\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("string.Equals(scenarioId, \"wordart-picture-watermark-layout\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("ResolveAvaloniaHeaderSlotName(expectationDocument, pageNumber)");
@@ -243,6 +246,9 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("CenterYNormalized = 0.5 + (0.5 - placement.CenterYNormalized) * 1.35");
         source.Should().Contain("RotationRadians = -placement.RotationRadians * 0.4");
         source.Should().Contain("fillWarpedTextWidth, isPrimaryGlowBlueStress");
+        source.Should().Contain("Word's 8-DIP GlowBlue halo is a continuous ramp");
+        source.Should().Contain("(9, 0.02), (8, 0.03), (7, 0.05), (6, 0.11), (5, 0.25)");
+        source.Should().Contain("(4, 0.33), (3, 0.10), (2, 0.07), (1, 0.07)");
     }
 
     [Fact]
@@ -267,10 +273,9 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("Style: WordArtStyle.GlowBlue");
         source.Should().Contain("new Rect(wd.Rect.X - 1, wd.Rect.Y - 1, wd.Rect.Width + 1, wd.Rect.Height + 1)");
         source.Should().Contain("Warp: WordArtWarp.Wave1");
-        source.Should().Contain("OffsetAndInflate(rect, 0, 0, radius * 0.55)");
-        source.Should().Contain("OffsetAndInflate(rect, 0, 0, radius * 0.75)");
-        source.Should().Contain("EffectBrush(glowColor, effects.GlowOpacity * 0.12)");
-        source.Should().Contain("EffectBrush(glowColor, effects.GlowOpacity * 0.36)");
+        source.Should().Contain("foreach (var (spread, opacity) in new (double Spread, double Opacity)[]");
+        source.Should().Contain("OffsetAndInflate(rect, 0, 0, spread)");
+        source.Should().Contain("EffectBrush(glowColor, opacity)");
         source.Should().Contain("Text: \"Review Copy\"");
         source.Should().Contain("BuildSecondaryFillGoldMaterialBrush()");
     }
