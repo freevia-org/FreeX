@@ -53,6 +53,9 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             Math.Min(_textBox.SelectionStart, _textBox.SelectionEnd)..
             Math.Max(_textBox.SelectionStart, _textBox.SelectionEnd)];
 
+    /// <summary>The production Avalonia visual used for rich-text selection evidence.</summary>
+    public Visual? ActiveRichTextVisual => _textBox;
+
     public bool TryGetSelectedShapeRunHyperlink(out Hyperlink? hyperlink)
     {
         hyperlink = null;

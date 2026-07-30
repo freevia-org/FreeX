@@ -44,6 +44,7 @@ internal sealed record WholeWindowVisualEvidenceComparison(
     IReadOnlyList<string> MismatchCategories,
     IReadOnlyList<string> Details,
     WholeWindowVisualEvidencePixelMetrics? PixelMetrics,
+    WholeWindowVisualEvidencePixelMetrics? SelectionPixelMetrics = null,
     ImageContentValidation? WpfContentValidation = null,
     ImageContentValidation? AvaloniaContentValidation = null,
     TitleBarRasterValidation? WpfTitleBarRasterValidation = null,
@@ -307,6 +308,26 @@ internal static class WholeWindowVisualEvidence
                     $"Full-client threshold failed: changed {pixelMetrics.ChangedPixelRatio:P2} (max {MaximumChangedPixelRatio:P0}), mean channel delta {pixelMetrics.MeanChannelDelta:F2} (max {MaximumMeanChannelDelta:F2}), perceptual hash distance {pixelMetrics.PerceptualHashDistance} (max {MaximumPerceptualHashDistance})."));
         }
 
+        WholeWindowVisualEvidencePixelMetrics? selectionPixelMetrics = null;
+        if (scenario.Kind == WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay &&
+            StringComparer.Ordinal.Equals(scenario.ActivationId, "selection"))
+        {
+            CompareRichEditorSelectionState(wpf.SemanticState, avalonia.SemanticState, Mismatch);
+            selectionPixelMetrics = ComputeSelectionPixelMetrics(evidenceRoot, scenario.Id, wpf, avalonia, out var selectionEvidenceFailure);
+            if (selectionPixelMetrics is null)
+                Mismatch(
+                    selectionEvidenceFailure ?? "rich-editor-evidence-missing",
+                    selectionEvidenceFailure == "rich-editor-evidence-blank"
+                        ? "The paired rich-editor selection crop decoded but failed the pixel-content gate."
+                        : "The paired rich-editor selection crop is missing or undecodable.");
+            else if (!selectionPixelMetrics.ThresholdPassed)
+                Mismatch(
+                    "rich-editor-selection-pixel-threshold",
+                    string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"Rich-editor selection threshold failed: changed {selectionPixelMetrics.ChangedPixelRatio:P2} (max {MaximumChangedPixelRatio:P0}), mean channel delta {selectionPixelMetrics.MeanChannelDelta:F2} (max {MaximumMeanChannelDelta:F2}), perceptual hash distance {selectionPixelMetrics.PerceptualHashDistance} (max {MaximumPerceptualHashDistance})."));
+        }
+
         var limitations = wpf.Limitations.Concat(avalonia.Limitations).Distinct(StringComparer.Ordinal).ToArray();
         details.AddRange(limitations);
         var classification = categories.Count > 0
@@ -325,6 +346,7 @@ internal static class WholeWindowVisualEvidence
             categories.OrderBy(category => category, StringComparer.Ordinal).ToArray(),
             details,
             pixelMetrics,
+            selectionPixelMetrics,
             wpfContent,
             avaloniaContent,
             wpfTitleBarRaster,
@@ -414,6 +436,30 @@ internal static class WholeWindowVisualEvidence
             mismatch("auxiliary-pane-state", $"Visible auxiliary panes differ: WPF [{string.Join(", ", wpf.VisibleAuxiliaryPanes)}], Avalonia [{string.Join(", ", avalonia.VisibleAuxiliaryPanes)}].");
     }
 
+    private static void CompareRichEditorSelectionState(
+        WholeWindowVisualEvidenceSemanticState wpf,
+        WholeWindowVisualEvidenceSemanticState avalonia,
+        Action<string, string> mismatch)
+    {
+        var expectedStart = DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectionStart;
+        var expectedEnd = DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectionEnd;
+        var expectedText = DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectedText;
+        var left = wpf.RichEditor;
+        var right = avalonia.RichEditor;
+        if (!left.Active || !right.Active || !left.Bounds.IsVisible || !right.Bounds.IsVisible)
+        {
+            mismatch("rich-editor-evidence-missing", "Both hosts must expose an active, visible production rich editor for the selection pair.");
+            return;
+        }
+        if (left.SelectionStart != expectedStart || left.SelectionEnd != expectedEnd ||
+            right.SelectionStart != expectedStart || right.SelectionEnd != expectedEnd ||
+            !StringComparer.Ordinal.Equals(left.SelectedText, expectedText) ||
+            !StringComparer.Ordinal.Equals(right.SelectedText, expectedText))
+            mismatch("rich-editor-evidence-stale", "The paired captures do not contain the deterministic selected range and selected text from the rich-editor fixture.");
+        if (!BoundsMatch(left.Bounds, right.Bounds))
+            mismatch("rich-editor-selection-geometry", BoundsDetail("Rich-editor selection", left.Bounds, right.Bounds));
+    }
+
     private static WholeWindowVisualEvidencePixelMetrics? ComputePixelMetrics(
         string evidenceRoot,
         string scenarioId,
@@ -424,18 +470,85 @@ internal static class WholeWindowVisualEvidence
         var avaloniaPath = Path.Combine(evidenceRoot, avalonia.ClientImagePath.Replace('/', Path.DirectorySeparatorChar));
         if (!File.Exists(wpfPath) || !File.Exists(avaloniaPath))
             return null;
+        return ComputePixelMetricsFromPaths(
+            evidenceRoot,
+            scenarioId,
+            wpfPath,
+            avaloniaPath,
+            WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
+            WholeWindowVisualEvidenceCatalog.LogicalClientHeight);
+    }
+
+    private static WholeWindowVisualEvidencePixelMetrics? ComputeSelectionPixelMetrics(
+        string evidenceRoot,
+        string scenarioId,
+        WholeWindowVisualEvidenceCapture wpf,
+        WholeWindowVisualEvidenceCapture avalonia,
+        out string? failureCategory)
+    {
+        failureCategory = null;
+        if (!wpf.SemanticState.RichEditor.Active || !avalonia.SemanticState.RichEditor.Active ||
+            !wpf.SemanticState.RichEditor.Bounds.IsVisible || !avalonia.SemanticState.RichEditor.Bounds.IsVisible)
+            return null;
+
+        var wpfPath = EvidencePath(evidenceRoot, wpf.ClientImagePath);
+        var avaloniaPath = EvidencePath(evidenceRoot, avalonia.ClientImagePath);
+        var wpfCrop = EvidencePath(evidenceRoot, $"diff/{scenarioId}.wpf-selection.png");
+        var avaloniaCrop = EvidencePath(evidenceRoot, $"diff/{scenarioId}.avalonia-selection.png");
+        if (!File.Exists(wpfPath) || !File.Exists(avaloniaPath))
+        {
+            failureCategory = "rich-editor-evidence-missing";
+            return null;
+        }
+        if (!ImageDiff.TryWriteCrop(wpfPath, wpf.SemanticState.RichEditor.Bounds, wpfCrop) ||
+            !ImageDiff.TryWriteCrop(avaloniaPath, avalonia.SemanticState.RichEditor.Bounds, avaloniaCrop))
+        {
+            failureCategory = "rich-editor-evidence-missing";
+            return null;
+        }
+
+        var wpfContent = TryValidateContent(wpfCrop);
+        var avaloniaContent = TryValidateContent(avaloniaCrop);
+        if (wpfContent?.IsValid != true || avaloniaContent?.IsValid != true)
+        {
+            failureCategory = "rich-editor-evidence-blank";
+            return null;
+        }
+
+        int normalizedWidth = Math.Max(wpfContent.Width, avaloniaContent.Width);
+        int normalizedHeight = Math.Max(wpfContent.Height, avaloniaContent.Height);
+        return ComputePixelMetricsFromPaths(
+            evidenceRoot,
+            $"{scenarioId}.selection",
+            wpfCrop,
+            avaloniaCrop,
+            normalizedWidth,
+            normalizedHeight);
+    }
+
+    private static WholeWindowVisualEvidencePixelMetrics? ComputePixelMetricsFromPaths(
+        string evidenceRoot,
+        string scenarioId,
+        string wpfPath,
+        string avaloniaPath,
+        int normalizedWidth,
+        int normalizedHeight)
+    {
+        if (!File.Exists(wpfPath) || !File.Exists(avaloniaPath) || normalizedWidth <= 0 || normalizedHeight <= 0)
+            return null;
+
         var heatmapRelativePath = $"diff/{scenarioId}.png";
         var heatmapPath = Path.Combine(evidenceRoot, heatmapRelativePath.Replace('/', Path.DirectorySeparatorChar));
         var diff = ImageDiff.CompareNormalized(
             wpfPath,
             avaloniaPath,
-            WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
-            WholeWindowVisualEvidenceCatalog.LogicalClientHeight,
+            normalizedWidth,
+            normalizedHeight,
             heatmapPath);
         var perceptual = ImageDiff.CompareDifferenceHash(wpfPath, avaloniaPath);
         var dimensionsMatch = diff.WidthA == diff.WidthB && diff.HeightA == diff.HeightB &&
-            diff.WidthA == WholeWindowVisualEvidenceCatalog.LogicalClientWidth &&
-            diff.HeightA == WholeWindowVisualEvidenceCatalog.LogicalClientHeight;
+            diff.WidthA == normalizedWidth &&
+            diff.HeightA == normalizedHeight;
         var thresholdPassed = dimensionsMatch &&
             diff.ChangedPixelRatio <= MaximumChangedPixelRatio &&
             diff.MeanChannelDelta <= MaximumMeanChannelDelta &&
@@ -629,8 +742,8 @@ internal static class WholeWindowVisualEvidence
         builder.AppendLine();
         builder.AppendLine("## Scenarios");
         builder.AppendLine();
-        builder.AppendLine("| Scenario | Kind | Result | Categories | Changed pixels | Mean delta | Perceptual distance | Evidence |");
-        builder.AppendLine("|---|---|---|---|---:|---:|---:|---|");
+        builder.AppendLine("| Scenario | Kind | Result | Categories | Changed pixels | Mean delta | Perceptual distance | Selection changed pixels | Evidence |");
+        builder.AppendLine("|---|---|---|---|---:|---:|---:|---:|---|");
         foreach (var comparison in summary.Comparisons)
         {
             var metrics = comparison.PixelMetrics;
@@ -641,6 +754,7 @@ internal static class WholeWindowVisualEvidence
                 .Append(" | ").Append(metrics is null ? "n/a" : metrics.ChangedPixelRatio.ToString("P2", CultureInfo.InvariantCulture))
                 .Append(" | ").Append(metrics is null ? "n/a" : metrics.MeanChannelDelta.ToString("F2", CultureInfo.InvariantCulture))
                 .Append(" | ").Append(metrics is null ? "n/a" : metrics.PerceptualHashDistance.ToString(CultureInfo.InvariantCulture))
+                .Append(" | ").Append(comparison.SelectionPixelMetrics is null ? "n/a" : comparison.SelectionPixelMetrics.ChangedPixelRatio.ToString("P2", CultureInfo.InvariantCulture))
                 .Append(" | ").Append(EvidenceLinks(comparison))
                 .AppendLine(" |");
             foreach (var detail in comparison.Details)
@@ -663,6 +777,7 @@ internal static class WholeWindowVisualEvidence
         foreach (var comparison in summary.Comparisons)
         {
             var metrics = comparison.PixelMetrics;
+            var selectionMetrics = comparison.SelectionPixelMetrics;
             var details = comparison.Details.Count == 0
                 ? string.Empty
                 : $"<ul>{string.Concat(comparison.Details.Select(detail => $"<li>{WebUtility.HtmlEncode(detail)}</li>"))}</ul>";
@@ -670,9 +785,9 @@ internal static class WholeWindowVisualEvidence
                 <section class="pair {comparison.Classification.ToString().ToLowerInvariant()}">
                   <h2>{WebUtility.HtmlEncode(comparison.ScenarioId)} <span>{comparison.Classification}</span></h2>
                   <p><b>{comparison.Kind}</b> | categories: {WebUtility.HtmlEncode(comparison.MismatchCategories.Count == 0 ? "none" : string.Join(", ", comparison.MismatchCategories))}</p>
-                  <p>Changed pixels {metrics?.ChangedPixelRatio.ToString("P2", CultureInfo.InvariantCulture) ?? "n/a"}; mean delta {metrics?.MeanChannelDelta.ToString("F2", CultureInfo.InvariantCulture) ?? "n/a"}; perceptual distance {metrics?.PerceptualHashDistance.ToString(CultureInfo.InvariantCulture) ?? "n/a"}.</p>
+                  <p>Changed pixels {metrics?.ChangedPixelRatio.ToString("P2", CultureInfo.InvariantCulture) ?? "n/a"}; mean delta {metrics?.MeanChannelDelta.ToString("F2", CultureInfo.InvariantCulture) ?? "n/a"}; perceptual distance {metrics?.PerceptualHashDistance.ToString(CultureInfo.InvariantCulture) ?? "n/a"}. Selection pair changed pixels: {selectionMetrics?.ChangedPixelRatio.ToString("P2", CultureInfo.InvariantCulture) ?? "n/a"}; mean delta: {selectionMetrics?.MeanChannelDelta.ToString("F2", CultureInfo.InvariantCulture) ?? "n/a"}; perceptual distance: {selectionMetrics?.PerceptualHashDistance.ToString(CultureInfo.InvariantCulture) ?? "n/a"}.</p>
                   {details}
-                  <div class="images">{HtmlImage("WPF full client", comparison.WpfFullImagePath)}{HtmlImage("Avalonia full client", comparison.AvaloniaFullImagePath)}{HtmlImage("WPF normalized client crop", comparison.WpfClientImagePath)}{HtmlImage("Avalonia normalized client crop", comparison.AvaloniaClientImagePath)}{HtmlImage("Whole-client diff", metrics?.HeatmapPath ?? string.Empty)}</div>
+                  <div class="images">{HtmlImage("WPF full client", comparison.WpfFullImagePath)}{HtmlImage("Avalonia full client", comparison.AvaloniaFullImagePath)}{HtmlImage("WPF normalized client crop", comparison.WpfClientImagePath)}{HtmlImage("Avalonia normalized client crop", comparison.AvaloniaClientImagePath)}{HtmlImage("Whole-client diff", metrics?.HeatmapPath ?? string.Empty)}{HtmlImage("WPF selection crop", selectionMetrics is null ? string.Empty : $"diff/{comparison.ScenarioId}.wpf-selection.png")}{HtmlImage("Avalonia selection crop", selectionMetrics is null ? string.Empty : $"diff/{comparison.ScenarioId}.avalonia-selection.png")}{HtmlImage("Selection diff", selectionMetrics?.HeatmapPath ?? string.Empty)}</div>
                 </section>
                 """);
         }
@@ -729,6 +844,7 @@ internal static class WholeWindowVisualEvidence
         Add("WPF client", comparison.WpfClientImagePath);
         Add("Avalonia client", comparison.AvaloniaClientImagePath);
         Add("diff", comparison.PixelMetrics?.HeatmapPath ?? string.Empty);
+        Add("selection diff", comparison.SelectionPixelMetrics?.HeatmapPath ?? string.Empty);
         return links.Count == 0 ? "n/a" : string.Join(" / ", links);
     }
 

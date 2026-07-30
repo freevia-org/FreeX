@@ -185,6 +185,24 @@ function Assert-PointerSelectionSemanticContract {
     if ($proof -notmatch '(?m)^drag-contract=first visual line to captured pointer beyond editor bottom across paragraph boundary$') {
         throw "Pointer-selection calibration proof does not describe the bounded drag contract."
     }
+    $visualStatePath = Join-Path $EvidenceDirectory "pointer-selection-visual-state.json"
+    if (-not (Test-Path -LiteralPath $visualStatePath -PathType Leaf) -or
+        (Get-Item -LiteralPath $visualStatePath).Length -le 0) {
+        throw "Pointer-selection paired visual state is missing."
+    }
+    $visualState = Get-Content -LiteralPath $visualStatePath -Raw | ConvertFrom-Json
+    $expectedText = "Wide words make this first paragraph wrap at unequal visual line widths`ntail paragraph crosses the boundary"
+    $expectedTextHash = ([Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($expectedText)))).ToLowerInvariant()
+    $fixtureBeforePath = Join-Path $EvidenceDirectory "fixture-mounted-before.sha256.txt"
+    $fixtureBefore = (Get-Content -LiteralPath $fixtureBeforePath -Raw).Trim()
+    if ($visualState.contractId -ne "freep.rich-text.selection-visual.v1" -or
+        $visualState.fixtureSha256 -ne $fixtureBefore -or
+        $visualState.selectedText -ne $expectedText -or
+        $visualState.selectedTextSha256 -ne $expectedTextHash -or
+        $visualState.capture -ne "pointer-selection-forward.png" -or
+        $visualState.direction -ne "forward") {
+        throw "Pointer-selection paired visual state is stale or does not describe the exact selected-text capture."
+    }
 }
 
 function Assert-ManifestContract {

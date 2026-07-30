@@ -913,6 +913,7 @@ if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
     pointer_reverse_readback=false
     pointer_forward_capture=false
     pointer_reverse_capture=false
+    pointer_visual_state=false
     pointer_expected=$'Wide words make this first paragraph wrap at unequal visual line widths\ntail paragraph crosses the boundary'
     if pointer_drag "$pointer_anchor_x" "$pointer_anchor_y" "$pointer_edge_x" "$pointer_edge_y"; then
         if copy_selection_and_assert_clipboard "pointer-selection-forward" "$pointer_expected"; then
@@ -922,6 +923,28 @@ if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
         fi
         if capture "pointer-selection-forward.png"; then
             pointer_forward_capture=true
+        else
+            input_commands_ok=false
+        fi
+        if python3 - "$output/pointer-selection-visual-state.json" "$initial_hash" "$pointer_expected" <<'PY'
+import hashlib
+import json
+import sys
+
+path, fixture_sha256, selected_text = sys.argv[1:]
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump({
+        "contractId": "freep.rich-text.selection-visual.v1",
+        "fixtureSha256": fixture_sha256,
+        "selectedText": selected_text,
+        "selectedTextSha256": hashlib.sha256(selected_text.encode("utf-8")).hexdigest(),
+        "capture": "pointer-selection-forward.png",
+        "direction": "forward",
+    }, handle, ensure_ascii=False, indent=2)
+    handle.write("\n")
+PY
+        then
+            pointer_visual_state=true
         else
             input_commands_ok=false
         fi
@@ -943,7 +966,7 @@ if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
         input_commands_ok=false
     fi
     if $pointer_forward_readback && $pointer_reverse_readback &&
-       $pointer_forward_capture && $pointer_reverse_capture; then
+       $pointer_forward_capture && $pointer_reverse_capture && $pointer_visual_state; then
         pointer_selection=true
     fi
 elif [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ||
@@ -1186,6 +1209,7 @@ if $visible_pass && $input_commands_ok && $input_capture && $commit_capture && $
             pointer-selection-reverse-proof.txt
             pointer-selection-final.png
             pointer-selection-state.txt
+            pointer-selection-visual-state.json
         )
         record "rich-editor-physical-soft-break-input" "passed" \
             "Physical X11 pointer drag selected the full unequal-width wrapped text across the paragraph boundary in both directions and both exact xclip reads matched." \

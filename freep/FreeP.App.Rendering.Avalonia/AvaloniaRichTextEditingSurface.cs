@@ -19,8 +19,16 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     private const double CaretWidth = 1.25;
     private static readonly Thickness ContentPadding = new(4, 3, 4, 3);
     private static readonly IBrush DefaultForeground = Brushes.Black;
-    private static readonly IBrush SelectionBrush =
-        new SolidColorBrush(Color.FromArgb(0x78, 0xAD, 0xD6, 0xFF));
+    private static readonly IBrush SelectionBrush = new SolidColorBrush(Color.FromArgb(
+        InCanvasRichTextSelectionVisualContract.BackgroundAlpha,
+        InCanvasRichTextSelectionVisualContract.BackgroundRed,
+        InCanvasRichTextSelectionVisualContract.BackgroundGreen,
+        InCanvasRichTextSelectionVisualContract.BackgroundBlue));
+    private static readonly IBrush SelectionForeground = new SolidColorBrush(Color.FromArgb(
+        InCanvasRichTextSelectionVisualContract.ForegroundAlpha,
+        InCanvasRichTextSelectionVisualContract.ForegroundRed,
+        InCanvasRichTextSelectionVisualContract.ForegroundGreen,
+        InCanvasRichTextSelectionVisualContract.ForegroundBlue));
     private static readonly IPen CaretPen = new Pen(Brushes.Black, CaretWidth);
 
     private readonly List<ParagraphLayout> _layouts = [];
@@ -189,7 +197,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         base.Render(context);
         EnsureLayouts();
 
-        foreach (var rect in BuildSelectionRects())
+        var selectionRects = BuildSelectionRects();
+        foreach (var rect in selectionRects)
             context.FillRectangle(SelectionBrush, rect);
 
         foreach (var item in _layouts)
@@ -213,6 +222,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             item.Layout.Draw(
                 context,
                 new Point(item.Origin.X, item.Origin.Y - _scrollOffsetY));
+
+            DrawSelectedText(context, item, selectionRects);
         }
 
         var caret = BuildCaretRect();
@@ -222,6 +233,43 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 CaretPen,
                 new Point(caret.X, caret.Y),
                 new Point(caret.X, caret.Bottom));
+        }
+    }
+
+    private void DrawSelectedText(
+        DrawingContext context,
+        ParagraphLayout item,
+        IReadOnlyList<Rect> selectionRects)
+    {
+        if (selectionRects.Count == 0)
+            return;
+
+        int start = Math.Max(_selectionStart, item.Paragraph.GlobalStart);
+        int end = Math.Min(_selectionEnd, item.Paragraph.GlobalEnd);
+        if (end <= start)
+            return;
+
+        using var selectedLayout = CreateLayout(
+            item.Paragraph,
+            Math.Max(1, Bounds.Width - item.Origin.X - ContentPadding.Right),
+            SelectionForeground);
+        foreach (var rect in selectedLayout.HitTestTextRange(
+                     start - item.Paragraph.GlobalStart,
+                     end - start))
+        {
+            var translated = rect.Translate(item.Origin);
+            var screenRect = new Rect(
+                translated.X,
+                translated.Y - _scrollOffsetY,
+                translated.Width,
+                translated.Height);
+            if (!selectionRects.Any(selection => selection.Intersects(screenRect)))
+                continue;
+
+            using (context.PushClip(screenRect))
+                selectedLayout.Draw(
+                    context,
+                    new Point(item.Origin.X, item.Origin.Y - _scrollOffsetY));
         }
     }
 
@@ -279,7 +327,10 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             Math.Max(0, _contentExtentHeight - Bounds.Height));
     }
 
-    private TextLayout CreateLayout(InCanvasRichTextVisualParagraph paragraph, double maxWidth)
+    private TextLayout CreateLayout(
+        InCanvasRichTextVisualParagraph paragraph,
+        double maxWidth,
+        IBrush? foregroundOverride = null)
     {
         var seed = paragraph.Runs.FirstOrDefault();
         var defaultTypeface = CreateTypeface(seed);
@@ -293,14 +344,14 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             overrides.Add(new ValueSpan<TextRunProperties>(
                 run.Start,
                 run.Length,
-                CreateRunProperties(run)));
+                CreateRunProperties(run, foregroundOverride)));
         }
 
         return new TextLayout(
             paragraph.Text,
             defaultTypeface,
             defaultFontSize,
-            DefaultForeground,
+            foregroundOverride ?? DefaultForeground,
             ToAvaloniaAlignment(paragraph.Alignment),
             TextWrapping.Wrap,
             TextTrimming.None,
@@ -365,7 +416,9 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         }
     }
 
-    private GenericTextRunProperties CreateRunProperties(InCanvasRichTextVisualRun? run)
+    private GenericTextRunProperties CreateRunProperties(
+        InCanvasRichTextVisualRun? run,
+        IBrush? foregroundOverride = null)
     {
         var decorations = new TextDecorationCollection();
         if (run?.Underline == true)
@@ -373,9 +426,9 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         if (run?.Strikethrough == true)
             decorations.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough });
 
-        IBrush foreground = run?.Color is { } color
+        IBrush foreground = foregroundOverride ?? (run?.Color is { } color
             ? new SolidColorBrush(Color.FromRgb(color.Resolved.R, color.Resolved.G, color.Resolved.B))
-            : DefaultForeground;
+            : DefaultForeground);
         return new GenericTextRunProperties(
             CreateTypeface(run),
             ToDip(run?.FontSizePt ?? _fallbackFontSizePt),

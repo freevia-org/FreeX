@@ -33,6 +33,30 @@ internal static class ImageDiff
 {
     internal const int DefaultChangedChannelThreshold = 24;
 
+    internal static bool TryWriteCrop(
+        string sourcePath,
+        WholeWindowVisualEvidenceBounds bounds,
+        string destinationPath)
+    {
+        if (!File.Exists(sourcePath) || !bounds.IsVisible)
+            return false;
+
+        var source = WpfImageDiff.LoadBitmap(sourcePath);
+        int x = Math.Clamp((int)Math.Floor(bounds.X), 0, source.PixelWidth - 1);
+        int y = Math.Clamp((int)Math.Floor(bounds.Y), 0, source.PixelHeight - 1);
+        int right = Math.Clamp((int)Math.Ceiling(bounds.X + bounds.Width), x + 1, source.PixelWidth);
+        int bottom = Math.Clamp((int)Math.Ceiling(bounds.Y + bounds.Height), y + 1, source.PixelHeight);
+        var crop = new CroppedBitmap(source, new Int32Rect(x, y, right - x, bottom - y));
+        crop.Freeze();
+
+        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(crop));
+        using var stream = File.Create(destinationPath);
+        encoder.Save(stream);
+        return true;
+    }
+
     /// <summary>Compare two PNG files and return metrics. Writes a heatmap if <paramref name="heatmapPath"/> is non-null.</summary>
     internal static DiffResult Compare(string pathA, string pathB, string? heatmapPath = null)
     {

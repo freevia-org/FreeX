@@ -138,6 +138,16 @@ public sealed class InCanvasTextEditor : IDisposable
             IsUndoEnabled = false,
             VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            SelectionBrush = new SolidColorBrush(Color.FromArgb(
+                InCanvasRichTextSelectionVisualContract.BackgroundAlpha,
+                InCanvasRichTextSelectionVisualContract.BackgroundRed,
+                InCanvasRichTextSelectionVisualContract.BackgroundGreen,
+                InCanvasRichTextSelectionVisualContract.BackgroundBlue)),
+            SelectionTextBrush = new SolidColorBrush(Color.FromArgb(
+                InCanvasRichTextSelectionVisualContract.ForegroundAlpha,
+                InCanvasRichTextSelectionVisualContract.ForegroundRed,
+                InCanvasRichTextSelectionVisualContract.ForegroundGreen,
+                InCanvasRichTextSelectionVisualContract.ForegroundBlue)),
         };
 
         Canvas.SetLeft(_richBox, placement.Left);
@@ -154,6 +164,9 @@ public sealed class InCanvasTextEditor : IDisposable
         _richBox.Focus();
         _richBox.SelectAll();
     }
+
+    /// <summary>The native WPF visual used for the active rich-text selection evidence.</summary>
+    public FrameworkElement? ActiveRichTextVisual => _richBox;
 
     /// <summary>Commits the current text edit, if active, to the command bus and hides the overlay.</summary>
     public void Commit()
