@@ -110,27 +110,44 @@ public static class WorkbookPdfContentBuilder
         var sheet = workbook.GetSheet(request.PrintRange.Start.Sheet)
             ?? workbook.GetSheetAt(request.SheetIndex);
 
-        var (pageW, pageH, mL, mR, mT, mB, headerBandPt, footerBandPt) =
+        var (pageW, pageH, mL, mR, mT, mB, _, _) =
             SheetPdfPageSetupResolver.ComputePdfGeometry(sheet);
 
         // Effective scale for rendering (percent / 100).
         var scaleRatio = ResolveScaleRatio(sheet, exportPlan, request);
-
-        // Content rect: page minus margins. y-origin is bottom-left in PDF space.
-        var contentLeft   = mL;
-        var contentBottom = mB;
-        var contentRight  = pageW - mR;
-        var contentTop    = pageH - mT;
-        var contentWidth  = Math.Max(1.0, contentRight - contentLeft);
-        var contentHeight = Math.Max(1.0, contentTop - contentBottom);
 
         // Header band: sits between the top of the page and the content rect.
         // In PDF y-up: header band top = pageH - headerEdge, header band bottom = pageH - mT.
         // Footer band: sits between the bottom of the content rect and the bottom of the page.
         var headerEdgePt  = sheet.HeaderMargin * SheetPdfPageSetupResolver.PdfPointsPerInch;
         var footerEdgePt  = sheet.FooterMargin * SheetPdfPageSetupResolver.PdfPointsPerInch;
-        _ = headerBandPt;
-        _ = footerBandPt;
+        // (ComputePdfGeometry's HeaderBandPt/FooterBandPt tuple members are these same raw
+        // header/footer margin-edge distances; discarded above via `_` rather than recomputed twice
+        // under two names.)
+
+        // R99-services-pagesetup-header-band-2: Excel's model -- the header/footer margin is the
+        // distance from the page edge to the header/footer TEXT band, which sits WITHIN the top/bottom
+        // margin band as long as it doesn't exceed it. The cell grid's own top/bottom edge is pushed
+        // out to max(margin, header/footer edge), NOT the plain margin, once the header/footer margin
+        // is the larger of the two -- exactly like SheetPdfPageSetupResolver.ResolveCapacityDetail's
+        // bodyTopPx/bodyBottomPx (R96-services-pagesetup-header-band-1, which already computed the
+        // capacity/row-count this way) and PrintRenderer.HeaderFooter.cs's contentTop
+        // (R99-app-host-header-footer-margin-overlap-1, the WPF rendering-geometry twin of this bug).
+        // Previously this method used the plain mT/mB unconditionally, so the PDF content renderer's
+        // actual drawn grid disagreed with both Excel and its own sibling pagination-capacity method
+        // whenever a Header/Footer margin exceeded the Top/Bottom margin -- the header text (drawn
+        // independently below at headerY = pageH - headerEdgePt - 8) visually overlapped the first
+        // printed row.
+        var bodyTopEdgePt    = Math.Max(mT, headerEdgePt);
+        var bodyBottomEdgePt = Math.Max(mB, footerEdgePt);
+
+        // Content rect: page minus margins. y-origin is bottom-left in PDF space.
+        var contentLeft   = mL;
+        var contentBottom = bodyBottomEdgePt;
+        var contentRight  = pageW - mR;
+        var contentTop    = pageH - bodyTopEdgePt;
+        var contentWidth  = Math.Max(1.0, contentRight - contentLeft);
+        var contentHeight = Math.Max(1.0, contentTop - contentBottom);
 
         var ops = new List<PdfDrawOp>();
 
@@ -394,13 +411,26 @@ public static class WorkbookPdfContentBuilder
         // Header text: rendered just below the header margin from the top of the page. The band
         // height (mT - headerEdgePt, the gap between the header edge and the content's top margin)
         // bounds how large an &G header picture may draw before it starts to overlap the grid.
-        var headerY = pageH - headerEdgePt - 8;   // baseline approx 8pt below header edge
+        //
+        // R99-services-header-band-2: when the Header margin is larger than the Top margin,
+        // bodyTopEdgePt (above) already pushed the grid's own top edge down to headerEdgePt -- but
+        // the natural "8pt below the header edge" baseline still landed 8pt further down than that
+        // same line, i.e. INSIDE the now-lowered grid, because this line never accounted for where
+        // contentTop actually ended up. Clamp the baseline to never sit below contentTop (never a
+        // smaller y in this y-up space) so the header text can, at most, touch the grid's own top
+        // edge -- matching PrintRenderer.HeaderFooterDrawing.cs's headerY (WPF path, R99-app-host-
+        // header-footer-margin-overlap-1), whose Math.Max(marginTop, headerMargin)-derived body top
+        // the header band is anchored against by construction, never drawing past it.
+        var headerY = Math.Max(pageH - headerEdgePt - 8, contentTop);   // baseline approx 8pt below header edge, never past the grid's own top
         var headerBandHeightPt = Math.Max(8.0, mT - headerEdgePt);
         RenderHeaderFooterBand(ops, header, headerPictures, pageW, mL, mR, headerY, headerBandHeightPt, 8,
             workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, HeaderTextColor);
 
-        // Footer text: rendered just above the footer edge from the bottom.
-        var footerY = footerEdgePt + 2;            // baseline approx 2pt above footer edge
+        // Footer text: rendered just above the footer edge from the bottom. R99-services-header-band-2:
+        // symmetric clamp -- never draw above (a larger y-up value than) contentBottom, the grid's own
+        // bottom edge, once Footer margin exceeds Bottom margin and bodyBottomEdgePt has already
+        // raised the grid's bottom edge to footerEdgePt.
+        var footerY = Math.Min(footerEdgePt + 2, contentBottom);            // baseline approx 2pt above footer edge, never past the grid's own bottom
         var footerBandHeightPt = Math.Max(8.0, mB - footerEdgePt);
         RenderHeaderFooterBand(ops, footer, footerPictures, pageW, mL, mR, footerY, footerBandHeightPt, 8,
             workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, FooterTextColor);

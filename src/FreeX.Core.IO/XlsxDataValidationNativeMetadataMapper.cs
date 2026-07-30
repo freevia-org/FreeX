@@ -75,9 +75,15 @@ internal static class XlsxDataValidationNativeMetadataMapper
         if (nativeMetadata.Count == 0 || sheet.DataValidations.Count == 0)
             return;
 
+        // Each native-metadata entry describes exactly one <dataValidation> element and must be
+        // consumed by at most one validation: two independent rules can share the same primary
+        // range (e.g. a multi-area List rule "A1:A10 C1:C10" and an unrelated single-area Custom
+        // rule "A1:A10"), and reusing one entry for both would splice the wrong AdditionalRanges
+        // onto the second rule (R99).
+        var consumed = new bool[nativeMetadata.Count];
         foreach (var validation in sheet.DataValidations)
         {
-            var metadata = FindNativeMetadata(nativeMetadata, validation.AppliesTo);
+            var metadata = FindNativeMetadata(nativeMetadata, validation, consumed);
             if (metadata is null)
                 continue;
 
@@ -520,12 +526,40 @@ internal static class XlsxDataValidationNativeMetadataMapper
 
     private static DataValidationNativeMetadata? FindNativeMetadata(
         IReadOnlyList<DataValidationNativeMetadata> nativeMetadata,
-        GridRange appliesTo)
+        DataValidation validation,
+        bool[] consumed)
     {
-        foreach (var metadata in nativeMetadata)
+        // ClosedXML itself splits a multi-area rule's sqref (e.g. "A1:A10 C1:C10") into several
+        // single-range DataValidation objects -- one per area -- rather than one object carrying
+        // all the ranges, so by the time this runs every candidate here has AdditionalRanges
+        // still empty and range-set comparison cannot tell "the primary split of rule X" apart
+        // from "an unrelated rule Y that merely starts at the same cell". Content comparison
+        // (the same Type/Operator/Formula1/Formula2 check RemoveDuplicateMultiAreaValidations
+        // already relies on) is what actually distinguishes them, so require it whenever more
+        // than one metadata entry shares this validation's primary range.
+        for (var i = 0; i < nativeMetadata.Count; i++)
         {
-            if (RangesEqual(metadata.AppliesTo, appliesTo))
-                return metadata;
+            if (consumed[i] || !RangesEqual(nativeMetadata[i].AppliesTo, validation.AppliesTo))
+                continue;
+
+            if (!MatchesMetadataContent(validation, nativeMetadata[i]))
+                continue;
+
+            consumed[i] = true;
+            return nativeMetadata[i];
+        }
+
+        // Fall back to the first unconsumed candidate with a matching primary range only, for
+        // cases where content comparison cannot confirm a match (e.g. a formula FreeX cannot
+        // round-trip byte-for-byte) -- preserves prior behavior for the common case of exactly
+        // one rule per primary range.
+        for (var i = 0; i < nativeMetadata.Count; i++)
+        {
+            if (consumed[i] || !RangesEqual(nativeMetadata[i].AppliesTo, validation.AppliesTo))
+                continue;
+
+            consumed[i] = true;
+            return nativeMetadata[i];
         }
 
         return null;

@@ -352,7 +352,19 @@ internal static class XlsxStructuredTableMetadataReader
                     filters?
                         .Elements(workbookNs + "filter")
                         .Select(filter => filter.Attribute("val")?.Value)
-                        .Where(value => !string.IsNullOrWhiteSpace(value))
+                        // R99-io-structured-table-blank-filter-1: keep any present (non-null) val,
+                        // including empty/whitespace-only strings -- a Table AutoFilter's "(Blanks)"
+                        // checklist entry round-trips as the literal sentinel value "" (see
+                        // FilterValueFormatter.ToText's BlankValue => "" and FilterCommand's
+                        // ApplyToStructuredTableIfMatched, which never converts that "" entry into
+                        // IncludeBlank=true before persisting it into StructuredTableFilterColumnModel),
+                        // and a whitespace-only literal cell value (e.g. " ") round-trips as
+                        // <filter val=" "/>. Dropping either here silently un-hides/re-hides rows the
+                        // user explicitly filtered on the moment the workbook is saved and reopened.
+                        // Only a genuinely absent val attribute (null) is meaningless and should be
+                        // discarded. Mirrors XlsxWorksheetAutoFilterXmlMapper's identical fix (see its
+                        // comment) for the plain worksheet-level AutoFilter reader.
+                        .Where(value => value is not null)
                         .Select(value => value!)
                         .ToList() ?? [],
                     XlsxXmlAttributeReader.ReadBoolAttribute(filters, "blank"),

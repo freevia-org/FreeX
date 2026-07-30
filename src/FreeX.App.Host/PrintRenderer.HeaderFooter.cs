@@ -128,8 +128,17 @@ public static partial class PrintRenderer
         var scaledHeight = printedHeight * scaleRatio;
         var xOffset = centerHorizontally ? Math.Max(0, (printableW - scaledWidth) / 2) : 0;
         var yOffset = centerVertically ? Math.Max(0, (printableH - scaledHeight) / 2) : 0;
+        // R99-app-host-header-footer-margin-overlap-1: mirrors PagePaginationPlanner.
+        // CalculatePageCapacityDetail's bodyTopInches = Math.Max(margins.Top, headerMarginInches) --
+        // the header/footer margin is the distance from the page edge to the header/footer band, which
+        // sits WITHIN the top margin band as long as it doesn't exceed it, but Excel pushes the grid's
+        // top edge down to the header margin (not the plain top margin) once the header margin is the
+        // larger of the two, so the printed grid never starts above the header text's own band. Using
+        // the plain top margin here (as before) disagreed with the row capacity the pagination planner
+        // already computed for this same page, causing the header text to visually collide with the
+        // first printed row whenever Header margin &gt; Top margin.
         var contentLeft = marginLeft + xOffset;
-        var contentTop = marginTop + yOffset;
+        var contentTop = Math.Max(marginTop, headerMargin) + yOffset;
         var gridLeft = contentLeft + measurement.HeaderWidth * scaleRatio;
         var gridTop = contentTop + measurement.HeaderHeight * scaleRatio;
 

@@ -142,7 +142,21 @@ public static class PageContentRenderModelBuilder
         var xOffset = sheet.CenterHorizontallyOnPage ? Math.Max(0, (printableW - printedWidth) / 2) : 0;
         var yOffset = sheet.CenterVerticallyOnPage ? Math.Max(0, (printableH - printedHeight) / 2) : 0;
         var contentLeft = marginLeft + xOffset;
-        var contentTop = marginTop + yOffset;
+        // R99-presentation-header-band-preview-1: mirrors PagePaginationPlanner.
+        // CalculatePageCapacityDetail's bodyTopInches = Math.Max(margins.Top, headerMarginInches) --
+        // the header/footer margin is the distance from the page edge to the header/footer band, which
+        // sits WITHIN the top margin band as long as it doesn't exceed it, but Excel pushes the grid's
+        // top edge down to the header margin (not the plain top margin) once the header margin is the
+        // larger of the two, so the printed grid never starts above the header text's own band. This
+        // print-PREVIEW content model (PageContentRenderModelBuilder.Build, consumed by
+        // PrintPreviewInstructionBuilder to paint the actual preview canvas on every shell) used the
+        // plain top margin here, so it disagreed with the row capacity the pagination planner (and the
+        // desktop print-renderer's rendering geometry, R99-app-host-header-footer-margin-overlap-1)
+        // already computed for this same page -- the header text visually collided with the first
+        // printed row in print preview whenever Header margin &gt; Top margin, even though the actual
+        // desktop print/PDF-export output (once separately fixed) did not.
+        var headerMarginPx = sheet.HeaderMargin * Dpi;
+        var contentTop = Math.Max(marginTop, headerMarginPx) + yOffset;
         var gridLeft = contentLeft + measurement.HeaderWidth;
         var gridTop = contentTop + measurement.HeaderHeight;
         var gridBounds = new LayoutRect(
@@ -215,7 +229,7 @@ public static class PageContentRenderModelBuilder
             pageH,
             marginLeft,
             marginRight,
-            sheet.HeaderMargin * Dpi,
+            headerMarginPx,
             sheet.FooterMargin * Dpi,
             workbook.Name,
             workbookDirectory,
