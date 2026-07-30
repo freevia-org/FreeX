@@ -1464,16 +1464,32 @@ public partial class MainWindow
         return false;
     }
 
+    // R92-commands-merge-edge-5-2: navigating (Name Box / Go To / hyperlink / any other caller of
+    // this shared setter) to a cell COVERED by a merged region must select the WHOLE merge, exactly
+    // like clicking that covered cell with the mouse does -- Excel has no independently-selectable
+    // sub-cell inside a merge. Expanding here (the single choke point every SetSelectionRange caller
+    // funnels through) matches ExtendSelection's ExpandRangeToFullyContainMerges call and
+    // AddOrMoveAdditionalSelection/SetActiveCell's GetMergeRegion snap, without needing every
+    // call site to know about merges individually. ExpandRangeToFullyContainMerges is a no-op when
+    // there are no merges or the range already fully contains every merge it overlaps, so plain
+    // single-cell/whole-range navigation is unaffected.
     private void SetSelectionRange(GridRange range, CellAddress activeCell)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        _selectionAnchor = range.Start;
-        _selectionCursor = range.End;
+        var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
+        // If the requested active cell itself sits inside a merge (covered, not the anchor), Excel
+        // shows the merge's anchor as the active cell -- e.g. Name Box "B2" into an A1:C3 merge
+        // selects A1:C3 with A1 (not B2) as the active/formula-bar cell.
+        var effectiveActiveCell = sheet is { MergedRegions.Count: > 0 } && sheet.GetMergeRegion(activeCell) is { } activeMerge
+            ? activeMerge.Start
+            : activeCell;
+        _selectionAnchor = expandedRange.Start;
+        _selectionCursor = expandedRange.End;
         SetSelectedRangesIfChanged(null);
-        SheetGrid.SelectedRange = range;
-        CellAddressBox.Text = FormatNameBoxSelectionText(range);
-        var activeCellModel = sheet?.GetCell(activeCell);
-        SetFormulaBarSelectionText(FormatFormulaBarText(activeCellModel, activeCell));
+        SheetGrid.SelectedRange = expandedRange;
+        CellAddressBox.Text = FormatNameBoxSelectionText(expandedRange);
+        var activeCellModel = sheet?.GetCell(effectiveActiveCell);
+        SetFormulaBarSelectionText(FormatFormulaBarText(activeCellModel, effectiveActiveCell));
         FocusSheetGridIfNeeded();
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();

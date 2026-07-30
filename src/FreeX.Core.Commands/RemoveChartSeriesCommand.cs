@@ -1,0 +1,224 @@
+using FreeX.Core.Model;
+
+namespace FreeX.Core.Commands;
+
+/// <summary>
+/// Removes one series from a chart's Select Data Source "Legend Entries (Series)" list
+/// (R92-app-chart-data-edit-5-1). FreeX charts have no independent per-series range storage --
+/// series are columns (or, when <see cref="ChartModel.SeriesInRows"/>, rows) of a single contiguous
+/// <see cref="ChartModel.DataRange"/> -- so "removing a series" means excluding its worksheet column
+/// from the plotted set via an authoritative <see cref="ChartModel.SeriesColumnMappings"/> list
+/// (the same mapping <c>ChartRenderer.SeriesFormatting.cs</c>'s <c>ShouldRenderColumnAsSeries</c>/
+/// <c>GetSeriesIndex</c> already honor for every chart type), rather than shrinking DataRange (which
+/// would also drop every OTHER still-wanted series' column if the removed series sits in the middle).
+/// <para>
+/// Scoped to the case this can represent soundly: column-major charts (not
+/// <see cref="ChartModel.SeriesInRows"/> -- a row-major chart has no equivalent "skip this row"
+/// mapping) and not Bubble/Scatter (whose column layout has a different, non-1-series-per-column
+/// meaning). Removing an individual series independent of a contiguous same-sheet range, and
+/// Add/Edit Series with an arbitrary (esp. cross-sheet) range, remain out of reach without adding a
+/// new per-series range/name storage field to <see cref="ChartModel"/> that the renderer (every
+/// ChartRenderer.*.cs series-iteration site), the Avalonia chart renderer, and the XLSX chart
+/// writer/reader would all need to honor -- deferred as a separate, larger subsystem change.
+/// </para>
+/// <para>
+/// When a series is removed, every SeriesIndex-keyed per-series/per-point override is remapped
+/// (indexes above the removed one shift down by one; entries pointing AT the removed series are
+/// dropped/cleared) rather than wholesale-cleared, following the same "an index-shift invalidates
+/// stale SeriesIndex-keyed state" principle <see cref="ChangeChartSourceCommand"/> established
+/// (r84/r86) -- just precise instead of blunt, since only ONE series' worth of indexes actually move.
+/// </para>
+/// </summary>
+public sealed class RemoveChartSeriesCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly Guid _chartId;
+    private readonly int _seriesIndex;
+
+    private bool _applied;
+    private List<ChartSeriesColumnMapping>? _previousSeriesColumnMappings;
+    private List<ChartSeriesOrderOverride>? _previousSeriesOrderOverrides;
+    private List<ChartPointMarkerFormat>? _previousPointMarkerFormats;
+    private List<ChartSeriesRawXmlEntry>? _previousMultiLevelCategoryXml;
+    private List<ChartPointExplosion>? _previousExplodedSlices;
+    private List<ChartRangeDataLabel>? _previousRangeDataLabels;
+    private List<ChartSeriesRangeDataLabels>? _previousSeriesRangeDataLabels;
+    private List<int>? _previousSecondaryAxisSeriesIndexes;
+    private List<int>? _previousComboLineSeriesIndexes;
+    private List<int>? _previousComboScatterSeriesIndexes;
+    private int _previousTrendlineSeriesIndex;
+    private int _previousErrorBarSeriesIndex;
+    private bool _previousShowLinearTrendline;
+    private bool _previousShowErrorBars;
+
+    public string Label => "Remove Chart Series";
+
+    public RemoveChartSeriesCommand(SheetId sheetId, Guid chartId, int seriesIndex)
+    {
+        _sheetId = sheetId;
+        _chartId = chartId;
+        _seriesIndex = seriesIndex;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
+        if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
+            return ChartCommandGuards.ChartNotFound();
+        if (chart.IsPivotChart)
+            return ChartCommandGuards.SelectedChartIsPivotChart();
+        if (chart.SeriesInRows || chart.Type is ChartType.Bubble or ChartType.Scatter)
+            return new CommandOutcome(false, "Removing an individual series is only supported for column-based charts (not Switch Row/Column, Bubble, or Scatter).");
+
+        var startCol = chart.DataRange.Start.Col;
+        var endCol = chart.DataRange.End.Col;
+        var dataStartCol = chart.FirstColIsCategories && endCol > startCol ? startCol + 1 : startCol;
+        if (dataStartCol > endCol)
+            return new CommandOutcome(false, "Chart has no series to remove.");
+
+        var columns = BuildCurrentSeriesColumns(chart, dataStartCol, endCol);
+        if (_seriesIndex < 0 || _seriesIndex >= columns.Count)
+            return new CommandOutcome(false, "Series index is out of range.");
+        if (columns.Count <= 1)
+            return new CommandOutcome(false, "A chart must keep at least one data series.");
+
+        var removedSeriesIndex = columns[_seriesIndex].SeriesIndex;
+
+        _previousSeriesColumnMappings = chart.SeriesColumnMappings;
+        _previousSeriesOrderOverrides = chart.SeriesOrderOverrides;
+        _previousPointMarkerFormats = chart.PointMarkerFormats;
+        _previousMultiLevelCategoryXml = chart.MultiLevelCategoryXml;
+        _previousExplodedSlices = chart.ExplodedSlices;
+        _previousRangeDataLabels = chart.RangeDataLabels;
+        _previousSeriesRangeDataLabels = chart.SeriesRangeDataLabels;
+        _previousSecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes;
+        _previousComboLineSeriesIndexes = chart.ComboLineSeriesIndexes;
+        _previousComboScatterSeriesIndexes = chart.ComboScatterSeriesIndexes;
+        _previousTrendlineSeriesIndex = chart.TrendlineSeriesIndex;
+        _previousErrorBarSeriesIndex = chart.ErrorBarSeriesIndex;
+        _previousShowLinearTrendline = chart.ShowLinearTrendline;
+        _previousShowErrorBars = chart.ShowErrorBars;
+        _applied = true;
+
+        var remainingColumns = new List<(int SeriesIndex, uint Column)>(columns.Count - 1);
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (i != _seriesIndex)
+                remainingColumns.Add(columns[i]);
+        }
+
+        chart.SeriesColumnMappings = remainingColumns
+            .Select((entry, newIndex) => new ChartSeriesColumnMapping(newIndex, entry.Column))
+            .ToList();
+
+        chart.SeriesOrderOverrides = chart.SeriesOrderOverrides
+            .Where(o => o.SeriesIndex != removedSeriesIndex)
+            .Select(o => o.SeriesIndex > removedSeriesIndex ? o with { SeriesIndex = o.SeriesIndex - 1 } : o)
+            .ToList();
+        chart.PointMarkerFormats = chart.PointMarkerFormats
+            .Where(f => f.SeriesIndex != removedSeriesIndex)
+            .Select(f => f.SeriesIndex > removedSeriesIndex ? f with { SeriesIndex = f.SeriesIndex - 1 } : f)
+            .ToList();
+        chart.MultiLevelCategoryXml = chart.MultiLevelCategoryXml
+            .Where(x => x.SeriesIndex != removedSeriesIndex)
+            .Select(x => x.SeriesIndex > removedSeriesIndex ? x with { SeriesIndex = x.SeriesIndex - 1 } : x)
+            .ToList();
+        chart.ExplodedSlices = chart.ExplodedSlices
+            .Where(s => s.SeriesIndex != removedSeriesIndex)
+            .Select(s => s.SeriesIndex > removedSeriesIndex ? s with { SeriesIndex = s.SeriesIndex - 1 } : s)
+            .ToList();
+        chart.RangeDataLabels = chart.RangeDataLabels
+            .Where(l => l.SeriesIndex != removedSeriesIndex)
+            .Select(l => l.SeriesIndex > removedSeriesIndex ? l with { SeriesIndex = l.SeriesIndex - 1 } : l)
+            .ToList();
+        chart.SeriesRangeDataLabels = chart.SeriesRangeDataLabels
+            .Where(l => l.SeriesIndex != removedSeriesIndex)
+            .Select(l => l.SeriesIndex > removedSeriesIndex ? l with { SeriesIndex = l.SeriesIndex - 1 } : l)
+            .ToList();
+        chart.SecondaryAxisSeriesIndexes = RemapIndexList(chart.SecondaryAxisSeriesIndexes, removedSeriesIndex);
+        chart.ComboLineSeriesIndexes = RemapIndexList(chart.ComboLineSeriesIndexes, removedSeriesIndex);
+        chart.ComboScatterSeriesIndexes = RemapIndexList(chart.ComboScatterSeriesIndexes, removedSeriesIndex);
+
+        if (chart.TrendlineSeriesIndex == removedSeriesIndex)
+            chart.ShowLinearTrendline = false;
+        else if (chart.TrendlineSeriesIndex > removedSeriesIndex)
+            chart.TrendlineSeriesIndex--;
+
+        if (chart.ErrorBarSeriesIndex == removedSeriesIndex)
+            chart.ShowErrorBars = false;
+        else if (chart.ErrorBarSeriesIndex > removedSeriesIndex)
+            chart.ErrorBarSeriesIndex--;
+
+        return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (!_applied)
+            return;
+
+        if (!ChartCommandGuards.TryFindChart(ctx.GetSheet(_sheetId), _chartId, out var chart))
+            return;
+
+        chart.SeriesColumnMappings = _previousSeriesColumnMappings ?? [];
+        chart.SeriesOrderOverrides = _previousSeriesOrderOverrides ?? [];
+        chart.PointMarkerFormats = _previousPointMarkerFormats ?? [];
+        chart.MultiLevelCategoryXml = _previousMultiLevelCategoryXml ?? [];
+        chart.ExplodedSlices = _previousExplodedSlices ?? [];
+        chart.RangeDataLabels = _previousRangeDataLabels ?? [];
+        chart.SeriesRangeDataLabels = _previousSeriesRangeDataLabels ?? [];
+        chart.SecondaryAxisSeriesIndexes = _previousSecondaryAxisSeriesIndexes ?? [];
+        chart.ComboLineSeriesIndexes = _previousComboLineSeriesIndexes ?? [];
+        chart.ComboScatterSeriesIndexes = _previousComboScatterSeriesIndexes ?? [];
+        chart.TrendlineSeriesIndex = _previousTrendlineSeriesIndex;
+        chart.ErrorBarSeriesIndex = _previousErrorBarSeriesIndex;
+        chart.ShowLinearTrendline = _previousShowLinearTrendline;
+        chart.ShowErrorBars = _previousShowErrorBars;
+
+        _applied = false;
+        _previousSeriesColumnMappings = null;
+        _previousSeriesOrderOverrides = null;
+        _previousPointMarkerFormats = null;
+        _previousMultiLevelCategoryXml = null;
+        _previousExplodedSlices = null;
+        _previousRangeDataLabels = null;
+        _previousSeriesRangeDataLabels = null;
+        _previousSecondaryAxisSeriesIndexes = null;
+        _previousComboLineSeriesIndexes = null;
+        _previousComboScatterSeriesIndexes = null;
+    }
+
+    private static List<int> RemapIndexList(List<int> indexes, int removedSeriesIndex) =>
+        indexes
+            .Where(i => i != removedSeriesIndex)
+            .Select(i => i > removedSeriesIndex ? i - 1 : i)
+            .ToList();
+
+    /// <summary>
+    /// Ordered (SeriesIndex, worksheet Column) pairs for the series currently rendered, mirroring
+    /// ChartRenderer.SeriesFormatting.cs's HasAuthoritativeSeriesColumns/ShouldRenderColumnAsSeries/
+    /// GetSeriesIndex trio (that file lives in FreeX.App.UI, which Core.Commands cannot reference,
+    /// hence the small duplication) so the column excluded here is exactly the column the renderer
+    /// would stop plotting.
+    /// </summary>
+    private static List<(int SeriesIndex, uint Column)> BuildCurrentSeriesColumns(ChartModel chart, uint dataStartCol, uint endCol)
+    {
+        var mappings = chart.SeriesColumnMappings;
+        var authoritative = mappings.Count > 0 && mappings.All(m => m.ValueColumn >= dataStartCol && m.ValueColumn <= endCol);
+        if (authoritative)
+        {
+            return mappings
+                .OrderBy(m => m.SeriesXmlIndex)
+                .Select(m => (m.SeriesXmlIndex, m.ValueColumn))
+                .ToList();
+        }
+
+        var result = new List<(int, uint)>();
+        for (var col = dataStartCol; col <= endCol; col++)
+            result.Add(((int)(col - dataStartCol), col));
+        return result;
+    }
+}

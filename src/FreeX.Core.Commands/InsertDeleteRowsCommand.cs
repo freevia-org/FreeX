@@ -144,6 +144,12 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftChartPositionRowsUp(sheet, _beforeRow, _count);
         RowColumnShiftHelpers.ShiftAddressBearingRowsUp(ctx.Workbook, sheet, _addressStateSnapshot, _beforeRow, _count);
 
+        // R92-render-cellstyle-inheritance-5-2: Excel's Insert Sheet Rows default ("Insert
+        // Options") inherits the format of the row above into the newly-vacated band. Must run
+        // after the ShiftAddressBearingRowsUp call above, which rebuilds the whole style-only
+        // store from the pre-insert snapshot and would otherwise wipe these new entries.
+        RowColumnShiftHelpers.InheritVacatedRowFormatFromAbove(sheet, _beforeRow, _count);
+
         _mergeSnapshot = sheet.MergedRegions.ToList();
         var shiftedMerges = new List<GridRange>(_mergeSnapshot.Count);
         foreach (var m in sheet.MergedRegions)
@@ -253,7 +259,16 @@ public sealed class InsertRowsCommand : IWorkbookCommand
                     var address = new CellAddress(sheet.Id, row, col);
                     filled.Add((address, sheet.GetCell(address)?.Clone()));
                     var shiftedFormula = StructuredTableEditEffects.ShiftFormulaRows(formula, firstDataRow, row, sheet.Name);
-                    sheet.SetCell(address, Cell.FromFormula(shiftedFormula));
+                    var filledCell = Cell.FromFormula(shiftedFormula);
+                    // R92-render-cellstyle-inheritance-5-2: this row was just given a row-above-
+                    // inherited style-only entry by InheritVacatedRowFormatFromAbove above (this cell
+                    // is brand new -- inserted rows never carry a pre-existing style-only entry of
+                    // their own) -- sheet.SetCell below unconditionally clears it (Sheet.cs
+                    // ClearStyleOnly side-effect), so without this the calculated-column auto-fill
+                    // would silently discard the inherited row format the instant it fills the cell.
+                    if (sheet.GetStyleOnly(row, col) is { } inheritedStyle)
+                        filledCell.StyleId = inheritedStyle;
+                    sheet.SetCell(address, filledCell);
                 }
             }
 

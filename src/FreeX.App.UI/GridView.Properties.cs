@@ -768,7 +768,17 @@ public partial class GridView
         if (d is not GridView grid)
             return;
 
-        grid.ClearChartRenderCache();
+        // R92-app-freeze-scroll-perf-5-1: do NOT ClearChartRenderCache() here. ViewportModel is a
+        // record whose Cells/RowMetrics/ColMetrics are freshly built list instances on every
+        // rebuild (see MainWindow.Viewport.cs CreateViewport), so this property changes on every
+        // single scroll tick even when nothing about any chart's own data changed -- only the
+        // visible window moved. Unconditionally clearing here defeated the render cache on every
+        // scroll regardless of how its key was computed. The cache is now content-keyed (chart
+        // identity + a fingerprint of the chart's own data cells, see
+        // ChartRenderCacheKey/ComputeChartDataFingerprint in GridView.ChartRenderCache.cs), so a
+        // stale entry is naturally superseded by a new key when a chart's underlying data actually
+        // changes; chart-list/theme/drawing-object edits still invalidate via
+        // OnChartRenderCacheInputChanged/OnWorkbookThemeChanged below.
         grid.ClearFormulaTraceArrowHeadGeometryCache();
         grid.ClearDrawingObjectLayerCache();
         grid.RefreshCommentPreviewAfterViewportChanged();

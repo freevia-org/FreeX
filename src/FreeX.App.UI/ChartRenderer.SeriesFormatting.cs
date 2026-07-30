@@ -255,7 +255,7 @@ public static partial class ChartRenderer
         if (format.ResolveStrokeColor(theme) is { } stroke)
             series.Color = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
         else if (format.ResolveFillColor(theme) is { } fill)
-            series.Color = OxyColor.FromRgb(fill.R, fill.G, fill.B);
+            series.Color = ApplyFillAlpha(OxyColor.FromRgb(fill.R, fill.G, fill.B), format.FillAlpha);
         if (format.StrokeThickness is { } thickness)
             series.StrokeThickness = thickness;
         if (format.DashStyle is { } dashStyle)
@@ -267,7 +267,7 @@ public static partial class ChartRenderer
         if (format.MarkerStyle == ChartMarkerStyle.Dot)
             series.MarkerSize *= DotMarkerSizeScale;
         if (format.ResolveFillColor(theme) is { } markerFill)
-            series.MarkerFill = OxyColor.FromRgb(markerFill.R, markerFill.G, markerFill.B);
+            series.MarkerFill = ApplyFillAlpha(OxyColor.FromRgb(markerFill.R, markerFill.G, markerFill.B), format.FillAlpha);
         if (format.ResolveStrokeColor(theme) is { } markerStroke)
             series.MarkerStroke = OxyColor.FromRgb(markerStroke.R, markerStroke.G, markerStroke.B);
         if (format.StrokeThickness is { } markerStrokeThickness)
@@ -287,7 +287,7 @@ public static partial class ChartRenderer
         }
         else if (format.ResolveFillColor(theme) is { } fill)
         {
-            series.FillColor = OxyColor.FromRgb(fill.R, fill.G, fill.B);
+            series.FillColor = ApplyFillAlpha(OxyColor.FromRgb(fill.R, fill.G, fill.B), format.FillAlpha);
         }
         if (format.NoLine)
         {
@@ -317,7 +317,7 @@ public static partial class ChartRenderer
         }
         else if (format.ResolveFillColor(theme) is { } fill)
         {
-            series.FillColor = OxyColor.FromRgb(fill.R, fill.G, fill.B);
+            series.FillColor = ApplyFillAlpha(OxyColor.FromRgb(fill.R, fill.G, fill.B), format.FillAlpha);
         }
         if (format.NoLine)
         {
@@ -583,7 +583,7 @@ public static partial class ChartRenderer
         if (format.ResolveStrokeColor(theme) is { } stroke)
             series.Color = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
         if (format.ResolveFillColor(theme) is { } fill)
-            series.Fill = OxyColor.FromRgb(fill.R, fill.G, fill.B);
+            series.Fill = ApplyFillAlpha(OxyColor.FromRgb(fill.R, fill.G, fill.B), format.FillAlpha);
         if (format.StrokeThickness is { } thickness)
             series.StrokeThickness = thickness;
         if (format.DashStyle is { } dashStyle)
@@ -595,7 +595,7 @@ public static partial class ChartRenderer
         if (format is null)
             return;
         if (format.ResolveFillColor(theme) is { } fill)
-            series.MarkerFill = OxyColor.FromRgb(fill.R, fill.G, fill.B);
+            series.MarkerFill = ApplyFillAlpha(OxyColor.FromRgb(fill.R, fill.G, fill.B), format.FillAlpha);
         if (format.ResolveStrokeColor(theme) is { } stroke)
             series.MarkerStroke = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
         if (format.StrokeThickness is { } thickness)
@@ -666,6 +666,19 @@ public static partial class ChartRenderer
 
     private static OxyColor? ToOxyColor(CellColor? color) =>
         color is { } value ? OxyColor.FromRgb(value.R, value.G, value.B) : null;
+
+    /// <summary>
+    /// Applies a series' authored fill transparency (<see cref="ChartSeriesFormat.FillAlpha"/> --
+    /// the &lt;a:alpha&gt; child of the series fill's &lt;a:srgbClr&gt;/&lt;a:schemeClr&gt;, a 0..1
+    /// opacity fraction) to an already-resolved fill <see cref="OxyColor"/>. R91 wired this value
+    /// through the reader and writer so it round-trips on save, but no renderer ever consumed it --
+    /// a semi-transparent series fill always drew fully opaque. Null (no authored &lt;a:alpha&gt;,
+    /// the common case) leaves the color untouched.
+    /// </summary>
+    private static OxyColor ApplyFillAlpha(OxyColor color, double? fillAlpha) =>
+        fillAlpha is { } alpha
+            ? OxyColor.FromAColor((byte)Math.Clamp(Math.Round(alpha * 255.0), 0, 255), color)
+            : color;
 
     private static void AddLineDataLabelAnnotations(
         PlotModel model,

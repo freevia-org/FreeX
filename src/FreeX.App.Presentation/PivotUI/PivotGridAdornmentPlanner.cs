@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PivotUI;
@@ -28,6 +29,71 @@ public readonly record struct PivotRowLabelAdornment(
     bool ShowExpandCollapseButton,
     bool IsExpanded,
     bool ReserveTextPadding = true);
+
+// ---------------------------------------------------------------------------
+// Expand/collapse state
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// Portable, in-memory expand/collapse state for pivot row/column field items -- R92-app-pivot-drilldown-5-1.
+/// Collapse applies at the (pivot table, source field, item value) level, matching Excel/OOXML's own
+/// item "e" (expanded) attribute semantics: collapsing an item value (e.g. "East") hides every
+/// occurrence of that value's descendant rows across the whole field, not just one specific parent
+/// occurrence. A shell host owns one instance per open workbook/session and passes it to
+/// <see cref="PivotGridAdornmentPlanner.BuildRowLabelAdornments"/> so the drawn +/- glyph
+/// (<see cref="PivotRowLabelAdornment.IsExpanded"/>) reflects the user's actual collapse choice
+/// instead of always claiming "expanded".
+///
+/// SCOPE (R92-app-pivot-drilldown-5-1 is a partial fix -- see round notes): this state is
+/// session-only. It is not yet:
+/// <list type="bullet">
+/// <item>parsed from an opened .xlsx's <c>&lt;item e="0"/&gt;</c> attribute (<c>XlsxPivotTableReader</c>),</item>
+/// <item>written back out on save (<c>XlsxPivotTableWriter</c>), or</item>
+/// <item>wired to a click handler (<c>GridView.Input.cs</c>/<c>GridView.HitTesting.cs</c> have no hit-test
+/// for <see cref="PivotRowLabelAdornment.ShowExpandCollapseButton"/> yet).</item>
+/// </list>
+/// Nor does collapsing an item hide its descendant rows at pivot-refresh time (<c>PivotTableRefreshService</c>) --
+/// this state only changes what the adornment glyph/planner reports, matching this fix's scope: the
+/// adornment/state model in the portable planner, not the full round-trip or interactive drill-down.
+/// </summary>
+public sealed class PivotCollapseState
+{
+    private readonly Dictionary<string, HashSet<string>> _collapsedItemsByField =
+        new(StringComparer.Ordinal);
+
+    /// <summary>True when <paramref name="itemValue"/> is currently collapsed for this field.</summary>
+    public bool IsCollapsed(string pivotTableName, int sourceFieldIndex, string itemValue) =>
+        _collapsedItemsByField.TryGetValue(FieldKey(pivotTableName, sourceFieldIndex), out var items) &&
+        items.Contains(itemValue);
+
+    /// <summary>Sets or clears the collapsed flag for a specific item value of a specific field.</summary>
+    public void SetCollapsed(string pivotTableName, int sourceFieldIndex, string itemValue, bool collapsed)
+    {
+        var key = FieldKey(pivotTableName, sourceFieldIndex);
+        if (collapsed)
+        {
+            if (!_collapsedItemsByField.TryGetValue(key, out var items))
+            {
+                items = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                _collapsedItemsByField[key] = items;
+            }
+            items.Add(itemValue);
+        }
+        else if (_collapsedItemsByField.TryGetValue(key, out var items))
+        {
+            items.Remove(itemValue);
+        }
+    }
+
+    /// <summary>Flips the collapsed flag for a specific item value of a specific field.</summary>
+    public void ToggleCollapsed(string pivotTableName, int sourceFieldIndex, string itemValue) =>
+        SetCollapsed(
+            pivotTableName, sourceFieldIndex, itemValue,
+            !IsCollapsed(pivotTableName, sourceFieldIndex, itemValue));
+
+    private static string FieldKey(string pivotTableName, int sourceFieldIndex) =>
+        pivotTableName + "|" + sourceFieldIndex.ToString(CultureInfo.InvariantCulture);
+}
 
 // ---------------------------------------------------------------------------
 // Planning entry point
@@ -200,14 +266,21 @@ public static class PivotGridAdornmentPlanner
     // Row-label expand/collapse adornments
     // -----------------------------------------------------------------------
 
-    public static IReadOnlyList<PivotRowLabelAdornment> BuildRowLabelAdornments(Workbook workbook, Sheet sheet)
+    /// <param name="collapseState">
+    /// Optional session collapse state (R92-app-pivot-drilldown-5-1). When supplied, a row-label
+    /// adornment's <see cref="PivotRowLabelAdornment.IsExpanded"/> reflects whether that row's own
+    /// item value is currently collapsed for its field; when omitted (the pre-existing default),
+    /// every adornment reports expanded, matching this method's original always-expanded behavior.
+    /// </param>
+    public static IReadOnlyList<PivotRowLabelAdornment> BuildRowLabelAdornments(
+        Workbook workbook, Sheet sheet, PivotCollapseState? collapseState = null)
     {
         if (sheet.PivotTables.Count == 0)
             return [];
 
         var adornments = new List<PivotRowLabelAdornment>();
         foreach (var pivotTable in sheet.PivotTables)
-            AddRowLabelAdornments(workbook, sheet, pivotTable, adornments);
+            AddRowLabelAdornments(workbook, sheet, pivotTable, collapseState, adornments);
         return adornments;
     }
 
@@ -215,6 +288,7 @@ public static class PivotGridAdornmentPlanner
         Workbook workbook,
         Sheet sheet,
         PivotTableModel pivotTable,
+        PivotCollapseState? collapseState,
         List<PivotRowLabelAdornment> adornments)
     {
         var visibleRange = GetVisiblePivotRange(pivotTable);
@@ -223,7 +297,7 @@ public static class PivotGridAdornmentPlanner
 
         if (pivotTable.ReportLayout != PivotReportLayout.Compact)
         {
-            AddNonCompactAdornments(sheet, pivotTable, visibleRange, adornments);
+            AddNonCompactAdornments(sheet, pivotTable, visibleRange, collapseState, adornments);
             return;
         }
 
@@ -235,7 +309,7 @@ public static class PivotGridAdornmentPlanner
         for (var row = dataStartRow; row <= visibleRange.End.Row; row++)
         {
             var address = new CellAddress(sheet.Id, row, labelCol);
-            if (!TryGetRowLabel(sheet, pivotTable, address, out _))
+            if (!TryGetRowLabel(sheet, pivotTable, address, out var label))
                 continue;
 
             var indentLevel = GetIndentLevel(workbook, sheet, address);
@@ -247,10 +321,12 @@ public static class PivotGridAdornmentPlanner
             if (!showButton && !reservePad)
                 continue;
 
+            var isExpanded = !showButton || !IsItemCollapsed(collapseState, pivotTable, indentLevel, label);
+
             adornments.Add(new PivotRowLabelAdornment(
                 address, indentLevel,
                 ShowExpandCollapseButton: showButton,
-                IsExpanded: true));
+                IsExpanded: isExpanded));
         }
     }
 
@@ -258,6 +334,7 @@ public static class PivotGridAdornmentPlanner
         Sheet sheet,
         PivotTableModel pivotTable,
         GridRange visibleRange,
+        PivotCollapseState? collapseState,
         List<PivotRowLabelAdornment> adornments)
     {
         if (!pivotTable.ShowExpandCollapseButtons)
@@ -274,7 +351,7 @@ public static class PivotGridAdornmentPlanner
         {
             var labelCol = labelStartCol + (uint)level;
             var address  = new CellAddress(sheet.Id, row, labelCol);
-            if (!TryGetRowLabel(sheet, pivotTable, address, out _))
+            if (!TryGetRowLabel(sheet, pivotTable, address, out var label))
                 continue;
 
             var hasPrevPeer  = HasSamePrefixOnPreviousRow(sheet, pivotTable, visibleRange, row, labelStartCol, level);
@@ -283,11 +360,31 @@ public static class PivotGridAdornmentPlanner
             if (!hasPrevPeer && !hasNextPeer && !hasChildRows)
                 continue;
 
+            var showButton = !hasPrevPeer && (hasNextPeer || hasChildRows);
+            var isExpanded = !showButton || !IsItemCollapsed(collapseState, pivotTable, level, label);
+
             adornments.Add(new PivotRowLabelAdornment(
                 address, IndentLevel: 0,
-                ShowExpandCollapseButton: !hasPrevPeer && (hasNextPeer || hasChildRows),
-                IsExpanded: true));
+                ShowExpandCollapseButton: showButton,
+                IsExpanded: isExpanded));
         }
+    }
+
+    /// <summary>
+    /// True when <paramref name="label"/> (the row-label text at <paramref name="fieldLevel"/>, i.e.
+    /// the field's position within <see cref="PivotTableModel.RowFields"/>) is currently collapsed in
+    /// <paramref name="collapseState"/> for its underlying source field. Returns <see langword="false"/>
+    /// (never collapsed) when no state is supplied or the level does not map to a real row field,
+    /// preserving the always-expanded default.
+    /// </summary>
+    private static bool IsItemCollapsed(
+        PivotCollapseState? collapseState, PivotTableModel pivotTable, int fieldLevel, string label)
+    {
+        if (collapseState is null || fieldLevel < 0 || fieldLevel >= pivotTable.RowFields.Count)
+            return false;
+
+        var field = pivotTable.RowFields[fieldLevel];
+        return collapseState.IsCollapsed(pivotTable.Name, field.SourceFieldIndex, label);
     }
 
     // -----------------------------------------------------------------------

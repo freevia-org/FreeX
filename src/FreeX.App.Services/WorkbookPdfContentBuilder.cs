@@ -681,8 +681,11 @@ public static class WorkbookPdfContentBuilder
             return;
 
         var layout = BuildPageContentLayout(workbook, sheet, exportPlan, request);
-        if (layout is null || (layout.Charts.Count == 0 && layout.TextBoxes.Count == 0))
+        if (layout is null ||
+            (layout.Charts.Count == 0 && layout.TextBoxes.Count == 0 && layout.Pictures.Count == 0))
+        {
             return;
+        }
 
         var scaleX = pageWidthPoints / layout.PageBounds.Width;
         var scaleY = pageHeightPoints / layout.PageBounds.Height;
@@ -696,6 +699,15 @@ public static class WorkbookPdfContentBuilder
             foreach (var overlay in chart.TextOverlays)
                 AddTextOverlay(ops, overlay, pageHeightPoints, scaleX, scaleY);
         }
+
+        // R92-consumer-wiring-sweep-1: sheet pictures (Insert > Pictures, or a raster non-linked
+        // Paste Special > Picture) were never emitted here at all, so an inserted picture silently
+        // never appeared in print/PDF on either platform even though it always rendered on screen
+        // (GridView.DrawingObjects.Pictures.cs). Paint order matches the on-screen z-order fallback
+        // this codebase already uses for charts vs. text boxes: pictures sit above the chart layer,
+        // below text-box annotations.
+        foreach (var picture in layout.Pictures)
+            AddPictureImage(ops, picture, pageHeightPoints, scaleX, scaleY);
 
         foreach (var textBox in layout.TextBoxes)
         {
@@ -1016,6 +1028,38 @@ public static class WorkbookPdfContentBuilder
             bounds.Height * scaleY,
             ToPdfColor(color),
             Math.Max(0.25, lineWidth * Math.Min(scaleX, scaleY))));
+    }
+
+    /// <summary>
+    /// Emits one <see cref="PdfImage"/> op for a resolved picture block, converting its layout-space
+    /// bounds to PDF points/bottom-up Y the same way <see cref="AddFillRect"/> does for a chart/text-box
+    /// rectangle, and forwarding the picture's crop fractions as-is -- <see cref="PdfImageSourceCrop"/>
+    /// uses the identical 0.0-1.0-cut-from-each-edge convention as <c>PictureCropRatios</c>
+    /// (see <see cref="Free.Shared.Pdf.PdfRenderGeometry.TryGetImageSourceRect"/>), so no re-derivation
+    /// is needed. Rotation is intentionally not forwarded, matching the printed text-box block's own
+    /// established scope (see <see cref="FreeX.App.Presentation.PageLayout.PagePictureLayoutPlanner"/>).
+    /// An unsupported <see cref="PagePictureBlock.ContentType"/> is safely skipped by the shared PDF
+    /// writer rather than emitting a corrupt image stream, so no gate is needed here.
+    /// </summary>
+    private static void AddPictureImage(
+        List<PdfDrawOp> ops,
+        PagePictureBlock picture,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        ops.Add(new PdfImage(
+            picture.Bounds.Left * scaleX,
+            pageHeightPoints - (picture.Bounds.Bottom * scaleY),
+            picture.Bounds.Width * scaleX,
+            picture.Bounds.Height * scaleY,
+            picture.ImageBytes,
+            picture.ContentType,
+            SourceCrop: new PdfImageSourceCrop(
+                picture.Crop.Left,
+                picture.Crop.Top,
+                picture.Crop.Right,
+                picture.Crop.Bottom)));
     }
 
     private static void AddTextOverlay(

@@ -30,7 +30,8 @@ public sealed class PrintPreviewInstructionBuilderTests
             Charts: [],
             TextBoxes: [],
             HeaderRuns: [],
-            FooterRuns: []);
+            FooterRuns: [],
+            Pictures: []);
 
     [Fact]
     public void Build_AlwaysPaintsPageBackgroundFirst()

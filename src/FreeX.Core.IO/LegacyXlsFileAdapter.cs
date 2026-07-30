@@ -122,9 +122,38 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         new(".xlt", "XLT 97-2003 Template", CanOpen: true, CanSave: false, OpensAsTemplate: true)
     ];
 
-    public Workbook Load(Stream stream)
+    // R92-io-legacy-format-read-5-1: message reported whenever the workbook could not be parsed
+    // as a BIFF8 (.xls) stream and had to fall back to ExcelDataReader's values-only reader -- the
+    // guaranteed path for every .xlsb (BIFF12/BRT) file, and also the path taken when NPOI's
+    // HSSFWorkbook throws on a corrupt/unsupported .xls. That reader only reads computed cell
+    // values (MapExcelDataReaderCellValue -> reader.GetValue), never formula text, and does not
+    // read charts, conditional formatting, data validation, autofilter, or defined names at all,
+    // so every one of those features is silently dropped without this warning.
+    private const string LegacyBinaryFallbackWarning =
+        "[legacy-binary-fallback]: This workbook could not be read as an Excel 97-2003 (BIFF8) file " +
+        "and was loaded as static values only -- formulas, charts, conditional formatting, data " +
+        "validation, autofilter, and defined names were not preserved.";
+
+    // R92-io-legacy-format-read-5-2: .xls Save always throws (NotSupportedException below), forcing
+    // every edit through Save As XLSX/XLSM -- which discards the VBA project bytes entirely since no
+    // code path carries them into a newly-written OOXML package. Surface the loss at open time so
+    // the user knows before they save over the macros.
+    private const string MacroProjectNotPreservedWarning =
+        "[macros]: This workbook contains a VBA macro project. FreeX cannot edit or preserve legacy " +
+        ".xls macros; they will be permanently discarded when this file is saved (Save As is " +
+        "required, since .xls itself cannot be saved back to).";
+
+    public Workbook Load(Stream stream) => LoadWithWarnings(stream).Workbook;
+
+    /// <summary>
+    /// Loads a workbook the same way as <see cref="Load"/>, but also returns any non-fatal
+    /// diagnostic messages describing legacy-format features that could not be preserved
+    /// (see <see cref="XlsxLoadResult.Warnings"/>).
+    /// </summary>
+    public XlsxLoadResult LoadWithWarnings(Stream stream)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        var warnings = new List<string>();
 
         if (stream.CanSeek)
         {
@@ -135,25 +164,33 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             try
             {
                 using var hssfStream = new MemoryStream(bytes, writable: false);
-                return LoadHssf(hssfStream);
+                var workbook = LoadHssf(hssfStream, warnings);
+                return new XlsxLoadResult(workbook, warnings);
             }
             catch
             {
                 stream.Position = start;
                 using var fallbackStream = new MemoryStream(bytes, writable: false);
-                return LoadWithExcelDataReader(fallbackStream);
+                var workbook = LoadWithExcelDataReader(fallbackStream);
+                warnings.Add(LegacyBinaryFallbackWarning);
+                return new XlsxLoadResult(workbook, warnings);
             }
         }
 
-        return LoadWithExcelDataReader(stream);
+        var nonSeekableWorkbook = LoadWithExcelDataReader(stream);
+        warnings.Add(LegacyBinaryFallbackWarning);
+        return new XlsxLoadResult(nonSeekableWorkbook, warnings);
     }
 
     public void Save(Workbook workbook, Stream stream) =>
         throw new NotSupportedException("Legacy .xls files are currently open-only. Use Save As XLSX Workbook instead.");
 
-    private static Workbook LoadHssf(Stream stream)
+    private static Workbook LoadHssf(Stream stream, List<string> warnings)
     {
         var hasVbaProjectPackage = TryHasVbaProjectPackage(stream);
+        if (hasVbaProjectPackage)
+            warnings.Add(MacroProjectNotPreservedWarning);
+
         using var hssf = new HSSFWorkbook(stream);
         var workbook = new Workbook("Untitled")
         {
@@ -200,7 +237,40 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         LoadDataValidations(hssf, workbook);
         LoadDefinedNames(hssf, workbook);
 
+        // R92-io-legacy-format-read-5-3: legacy BIFF embedded charts are anchored via internal
+        // "_xlchart.N" defined names (see IsExcelReservedDefinedName below, which exists only to
+        // hide them from the user-visible Name Manager) but the chart sub-streams themselves are
+        // never modeled -- LoadDrawingObjects only reads pictures/simple shapes. Report the loss so
+        // it isn't silent, since no XlsxFeatureReport gate exists for a legacy .xls/.xlsb open.
+        var embeddedChartCount = CountEmbeddedLegacyCharts(hssf);
+        if (embeddedChartCount > 0)
+        {
+            warnings.Add(
+                $"[charts]: This workbook contains {embeddedChartCount} embedded chart" +
+                (embeddedChartCount == 1 ? "" : "s") +
+                " that FreeX cannot yet read from legacy .xls/.xlsb files; " +
+                (embeddedChartCount == 1 ? "it was" : "they were") +
+                " dropped and will not appear after loading.");
+        }
+
         return workbook;
+    }
+
+    private static int CountEmbeddedLegacyCharts(NPOIWorkbook sourceWorkbook)
+    {
+        var count = 0;
+        for (var index = 0; index < sourceWorkbook.NumberOfNames; index++)
+        {
+            var definedName = sourceWorkbook.GetNameAt(index);
+            if (definedName is { IsDeleted: false } &&
+                definedName.NameName is { } name &&
+                name.Trim().StartsWith("_xlchart.", StringComparison.OrdinalIgnoreCase))
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private static bool TryHasVbaProjectPackage(Stream stream)

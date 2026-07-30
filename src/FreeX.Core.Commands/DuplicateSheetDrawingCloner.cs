@@ -127,7 +127,12 @@ internal static class DuplicateSheetDrawingCloner
             DateAxisRange = RemapRange(sparkline.DateAxisRange, copyId)
         };
 
-    private static TextBoxModel CloneTextBox(TextBoxModel textBox, SheetId copyId) =>
+    /// <summary>
+    /// Also used by <c>PasteTextBoxesCommand</c> (plain-range-copy floating-object carry) --
+    /// R92-cmd-paste-floating-objects. Bumped from private to internal for that reuse, mirroring
+    /// <see cref="CloneDrawingShape"/> and <see cref="CloneChart"/> above.
+    /// </summary>
+    internal static TextBoxModel CloneTextBox(TextBoxModel textBox, SheetId copyId) =>
         new()
         {
             Name = textBox.Name,
@@ -171,7 +176,9 @@ internal static class DuplicateSheetDrawingCloner
 
     /// <summary>
     /// Also used by <c>DuplicateDrawingObjectCommand</c> (single-object Ctrl+C/Ctrl+V) --
-    /// R91-io-clipboard-image-formats-5-1. See <see cref="CloneChart"/> for why this is internal.
+    /// R91-io-clipboard-image-formats-5-1 -- and by <c>PasteShapesCommand</c> (plain-range-copy
+    /// floating-object carry) -- R92-cmd-paste-floating-objects. See <see cref="CloneChart"/> for why
+    /// this is internal.
     /// </summary>
     internal static DrawingShapeModel CloneDrawingShape(DrawingShapeModel shape, SheetId copyId) =>
         new()
@@ -243,7 +250,13 @@ internal static class DuplicateSheetDrawingCloner
             ShapeTextWrap = shape.ShapeTextWrap
         };
 
-    private static PictureModel ClonePicture(
+    /// <summary>
+    /// Also used by <c>DuplicateDrawingObjectCommand</c> (single-object Ctrl+C/Ctrl+V) --
+    /// R92-consumer-wiring-sweep-2 -- completing the Picture case DuplicateDrawingObjectCommand's
+    /// Chart/Shape cases already had (R91-io-clipboard-image-formats-5-1). Bumped from private to
+    /// internal for that reuse, mirroring <see cref="CloneDrawingShape"/>/<see cref="CloneTextBox"/>.
+    /// </summary>
+    internal static PictureModel ClonePicture(
         PictureModel picture,
         SheetId sourceSheetId,
         string sourceSheetName,
@@ -318,8 +331,10 @@ internal static class DuplicateSheetDrawingCloner
 
     /// <summary>
     /// Also used by <c>DuplicateDrawingObjectCommand</c> (single-object Ctrl+C/Ctrl+V, not just
-    /// whole-sheet Duplicate Sheet) -- R91-io-clipboard-image-formats-5-1. Bumped from private to
-    /// internal for that reuse rather than duplicating this ~250-property clone list a second time.
+    /// whole-sheet Duplicate Sheet) -- R91-io-clipboard-image-formats-5-1 -- and by
+    /// <c>PasteChartsCommand</c> (plain-range-copy floating-object carry) --
+    /// R92-cmd-paste-floating-objects. Bumped from private to internal for that reuse rather than
+    /// duplicating this ~250-property clone list a second time.
     /// </summary>
     internal static ChartModel CloneChart(ChartModel chart, SheetId sourceSheetId, SheetId copyId) =>
         new()

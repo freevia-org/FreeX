@@ -106,6 +106,53 @@ public static partial class PrintRenderer
         return chartRect.IntersectsWith(pageGridRect);
     }
 
+    /// <summary>
+    /// R92-consumer-wiring-sweep-1: sheet pictures (Insert &gt; Pictures, or a raster non-linked Paste
+    /// Special &gt; Picture) were never drawn by the print/XPS/Print-Preview renderer at all -- they
+    /// rendered fine on screen (<c>GridView.RenderPicture</c>) but were simply absent from every
+    /// printed page. Mirrors that screen renderer's crop handling (an <see cref="ImageBrush"/> with a
+    /// relative <see cref="Viewbox"/> when cropped, a plain <see cref="DrawingContext.DrawImage"/>
+    /// otherwise) so a cropped picture prints the same visible region it shows on screen.
+    /// </summary>
+    private static void DrawPrintedPictures(DrawingContext dc, IReadOnlyList<PagePictureBlock> pictures)
+    {
+        if (pictures.Count == 0)
+            return;
+
+        foreach (var picture in pictures)
+        {
+            if (!WpfBitmapImageLoader.TryLoad(picture.ImageBytes, out var image) || image is null)
+                continue;
+
+            var rect = ToRect(picture.Bounds);
+            // Note: picture.Crop is FreeX.App.Presentation.DrawingInteraction.PictureCropRatios, kept
+            // unnamed here (destructured via `var`) because FreeX.App.UI (already `using`-imported
+            // above for WpfBitmapImageLoader/ChartRenderer) declares its own same-shaped
+            // PictureCropRatios, and naming the type directly would be an ambiguous reference.
+            var crop = picture.Crop;
+            if (crop.Left > 0 || crop.Top > 0 || crop.Right > 0 || crop.Bottom > 0)
+            {
+                var brush = new ImageBrush(image)
+                {
+                    Stretch = Stretch.Fill,
+                    ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
+                    Viewbox = new Rect(
+                        crop.Left,
+                        crop.Top,
+                        Math.Max(0.01, 1 - crop.Left - crop.Right),
+                        Math.Max(0.01, 1 - crop.Top - crop.Bottom))
+                };
+                if (brush.CanFreeze)
+                    brush.Freeze();
+                dc.DrawRectangle(brush, null, rect);
+            }
+            else
+            {
+                dc.DrawImage(image, rect);
+            }
+        }
+    }
+
     private static void DrawPrintedTextBoxes(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,

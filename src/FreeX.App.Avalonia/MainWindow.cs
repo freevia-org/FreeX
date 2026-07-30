@@ -517,6 +517,17 @@ public sealed partial class MainWindow : Window
     private int? _formulaReferenceLength;
     private readonly TextBlock _formulaReferenceTextOverlay = new();
     private Canvas? _formulaReferenceGridOverlay;
+
+    // R92-meta-2: the function-name AutoComplete popup driven by the portable
+    // FormulaFunctionAutocompletePlanner (FreeX.App.Presentation.FormulaBar), ported to this shell
+    // from the WPF host's _functionAutocompletePopup/_functionAutocompleteListBox (MainWindow.Editing.cs)
+    // so typing "=SU" shows the SUM/SUMIF/... dropdown here too, not only on Windows.
+    private Popup? _functionAutocompletePopup;
+    private ListBox? _functionAutocompleteListBox;
+    private IReadOnlyList<string> _functionAutocompleteCandidates = [];
+    private int _functionAutocompleteTokenStart;
+    private int _functionAutocompleteTokenLength;
+    private bool FunctionAutocompleteIsOpen => _functionAutocompletePopup?.IsOpen == true;
     private Canvas? _cellAffordanceOverlay;
     private readonly List<Control> _formulaReferenceGridHighlightVisuals = [];
     private const double FormulaReferenceGripSize = 6;
@@ -929,6 +940,50 @@ public sealed partial class MainWindow : Window
     internal bool FormulaPointModeForTest => _formulaRangeEntryMode;
 
     internal ExcelSelectionMode FormulaRangeEntrySelectionModeForTest => _formulaRangeEntrySelectionMode;
+
+    /// <summary>
+    /// R92-meta-2 test seam: whether the function-name AutoComplete popup is currently open, and the
+    /// candidate list it is showing. Not used by production code paths.
+    /// </summary>
+    internal bool FunctionAutocompleteOpenForTest => FunctionAutocompleteIsOpen;
+
+    internal IReadOnlyList<string> FunctionAutocompleteCandidatesForTest => _functionAutocompleteCandidates;
+
+    /// <summary>
+    /// R92-meta-2 test seam: drives the Formula Bar's real TextChanged handling with the Text and
+    /// CaretIndex already at their post-keystroke values (native Avalonia TextBox typing -- the
+    /// Formula Bar has no custom TextInput interception -- updates both atomically before raising
+    /// TextChanged, unlike a bare property assignment), so headless tests can exercise
+    /// RefreshFormulaFunctionAutocomplete via the exact FormulaBox_TextChanged production path
+    /// instead of only calling it directly. Not used by production code paths.
+    /// </summary>
+    internal void SimulateFormulaBoxTypedTextForTest(string text, int caretIndex)
+    {
+        _formulaBox.Text = text;
+        var clamped = Math.Clamp(caretIndex, 0, text.Length);
+        _formulaBox.CaretIndex = clamped;
+        _formulaBox.SelectionStart = clamped;
+        _formulaBox.SelectionEnd = clamped;
+        FormulaBox_TextChanged(_formulaBox, null!);
+    }
+
+    /// <summary>
+    /// R92-meta-2 test seam: drives the in-cell inline editor's real TextInput handling
+    /// (<see cref="InlineCellEditor_TextInput"/> -&gt; TryApplyInlineCellTextInput -&gt;
+    /// ApplyTextBoxEdit -&gt; RefreshFormulaFunctionAutocomplete), the same method a genuine keystroke
+    /// invokes, so headless tests exercise the production entry point rather than a source-string
+    /// proxy. Not used by production code paths.
+    /// </summary>
+    internal void RaiseInlineCellEditorTextInputForTest(string text)
+    {
+        if (_inlineCellEditor is not { } editor || _inlineCellEditAddress is not { } address)
+            throw new InvalidOperationException("No inline cell editor is active.");
+
+        InlineCellEditor_TextInput(
+            address,
+            editor,
+            new TextInputEventArgs { RoutedEvent = InputElement.TextInputEvent, Source = editor, Text = text });
+    }
 
     internal string? InlineCellEditorTextForTest => _inlineCellEditor?.Text ?? _inlineCellEditText;
 
@@ -9216,6 +9271,7 @@ public sealed partial class MainWindow : Window
             UpdateFormulaRangeEntryStateAfterTextChanged(_inlineCellEditText);
             RefreshFormulaReferenceHighlights();
             RefreshFormulaReferenceGridHighlights();
+            RefreshFormulaFunctionAutocomplete(editor);
 
             var suppressed = _suppressNextInlineCellValueAutoCompleteSuggestion;
             _suppressNextInlineCellValueAutoCompleteSuggestion = false;
@@ -9341,11 +9397,29 @@ public sealed partial class MainWindow : Window
         _inlineCellEditSelectionStart = nextCaretIndex;
         _inlineCellEditSelectionEnd = nextCaretIndex;
         _pendingInlineCellCaretIndex = null;
+
+        // R92-meta-2: ApplyTextBoxEdit sets Text before CaretIndex, so the editor.TextChanged pass
+        // it triggers (which drives RefreshFormulaFunctionAutocomplete) sees the *previous* caret
+        // position, not the one this keystroke just produced -- e.g. typing the "P" of "=XNP" would
+        // still evaluate the popup against the stale "=XN" caret. Re-run it now that both Text and
+        // CaretIndex reflect this keystroke, so the AutoComplete popup always matches what was
+        // actually just typed (mirrors the WPF host, whose native TextBox typing keeps caret and
+        // text in sync before TextChanged fires, so it never needed this second pass).
+        RefreshFormulaFunctionAutocomplete(inlineEditor);
         return true;
     }
 
     private void InlineCellEditor_KeyDown(CellAddress address, TextBox editor, KeyEventArgs args)
     {
+        // R92-meta-2: while the function-name AutoComplete popup is open, Up/Down/Tab/Enter/Escape
+        // drive the popup instead of their normal formula-editing meaning, exactly as Excel's own
+        // popup takes priority over those keys. Checked first, before any other key handling below.
+        if (HandleFunctionAutocompleteKeyDown(editor, args.Key))
+        {
+            args.Handled = true;
+            return;
+        }
+
         // R88-app-autocomplete-picklist-5-2: Backspace/Delete reject a live AutoComplete suggestion
         // (Excel behavior) rather than instantly re-offering the same completion the deletion just
         // removed. The key itself is left unhandled so it still performs its normal TextBox deletion.
@@ -9536,6 +9610,7 @@ public sealed partial class MainWindow : Window
 
     private void ClearInlineCellEditorState()
     {
+        HideFormulaFunctionAutocomplete();
         _inlineCellEditor = null;
         _inlineCellReferenceTextOverlay = null;
         _inlineCellEditorForeground = null;
@@ -10557,11 +10632,13 @@ public sealed partial class MainWindow : Window
             ClearFormulaReferenceTextOverlay();
             ClearFormulaReferenceGridHighlights();
             RefreshFormulaReferenceGrips();
+            HideFormulaFunctionAutocomplete();
             return;
         }
 
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
+        RefreshFormulaFunctionAutocomplete(_formulaBox);
     }
 
     private IReadOnlyList<FormulaReferenceHighlight> GetFormulaReferenceHighlights(string text) =>
@@ -10937,6 +11014,130 @@ public sealed partial class MainWindow : Window
             overlay.Children.Remove(visual);
 
         _formulaReferenceGridHighlightVisuals.Clear();
+    }
+
+    // ── R92-meta-2: function-name AutoComplete popup ────────────────────────────────────────────
+    // Ported from the WPF host's RefreshFormulaFunctionAutocomplete/HandleFunctionAutocompleteKeyDown
+    // (MainWindow.Editing.cs) onto FormulaFunctionAutocompletePlanner, the same portable planner the
+    // host already uses -- so this shell's formula editors (the Formula Bar and the in-cell inline
+    // editor) get the same "=SU" -> SUM/SUMIF/... dropdown Windows users already see.
+
+    /// <summary>
+    /// Recomputes and shows/hides the function-name AutoComplete popup for the given formula editor
+    /// (the in-cell inline editor or the Formula Bar). Called on every formula-editor TextChanged
+    /// pass alongside the existing reference-highlight refresh.
+    /// </summary>
+    private void RefreshFormulaFunctionAutocomplete(TextBox editor)
+    {
+        if (!FormulaFunctionAutocompletePlanner.ShouldShowAutocomplete(
+                editor.Text, editor.CaretIndex, out var tokenStart, out var tokenLength, out var prefix))
+        {
+            HideFormulaFunctionAutocomplete();
+            return;
+        }
+
+        var candidates = FormulaFunctionAutocompletePlanner.BuildCandidates(
+            prefix,
+            BuiltInFunctions.Names,
+            _session.Workbook.NamedRanges.Keys,
+            _session.Workbook.Sheets.SelectMany(s => s.StructuredTables).Select(t => t.Name));
+
+        if (candidates.Count == 0)
+        {
+            HideFormulaFunctionAutocomplete();
+            return;
+        }
+
+        _functionAutocompleteCandidates = candidates;
+        _functionAutocompleteTokenStart = tokenStart;
+        _functionAutocompleteTokenLength = tokenLength;
+        ShowFormulaFunctionAutocomplete(editor, candidates);
+    }
+
+    private void ShowFormulaFunctionAutocomplete(TextBox editor, IReadOnlyList<string> candidates)
+    {
+        EnsureFunctionAutocompletePopup();
+        _functionAutocompleteListBox!.ItemsSource = candidates;
+        _functionAutocompleteListBox.SelectedIndex = 0;
+
+        _functionAutocompletePopup!.PlacementTarget = editor;
+        _functionAutocompletePopup.Placement = PlacementMode.BottomEdgeAlignedLeft;
+        _functionAutocompletePopup.IsOpen = true;
+    }
+
+    private void HideFormulaFunctionAutocomplete()
+    {
+        if (_functionAutocompletePopup is not null)
+            _functionAutocompletePopup.IsOpen = false;
+        _functionAutocompleteCandidates = [];
+    }
+
+    private void EnsureFunctionAutocompletePopup()
+    {
+        if (_functionAutocompletePopup is not null)
+            return;
+
+        _functionAutocompleteListBox = new ListBox
+        {
+            MaxHeight = 220,
+            Focusable = false,
+        };
+        AutomationProperties.SetAutomationId(_functionAutocompleteListBox, "FormulaFunctionAutocompleteList");
+        _functionAutocompletePopup = new Popup
+        {
+            Child = new Border
+            {
+                Background = Brushes.White,
+                BorderBrush = Brushes.Gray,
+                BorderThickness = new Thickness(1),
+                Child = _functionAutocompleteListBox,
+            },
+            IsLightDismissEnabled = false,
+        };
+    }
+
+    /// <summary>
+    /// Handles Up/Down/Tab/Enter/Escape while the function AutoComplete popup is open. Returns true
+    /// when the key was consumed by the popup, so the caller skips its normal formula-editing
+    /// handling for that key (mirrors the WPF host's HandleFunctionAutocompleteKeyDown).
+    /// </summary>
+    private bool HandleFunctionAutocompleteKeyDown(TextBox editor, Key key)
+    {
+        if (!FunctionAutocompleteIsOpen)
+            return false;
+
+        switch (key)
+        {
+            case Key.Down:
+            case Key.Up:
+                _functionAutocompleteListBox!.SelectedIndex = FormulaFunctionAutocompletePlanner.MoveSelection(
+                    _functionAutocompleteListBox.SelectedIndex,
+                    _functionAutocompleteCandidates.Count,
+                    key == Key.Down ? 1 : -1);
+                return true;
+
+            case Key.Tab:
+            case Key.Enter:
+                if (_functionAutocompleteListBox!.SelectedItem is string chosen)
+                    CommitFunctionAutocomplete(editor, chosen);
+                return true;
+
+            case Key.Escape:
+                HideFormulaFunctionAutocomplete();
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    private void CommitFunctionAutocomplete(TextBox editor, string chosenName)
+    {
+        var (text, caretIndex) = FormulaFunctionAutocompletePlanner.Commit(
+            editor.Text ?? "", _functionAutocompleteTokenStart, _functionAutocompleteTokenLength, chosenName);
+        HideFormulaFunctionAutocomplete();
+        ApplyTextBoxEdit(editor, new ExcelTextEdit(text, caretIndex, 0));
+        SynchronizeFormulaEditors(editor);
     }
 
     /// <summary>
@@ -15092,9 +15293,13 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
+        // R92-render-localization-chrome-5-4: the multi-range branch previously spliced a raw
+        // English "cells" noun into this otherwise-localized status; route it through the shared
+        // catalog (MainLoc_CellsCount) like the single-range branch's own FormatRangeReference,
+        // which is already culture-neutral.
         var selectedText = result.SelectedRanges.Count == 1
             ? FormatRangeReference(result.SelectedRange!.Value)
-            : $"{result.MatchCount} cells";
+            : UiText.Format("MainLoc_CellsCount", result.MatchCount);
         RefreshShell(UiText.Format("MainLoc_SelectedX", selectedText));
         return true;
     }
@@ -18293,6 +18498,14 @@ public sealed partial class MainWindow : Window
 
     private void FormulaBox_KeyDown(object? sender, KeyEventArgs e)
     {
+        // R92-meta-2: see the matching check in InlineCellEditor_KeyDown -- the popup must claim
+        // these keys before any of the Formula Bar's own navigation/commit handling below.
+        if (HandleFunctionAutocompleteKeyDown(_formulaBox, e.Key))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (TryToggleFormulaRangeEntrySelectionMode(e.Key, e.KeyModifiers))
         {
             e.Handled = true;
@@ -18645,6 +18858,7 @@ public sealed partial class MainWindow : Window
 
         _formulaBoxEditOriginalText = null;
         ClearFormulaRangeEntryState();
+        HideFormulaFunctionAutocomplete();
         // R75-render-selection-marquee-4-2: mirrors the WPF host's TryExecuteEditCells, which
         // cancels an active Copy/Cut marching-ants marquee as soon as an ordinary cell edit is
         // committed -- a subsequent Paste must not silently move/copy a source range the user has
@@ -21056,9 +21270,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var status = FormatRemoveDuplicatesStatus(plan, result);
+        var status = FormatRemoveDuplicatesStatus(result);
         RefreshShell(status);
-        await ShowTextDialogAsync("Remove Duplicates", status, 420, 220);
+        await ShowTextDialogAsync(UiText.Get("MainWindowMessage_RemoveDuplicatesTitle"), status, 420, 220);
     }
 
     private async Task<RemoveDuplicatesPlan?> ShowRemoveDuplicatesInputDialogAsync(bool? forceHasHeaders = null)
@@ -21071,7 +21285,7 @@ public sealed partial class MainWindow : Window
 
         var dialog = new Window
         {
-            Title = "Remove Duplicates",
+            Title = UiText.Get("MainWindowMessage_RemoveDuplicatesTitle"),
             Width = 360,
             Height = 360,
             MinWidth = 360,
@@ -21329,13 +21543,11 @@ public sealed partial class MainWindow : Window
         return result;
     }
 
-    private static string FormatRemoveDuplicatesStatus(
-        RemoveDuplicatesPlan plan,
-        WorkbookRemoveDuplicatesResult result)
-    {
-        var rowLabel = result.RemovedRowCount == 1 ? "row" : "rows";
-        return $"Removed {result.RemovedRowCount} duplicate {rowLabel} from {FormatRangeReference(plan.SourceRange)}";
-    }
+    private static string FormatRemoveDuplicatesStatus(WorkbookRemoveDuplicatesResult result) =>
+        // R92-render-localization-chrome-5-3: reuse the WPF host's own resx-backed message
+        // (MainWindow.DataCommands.cs) instead of a hardcoded, English-only, naively-pluralized
+        // ("row"/"rows") sentence -- the shared catalog already owns this exact status string.
+        UiText.Format("MainWindowMessage_RemoveDuplicatesRemovedRows", result.RemovedRowCount);
 
     private async Task ShowScenarioManagerDialogAsync()
     {

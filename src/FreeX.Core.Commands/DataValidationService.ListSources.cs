@@ -183,9 +183,15 @@ public static partial class DataValidationService
                 return true;
             }
 
+            // Sheet-qualification-aware, shared with TryValidateRangeOrNamedSource below (and
+            // FormulaAuditingService's precedent collectors) so a sheet-scoped name reference
+            // (e.g. an explicit "=Sheet2!Data" naming Sheet2's OWN local "Data", authored on a
+            // cell that lives on Sheet1, which also happens to have its own local "Data") is
+            // resolved against the QUALIFIED sheet's scope, not the validated cell's own sheet
+            // (R92-io-defined-name-scope-eval-5-2). See NamedRangeNodeScopeResolver's doc comment
+            // for the full scope-precedence rule this mirrors from the formula evaluator.
             if (ast is NamedRangeNode named && workbook is not null &&
-                !HasSheetScopedNamedFormula(workbook, named.Name, sheet.Id) &&
-                workbook.TryGetNamedRange(named.Name, sheet.Id, out var namedRange))
+                NamedRangeNodeScopeResolver.TryResolveNamedRange(workbook, named, sheet.Id, out var namedRange))
             {
                 var sourceSheet = workbook.GetSheet(namedRange.Start.Sheet) ?? sheet;
                 values = ReadRangeValues(
@@ -204,20 +210,6 @@ public static partial class DataValidationService
             return false;
         }
     }
-
-    /// <summary>
-    /// Excel scope precedence: a name scoped to the current sheet always wins over a
-    /// same-named workbook-global name, regardless of whether either name is a plain range
-    /// or a formula expression (mirrors FormulaEvaluator.References.cs.IsSheetScopedName).
-    /// Workbook.TryGetNamedRange(name, sheetId) only consults ScopedNamedRanges (range-kind)
-    /// before falling back to the workbook-global NamedRanges dictionary — it never looks at
-    /// ScopedNamedFormulas, so a sheet-scoped named FORMULA is invisible to it and the
-    /// shadowed workbook-global range would be returned as if it were the correct match. Guard
-    /// the DV fast path here so that case falls through to the full FormulaEvaluator, which
-    /// implements the correct precedence via EvaluateNamedRange/IsSheetScopedName.
-    /// </summary>
-    private static bool HasSheetScopedNamedFormula(Workbook workbook, string name, SheetId sheetId) =>
-        workbook.ScopedNamedFormulas.ContainsKey((name, sheetId));
 
     private static bool TryReadSimpleSameSheetRangeSource(
         string formulaText,
@@ -304,9 +296,10 @@ public static partial class DataValidationService
                 return true;
             }
 
+            // See TryReadRangeOrNamedSource above: same sheet-qualification-aware shared resolver
+            // (R92-io-defined-name-scope-eval-5-2).
             if (ast is NamedRangeNode named && workbook is not null &&
-                !HasSheetScopedNamedFormula(workbook, named.Name, sheet.Id) &&
-                workbook.TryGetNamedRange(named.Name, sheet.Id, out var namedRange))
+                NamedRangeNodeScopeResolver.TryResolveNamedRange(workbook, named, sheet.Id, out var namedRange))
             {
                 var sourceSheet = workbook.GetSheet(namedRange.Start.Sheet) ?? sheet;
                 matches = RangeContainsValue(

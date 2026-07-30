@@ -158,7 +158,7 @@ public static partial class ChartRenderer
                 if (pointFill is { } perPointFill)
                     slice.Fill = OxyColor.FromRgb(perPointFill.R, perPointFill.G, perPointFill.B);
                 else if (pieFormat?.ResolveFillColor(theme) is { } fill)
-                    slice.Fill = OxyColor.FromRgb(fill.R, fill.G, fill.B);
+                    slice.Fill = ApplyFillAlpha(OxyColor.FromRgb(fill.R, fill.G, fill.B), pieFormat?.FillAlpha);
                 else
                     slice.Fill = piePalette[sliceIndex % piePalette.Count];
                 pieSeries.Slices.Add(slice);

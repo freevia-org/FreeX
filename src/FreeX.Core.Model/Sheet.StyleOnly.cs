@@ -68,6 +68,12 @@ public sealed partial class Sheet
             _styleOnlyRunTombstones ??= [];
             _styleOnlyRunTombstones.Add(key);
         }
+
+        // R92-render-cellstyle-inheritance-5-3: the row/column-format provenance tag (if any)
+        // describes THIS style-only entry -- once the entry itself is gone (superseded by a real
+        // cell, or explicitly cleared), the tag must not survive to be misread against whatever
+        // unrelated style-only entry a later command creates at the same address.
+        ClearStyleOnlySource(row, col);
     }
 
     /// <summary>Removes all style-only overrides for empty cells.</summary>

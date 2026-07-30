@@ -430,11 +430,29 @@ public static class PasteCommandFactory
         // R91-io-clipboard-image-formats-5-2: a plain Ctrl+V (mode All, no Paste Special options)
         // must bring along any picture anchored inside the copied range, exactly as it brings along
         // the cell values/formats themselves -- matching real Excel.
+        // R92-cmd-paste-floating-objects: generalized to every anchored-object kind Excel carries
+        // this way, not just pictures -- a Chart, DrawingShape (incl. WordArt), or TextBox anchored
+        // inside the copied range must travel with the paste exactly like a Picture does.
         if (carriesFormatting)
         {
             var picturesToCarry = FindPicturesAnchoredIn(sourceSheet, sourceRange);
             if (picturesToCarry.Count > 0)
                 extraCommands.Add(new PastePicturesCommand(targetSheetId, sourceRange, destination, picturesToCarry, transpose: false));
+
+            var shapesToCarry = FindShapesAnchoredIn(sourceSheet, sourceRange);
+            if (shapesToCarry.Count > 0)
+                extraCommands.Add(new PasteShapesCommand(targetSheetId, sourceRange, destination, shapesToCarry, transpose: false));
+
+            var textBoxesToCarry = FindTextBoxesAnchoredIn(sourceSheet, sourceRange);
+            if (textBoxesToCarry.Count > 0)
+                extraCommands.Add(new PasteTextBoxesCommand(targetSheetId, sourceRange, destination, textBoxesToCarry, transpose: false));
+
+            var chartsToCarry = FindChartsAnchoredIn(sourceSheet, sourceRange);
+            if (chartsToCarry.Count > 0)
+            {
+                extraCommands.Add(new PasteChartsCommand(
+                    sourceRange.Start.Sheet, targetSheetId, sourceRange, destination, chartsToCarry, transpose: false));
+            }
         }
 
         return extraCommands.Count == 0
@@ -730,6 +748,8 @@ public static class PasteCommandFactory
             // above -- a picture anchored inside the copied source range is re-created at every
             // whole repeated tile of the destination selection, mirroring how merged regions and
             // comments are already tiled just above.
+            // R92-cmd-paste-floating-objects: tiled counterparts for the other anchored-object kinds,
+            // mirroring the non-tiled generalization above.
             var tiledPicturesToCarry = FindPicturesAnchoredIn(sourceSheet, sourceRange);
             if (tiledPicturesToCarry.Count > 0)
             {
@@ -738,6 +758,40 @@ public static class PasteCommandFactory
                     sourceRange,
                     tiledFootprint,
                     tiledPicturesToCarry,
+                    options.Transpose));
+            }
+
+            var tiledShapesToCarry = FindShapesAnchoredIn(sourceSheet, sourceRange);
+            if (tiledShapesToCarry.Count > 0)
+            {
+                tiledExtraCommands.Add(new PasteShapesCommand(
+                    targetSheetId,
+                    sourceRange,
+                    tiledFootprint,
+                    tiledShapesToCarry,
+                    options.Transpose));
+            }
+
+            var tiledTextBoxesToCarry = FindTextBoxesAnchoredIn(sourceSheet, sourceRange);
+            if (tiledTextBoxesToCarry.Count > 0)
+            {
+                tiledExtraCommands.Add(new PasteTextBoxesCommand(
+                    targetSheetId,
+                    sourceRange,
+                    tiledFootprint,
+                    tiledTextBoxesToCarry,
+                    options.Transpose));
+            }
+
+            var tiledChartsToCarry = FindChartsAnchoredIn(sourceSheet, sourceRange);
+            if (tiledChartsToCarry.Count > 0)
+            {
+                tiledExtraCommands.Add(new PasteChartsCommand(
+                    sourceRange.Start.Sheet,
+                    targetSheetId,
+                    sourceRange,
+                    tiledFootprint,
+                    tiledChartsToCarry,
                     options.Transpose));
             }
         }
@@ -832,6 +886,36 @@ public static class PasteCommandFactory
         sheet is null
             ? []
             : sheet.Pictures.Where(picture => sourceRange.Contains(picture.Anchor)).ToList();
+
+    /// <summary>
+    /// R92-cmd-paste-floating-objects: DrawingShape (rectangle/arrow/connector/WordArt/etc) analogue
+    /// of <see cref="FindPicturesAnchoredIn"/> -- DrawingShapeModel carries the same cell-anchored
+    /// <c>Anchor</c> shape as PictureModel, so the same containment check applies unchanged.
+    /// </summary>
+    private static List<DrawingShapeModel> FindShapesAnchoredIn(Sheet? sheet, GridRange sourceRange) =>
+        sheet is null
+            ? []
+            : sheet.DrawingShapes.Where(shape => sourceRange.Contains(shape.Anchor)).ToList();
+
+    /// <summary>
+    /// R92-cmd-paste-floating-objects: TextBox analogue of <see cref="FindPicturesAnchoredIn"/>.
+    /// </summary>
+    private static List<TextBoxModel> FindTextBoxesAnchoredIn(Sheet? sheet, GridRange sourceRange) =>
+        sheet is null
+            ? []
+            : sheet.TextBoxes.Where(textBox => sourceRange.Contains(textBox.Anchor)).ToList();
+
+    /// <summary>
+    /// R92-cmd-paste-floating-objects: Chart analogue of <see cref="FindPicturesAnchoredIn"/>. Unlike
+    /// Picture/DrawingShape/TextBox, ChartModel has no cell-anchored <c>Anchor</c> -- its position is
+    /// an absolute pixel Left/Top on the sheet's drawing canvas -- so containment is decided via
+    /// <see cref="PasteChartsCommand.IsAnchoredIn"/>'s pixel bounding-box check instead of
+    /// <c>GridRange.Contains</c>.
+    /// </summary>
+    private static List<ChartModel> FindChartsAnchoredIn(Sheet? sheet, GridRange sourceRange) =>
+        sheet is null
+            ? []
+            : sheet.Charts.Where(chart => PasteChartsCommand.IsAnchoredIn(sheet, chart, sourceRange)).ToList();
 
     /// <summary>
     /// Builds the command pair that makes a plain paste's destination comment/note state exactly

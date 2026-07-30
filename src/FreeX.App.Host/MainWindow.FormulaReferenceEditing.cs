@@ -222,7 +222,7 @@ public partial class MainWindow
         if (formulaCell is null)
             return false;
 
-        var getPivotDataPlan = range.Start == range.End
+        var getPivotDataPlan = range.Start == range.End && _options.GenerateGetPivotData
             ? GetPivotDataFormulaPlanner.Create(
                 _workbook,
                 _workbook.GetSheet(formulaCell.Value.Sheet)!,

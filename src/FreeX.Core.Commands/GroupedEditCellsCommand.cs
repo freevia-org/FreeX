@@ -69,8 +69,13 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
                     oldPhoneticGuide));
 
                 var appliedCell = sourceCell.Clone();
-                if (oldCell is not null)
-                    appliedCell.StyleId = oldCell.StyleId;
+                if (appliedCell.StyleId == StyleId.Default)
+                {
+                    if (oldCell is not null)
+                        appliedCell.StyleId = oldCell.StyleId;
+                    else if (sheet.GetStyleOnly(address.Row, address.Col) is { } styleOnly)
+                        appliedCell.StyleId = styleOnly;
+                }
 
                 sheet.SetCell(address, appliedCell);
 

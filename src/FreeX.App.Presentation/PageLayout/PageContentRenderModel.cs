@@ -1,5 +1,6 @@
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
@@ -154,10 +155,28 @@ public sealed record PageChartBlock(
     IReadOnlyList<PrintChartTextOverlayPlan> TextOverlays);
 
 /// <summary>
+/// One printed worksheet picture (Insert &gt; Pictures, or a raster/non-linked Paste Special &gt;
+/// Picture snapshot) resolved into page-space geometry: its pixel rectangle, the crop fractions to
+/// apply against the full decoded image (see <see cref="PictureCropRatios"/> -- 0.0-1.0 cut from
+/// each edge, matching <c>PictureModel.CropLeft/Top/Right/Bottom</c>), and the raw encoded image
+/// bytes + content type a renderer paints directly so no platform image-decode type leaks through the
+/// portable model. Only <see cref="FreeX.Core.Model.PictureKind.Image"/> pictures with decoded raster
+/// bytes are resolved -- see <see cref="PagePictureLayoutPlanner"/> for the exact scope (mirrors
+/// <see cref="PageTextBoxBlock"/>'s sibling contract: sub-cell anchor offset and rotation are not
+/// applied here).
+/// </summary>
+public sealed record PagePictureBlock(
+    Guid Id,
+    LayoutRect Bounds,
+    PictureCropRatios Crop,
+    byte[] ImageBytes,
+    string ContentType);
+
+/// <summary>
 /// The complete, backend-agnostic content of one printed page: the page rectangle, the printable
 /// area inset by margins, and ordered render instructions a renderer paints in list order (fills,
-/// gridlines, the outer grid border, headings, cell text/borders, charts, text boxes, and the
-/// header/footer bands). All geometry is in device-independent units (96 dpi) with origin top-left, y growing
+/// gridlines, the outer grid border, headings, cell text/borders, charts, pictures, text boxes, and
+/// the header/footer bands). All geometry is in device-independent units (96 dpi) with origin top-left, y growing
 /// downward.
 /// </summary>
 public sealed record PageContentLayout(
@@ -172,7 +191,8 @@ public sealed record PageContentLayout(
     IReadOnlyList<PageChartBlock> Charts,
     IReadOnlyList<PageTextBoxBlock> TextBoxes,
     IReadOnlyList<PageHeaderFooterRun> HeaderRuns,
-    IReadOnlyList<PageHeaderFooterRun> FooterRuns)
+    IReadOnlyList<PageHeaderFooterRun> FooterRuns,
+    IReadOnlyList<PagePictureBlock> Pictures)
 {
     public bool PrintGridlines => GridLines.Count > 0;
     public bool PrintHeadings => ColumnHeadings.Count > 0 || RowHeadings.Count > 0;

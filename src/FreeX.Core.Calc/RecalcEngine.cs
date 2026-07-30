@@ -46,6 +46,35 @@ public sealed class RecalcEngine
     // (see RunIterativeCalc). Entries are removed once the cell evaluates normally again as part
     // of the ordinary evaluation loop (its formula no longer participates in a cycle).
     private readonly HashSet<CellAddress> _cyclicCells = [];
+    // Cells most recently resolved by RunIterativeCalc for an ACTIVE iterative circular-reference
+    // group (Workbook.IterativeCalculation on). In real Excel, an active iterative circular group
+    // re-iterates on every recalculation pass -- including a bare F9 "Calculate Now" that touches
+    // nothing else in the workbook -- so this is seeded into the traversal exactly like
+    // _volatileCells (see BuildChangedSetForTraversal) rather than only ever being reached when the
+    // caller happens to supply the cyclic cell(s) as changedCells. Refreshed every pass: entries not
+    // still reported cyclic by that pass's own fresh GetRecalcOrder/GetEvaluationOrder are dropped,
+    // so a since-fixed formula or a switch to non-iterative mode (which re-marks it via
+    // AddCyclicCell instead) naturally ages out. See R92-calc-iterative-convergence-5-1.
+    private readonly HashSet<CellAddress> _activeIterativeCyclicCells = [];
+    // Anchor cell -> the set of formula cells whose dependency-graph edges are a live union of
+    // that anchor's spill extent with a literal end cell (an ANCHORARRAY(anchor,end) 2-arg
+    // reference, e.g. "=SUM(A1#:B5)"). RegisterFormulaDependencies only runs once per formula
+    // cell (see the CachedAst gate in the main evaluation loop below), so if the anchor's spill
+    // extent later grows, shrinks, appears, or disappears on some LATER edit, the registered
+    // union rectangle for every dependent recorded here goes stale — a plain data cell that is
+    // newly inside (or newly outside) the TRUE current union has no graph edge (or a spurious
+    // one) and would not (or would wrongly) dirty the dependent until an unrelated full recalc
+    // rebuilt every dependency from scratch. Populated by RegisterFormulaDependencies (via
+    // FormulaDependencySet.AnchorArrayAnchors) and consulted by the main evaluation loop every
+    // time a cell that IS such an anchor finishes evaluating, so the affected dependents'
+    // dependencies are re-derived from the anchor's now-current live extent immediately. See
+    // R92-calc-array-recalc-order-5-1.
+    private readonly Dictionary<CellAddress, HashSet<CellAddress>> _anchorArraySpillDependents = [];
+    // Reverse index of the above: dependent formula cell -> the anchor addresses it is currently
+    // registered under, so a later re-registration (the formula changed to no longer read that
+    // anchor, or to read a different one) can remove the stale forward-map entries instead of
+    // leaking them for the lifetime of the engine.
+    private readonly Dictionary<CellAddress, List<CellAddress>> _anchorArraySpillDependentAnchors = [];
 
     /// <summary>
     /// Cells currently classified as part of a non-iterative circular reference by the most
@@ -87,6 +116,10 @@ public sealed class RecalcEngine
     {
         if (changedCells.Count == 0 &&
             _volatileCells.Count == 0 &&
+            // An active iterative circular-reference group must re-iterate every pass (see
+            // _activeIterativeCyclicCells) even when nothing else in the workbook changed -- e.g.
+            // a bare F9 with no other dirty cells (R92-calc-iterative-convergence-5-1).
+            _activeIterativeCyclicCells.Count == 0 &&
             // Mirror the fallthrough guard below (P73): an edit with no changed cells at all (e.g.
             // Unmerge, which never populates CommandOutcome.AffectedCells) must still reach the
             // spill-blocked-anchor retry pass further down instead of short-circuiting here first.
@@ -146,11 +179,16 @@ public sealed class RecalcEngine
             {
                 seenIterativeCells = [.. plan.CyclicCells];
                 RunIterativeCalc(workbook, plan.CyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors, restrictWritesToSheet);
+                foreach (var cyclic in plan.CyclicCells)
+                    _activeIterativeCyclicCells.Add(cyclic);
             }
             else
             {
                 foreach (var cyclic in plan.CyclicCells)
+                {
                     AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors, restrictWritesToSheet);
+                    _activeIterativeCyclicCells.Remove(cyclic);
+                }
             }
         }
 
@@ -227,15 +265,38 @@ public sealed class RecalcEngine
                             }
                         }
                         if (newCyclicCells is not null)
+                        {
                             RunIterativeCalc(workbook, newCyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors, restrictWritesToSheet);
+                            foreach (var cyclic in newCyclicCells)
+                                _activeIterativeCyclicCells.Add(cyclic);
+                        }
                     }
                     else
                     {
                         foreach (var cyclic in evaluationPlan.CyclicCells)
+                        {
                             AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors, restrictWritesToSheet);
+                            _activeIterativeCyclicCells.Remove(cyclic);
+                        }
                     }
                 }
             }
+        }
+
+        if (_activeIterativeCyclicCells.Count > 0)
+        {
+            // Drop any previously-tracked iterative cyclic cell that this pass's own fresh
+            // GetRecalcOrder/GetEvaluationOrder traversal (which always re-seeds every entry here
+            // into changedForTraversal, mirroring _volatileCells) no longer reports as cyclic -- the
+            // formula was edited to no longer self-reference, so it ages out instead of forcing an
+            // extra RunIterativeCalc pass on it forever.
+            var stillCyclic = new HashSet<CellAddress>(plan.CyclicCells);
+            if (!ReferenceEquals(evaluationPlan, plan))
+            {
+                foreach (var addr in evaluationPlan.CyclicCells)
+                    stillCyclic.Add(addr);
+            }
+            _activeIterativeCyclicCells.RemoveWhere(addr => !stillCyclic.Contains(addr));
         }
 
         foreach (var addr in directFormulaRoots ?? evaluationPlan.OrderedCells)
@@ -466,6 +527,15 @@ public sealed class RecalcEngine
                 AddError(ref errors, addr, "#VALUE!");
 #endif
             }
+
+            // addr just (re-)evaluated, so if it is itself the anchor of one or more live
+            // ANCHORARRAY(anchor,end) spill-union dependencies, those dependents' registered
+            // dependency edges may now be stale (addr's spill extent could have grown, shrunk,
+            // appeared, or disappeared). Re-derive them now rather than leaving that a one-time
+            // snapshot from first registration. Cheap in the overwhelming common case: the
+            // dictionary is empty unless some OTHER formula reads addr via a live spill union.
+            if (_anchorArraySpillDependents.Count > 0)
+                RefreshAnchorArraySpillDependents(workbook, addr);
         }
 
         var report = new RecalcReport(
@@ -727,13 +797,16 @@ public sealed class RecalcEngine
 
     private IEnumerable<CellAddress> BuildChangedSetForTraversal(IReadOnlyList<CellAddress> changedCells)
     {
-        if (_volatileCells.Count == 0)
+        if (_volatileCells.Count == 0 && _activeIterativeCyclicCells.Count == 0)
             return changedCells;
 
-        var allChanged = new List<CellAddress>(changedCells.Count + _volatileCells.Count);
+        var allChanged = new List<CellAddress>(
+            changedCells.Count + _volatileCells.Count + _activeIterativeCyclicCells.Count);
         foreach (var addr in changedCells)
             allChanged.Add(addr);
         foreach (var addr in _volatileCells)
+            allChanged.Add(addr);
+        foreach (var addr in _activeIterativeCyclicCells)
             allChanged.Add(addr);
         return allChanged;
     }
@@ -941,8 +1014,11 @@ public sealed class RecalcEngine
                 var cell = sheet.GetCell(addr);
                 if (cell is null || !cell.HasFormula) continue;
 
-                // Snapshot the value before this eval so we can compute the delta.
-                var prevNumeric = ToNumericForConvergence(cell.Value);
+                // Snapshot the value before this eval so we can compute the delta. Keep the whole
+                // ScalarValue (not just its numeric projection) — see ComputeConvergenceDelta,
+                // which needs the actual prior value to detect a change confined to a
+                // Boolean/Text/Error/Blank cell (R92-calc-iterative-convergence-5-2).
+                var prevValue = cell.Value;
 
                 try
                 {
@@ -985,11 +1061,12 @@ public sealed class RecalcEngine
 #endif
                 }
 
-                var newNumeric = ToNumericForConvergence(cell.Value);
-                var delta = Math.Abs(newNumeric - prevNumeric);
-                // Guard: NaN/Infinity in the delta (e.g. the formula produced #DIV/0! on this pass)
-                // must not prevent termination — treat them as "large but not infinite" change so
-                // the loop simply runs to maxIterations and returns the last value.
+                var delta = ComputeConvergenceDelta(prevValue, cell.Value);
+                // Guard: NaN/Infinity in the delta (e.g. the formula produced #DIV/0! on this pass,
+                // or a Boolean/Text/Error cell's value actually changed — see
+                // ComputeConvergenceDelta) must not prevent termination — treat them as "large but
+                // not infinite" change so the loop simply runs to maxIterations and returns the
+                // last value.
                 if (double.IsFinite(delta) && delta > maxAbsChange)
                     maxAbsChange = delta;
             }
@@ -1023,6 +1100,41 @@ public sealed class RecalcEngine
         };
 
     /// <summary>
+    /// True when <paramref name="value"/> is a kind <see cref="ToNumericForConvergence"/> maps to
+    /// its OWN finite magnitude (a real number/date, not the shared 0.0 sentinel every other kind
+    /// collapses to).
+    /// </summary>
+    private static bool IsFiniteNumericForConvergence(ScalarValue? value) =>
+        value switch
+        {
+            NumberValue nv => double.IsFinite(nv.Value),
+            DateTimeValue dv => double.IsFinite(dv.Value),
+            _ => false
+        };
+
+    /// <summary>
+    /// Compute the per-cell convergence delta <see cref="RunIterativeCalc"/> uses for its
+    /// per-pass stopping condition. When both the previous and current value are finite
+    /// numbers/dates, this is the plain numeric magnitude of change (unchanged from before).
+    /// Otherwise — a Boolean, Text, Error, or Blank value on either side (or a pass that flips
+    /// between numeric and non-numeric) — <see cref="ToNumericForConvergence"/> would collapse
+    /// both sides to the identical 0.0 sentinel regardless of their actual content, making a
+    /// cyclic cell whose value keeps changing every pass (e.g. A1=NOT(A1), a Boolean toggle;
+    /// or any concatenation/IF/error-based cyclic formula) look falsely converged after a single
+    /// pass. Compare the values themselves instead: an actual change reports a large-but-finite
+    /// delta (so it counts exactly like a genuine numeric change and keeps the loop running
+    /// toward MaxCalculationIterations, matching the numeric oscillator A1=-A1's already-correct
+    /// behaviour); no change reports a true 0. See R92-calc-iterative-convergence-5-2.
+    /// </summary>
+    private static double ComputeConvergenceDelta(ScalarValue? previous, ScalarValue? current)
+    {
+        if (IsFiniteNumericForConvergence(previous) && IsFiniteNumericForConvergence(current))
+            return Math.Abs(ToNumericForConvergence(current) - ToNumericForConvergence(previous));
+
+        return Equals(previous, current) ? 0.0 : double.MaxValue;
+    }
+
+    /// <summary>
     /// Extract cell references from a formula AST and register them in the dependency graph.
     /// Call this whenever a formula is set on a cell.
     /// </summary>
@@ -1046,6 +1158,11 @@ public sealed class RecalcEngine
         if (!containsSelfExcludingCall && _dependencyPlanCache.TryGetValue(cacheKey, out var cachedPlan))
         {
             ApplyDependencyPlan(formulaCell, cachedPlan);
+            // A cached plan is never produced for an ANCHORARRAY live-spill-union formula (see the
+            // cacheableForDependencyPlan gate below), so reaching this branch means formulaCell's
+            // current formula does not need anchor-array spill tracking. Drop any stale tracking
+            // left over from a PRIOR formula at this same address.
+            ClearAnchorArraySpillTracking(formulaCell);
             return;
         }
 
@@ -1069,9 +1186,82 @@ public sealed class RecalcEngine
         _graph.SetDependencies(formulaCell, refs.Cells, refs.Ranges);
 
         SetVolatileTracking(formulaCell, containsVolatileFunction);
+        UpdateAnchorArraySpillTracking(formulaCell, refs.AnchorArrayAnchors);
 
         if (cacheableForDependencyPlan && !containsSelfExcludingCall)
             AddDependencyPlanToCache(cacheKey, refs, containsVolatileFunction);
+    }
+
+    /// <summary>
+    /// Refresh <see cref="_anchorArraySpillDependents"/>/<see cref="_anchorArraySpillDependentAnchors"/>
+    /// so they reflect exactly the anchor addresses <paramref name="formulaCell"/>'s just-registered
+    /// dependencies actually read via a live ANCHORARRAY spill-extent union, dropping any anchors it
+    /// no longer reads (e.g. the formula was edited to a different anchor, or to stop using
+    /// ANCHORARRAY entirely).
+    /// </summary>
+    private void UpdateAnchorArraySpillTracking(CellAddress formulaCell, IReadOnlyList<CellAddress> anchors)
+    {
+        ClearAnchorArraySpillTracking(formulaCell);
+
+        if (anchors.Count == 0)
+            return;
+
+        var anchorList = new List<CellAddress>(anchors);
+        _anchorArraySpillDependentAnchors[formulaCell] = anchorList;
+        foreach (var anchor in anchorList)
+        {
+            if (!_anchorArraySpillDependents.TryGetValue(anchor, out var set))
+            {
+                set = [];
+                _anchorArraySpillDependents[anchor] = set;
+            }
+            set.Add(formulaCell);
+        }
+    }
+
+    /// <summary>Remove formulaCell from every anchor's dependent set it was previously registered under.</summary>
+    private void ClearAnchorArraySpillTracking(CellAddress formulaCell)
+    {
+        if (!_anchorArraySpillDependentAnchors.TryGetValue(formulaCell, out var previousAnchors))
+            return;
+
+        foreach (var previousAnchor in previousAnchors)
+        {
+            if (_anchorArraySpillDependents.TryGetValue(previousAnchor, out var set))
+            {
+                set.Remove(formulaCell);
+                if (set.Count == 0)
+                    _anchorArraySpillDependents.Remove(previousAnchor);
+            }
+        }
+
+        _anchorArraySpillDependentAnchors.Remove(formulaCell);
+    }
+
+    /// <summary>
+    /// If <paramref name="anchorCell"/> is itself the anchor of one or more live
+    /// ANCHORARRAY(anchor,end) spill-union dependencies (<see cref="_anchorArraySpillDependents"/>),
+    /// re-run <see cref="RegisterFormulaDependencies"/> for each of those dependents so their
+    /// graph edges are re-derived from this anchor's CURRENT live spill extent. Call this
+    /// whenever a cell that might be such an anchor finishes evaluating — cheap in the common
+    /// case, since the dictionary lookup is empty for the overwhelming majority of cells.
+    /// See R92-calc-array-recalc-order-5-1.
+    /// </summary>
+    private void RefreshAnchorArraySpillDependents(FreeX.Core.Model.Workbook workbook, CellAddress anchorCell)
+    {
+        if (!_anchorArraySpillDependents.TryGetValue(anchorCell, out var dependents) || dependents.Count == 0)
+            return;
+
+        // Snapshot first: RegisterFormulaDependencies below mutates this same set (and possibly
+        // others) via UpdateAnchorArraySpillTracking, which would otherwise invalidate the
+        // in-progress enumeration.
+        foreach (var dependent in dependents.ToArray())
+        {
+            var depSheet = workbook.GetSheet(dependent.Sheet);
+            var depCell = depSheet?.GetCell(dependent);
+            if (depCell?.CachedAst is FormulaNode depAst)
+                RegisterFormulaDependencies(dependent, depAst, dependent.Sheet, workbook);
+        }
     }
 
     /// <summary>
@@ -1341,6 +1531,7 @@ public sealed class RecalcEngine
     {
         _graph.ClearDependencies(cell);
         _volatileCells.Remove(cell);
+        ClearAnchorArraySpillTracking(cell);
     }
 
     /// <summary>Rebuild dependency and volatile-function tracking from every formula in a workbook.</summary>
@@ -1425,6 +1616,7 @@ public sealed class RecalcEngine
         _volatileCells.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
         _spillBlockedAnchors.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
         _cyclicCells.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
+        _activeIterativeCyclicCells.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
 
         if (_dependencyPlanCache.Count == 0)
             return;
@@ -1904,6 +2096,30 @@ public sealed class RecalcEngine
             case NamedRangeNode named:
             {
                 cacheableForDependencyPlan = false;
+
+                // An explicit sheet qualifier (e.g. the "Sheet2" in "Sheet2!Data") must resolve
+                // against THAT sheet's own defined-name scope, not the FORMULA cell's own sheet —
+                // exactly like FormulaEvaluator.References.cs's TryResolveSheetQualifiedName
+                // (which the eval side already uses for this identical SheetQualifier field).
+                // Two sheets can each define their own LOCAL name with the same text (Sheet1's
+                // own "Data" vs Sheet2's own "Data"); resolving against defaultSheetId here would
+                // register the dependency edge on the WRONG sheet's name whenever a formula
+                // explicitly qualifies a reference to the OTHER sheet's local name. See
+                // R92-io-defined-name-scope-eval-5-1.
+                var resolveSheetId = defaultSheetId;
+                if (named.SheetQualifier is { } sheetQualifier)
+                {
+                    var qualifiedSheet = workbook?.GetSheet(sheetQualifier);
+                    if (qualifiedSheet is null)
+                    {
+                        // Unresolvable qualifier (deleted sheet, or a bracket-prefixed external-
+                        // workbook qualifier): the evaluator surfaces #REF!/reads an external
+                        // cache, either way nothing in THIS workbook's dependency graph to wire.
+                        return false;
+                    }
+                    resolveSheetId = qualifiedSheet.Id;
+                }
+
                 // Sheet-scope-first, and scope wins over kind: a sheet-scoped named FORMULA must
                 // take precedence over a same-named workbook-global named RANGE, exactly like
                 // FormulaEvaluator.IsSheetScopedName/EvaluateNamedRange resolve it (Excel rule
@@ -1915,16 +2131,16 @@ public sealed class RecalcEngine
                 // formula. Check for an explicit sheet-scoped FORMULA first, mirroring the eval
                 // side's precedence exactly, before ever consulting the range resolver.
                 var sheetScopedIsFormula = workbook is not null &&
-                    workbook.ScopedNamedFormulas.ContainsKey((named.Name, defaultSheetId));
+                    workbook.ScopedNamedFormulas.ContainsKey((named.Name, resolveSheetId));
 
                 if (!sheetScopedIsFormula &&
-                    workbook is not null && workbook.TryGetNamedRange(named.Name, defaultSheetId, out var namedRange))
+                    workbook is not null && workbook.TryGetNamedRange(named.Name, resolveSheetId, out var namedRange))
                 {
                     refs.AddRange(namedRange);
                     return false;
                 }
 
-                var formulaText = workbook?.TryGetNamedFormulaText(named.Name, defaultSheetId);
+                var formulaText = workbook?.TryGetNamedFormulaText(named.Name, resolveSheetId);
                 if (formulaText is not null && !string.IsNullOrWhiteSpace(formulaText))
                 {
                     namedFormulaStack ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -2058,6 +2274,13 @@ public sealed class RecalcEngine
                 refs.AddRange(new GridRange(
                     new CellAddress(anchorSheetId, anchorRow, anchorCol),
                     new CellAddress(anchorSheetId, unionEndRow, unionEndCol)));
+
+                // Record that formulaCell's registered edges depend on this anchor's LIVE spill
+                // extent, not just the rectangle computed above -- so the main evaluation loop can
+                // re-derive that rectangle whenever the anchor's extent later changes (grows,
+                // shrinks, appears, or disappears), instead of leaving this a one-time snapshot.
+                // See R92-calc-array-recalc-order-5-1 / _anchorArraySpillDependents.
+                refs.AddAnchorArrayAnchor(new CellAddress(anchorSheetId, anchorRow, anchorCol));
                 return false;
             }
 
@@ -2284,11 +2507,25 @@ public sealed class RecalcEngine
     private sealed class FormulaDependencySet
     {
         private List<GridRange>? _ranges;
+        private List<CellAddress>? _anchorArrayAnchors;
 
         public HashSet<CellAddress> Cells { get; } = [];
         public IReadOnlyList<GridRange> Ranges => _ranges is null ? Array.Empty<GridRange>() : _ranges;
 
+        /// <summary>
+        /// Anchor cell addresses this formula reads via a live ANCHORARRAY(anchor,end) spill-extent
+        /// union (see <see cref="_anchorArraySpillDependents"/>). Populated by the ANCHORARRAY case
+        /// in <see cref="CollectReferences"/>.
+        /// </summary>
+        public IReadOnlyList<CellAddress> AnchorArrayAnchors => _anchorArrayAnchors is null ? Array.Empty<CellAddress>() : _anchorArrayAnchors;
+
         public void Add(CellAddress address) => Cells.Add(address);
+
+        public void AddAnchorArrayAnchor(CellAddress anchor)
+        {
+            _anchorArrayAnchors ??= [];
+            _anchorArrayAnchors.Add(anchor);
+        }
 
         public void AddRange(GridRange range)
         {
