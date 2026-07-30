@@ -286,6 +286,47 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
     }
 
     [Fact]
+    public async Task DropdownKeyboardSelection_CommitsTheThirdTableEntry()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("KeyboardFixture");
+            window.Session.SelectSheet(sheet.Id);
+            window.Session.Workbook.DefineNamedRange(
+                "FirstName",
+                new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)));
+            sheet.StructuredTables.Add(new StructuredTableModel
+            {
+                Id = 32,
+                Name = "OrdersTable",
+                DisplayName = "OrdersTable",
+                Range = new GridRange(
+                    new CellAddress(sheet.Id, 1, 1),
+                    new CellAddress(sheet.Id, 2, 2)),
+                HeaderRowCount = 1,
+            });
+            var shape = new DrawingShapeModel
+            {
+                Name = "OrdersShape",
+                Anchor = new CellAddress(sheet.Id, 4, 4),
+            };
+            sheet.DrawingShapes.Add(shape);
+
+            var selected = window.SelectCellAddressAutocompleteKeyboardForTest(Key.Home, Key.Down, Key.Down, Key.Enter);
+
+            selected.Should().NotBeNull();
+            selected!.Name.Should().Be("OrdersTable");
+            selected.Kind.Should().Be(NameBoxNavigationItemKind.Table);
+            window.Session.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(sheet.Id, 2, 1),
+                new CellAddress(sheet.Id, 2, 2)));
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task DropdownSelection_NavigatesToTableAndSelectsNamedObjectAcrossSheets()
     {
         await Session.Dispatch(() =>

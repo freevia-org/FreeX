@@ -528,7 +528,8 @@ public sealed partial class MainWindow : Window
     private int _functionAutocompleteTokenStart;
     private int _functionAutocompleteTokenLength;
     private bool FunctionAutocompleteIsOpen => _functionAutocompletePopup?.IsOpen == true;
-    private MenuFlyout? _cellAddressAutocompleteFlyout;
+    private Popup? _cellAddressAutocompletePopup;
+    private ListBox? _cellAddressAutocompleteListBox;
 
     // R93-formula-editing-assist-5-2: the live argument-signature tooltip driven by
     // FormulaSignatureHelpPlanner (FreeX.App.Presentation.FormulaBar) -- ported from the WPF host's
@@ -910,6 +911,24 @@ public sealed partial class MainWindow : Window
 
     internal bool SelectCellAddressBoxItemForTest(NameBoxNavigationItem item) =>
         SelectCellAddressBoxItem(item);
+
+    internal NameBoxNavigationItem? SelectCellAddressAutocompleteKeyboardForTest(params Key[] keys)
+    {
+        ShowCellAddressAutocompletePopup();
+        foreach (var key in keys)
+        {
+            if (key == Key.Enter)
+            {
+                var item = _cellAddressAutocompleteListBox?.SelectedItem as NameBoxNavigationItem;
+                CommitCellAddressAutocompleteSelection();
+                return item;
+            }
+
+            MoveCellAddressAutocompleteSelection(key);
+        }
+
+        return _cellAddressAutocompleteListBox?.SelectedItem as NameBoxNavigationItem;
+    }
 
     /// <summary>
     /// Test-only accessor for the Formula Bar's current text, so headless tests can seed typed
@@ -3619,14 +3638,21 @@ public sealed partial class MainWindow : Window
         _cellAddressDropDownButton.Padding = new Thickness(0);
         _cellAddressDropDownButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Center;
         _cellAddressDropDownButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
-        _cellAddressAutocompleteFlyout = CreateCellAddressAutocompleteFlyout();
-        // Avalonia's DropDownButton template does not consistently invoke the assigned
-        // MenuFlyout on the Linux X11 backend. Show the same production flyout explicitly
-        // from the button route so pointer activation is reliable on every host.
-        _cellAddressDropDownButton.Click += (_, _) =>
+        CreateCellAddressAutocompletePopup();
+        // Use an explicit Popup rather than relying on the DropDownButton template's
+        // MenuFlyout hookup, which is not reliable on the Linux X11 backend.
+        _cellAddressDropDownButton.AddHandler(
+            InputElement.PointerPressedEvent,
+            (_, args) =>
         {
-            _cellAddressAutocompleteFlyout.ShowAt(_cellAddressDropDownButton);
-        };
+            if (args.GetCurrentPoint(_cellAddressDropDownButton).Properties.PointerUpdateKind != PointerUpdateKind.LeftButtonPressed)
+                return;
+
+            ShowCellAddressAutocompletePopup();
+            args.Handled = true;
+        },
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
         AutomationProperties.SetAutomationId(_cellAddressDropDownButton, "CellAddressDropDownButton");
         AutomationProperties.SetName(_cellAddressDropDownButton, "Name Box list");
         AutomationProperties.SetHelpText(_cellAddressDropDownButton, "Shows defined names to navigate to.");
@@ -18943,28 +18969,100 @@ public sealed partial class MainWindow : Window
     private IReadOnlyList<string> BuildCellAddressAutocompleteNames() =>
         BuildCellAddressAutocompleteItems().Select(item => item.Name).ToArray();
 
-    private MenuFlyout CreateCellAddressAutocompleteFlyout()
+    private void CreateCellAddressAutocompletePopup()
     {
-        var flyout = new MenuFlyout();
-        flyout.Opening += (_, _) =>
+        _cellAddressAutocompleteListBox = new ListBox
         {
-            var items = BuildCellAddressAutocompleteItems();
-            flyout.ItemsSource = items.Count == 0
-                ? new[] { new MenuItem { Header = "(No defined names)", IsEnabled = false } }
-                : items.Select(item =>
-                {
-                    var menuItem = new MenuItem { Header = item.Name };
-                    AutomationProperties.SetName(menuItem, item.AccessibleDescription);
-                    menuItem.Click += (_, _) =>
-                    {
-                        SelectCellAddressBoxItem(item);
-                        FocusShellRegion(ShellFocusTarget.Worksheet);
-                    };
-                    return menuItem;
-                }).ToArray();
+            MaxHeight = 220,
+            MinWidth = 180,
+            Focusable = true,
         };
+        AutomationProperties.SetAutomationId(_cellAddressAutocompleteListBox, "CellAddressAutocompleteList");
+        _cellAddressAutocompleteListBox.ItemTemplate = new FuncDataTemplate<NameBoxNavigationItem>((item, _) =>
+        {
+            var text = new TextBlock
+            {
+                Text = item.Name,
+                Padding = new Thickness(8, 4),
+            };
+            AutomationProperties.SetName(text, item.AccessibleDescription);
+            return text;
+        });
+        _cellAddressAutocompleteListBox.KeyDown += (_, args) =>
+        {
+            if (args.Key is Key.Home or Key.End or Key.Up or Key.Down)
+            {
+                MoveCellAddressAutocompleteSelection(args.Key);
+                args.Handled = true;
+            }
+            else if (args.Key == Key.Enter)
+            {
+                CommitCellAddressAutocompleteSelection();
+                args.Handled = true;
+            }
+            else if (args.Key == Key.Escape)
+            {
+                _cellAddressAutocompletePopup!.IsOpen = false;
+                FocusShellRegion(ShellFocusTarget.Worksheet);
+                args.Handled = true;
+            }
+        };
+        _cellAddressAutocompleteListBox.PointerReleased += (_, args) =>
+        {
+            if (args.GetCurrentPoint(_cellAddressAutocompleteListBox).Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonReleased)
+                CommitCellAddressAutocompleteSelection();
+        };
+        _cellAddressAutocompletePopup = new Popup
+        {
+            Child = new Border
+            {
+                Background = Brushes.White,
+                BorderBrush = FormulaBarControlBorder,
+                BorderThickness = new Thickness(1),
+                Child = _cellAddressAutocompleteListBox,
+            },
+            IsLightDismissEnabled = true,
+        };
+    }
 
-        return flyout;
+    private void CommitCellAddressAutocompleteSelection()
+    {
+        if (_cellAddressAutocompleteListBox?.SelectedItem is not NameBoxNavigationItem item ||
+            item.Name.StartsWith("(No ", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _cellAddressAutocompletePopup!.IsOpen = false;
+        SelectCellAddressBoxItem(item);
+        FocusShellRegion(ShellFocusTarget.Worksheet);
+    }
+
+    private void MoveCellAddressAutocompleteSelection(Key key)
+    {
+        if (_cellAddressAutocompleteListBox is not { IsEnabled: true } list || list.ItemCount == 0)
+            return;
+
+        list.SelectedIndex = key switch
+        {
+            Key.Home => 0,
+            Key.End => list.ItemCount - 1,
+            Key.Down => Math.Min(list.ItemCount - 1, Math.Max(0, list.SelectedIndex + 1)),
+            Key.Up => Math.Max(0, list.SelectedIndex - 1),
+            _ => list.SelectedIndex,
+        };
+    }
+
+    private void ShowCellAddressAutocompletePopup()
+    {
+        var items = BuildCellAddressAutocompleteItems();
+        _cellAddressAutocompleteListBox!.IsEnabled = items.Count > 0;
+        _cellAddressAutocompleteListBox.ItemsSource = items;
+        _cellAddressAutocompleteListBox.SelectedIndex = -1;
+        _cellAddressAutocompletePopup!.PlacementTarget = _cellAddressDropDownButton;
+        _cellAddressAutocompletePopup.Placement = PlacementMode.BottomEdgeAlignedLeft;
+        _cellAddressAutocompletePopup.IsOpen = true;
+        _cellAddressAutocompleteListBox.Focus();
     }
 
     // The X11 lane needs stable non-defined-name entries without relying on a user-authored file.
@@ -18974,14 +19072,14 @@ public sealed partial class MainWindow : Window
     {
         var sheet = _session.ActiveSheet;
         var firstCell = new CellAddress(sheet.Id, 1, 1);
-        var lastCell = new CellAddress(sheet.Id, 4, 2);
-        _session.Workbook.NamedRanges["PhysicalName"] = new GridRange(firstCell, lastCell);
+        var tableLastCell = new CellAddress(sheet.Id, 2, 2);
+        _session.Workbook.NamedRanges["PhysicalName"] = new GridRange(firstCell, firstCell);
         sheet.StructuredTables.Add(new StructuredTableModel
         {
             Id = 6701,
             Name = "PhysicalTable",
             DisplayName = "PhysicalTable",
-            Range = new GridRange(firstCell, lastCell),
+            Range = new GridRange(firstCell, tableLastCell),
             HeaderRowCount = 1,
             TotalsRowCount = 0,
             HasAutoFilter = true,

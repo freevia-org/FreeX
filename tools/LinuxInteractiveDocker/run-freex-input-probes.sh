@@ -267,8 +267,9 @@ copy_cell_formula() {
 
 probe_name_box_dropdown() {
     local dropdown_x dropdown_y defined_clipboard table_clipboard
-    local defined_passed=false table_passed=false
-    local artifacts="name-box-dropdown-open.png;name-box-dropdown-open-root.png;name-box-dropdown-defined-name.png;name-box-dropdown-table.png;name-box-dropdown-postcondition.txt"
+    local before_root after_root window_count_before window_count_open
+    local popup_open=false defined_popup_open=false table_popup_open=false defined_passed=false table_passed=false
+    local artifacts="name-box-dropdown-defined-before.png;name-box-dropdown-defined-before-root.png;name-box-dropdown-defined-before-x11.txt;name-box-dropdown-open-root.png;name-box-dropdown-defined-open-x11.txt;name-box-dropdown-defined-windows.txt;name-box-dropdown-defined-name.png;name-box-dropdown-table-before.png;name-box-dropdown-table-before-root.png;name-box-dropdown-table-before-x11.txt;name-box-dropdown-table-open-root.png;name-box-dropdown-table-open-x11.txt;name-box-dropdown-table-windows.txt;name-box-dropdown-table.png;name-box-dropdown-postcondition.txt"
 
     # The name-box button is immediately above the grid's A column. Deriving both
     # coordinates from the calibrated A1 cell keeps this lane valid across the
@@ -276,40 +277,80 @@ probe_name_box_dropdown() {
     dropdown_x="$((a1_x + cell_width * 78 / 100))"
     dropdown_y="$((a1_y - cell_height / 2 - 29))"
 
+    # Start from a neutral blank cell so clipboard data cannot be inherited from
+    # a prior selection or mistaken for dropdown navigation.
+    select_cell 6 9 G10 || true
+    capture "name-box-dropdown-defined-before.png"
+    before_root="$output/name-box-dropdown-defined-before-root.png"
+    scrot "$before_root"
+    x11_window_snapshot "$output/name-box-dropdown-defined-before-x11.txt"
+    window_count_before="$(x11_visible_window_count)"
     focus_app
     xdotool_mousemove_sync "$dropdown_x" "$dropdown_y" click 1
     sleep "$settle_seconds"
-    capture "name-box-dropdown-open.png"
-    scrot "$output/name-box-dropdown-open-root.png"
+    after_root="$output/name-box-dropdown-open-root.png"
+    scrot "$after_root"
+    x11_window_snapshot "$output/name-box-dropdown-defined-open-x11.txt"
+    wmctrl -lG > "$output/name-box-dropdown-defined-windows.txt"
+    window_count_open="$(x11_visible_window_count)"
+    if (( window_count_open > window_count_before )); then
+        popup_open=true
+    fi
+    defined_popup_open="$popup_open"
 
     # The fixture orders entries as PhysicalName, PhysicalShape, PhysicalTable.
-    # Click the first and third visible MenuItems so this lane proves pointer input
-    # to the actual flyout, rather than relying on a test-only item selector.
-    xdotool_mousemove_sync "$dropdown_x" "$((dropdown_y + 36))" click 1
-    sleep "$settle_seconds"
-    capture "name-box-dropdown-defined-name.png"
-    send_key ctrl+c
-    defined_clipboard="$(clipboard_text)"
-    [[ "$defined_clipboard" == *"Region"* ]] && defined_passed=true
+    # MenuFlyout receives focus when opened; Home/Enter selects PhysicalName.
+    if $popup_open; then
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Home Return
+        sleep "$settle_seconds"
+        capture "name-box-dropdown-defined-name.png"
+        send_key ctrl+c
+        defined_clipboard="$(clipboard_text || true)"
+        [[ "$defined_clipboard" == "Region" ]] && defined_passed=true
+    else
+        defined_clipboard="popup-not-open"
+        capture "name-box-dropdown-defined-name.png"
+    fi
 
+    # Repeat from neutral G10 and require a fresh popup before selecting the
+    # third entry, PhysicalTable. Its one-row body must copy exactly North/120.
+    select_cell 6 9 G10 || true
+    capture "name-box-dropdown-table-before.png"
+    before_root="$output/name-box-dropdown-table-before-root.png"
+    scrot "$before_root"
+    x11_window_snapshot "$output/name-box-dropdown-table-before-x11.txt"
+    window_count_before="$(x11_visible_window_count)"
     focus_app
     xdotool_mousemove_sync "$dropdown_x" "$dropdown_y" click 1
     sleep "$settle_seconds"
-    xdotool_mousemove_sync "$dropdown_x" "$((dropdown_y + 36 + 64))" click 1
-    sleep "$settle_seconds"
-    capture "name-box-dropdown-table.png"
-    send_key ctrl+c
-    table_clipboard="$(clipboard_text)"
-    if [[ "$table_clipboard" == *"North"* && "$table_clipboard" == *"East"* && "$table_clipboard" == *$'\t'* ]]; then
-        table_passed=true
+    after_root="$output/name-box-dropdown-table-open-root.png"
+    scrot "$after_root"
+    x11_window_snapshot "$output/name-box-dropdown-table-open-x11.txt"
+    wmctrl -lG > "$output/name-box-dropdown-table-windows.txt"
+    window_count_open="$(x11_visible_window_count)"
+    popup_open=false
+    if (( window_count_open > window_count_before )); then
+        popup_open=true
+    fi
+    table_popup_open="$popup_open"
+    if $popup_open; then
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Home Down Down Return
+        sleep "$settle_seconds"
+        capture "name-box-dropdown-table.png"
+        send_key ctrl+c
+        table_clipboard="$(clipboard_text || true)"
+        [[ "$table_clipboard" == $'North\t120' ]] && table_passed=true
+    else
+        table_clipboard="popup-not-open"
+        capture "name-box-dropdown-table.png"
     fi
 
     write_artifact "name-box-dropdown-postcondition.txt" \
-        "dropdown-x=$dropdown_x\ndropdown-y=$dropdown_y\nexpected-order=PhysicalName,PhysicalShape,PhysicalTable\ndefined-clipboard=$defined_clipboard\ntable-clipboard=$table_clipboard\ndefined-name-passed=$defined_passed\ntable-passed=$table_passed\n"
+        "dropdown-x=$dropdown_x\ndropdown-y=$dropdown_y\nexpected-order=PhysicalName,PhysicalShape,PhysicalTable\ndefined-popup-open=$defined_popup_open\ntable-popup-open=$table_popup_open\ndefined-clipboard=$defined_clipboard\ntable-clipboard=$table_clipboard\ndefined-name-passed=$defined_passed\ntable-passed=$table_passed\n"
     if $defined_passed; then
         record "name-box-dropdown-defined-name-physical" "passed" \
-            "name-box-dropdown-open.png; name-box-dropdown-defined-name.png; defined-clipboard=$defined_clipboard" \
-            "The defined-name entry was selected through the production Avalonia Name Box flyout and the resulting range copied the expected Region header." \
+            "name-box-dropdown-defined-before.png; name-box-dropdown-open-root.png; name-box-dropdown-defined-before-x11.txt; name-box-dropdown-defined-open-x11.txt; name-box-dropdown-defined-windows.txt; name-box-dropdown-defined-name.png; defined-clipboard=$defined_clipboard" \
+            "The production Avalonia Name Box flyout created an additional visible X11 popup window and its focused first entry produced the exact Region clipboard value from neutral G10." \
             "$artifacts"
     else
         record "name-box-dropdown-defined-name-physical" "failed" "$artifacts" \
@@ -317,8 +358,8 @@ probe_name_box_dropdown() {
     fi
     if $table_passed; then
         record "name-box-dropdown-table-physical" "passed" \
-            "name-box-dropdown-open.png; name-box-dropdown-table.png; table-clipboard=$table_clipboard" \
-            "The non-defined-name table entry was selected through the same production flyout and the resulting table body copied North and East values." \
+            "name-box-dropdown-table-before.png; name-box-dropdown-table-open-root.png; name-box-dropdown-table-before-x11.txt; name-box-dropdown-table-open-x11.txt; name-box-dropdown-table-windows.txt; name-box-dropdown-table.png; table-clipboard=$table_clipboard" \
+            "The non-defined-name table entry was selected through the focused production flyout with an additional visible X11 popup window, from neutral G10, and copied the exact one-row table body North/120." \
             "$artifacts"
     else
         record "name-box-dropdown-table-physical" "failed" "$artifacts" \
@@ -2003,6 +2044,21 @@ dismiss_overlays() {
 
 visible_window_count() {
     wmctrl -l 2>/dev/null | wc -l
+}
+
+x11_visible_window_count() {
+    xdotool search --onlyvisible --name '.*' 2>/dev/null | awk 'NF { count += 1 } END { print count + 0 }'
+}
+
+x11_window_snapshot() {
+    local path="$1" id name geometry
+    : > "$path"
+    while read -r id; do
+        [[ -z "$id" ]] && continue
+        name="$(xdotool getwindowname "$id" 2>/dev/null || true)"
+        geometry="$(xdotool getwindowgeometry --shell "$id" 2>/dev/null | tr '\n' ' ' || true)"
+        printf '%s|%s|%s\n' "$id" "${name//$'\n'/ }" "$geometry" >> "$path"
+    done < <(xdotool search --onlyvisible --name '.*' 2>/dev/null | sort -n)
 }
 
 freex_window_ids() {
