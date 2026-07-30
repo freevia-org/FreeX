@@ -666,6 +666,15 @@ public abstract class DrawOp
         /// <summary>Bounding box of the entire table frame in DIP.</summary>
         public LayoutRect BoundsDip { get; init; }
 
+        /// <summary>Table-frame rotation in degrees, matching the source shape transform.</summary>
+        public double RotationDeg { get; init; }
+
+        /// <summary>Whether the rendered table is horizontally flipped.</summary>
+        public bool FlipH { get; init; }
+
+        /// <summary>Whether the rendered table is vertically flipped.</summary>
+        public bool FlipV { get; init; }
+
         /// <summary>Ordered list of cell draw ops (back to front, row-major).</summary>
         public IReadOnlyList<TableCellOp> Cells { get; init; } = Array.Empty<TableCellOp>();
     }

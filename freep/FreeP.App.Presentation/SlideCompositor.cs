@@ -809,6 +809,9 @@ public static class SlideCompositor
         {
             ShapeId   = shape.Id,
             BoundsDip = frameBounds,
+            RotationDeg = shape.RotationDeg,
+            FlipH     = shape.FlipH,
+            FlipV     = shape.FlipV,
             Cells     = cellOps
         });
     }

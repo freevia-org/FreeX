@@ -443,6 +443,32 @@ public static class TableCellEditPlanner
     private const long ParagraphHangingIndentEmu = -DrawingMlCoordinateUnits.EmuPerInch / 4;
     private const string DefaultBulletChar = "\u2022";
 
+    public static InCanvasEditorPlacement PlanCellEditorPlacement(
+        SlideShape tableShape,
+        CellRectDip cellRect,
+        SlideTransformCore transform,
+        double minimumWidth,
+        double minimumHeight)
+    {
+        ArgumentNullException.ThrowIfNull(tableShape);
+        ArgumentNullException.ThrowIfNull(transform);
+
+        var tableBounds = new ShapeBoundsDip(
+            tableShape.OffsetXEmu / DrawingMlCoordinateUnits.EmuPerPixel,
+            tableShape.OffsetYEmu / DrawingMlCoordinateUnits.EmuPerPixel,
+            tableShape.ExtentCxEmu / DrawingMlCoordinateUnits.EmuPerPixel,
+            tableShape.ExtentCyEmu / DrawingMlCoordinateUnits.EmuPerPixel);
+        return SlideCanvasGeometryPlanner.PlanTableCellEditorPlacement(
+            cellRect,
+            tableBounds,
+            transform,
+            minimumWidth,
+            minimumHeight,
+            tableShape.RotationDeg,
+            tableShape.FlipH,
+            tableShape.FlipV);
+    }
+
     public static TableCellEditState PlanSelectedCell(
         Slide? slide,
         IReadOnlyList<uint> selectedShapeIds,
@@ -534,9 +560,10 @@ public static class TableCellEditPlanner
         if (cellRect is null)
             return NotReady(TableCellEditStartStatus.MissingCellBounds, shapeId, normalized.Value.Row, normalized.Value.Col);
 
-        var screenRect = SlideCanvasGeometryPlanner.DipBoundsToScreen(cellRect.Value, transform);
-        var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(
-            screenRect,
+        var placement = PlanCellEditorPlacement(
+            shape,
+            cellRect.Value,
+            transform,
             minimumWidth,
             minimumHeight);
         var originalBody = TextBodyModelCloner.CloneTextBody(normalized.Value.Cell.TextBody);

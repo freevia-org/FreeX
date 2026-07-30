@@ -28,6 +28,49 @@ public readonly record struct ShapeAffineTransform(
 
 public static class ShapeTransformPlanner
 {
+    public static (double X, double Y) TransformPoint(
+        double centerX,
+        double centerY,
+        double pointX,
+        double pointY,
+        double rotationDeg,
+        bool flipH,
+        bool flipV)
+    {
+        double x = pointX - centerX;
+        double y = pointY - centerY;
+        if (flipH) x = -x;
+        if (flipV) y = -y;
+
+        double radians = rotationDeg * Math.PI / 180.0;
+        double cos = Math.Cos(radians);
+        double sin = Math.Sin(radians);
+        return (
+            centerX + cos * x - sin * y,
+            centerY + sin * x + cos * y);
+    }
+
+    public static (double X, double Y) InverseTransformPoint(
+        double centerX,
+        double centerY,
+        double pointX,
+        double pointY,
+        double rotationDeg,
+        bool flipH,
+        bool flipV)
+    {
+        double x = pointX - centerX;
+        double y = pointY - centerY;
+        double radians = -rotationDeg * Math.PI / 180.0;
+        double cos = Math.Cos(radians);
+        double sin = Math.Sin(radians);
+        double unrotatedX = cos * x - sin * y;
+        double unrotatedY = sin * x + cos * y;
+        if (flipH) unrotatedX = -unrotatedX;
+        if (flipV) unrotatedY = -unrotatedY;
+        return (centerX + unrotatedX, centerY + unrotatedY);
+    }
+
     public static ShapeAffineTransform PlanShapeTransform(DrawOp.Shape shape) =>
         PlanShapeTransform(shape.BoundsDip, shape.RotationDeg, shape.FlipH, shape.FlipV);
 

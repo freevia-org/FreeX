@@ -3410,6 +3410,10 @@ public static class PptxPackageWriter
             new XElement(A + "ext",
                 new XAttribute("cx", shape.ExtentCxEmu),
                 new XAttribute("cy", shape.ExtentCyEmu)));
+        if (shape.RotationDeg != 0)
+            xfrm.SetAttributeValue("rot", (long)Math.Round(shape.RotationDeg * 60000));
+        if (shape.FlipH) xfrm.SetAttributeValue("flipH", "1");
+        if (shape.FlipV) xfrm.SetAttributeValue("flipV", "1");
 
         return new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
