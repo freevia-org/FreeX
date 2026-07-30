@@ -93,6 +93,7 @@ public sealed class PivotValueFieldSettingsParitySourceTests
         source.Should().Contain("PivotValueFieldPlanner.ValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem)");
         source.Should().Contain("PivotValueFieldPlanner.DescribeValidationError(validationError)");
         source.Should().Contain("ShowEditIssue(UiText.Get(errorPlan.ResourceKey));");
+        source.Should().Contain("FocusInvalidShowValuesAsInput(valueFieldTabs!, baseFieldBox, baseItemBox, baseFieldIndex);");
         source.Should().NotContain("PivotValueFieldPlanner.TryValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem");
     }
 

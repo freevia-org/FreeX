@@ -210,6 +210,8 @@ public sealed partial class MainWindow
                 SetNumberFormatState(acceptedFormat);
         };
 
+        TabControl? valueFieldTabs = null;
+
         var dialog = new Window
         {
             Title = UiText.Get("PivotValueFieldSettings_ValueFieldSettings"),
@@ -256,6 +258,7 @@ public sealed partial class MainWindow
             if (errorPlan is not null)
             {
                 ShowEditIssue(UiText.Get(errorPlan.ResourceKey));
+                FocusInvalidShowValuesAsInput(valueFieldTabs!, baseFieldBox, baseItemBox, baseFieldIndex);
                 return;
             }
 
@@ -333,7 +336,7 @@ public sealed partial class MainWindow
         numberFormatPanel.Children.Add(numberFormatPresetBox);
         numberFormatPanel.Children.Add(numberFormatButton);
 
-        var tabs = new TabControl
+        valueFieldTabs = new TabControl
         {
             Padding = new Thickness(0),
             Items =
@@ -343,9 +346,9 @@ public sealed partial class MainWindow
                 new TabItem { Header = StripDisplayMnemonic(UiText.Get("PivotValueFieldSettings_NumberFormat")), Content = numberFormatPanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
             },
         };
-        AutomationProperties.SetAutomationId(tabs, "PivotValueFieldSettingsTabs");
+        AutomationProperties.SetAutomationId(valueFieldTabs, "PivotValueFieldSettingsTabs");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
-            tabs,
+            valueFieldTabs,
             PivotDialogChromeStyle with { ControlHeight = 20 });
 
         var buttonRow = new StackPanel
@@ -367,10 +370,10 @@ public sealed partial class MainWindow
             },
         };
         Grid.SetRow(customNameRow, 0);
-        Grid.SetRow(tabs, 1);
+        Grid.SetRow(valueFieldTabs, 1);
         Grid.SetRow(buttonRow, 2);
         bodyGrid.Children.Add(customNameRow);
-        bodyGrid.Children.Add(tabs);
+        bodyGrid.Children.Add(valueFieldTabs);
         bodyGrid.Children.Add(buttonRow);
 
         var content = new Border
@@ -412,6 +415,22 @@ public sealed partial class MainWindow
             pivot.PageFields.ToList(),
             dataFields);
         ExecutePivotCommand(command);
+    }
+
+    internal static void FocusInvalidShowValuesAsInput(
+        TabControl valueFieldTabs,
+        ComboBox baseFieldBox,
+        TextBox baseItemBox,
+        int? baseFieldIndex)
+    {
+        valueFieldTabs.SelectedIndex = 1;
+        if (baseFieldIndex is null)
+        {
+            baseFieldBox.Focus();
+            return;
+        }
+
+        AvaloniaCompactDialogChrome.FocusAndSelect(baseItemBox);
     }
 
     // ── More Sort Options ─────────────────────────────────────────────────────
