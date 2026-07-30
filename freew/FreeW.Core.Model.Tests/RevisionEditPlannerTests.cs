@@ -74,28 +74,6 @@ public sealed class RevisionEditPlannerTests
     }
 
     [Fact]
-    public void InsertText_MergesAdjacentEquivalentTextRuns()
-    {
-        var paragraph = new Paragraph();
-        paragraph.Runs.Add(new Run("Acme")
-        {
-            HyperlinkUrl = "https://example.com"
-        });
-
-        var next = RevisionEditPlanner.InsertText(
-            paragraph,
-            2,
-            "X",
-            RunFormatting.Default,
-            new RevisionEditPlanner.InsertOptions(HyperlinkUrl: "https://example.com"));
-
-        next.Should().Be(3);
-        paragraph.Runs.Should().ContainSingle();
-        paragraph.Runs[0].Text.Should().Be("AcXme");
-        paragraph.Runs[0].HyperlinkUrl.Should().Be("https://example.com");
-    }
-
-    [Fact]
     public void DeleteRangeAsRevision_MarksOrdinaryTextDeleted()
     {
         var paragraph = new Paragraph("abcdef");

@@ -74,7 +74,6 @@ public static class RevisionEditPlanner
         };
 
         InsertRunAtOffset(paragraph, target, insertion);
-        MergeAdjacentTextRuns(paragraph);
         return target + text.Length;
     }
 
@@ -310,69 +309,4 @@ public static class RevisionEditPlanner
 
         paragraph.Runs.Add(insertedRun);
     }
-
-    private static void MergeAdjacentTextRuns(Paragraph paragraph)
-    {
-        for (var i = paragraph.Runs.Count - 2; i >= 0; i--)
-        {
-            var current = paragraph.Runs[i];
-            var next = paragraph.Runs[i + 1];
-            if (!CanMergeTextRuns(current, next))
-                continue;
-
-            current.Text += next.Text;
-            paragraph.Runs.RemoveAt(i + 1);
-        }
-    }
-
-    private static bool CanMergeTextRuns(Run left, Run right) =>
-        left.Text.Length > 0
-        && right.Text.Length > 0
-        && left.Formatting.Equals(right.Formatting)
-        && left.HyperlinkUrl == right.HyperlinkUrl
-        && left.HyperlinkAnchor == right.HyperlinkAnchor
-        && left.HyperlinkTooltip == right.HyperlinkTooltip
-        && left.CommentId == right.CommentId
-        && left.Revision == right.Revision
-        && left.RevisionAuthor == right.RevisionAuthor
-        && left.RevisionDateXml == right.RevisionDateXml
-        && Equals(left.FormatRevision, right.FormatRevision)
-        && left.Image is null
-        && right.Image is null
-        && left.Equation is null
-        && right.Equation is null
-        && left.Shape is null
-        && right.Shape is null
-        && left.WordArt is null
-        && right.WordArt is null
-        && left.Chart is null
-        && right.Chart is null
-        && left.EmbeddedObject is null
-        && right.EmbeddedObject is null
-        && left.SmartArt is null
-        && right.SmartArt is null
-        && left.PreservedDrawing is null
-        && right.PreservedDrawing is null
-        && left.DrawingGroup is null
-        && right.DrawingGroup is null
-        && left.FieldKind == RunFieldKind.None
-        && right.FieldKind == RunFieldKind.None
-        && left.TableFormula is null
-        && right.TableFormula is null
-        && left.Citation is null
-        && right.Citation is null
-        && left.CrossReference is null
-        && right.CrossReference is null
-        && left.ComplexField is null
-        && right.ComplexField is null
-        && left.FootnoteId is null
-        && right.FootnoteId is null
-        && left.EndnoteId is null
-        && right.EndnoteId is null
-        && !left.IsCommentReference
-        && !right.IsCommentReference
-        && !left.IsPageBreak
-        && !right.IsPageBreak
-        && left.Control is null
-        && right.Control is null;
 }

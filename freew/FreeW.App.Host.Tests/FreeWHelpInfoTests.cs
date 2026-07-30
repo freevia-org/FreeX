@@ -171,8 +171,7 @@ public sealed class FreeWHelpInfoTests
             var enter = CreateKeyDown(dialog, Key.Enter);
             text.RaiseEvent(enter);
             enter.Handled.Should().BeFalse("WPF read-only text must not consume plain Enter");
-            // The relevant contract is that the text box leaves Enter unhandled. The
-            // surrounding window may then route it to a default button on hosted WPF.
+            dialog.IsVisible.Should().BeTrue("the routed authority probe does not synthesize a default-button click");
         }
         finally
         {

@@ -251,6 +251,24 @@ public sealed class ReleaseAutomationWorkflowTests
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "app-tester-release.yml");
         var publisher = WorkspaceFileLocator.ReadAllText("tools", "Publish-SisterAppTesterPackages.ps1");
+        var expectedLanes = new[]
+        {
+            """@{ app = "FreeX"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" }""",
+            """@{ app = "FreeX"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" }""",
+            """@{ app = "FreeX"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" }""",
+            """@{ app = "FreeX"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" }""",
+            """@{ app = "FreeX"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" }""",
+            """@{ app = "FreeW"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" }""",
+            """@{ app = "FreeW"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" }""",
+            """@{ app = "FreeW"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" }""",
+            """@{ app = "FreeW"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" }""",
+            """@{ app = "FreeW"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" }""",
+            """@{ app = "FreeP"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" }""",
+            """@{ app = "FreeP"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" }""",
+            """@{ app = "FreeP"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" }""",
+            """@{ app = "FreeP"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" }""",
+            """@{ app = "FreeP"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" }"""
+        };
 
         workflow.Should().Contain("name: App Tester Release");
         workflow.Should().Contain("- all");
@@ -260,9 +278,23 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("- windows");
         workflow.Should().Contain("- linux");
         workflow.Should().Contain("- macos");
+        Regex.Matches(workflow, @"@\{ app = ""(?:FreeX|FreeW|FreeP)""; platform = ").Count.Should().Be(15);
+        foreach (var lane in expectedLanes)
+        {
+            workflow.Should().Contain(lane);
+        }
+
         workflow.Should().Contain("needs: [prepare, verify]");
         workflow.Should().Contain("fromJSON(needs.prepare.outputs.package_matrix)");
-        workflow.Should().Contain("FullyQualifiedName~ReleaseAutomationWorkflowTests");
+        workflow.Should().Contain("$isFullReleaseBranch = $env:GITHUB_REF -like \"refs/heads/codex/full-release-*\"");
+        workflow.Should().Contain("git fetch origin main:refs/remotes/origin/main --no-tags");
+        workflow.Should().Contain("git merge-base --is-ancestor origin/main HEAD");
+        workflow.Should().Contain("Full release branches must contain the current origin/main commit.");
+        workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release");
+        workflow.Should().Contain("dotnet test FreeX.DefaultTests.slnx");
+        workflow.Should().Contain("dotnet test FreeX.UiTests.slnx");
+        workflow.Should().Contain("dotnet build FreeW.slnx --configuration Release");
+        workflow.Should().Contain("dotnet build FreeP.slnx --configuration Release");
         workflow.Should().Contain("-Runtimes \"${{ matrix.runtime }}\"");
         workflow.Should().Contain("-WindowsPackageMode SingleFile");
         workflow.Should().Contain("$tag = \"$($app.ToLowerInvariant())-v$version\"");
@@ -270,6 +302,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("### Windows x64");
         workflow.Should().Contain("### Linux x64 and ARM64");
         workflow.Should().Contain("### macOS Intel and Apple silicon");
+        workflow.Should().Contain("unsigned portable archives, not signed or notarized `.app` bundles");
         workflow.Should().Contain("sha256sum -c $app-v$version-linux-<architecture>.zip.sha256");
         workflow.Should().Contain("shasum -a 256 -c $app-v$version-osx-<architecture>.zip.sha256");
         workflow.Should().Contain("$notes | gh release edit $tag --title $title --notes-file -");
@@ -280,6 +313,12 @@ public sealed class ReleaseAutomationWorkflowTests
         publisher.Should().Contain("[ValidateSet(\"SingleFile\", \"FolderZip\")]");
         publisher.Should().Contain("-p:IncludeNativeLibrariesForSelfExtract=true");
         publisher.Should().Contain("-p:IncludeAllContentForSelfExtract=true");
+        publisher.Should().Contain("-p:FreePWindowsBuild=false");
+        publisher.Should().Contain("@(\"--tester-release-smoke\", $smokeReportPath)");
+        publisher.Should().Contain("$smokeArguments = @(\"--packaging-smoke\")");
+        publisher.Should().Contain("freep_packaging_smoke=passed");
+        publisher.Should().Contain("Packaged smoke passed for $App $runtime.");
+        publisher.Should().Contain("has no packaged smoke entry point; the release gate uses its compiled test suite.");
         publisher.Should().Contain("Single-file Windows publish produced runtime sidecars");
         publisher.Should().Contain("$packageName = \"$App-v$Version-$runtime$packageExtension\"");
     }

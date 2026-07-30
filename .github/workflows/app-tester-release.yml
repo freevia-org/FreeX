@@ -107,6 +107,25 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Validate latest release source
+        shell: pwsh
+        run: |
+          $isMainRelease = $env:GITHUB_REF -eq "refs/heads/main"
+          $isFullReleaseBranch = $env:GITHUB_REF -like "refs/heads/codex/full-release-*"
+          if (-not ($isMainRelease -or $isFullReleaseBranch)) {
+            throw "Full app releases must run from refs/heads/main or a codex/full-release-* branch."
+          }
+
+          git fetch origin main:refs/remotes/origin/main --no-tags
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not fetch origin/main while validating the full release source."
+          }
+
+          git merge-base --is-ancestor origin/main HEAD
+          if ($LASTEXITCODE -ne 0) {
+            throw "Full release branches must contain the current origin/main commit."
+          }
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
@@ -118,19 +137,29 @@ jobs:
           switch ("${{ matrix.app }}") {
             "FreeX" {
               powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1
-              # FreeX's full default/UI gate already passed for c01c7bd3 in the
-              # preceding tester release. This workflow changes release plumbing,
-              # and each native package job compiles the current app again.
-              dotnet test tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj `
+              dotnet build FreeX.slnx --configuration Release
+              dotnet test FreeX.DefaultTests.slnx `
                 --configuration Release `
-                --filter "FullyQualifiedName~ReleaseAutomationWorkflowTests" `
-                --logger "trx;LogFileName=freex-release-automation-tests.trx"
+                --no-build `
+                --logger "trx;LogFileName=freex-default-tests.trx"
+              dotnet test FreeX.UiTests.slnx `
+                --configuration Release `
+                --no-build `
+                --logger "trx;LogFileName=freex-ui-tests.trx"
             }
             "FreeW" {
-              dotnet test FreeW.slnx --configuration Release --logger "trx;LogFileName=freew-tests.trx"
+              dotnet build FreeW.slnx --configuration Release
+              dotnet test FreeW.slnx `
+                --configuration Release `
+                --no-build `
+                --logger "trx;LogFileName=freew-tests.trx"
             }
             "FreeP" {
-              dotnet test FreeP.slnx --configuration Release --logger "trx;LogFileName=freep-tests.trx"
+              dotnet build FreeP.slnx --configuration Release
+              dotnet test FreeP.slnx `
+                --configuration Release `
+                --no-build `
+                --logger "trx;LogFileName=freep-tests.trx"
             }
             default { throw "Unsupported app '${{ matrix.app }}'." }
           }
@@ -261,7 +290,7 @@ jobs:
           3. Extract it into a stable per-user directory, for example `unzip $app-v$version-osx-<architecture>.zip -d ~/$app`.
           4. Run `chmod +x ~/$app/$app` once, then start it with `~/$app/$app`. To update, close the app and replace the extracted directory.
 
-          These tester packages are self-contained. Do not run them from inside the archive; keep the extracted Linux or macOS directory intact.
+          These tester packages are self-contained. Do not run them from inside the archive; keep the extracted Linux or macOS directory intact. The macOS assets are unsigned portable archives, not signed or notarized `.app` bundles.
           "@
 
           gh release view $tag *> $null

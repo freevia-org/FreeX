@@ -144,6 +144,9 @@ foreach ($runtime in $Runtimes) {
             "-p:InformationalVersion=$Version+$shortSha",
             "--output", $publishDir
         )
+        if ($App -eq "FreeP") {
+            $publishArgs += "-p:FreePWindowsBuild=false"
+        }
     }
 
     Write-Host ""
@@ -159,6 +162,51 @@ foreach ($runtime in $Runtimes) {
         throw "Publish output missing expected apphost '$expectedAppHost'."
     }
     $expectedExe = (Resolve-Path -LiteralPath $expectedAppHost).Path
+
+    $smokeRan = $false
+    if ($isWindowsRuntime -and $App -eq "FreeX") {
+        $smokeRan = $true
+        $smokeReportPath = Join-Path $OutputDir "$App-$runtime-tester-release-smoke.json"
+        $smokeProcess = Start-Process `
+            -FilePath $expectedExe `
+            -ArgumentList @("--tester-release-smoke", $smokeReportPath) `
+            -WindowStyle Hidden `
+            -Wait `
+            -PassThru
+        if ($smokeProcess.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $smokeReportPath)) {
+            throw "$App $runtime tester-release smoke failed with exit code $($smokeProcess.ExitCode)."
+        }
+
+        $smokeReport = Get-Content -LiteralPath $smokeReportPath -Raw | ConvertFrom-Json
+        if ($smokeReport.Success -ne $true) {
+            throw "$App $runtime tester-release smoke reported failure."
+        }
+    }
+    elseif (-not $isWindowsRuntime) {
+        $smokeRan = $true
+        $smokeArguments = @("--packaging-smoke")
+        $smokeReportPath = $null
+        if ($App -eq "FreeP") {
+            $smokeReportPath = Join-Path $OutputDir "$App-$runtime-packaging-smoke.txt"
+            $smokeArguments += $smokeReportPath
+        }
+
+        & $expectedExe @smokeArguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "$App $runtime packaging smoke failed with exit code $LASTEXITCODE."
+        }
+        if ($App -eq "FreeP" -and
+            (-not (Test-Path -LiteralPath $smokeReportPath) -or
+             (Get-Content -LiteralPath $smokeReportPath -Raw) -notmatch "freep_packaging_smoke=passed")) {
+            throw "$App $runtime packaging smoke did not produce a passing report."
+        }
+    }
+
+    if ($smokeRan) {
+        Write-Host "Packaged smoke passed for $App $runtime."
+    } else {
+        Write-Host "$App $runtime has no packaged smoke entry point; the release gate uses its compiled test suite."
+    }
 
     if ($isWindowsSingleFile) {
         $unexpectedPublishFiles = @(
