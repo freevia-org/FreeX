@@ -128,6 +128,7 @@ static int RenderAll(string outDir)
     var drawingObjectsPath = VisualEvidenceOutputPath(outDir, "drawing-objects-complex", 1);
     var objectFormatPath = VisualEvidenceOutputPath(outDir, "object-format-position-size-style", 1);
     var chartSmartArtPath = VisualEvidenceOutputPath(outDir, "chart-smartart-complex", 1);
+    var chartSmartArtP2Path = VisualEvidenceOutputPath(outDir, "chart-smartart-complex", 2);
     var wordArtWatermarkPath = VisualEvidenceOutputPath(outDir, "wordart-watermark-stress", 1);
     var wordArtPictureWatermarkPath = VisualEvidenceOutputPath(outDir, "wordart-picture-watermark-layout", 1);
     var printPreviewP1Path = VisualEvidenceOutputPath(outDir, "backstage-print-preview-fidelity", 1);
@@ -500,7 +501,20 @@ static int RenderAll(string outDir)
         label: "Chart + SmartArt",
         scenarioId: "chart-smartart-complex",
         evidence: evidence,
-        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument);
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument,
+        pageNumber: 1,
+        pageCount: 2);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, chartSmartArtP2Path,
+        width: 960, height: 1200,
+        label: "Chart + SmartArt p2",
+        scenarioId: "chart-smartart-complex",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument,
+        pageNumber: 2,
+        pageCount: 2,
+        viewportOffsetY: 1100);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, wordArtWatermarkPath,

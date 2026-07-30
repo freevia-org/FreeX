@@ -150,6 +150,8 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"object-format-position-size-style\", 1)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildObjectFormatPositionSizeStyleDocument");
         source.Should().Contain("chart-smartart-complex");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"chart-smartart-complex\", 1)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"chart-smartart-complex\", 2)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildChartSmartArtCompositionDocument");
         source.Should().Contain("wordart-watermark-stress");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument");

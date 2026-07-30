@@ -314,7 +314,7 @@ public sealed class VisualEvidencePlannerTests
             "smartart-polygon-geometry",
             "smartart-visual-signature"]);
         chartSmartArtScenario.ExpectedOutputNamePattern.Should().Be("chart-smartart-complex_p{page}.png");
-        chartSmartArtScenario.MinimumExpectedOutputs.Should().Be(1);
+        chartSmartArtScenario.MinimumExpectedOutputs.Should().Be(2);
 
         var wordArtWatermarkScenario = FreeWVisualEvidencePlanner.ResolveScenario("wordart-watermark-stress");
         wordArtWatermarkScenario.ExpectedFeatureTags.Should().Contain([
@@ -1552,11 +1552,11 @@ public sealed class VisualEvidencePlannerTests
             expected.Should().Contain(e =>
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
                 e.ScenarioId == scenarioId &&
-                e.MinimumExpectedOutputs == 1);
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
             expected.Should().Contain(e =>
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
                 e.ScenarioId == scenarioId &&
-                e.MinimumExpectedOutputs == 1);
+                e.MinimumExpectedOutputs == FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
         }
 
         FreeWVisualEvidenceManifestNormalizer.DrawingObjectVisualProofScenarioIds.Should().Contain([
@@ -1577,11 +1577,11 @@ public sealed class VisualEvidencePlannerTests
             expected.Should().Contain(e =>
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
                 e.ScenarioId == scenarioId &&
-                e.MinimumExpectedOutputs == 1);
+                e.MinimumExpectedOutputs == 2);
             expected.Should().Contain(e =>
                 e.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
                 e.ScenarioId == scenarioId &&
-                e.MinimumExpectedOutputs == 1);
+                e.MinimumExpectedOutputs == 2);
         }
     }
 
@@ -7336,16 +7336,28 @@ public sealed class VisualEvidencePlannerTests
                     FreeWVisualEvidenceManifestNormalizer.WpfHostId,
                     scenarioId,
                     pageNumber: 1,
-                    pageCount: 1))
+                    pageCount: scenarioId == "chart-smartart-complex" ? 2 : 1))
                 .ToList();
+            wpfRows.Add(BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "chart-smartart-complex",
+                pageNumber: 2,
+                pageCount: 2));
             var avaloniaRows = scenarioIds
                 .Select(scenarioId => BuildFileBackedRow(
                     root,
                     FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
                     scenarioId,
                     pageNumber: 1,
-                    pageCount: 1))
+                    pageCount: scenarioId == "chart-smartart-complex" ? 2 : 1))
                 .ToList();
+            avaloniaRows.Add(BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                "chart-smartart-complex",
+                pageNumber: 2,
+                pageCount: 2));
 
             FreeWVisualEvidencePlanner.WriteManifest(
                 wpfDir,
@@ -7361,11 +7373,11 @@ public sealed class VisualEvidencePlannerTests
                     new FreeWVisualEvidenceExpectedScenario(
                         FreeWVisualEvidenceManifestNormalizer.WpfHostId,
                         scenarioId,
-                        1),
+                        scenarioId == "chart-smartart-complex" ? 2 : 1),
                     new FreeWVisualEvidenceExpectedScenario(
                         FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
                         scenarioId,
-                        1)
+                        scenarioId == "chart-smartart-complex" ? 2 : 1)
                 })
                 .ToList();
             var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
@@ -7388,19 +7400,19 @@ public sealed class VisualEvidencePlannerTests
                 comparisons);
 
             withBaseline.Trust.Passed.Should().BeTrue();
-            withBaseline.DrawingObjectProofReadiness.Should().HaveCount(5);
+            withBaseline.DrawingObjectProofReadiness.Should().HaveCount(6);
             withBaseline.DrawingObjectProofReadiness.Should().OnlyContain(row =>
                 row.Status == "paired-renderer-proof-ready"
                 && row.WordBaselineStatus == "word-baseline-unavailable=2"
                 && row.BaselineReadiness.Contains("without authoritative Word parity", StringComparison.Ordinal)
                 && row.Trust.Passed);
-            withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex")
+            withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex" && row.PageNumber == 2)
                 .SemanticEvidence.Should().Contain("chart signatures=2");
-            withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex")
+            withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex" && row.PageNumber == 2)
                 .SemanticEvidence.Should().Contain("chart data signatures=2");
-            withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex")
+            withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex" && row.PageNumber == 2)
                 .SemanticEvidence.Should().Contain("SmartArt layouts=orgchart1/pyramid1");
-            withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex")
+            withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex" && row.PageNumber == 2)
                 .SemanticEvidence.Should().Contain("SmartArt polygon nodes=4");
             withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "wordart-picture-watermark-layout")
                 .SemanticEvidence.Should().Contain("picture watermark");
@@ -7420,7 +7432,7 @@ public sealed class VisualEvidencePlannerTests
             smartArtBlocker.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
             smartArtBlocker.Area.Should().Be("SmartArt polygon visual fidelity");
             smartArtBlocker.RequiresWordBaseline.Should().BeTrue();
-            smartArtBlocker.SemanticEvidence.Should().HaveCount(2);
+            smartArtBlocker.SemanticEvidence.Should().HaveCount(4);
             smartArtBlocker.SemanticEvidence.Should().OnlyContain(evidence =>
                 evidence.Contains("pyramid1", StringComparison.Ordinal) &&
                 evidence.Contains("polygonNodes=4", StringComparison.Ordinal));
@@ -7437,7 +7449,7 @@ public sealed class VisualEvidencePlannerTests
             using var doc = JsonDocument.Parse(json);
             doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().BeGreaterThanOrEqualTo(38);
             var readiness = doc.RootElement.GetProperty("drawingObjectProofReadiness");
-            readiness.GetArrayLength().Should().Be(5);
+            readiness.GetArrayLength().Should().Be(6);
             readiness.EnumerateArray()
                 .Should().OnlyContain(row =>
                     row.GetProperty("trust").GetProperty("passed").GetBoolean()
@@ -7484,7 +7496,13 @@ public sealed class VisualEvidencePlannerTests
                         FreeWVisualEvidenceManifestNormalizer.WpfHostId,
                         scenarioId,
                         pageNumber: 1,
-                        pageCount: 1)
+                        pageCount: 2),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        pageNumber: 2,
+                        pageCount: 2)
                 ],
                 new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
             FreeWVisualEvidencePlanner.WriteManifest(
@@ -7495,7 +7513,13 @@ public sealed class VisualEvidencePlannerTests
                         FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
                         scenarioId,
                         pageNumber: 1,
-                        pageCount: 1)
+                        pageCount: 2),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        pageNumber: 2,
+                        pageCount: 2)
                 ],
                 new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
             var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
@@ -7508,11 +7532,11 @@ public sealed class VisualEvidencePlannerTests
                     new FreeWVisualEvidenceExpectedScenario(
                         FreeWVisualEvidenceManifestNormalizer.WpfHostId,
                         scenarioId,
-                        1),
+                        2),
                     new FreeWVisualEvidenceExpectedScenario(
                         FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
                         scenarioId,
-                        1)
+                        2)
                 ]);
             var comparisons = summary.Evidence
                 .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
@@ -7525,7 +7549,7 @@ public sealed class VisualEvidencePlannerTests
                 comparisons);
 
             withBaseline.Trust.Passed.Should().BeTrue();
-            var readiness = withBaseline.DrawingObjectProofReadiness.Single();
+            var readiness = withBaseline.DrawingObjectProofReadiness.Single(row => row.PageNumber == 2);
             readiness.ScenarioId.Should().Be(scenarioId);
             readiness.Status.Should().Be("paired-renderer-proof-ready");
             readiness.WordBaselineStatus.Should().Be("word-baseline-unavailable=2");
@@ -7572,16 +7596,28 @@ public sealed class VisualEvidencePlannerTests
                     FreeWVisualEvidenceManifestNormalizer.WpfHostId,
                     scenarioId,
                     pageNumber: 1,
-                    pageCount: 1))
+                    pageCount: scenarioId == "chart-smartart-complex" ? 2 : 1))
                 .ToList();
+            wpfRows.Add(BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "chart-smartart-complex",
+                pageNumber: 2,
+                pageCount: 2));
             var avaloniaRows = scenarios
                 .Select(scenarioId => BuildFileBackedRow(
                     root,
                     FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
                     scenarioId,
                     pageNumber: 1,
-                    pageCount: 1))
+                    pageCount: scenarioId == "chart-smartart-complex" ? 2 : 1))
                 .ToList();
+            avaloniaRows.Add(BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                "chart-smartart-complex",
+                pageNumber: 2,
+                pageCount: 2));
             FreeWVisualEvidencePlanner.WriteManifest(
                 wpfDir,
                 wpfRows,
@@ -7597,11 +7633,11 @@ public sealed class VisualEvidencePlannerTests
                     new FreeWVisualEvidenceExpectedScenario(
                         FreeWVisualEvidenceManifestNormalizer.WpfHostId,
                         scenarioId,
-                        1),
+                        scenarioId == "chart-smartart-complex" ? 2 : 1),
                     new FreeWVisualEvidenceExpectedScenario(
                         FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
                         scenarioId,
-                        1)
+                        scenarioId == "chart-smartart-complex" ? 2 : 1)
                 })
                 .ToList();
             var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
@@ -7623,7 +7659,7 @@ public sealed class VisualEvidencePlannerTests
                 comparisons);
 
             withBaseline.Trust.Passed.Should().BeTrue();
-            withBaseline.DrawingObjectProofReadiness.Should().HaveCount(scenarios.Count);
+            withBaseline.DrawingObjectProofReadiness.Should().HaveCount(scenarios.Count + 1);
             withBaseline.DrawingObjectProofReadiness.Should().OnlyContain(row =>
                 row.Status == "paired-renderer-proof-ready" &&
                 row.WordBaselineStatus == "word-baseline-unavailable=2" &&
@@ -7639,7 +7675,7 @@ public sealed class VisualEvidencePlannerTests
             drawingRow.SemanticEvidence.Should().Contain("grouped child visual signatures=5");
             drawingRow.SemanticEvidence.Should().Contain("2 rendered grouped child effect object(s)");
             var smartArtRow = withBaseline.DrawingObjectProofReadiness.Single(row =>
-                row.ScenarioId == "chart-smartart-complex");
+                row.ScenarioId == "chart-smartart-complex" && row.PageNumber == 2);
             smartArtRow.SemanticEvidence.Should().Contain("SmartArt layouts=orgchart1/pyramid1");
             smartArtRow.SemanticEvidence.Should().Contain("SmartArt geometry=Pyramid");
             smartArtRow.SemanticEvidence.Should().Contain("SmartArt polygon nodes=4");

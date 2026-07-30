@@ -961,7 +961,7 @@ public static class FreeWVisualEvidencePlanner
                 "smartart-visual-signature"
             ],
             "chart-smartart-complex_p{page}.png",
-            1,
+            2,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition),
         new(
