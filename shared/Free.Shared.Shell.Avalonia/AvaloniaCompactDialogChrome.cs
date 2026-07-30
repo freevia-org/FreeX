@@ -51,6 +51,7 @@ public static class AvaloniaCompactDialogChrome
 {
     public const string DialogWindowClass = "free-compact-dialog-window";
     public const string ClassicTabClass = "free-classic-dialog-tabs";
+    public const string CompactComboBoxClass = "free-compact-dialog-combo";
 
     public static FontFamily WindowsUiFontFamily { get; } = new(
         "Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, " +
@@ -310,6 +311,10 @@ public static class AvaloniaCompactDialogChrome
         comboBox.BorderBrush = style.InputBorderBrush ?? InputBorderBrush;
         comboBox.BorderThickness = new Thickness(1);
         comboBox.VerticalContentAlignment = VerticalAlignment.Center;
+        if (comboBox.Classes.Contains(CompactComboBoxClass))
+            return;
+
+        comboBox.Classes.Add(CompactComboBoxClass);
         // Fluent renders the selected value through named template parts, so setting only the
         // ComboBox surface does not reach the field behind the text and arrow. Keep those parts
         // on the same WPF-authority surface when a dialog opts into a palette.
@@ -325,6 +330,42 @@ public static class AvaloniaCompactDialogChrome
                 new Setter(ContentPresenter.ForegroundProperty, DialogForegroundBrush),
             },
         });
+        // Fluent's default DropDownGlyph is wider and sits inside a padded button slot. The WPF
+        // compact-dialog template uses a small, centered V at the trailing edge with no filled
+        // slot. Keep the platform popup/editing behavior and normalize only the glyph geometry.
+        comboBox.Styles.Add(new Style(selector => selector.OfType<global::Avalonia.Controls.PathIcon>().Name("DropDownGlyph"))
+        {
+            Setters =
+            {
+                new Setter(global::Avalonia.Controls.PathIcon.ForegroundProperty, DialogForegroundBrush),
+                new Setter(Layoutable.WidthProperty, 8d),
+                new Setter(Layoutable.HeightProperty, 5d),
+                new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 4, 0)),
+                new Setter(Layoutable.HorizontalAlignmentProperty, HorizontalAlignment.Right),
+                new Setter(Layoutable.VerticalAlignmentProperty, VerticalAlignment.Center),
+            },
+        });
+
+        void ApplyWpfComboGlyph()
+        {
+            comboBox.ApplyTemplate();
+            foreach (var glyph in comboBox.GetVisualDescendants()
+                .OfType<global::Avalonia.Controls.PathIcon>()
+                .Where(path => path.Name == "DropDownGlyph"))
+            {
+                glyph.Data = Geometry.Parse("M 0 0 L 4 4 L 8 0 L 8 1 L 4 5 L 0 1 Z");
+                glyph.Foreground = DialogForegroundBrush;
+                glyph.Width = 8;
+                glyph.Height = 5;
+                glyph.Margin = new Thickness(0, 0, 4, 0);
+                glyph.HorizontalAlignment = HorizontalAlignment.Right;
+                glyph.VerticalAlignment = VerticalAlignment.Center;
+            }
+        }
+
+        comboBox.AttachedToVisualTree += (_, _) =>
+            Dispatcher.UIThread.Post(ApplyWpfComboGlyph, DispatcherPriority.Render);
+        Dispatcher.UIThread.Post(ApplyWpfComboGlyph, DispatcherPriority.Render);
     }
 
     public static void ApplyCheckBox(CheckBox checkBox, AvaloniaCompactDialogChromeStyle style)
@@ -373,6 +414,8 @@ public static class AvaloniaCompactDialogChrome
             };
             var content = new ContentPresenter
             {
+                FontFamily = style.FontFamily,
+                FontSize = style.FontSize,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 Foreground = DialogForegroundBrush,
             };

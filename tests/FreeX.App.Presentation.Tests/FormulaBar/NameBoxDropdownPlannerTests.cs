@@ -29,17 +29,44 @@ public sealed class NameBoxDropdownPlannerTests
             Anchor = new CellAddress(sheet.Id, 7, 2),
         };
         sheet.DrawingShapes.Add(shape);
+        var picture = new PictureModel
+        {
+            Name = "MiddlePicture",
+            Anchor = new CellAddress(sheet.Id, 8, 2),
+            Kind = PictureKind.Image,
+        };
+        sheet.Pictures.Add(picture);
+        var textBox = new TextBoxModel
+        {
+            Name = "MiddleTextBox",
+            Anchor = new CellAddress(sheet.Id, 9, 2),
+        };
+        sheet.TextBoxes.Add(textBox);
+        var chart = new ChartModel
+        {
+            Name = "MiddleChart",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 10, 2),
+                new CellAddress(sheet.Id, 11, 3)),
+        };
+        sheet.Charts.Add(chart);
 
         var items = NameBoxDropdownPlanner.Build(workbook, sheet.Id);
 
         items.Select(item => (item.Name, item.Kind)).Should().Equal(
             ("AppleTable", NameBoxNavigationItemKind.Table),
+            ("MiddleChart", NameBoxNavigationItemKind.Object),
+            ("MiddlePicture", NameBoxNavigationItemKind.Object),
             ("MiddleShape", NameBoxNavigationItemKind.Object),
+            ("MiddleTextBox", NameBoxNavigationItemKind.Object),
             ("Zebra", NameBoxNavigationItemKind.DefinedName));
         items.Single(item => item.Name == "AppleTable").Range.Should().Be(new GridRange(
             new CellAddress(sheet.Id, 2, 1),
             new CellAddress(sheet.Id, 5, 3)));
         items.Single(item => item.Name == "MiddleShape").ObjectId.Should().Be(shape.Id);
+        items.Single(item => item.Name == "MiddleChart").ObjectKind.Should().Be(SelectionPaneObjectKind.Chart);
+        items.Single(item => item.Name == "MiddlePicture").ObjectKind.Should().Be(SelectionPaneObjectKind.Picture);
+        items.Single(item => item.Name == "MiddleTextBox").ObjectKind.Should().Be(SelectionPaneObjectKind.TextBox);
     }
 
     [Fact]

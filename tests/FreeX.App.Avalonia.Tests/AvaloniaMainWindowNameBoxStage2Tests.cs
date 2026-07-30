@@ -355,6 +355,27 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
                 Anchor = new CellAddress(second.Id, 8, 3),
             };
             second.DrawingShapes.Add(shape);
+            var picture = new PictureModel
+            {
+                Name = "OrdersPicture",
+                Anchor = new CellAddress(second.Id, 9, 3),
+                Kind = PictureKind.Image,
+            };
+            second.Pictures.Add(picture);
+            var textBox = new TextBoxModel
+            {
+                Name = "OrdersTextBox",
+                Anchor = new CellAddress(second.Id, 10, 3),
+            };
+            second.TextBoxes.Add(textBox);
+            var chart = new ChartModel
+            {
+                Name = "OrdersChart",
+                DataRange = new GridRange(
+                    new CellAddress(second.Id, 11, 3),
+                    new CellAddress(second.Id, 12, 4)),
+            };
+            second.Charts.Add(chart);
 
             var items = NameBoxDropdownPlanner.Build(window.Session.Workbook, first.Id);
             var tableItem = items.Single(item => item.Name == "OrdersTable");
@@ -373,6 +394,27 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             window.SelectedDrawingObjectKindForTest.Should().Be(SelectionPaneObjectKind.Shape);
             window.SelectedDrawingObjectIdForTest.Should().Be(shape.Id);
             window.Session.ActiveSheet.Id.Should().Be(second.Id);
+
+            foreach (var expected in new[]
+            {
+                ("OrdersChart", SelectionPaneObjectKind.Chart, chart.Id),
+                ("OrdersPicture", SelectionPaneObjectKind.Picture, picture.Id),
+                ("OrdersShape", SelectionPaneObjectKind.Shape, shape.Id),
+                ("OrdersTextBox", SelectionPaneObjectKind.TextBox, textBox.Id),
+            })
+            {
+                var item = NameBoxDropdownPlanner
+                    .Build(window.Session.Workbook, second.Id)
+                    .Single(entry => entry.Name == expected.Item1);
+
+                window.Session.SelectCell(new CellAddress(second.Id, 20, 1));
+                window.SelectCellAddressBoxItemForTest(item).Should().BeTrue();
+                window.SelectedDrawingObjectKindForTest.Should().Be(expected.Item2);
+                window.SelectedDrawingObjectIdForTest.Should().Be(expected.Item3);
+                window.Session.ActiveSheet.Id.Should().Be(second.Id);
+                window.CellAddressBoxTextForTest.Should().Be(expected.Item1,
+                    "the WPF Name Box keeps the selected drawing object's name instead of its anchor cell");
+            }
 
             window.Close();
         }, CancellationToken.None);

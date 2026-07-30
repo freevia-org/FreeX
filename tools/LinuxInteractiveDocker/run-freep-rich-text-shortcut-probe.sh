@@ -134,21 +134,28 @@ shape = data["shapeId2"]
 grouped = os.environ.get("FREEP_APP_SURFACE") in (
     "in-canvas-grouped-child-rich-text",
     "in-canvas-grouped-child-caret",
+    "in-canvas-grouped-child-pointer-selection",
 )
 caret_geometry = os.environ.get("FREEP_APP_SURFACE") == "in-canvas-grouped-child-caret"
+pointer_geometry = os.environ.get("FREEP_APP_SURFACE") == "in-canvas-grouped-child-pointer-selection"
+expected_run_count = 1 if pointer_geometry else 2
 expected_bounds = {
     "x": 914400,
     "y": 914400,
     "cx": 2743200,
-    "cy": 2743200 if caret_geometry else 914400,
+    "cy": 2743200 if (caret_geometry or pointer_geometry) else 914400,
 }
 expected_first = (
     "Alpha bravo charlie delta echo foxtrot golf hotel"
-    if caret_geometry else "Slide 1 has"
+    if caret_geometry else
+    "Wide words make this first paragraph wrap at unequal visual line widths"
+    if pointer_geometry else "Slide 1 has"
 )
 expected_second = (
     "tiny middle wide lower line with many words for contrast"
-    if caret_geometry else " speaker notes"
+    if caret_geometry else
+    "tail paragraph crosses the boundary"
+    if pointer_geometry else " speaker notes"
 )
 expected_first_paragraph = expected_first if grouped else expected_first + expected_second
 valid = (
@@ -162,8 +169,8 @@ valid = (
     and shape["paragraphs"][0]["text"] == expected_first_paragraph
     and shape["paragraphs"][0]["breakCount"] == 0
     and (not grouped or shape["paragraphs"][1]["text"] == expected_second)
-    and (not grouped or len(shape["paragraphs"][0]["runs"]) == 2)
-    and (not grouped or len(shape["paragraphs"][1]["runs"]) == 2)
+    and (not grouped or len(shape["paragraphs"][0]["runs"]) == expected_run_count)
+    and (not grouped or len(shape["paragraphs"][1]["runs"]) == expected_run_count)
     and data["pPicCount"] == 0
     and data["pGraphicFrameCount"] == 0
 )
@@ -232,6 +239,34 @@ valid = (
     and shape["paragraphs"][1]["text"] == " speaker notes"
     and len(shape["paragraphs"][0]["runs"]) >= 1
     and len(shape["paragraphs"][1]["runs"]) >= 1
+    and data["pPicCount"] == 0
+    and data["pGraphicFrameCount"] == 0
+)
+raise SystemExit(0 if valid else 1)
+PY
+}
+
+assert_grouped_pointer_selection_inspection() {
+    python3 - "$1" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+shape = data["shapeId2"]
+first = "Wide words make this first paragraph wrap at unequal visual line widths"
+second = "tail paragraph crosses the boundary"
+valid = (
+    data["shapeId2Count"] == 1
+    and shape is not None
+    and shape["id"] == 2
+    and shape["name"] == "Notes marker"
+    and shape["bounds"] == {"x": 914400, "y": 914400, "cx": 2743200, "cy": 2743200}
+    and shape["paragraphCount"] == 2
+    and shape["text"] == first + second
+    and shape["paragraphs"][0]["text"] == first
+    and shape["paragraphs"][1]["text"] == second
+    and len(shape["paragraphs"][0]["runs"]) == 1
+    and len(shape["paragraphs"][1]["runs"]) == 1
     and data["pPicCount"] == 0
     and data["pGraphicFrameCount"] == 0
 )
@@ -505,6 +540,25 @@ send_owner_shift_verticals() {
     sleep "$settle_seconds"
 }
 
+pointer_drag() {
+    local start_x="$1" start_y="$2" end_x="$3" end_y="$4"
+    focus_owner
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool mousemove "$start_x" "$start_y" || return 1
+    sleep 0.05
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool mousedown 1 || return 1
+    sleep 0.12
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool mousemove --sync "$end_x" "$end_y" || {
+            xdotool mouseup 1 >/dev/null 2>&1 || true
+            return 1
+        }
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool mouseup 1 || return 1
+    sleep "$settle_seconds"
+}
+
 capture_window_state() {
     local name="$1"
     {
@@ -635,7 +689,17 @@ manifest = {
             ],
             "reopenProof": "grouped-caret-reopen-proof.txt",
         }
-        if app_surface == "in-canvas-grouped-child-caret" else None
+        if app_surface == "in-canvas-grouped-child-caret" else
+        {
+            "tool": "xclip",
+            "selection": "clipboard",
+            "transcripts": [
+                "pointer-selection-forward",
+                "pointer-selection-reverse",
+            ],
+            "geometryProof": "pointer-selection-calibration.txt",
+        }
+        if app_surface == "in-canvas-grouped-child-pointer-selection" else None
     ),
     "contractValidation": {
         "status": "pending",
@@ -748,7 +812,8 @@ slide_height_emu=6858000
 shape_center_x_emu=2286000
 shape_center_y_emu=1371600
 shape_height_emu=914400
-if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+if [[ "$app_surface" == "in-canvas-grouped-child-caret" ||
+      "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
     shape_center_y_emu=2286000
     shape_height_emu=2743200
 fi
@@ -774,6 +839,10 @@ shape_center_y=$((slide_y +
         slide_height_emu))
 commit_point_x=$((slide_x + slide_width_px - 24))
 commit_point_y=$((slide_y + slide_height_px - 24))
+calibration_artifact="shape-pointer-calibration.txt"
+if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
+    calibration_artifact="pointer-selection-calibration.txt"
+fi
 
 if (( fit_box_width <= 0 || fit_box_height <= 0 ||
       slide_width_px <= 0 || slide_height_px <= 0 ||
@@ -796,7 +865,32 @@ fi
     printf 'shape-center-emu=%s,%s\n' "$shape_center_x_emu" "$shape_center_y_emu"
     printf 'shape-center-point=%s,%s\n' "$shape_center_x" "$shape_center_y"
     printf 'natural-commit-point=%s,%s\n' "$commit_point_x" "$commit_point_y"
-} > "$output/shape-pointer-calibration.txt"
+    if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
+        pointer_shape_left_x=$((slide_x +
+            (slide_width_px * 914400 + slide_width_emu / 2) /
+            slide_width_emu))
+        pointer_shape_top_y=$((slide_y +
+            (slide_height_px * 914400 + slide_height_emu / 2) /
+            slide_height_emu))
+        pointer_shape_right_x=$((slide_x +
+            (slide_width_px * (914400 + 2743200) + slide_width_emu / 2) /
+            slide_width_emu))
+        pointer_shape_bottom_y=$((slide_y +
+            (slide_height_px * (914400 + 2743200) + slide_height_emu / 2) /
+            slide_height_emu))
+        pointer_anchor_x=$((pointer_shape_left_x + 8))
+        pointer_anchor_y=$((pointer_shape_top_y + 8))
+        pointer_caret_x=$((pointer_shape_right_x - 8))
+        pointer_caret_y=$((pointer_shape_bottom_y - 8))
+        printf 'drag-contract=first visual line to final wrapped line across paragraph boundary\n'
+        printf 'pointer-shape-rect=%s,%s,%s,%s\n' \
+            "$pointer_shape_left_x" "$pointer_shape_top_y" \
+            "$((pointer_shape_right_x - pointer_shape_left_x))" \
+            "$((pointer_shape_bottom_y - pointer_shape_top_y))"
+        printf 'pointer-anchor=%s,%s\n' "$pointer_anchor_x" "$pointer_anchor_y"
+        printf 'pointer-caret=%s,%s\n' "$pointer_caret_x" "$pointer_caret_y"
+    fi
+} > "$output/$calibration_artifact"
 
 input_commands_ok=true
 grouped_formatting=false
@@ -804,13 +898,52 @@ grouped_caret=false
 grouped_vertical=false
 grouped_semantic_readback=false
 grouped_reopen=false
+pointer_selection=false
 focus_owner
 xdotool mousemove --sync "$shape_center_x" "$shape_center_y" >/dev/null 2>&1 ||
     input_commands_ok=false
 xdotool click --clearmodifiers --repeat 2 --delay 120 1 >/dev/null 2>&1 ||
     input_commands_ok=false
 sleep "$settle_seconds"
-if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ||
+if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
+    pointer_forward_readback=false
+    pointer_reverse_readback=false
+    pointer_forward_capture=false
+    pointer_reverse_capture=false
+    pointer_expected=$'Wide words make this first paragraph wrap at unequal visual line widths\ntail paragraph crosses the boundary'
+    if pointer_drag "$pointer_anchor_x" "$pointer_anchor_y" "$pointer_caret_x" "$pointer_caret_y"; then
+        if copy_selection_and_assert_clipboard "pointer-selection-forward" "$pointer_expected"; then
+            pointer_forward_readback=true
+        else
+            input_commands_ok=false
+        fi
+        if capture "pointer-selection-forward.png"; then
+            pointer_forward_capture=true
+        else
+            input_commands_ok=false
+        fi
+    else
+        input_commands_ok=false
+    fi
+    if pointer_drag "$pointer_caret_x" "$pointer_caret_y" "$pointer_anchor_x" "$pointer_anchor_y"; then
+        if copy_selection_and_assert_clipboard "pointer-selection-reverse" "$pointer_expected"; then
+            pointer_reverse_readback=true
+        else
+            input_commands_ok=false
+        fi
+        if capture "pointer-selection-reverse.png"; then
+            pointer_reverse_capture=true
+        else
+            input_commands_ok=false
+        fi
+    else
+        input_commands_ok=false
+    fi
+    if $pointer_forward_readback && $pointer_reverse_readback &&
+       $pointer_forward_capture && $pointer_reverse_capture; then
+        pointer_selection=true
+    fi
+elif [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ||
       "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
     # Establish a deterministic keyboard editing position in the grouped child.
     send_owner_document_boundary Home || input_commands_ok=false
@@ -944,22 +1077,34 @@ else
 fi
 sleep "$settle_seconds"
 input_capture=false
-if capture "soft-break-input.png"; then
-    input_capture=true
-fi
-capture_window_state "soft-break-input-state.txt"
-xdotool mousemove --sync "$commit_point_x" "$commit_point_y" >/dev/null 2>&1 ||
-    input_commands_ok=false
-xdotool click --clearmodifiers 1 >/dev/null 2>&1 || input_commands_ok=false
-sleep "$settle_seconds"
 commit_capture=false
-if capture "soft-break-committed.png"; then
-    commit_capture=true
+if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
+    if capture "pointer-selection-final.png"; then
+        input_capture=true
+        commit_capture=true
+    fi
+    capture_window_state "pointer-selection-state.txt"
+else
+    if capture "soft-break-input.png"; then
+        input_capture=true
+    fi
+    capture_window_state "soft-break-input-state.txt"
+    xdotool mousemove --sync "$commit_point_x" "$commit_point_y" >/dev/null 2>&1 ||
+        input_commands_ok=false
+    xdotool click --clearmodifiers 1 >/dev/null 2>&1 || input_commands_ok=false
+    sleep "$settle_seconds"
+    if capture "soft-break-committed.png"; then
+        commit_capture=true
+    fi
+    capture_window_state "soft-break-committed-state.txt"
 fi
-capture_window_state "soft-break-committed-state.txt"
 {
     printf 'editor-entry=physical double click at shape ID2 center\n'
-    if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ||
+    if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
+        printf 'selection=physical pointer drag from first visual line to final wrapped line across paragraph boundary\n'
+        printf 'semantic-readback=forward and reverse exact xclip clipboard transcripts\n'
+        printf 'pointer-selection=%s\n' "$pointer_selection"
+    elif [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ||
           "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
         printf 'selection=physical Ctrl+Home, horizontal placement, and Shift+Down across unequal wrapped visual lines\n'
         if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
@@ -979,7 +1124,11 @@ capture_window_state "soft-break-committed-state.txt"
         printf 'soft-break=physical Shift+Enter\n'
         printf 'suffix=ASCII SoftAfter\n'
     fi
-    printf 'commit=physical click at calibrated slide point outside shape ID2\n'
+    if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
+        printf 'commit=not applicable; pointer selection remains active\n'
+    else
+        printf 'commit=physical click at calibrated slide point outside shape ID2\n'
+    fi
     printf 'input-commands-ok=%s\n' "$input_commands_ok"
     printf 'input-screenshot-captured=%s\n' "$input_capture"
     printf 'commit-screenshot-captured=%s\n' "$commit_capture"
@@ -992,7 +1141,7 @@ fi
 input_pass=false
 input_evidence=(
     rich-editor-physical-input-proof.txt
-    shape-pointer-calibration.txt
+    "$calibration_artifact"
 )
 if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
     input_evidence+=(
@@ -1010,24 +1159,97 @@ if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
         grouped-caret-vertical-shift-up.png
     )
 fi
-input_evidence+=(
-    soft-break-input.png
-    soft-break-input-state.txt
-    soft-break-committed.png
-    soft-break-committed-state.txt
-)
+if [[ "$app_surface" != "in-canvas-grouped-child-pointer-selection" ]]; then
+    input_evidence+=(
+        soft-break-input.png
+        soft-break-input-state.txt
+        soft-break-committed.png
+        soft-break-committed-state.txt
+    )
+fi
 if $visible_pass && $input_commands_ok && $input_capture && $commit_capture && $vertical_pass &&
+   { [[ "$app_surface" != "in-canvas-grouped-child-pointer-selection" ]] || $pointer_selection; } &&
    { [[ "$app_surface" != "in-canvas-grouped-child-caret" ]] || $grouped_semantic_readback; }; then
     input_pass=true
-    record "rich-editor-physical-soft-break-input" "passed" \
-        "Physical X11 input entered shape ID2, replaced its text, sent Shift+Enter between the ASCII tokens, and committed naturally outside the shape." \
-        "${input_evidence[@]}"
+    if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
+        input_evidence+=(
+            pointer-selection-forward.png
+            pointer-selection-forward-expected.txt
+            pointer-selection-forward-actual.txt
+            pointer-selection-forward-proof.txt
+            pointer-selection-reverse.png
+            pointer-selection-reverse-expected.txt
+            pointer-selection-reverse-actual.txt
+            pointer-selection-reverse-proof.txt
+            pointer-selection-final.png
+            pointer-selection-state.txt
+        )
+        record "rich-editor-physical-soft-break-input" "passed" \
+            "Physical X11 pointer drag selected the full unequal-width wrapped text across the paragraph boundary in both directions and both exact xclip reads matched." \
+            "${input_evidence[@]}"
+    else
+        record "rich-editor-physical-soft-break-input" "passed" \
+            "Physical X11 input entered shape ID2, replaced its text, sent Shift+Enter between the ASCII tokens, and committed naturally outside the shape." \
+            "${input_evidence[@]}"
+    fi
 else
     lane_failed=true
     record "rich-editor-physical-soft-break-input" "failed" \
-        "The physical editor entry, replacement, Shift+Enter, suffix, commit, and screenshots were not all completed." \
-        rich-editor-physical-input-proof.txt shape-pointer-calibration.txt \
-        soft-break-input-state.txt soft-break-committed-state.txt
+        "The physical rich-editor input, pointer selection or soft-break route, commit state, and screenshots were not all completed." \
+        rich-editor-physical-input-proof.txt "$calibration_artifact"
+fi
+
+if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
+    final_hash="$(hash_file "$document_path")"
+    printf '%s\n' "$final_hash" > "$output/fixture-mounted-after.sha256.txt"
+    pointer_read_only=false
+    if $input_pass && [[ "$initial_hash" == "$final_hash" ]]; then
+        pointer_read_only=true
+    fi
+    {
+        printf 'checkpoint=pointer-selection-read-only\n'
+        printf 'action=none\n'
+        printf 'ctrl-s-sent=false\n'
+        printf 'ctrl-z-sent=false\n'
+        printf 'ctrl-shift-z-sent=false\n'
+        printf 'initial-sha256=%s\n' "$initial_hash"
+        printf 'current-sha256=%s\n' "$final_hash"
+        printf 'unchanged=%s\n' "$pointer_read_only"
+    } > "$output/pointer-selection-nonmutation-proof.txt"
+
+    if $pointer_read_only; then
+        record "saved-soft-break-native-package" "passed" \
+            "The read-only pointer-selection lane deliberately sent no save command and the mounted package remained byte-identical." \
+            pointer-selection-nonmutation-proof.txt fixture-mounted-before.sha256.txt \
+            fixture-mounted-after.sha256.txt pointer-selection-final.png
+        record "undo-restores-original-text" "passed" \
+            "The nonmutating pointer-selection lane created no edit transaction, so no undo command was sent and the original package remained exact." \
+            pointer-selection-nonmutation-proof.txt pointer-selection-forward-proof.txt \
+            pointer-selection-final.png
+        record "redo-restores-soft-break" "passed" \
+            "The nonmutating pointer-selection lane created no redo transaction, so no redo command was sent and the original package remained exact." \
+            pointer-selection-nonmutation-proof.txt pointer-selection-reverse-proof.txt \
+            pointer-selection-state.txt
+    else
+        lane_failed=true
+        record "saved-soft-break-native-package" "failed" \
+            "The read-only pointer-selection package changed or the pointer contract failed." \
+            pointer-selection-nonmutation-proof.txt fixture-mounted-before.sha256.txt \
+            fixture-mounted-after.sha256.txt
+        record "undo-restores-original-text" "failed" \
+            "The pointer-selection lane could not prove a nonmutating selection with no undo transaction." \
+            pointer-selection-nonmutation-proof.txt rich-editor-physical-input-proof.txt
+        record "redo-restores-soft-break" "failed" \
+            "The pointer-selection lane could not prove a nonmutating selection with no redo transaction." \
+            pointer-selection-nonmutation-proof.txt rich-editor-physical-input-proof.txt
+    fi
+
+    if $lane_failed; then
+        exit 1
+    fi
+
+    rm -f "$output/probe-incomplete.txt"
+    exit 0
 fi
 
 save_predicate=assert_soft_break_inspection
@@ -1035,6 +1257,8 @@ if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
     save_predicate=assert_grouped_format_inspection
 elif [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
     save_predicate=assert_grouped_caret_inspection
+elif [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
+    save_predicate=assert_grouped_pointer_selection_inspection
 fi
 saved_checkpoint=false
 if save_checkpoint "after-soft-break" "$save_predicate"; then
@@ -1051,6 +1275,10 @@ fi
         printf 'selection-navigation=Ctrl+Home/Ctrl+End and Shift selection across multiple native runs and paragraphs\n'
         printf 'boundary-edit=Delete and Backspace were each undone before type-to-replace\n'
         printf 'type-replace=Child 1 has / speaker notes\n'
+    elif [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
+        printf 'paragraph-count=2\n'
+        printf 'selection-navigation=pointer drag across unequal wrapped visual lines and paragraph boundary\n'
+        printf 'selection-readback=two exact xclip clipboard transcripts\n'
     else
         printf 'paragraph-count=1\n'
         printf 'ordered-children=a:t SoftBefore; a:br; a:t SoftAfter\n'
@@ -1144,6 +1372,8 @@ if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
     redo_predicate=assert_grouped_format_inspection
 elif [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
     redo_predicate=assert_grouped_caret_inspection
+elif [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
+    redo_predicate=assert_grouped_pointer_selection_inspection
 fi
 redo_checkpoint=false
 if save_checkpoint "after-redo" "$redo_predicate"; then

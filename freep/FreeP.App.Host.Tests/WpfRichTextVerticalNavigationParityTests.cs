@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
+using FreeP.App.Compositor;
 using FreeP.Core.Model;
 using FreeP.App.Rendering.Wpf;
 using ModelParagraph = FreeP.Core.Model.Paragraph;
@@ -72,6 +73,59 @@ public sealed class WpfRichTextVerticalNavigationParityTests
         }
     }
 
+    [StaFact]
+    public void WpfRichTextBox_NativePointerRangeMatchesSharedCrossParagraphSelection()
+    {
+        const string firstText = "Wide words make this first paragraph wrap at unequal visual line widths";
+        const string secondText = "tail paragraph crosses the boundary";
+        var body = new TextBody();
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Runs = { new ModelRun { Text = firstText } },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Runs = { new ModelRun { Text = secondText } },
+        });
+
+        var box = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(body, 12))
+        {
+            AcceptsReturn = true,
+            Width = 96,
+            Height = 220,
+            IsUndoEnabled = false,
+        };
+        box.Document.PageWidth = 80;
+        box.Document.ColumnWidth = 80;
+        var window = new Window { Content = box, Width = 96, Height = 220 };
+        window.Show();
+        window.UpdateLayout();
+        try
+        {
+            box.Focus().Should().BeTrue();
+            const int anchor = 8;
+            int secondParagraphStart = firstText.Length + 1;
+            int caret = secondParagraphStart + 4;
+            var expected = InCanvasRichTextPointerSelectionPlanner.Plan(
+                anchor,
+                caret,
+                firstText.Length + 1 + secondText.Length);
+
+            var start = PointerAtLogicalOffset(box.Document, expected.Start);
+            var end = PointerAtLogicalOffset(box.Document, expected.End);
+            box.Selection.Select(start, end);
+
+            LogicalOffsetAt(box.Document, box.Selection.Start).Should().Be(expected.Start);
+            LogicalOffsetAt(box.Document, box.Selection.End).Should().Be(expected.End);
+            box.Selection.Text.Should().Contain("\r\n");
+            box.Selection.Text.Should().Contain("tail");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     [Fact]
     public void WpfRichTextEditor_LeavesVisualLineNavigationToNativeRichTextBox()
     {
@@ -107,7 +161,7 @@ public sealed class WpfRichTextVerticalNavigationParityTests
 
     private static TextPointer PointerAtLogicalOffset(FlowDocument document, int offset)
     {
-        int remaining = Math.Max(0, offset);
+        int target = Math.Max(0, offset);
         for (var position = document.ContentStart;
              position is not null;
              position = position.GetNextContextPosition(LogicalDirection.Forward))
@@ -116,9 +170,12 @@ public sealed class WpfRichTextVerticalNavigationParityTests
                 continue;
 
             int length = position.GetTextRunLength(LogicalDirection.Forward);
-            if (remaining <= length)
-                return position.GetPositionAtOffset(remaining);
-            remaining -= length;
+            for (int localOffset = 0; localOffset <= length; localOffset++)
+            {
+                var candidate = position.GetPositionAtOffset(localOffset);
+                if (LogicalOffsetAt(document, candidate) >= target)
+                    return candidate;
+            }
         }
 
         return document.ContentEnd;

@@ -97,7 +97,10 @@ public sealed class ParagraphDialog : FreeWDialogWindow
             Padding = new Thickness(0),
             Height = 253,
         };
-        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(_tabs, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
+            _tabs,
+            DialogChromeStyle,
+            contentPaneMargin: new Thickness(0, -1, 0, 0));
         _tabs.Items.Add(new TabItem { Header = "Indents and Spacing", Width = 123, Content = BuildIndentsTab() });
         _tabs.Items.Add(new TabItem { Header = "Line and Page Breaks", Width = 122, Content = BuildBreaksTab() });
         _tabs.SelectionChanged += (_, _) => _tabs.Height = _tabs.SelectedIndex == 1 ? 235 : 253;

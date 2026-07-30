@@ -309,6 +309,11 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("formula-bar-name-box-tour");
         source.Should().Contain("EnsureFormulaBarNameBoxTourContext");
         source.Should().Contain("_workbook.DefineNamedRange(\"Sales\", namedRange);");
+        source.Should().Contain("Tour Name Box Shape");
+        source.Should().Contain("Tour Name Box Picture");
+        source.Should().Contain("Tour Name Box Text Box");
+        source.Should().Contain("Tour Name Box Chart");
+        source.Should().Contain("ObjectNames: [nameBoxChart, nameBoxPicture, nameBoxShape, nameBoxTextBox]");
         source.Should().Contain("CellAddressBox.IsDropDownOpen = true;");
         source.Should().Contain("NameBoxDropdownPlanner");
         source.Should().Contain("BeginFormulaBarFormulaEdit(\"=SUM(B2:C3)\");");

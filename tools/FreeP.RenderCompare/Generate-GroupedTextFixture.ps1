@@ -1,8 +1,9 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$Source,
-    [Parameter(Mandatory = $true)][string]$Destination,
-    [switch]$CaretGeometry
+[Parameter(Mandatory = $true)][string]$Source,
+[Parameter(Mandatory = $true)][string]$Destination,
+[switch]$CaretGeometry,
+[switch]$PointerSelectionGeometry
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,6 +14,7 @@ $sourcePath = [IO.Path]::GetFullPath($Source)
 $destinationPath = [IO.Path]::GetFullPath($Destination)
 if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) { throw "Source fixture was not found: $sourcePath" }
 if ([string]::Equals($sourcePath, $destinationPath, [StringComparison]::OrdinalIgnoreCase)) { throw "Destination must be a copy, not the source fixture." }
+if ($CaretGeometry -and $PointerSelectionGeometry) { throw "CaretGeometry and PointerSelectionGeometry are mutually exclusive." }
 
 $destinationDirectory = Split-Path -Parent $destinationPath
 New-Item -ItemType Directory -Force -Path $destinationDirectory | Out-Null
@@ -69,7 +71,7 @@ try {
     # unequal-width paragraphs so physical visual-line movement has a stable
     # native document to exercise.
     $groupedShape = $shape.CloneNode($true)
-    if ($CaretGeometry) {
+    if ($CaretGeometry -or $PointerSelectionGeometry) {
         $shapeExt = $groupedShape.SelectSingleNode("./p:spPr/a:xfrm/a:ext", $ns)
         if ($null -eq $shapeExt) { throw "Grouped caret fixture shape extent is missing." }
         $shapeExt.SetAttribute("cy", "2743200")
@@ -92,6 +94,9 @@ try {
         $paragraph.AppendChild((New-TextRun "Alpha bravo charlie ")) | Out-Null
         $paragraph.AppendChild((New-TextRun "delta echo foxtrot golf hotel")) | Out-Null
     }
+    elseif ($PointerSelectionGeometry) {
+        $paragraph.AppendChild((New-TextRun "Wide words make this first paragraph wrap at unequal visual line widths")) | Out-Null
+    }
     else {
         $paragraph.AppendChild((New-TextRun "Slide 1")) | Out-Null
         $paragraph.AppendChild((New-TextRun " has")) | Out-Null
@@ -100,6 +105,9 @@ try {
     if ($CaretGeometry) {
         $secondParagraph.AppendChild((New-TextRun "tiny middle wide lower ")) | Out-Null
         $secondParagraph.AppendChild((New-TextRun "line with many words for contrast")) | Out-Null
+    }
+    elseif ($PointerSelectionGeometry) {
+        $secondParagraph.AppendChild((New-TextRun "tail paragraph crosses the boundary")) | Out-Null
     }
     else {
         $secondParagraph.AppendChild((New-TextRun " speaker")) | Out-Null

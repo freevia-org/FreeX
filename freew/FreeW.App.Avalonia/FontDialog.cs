@@ -137,7 +137,7 @@ public sealed class FontDialog : FreeWDialogWindow
             state.NumberSpacingIndex,
             minWidth: 160);
 
-        var fontPanel = new StackPanel { Margin = new Thickness(10) };
+        var fontPanel = new StackPanel { Margin = new Thickness(12, 10, 11, 10) };
         AddField(fontPanel, "Font family:", _familyBox);
         AddField(fontPanel, "Size (pt):", _sizeBox);
         AddField(fontPanel, "Color:", _colorBox);
@@ -184,7 +184,7 @@ public sealed class FontDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             tabs,
             DialogChromeStyle,
-            contentPaneMargin: new Thickness(-12, 0, -12, 0));
+            contentPaneMargin: new Thickness(-12, -1, -12, 0));
 
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(0, 6, 0, 0));
         var buttons = AvaloniaCompactDialogChrome.CreateOkCancelRow(

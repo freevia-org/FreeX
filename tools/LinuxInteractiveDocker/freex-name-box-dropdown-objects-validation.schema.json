@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FreeX Name Box object-kind physical validation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "suite",
+    "platform",
+    "shell",
+    "app",
+    "expectedOrder",
+    "summary",
+    "results"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "suite": { "const": "freex-name-box-dropdown-objects-physical" },
+    "platform": { "const": "linux" },
+    "shell": { "const": "avalonia" },
+    "app": { "const": "FreeX" },
+    "expectedOrder": {
+      "type": "array",
+      "const": [
+        "PhysicalChart",
+        "PhysicalName",
+        "PhysicalPicture",
+        "PhysicalShape",
+        "PhysicalTable",
+        "PhysicalTextBox"
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "failed", "total"],
+      "properties": {
+        "passed": { "const": 4 },
+        "failed": { "const": 0 },
+        "total": { "const": 4 }
+      }
+    },
+    "results": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "expectedName",
+          "expectedKind",
+          "expectedId",
+          "baselineSequence",
+          "baselineStage",
+          "baselineSelectedObjectKind",
+          "baselineSelectedObjectId",
+          "baselineNameBox",
+          "baselineActiveCell",
+          "observedSequence",
+          "observedStage",
+          "observedName",
+          "observedItemKind",
+          "observedObjectKind",
+          "observedSelectedObjectKind",
+          "observedId",
+          "observedNameBox",
+          "observedActiveCell",
+          "status"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "expectedName": { "type": "string" },
+          "expectedKind": { "enum": ["Chart", "Picture", "Shape", "TextBox"] },
+          "expectedId": { "type": "string", "format": "uuid" },
+          "baselineSequence": { "type": "integer", "minimum": 0 },
+          "baselineStage": { "const": "neutral-cell-selected" },
+          "baselineSelectedObjectKind": { "const": "" },
+          "baselineSelectedObjectId": { "const": "" },
+          "baselineNameBox": { "const": "J20" },
+          "baselineActiveCell": { "const": "J20" },
+          "observedSequence": { "type": "integer", "minimum": 1 },
+          "observedStage": { "const": "object-selected" },
+          "observedName": { "type": "string", "minLength": 1 },
+          "observedItemKind": { "const": "Object" },
+          "observedObjectKind": { "enum": ["Chart", "Picture", "Shape", "TextBox"] },
+          "observedSelectedObjectKind": { "enum": ["Chart", "Picture", "Shape", "TextBox"] },
+          "observedId": { "type": "string", "format": "uuid" },
+          "observedNameBox": { "type": "string", "minLength": 1 },
+          "observedActiveCell": { "type": "string", "minLength": 1 },
+          "status": { "const": "passed" }
+        }
+      }
+    }
+  }
+}
