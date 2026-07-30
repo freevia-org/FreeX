@@ -67,6 +67,115 @@ internal static class DuplicateSheetDrawingCloner
             copy.FormControls.Add(CloneFormControl(control, copyId));
     }
 
+    /// <summary>
+    /// R100: rewrites every Table[...] structured reference inside <paramref name="copy"/>'s own
+    /// cloned charts (verbatim series value/category/name/bubble-size formulas, "value from cells"
+    /// data-label formulas, and custom error-bar range formulas) that named one of the tables
+    /// <c>DuplicateSheetCommand.UniquifyClonedTables</c> just renamed on this same sheet, from its
+    /// old (source-sheet) name to its new workbook-unique name. A chart series sourced from
+    /// "=Table1[Values]" is unparsable as a plain <see cref="GridRange"/> (see
+    /// <c>XlsxChartSeriesRangeReader.TryParseFormulaRange</c>), so it lands on the verbatim path
+    /// <see cref="CopyDrawingCollections"/> already clones byte-for-byte — without this rewrite the
+    /// duplicate's own chart would keep resolving the structured reference to the SOURCE sheet's
+    /// still-named table instead of the copy's own renamed one, exactly the gap
+    /// <c>DuplicateSheetCommand.RewriteClonedTableReferences</c> already closes for cell formulas
+    /// and table self-reference metadata. Called separately from (and after) that method because
+    /// <see cref="CopyDrawingCollections"/> clones charts onto <paramref name="copy"/> before the
+    /// sheet's table identities are uniquified/renamed.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately does NOT reuse <see cref="RowColumnShiftHelpers.RewriteChartVerbatimFormulas(Sheet, RewriteOperation, string)"/>
+    /// (the RenameSheetOp path <see cref="CopyDrawingCollections"/> uses above): that helper's
+    /// <c>RewriteVerbatimFormula</c> pre-splits the formula text on every top-level unquoted comma
+    /// to handle multi-area range unions like "(Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5)" -- but a
+    /// structured reference such as "Table1[[#Headers],[Values]]" ALSO contains an unquoted comma
+    /// (inside its own bracket pair), so that splitter would cut it into two bogus fragments and
+    /// silently corrupt it. A table rename never appears as one area of a multi-area union, so
+    /// each formula is instead run directly through <see cref="FormulaRewriter.Rewrite"/> (which
+    /// parses the whole expression, so a comma nested inside "[...]" is never mistaken for a
+    /// union separator) exactly as <c>DuplicateSheetCommand.RewriteFormulaForTableRenames</c>
+    /// already does for cell formulas. The host-sheet-name parameter <see cref="FormulaRewriter.Rewrite"/>
+    /// takes is irrelevant for a table rename (<see cref="RenameTableOp"/> matches purely by table
+    /// name, with no sheet-qualification concept), so any non-null placeholder is safe to pass.
+    /// </remarks>
+    internal static void RewriteClonedChartTableReferences(
+        Sheet copy, IReadOnlyList<(string OldName, string NewName)> renames)
+    {
+        if (renames.Count == 0 || copy.Charts.Count == 0)
+            return;
+
+        foreach (var chart in copy.Charts)
+        {
+            if (chart.VerbatimSeriesFormulas is { Count: > 0 } vf)
+            {
+                for (var i = 0; i < vf.Count; i++)
+                {
+                    var entry = vf[i];
+                    var newVal = RewriteFormulaForTableRenames(entry.ValFormula, renames);
+                    var newCat = RewriteFormulaForTableRenames(entry.CatFormula, renames);
+                    var newTx = RewriteFormulaForTableRenames(entry.TxFormula, renames);
+                    var newBubble = RewriteFormulaForTableRenames(entry.BubbleSizeFormula, renames);
+                    if (!string.Equals(newVal, entry.ValFormula, StringComparison.Ordinal) ||
+                        !string.Equals(newCat, entry.CatFormula, StringComparison.Ordinal) ||
+                        !string.Equals(newTx, entry.TxFormula, StringComparison.Ordinal) ||
+                        !string.Equals(newBubble, entry.BubbleSizeFormula, StringComparison.Ordinal))
+                    {
+                        vf[i] = entry with
+                        {
+                            ValFormula = newVal,
+                            CatFormula = newCat,
+                            TxFormula = newTx,
+                            BubbleSizeFormula = newBubble
+                        };
+                    }
+                }
+            }
+
+            if (chart.SeriesRangeDataLabels is { Count: > 0 } dl)
+            {
+                for (var i = 0; i < dl.Count; i++)
+                {
+                    var entry = dl[i];
+                    var rewritten = RewriteFormulaForTableRenames(entry.Formula, renames);
+                    if (!string.Equals(rewritten, entry.Formula, StringComparison.Ordinal))
+                        dl[i] = entry with { Formula = rewritten };
+                }
+            }
+
+            var newPlus = RewriteFormulaForTableRenames(chart.ErrorBarPlusRangeFormula, renames);
+            var newMinus = RewriteFormulaForTableRenames(chart.ErrorBarMinusRangeFormula, renames);
+            if (!string.Equals(newPlus, chart.ErrorBarPlusRangeFormula, StringComparison.Ordinal))
+                chart.ErrorBarPlusRangeFormula = newPlus;
+            if (!string.Equals(newMinus, chart.ErrorBarMinusRangeFormula, StringComparison.Ordinal))
+                chart.ErrorBarMinusRangeFormula = newMinus;
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="formulaText"/> through <see cref="FormulaRewriter.Rewrite"/> once per
+    /// rename in <paramref name="renames"/> (a sheet can host more than one renamed table) and
+    /// returns the fully rewritten text, or the original text unchanged if none of the renames
+    /// touched it (or it was null/blank) -- mirroring
+    /// <c>DuplicateSheetCommand.RewriteFormulaForTableRenames</c>/<c>RewriteNullableFormulaForTableRenames</c>
+    /// exactly, just duplicated here since that method is private to its own file.
+    /// </summary>
+    private static string? RewriteFormulaForTableRenames(
+        string? formulaText, IReadOnlyList<(string OldName, string NewName)> renames)
+    {
+        if (string.IsNullOrWhiteSpace(formulaText))
+            return formulaText;
+
+        string? current = null;
+        foreach (var (oldName, newName) in renames)
+        {
+            var rewritten = FormulaRewriter.Rewrite(current ?? formulaText, new RenameTableOp(oldName, newName), string.Empty);
+            if (rewritten is not null)
+                current = rewritten;
+        }
+
+        return current ?? formulaText;
+    }
+
     private static FormControlModel CloneFormControl(FormControlModel control, SheetId copyId) =>
         new()
         {

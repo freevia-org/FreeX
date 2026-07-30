@@ -542,6 +542,12 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // silently reattach to an unrelated sheet later re-created/renamed with the same name.
     private List<(TimelineModel Timeline, string OldValue)>? _timelineNameDeleteSnapshot;
     private List<(PictureModel Picture, string OldValue)>? _pictureNameDeleteSnapshot;
+    // R100: mirrors _pivotCacheNameDeleteSnapshot above for ChartModel.PivotSourceSheetName — a
+    // pivot chart's recorded "where does my PivotTable actually live" sheet name must be cleared
+    // when that sheet is deleted, or XlsxChartXmlWriter keeps emitting a <c:pivotSource><c:name>
+    // naming a worksheet absent from the workbook forever (mirrors RenameSheetCommand's T6 block,
+    // which uses this same field).
+    private List<(ChartModel Chart, string OldValue)>? _chartPivotSourceNameDeleteSnapshot;
     // K16: chart verbatim series/data-label formulas that reference the deleted sheet must
     // become #REF! just like ordinary cell/CF/DV formulas do via DeleteSheetOp — otherwise
     // they keep dangling text naming a sheet that no longer exists.
@@ -800,6 +806,25 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             }
         }
 
+        // R100: pivot charts (on surviving sheets) whose PivotSourceSheetName named the deleted
+        // sheet — clear so XlsxChartXmlWriter's <c:pivotSource><c:name> never keeps naming a
+        // worksheet absent from the workbook and can never silently reattach to an unrelated sheet
+        // later re-created/renamed with the same name — mirrors the PivotCache/Slicer/Picture/
+        // Timeline clears immediately above (same field RenameSheetCommand's T6 block rewrites).
+        _chartPivotSourceNameDeleteSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var chart in s.Charts)
+            {
+                if (chart.PivotSourceSheetName is not null &&
+                    string.Equals(chart.PivotSourceSheetName, deletedSheetName, StringComparison.OrdinalIgnoreCase))
+                {
+                    _chartPivotSourceNameDeleteSnapshot.Add((chart, chart.PivotSourceSheetName));
+                    chart.PivotSourceSheetName = null;
+                }
+            }
+        }
+
         // R95: rewrite 'Place in This Document' hyperlink bookmarks/targets across ALL surviving
         // sheets that reference the deleted sheet, producing #REF! — mirrors RenameSheetCommand's
         // O25/P113 pass (same two fields, same bookmark-vs-bare-target split), but using deleteOp
@@ -965,6 +990,10 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             if (_timelineNameDeleteSnapshot is not null)
                 foreach (var (timeline, oldValue) in _timelineNameDeleteSnapshot)
                     timeline.SourceSheetName = oldValue;
+
+            if (_chartPivotSourceNameDeleteSnapshot is not null)
+                foreach (var (chart, oldValue) in _chartPivotSourceNameDeleteSnapshot)
+                    chart.PivotSourceSheetName = oldValue;
 
             // R95 restore: hyperlink bookmarks/targets rewritten to #REF!
             if (_hyperlinkBookmarkDeleteSnapshot is not null)

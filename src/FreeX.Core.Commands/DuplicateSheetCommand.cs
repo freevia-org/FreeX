@@ -160,19 +160,26 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
     }
 
     /// <summary>
-    /// Rewrites every Table[...] structured reference on <paramref name="copy"/> -- both ordinary
-    /// cell formulas and each cloned table's own
+    /// Rewrites every Table[...] structured reference on <paramref name="copy"/> -- ordinary cell
+    /// formulas, each cloned table's own
     /// <see cref="StructuredTableColumnModel.CalculatedColumnFormula"/>/<see cref="StructuredTableColumnModel.TotalsRowFormula"/>
-    /// metadata -- that named one of the tables <see cref="UniquifyClonedTables"/> just renamed,
-    /// from its old (source-sheet) name to its new workbook-unique name. <see cref="Sheet.Clone"/>
-    /// copies every cell's formula text (and every table's self-reference formula metadata)
-    /// VERBATIM from the source sheet, so without this rewrite a formula such as
-    /// "=SUM(Table1[Price])" on the copy would keep resolving -- via
-    /// <see cref="StructuredReferenceResolver"/>'s workbook-global by-name lookup -- to the
-    /// SOURCE sheet's still-named table instead of the copy's own renamed one. Deliberately scoped
-    /// to just this one sheet (not the whole workbook, unlike
-    /// <see cref="RowColumnShiftHelpers.RewriteAllFormulas"/>): formulas on every OTHER sheet must
-    /// keep referencing the original table unchanged, since only this one table identity moved.
+    /// metadata, and (R100) every cloned <see cref="ConditionalFormat.FormulaText"/> and
+    /// <see cref="DataValidation.Formula1"/>/<see cref="DataValidation.Formula2"/> -- that named
+    /// one of the tables <see cref="UniquifyClonedTables"/> just renamed, from its old
+    /// (source-sheet) name to its new workbook-unique name. <see cref="Sheet.Clone"/> copies every
+    /// cell's formula text, every table's self-reference formula metadata, AND every conditional
+    /// format rule / data validation rule's formula text VERBATIM from the source sheet -- only
+    /// rebasing same-sheet-qualified sheet-NAME references (<see cref="Sheet.RewriteSameSheetQualifiedFormula"/>
+    /// via <c>Sheet.Clone.CloneConditionalFormat</c>/<c>CloneDataValidation</c>), never a table
+    /// rename. So without this rewrite a formula such as "=SUM(Table1[Price])" on the copy would
+    /// keep resolving -- via <see cref="StructuredReferenceResolver"/>'s workbook-global by-name
+    /// lookup -- to the SOURCE sheet's still-named table instead of the copy's own renamed one.
+    /// Deliberately scoped to just this one sheet (not the whole workbook, unlike
+    /// <see cref="RowColumnShiftHelpers.RewriteAllFormulas"/>): formulas/rules on every OTHER sheet
+    /// must keep referencing the original table unchanged, since only this one table identity
+    /// moved. Chart series/error-bar formulas are handled separately by
+    /// <see cref="DuplicateSheetDrawingCloner.RewriteClonedChartTableReferences"/> since charts are
+    /// cloned/rewritten before this sheet's table identities are uniquified.
     /// </summary>
     private static void RewriteClonedTableReferences(
         Sheet copy, IReadOnlyList<(string OldName, string NewName)> renames)
@@ -209,6 +216,25 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
                 }
             }
         }
+
+        foreach (var cf in copy.ConditionalFormats)
+        {
+            var rewritten = RewriteNullableFormulaForTableRenames(cf.FormulaText, renames);
+            if (!string.Equals(rewritten, cf.FormulaText, StringComparison.Ordinal))
+                cf.FormulaText = rewritten;
+        }
+
+        foreach (var dv in copy.DataValidations)
+        {
+            var formula1 = RewriteNullableFormulaForTableRenames(dv.Formula1, renames);
+            var formula2 = RewriteNullableFormulaForTableRenames(dv.Formula2, renames);
+            if (!string.Equals(formula1, dv.Formula1, StringComparison.Ordinal))
+                dv.Formula1 = formula1;
+            if (!string.Equals(formula2, dv.Formula2, StringComparison.Ordinal))
+                dv.Formula2 = formula2;
+        }
+
+        DuplicateSheetDrawingCloner.RewriteClonedChartTableReferences(copy, renames);
     }
 
     /// <summary>

@@ -259,14 +259,17 @@ public static class PasteCommandFactory
                     if (options.ContentKind == PasteSpecialContentKind.ValuesAndNumberFormats)
                         pastedCell.StyleId = sourceCell.StyleId;
 
-                    // "All except borders"/"Values and source formatting"/"All using Source theme"/
-                    // "Formulas and number formats" all inherit source formatting during a plain paste
-                    // (PasteCommandCellFactory.BuildPastedCell); PasteSpecialCellsCommand's arithmetic
+                    // "All except borders"/"Values and source formatting"/"Formulas and number
+                    // formats" have a dedicated BuildPastedCell branch that inherits source
+                    // formatting during a plain paste; PasteSpecialCellsCommand's arithmetic
                     // Operation handling only special-cases ValuesAndNumberFormats, so those other
                     // kinds silently kept no formatting at all once an Operation was picked. Queue a
                     // follow-up format edit here -- mirroring BuildPastedCell's per-kind formatting --
                     // for the destination cells the operation actually touches (R26-paste-special-
-                    // operation-deep-3).
+                    // operation-deep-3). "All using Source theme" is NOT one of these: it has no
+                    // dedicated BuildPastedCell branch and falls through to the same generic path as
+                    // Default, so it must be excluded here too, matching Default
+                    // (R100-paste-special-all-using-theme-operation-1).
                     var operationDestination = options.Transpose
                         ? PasteCommandCellFactory.TransposeDestination(sourceRange, source, targetSheetId, destination)
                         : PasteCommandCellFactory.Shift(
@@ -531,6 +534,16 @@ public static class PasteCommandFactory
     /// arithmetic itself would be a no-op (non-numeric destination, or blank combined with blank) --
     /// matching TryBuildCell's own no-op skip, which leaves the destination's value AND format
     /// entirely untouched in that case.
+    ///
+    /// <see cref="PasteSpecialContentKind.AllUsingSourceTheme"/> is deliberately NOT in the eligible
+    /// list, even though it looks like a sibling of ValuesAndSourceFormatting: with Operation==None,
+    /// BuildPastedCell has no dedicated branch for it at all -- it falls through to the exact same
+    /// generic "mode==All" path (BuildAllCell) that <see cref="PasteSpecialContentKind.Default"/>
+    /// uses (the theme distinction only matters cross-workbook), and Default is intentionally excluded
+    /// here (see DefaultContentKind_WithOperation_StaysPlainValueOnly_NoRegression). Same-workbook
+    /// "All using Source theme" + an Operation must therefore also leave the destination's own
+    /// formatting untouched, matching Default, not get the wholesale source-style overwrite
+    /// (R100-paste-special-all-using-theme-operation-1).
     /// </summary>
     private static bool TryComputeOperationFormatEdit(
         Workbook workbook,
@@ -543,7 +556,6 @@ public static class PasteCommandFactory
     {
         if (contentKind is not (PasteSpecialContentKind.AllExceptBorders
             or PasteSpecialContentKind.ValuesAndSourceFormatting
-            or PasteSpecialContentKind.AllUsingSourceTheme
             or PasteSpecialContentKind.FormulasAndNumberFormats))
         {
             styleId = default;
@@ -562,8 +574,8 @@ public static class PasteCommandFactory
         {
             PasteSpecialContentKind.AllExceptBorders => MergeAllExceptBorders(workbook, sourceCell.StyleId, destinationStyle),
             PasteSpecialContentKind.FormulasAndNumberFormats => MergeNumberFormat(workbook, destinationStyle, sourceCell.StyleId),
-            // ValuesAndSourceFormatting / AllUsingSourceTheme: BuildPastedCell applies the source's
-            // style wholesale (no merge with the destination) when Operation is None; same here.
+            // ValuesAndSourceFormatting: BuildPastedCell applies the source's style wholesale (no
+            // merge with the destination) when Operation is None; same here.
             _ => sourceCell.StyleId
         };
         return true;

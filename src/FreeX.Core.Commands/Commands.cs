@@ -412,6 +412,32 @@ internal static class StructuredTableEditEffects
         return (firstDataRow, Math.Max(firstDataRow, lastDataRow));
     }
 
+    /// <summary>
+    /// R100-commands-filter-totalsrow-1: returns the last row of <paramref name="range"/> that
+    /// participates in interactive AutoFilter/slicer matching. When <paramref name="range"/> is
+    /// exactly a structured table's <c>Range</c> (the shape
+    /// <see cref="AutoFilterRangeResolver.TryGetEffectiveAutoFilterRange"/> hands back for a table's
+    /// header-cell filter dropdown) and that table's Totals Row is shown, <c>range.End.Row</c> IS the
+    /// Totals Row itself (see <c>SetStructuredTableTotalsRowCommand</c>), so it is excluded here —
+    /// matching the same totals-row-aware bound <see cref="GetDataBodyRowBounds"/> already gives
+    /// every other table-editing command (Sort/InsertDeleteRows/InsertDeleteColumns) and
+    /// <c>ApplyStructuredTableFiltersCommand.LastDataRow</c>. For a plain worksheet-level AutoFilter
+    /// range (no matching table), <paramref name="range"/>.End.Row is returned unchanged.
+    /// </summary>
+    internal static uint GetFilterableLastRow(Sheet sheet, GridRange range)
+    {
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (table.Range.Equals(range))
+            {
+                var (_, lastDataRow) = GetDataBodyRowBounds(table);
+                return lastDataRow;
+            }
+        }
+
+        return range.End.Row;
+    }
+
     /// <summary>Row-shifts a formula from <paramref name="fromRow"/> to <paramref name="toRow"/> via a plain paste-offset rewrite (relative refs move; absolute/structured refs don't).</summary>
     internal static string ShiftFormulaRows(string formulaText, uint fromRow, uint toRow, string hostSheetName)
     {

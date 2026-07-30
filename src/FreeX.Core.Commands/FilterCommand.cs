@@ -142,7 +142,11 @@ public sealed class FilterCommand : IWorkbookCommand
     private static void RecomputeHiddenRows(Sheet sheet, GridRange range)
     {
         uint startRow = range.Start.Row;
-        uint endRow   = range.End.Row;
+        // R100-commands-filter-totalsrow-1: when range is a structured table's own Range with its
+        // Totals Row shown, range.End.Row IS the Totals Row itself -- exclude it from the filterable
+        // data set the same way GetDataBodyRowBounds already does for every other table-editing
+        // command (Sort/InsertDeleteRows/InsertDeleteColumns) and ApplyStructuredTableFiltersCommand.
+        uint endRow   = StructuredTableEditEffects.GetFilterableLastRow(sheet, range);
 
         // G7: Top10/Average/color/custom-criterion filters hide rows by mutating FilterHiddenRows
         // directly, without registering anything in ActiveValueFilterColumns. This recompute must
@@ -270,7 +274,10 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
         _undoSnapshot.Capture(sheet);
 
         var filterCol = _range.Start.Col + _filterColOffset;
-        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
+        // R100-commands-filter-totalsrow-1: see FilterCommand.RecomputeHiddenRows -- exclude a
+        // structured table's shown Totals Row from the filterable data set.
+        var lastDataRow = StructuredTableEditEffects.GetFilterableLastRow(sheet, _range);
+        for (uint row = _range.Start.Row + 1; row <= lastDataRow; row++)
         {
             // filter-by-color-cf: resolve the color Excel would actually show for this cell,
             // including any conditional-formatting-driven fill, not just the cell's static stored
@@ -347,7 +354,10 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
         _undoSnapshot.Capture(sheet);
 
         var filterCol = _range.Start.Col + _filterColOffset;
-        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
+        // R100-commands-filter-totalsrow-1: see FilterCommand.RecomputeHiddenRows -- exclude a
+        // structured table's shown Totals Row from the filterable data set.
+        var lastDataRow = StructuredTableEditEffects.GetFilterableLastRow(sheet, _range);
+        for (uint row = _range.Start.Row + 1; row <= lastDataRow; row++)
         {
             // filter-by-color-cf: a CF-driven fill counts as "has a fill" here too, so a CF-red
             // cell must NOT wrongly match "No Fill".
@@ -429,7 +439,10 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
         _undoSnapshot.Capture(sheet);
 
         var filterCol = _range.Start.Col + _filterColOffset;
-        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
+        // R100-commands-filter-totalsrow-1: see FilterCommand.RecomputeHiddenRows -- exclude a
+        // structured table's shown Totals Row from the filterable data set.
+        var lastDataRow = StructuredTableEditEffects.GetFilterableLastRow(sheet, _range);
+        for (uint row = _range.Start.Row + 1; row <= lastDataRow; row++)
         {
             // filter-by-color-cf: resolve the color Excel would actually show for this cell,
             // including any conditional-formatting-driven font color, not just the cell's static

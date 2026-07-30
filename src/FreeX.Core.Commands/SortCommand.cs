@@ -181,23 +181,34 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             if (_options.LeftToRight)
             {
                 var firstRowSpan = overlappingMerges[0].RowCount;
+                var firstStartRow = overlappingMerges[0].Start.Row;
                 var rangeColCount = (int)(_range.End.Col - _range.Start.Col + 1);
                 uniform = overlappingMerges.Count == rangeColCount &&
                     overlappingMerges.All(m =>
-                        _range.Contains(m) && m.ColCount == 1 && m.RowCount == firstRowSpan);
+                        _range.Contains(m) && m.ColCount == 1 && m.RowCount == firstRowSpan && m.Start.Row == firstStartRow);
             }
             else
             {
                 var firstColSpan = overlappingMerges[0].ColCount;
+                var firstStartCol = overlappingMerges[0].Start.Col;
                 // Merged regions never overlap one another (MergeCellsCommand rejects any merge
                 // whose range intersects an existing one), so requiring the merge count to equal
                 // the range's row count — on top of each merge being fully contained, exactly one
                 // row tall, and identically sized — guarantees every row of the range is covered by
                 // an identically-sized merge and none is left partially/un-merged.
+                //
+                // R100-commands-sort-merge-column-align-4-1: identically SIZED is not enough — the
+                // sort below swaps whole grid rows through fixed column indexes (WriteCellPayload
+                // writes ci back into the SAME column), so a same-width merge sitting at a different
+                // Start.Col than the others would have its anchor value relocated into a covered
+                // (non-anchor) cell of whichever row it swaps into, planting a live value where only
+                // the top-left cell of a merge may hold one. Requiring every merge to also share the
+                // first merge's Start.Col guarantees the merges line up as one vertical column-aligned
+                // block, so the row swap moves each merge's anchor to another row's own anchor cell.
                 var rangeRowCount = (int)(_range.End.Row - _range.Start.Row + 1);
                 uniform = overlappingMerges.Count == rangeRowCount &&
                     overlappingMerges.All(m =>
-                        _range.Contains(m) && m.RowCount == 1 && m.ColCount == firstColSpan);
+                        _range.Contains(m) && m.RowCount == 1 && m.ColCount == firstColSpan && m.Start.Col == firstStartCol);
             }
 
             if (!uniform)
