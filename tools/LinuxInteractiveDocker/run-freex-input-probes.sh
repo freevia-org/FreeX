@@ -298,7 +298,8 @@ probe_formula_bar_point_mode_whole_range() {
     if select_cell 6 9 G10; then
         send_key ctrl+F2
         send_key ctrl+a
-        type_text "=SUM("
+        type_text "=SUM()"
+        send_key Left
         send_key F2
         send_key F2
         capture "formula-whole-range-column-editing.png"
@@ -323,7 +324,8 @@ probe_formula_bar_point_mode_whole_range() {
     if select_cell 6 10 G11; then
         send_key ctrl+F2
         send_key ctrl+a
-        type_text "=SUM("
+        type_text "=SUM()"
+        send_key Left
         send_key F2
         send_key F2
         capture "formula-whole-range-row-editing.png"
@@ -349,7 +351,8 @@ probe_formula_bar_point_mode_whole_range() {
     if select_cell 6 11 G12; then
         send_key ctrl+F2
         send_key ctrl+a
-        type_text "=SUM("
+        type_text "=SUM()"
+        send_key Left
         send_key F2
         send_key F2
         capture "formula-whole-range-select-all-editing.png"
@@ -358,7 +361,7 @@ probe_formula_bar_point_mode_whole_range() {
         sleep "$settle_seconds"
         select_all_formula_bar="$(read_active_formula_bar || true)"
         capture "formula-whole-range-select-all-editing.png"
-        if [[ "$select_all_formula_bar" == "=SUM(A1:XFD1048576" ]]; then
+        if [[ "$select_all_formula_bar" == "=SUM(A1:XFD1048576)" ]]; then
             select_all_active=true
         fi
         send_key Escape

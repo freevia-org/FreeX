@@ -261,6 +261,12 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("probe_selector\" == \"formula-whole-range-point\"", probe, StringComparison.Ordinal);
         Assert.Contains("Assert-FormulaWholeRangePointPostcondition", runner, StringComparison.Ordinal);
         Assert.Contains("read_active_formula_bar", probe, StringComparison.Ordinal);
+        Assert.True(
+            probe.Split("type_text \"=SUM()\"", StringSplitOptions.None).Length - 1 >= 3,
+            "each whole-range case must preserve a closing parenthesis around the pointed reference");
+        Assert.True(
+            probe.Split("send_key Left", StringSplitOptions.None).Length - 1 >= 3,
+            "each whole-range case must place the caret before the closing parenthesis");
         Assert.Contains("xdotool_mousemove_sync \"$column_header_x\" \"$column_header_y\" click 1", probe, StringComparison.Ordinal);
         Assert.Contains("xdotool_mousemove_sync \"$row_header_x\" \"$row_header_y\" click 1", probe, StringComparison.Ordinal);
         Assert.Contains("xdotool_mousemove_sync \"$corner_x\" \"$corner_y\" click 1", probe, StringComparison.Ordinal);
@@ -308,6 +314,7 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("column-header-expected=B:B", runner, StringComparison.Ordinal);
         Assert.Contains("row-header-expected=3:3", runner, StringComparison.Ordinal);
         Assert.Contains("select-all-expected=A1:XFD1048576", runner, StringComparison.Ordinal);
+        Assert.Contains("select-all-formula-bar-clipboard==SUM(A1:XFD1048576)", runner, StringComparison.Ordinal);
         Assert.Contains("select-all-edit-active-before-cancel=true", runner, StringComparison.Ordinal);
         Assert.Contains("select-all-cell-package-formula-after-cancel=", runner, StringComparison.Ordinal);
     }

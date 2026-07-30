@@ -513,7 +513,7 @@ function Assert-FormulaWholeRangePointPostcondition {
         "row-header-edit-active-before-commit=true",
         "row-header-passed=true",
         "select-all-expected=A1:XFD1048576",
-        "select-all-formula-bar-clipboard==SUM(A1:XFD1048576",
+        "select-all-formula-bar-clipboard==SUM(A1:XFD1048576)",
         "select-all-cell-package-formula-after-cancel=",
         "select-all-edit-active-before-cancel=true",
         "select-all-passed=true"
