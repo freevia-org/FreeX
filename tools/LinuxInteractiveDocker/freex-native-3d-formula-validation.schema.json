@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tony-xmelon/FreeX/freex-native-3d-formula-validation.schema.json",
+  "title": "FreeX native XLSX 3-D formula physical validation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "format",
+    "source",
+    "save",
+    "reopen",
+    "package"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "format": { "const": "xlsx" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "pointFormula", "pointResult"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "pointFormula": { "type": "string", "minLength": 1 },
+        "pointResult": { "type": "string", "minLength": 1 }
+      }
+    },
+    "save": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clean", "resizedFormula", "resizedResult"],
+      "properties": {
+        "clean": { "type": "boolean" },
+        "resizedFormula": { "type": "string", "minLength": 1 },
+        "resizedResult": { "type": "string", "minLength": 1 }
+      }
+    },
+    "reopen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["physical", "formula", "result"],
+      "properties": {
+        "physical": { "type": "boolean" },
+        "formula": { "type": "string", "minLength": 1 },
+        "result": { "type": "string", "minLength": 1 }
+      }
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zip", "workbook", "formula", "cachedResult"],
+      "properties": {
+        "zip": { "type": "boolean" },
+        "workbook": { "type": "boolean" },
+        "formula": { "type": "string", "minLength": 1 },
+        "cachedResult": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

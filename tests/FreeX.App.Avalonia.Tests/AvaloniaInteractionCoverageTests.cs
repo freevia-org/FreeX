@@ -219,9 +219,14 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("probe_selector\" == \"sheet-tabs\"", probe, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"formula-3d-point\"", probe, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"formula-3d-grip\"", probe, StringComparison.Ordinal);
+        Assert.Contains("probe_selector\" == \"formula-3d-native-xlsx\"", probe, StringComparison.Ordinal);
         Assert.Contains("formula-bar-point-mode-3d-sheet-range", probe, StringComparison.Ordinal);
         Assert.Contains("formula-bar-point-mode-3d-sheet-range-grip", probe, StringComparison.Ordinal);
         Assert.Contains("formula-bar-point-mode-3d-sheet-range-grip", runner, StringComparison.Ordinal);
+        Assert.Contains("formula-bar-point-mode-3d-native-xlsx", probe, StringComparison.Ordinal);
+        Assert.Contains("formula-bar-point-mode-3d-native-xlsx", runner, StringComparison.Ordinal);
+        Assert.Contains("New-FreeXWave66Native3DFixture.ps1", runner, StringComparison.Ordinal);
+        Assert.Contains("freex-native-3d-formula-validation.schema.json", readme, StringComparison.Ordinal);
         Assert.Contains("normalize_formula", probe, StringComparison.Ordinal);
         Assert.Contains("SHEET2:SHEET3!B2", probe, StringComparison.Ordinal);
         Assert.Contains("select_sheet_tab_range_end", probe, StringComparison.Ordinal);
