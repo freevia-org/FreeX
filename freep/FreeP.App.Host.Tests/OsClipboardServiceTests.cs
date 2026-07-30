@@ -611,7 +611,7 @@ public sealed class OsClipboardServiceTests
     }
 
     [StaFact]
-    public void Paste_ExternalRtfObject_UsesVisibleResultText()
+    public void Paste_ExternalRtfObject_InsertsEditableObjectAndVisibleResultText()
     {
         var rtf = Encoding.ASCII.GetBytes(
             @"{\rtf1\ansi Before {\object{\*\objclass Word.Document.12}{\*\objdata 010203}{\objresult Embedded result}} After}");
@@ -624,8 +624,12 @@ public sealed class OsClipboardServiceTests
         var result = service.PasteWithResult(editor);
 
         result.Should().Be(PresentationClipboardPasteSource.RichText);
-        editor.CurrentSlide!.Shapes.Should().ContainSingle();
-        editor.CurrentSlide.Shapes.Single().TextBody!.Paragraphs.Single().Runs
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        var objectShape = editor.CurrentSlide.Shapes[0];
+        objectShape.Kind.Should().Be(SlideShapeKind.Ole);
+        objectShape.OleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
+        objectShape.OleObject.EmbeddedExtension.Should().Be("docx");
+        editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
             .Select(run => run.Text)
             .Should().ContainSingle()
             .Which.Should().Be("Before Embedded result After");

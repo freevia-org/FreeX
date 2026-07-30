@@ -461,6 +461,30 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task External_Rtf_object_is_pasted_as_editable_ole_shape_with_result_text()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                RtfBytes: Encoding.ASCII.GetBytes(
+                    @"{\rtf1\ansi Before {\object{\*\objclass Word.Document.12}{\*\objdata 010203}{\objresult Embedded result}} After}")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.RichText);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        var objectShape = editor.CurrentSlide.Shapes[0];
+        objectShape.Kind.Should().Be(SlideShapeKind.Ole);
+        objectShape.OleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
+        objectShape.OleObject.EmbeddedExtension.Should().Be("docx");
+        editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
+            .Select(run => run.Text)
+            .Should().ContainSingle()
+            .Which.Should().Be("Before Embedded result After");
+    }
+
+    [Fact]
     public async Task XamlPackage_table_is_pasted_as_native_editable_table()
     {
         var clipboard = new FakeSystemClipboard

@@ -23,6 +23,9 @@ public sealed record InCanvasRichClipboardTableCellStyle(
 /// <summary>One image payload carried by an external rich clipboard fragment.</summary>
 public sealed record InCanvasRichClipboardImage(byte[] Bytes, string ContentType);
 
+/// <summary>One embedded object payload carried by an external rich clipboard fragment.</summary>
+public sealed record InCanvasRichClipboardObject(byte[] Bytes, string FileName);
+
 /// <summary>
 /// Renderer-neutral rich clipboard payload used by both desktop editors. The model fragment is
 /// intentionally narrower than a full shape: it carries only the selected text and its run and
@@ -37,7 +40,8 @@ public sealed record InCanvasRichClipboardPayload(
     bool ContainsTable = false,
     IReadOnlyList<long>? TableColumnWidthsEmu = null,
     IReadOnlyList<InCanvasRichClipboardTableCellStyle>? TableCellStyles = null,
-    IReadOnlyList<InCanvasRichClipboardImage>? ImagePayloads = null)
+    IReadOnlyList<InCanvasRichClipboardImage>? ImagePayloads = null,
+    IReadOnlyList<InCanvasRichClipboardObject>? ObjectPayloads = null)
 {
     public bool HasImage => ImagePayloads is { Count: > 0 }
         || ImageBytes is { Length: > 0 };
@@ -51,6 +55,11 @@ public sealed record InCanvasRichClipboardPayload(
             return [new InCanvasRichClipboardImage(ImageBytes, ImageContentType)];
         return Array.Empty<InCanvasRichClipboardImage>();
     }
+
+    public IReadOnlyList<InCanvasRichClipboardObject> GetObjectPayloads() =>
+        ObjectPayloads is { Count: > 0 }
+            ? ObjectPayloads
+            : Array.Empty<InCanvasRichClipboardObject>();
 
     public static InCanvasRichClipboardPayload FromPlainText(
         string? text,
@@ -89,7 +98,10 @@ public sealed record InCanvasRichClipboardPayload(
         TableCellStyles?.ToArray(),
         ImagePayloads?.Select(image => new InCanvasRichClipboardImage(
             image.Bytes.ToArray(),
-            image.ContentType)).ToArray());
+            image.ContentType)).ToArray(),
+        ObjectPayloads?.Select(obj => new InCanvasRichClipboardObject(
+            obj.Bytes.ToArray(),
+            obj.FileName)).ToArray());
 
     internal static Run? RunFromStyle(InCanvasEditorTextStyleState? style) => style is null
         ? null
@@ -183,7 +195,14 @@ public static class InCanvasRichClipboardPlanner
                 ContainsTable: dto.ContainsTable,
                 TableColumnWidthsEmu: dto.TableColumnWidthsEmu,
                 TableCellStyles: dto.TableCellStyles,
-                ImagePayloads: imagePayloads);
+                ImagePayloads: imagePayloads,
+                ObjectPayloads: dto.ObjectPayloads?
+                    .Where(obj => obj.Bytes is { Length: > 0 }
+                        && !string.IsNullOrWhiteSpace(obj.FileName))
+                    .Select(obj => new InCanvasRichClipboardObject(
+                        obj.Bytes!,
+                        obj.FileName!))
+                    .ToArray());
         }
         catch (JsonException)
         {
@@ -335,6 +354,11 @@ public static class InCanvasRichClipboardPlanner
         {
             ContentType = image.ContentType,
             Bytes = image.Bytes.ToArray(),
+        }).ToList(),
+        ObjectPayloads = payload.GetObjectPayloads().Select(obj => new ClipboardObjectDto
+        {
+            FileName = obj.FileName,
+            Bytes = obj.Bytes.ToArray(),
         }).ToList(),
     };
 
@@ -776,6 +800,7 @@ public static class InCanvasRichClipboardPlanner
         public List<long>? TableColumnWidthsEmu { get; set; }
         public List<InCanvasRichClipboardTableCellStyle>? TableCellStyles { get; set; }
         public List<ClipboardImageDto>? ImagePayloads { get; set; }
+        public List<ClipboardObjectDto>? ObjectPayloads { get; set; }
     }
 
     private sealed class ClipboardBodyDto
@@ -830,6 +855,12 @@ public static class InCanvasRichClipboardPlanner
     private sealed class ClipboardImageDto
     {
         public string? ContentType { get; set; }
+        public byte[]? Bytes { get; set; }
+    }
+
+    private sealed class ClipboardObjectDto
+    {
+        public string? FileName { get; set; }
         public byte[]? Bytes { get; set; }
     }
 

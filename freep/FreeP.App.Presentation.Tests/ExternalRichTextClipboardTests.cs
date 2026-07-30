@@ -178,7 +178,7 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
-    public void RtfObject_PreservesVisibleResultAndSuppressesObjectMetadata()
+    public void RtfObject_PreservesVisibleResultAndEmbeddedPayload()
     {
         const string rtf =
             @"{\rtf1\ansi Before {\object{\*\objclass Word.Document.12}{\*\objdata 010203}{\result Embedded result}} After}";
@@ -187,9 +187,16 @@ public sealed class ExternalRichTextClipboardTests
 
         payload.Should().NotBeNull();
         payload!.PlainText.Should().Be("Before Embedded result After");
-        payload.Body.Paragraphs.Single().Runs
-            .Select(run => run.Text)
-            .Should().NotContain(text => text.Contains("Word.Document", StringComparison.Ordinal));
+        payload.GetObjectPayloads().Should().ContainSingle();
+        payload.GetObjectPayloads()[0].Bytes.Should().Equal(0x01, 0x02, 0x03);
+        payload.GetObjectPayloads()[0].FileName.Should().Be("Embedded.docx");
+
+        var restored = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        restored.Should().NotBeNull();
+        restored!.GetObjectPayloads().Should().ContainSingle();
+        restored.GetObjectPayloads()[0].Bytes.Should().Equal(0x01, 0x02, 0x03);
+        restored.GetObjectPayloads()[0].FileName.Should().Be("Embedded.docx");
     }
 
     [Fact]
