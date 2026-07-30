@@ -75,6 +75,29 @@ public sealed class PowerPointCorpusValidatorTests
         result.ExportedDecks.Should().Be(0);
     }
 
+    [Fact]
+    public void CaptureReferences_WritesTheStableReferenceTree()
+    {
+        using var fixture = new CorpusFixture();
+        fixture.AddDeck("02-deck.pptx");
+        fixture.AddDeck("01-deck.pptx");
+
+        var result = PowerPointCorpusValidator.CaptureReferences(
+            fixture.CorpusDirectory,
+            fixture.ReferenceDirectory,
+            1280,
+            720,
+            ExportOneSlide);
+
+        result.ExitCode.Should().Be(0);
+        result.ReferenceDirectory.Should().BeNull();
+        result.OutputDirectory.Should().Be(fixture.ReferenceDirectory);
+        result.ExportedDecks.Should().Be(2);
+        result.Decks.Select(deck => deck.DeckName).Should().Equal("01-deck.pptx", "02-deck.pptx");
+        File.ReadAllText(Path.Combine(fixture.ReferenceDirectory, "01-deck", "slide-01.png")).Should().Be("one");
+        File.ReadAllText(Path.Combine(fixture.ReferenceDirectory, "02-deck", "slide-01.png")).Should().Be("two");
+    }
+
     private static PowerPointExportResult ExportOneSlide(
         string deck,
         string output,

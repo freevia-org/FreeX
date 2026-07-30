@@ -92,6 +92,7 @@ internal static class Program
                 "--whole-window-visual-report" => RunWholeWindowVisualReport(args[1..]),
                 "--corpus-summary"    => RunCorpusSummary(args[1..]),
                 "--powerpoint-corpus-validate" => RunPowerPointCorpusValidation(args[1..]),
+                "--powerpoint-corpus-capture-refs" => RunPowerPointCorpusCaptureReferences(args[1..]),
                 "--generate-corpus"           => RunGenerateCorpus(args[1..]),
                 "--generate-presenter-ink-probe" => RunGeneratePresenterInkProbe(args[1..]),
                 "--patch-chart-labels-19"     => RunPatchChartLabels19(args[1..]),
@@ -754,6 +755,54 @@ internal static class Program
     }
 
     // -----------------------------------------------------------------------
+    // Mode: --powerpoint-corpus-capture-refs
+    // -----------------------------------------------------------------------
+    private static int RunPowerPointCorpusCaptureReferences(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("usage: --powerpoint-corpus-capture-refs <corpusDir> <refsDir> [--force] [--width W] [--height H]");
+            return 2;
+        }
+
+        var corpusDirectory = Path.GetFullPath(args[0]);
+        var referenceDirectory = Path.GetFullPath(args[1]);
+        if (!Directory.Exists(corpusDirectory))
+        {
+            Console.Error.WriteLine($"Corpus directory not found: {corpusDirectory}");
+            return 1;
+        }
+
+        if (Directory.Exists(referenceDirectory) &&
+            Directory.EnumerateFileSystemEntries(referenceDirectory).Any() &&
+            !HasFlag(args, "--force"))
+        {
+            Console.Error.WriteLine(
+                $"Reference directory is not empty: {referenceDirectory}. Pass --force to overwrite captured slides.");
+            return 2;
+        }
+
+        var (width, height) = ParseWidthHeight(args[2..], 1280, 720);
+        var timeoutSeconds = int.TryParse(ReadOption(args, "--deck-timeout-seconds"), out var parsedTimeout)
+            ? parsedTimeout
+            : (int)PowerPointCorpusProcessExporter.DefaultDeckTimeout.TotalSeconds;
+        if (timeoutSeconds <= 0)
+        {
+            Console.Error.WriteLine("--deck-timeout-seconds must be greater than zero.");
+            return 2;
+        }
+
+        var result = PowerPointCorpusValidator.CaptureReferences(
+            corpusDirectory,
+            referenceDirectory,
+            width,
+            height,
+            deckTimeout: TimeSpan.FromSeconds(timeoutSeconds));
+        result.PrintCapture(Console.Out);
+        return result.ExitCode;
+    }
+
+    // -----------------------------------------------------------------------
     // Mode: --patch-chart-labels-19
     //   Patches 19-chart-labels.pptx chart XML (injects c:dLbls + secondary valAx).
     //   Run --powerpoint-export on the result to generate reference PNGs.
@@ -866,6 +915,9 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("  --powerpoint-corpus-validate <corpusDir> <outDir> [--refs <refsDir>] [--width W] [--height H] [--deck-timeout-seconds N]");
         Console.WriteLine("      Open/export every corpus deck through isolated PowerPoint workers and optionally verify slide hashes against references.");
+        Console.WriteLine();
+        Console.WriteLine("  --powerpoint-corpus-capture-refs <corpusDir> <refsDir> [--force] [--width W] [--height H] [--deck-timeout-seconds N]");
+        Console.WriteLine("      Capture PowerPoint COM slide PNGs into a reference tree; --force permits overwriting an existing tree.");
         Console.WriteLine();
         Console.WriteLine("  --generate-corpus <outDir>");
         Console.WriteLine("      Author test .pptx decks via PowerPoint COM.");

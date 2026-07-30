@@ -5,6 +5,26 @@ namespace FreeP.RenderCompare;
 
 internal static class PowerPointCorpusValidator
 {
+    internal static PowerPointCorpusValidationResult CaptureReferences(
+        string corpusDirectory,
+        string referenceDirectory,
+        int width,
+        int height,
+        Func<string, string, int, int, PowerPointExportResult>? exporter = null,
+        TimeSpan? deckTimeout = null)
+    {
+        // Capture uses the same isolated worker and stale-slide cleanup as validation,
+        // but deliberately omits reference comparison because the output is the refs.
+        return Validate(
+            corpusDirectory,
+            referenceDirectory,
+            referenceDirectory: null,
+            width: width,
+            height: height,
+            exporter: exporter,
+            deckTimeout: deckTimeout);
+    }
+
     internal static PowerPointCorpusValidationResult Validate(
         string corpusDirectory,
         string outputDirectory,
@@ -162,6 +182,16 @@ internal sealed record PowerPointCorpusValidationResult(
             $"decks={Decks.Count}; exported={ExportedDecks}; failed={FailedDecks}; " +
             $"reference-matches={MatchingSlides}/{ComparedSlides}; missing-refs={MissingReferences}; " +
             $"reference-diffs={MismatchedReferences}; exit={ExitCode}");
+    }
+
+    internal void PrintCapture(TextWriter writer)
+    {
+        writer.WriteLine("PowerPoint corpus reference capture");
+        writer.WriteLine($"  corpus : {CorpusDirectory}");
+        writer.WriteLine($"  refs   : {OutputDirectory}");
+        writer.WriteLine($"  size   : {Width}x{Height}");
+        writer.WriteLine();
+        writer.WriteLine($"decks={Decks.Count}; exported={ExportedDecks}; failed={FailedDecks}; exit={ExitCode}");
     }
 }
 
