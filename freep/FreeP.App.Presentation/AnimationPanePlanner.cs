@@ -1533,7 +1533,7 @@ public static class AnimationPanePlanner
 
     private static string ResolveShapeName(Slide slide, uint shapeId)
     {
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
+        var shape = ShapeHitTester.FindShape(slide, shapeId);
         return string.IsNullOrWhiteSpace(shape?.Name)
             ? $"Shape {shapeId.ToString(CultureInfo.InvariantCulture)}"
             : shape!.Name;
