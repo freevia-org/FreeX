@@ -4588,7 +4588,8 @@ public sealed class DocumentView : Control
         var y = startY + headingH + 2;
 
         // Separator rule beneath the heading.
-        _noteSeparators.Add((_contentLeft, _contentLeft + _contentWidth, y));
+        var separatorWidth = Math.Min(DocumentNoteRegionPlanner.FootnoteSeparatorWidthDip, _contentWidth);
+        _noteSeparators.Add((_contentLeft, _contentLeft + separatorWidth, y));
         y += 6;
 
         // DB3: endnote numbering options — Word defaults to LowerRoman; users may override.
@@ -4649,7 +4650,8 @@ public sealed class DocumentView : Control
 
     private void LayoutEndnoteRegion(double separatorY)
     {
-        _noteSeparators.Add((_contentLeft, _contentLeft + _contentWidth, separatorY));
+        var separatorWidth = Math.Min(DocumentNoteRegionPlanner.FootnoteSeparatorWidthDip, _contentWidth);
+        _noteSeparators.Add((_contentLeft, _contentLeft + separatorWidth, separatorY));
         var y = separatorY + EndnoteSeparatorToTextGap;
         var options = _doc.EndnoteNumbering;
         var sequence = Math.Max(1, options.StartAt);

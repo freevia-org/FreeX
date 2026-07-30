@@ -499,7 +499,7 @@ public sealed class VisualEvidencePlannerTests
         endnotePlan.Kind.Should().Be(DocumentNoteRegionKind.Endnotes);
         endnotePlan.IsSyntheticPage.Should().BeTrue();
         endnotePlan.Heading.Should().Be("Endnotes");
-        endnotePlan.SeparatorWidthDip.Should().Be(contentWidth);
+        endnotePlan.SeparatorWidthDip.Should().Be(DocumentNoteRegionPlanner.FootnoteSeparatorWidthDip);
         endnotePlan.Rows.Select(r => r.Label).Should().ContainInOrder("1", "2");
         endnotePlan.Rows.Select(r => r.Text).Should().Contain(t => t.Contains("very end of the document"));
     }
