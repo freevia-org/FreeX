@@ -995,6 +995,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.DescendingBlockList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicPyramid, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PyramidList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.InvertedPyramid, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.RadialCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicRadial, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.RadialCluster, SmartArtFamily.Cycle)]
@@ -2488,6 +2489,24 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesInvertedPyramidAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid",
+            nodes: [("id1", "Market"), ("id2", "Product"), ("id3", "Team"), ("id4", "Task")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "invertedPyramid is admitted through the shared list-family live planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Market", "Product", "Team", "Task");
+    }
+
+    [Fact]
     public void Reader_ParsesBasicVennAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -3877,6 +3896,29 @@ public sealed class SmartArtTests : IDisposable
             .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared top-to-bottom pyramid DrawOps");
         liveShapes.Select(op => op.BoundsDip.Width)
             .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared widening pyramid segment geometry");
+    }
+
+    [Fact]
+    public void Compositor_InvertedPyramidSmartArt_RendersSharedLiveSegments()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid",
+            nodes: [("n1", "Market"), ("n2", "Product"), ("n3", "Team"), ("n4", "Task")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(4, "four inverted-pyramid bands should render from shared live data");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Market", "Product", "Team", "Task");
+        liveShapes.Select(op => op.BoundsDip.Y).Should().BeInAscendingOrder();
+        liveShapes.Select(op => op.BoundsDip.Width).Should().BeInDescendingOrder();
     }
 
     [Fact]

@@ -269,6 +269,7 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.DescendingBlockList => ("urn:microsoft.com/office/officeart/2005/8/layout/descendingBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicPyramid => ("urn:microsoft.com/office/officeart/2005/8/layout/basicPyramid", SmartArtFamily.List),
             SmartArtLayoutPreset.PyramidList => ("urn:microsoft.com/office/officeart/2005/8/layout/pyramidList", SmartArtFamily.List),
+            SmartArtLayoutPreset.InvertedPyramid => ("urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid", SmartArtFamily.List),
             SmartArtLayoutPreset.RadialCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/radialCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicRadial => ("urn:microsoft.com/office/officeart/2005/8/layout/radial1", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.RadialCluster => ("urn:microsoft.com/office/officeart/2008/layout/RadialCluster", SmartArtFamily.Cycle),

@@ -5890,6 +5890,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
                 SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
+                SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialClusterLayoutCommandId,
@@ -6350,6 +6351,35 @@ public sealed class MainWindowHeadlessTests
             .Should().BeInAscendingOrder("Avalonia host should consume shared top-to-bottom pyramid geometry");
         liveShapes.Select(op => op.BoundsDip.Width)
             .Should().BeInAscendingOrder("Avalonia host should consume shared widening pyramid segment geometry");
+    }
+
+    [Fact]
+    public async Task SmartArt_inverted_pyramid_shape_composes_shared_live_draw_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.List,
+                "urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid",
+                ["Market", "Product", "Team", "Task"]);
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.ShapeId is >= 540 and < 560)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(4, "Avalonia consumes the shared inverted-pyramid bands");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Market", "Product", "Team", "Task");
+        liveShapes.Select(op => op.BoundsDip.Y).Should().BeInAscendingOrder();
+        liveShapes.Select(op => op.BoundsDip.Width).Should().BeInDescendingOrder();
     }
 
     [Fact]
