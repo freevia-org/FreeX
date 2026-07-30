@@ -570,7 +570,7 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_SmartArt_PictureCaptionList_WithoutImage_KeepsLiveLayoutDisabled()
+    public void Reader_SmartArt_PictureCaptionList_WithoutImage_UsesLivePlaceholders()
     {
         var pptxPath = MakeSmartArtPptx(["Caption only"], pictureCaptionList: true, includeNodeImage: false);
         var pres = PptxPackageReader.Read(pptxPath);
@@ -580,11 +580,18 @@ public sealed class SmartArtTests : IDisposable
             .SmartArt!;
 
         smart.Data.Should().NotBeNull();
-        smart.Data!.IsLiveLayoutSupported.Should().BeFalse(
-            "pictureCaptionList must not claim live layout when node images cannot be resolved");
+        smart.Data!.IsLiveLayoutSupported.Should().BeTrue(
+            "PowerPoint exposes an empty picture layout as editable Add picture placeholders");
         smart.Data.Nodes.Should().ContainSingle();
         smart.Data.Nodes[0].Picture.Should().BeNull();
-        smart.FallbackShapes.Should().NotBeEmpty("cached drawing remains the render fallback");
+
+        var liveText = SlideCompositor.Compose(pres, pres.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .SelectMany(shape => shape.Text?.Paragraphs ?? [])
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.Text)
+            .ToArray();
+        liveText.Should().Contain("Add picture");
     }
 
     [Fact]
@@ -2753,7 +2760,7 @@ public sealed class SmartArtTests : IDisposable
     public void Reader_ParsesKnownListFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
-            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList",
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/list2",
             nodes: [("id1", "Item 1"), ("id2", "Item 2")],
             parOfConnections: []);
 

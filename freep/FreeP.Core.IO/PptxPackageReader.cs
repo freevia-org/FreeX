@@ -2450,9 +2450,10 @@ public static class PptxPackageReader
         }
         if (IsPictureNodeLayout(layoutUniqueId))
         {
-            // Final admission for this picture layout depends on deterministic
-            // node-level image import from the cached diagram drawing.
-            isLiveLayoutSupported = false;
+            // A valid picture layout may intentionally contain no images yet: PowerPoint
+            // exposes those nodes as editable "Add picture" placeholders. Relationship
+            // validation below still rejects ambiguous partial media mappings.
+            isLiveLayoutSupported = true;
         }
 
         var data = new SmartArtData
@@ -2598,7 +2599,14 @@ public static class PptxPackageReader
             .ToList();
 
         // This bounded slice maps cached drawing pictures to data nodes by document order only
-        // when the fixture/deck supplies a one-to-one mapping. Anything ambiguous keeps fallback.
+        // when the fixture/deck supplies a one-to-one mapping. An empty drawing is the valid
+        // placeholder-only state; anything partially mapped remains on the cached fallback.
+        if (pictures.Count == 0)
+        {
+            data.IsLiveLayoutSupported = true;
+            return;
+        }
+
         if (pictures.Count != nodes.Count)
         {
             data.IsLiveLayoutSupported = false;
