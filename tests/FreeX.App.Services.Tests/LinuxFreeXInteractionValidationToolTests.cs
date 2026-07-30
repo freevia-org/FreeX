@@ -131,6 +131,7 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("probe_name_box_dropdown_parity()");
         probe.Should().Contain("name-box-dropdown-parity-before-x11.txt");
         probe.Should().Contain("name-box-dropdown-parity-open-x11.txt");
+        probe.Should().Contain("xdotool mousemove --window \"$window_id\"");
         probe.Should().Contain("if len(candidates) == 1");
         probe.Should().Contain("-crop \"208x136+${popup_x}+${popup_y}\" +repage");
         probe.Should().Contain("\"evidenceProvenance\": \"native-x11-root-crop\"");
