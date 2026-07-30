@@ -327,19 +327,28 @@ public sealed class DocumentView : Control
     public event Action? FloatingSelectionChanged;
 
     /// <summary>
-    /// AV-PICTAB: Last (block,run) identity for which <see cref="FloatingSelectionChanged"/> was raised.
-    /// Used to suppress duplicate notifications when only the selection rect changes.
+    /// AV-PICTAB: Last root object plus nested-child identity for which
+    /// <see cref="FloatingSelectionChanged"/> was raised. Used to suppress duplicate notifications
+    /// when only the selection rect changes while still refreshing command state when selection
+    /// moves between a group and one of its nested children.
     /// </summary>
-    private (int BlockIndex, int RunIndex)? _lastSignaledFloating;
+    private (int BlockIndex, int RunIndex, string? ChildPath)? _lastSignaledFloating;
 
     /// <summary>
-    /// AV-PICTAB: Fire <see cref="FloatingSelectionChanged"/> iff the selected float's identity
-    /// (block+run) differs from the last signalled value. Call after every assignment to
-    /// <see cref="_selectedFloating"/>.
+    /// AV-PICTAB: Fire <see cref="FloatingSelectionChanged"/> iff the selected root float or nested
+    /// child path differs from the last signalled value. Call after every assignment to
+    /// <see cref="_selectedFloating"/> or <see cref="_selectedFloatingGroupChild"/>.
     /// </summary>
     private void RaiseFloatingSelectionChangedIfIdentityChanged()
     {
-        var identity = _selectedFloating is { } sel ? (sel.BlockIndex, sel.RunIndex) : ((int, int)?)null;
+        (int BlockIndex, int RunIndex, string? ChildPath)? identity = _selectedFloating is { } sel
+            ? (
+                sel.BlockIndex,
+                sel.RunIndex,
+                _selectedFloatingGroupChild is { } child
+                    ? string.Join(",", child.ChildPath)
+                    : null)
+            : null;
         if (identity == _lastSignaledFloating)
             return;
         _lastSignaledFloating = identity;

@@ -918,7 +918,19 @@ public static class AvaloniaRibbonRenderer
             var tab = desired[i];
             var existingIndex = IndexOfTab(tabControl, tab.Id);
             if (existingIndex >= 0)
+            {
+                // Context sources also raise when the selected object changes inside an already-active
+                // context. Rebuild contextual content so every control and flyout item re-queries its
+                // stateful command while preserving the visible tab set and selected tab id.
+                if (tab.Context is not null)
+                {
+                    tabControl.Items.RemoveAt(existingIndex);
+                    tabControl.Items.Insert(
+                        existingIndex,
+                        BuildTabItem(tab, registry, afterExecute, palette));
+                }
                 continue;
+            }
 
             // Find the closest predecessor in the desired list that already lives in the control.
             var insertAfter = 0; // default: insert after the File tab (index 0)

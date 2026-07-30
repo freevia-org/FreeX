@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using SkiaSharp;
@@ -837,6 +838,8 @@ public sealed class DocumentViewFloatingShapeTests
         bool redoRestored = false;
         bool rotate270Applied = false;
         bool horizontalApplied = false;
+        bool childSelectionSignaled = false;
+        bool ribbonContextRefreshed = false;
         var ran = await OnUiThread(() =>
         {
             var document = TextDocument.CreateEmpty();
@@ -861,6 +864,11 @@ public sealed class DocumentViewFloatingShapeTests
 
             var view = new DocumentView();
             view.LoadDocument(document);
+            var selectionChangeCount = 0;
+            view.FloatingSelectionChanged += () => selectionChangeCount++;
+            var contextSource = new FloatingRibbonContextSource(view);
+            var contextRefreshCount = 0;
+            contextSource.ContextChanged += (_, _) => contextRefreshCount++;
             view.Measure(new Size(800, 2000));
             view.SelectFloating(0, 0);
             var groupRect = view.SelectedFloatingInfo!.Value.Rect;
@@ -887,6 +895,8 @@ public sealed class DocumentViewFloatingShapeTests
             view.SelectFloatingGroupChildForTest(
                 new Point(visibleCenter.XDip, visibleCenter.YDip)).Should().BeTrue();
             selectedPath = view.SelectedFloatingGroupChildPath?.ToArray();
+            childSelectionSignaled = selectionChangeCount == 2;
+            ribbonContextRefreshed = contextRefreshCount == 2;
 
             view.SetSelectedShapeTextDirection(ShapeTextDirection.Rotate90);
             direction = leaf.TextDirection;
@@ -902,6 +912,10 @@ public sealed class DocumentViewFloatingShapeTests
         });
         if (!ran) return;
         selectedPath.Should().Equal(0, 1);
+        childSelectionSignaled.Should().BeTrue(
+            "nested child selection must refresh cached ribbon command state after the group was selected");
+        ribbonContextRefreshed.Should().BeTrue(
+            "the Drawing context must propagate same-context child changes to the shared ribbon renderer");
         direction.Should().Be(ShapeTextDirection.Rotate90);
         siblingDirection.Should().Be(ShapeTextDirection.Horizontal);
         undoRestored.Should().BeTrue();

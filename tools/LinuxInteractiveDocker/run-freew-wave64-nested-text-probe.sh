@@ -27,10 +27,15 @@ xdotool click 1
 sleep 1
 if [[ "$selector" == "nested-text-direction" ]]; then
     # Wave 65 opt-in route: invoke the production Drawing Format > Text Direction dropdown.
-    text_direction_x="${FREEW_TEXT_DIRECTION_X:-455}"
-    text_direction_y="${FREEW_TEXT_DIRECTION_Y:-145}"
-    text_direction_item_x="${FREEW_TEXT_DIRECTION_ITEM_X:-455}"
-    text_direction_item_y="${FREEW_TEXT_DIRECTION_ITEM_Y:-190}"
+    drawing_format_tab_x="${FREEW_DRAWING_FORMAT_TAB_X:-596}"
+    drawing_format_tab_y="${FREEW_DRAWING_FORMAT_TAB_Y:-68}"
+    text_direction_x="${FREEW_TEXT_DIRECTION_X:-369}"
+    text_direction_y="${FREEW_TEXT_DIRECTION_Y:-101}"
+    text_direction_item_x="${FREEW_TEXT_DIRECTION_ITEM_X:-305}"
+    text_direction_item_y="${FREEW_TEXT_DIRECTION_ITEM_Y:-158}"
+    xdotool mousemove --sync "$drawing_format_tab_x" "$drawing_format_tab_y"
+    xdotool click 1
+    sleep 0.65
     xdotool mousemove --sync "$text_direction_x" "$text_direction_y"
     xdotool click 1
     sleep 0.45
