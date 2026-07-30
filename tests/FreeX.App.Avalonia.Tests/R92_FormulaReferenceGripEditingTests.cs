@@ -148,4 +148,69 @@ public sealed class R92_FormulaReferenceGripEditingTests
             }
         }, CancellationToken.None);
     }
+
+    [Fact]
+    public async Task ThreeDSheetRange_OnMiddleSheet_ShowsGripResizesCalculatesAndRoundTrips()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sourceSheet = window.Session.Workbook.Sheets[0];
+            sourceSheet.Name = "Source Sheet";
+            var middleSheet = window.Session.Workbook.AddSheet("Middle Sheet");
+            var endSheet = window.Session.Workbook.AddSheet("Final Sheet");
+            window.Session.SelectSheet(sourceSheet.Id);
+            window.Show();
+            window.Measure(new Size(1120, 720));
+            window.Arrange(new Rect(0, 0, 1120, 720));
+            try
+            {
+                for (uint row = 1; row <= 3; row++)
+                {
+                    for (uint col = 1; col <= 3; col++)
+                    {
+                        middleSheet.SetCell(new CellAddress(middleSheet.Id, row, col), new NumberValue(row * 3 + col));
+                        endSheet.SetCell(new CellAddress(endSheet.Id, row, col), new NumberValue(9 + row * 3 + col));
+                    }
+                }
+
+                var formulaAddress = new CellAddress(sourceSheet.Id, 8, 7);
+                var formula = "=SUM('Middle Sheet:Final Sheet'!A1:B2)";
+                sourceSheet.SetCell(formulaAddress, Cell.FromFormula(formula[1..]));
+                window.Session.SelectCell(formulaAddress);
+                window.BeginFormulaEditForTest(formulaAddress, formula);
+
+                window.SelectFormulaReferenceSheetForTest(middleSheet.Id).Should().BeTrue();
+                window.Session.ActiveSheet.Id.Should().Be(middleSheet.Id);
+                window.FormulaReferenceGripCountForTest.Should().Be(1);
+                window.RaiseFormulaReferenceGripDragForTest(
+                    highlightIndex: 0,
+                    new CellAddress(middleSheet.Id, 3, 3)).Should().BeTrue();
+                window.FormulaBoxTextForTest.Should().Be("=SUM('Middle Sheet:Final Sheet'!A1:C3)");
+
+                window.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs
+                {
+                    Key = Key.Enter,
+                    PhysicalKey = PhysicalKey.Enter,
+                });
+
+                sourceSheet.GetCell(formulaAddress)!.FormulaText.Should().Be("SUM('Middle Sheet:Final Sheet'!A1:C3)");
+                sourceSheet.GetValue(formulaAddress).Should().Be(new NumberValue(225));
+
+                using var stream = new MemoryStream();
+                new NativeJsonAdapter().Save(window.Session.Workbook, stream);
+                stream.Position = 0;
+                var reopened = new NativeJsonAdapter().Load(stream);
+                var reopenedSource = reopened.Sheets.Single(sheet => sheet.Name == "Source Sheet");
+                var reopenedFormulaAddress = new CellAddress(reopenedSource.Id, 8, 7);
+                reopenedSource.GetCell(reopenedFormulaAddress)!.FormulaText
+                    .Should().Be("SUM('Middle Sheet:Final Sheet'!A1:C3)");
+                reopenedSource.GetValue(reopenedFormulaAddress).Should().Be(new NumberValue(225));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
 }

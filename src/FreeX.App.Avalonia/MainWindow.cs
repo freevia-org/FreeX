@@ -10712,7 +10712,17 @@ public sealed partial class MainWindow : Window
             text,
             _session.ActiveSheet.Id,
             sheetName => _session.Workbook.GetSheet(sheetName)?.Id,
-            ResolveStructuredFormulaReference);
+            ResolveStructuredFormulaReference,
+            sheetId =>
+            {
+                for (var index = 0; index < _session.Workbook.Sheets.Count; index++)
+                {
+                    if (_session.Workbook.Sheets[index].Id == sheetId)
+                        return index;
+                }
+
+                return null;
+            });
 
     private GridRange? ResolveStructuredFormulaReference(string tableName, string selector)
     {

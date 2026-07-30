@@ -773,6 +773,10 @@ try {
         @(
             "autofilter-recalculation-apply-change-clear-physical"
         )
+    } elseif ($PhysicalProbeSelector -eq "formula-3d-grip") {
+        @(
+            "formula-bar-point-mode-3d-sheet-range-grip"
+        )
     } elseif ($PhysicalProbeSelector -eq "formula-multi-area-point") {
         @(
             "formula-bar-point-mode-multi-area-keyboard",
@@ -839,6 +843,10 @@ try {
     } elseif ($PhysicalProbeSelector -eq "autofilter-recalculation") {
         @(
             "autofilter-recalculation-apply-change-clear-physical"
+        )
+    } elseif ($PhysicalProbeSelector -eq "formula-3d-grip") {
+        @(
+            "formula-bar-point-mode-3d-sheet-range-grip"
         )
     } elseif ($PhysicalProbeSelector -eq "formula-multi-area-point") {
         @(

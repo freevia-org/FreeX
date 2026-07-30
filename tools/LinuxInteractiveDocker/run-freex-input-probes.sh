@@ -931,6 +931,119 @@ probe_formula_bar_point_mode_3d() {
     dismiss_overlays
 }
 
+probe_formula_bar_point_mode_3d_range_grip() {
+    local committed_formula="" committed_result="" resized_formula="" resized_result=""
+    local point_passed=false grip_passed=false result_passed=false save_passed=false
+    local expected_point="=SUM(Sheet2:Sheet3!B2:C3)"
+    local expected_resized="=SUM(Sheet2:Sheet3!B2:D4)"
+    local artifacts="formula-3d-grip-create.png;formula-3d-grip-point.png;formula-3d-grip-middle.png;formula-3d-grip-dragging.png;formula-3d-grip-committed.png;formula-3d-grip-postcondition.txt"
+
+    # Create two real worksheets so Sheet1, Sheet2, and Sheet3 form the complete physical span.
+    local tab_y="$(sheet_tab_y)" plus_x created_count
+    for created_count in 0 1; do
+        plus_x="$(sheet_plus_center_x "$created_count")"
+        focus_app
+        xdotool_mousemove_sync "$plus_x" "$tab_y" click 1
+        sleep "$settle_seconds"
+    done
+    capture_sheet_tab_strip "formula-3d-grip-create.png"
+
+    # Seed B2:D4 on both referenced sheets through the normal cell-edit route. The values make
+    # both the original B2:C3 aggregate and the resized B2:D4 aggregate independently observable.
+    local sheet_index row_offset column_offset value
+    for sheet_index in 1 2; do
+        select_sheet_tab "$sheet_index"
+        for row_offset in 1 2 3; do
+            for column_offset in 1 2 3; do
+                if (( sheet_index == 1 )); then
+                    value=$(( (row_offset - 1) * 3 + column_offset ))
+                else
+                    value=$(( 9 + (row_offset - 1) * 3 + column_offset ))
+                fi
+                set_cell_text_without_save "$column_offset" "$row_offset" "3d-${sheet_index}-${row_offset}-${column_offset}" "$value" || {
+                    write_artifact "formula-3d-grip-postcondition.txt" "seeded=false\nsheet=$sheet_index\n"
+                    record "formula-bar-point-mode-3d-sheet-range-grip" "failed" "formula-3d-grip-create.png; formula-3d-grip-postcondition.txt" "Could not seed the physical 3-D range sources." "$artifacts"
+                    return
+                }
+            done
+        done
+    done
+
+    # Point-select a multi-cell range while the sheet tabs define Sheet2:Sheet3. The drag is
+    # deliberate X11 input; a literal colon would produce the invalid Sheet2!B2:Sheet3!C3 form.
+    select_sheet_tab 0
+    if select_cell 6 9 G10; then
+        send_key ctrl+F2
+        send_key ctrl+a
+        type_text "=SUM("
+        send_key F2
+        send_key F2
+        select_sheet_tab 1
+        xdotool keydown --window "$window_id" Shift_L
+        focus_app
+        xdotool_mousemove_sync "$(sheet_tab_center_x 2)" "$tab_y" click 1
+        xdotool keyup --window "$window_id" Shift_L
+        sleep "$settle_seconds"
+        focus_app
+        xdotool_mousemove_sync "$(cell_center_x 1)" "$(cell_center_y 1)"
+        xdotool mousedown 1
+        sleep 0.18
+        xdotool_mousemove_sync "$(cell_center_x 2)" "$(cell_center_y 2)"
+        sleep 0.18
+        xdotool mouseup 1
+        sleep "$settle_seconds"
+        capture "formula-3d-grip-point.png"
+        type_text ")"
+        send_key Return
+    fi
+
+    select_sheet_tab 0
+    committed_formula="$(copy_cell_formula 6 9 G10 || true)"
+    committed_result="$(copy_cell_display 6 9 G10 || true)"
+    [[ "$(normalize_formula "$committed_formula")" == "$(normalize_formula "$expected_point")" ]] && point_passed=true
+
+    # Reopen the committed formula, activate the middle sheet, then drag its visible C3 grip to
+    # D4. This proves the shared planner projects the span onto a middle sheet and preserves the
+    # complete qualifier while changing only the cell range.
+    if select_cell 6 9 G10 && send_key F2; then
+        select_sheet_tab 1
+        capture "formula-3d-grip-middle.png"
+        focus_app
+        xdotool_mousemove_sync "$((a1_x + 3 * cell_width - 22))" "$((a1_y + 3 * cell_height - 6))"
+        xdotool mousedown 1
+        sleep 0.22
+        xdotool_mousemove_sync "$(cell_center_x 3)" "$(cell_center_y 3)"
+        sleep 0.22
+        capture "formula-3d-grip-dragging.png"
+        xdotool mouseup 1
+        sleep "$settle_seconds"
+        focus_app
+        xdotool_mousemove_sync 500 198 click 1
+        sleep "$settle_seconds"
+        send_key Return
+        capture "formula-3d-grip-committed.png"
+    fi
+
+    select_sheet_tab 0
+    resized_formula="$(copy_cell_formula 6 9 G10 || true)"
+    resized_result="$(copy_cell_display 6 9 G10 || true)"
+    send_key ctrl+s
+    wait_for_document_clean && save_passed=true
+    [[ "$(normalize_formula "$resized_formula")" == "$(normalize_formula "$expected_resized")" ]] && grip_passed=true
+    [[ "$resized_result" =~ ^171([.]0+)?$ ]] && result_passed=true
+
+    write_artifact "formula-3d-grip-postcondition.txt" \
+        "expected-point=$expected_point\ncommitted-point-formula=$committed_formula\ncommitted-point-result=$committed_result\npoint-passed=$point_passed\nexpected-resized=$expected_resized\nresized-formula=$resized_formula\nresized-result=$resized_result\ngrip-passed=$grip_passed\nresult-passed=$result_passed\nsave-clean=$save_passed\n"
+    if $point_passed && $grip_passed && $result_passed && $save_passed; then
+        record "formula-bar-point-mode-3d-sheet-range-grip" "passed" \
+            "formula-3d-grip-point.png; formula-3d-grip-middle.png; formula-3d-grip-dragging.png; formula-3d-grip-committed.png; formula=$resized_formula; result=$resized_result; save-clean=$save_passed" \
+            "Physical X11 point mode selected B2:C3 across Sheet2:Sheet3, then the middle-sheet grip resized it to B2:D4 while preserving the complete 3-D qualifier and calculating 171." "$artifacts"
+    else
+        record "formula-bar-point-mode-3d-sheet-range-grip" "failed" "$artifacts" "Expected point formula '$expected_point', resized formula '$expected_resized', result 171, and a clean save; observed point='$committed_formula', resized='$resized_formula', result='$resized_result', save-clean=$save_passed." "$artifacts"
+    fi
+    send_key Escape || true
+}
+
 probe_formula_bar_point_mode_multi_area() {
     local keyboard_formula="" keyboard_display="" pointer_formula="" pointer_display=""
     local keyboard_normalized="" pointer_normalized=""
@@ -2047,6 +2160,20 @@ if [[ "$probe_selector" == "formula-3d-point" ]]; then
     probe_formula_bar_point_mode_3d
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused 3-D formula point probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "formula-3d-grip" ]]; then
+    # Focused iteration mode for physical multi-cell 3-D point selection followed by a
+    # middle-sheet reference-highlight grip resize.
+    probe_formula_bar_point_mode_3d_range_grip
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused 3-D range/grip probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then

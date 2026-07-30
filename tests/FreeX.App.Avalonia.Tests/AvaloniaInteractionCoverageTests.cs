@@ -218,7 +218,10 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("FREEX_X11_PROBE_SELECTOR", probe, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"sheet-tabs\"", probe, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"formula-3d-point\"", probe, StringComparison.Ordinal);
+        Assert.Contains("probe_selector\" == \"formula-3d-grip\"", probe, StringComparison.Ordinal);
         Assert.Contains("formula-bar-point-mode-3d-sheet-range", probe, StringComparison.Ordinal);
+        Assert.Contains("formula-bar-point-mode-3d-sheet-range-grip", probe, StringComparison.Ordinal);
+        Assert.Contains("formula-bar-point-mode-3d-sheet-range-grip", runner, StringComparison.Ordinal);
         Assert.Contains("normalize_formula", probe, StringComparison.Ordinal);
         Assert.Contains("SHEET2:SHEET3!B2", probe, StringComparison.Ordinal);
         Assert.Contains("select_sheet_tab_range_end", probe, StringComparison.Ordinal);

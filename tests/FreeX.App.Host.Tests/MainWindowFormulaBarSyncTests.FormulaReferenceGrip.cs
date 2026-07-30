@@ -79,4 +79,41 @@ public sealed partial class MainWindowFormulaBarSyncTests
             reopenedSource.GetValue(reopenedFormulaAddress).Should().Be(new NumberValue(15));
         });
     }
+
+    [Fact]
+    public void ThreeDSheetRange_OnMiddleSheet_ShowsGripResizesAndCalculates()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sourceSheet = harness.FirstSheet;
+            sourceSheet.Name = "Source Sheet";
+            var middleSheet = harness.AddSheet("Middle Sheet");
+            var endSheet = harness.AddSheet("Final Sheet");
+
+            for (uint row = 1; row <= 3; row++)
+            {
+                for (uint col = 1; col <= 3; col++)
+                {
+                    middleSheet.SetCell(new CellAddress(middleSheet.Id, row, col), new NumberValue(row * 3 + col));
+                    endSheet.SetCell(new CellAddress(endSheet.Id, row, col), new NumberValue(9 + row * 3 + col));
+                }
+            }
+
+            var formulaAddress = new CellAddress(sourceSheet.Id, 8, 7);
+            var formula = "=SUM('Middle Sheet:Final Sheet'!A1:B2)";
+            sourceSheet.SetCell(formulaAddress, Cell.FromFormula(formula[1..]));
+            harness.SelectActiveCell(8, 7);
+            harness.EditActiveCellInFormulaBar();
+            harness.SelectFormulaSheetTab(middleSheet.Id, ModifierKeys.None);
+            harness.CurrentSheetId.Should().Be(middleSheet.Id);
+
+            harness.RaiseFormulaReferenceGripDrag(0, 3, 3).Should().BeTrue();
+            harness.FormulaBarText.Should().Be("=SUM('Middle Sheet:Final Sheet'!A1:C3)");
+            harness.CommitEdit().Should().BeTrue();
+
+            sourceSheet.GetCell(formulaAddress)!.FormulaText.Should().Be("SUM('Middle Sheet:Final Sheet'!A1:C3)");
+            sourceSheet.GetValue(formulaAddress).Should().Be(new NumberValue(225));
+        });
+    }
 }

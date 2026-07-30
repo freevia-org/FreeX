@@ -295,7 +295,17 @@ public partial class MainWindow
             text,
             _currentSheetId,
             sheetName => _workbook.GetSheet(sheetName)?.Id,
-            ResolveStructuredFormulaReference);
+            ResolveStructuredFormulaReference,
+            sheetId =>
+            {
+                for (var index = 0; index < _workbook.Sheets.Count; index++)
+                {
+                    if (_workbook.Sheets[index].Id == sheetId)
+                        return index;
+                }
+
+                return null;
+            });
 
     internal bool RaiseFormulaReferenceGripDragForTest(int highlightIndex, CellAddress target)
     {
