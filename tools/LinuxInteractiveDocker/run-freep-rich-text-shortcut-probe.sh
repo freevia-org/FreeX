@@ -983,7 +983,7 @@ PY
     # this readback exact so a visual-only paragraph selection cannot pass.
     if xdotool click --clearmodifiers --repeat 3 --delay 120 1 >/dev/null 2>&1; then
         if copy_selection_and_assert_clipboard \
-            "pointer-paragraph-selection" "$'Wide words make this first paragraph wrap at unequal visual line widths\n'"; then
+            "pointer-paragraph-selection" $'Wide words make this first paragraph wrap at unequal visual line widths\n'; then
             pointer_paragraph_readback=true
         else
             input_commands_ok=false
