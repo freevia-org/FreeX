@@ -78,6 +78,10 @@ public sealed class PptxPackageReaderSourceTests
             .And.Contain("isLiveLayoutSupported = false;")
             .And.Contain("IsLiveLayoutSupported = isLiveLayoutSupported");
 
+        ExtractMethod(source, "private static bool IsLiveSmartArtLayoutSupported(")
+            .Should()
+            .Contain("\"circlearrowprocess\"");
+
         ExtractMethod(source, "private static void TryAttachPictureNodePictures(")
             .Should()
             .Contain("if (pictures.Count != nodes.Count)")
@@ -99,6 +103,7 @@ public sealed class PptxPackageReaderSourceTests
             .And.Contain("picturelineup")
             .And.Contain("picturegrid")
             .And.Contain("pyramidlist")
+            .And.Contain("invertedpyramid")
             .And.Contain("relationship1")
             .And.Contain("opposingideas")
             .And.Contain("convergingradial")
