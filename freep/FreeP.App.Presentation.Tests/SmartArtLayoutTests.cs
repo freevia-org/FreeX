@@ -634,6 +634,24 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void MultidirectionalCycle_ReturnsLiveCircularBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Discover", "Plan", "Build", "Review");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/multidirectionalCycle";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("multidirectionalCycle is admitted through the shared cycle-family layout path");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "one live box should be emitted per multidirectional-cycle node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(4, "multidirectionalCycle should reuse the shared circular connector planner");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().BeEquivalentTo(new[] { "Discover", "Plan", "Build", "Review" });
+    }
+
+    [Fact]
     public void RadialCycle_ReturnsLiveCircularBoxesAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Cycle, "Identify", "Analyze", "Act", "Review");
