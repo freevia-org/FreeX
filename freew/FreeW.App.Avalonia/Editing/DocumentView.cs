@@ -5543,6 +5543,12 @@ public sealed class DocumentView : Control
         colOffsets[cols] = running;
 
         const double pad = 5;
+        // Word preserves the nominal table grid and treats tblCellSpacing as a gap around each
+        // physical cell surface. Keep row measurement and pagination on the nominal grid; only
+        // the painted cell and its content origin consume this surface reservation.
+        var cellSpacingInset = table.CellSpacingPt is > 0
+            ? table.CellSpacingPt.Value * PxPerPoint
+            : 0;
         var borders = table.Formatting.Borders || _showTableGridlines;
         var tableLayoutPlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(
             table,
@@ -5564,6 +5570,31 @@ public sealed class DocumentView : Control
             string.IsNullOrWhiteSpace(fillPlan.EffectiveFillHex)
                 ? null
                 : BrushFor(fillPlan.EffectiveFillHex);
+
+        Rect SurfaceRectFor(double x, double y, double width, double height, int startCol, int span, int rowIndex)
+        {
+            if (cellSpacingInset <= 0)
+                return new Rect(x, y, width, height);
+
+            var endCol = startCol + span;
+            var left = startCol == 0 ? 2 * cellSpacingInset : cellSpacingInset;
+            var right = endCol == cols ? 2 * cellSpacingInset : cellSpacingInset;
+            var top = rowIndex == 0 ? 2 * cellSpacingInset : cellSpacingInset;
+            var bottom = rowIndex == table.Rows.Count - 1 ? 2 * cellSpacingInset : cellSpacingInset;
+            return new Rect(
+                x + left,
+                y + top,
+                Math.Max(1, width - left - right),
+                Math.Max(1, height - top - bottom));
+        }
+
+        (double Before, double After) CellParagraphSpacing(Paragraph paragraph)
+        {
+            var formatting = ResolveParagraphFmt(paragraph);
+            return (
+                formatting.SpaceBeforeIsSet ? Math.Max(0, formatting.SpaceBeforePt) * PxPerPoint : 0,
+                formatting.SpaceAfterIsSet ? Math.Max(0, formatting.SpaceAfterPt) * PxPerPoint : 0);
+        }
 
         // AV-TBL: glyphOffset is unique within this table block and is used as PlacedChar.Offset so
         // TryGetCaretRect can match (Block == tableBlockIndex && Offset == glyphOffset).
@@ -5598,10 +5629,15 @@ public sealed class DocumentView : Control
                     prFmt = prFmt with { Bold = true };
 
                 var prInnerW = Math.Max(10, prCellWidth - 2 * pad);
-                var prLines = cell.Paragraphs.Count > 0
-                    ? cell.Paragraphs.SelectMany(p => WrapCellLines(p.PlainText, prFmt, prInnerW)).ToList()
-                    : WrapCellLines(string.Empty, prFmt, prInnerW);
-                var prCellHeight = prLines.Sum(l => l.Height) + 2 * pad;
+                var prParagraphs = cell.Paragraphs.Count > 0
+                    ? cell.Paragraphs
+                    : [new Paragraph()];
+                var prCellHeight = prParagraphs.Sum(paragraph =>
+                {
+                    var spacing = CellParagraphSpacing(paragraph);
+                    return WrapCellLines(paragraph.PlainText, prFmt, prInnerW).Sum(line => line.Height)
+                        + spacing.Before + spacing.After;
+                }) + 2 * pad;
                 if (prCellHeight > prRowHeight)
                     prRowHeight = prCellHeight;
 
@@ -5643,7 +5679,7 @@ public sealed class DocumentView : Control
             // AV-TBL: carry the TableCell model reference and actual column index so we can emit
             // per-paragraph, per-character cell-aware PlacedChars for caret routing.
             // BE2: CellParas holds wrapped lines per-paragraph (outer list = para, inner = wrapped lines).
-            var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<(double Height, List<(char Ch, double W)> Chars)>> CellParas, List<double> MarkerInsets, RunFormatting Fmt)>();
+            var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<(double Height, List<(char Ch, double W)> Chars)>> CellParas, List<(double Before, double After)> ParagraphSpacings, List<double> MarkerInsets, RunFormatting Fmt)>();
             var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
             var col = 0;
             for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
@@ -5673,14 +5709,17 @@ public sealed class DocumentView : Control
                     preservedNumberingMarkers.TryGetValue(paragraph, out var marker)
                         ? Build(marker.Text, fmt).WidthIncludingTrailingWhitespace + 6
                         : 0d).ToList();
+                var paragraphSpacings = cellParagraphs.Select(CellParagraphSpacing).ToList();
                 var cellParas = cellParagraphs.Select((paragraph, paragraphIndex) =>
                     WrapCellLines(paragraph.PlainText, fmt, Math.Max(10, innerW - markerInsets[paragraphIndex]))).ToList();
                 var lines = cellParas.SelectMany(pl => pl).ToList(); // flattened for height calc
-                var cellHeight = lines.Sum(l => l.Height) + 2 * pad;
+                var cellHeight = lines.Sum(l => l.Height)
+                    + paragraphSpacings.Sum(spacing => spacing.Before + spacing.After)
+                    + 2 * pad;
                 if (cellHeight > rowHeight)
                     rowHeight = cellHeight;
 
-                measured.Add((cell, cellIndex, col, span, cellParas, markerInsets, fmt));
+                measured.Add((cell, cellIndex, col, span, cellParas, paragraphSpacings, markerInsets, fmt));
                 col += span;
             }
 
@@ -5693,13 +5732,13 @@ public sealed class DocumentView : Control
             // AV-COL-NONTXT AG1: use the column band that this row's content-Y falls in.
             var rowColLeft = ColumnLeftFor(rowContentY);
 
-            foreach (var (cellModel, cellIndex, startCol, span, cellParas, markerInsets, fmt) in measured)
+            foreach (var (cellModel, cellIndex, startCol, span, cellParas, paragraphSpacings, markerInsets, fmt) in measured)
             {
                 double cellWidth = 0;
                 for (var s = 0; s < span; s++)
                     cellWidth += colWidths[startCol + s];
                 var cellX = rowColLeft + colOffsets[startCol];
-                var rect = new Rect(cellX, rowPageSpaceY, cellWidth, rowHeight);
+                var rect = SurfaceRectFor(cellX, rowPageSpaceY, cellWidth, rowHeight, startCol, span, r);
                 var fill = EffectiveFillBrush(EffectiveFillFor(r, cellIndex));
                 var cellBorderPlan = TableCellBorderVisualPlanner.Build(cellModel.Borders, PxPerPoint);
                 _rects.Add((rect, fill, borders, cellBorderPlan.HasVisibleEdges ? cellBorderPlan : null));
@@ -5724,7 +5763,8 @@ public sealed class DocumentView : Control
                 // height (best-effort — matches the existing per-row pagination behavior rather than
                 // clipping the merged region further).
                 var cellLines = cellParas.SelectMany(pl => pl).ToList();
-                var contentHeight = cellLines.Sum(l => l.Height);
+                var contentHeight = cellLines.Sum(l => l.Height)
+                    + paragraphSpacings.Sum(spacing => spacing.Before + spacing.After);
                 var mergedSpanHeight = rowHeight;
                 if (cellModel.VerticalMerge == VerticalMergeState.Restart)
                 {
@@ -5745,7 +5785,7 @@ public sealed class DocumentView : Control
                         Math.Max(0.0, cellAvailableHeight - contentHeight),
                     _ => 0.0  // Top (default)
                 };
-                var contentTopY = rowPageSpaceY + pad + vAlignOffset;
+                var contentTopY = rect.Top + pad + vAlignOffset;
 
                 var ty = contentTopY;
                 // BE2+BE1: iterate paragraphs independently — each paragraph's wrapped lines render
@@ -5757,17 +5797,19 @@ public sealed class DocumentView : Control
                     var paraLines = cellParas[pIdx];
                     var paraCharOffset = 0;
                     var markerInset = markerInsets[pIdx];
+                    var paragraphSpacing = paragraphSpacings[pIdx];
+                    ty += paragraphSpacing.Before;
                     if (cellModel.Paragraphs.Count > pIdx
                         && preservedNumberingMarkers.TryGetValue(cellModel.Paragraphs[pIdx], out var preservedMarker))
                     {
                         // Markers are visual chrome, so they reserve the first-line leading space but
                         // are not added to editable table-cell character offsets.
-                        _markers.Add((cellX + pad, ty, preservedMarker.Text, fmt));
+                        _markers.Add((rect.Left + pad, ty, preservedMarker.Text, fmt));
                     }
 
                     foreach (var (lineHeight, chars) in paraLines)
                     {
-                        var tx = cellX + pad + markerInset;
+                        var tx = rect.Left + pad + markerInset;
                         foreach (var (ch, w) in chars)
                         {
                             _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, fmt, ch,
@@ -5780,11 +5822,13 @@ public sealed class DocumentView : Control
                         ty += lineHeight;
                     }
 
+                    ty += paragraphSpacing.After;
+
                     // BE1: sentinel at end of this paragraph (at the end of its last visual line).
                     (double Height, List<(char Ch, double W)> Chars)? lastParaLine = paraLines.Count > 0 ? paraLines[^1] : null;
-                    var sentinelX = cellX + pad + (lastParaLine.HasValue ? lastParaLine.Value.Chars.Sum(c => c.W) : 0);
+                    var sentinelX = rect.Left + pad + (lastParaLine.HasValue ? lastParaLine.Value.Chars.Sum(c => c.W) : 0);
                     var sentinelY = lastParaLine.HasValue
-                        ? ty - lastParaLine.Value.Height
+                        ? ty - paragraphSpacing.After - lastParaLine.Value.Height
                         : contentTopY;
                     var sentinelH = lastParaLine.HasValue ? lastParaLine.Value.Height : Build("A", fmt).Height;
                     var sentinelParaOffset = cellModel.Paragraphs.Count > pIdx

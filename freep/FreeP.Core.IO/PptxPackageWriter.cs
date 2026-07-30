@@ -2137,7 +2137,8 @@ public static class PptxPackageWriter
                 && (shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically
                     || shape.Media?.Loop == true))
             .ToList();
-        if (animations.Count == 0 && timedMedia.Count == 0) return null;
+        if (animations.Count == 0 && timedMedia.Count == 0 && string.IsNullOrWhiteSpace(slide.AnimationBuildListXml))
+            return null;
 
         // Split animations into main-sequence and trigger groups.
         var mainAnims    = animations.Where(a => a.TriggerShapeId is null).ToList();
@@ -2220,7 +2221,24 @@ public static class PptxPackageWriter
                 rootChildTnLst));
 
         return new XElement(P + "timing",
-            new XElement(P + "tnLst", outerPar));
+            new XElement(P + "tnLst", outerPar),
+            BuildAnimationBuildListEl(slide.AnimationBuildListXml));
+    }
+
+    private static XElement? BuildAnimationBuildListEl(string? rawXml)
+    {
+        if (string.IsNullOrWhiteSpace(rawXml))
+            return null;
+
+        try
+        {
+            var element = XElement.Parse(rawXml, LoadOptions.PreserveWhitespace);
+            return element.Name == P + "bldLst" ? element : null;
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
     }
 
     private static XElement BuildMediaTimingEl(SlideShape shape, ref uint nodeId)

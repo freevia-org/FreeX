@@ -1025,7 +1025,10 @@ public static class PptxPackageReader
         // Animations (main sequence only)
         var timingEl = xml.Root.Element(P + "timing");
         if (timingEl is not null)
+        {
             ReadAnimations(timingEl, slide);
+            slide.AnimationBuildListXml = timingEl.Element(P + "bldLst")?.ToString(SaveOptions.DisableFormatting);
+        }
 
         // Speaker notes — follow notesSlide relationship if present
         var notesTarget = OpcRelationships.FirstTargetByType(slideRels, NotesSlideRelType);
