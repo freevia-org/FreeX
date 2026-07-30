@@ -1,3 +1,4 @@
+using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 
 namespace FreeW.App.Host.Tests;
