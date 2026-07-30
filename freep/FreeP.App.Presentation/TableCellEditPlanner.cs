@@ -479,7 +479,7 @@ public static class TableCellEditPlanner
         if (slide is null || selectedShapeIds.Count == 0)
             return TableCellEditState.None;
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == selectedShapeIds[0]);
+        var shape = ShapeHitTester.FindShape(slide, selectedShapeIds[0]);
         if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
             return TableCellEditState.None;
 
@@ -546,7 +546,7 @@ public static class TableCellEditPlanner
         if (slide is null)
             return NotReady(TableCellEditStartStatus.MissingSlide, shapeId, row, col);
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
+        var shape = ShapeHitTester.FindShape(slide, shapeId);
         if (shape is null)
             return NotReady(TableCellEditStartStatus.ShapeNotFound, shapeId, row, col);
         if (shape.Kind != SlideShapeKind.Table || shape.Table is null)
@@ -614,7 +614,7 @@ public static class TableCellEditPlanner
         if (selectedShapeIds.Count == 0)
             return DisabledNavigation(TableCellNavigationStatus.ShapeNotFound, direction);
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == selectedShapeIds[0]);
+        var shape = ShapeHitTester.FindShape(slide, selectedShapeIds[0]);
         if (shape is null)
             return DisabledNavigation(TableCellNavigationStatus.ShapeNotFound, direction);
         if (shape.Kind != SlideShapeKind.Table || shape.Table is null)
@@ -790,7 +790,7 @@ public static class TableCellEditPlanner
         if (selectedShapeIds.Count == 0)
             return DisabledFormat(TableCellTextFormatStatus.ShapeNotFound, kind);
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == selectedShapeIds[0]);
+        var shape = ShapeHitTester.FindShape(slide, selectedShapeIds[0]);
         if (shape is null)
             return DisabledFormat(TableCellTextFormatStatus.ShapeNotFound, kind);
         if (shape.Kind != SlideShapeKind.Table || shape.Table is null)
@@ -1085,7 +1085,7 @@ public static class TableCellEditPlanner
         if (selectedShapeIds.Count == 0)
             return DisabledParagraphFormat(TableCellTextFormatStatus.ShapeNotFound, kind, value);
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == selectedShapeIds[0]);
+        var shape = ShapeHitTester.FindShape(slide, selectedShapeIds[0]);
         if (shape is null)
             return DisabledParagraphFormat(TableCellTextFormatStatus.ShapeNotFound, kind, value);
         if (shape.Kind != SlideShapeKind.Table || shape.Table is null)
@@ -1140,7 +1140,7 @@ public static class TableCellEditPlanner
         if (selectedShapeIds.Count == 0)
             return DisabledValueFormat(TableCellTextFormatStatus.ShapeNotFound, kind, value);
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == selectedShapeIds[0]);
+        var shape = ShapeHitTester.FindShape(slide, selectedShapeIds[0]);
         if (shape is null)
             return DisabledValueFormat(TableCellTextFormatStatus.ShapeNotFound, kind, value);
         if (shape.Kind != SlideShapeKind.Table || shape.Table is null)
