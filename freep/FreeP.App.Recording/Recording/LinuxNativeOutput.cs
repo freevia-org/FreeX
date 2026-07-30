@@ -25,7 +25,8 @@ public sealed record LinuxVideoEncoderCapability(
     string? ExecutablePath,
     string? EncoderName,
     bool CanCaptureNarration,
-    string Reason)
+    string Reason,
+    bool CanCaptureCameraAndMedia = false)
 {
     public static LinuxVideoEncoderCapability Unavailable(
         string reason,

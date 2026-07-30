@@ -127,6 +127,22 @@ public sealed record IntersectionNode(FormulaNode Left, FormulaNode Right) : For
 /// </summary>
 public sealed record NamedRangeEndpointNode(FormulaNode Start, FormulaNode End) : FormulaNode;
 
+/// <summary>
+/// Excel's UNION reference operator: a comma joining two or more reference operands behind an
+/// extra pair of parens, e.g. <c>(A1:B2,D5,F1:F10)</c> -- <see cref="AREAS"/> of that reference
+/// is 3, and <c>SUM((A1:A2,B1:B2))</c> sums every cell across both areas. R85-formula-areas-union
+/// originally deferred this entirely (see the parser's prior "Union references ... are not
+/// supported" diagnostic) because <see cref="Model.RangeValue"/> has no multi-area variant;
+/// R93-AREAS-union-value-model adds this dedicated node plus <see cref="UnionValue"/> (a
+/// Core.Formula-only <see cref="Model.ScalarValue"/> subtype carrying one <see cref="Model.RangeValue"/>
+/// per area) rather than touching the shared cross-app Core.Model value model, keeping the change
+/// scoped to the formula engine. <see cref="Areas"/> is the flat list of comma-separated operand
+/// subtrees at this paren-nesting depth (each itself typically a <see cref="RangeRefNode"/>,
+/// <see cref="CellRefNode"/>, <see cref="NamedRangeNode"/>, <see cref="IntersectionNode"/>, or a
+/// nested <see cref="UnionNode"/>).
+/// </summary>
+public sealed record UnionNode(IReadOnlyList<FormulaNode> Areas) : FormulaNode;
+
 /// <summary>Binary operators.</summary>
 public enum BinaryOperator
 {

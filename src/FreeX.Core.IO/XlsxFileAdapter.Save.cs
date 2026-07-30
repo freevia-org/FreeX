@@ -409,6 +409,56 @@ public sealed partial class XlsxFileAdapter
                 }
             }
 
+            // R93-threaded-comment-extLst: real Excel always pairs a threaded comment with a
+            // legacy xl/comments*.xml "compatibility shim" entry (author "tc={thread id}", text
+            // starting with the fixed "[Threaded comment]" banner) so older Excel builds -- and any
+            // reader that only understands the classic comment/VML model -- still show SOME note
+            // on the cell instead of nothing at all. XlsxWorksheetThreadedCommentMapper.Save only
+            // ever writes the MODERN xl/threadedComments/*.xml part; XlsxLegacyCommentPreserver only
+            // PRESERVES a shim that already existed in a source package on a load-then-save round
+            // trip. Neither one ever CREATES the shim for a thread authored fresh in FreeX, so
+            // saving a brand-new threaded comment silently produced a file where every non-Excel
+            // (or older-Excel) reader saw no comment indicator at all on that cell. Writing it here,
+            // through ClosedXML's own CreateComment() alongside the legacy Comments loop above, gets
+            // ClosedXML to emit the matching comments1.xml entry AND its VML note shape automatically
+            // (the same way it already does for a genuine Sheet.Comments note) -- and on every
+            // subsequent load-then-save round trip, XlsxLegacyCommentPreserver's existing shim
+            // preservation/reconciliation logic (IsLegacyThreadedCommentShimEntry) takes over and
+            // keeps it in sync with the thread instead of this fresh write.
+            foreach (var (address, comment) in sheet.ThreadedComments)
+            {
+                if (sheet.Comments.ContainsKey(address))
+                    continue; // a cell is never both an independent legacy note and a thread
+
+                // A thread already carrying an id was loaded from (or already saved to) a source
+                // package: XlsxLegacyCommentPreserver.Preserve owns keeping its legacy shim in sync
+                // from there on (IsLegacyThreadedCommentShimEntry/TryResolveShiftedThreadedCommentAddress).
+                // Writing another fresh ClosedXML comment/VML shape for it here as well would leave
+                // TWO legacy comment/VML parts (ClosedXML's brand-new one plus Preserve's reconciled
+                // source copy) once the post-processing pass runs -- only a thread with no id yet
+                // (never saved before) needs ITS FIRST shim minted through ClosedXML.
+                if (comment.Id is not null)
+                    continue;
+
+                try
+                {
+                    var threadId = XlsxWorksheetThreadedCommentMapper.ResolveThreadId(sheet, address, comment);
+                    var xlShimComment = xlSheet.Cell((int)address.Row, (int)address.Col)
+                        .CreateComment();
+                    xlShimComment.Author = $"tc={threadId}";
+                    xlShimComment.AddText(
+                        "[Threaded comment]\n\nYour version of Excel allows you to read this threaded comment; " +
+                        "however, any edits made to it will get removed if the file is opened in a newer version " +
+                        "of Excel. Learn more: https://go.microsoft.com/fwlink/?linkid=870924\n\nComment:\n    " +
+                        comment.Text);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping threaded-comment legacy shim for sheet '{sheet.Name}' cell '{address}': {ex.Message}");
+                    warnings?.Add($"[comment] Legacy compatibility note for the threaded comment at '{sheet.Name}!{address}' could not be saved and was skipped.");
+                }
+            }
+
             // Save merged regions BEFORE hyperlinks: ClosedXML's Range.Merge() clears every
             // non-anchor cell of the merged region (including anything just assigned to it), so a
             // hyperlink written to a non-anchor cell first (the shape ClosedXML's own loader

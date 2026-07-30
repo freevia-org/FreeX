@@ -269,7 +269,15 @@ public partial class MainWindow
     private string GetAutoFitDisplayText(Sheet sheet, Cell cell)
     {
         var style = _workbook.GetStyle(cell.StyleId);
-        return sheet.ShowFormulas && cell.FormulaText is not null
+
+        // AutoFit measures whatever text is CURRENTLY DISPLAYED, so with Show Formulas on it must
+        // size to the formula text -- and Show Formulas is per-window (R89-show-formulas-per-window-1).
+        // Read this window's own effective view state rather than the raw shared Sheet field: a
+        // sibling "New Window" on the same sheet may have flipped the shared field without this
+        // window ever adopting it, which would size this window's columns to the sibling's mode.
+        // Mirrors GetEffectiveViewState use in MainWindow.FormulaCommands.cs and the shared tier's
+        // WorkbookSession.GetAutoFitDisplayText, which already reads the per-view accessor.
+        return GetEffectiveViewState(sheet).ShowFormulas && cell.FormulaText is not null
             ? "=" + cell.FormulaText
             : NumberFormatter.Format(cell.Value, style.NumberFormat, _workbook.Uses1904DateSystem);
     }

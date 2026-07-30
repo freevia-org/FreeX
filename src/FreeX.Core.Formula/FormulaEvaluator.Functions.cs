@@ -308,6 +308,8 @@ public sealed partial class FormulaEvaluator
                         expandedArgs.Add(lambdaBound);
                     else if (!isStructured && lambdaBound is RangeValue flatRv)
                         AddRangeValues(expandedArgs, flatRv.Flatten(), preservesReferenceProvenance);
+                    else if (!isStructured && isAggregate && lambdaBound is UnionValue lambdaUnion)
+                        AddRangeValues(expandedArgs, FlattenUnionAreas(lambdaUnion), preservesReferenceProvenance);
                     else
                         expandedArgs.Add(lambdaBound);
                 }
@@ -363,9 +365,14 @@ public sealed partial class FormulaEvaluator
                     }
                     else if (TryEvaluateNamedFormula(named.Name, context, out var namedFormulaArg))
                     {
-                        // Named formula: the evaluated result may be a scalar or RangeValue (array).
+                        // Named formula: the evaluated result may be a scalar, RangeValue (array),
+                        // or -- when the name's RefersTo is itself a union, e.g. a name "U" whose
+                        // RefersTo is "=(Sheet1!A1:A2,Sheet1!B1:B2)" -- a UnionValue; unwrap the
+                        // same way a literal parenthesized union argument is unwrapped below.
                         if (!isStructured && isAggregate && namedFormulaArg is RangeValue namedRv)
                             AddRangeValues(expandedArgs, namedRv.Flatten(), preservesReferenceProvenance);
+                        else if (!isStructured && isAggregate && namedFormulaArg is UnionValue namedUnion)
+                            AddRangeValues(expandedArgs, FlattenUnionAreas(namedUnion), preservesReferenceProvenance);
                         else
                             expandedArgs.Add(namedFormulaArg);
                     }
@@ -380,6 +387,18 @@ public sealed partial class FormulaEvaluator
                 var value = EvaluateNode(arg, context);
                 if (!isStructured && isAggregate && value is RangeValue rangeValue)
                     AddRangeValues(expandedArgs, rangeValue.Flatten(), preservesReferenceProvenance);
+                else if (!isStructured && isAggregate && value is UnionValue union)
+                    // R93-AREAS-union-value-model gap close: a parenthesized union argument (e.g.
+                    // the "(A1:A2,B1:B2)" in MIN((A1:A2,B1:B2))) evaluates to a UnionValue here --
+                    // unwrap it into its per-area flattened cell values at this single choke
+                    // point, exactly like a plain RangeValue argument above, so every aggregate
+                    // function (SUM/AVERAGE/MIN/MAX/COUNT/COUNTA/PRODUCT/MEDIAN/STDEV/VAR/...)
+                    // gets union support for free instead of each needing its own inline unwrap.
+                    // FlattenUnionAreas concatenates each area's cells in order without
+                    // deduplicating, so a cell covered by two overlapping areas is naturally
+                    // counted/summed/collected twice -- matching Excel's own double-counting of
+                    // overlapping union areas (e.g. SUM((A1:A2,A1:A2)) double-counts A1 and A2).
+                    AddRangeValues(expandedArgs, FlattenUnionAreas(union), preservesReferenceProvenance);
                 else
                     expandedArgs.Add(value);
             }

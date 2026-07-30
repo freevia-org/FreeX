@@ -167,6 +167,12 @@ public sealed partial class FormulaEvaluator
                 ? EvaluateArrayOperand(ast, context)
                 : EvaluateNode(ast, context);
 
+            // A bare union reference as a formula's entire body (e.g. =(A1:B2,D5) with no
+            // enclosing function) has no scalar/array reduction in Excel either -- entering that
+            // directly in a cell yields #VALUE! there too, since a union is only meaningful as a
+            // reference-taking function argument (AREAS, SUM, ...). NormalizeTopLevelResult below
+            // handles the ordinary Evaluate() entry point's equivalent case.
+
             return NormalizeTopLevelResult(result);
         }
         catch (FormulaEvalException ex)
@@ -184,6 +190,10 @@ public sealed partial class FormulaEvaluator
             // as an *argument* (before this normalization step) and handle it internally.
             BlankValue => NumberValueFor(0d),
             LambdaValue => ErrorValue.Calc,
+            // A UnionValue reaching the top level (bare "=(A1:B2,D5)" formula body, outside any
+            // function argument position) mirrors Excel: a union reference is only valid as an
+            // argument to a reference-taking function, never as a standalone value.
+            UnionValue => ErrorValue.Value,
             _ => value,
         };
 
@@ -220,6 +230,7 @@ public sealed partial class FormulaEvaluator
                 FunctionCallNode func => EvaluateFunction(func, context),
                 IntersectionNode intersection => EvaluateIntersectionNode(intersection, context),
                 NamedRangeEndpointNode endpoint => EvaluateNamedRangeEndpointNode(endpoint, context),
+                UnionNode union => EvaluateUnionNode(union, context),
                 _ => throw new FormulaEvalException("#VALUE!", $"Unknown node type: {node.GetType().Name}")
             };
         }

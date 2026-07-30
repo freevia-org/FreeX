@@ -9,29 +9,22 @@ namespace FreeX.Core.Formula.Tests;
 /// (contiguous ranges) in a reference, and a multi-area reference is written using the union
 /// operator behind an extra set of parens, e.g. AREAS((A1:B2,D5,F1:F10)) = 3.
 ///
-/// Investigation found AREAS itself is already correct for every reference shape FreeX's engine
-/// can actually represent (a plain range, a bare single cell, a full row/column, and a reference
-/// redundantly wrapped in an extra pair of parens all correctly return 1; a non-reference
-/// argument correctly returns #VALUE!). The gap is that the union operator (a bare ',' inside a
-/// parenthesized reference, e.g. (A1:B2,D5)) is not parsed at all -- FreeX's reference value model
-/// (RangeValue, see FreeX.Core.Model.ScalarValue) represents exactly one rectangular area tied to
-/// a single SheetName/StartRow/StartCol; there is no multi-area variant. Adding one is a large,
-/// cross-cutting change: a new AST node, a new ScalarValue kind, and updates to every one of the
-/// 15+ files that pattern-match on RangeRefNode-shaped fast paths, plus FormulaRewriter's row/
-/// col-shift logic and FormulaSerializer's round-trip -- squarely the "large/risky" case this
-/// backlog round is instructed to defer rather than force.
+/// R85 found AREAS itself already correct for every reference shape FreeX's engine could
+/// represent at the time (a plain range, a bare single cell, a full row/column, and a reference
+/// redundantly wrapped in an extra pair of parens all correctly return 1; a non-reference argument
+/// correctly returns #VALUE!), but deferred the union operator itself (a bare ',' inside a
+/// parenthesized reference, e.g. (A1:B2,D5)): FreeX's reference value model (RangeValue, see
+/// FreeX.Core.Model.ScalarValue) represents exactly one rectangular area, with no multi-area
+/// variant, and the parser rejected the shape outright with a documented "not supported" message.
 ///
-/// What WAS fixed (surgical, zero behavior change at the evaluation level): the union-paren shape
-/// used to fail with a generic "Expected CloseParen but got Comma" parser message -- an accidental
-/// byproduct of Parser.ParsePrimary's plain grouped-expression case, indistinguishable from any
-/// other malformed formula. It still surfaces as #VALUE! (FormulaEvaluator.Evaluate's top-level
-/// FormulaParseException handler treats every unparseable formula, this one included, as #VALUE!
-/// rather than a crash -- exactly the "a proper error... rather than a wrong number" contract this
-/// round calls for), but the parser now recognizes the shape explicitly and reports a specific,
-/// documented "union references are not supported" message instead of the generic one, so the
-/// deferral is an intentional, discoverable decision rather than an accident.
-///
-/// The union-operator/multi-area-value-model feature itself remains STILL-DEFERRED.
+/// R93-AREAS-union-value-model implements the union operator without touching the shared
+/// Core.Model.ScalarValue hierarchy: a new UnionNode AST node (FormulaNode.cs) and a
+/// FreeX.Core.Formula-only UnionValue (carrying one RangeValue per area) that only ever exists
+/// transiently during evaluation -- never stored in a cell or serialized. AREAS((A1:B2,D5,F1:F10))
+/// now correctly evaluates to 3 (see the tests below, updated from R85's "deliberately still
+/// #VALUE!" assertions to match: per this round's ground-truth rule, a deliberately-authored
+/// existing test that only locks in a previous round's SCOPE DEFERRAL -- not a genuine behavioral
+/// decision -- must yield once Excel's real behavior is actually implemented).
 /// </summary>
 public sealed class R85_AreasUnionReferenceTests
 {
@@ -45,44 +38,40 @@ public sealed class R85_AreasUnionReferenceTests
         return sheet;
     }
 
-    // --- The fix: the union-paren shape now gets a specific, documented parser message ---------
+    // --- R93 fix: the union-paren shape now parses into a UnionNode and evaluates correctly -----
 
     [Fact]
-    public void UnionReferenceInParens_ParserThrows_WithExplicitUnsupportedMessage()
+    public void UnionReferenceInParens_ParsesSuccessfully()
     {
-        // Pre-fix: this threw FormulaParseException with the generic
-        // "Expected CloseParen but got Comma ...' at position ..." message -- indistinguishable
-        // from any other malformed-formula parse failure. Post-fix: the parser recognizes the
-        // union-paren shape explicitly and names it in the message.
+        // Pre-R93: this threw a documented FormulaParseException ("Union references ... are not
+        // supported"). Post-R93: the parser builds a UnionNode instead of rejecting the shape.
         var formula = "=AREAS((A1:B2,D5,F1:F10))";
 
         Action act = () => new Parser(new Lexer(formula).Tokenize()).Parse();
 
-        act.Should().Throw<FormulaParseException>()
-            .WithMessage("*Union references*not supported*");
+        act.Should().NotThrow();
     }
 
     [Fact]
-    public void SimpleUnionParens_ParserThrows_WithExplicitUnsupportedMessage()
+    public void SimpleUnionParens_ParsesSuccessfully()
     {
         // Sibling shape: a plain 2-area union, not nested inside a function call at all.
         var formula = "=(A1:B2,C3)";
 
         Action act = () => new Parser(new Lexer(formula).Tokenize()).Parse();
 
-        act.Should().Throw<FormulaParseException>()
-            .WithMessage("*Union references*not supported*");
+        act.Should().NotThrow();
     }
 
     [Fact]
-    public void Areas_UnionReference_TopLevelEval_StillReturnsValueError_NoRegression()
+    public void Areas_UnionReference_TopLevelEval_ReturnsAreaCount()
     {
-        // The observable evaluation-level result for the whole formula must NOT change: still a
-        // graceful #VALUE! (via FormulaEvaluator.Evaluate's top-level FormulaParseException
-        // catch), never a crash and never a silently wrong area count.
+        // Ground truth: real Excel's AREAS((A1:B2,D5,F1:F10)) is 3 (three comma-separated areas).
+        // R85 deliberately locked in #VALUE! here as a documented scope deferral, not a genuine
+        // behavioral decision -- R93 implements the union operator, so this must now match Excel.
         var sheet = MakeSheet();
 
-        _eval.Evaluate("=AREAS((A1:B2,D5,F1:F10))", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=AREAS((A1:B2,D5,F1:F10))", sheet).Should().Be(new NumberValue(3));
     }
 
     // --- No-regression: ordinary (non-union) parenthesized expressions are unaffected ----------

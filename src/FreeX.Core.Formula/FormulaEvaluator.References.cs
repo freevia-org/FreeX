@@ -539,6 +539,61 @@ public sealed partial class FormulaEvaluator
     }
 
     /// <summary>
+    /// Evaluates a <see cref="UnionNode"/> -- resolves each comma-separated area to a
+    /// <see cref="RangeValue"/> (via <see cref="EvaluateArrayOperand"/>, which already knows every
+    /// reference shape: plain ranges, full column/row, named ranges, intersections, ...) and
+    /// collects them into a <see cref="UnionValue"/>. A nested <see cref="UnionNode"/> area (from a
+    /// defined name whose own RefersTo text is itself a union) is flattened into the same flat
+    /// area list rather than nested, matching how Excel treats <c>((A1,B1),C1)</c> as three areas,
+    /// not two. Propagates the first error encountered (a missing sheet -> #REF!, an unresolved
+    /// name -> #NAME?, a disjoint intersection -> #NULL!) and rejects any area that isn't
+    /// reference-shaped at all (e.g. a bare number) with #VALUE!, matching Excel's refusal to
+    /// accept a non-reference operand in a union.
+    /// </summary>
+    private ScalarValue EvaluateUnionNode(UnionNode node, IEvalContext context)
+    {
+        var areas = new List<RangeValue>(node.Areas.Count);
+        foreach (var areaNode in node.Areas)
+        {
+            // A single-cell area (e.g. the "D5" in (A1:B2,D5)) is a CellRefNode, which
+            // EvaluateArrayOperand's generic fallback evaluates to the cell's raw scalar value
+            // (not a RangeValue) everywhere else it's used -- correct for a plain scalar operand,
+            // but wrong here, where every area must become a RangeValue so AREAS/SUM can treat a
+            // lone cell exactly like a 1x1 range (matching every other reference-shaped operand).
+            var value = areaNode is CellRefNode cellArea
+                ? BuildRangeValueOrError(new RangeRefNode(cellArea, cellArea, cellArea.SheetName), context)
+                : EvaluateArrayOperand(areaNode, context);
+            switch (value)
+            {
+                case ErrorValue error:
+                    return error;
+                case UnionValue nestedUnion:
+                    areas.AddRange(nestedUnion.Areas);
+                    break;
+                case RangeValue rangeValue:
+                    // BuildRangeValue silently reads blank cells from a nonexistent sheet rather
+                    // than throwing (its callers -- the per-argument expansion loop in
+                    // FormulaEvaluator.Functions.cs -- are the ones that check SheetExists and
+                    // surface #REF!, e.g. for AREAS(Missing!A:A)). EvaluateUnionNode bypasses that
+                    // loop entirely (it evaluates each area directly), so it must make the same
+                    // check itself, or a union area on a deleted/renamed sheet would silently
+                    // count as a valid area instead of invalidating the whole reference like Excel.
+                    if (rangeValue.SheetName is not null && !context.SheetExists(rangeValue.SheetName))
+                        return ErrorValue.Ref;
+                    areas.Add(rangeValue);
+                    break;
+                default:
+                    // Not reference-shaped (e.g. a literal number/text/bool area) -- Excel doesn't
+                    // even parse that as a union operand; treat it the same way ARGS/scalar misuse
+                    // of a non-reference is treated elsewhere in this engine: #VALUE!.
+                    return ErrorValue.Value;
+            }
+        }
+
+        return new UnionValue(areas);
+    }
+
+    /// <summary>
     /// Evaluates a bare <see cref="NamedRangeEndpointNode"/> used as a scalar -- resolves any
     /// NamedRangeNode endpoint to its defined range's top-left cell, forms the effective range,
     /// then applies the same current-cell implicit intersection a bare multi-cell
@@ -887,6 +942,22 @@ public sealed partial class FormulaEvaluator
             : BuildRangeValueOrError(range.Value, context);
     }
 
+
+    /// <summary>
+    /// Flattens every area of a <see cref="UnionValue"/> into one flat cell-value list, in area
+    /// order, for feeding to <see cref="AddRangeValues"/> exactly like a plain
+    /// <see cref="RangeValue"/>'s <c>Flatten()</c> result. Areas are concatenated without
+    /// deduplication -- a cell present in two overlapping areas (e.g. <c>(A1:A2,A1:A2)</c>)
+    /// therefore appears twice in the result, matching Excel's own double-counting of overlapping
+    /// union areas.
+    /// </summary>
+    private static List<ScalarValue> FlattenUnionAreas(UnionValue union)
+    {
+        var flattened = new List<ScalarValue>();
+        foreach (var area in union.Areas)
+            flattened.AddRange(area.Flatten());
+        return flattened;
+    }
 
     private static void AddRangeValues(
         List<ScalarValue> expandedArgs,

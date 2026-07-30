@@ -130,7 +130,8 @@ public sealed class WorkbookViewportScrollPlannerTests
                 new ColMetric(4, 64, 64),
                 new ColMetric(5, 64, 128),
                 new ColMetric(6, 64, 192),
-            ]);
+            ],
+            FrozenPanes: new FrozenPaneState(sheet.FrozenRows, sheet.FrozenCols));
 
         var plan = WorkbookViewportScrollPlanner.PlanCellReveal(
             viewport,
@@ -165,7 +166,8 @@ public sealed class WorkbookViewportScrollPlannerTests
                 new ColMetric(4, 64, 64),
                 new ColMetric(5, 64, 128),
                 new ColMetric(6, 64, 192),
-            ]);
+            ],
+            FrozenPanes: new FrozenPaneState(sheet.FrozenRows, sheet.FrozenCols));
 
         var plan = WorkbookViewportScrollPlanner.PlanCellReveal(
             viewport,

@@ -714,6 +714,18 @@ internal static class XlsxWorksheetThreadedCommentMapper
         XlsxPackageXmlEditor.EnsureSpecificContentType(archive, threadedCommentPath, ThreadedCommentsContentType);
     }
 
+    /// <summary>
+    /// R93-threaded-comment-extLst: resolves the SAME stable thread id that
+    /// <see cref="ToThreadedCommentElements"/> writes as the root <c>&lt;threadedComment&gt;</c>'s
+    /// own <c>id</c> attribute, exposed so <see cref="XlsxFileAdapter"/>'s early ClosedXML cell
+    /// population phase (which runs before this mapper's own post-processing pass touches the raw
+    /// package) can embed the identical GUID into the legacy compatibility shim's
+    /// <c>tc={GUID}</c> author -- matching real Excel, which always ties its legacy shim's author
+    /// back to the thread's own id.
+    /// </summary>
+    internal static string ResolveThreadId(Sheet sheet, CellAddress address, ThreadedComment comment) =>
+        comment.Id ?? CreateStableGuid("comment", $"{sheet.Name}!{address.ToA1()}:{comment.Text}");
+
     private static IEnumerable<XElement> ToThreadedCommentElements(
         Sheet sheet,
         CellAddress address,
@@ -724,7 +736,7 @@ internal static class XlsxWorksheetThreadedCommentMapper
         // references it) stays stable across saves instead of cascade-changing whenever the
         // comment's text is edited. Only a comment that has never been saved before (no source
         // id) gets a freshly minted stable guid.
-        var parentId = comment.Id ?? CreateStableGuid("comment", $"{sheet.Name}!{address.ToA1()}:{comment.Text}");
+        var parentId = ResolveThreadId(sheet, address, comment);
         yield return ToThreadedCommentElement(address, comment, authorsByName, parentId);
 
         for (var replyIndex = 0; replyIndex < comment.Replies.Count; replyIndex++)
