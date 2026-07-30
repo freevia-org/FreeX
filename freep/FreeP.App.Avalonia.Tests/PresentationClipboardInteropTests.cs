@@ -571,6 +571,36 @@ Header\cell Value\cell\row}")),
     }
 
     [Fact]
+    public async Task XamlPackage_images_are_pasted_in_document_order()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <BlockUIContainer><Image Source="Images/first.png" /></BlockUIContainer>
+              <BlockUIContainer><Image Source="Images/second.jpg" /></BlockUIContainer>
+            </FlowDocument>
+            """;
+        var first = new byte[] { 0x01, 0x02 };
+        var second = new byte[] { 0x03, 0x04, 0x05 };
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage(
+                    xaml,
+                    ("Images/first.png", first),
+                    ("Images/second.jpg", second))),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        editor.CurrentSlide.Shapes[0].Picture!.Bytes.Should().Equal(first);
+        editor.CurrentSlide.Shapes[0].Picture!.ContentType.Should().Be("image/png");
+        editor.CurrentSlide.Shapes[1].Picture!.Bytes.Should().Equal(second);
+        editor.CurrentSlide.Shapes[1].Picture!.ContentType.Should().Be("image/jpeg");
+    }
+
+    [Fact]
     public async Task Own_copy_prefers_internal_editable_shape_over_exported_fallbacks()
     {
         var clipboard = new FakeSystemClipboard();
