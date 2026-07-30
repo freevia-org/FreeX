@@ -118,6 +118,9 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("string.Equals(scenarioId, \"equation-structures\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("string.Equals(scenarioId, \"chart-smartart-complex\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("string.Equals(scenarioId, \"object-format-position-size-style\", StringComparison.OrdinalIgnoreCase)");
+        source.Should().Contain("string.Equals(scenarioId, \"table-layout-complex\", StringComparison.OrdinalIgnoreCase)");
+        source.Should().Contain("string.Equals(scenarioId, \"table-pagination-repeat-header\", StringComparison.OrdinalIgnoreCase)");
+        source.Should().Contain("string.Equals(scenarioId, \"table-page-composition-stress\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("string.Equals(scenarioId, \"wordart-watermark-stress\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("string.Equals(scenarioId, \"wordart-picture-watermark-layout\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("ResolveAvaloniaHeaderSlotName(expectationDocument, pageNumber)");

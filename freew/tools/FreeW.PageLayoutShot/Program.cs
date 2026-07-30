@@ -1176,6 +1176,9 @@ static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
     string.Equals(scenarioId, "object-format-position-size-style", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "field-page-number-variants", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "f2-hf-images", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "table-layout-complex", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "table-pagination-repeat-header", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "table-page-composition-stress", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "wordart-watermark-stress", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "wordart-picture-watermark-layout", StringComparison.OrdinalIgnoreCase);
 
