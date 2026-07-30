@@ -393,6 +393,31 @@ public sealed class InCanvasTextEditPlanner
         (int Start, int End)? selection) =>
         TableCellEditPlanner.ApplyParagraphIndentToBody(source, increase, selection);
 
+    /// <summary>
+    /// Applies a run-level format through the renderer-neutral mutation planner.
+    /// WPF and Avalonia use this entry point while their native text overlays are
+    /// active so grouped-child selection behavior stays identical.
+    /// </summary>
+    public static TextBody ApplyTextFormat(
+        TextBody source,
+        TableCellTextFormatKind kind,
+        (int Start, int End)? selection)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return TextBodyRunMutationPlanner.ToggleTextFormat(source, kind, selection, out _);
+    }
+
+    /// <summary>Applies a run-level value format through the shared planner.</summary>
+    public static TextBody ApplyTextValueFormat(
+        TextBody source,
+        TableCellTextValueFormatKind kind,
+        object? value,
+        (int Start, int End)? selection)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return TextBodyRunMutationPlanner.ApplyValueFormat(source, kind, value, selection);
+    }
+
     public static TextBody BuildPlainTextBody(TextBody? original, string text)
     {
         string fontFamily = "Calibri";

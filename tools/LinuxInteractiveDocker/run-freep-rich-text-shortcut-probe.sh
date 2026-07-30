@@ -6,6 +6,7 @@ inspect_pptx() {
     python3 - "$package_path" "$destination" <<'PY'
 import hashlib
 import json
+import os
 import sys
 import zipfile
 import xml.etree.ElementTree as ET
@@ -30,11 +31,19 @@ def shape_bounds(shape):
 
 def paragraph_record(paragraph):
     sequence = []
+    runs = []
     for child in paragraph:
         if child.tag in (A + "r", A + "fld"):
             text = child.find("a:t", NS)
             if text is not None:
                 sequence.append({"node": "a:t", "value": text.text or ""})
+                rpr = child.find("a:rPr", NS)
+                runs.append({
+                    "text": text.text or "",
+                    "bold": rpr is not None and rpr.get("b") == "1",
+                    "italic": rpr is not None and rpr.get("i") == "1",
+                    "underline": rpr is not None and rpr.get("u") not in (None, "none"),
+                })
         elif child.tag == A + "br":
             sequence.append({"node": "a:br"})
     return {
@@ -44,6 +53,7 @@ def paragraph_record(paragraph):
             item.get("value", "") for item in sequence if item["node"] == "a:t"
         ),
         "breakCount": sum(item["node"] == "a:br" for item in sequence),
+        "runs": runs,
     }
 
 with open(package_path, "rb") as handle:
@@ -116,20 +126,67 @@ PY
 assert_baseline_inspection() {
     python3 - "$1" <<'PY'
 import json
+import os
 import sys
 
 data = json.load(open(sys.argv[1], encoding="utf-8"))
 shape = data["shapeId2"]
+grouped = os.environ.get("FREEP_APP_SURFACE") == "in-canvas-grouped-child-rich-text"
 valid = (
     data["shapeId2Count"] == 1
     and shape is not None
     and shape["id"] == 2
     and shape["name"] == "Notes marker"
     and shape["bounds"] == {"x": 914400, "y": 914400, "cx": 2743200, "cy": 914400}
-    and shape["paragraphCount"] == 1
+    and shape["paragraphCount"] == (2 if grouped else 1)
     and shape["text"] == "Slide 1 has speaker notes"
-    and shape["paragraphs"][0]["text"] == "Slide 1 has speaker notes"
+    and shape["paragraphs"][0]["text"] == ("Slide 1 has" if grouped else "Slide 1 has speaker notes")
     and shape["paragraphs"][0]["breakCount"] == 0
+    and (not grouped or shape["paragraphs"][1]["text"] == " speaker notes")
+    and (not grouped or len(shape["paragraphs"][0]["runs"]) == 2)
+    and (not grouped or len(shape["paragraphs"][1]["runs"]) == 2)
+    and data["pPicCount"] == 0
+    and data["pGraphicFrameCount"] == 0
+)
+raise SystemExit(0 if valid else 1)
+PY
+}
+
+assert_grouped_format_inspection() {
+    python3 - "$1" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+shape = data["shapeId2"]
+runs = [run for paragraph in shape["paragraphs"] for run in paragraph["runs"]]
+formatted = [
+    run for run in runs
+    if run["bold"] and run["italic"] and run["underline"]
+]
+first_paragraph_runs = shape["paragraphs"][0]["runs"]
+second_paragraph_runs = shape["paragraphs"][1]["runs"]
+valid = (
+    data["shapeId2Count"] == 1
+    and shape is not None
+    and shape["id"] == 2
+    and shape["name"] == "Notes marker"
+    and shape["bounds"] == {"x": 914400, "y": 914400, "cx": 2743200, "cy": 914400}
+    and shape["paragraphCount"] == 2
+    and shape["text"] == "Slide 1 has speaker notes"
+    and len(runs) >= 3
+    and len(formatted) >= 2
+    and first_paragraph_runs[0]["bold"]
+    and first_paragraph_runs[0]["italic"]
+    and first_paragraph_runs[0]["underline"]
+    and second_paragraph_runs[0]["text"] == " s"
+    and second_paragraph_runs[0]["bold"]
+    and second_paragraph_runs[0]["italic"]
+    and second_paragraph_runs[0]["underline"]
+    and second_paragraph_runs[-1]["text"] == "peaker notes"
+    and not second_paragraph_runs[-1]["bold"]
+    and not second_paragraph_runs[-1]["italic"]
+    and not second_paragraph_runs[-1]["underline"]
     and data["pPicCount"] == 0
     and data["pGraphicFrameCount"] == 0
 )
@@ -191,7 +248,7 @@ coverage_scope="${FREEP_COVERAGE_SCOPE:-physical FreeP rich-editor soft-break ev
 input_delay_ms="${FREEP_X11_INPUT_DELAY_MS:-160}"
 settle_seconds="${FREEP_X11_SETTLE_SECONDS:-0.45}"
 pointer_timeout_seconds="${FREEP_X11_POINTER_TIMEOUT_SECONDS:-3}"
-save_attempts="${FREEP_SAVE_ATTEMPTS:-16}"
+save_attempts="${FREEP_SAVE_ATTEMPTS:-50}"
 screen_width="${FREEP_SCREEN_WIDTH:-1280}"
 screen_height="${FREEP_SCREEN_HEIGHT:-820}"
 screen_dpi="${FREEP_SCREEN_DPI:-96}"
@@ -307,6 +364,7 @@ save_checkpoint() {
             mv "$temporary_pptx" "$output/$prefix.pptx"
             mv "$temporary_json" "$output/$prefix.json"
             hash_file "$output/$prefix.pptx" > "$output/$prefix.sha256.txt"
+            printf 'Checkpoint %s satisfied predicate %s.\n' "$prefix" "$predicate" > "$error_file"
             return 0
         fi
         sleep 0.2
@@ -552,22 +610,77 @@ fi
 } > "$output/shape-pointer-calibration.txt"
 
 input_commands_ok=true
+grouped_formatting=false
 focus_owner
 xdotool mousemove --sync "$shape_center_x" "$shape_center_y" >/dev/null 2>&1 ||
     input_commands_ok=false
 xdotool click --clearmodifiers --repeat 2 --delay 120 1 >/dev/null 2>&1 ||
     input_commands_ok=false
 sleep "$settle_seconds"
-send_owner_key ctrl+a || input_commands_ok=false
-timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
-    xdotool type --clearmodifiers --delay "$input_delay_ms" "SoftBefore" ||
-    input_commands_ok=false
-timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
-    xdotool key --clearmodifiers --delay "$input_delay_ms" shift+Return ||
-    input_commands_ok=false
-timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
-    xdotool type --clearmodifiers --delay "$input_delay_ms" "SoftAfter" ||
-    input_commands_ok=false
+if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
+    # Select fourteen characters from the start of the grouped child. The fixture
+    # places the selection across its two native paragraphs and four runs.
+    send_owner_key ctrl+Home || input_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool keydown Shift || input_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool key --delay "$input_delay_ms" --repeat 14 Right ||
+        input_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool keyup Shift || input_commands_ok=false
+    send_owner_key ctrl+b || input_commands_ok=false
+
+    # Commit the shortcut pass, then reopen the same child and range for the
+    # actual Home ribbon key-tip route. FreeP's shared ribbon assigns Home=H
+    # and Bold=1; the route may commit the overlay as focus moves to the bar.
+    xdotool mousemove --sync "$commit_point_x" "$commit_point_y" >/dev/null 2>&1 || input_commands_ok=false
+    xdotool click --clearmodifiers 1 >/dev/null 2>&1 || input_commands_ok=false
+    sleep "$settle_seconds"
+    xdotool mousemove --sync "$shape_center_x" "$shape_center_y" >/dev/null 2>&1 || input_commands_ok=false
+    xdotool click --clearmodifiers --repeat 2 --delay 120 1 >/dev/null 2>&1 || input_commands_ok=false
+    sleep "$settle_seconds"
+    send_owner_key ctrl+Home || input_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool keydown Shift || input_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool key --delay "$input_delay_ms" --repeat 14 Right || input_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool keyup Shift || input_commands_ok=false
+    focus_owner
+    ribbon_route_commands_ok=true
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool key --clearmodifiers --delay "$input_delay_ms" alt || ribbon_route_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool key --clearmodifiers --delay "$input_delay_ms" h || ribbon_route_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool key --clearmodifiers --delay "$input_delay_ms" 1 || ribbon_route_commands_ok=false
+    sleep "$settle_seconds"
+    xdotool mousemove --sync "$commit_point_x" "$commit_point_y" >/dev/null 2>&1 || input_commands_ok=false
+    xdotool click --clearmodifiers 1 >/dev/null 2>&1 || input_commands_ok=false
+    sleep "$settle_seconds"
+
+    # Reopen once more so Italic and Underline are applied through the shared
+    # rich-text shortcut path after the ribbon focus transition.
+    xdotool mousemove --sync "$shape_center_x" "$shape_center_y" >/dev/null 2>&1 || input_commands_ok=false
+    xdotool click --clearmodifiers --repeat 2 --delay 120 1 >/dev/null 2>&1 || input_commands_ok=false
+    sleep "$settle_seconds"
+    send_owner_key ctrl+Home || input_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool keydown Shift || input_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool key --delay "$input_delay_ms" --repeat 14 Right || input_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool keyup Shift || input_commands_ok=false
+    send_owner_key ctrl+b || input_commands_ok=false
+    send_owner_key ctrl+i || input_commands_ok=false
+    send_owner_key ctrl+u || input_commands_ok=false
+    grouped_formatting=true
+else
+    send_owner_key ctrl+a || input_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool type --clearmodifiers --delay "$input_delay_ms" "SoftBefore" ||
+        input_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool key --clearmodifiers --delay "$input_delay_ms" shift+Return ||
+        input_commands_ok=false
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool type --clearmodifiers --delay "$input_delay_ms" "SoftAfter" ||
+        input_commands_ok=false
+fi
 sleep "$settle_seconds"
 input_capture=false
 if capture "soft-break-input.png"; then
@@ -585,9 +698,16 @@ fi
 capture_window_state "soft-break-committed-state.txt"
 {
     printf 'editor-entry=physical double click at shape ID2 center\n'
-    printf 'replacement=Ctrl+A then ASCII SoftBefore\n'
-    printf 'soft-break=physical Shift+Enter\n'
-    printf 'suffix=ASCII SoftAfter\n'
+    if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
+        printf 'selection=physical Ctrl+Home then fourteen Shift+Right keys across the paragraph boundary\n'
+        printf 'formatting=physical Ctrl+B, Home-ribbon Bold key-tip, Ctrl+I, Ctrl+U\n'
+        printf 'ribbon-route-commands-ok=%s\n' "${ribbon_route_commands_ok:-false}"
+        printf 'grouped-formatting=%s\n' "$grouped_formatting"
+    else
+        printf 'replacement=Ctrl+A then ASCII SoftBefore\n'
+        printf 'soft-break=physical Shift+Enter\n'
+        printf 'suffix=ASCII SoftAfter\n'
+    fi
     printf 'commit=physical click at calibrated slide point outside shape ID2\n'
     printf 'input-commands-ok=%s\n' "$input_commands_ok"
     printf 'input-screenshot-captured=%s\n' "$input_capture"
@@ -610,15 +730,24 @@ else
         soft-break-input-state.txt soft-break-committed-state.txt
 fi
 
+save_predicate=assert_soft_break_inspection
+if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
+    save_predicate=assert_grouped_format_inspection
+fi
 saved_checkpoint=false
-if save_checkpoint "after-soft-break" assert_soft_break_inspection; then
+if save_checkpoint "after-soft-break" "$save_predicate"; then
     saved_checkpoint=true
 fi
 {
     printf 'checkpoint=after-soft-break.pptx\n'
     printf 'shape-id=2\n'
-    printf 'paragraph-count=1\n'
-    printf 'ordered-children=a:t SoftBefore; a:br; a:t SoftAfter\n'
+    if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
+        printf 'paragraph-count=2\n'
+        printf 'selection-formatting=bold italic underline across multiple native runs\n'
+    else
+        printf 'paragraph-count=1\n'
+        printf 'ordered-children=a:t SoftBefore; a:br; a:t SoftAfter\n'
+    fi
     printf 'fallback-counts=p:pic 0; p:graphicFrame 0\n'
     printf 'checkpoint-valid=%s\n' "$saved_checkpoint"
 } > "$output/saved-soft-break-native-package-proof.txt"
@@ -627,7 +756,7 @@ saved_pass=false
 if $input_pass && $saved_checkpoint; then
     saved_pass=true
     record "saved-soft-break-native-package" "passed" \
-        "Ctrl+S saved shape ID2 as exactly one native paragraph with ordered SoftBefore text, break, SoftAfter text and zero fallback objects." \
+        "Ctrl+S saved shape ID2 with native paragraph/run structure, formatting, bounds, and zero fallback objects." \
         saved-soft-break-native-package-proof.txt after-soft-break.pptx \
         after-soft-break.json after-soft-break.sha256.txt
 else
@@ -638,7 +767,15 @@ else
 fi
 
 undo_key_sent=true
-send_owner_key ctrl+z || undo_key_sent=false
+if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
+    # The grouped lane commits shortcut Bold, ribbon Bold, then the final
+    # shortcut formatting session as three native edit transactions.
+    for _ in 1 2 3; do
+        send_owner_key ctrl+z || undo_key_sent=false
+    done
+else
+    send_owner_key ctrl+z || undo_key_sent=false
+fi
 undo_capture=false
 if capture "undo-original.png"; then
     undo_capture=true
@@ -651,7 +788,11 @@ fi
 {
     printf 'shortcut=Ctrl+Z\n'
     printf 'key-sent=%s\n' "$undo_key_sent"
-    printf 'expected-original-text=Slide 1 has speaker notes\n'
+    if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
+        printf 'expected-original-formatting=three Ctrl+Z transactions restore the original grouped runs\n'
+    else
+        printf 'expected-original-text=Slide 1 has speaker notes\n'
+    fi
     printf 'exact-original-checkpoint=%s\n' "$undo_checkpoint"
     printf 'screenshot-captured=%s\n' "$undo_capture"
 } > "$output/undo-restores-original-text-proof.txt"
@@ -673,20 +814,34 @@ else
 fi
 
 redo_key_sent=true
-send_owner_key ctrl+shift+z || redo_key_sent=false
+if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
+    for _ in 1 2 3; do
+        send_owner_key ctrl+y || redo_key_sent=false
+    done
+else
+    send_owner_key ctrl+shift+z || redo_key_sent=false
+fi
 redo_capture=false
 if capture "redo-soft-break.png"; then
     redo_capture=true
 fi
 capture_window_state "redo-soft-break-state.txt"
+redo_predicate=assert_soft_break_inspection
+if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
+    redo_predicate=assert_grouped_format_inspection
+fi
 redo_checkpoint=false
-if save_checkpoint "after-redo" assert_soft_break_inspection; then
+if save_checkpoint "after-redo" "$redo_predicate"; then
     redo_checkpoint=true
 fi
 {
     printf 'shortcut=Ctrl+Shift+Z\n'
     printf 'key-sent=%s\n' "$redo_key_sent"
-    printf 'expected-ordered-children=a:t SoftBefore; a:br; a:t SoftAfter\n'
+    if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ]]; then
+        printf 'expected-formatted-runs=three Ctrl+Y transactions restore Bold+Italic+Underline\n'
+    else
+        printf 'expected-ordered-children=a:t SoftBefore; a:br; a:t SoftAfter\n'
+    fi
     printf 'exact-soft-break-checkpoint=%s\n' "$redo_checkpoint"
     printf 'screenshot-captured=%s\n' "$redo_capture"
 } > "$output/redo-restores-soft-break-proof.txt"

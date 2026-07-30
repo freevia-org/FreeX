@@ -226,28 +226,22 @@ public sealed class InCanvasTextEditor : IDisposable
     /// <summary>Toggles bold on the current RichTextBox selection. No-op if not active.</summary>
     public void ApplyBold()
     {
-        if (_richBox is null)
-            return;
-
-        EditingCommands.ToggleBold.Execute(null, _richBox);
+        ApplyShapeRunMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyTextFormat(body, TableCellTextFormatKind.Bold, selection));
     }
 
     /// <summary>Toggles italic on the current RichTextBox selection. No-op if not active.</summary>
     public void ApplyItalic()
     {
-        if (_richBox is null)
-            return;
-
-        EditingCommands.ToggleItalic.Execute(null, _richBox);
+        ApplyShapeRunMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyTextFormat(body, TableCellTextFormatKind.Italic, selection));
     }
 
     /// <summary>Toggles underline on the current RichTextBox selection. No-op if not active.</summary>
     public void ApplyUnderline()
     {
-        if (_richBox is null)
-            return;
-
-        EditingCommands.ToggleUnderline.Execute(null, _richBox);
+        ApplyShapeRunMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyTextFormat(body, TableCellTextFormatKind.Underline, selection));
     }
 
     /// <summary>Applies superscript to the current RichTextBox selection.</summary>
@@ -264,49 +258,55 @@ public sealed class InCanvasTextEditor : IDisposable
 
     private void ApplyBaseline(BaselineAlignment alignment)
     {
-        if (_richBox is null)
-            return;
-
-        _richBox.Selection.ApplyPropertyValue(
-            Inline.BaselineAlignmentProperty,
-            alignment);
+        ApplyShapeRunMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyTextFormat(
+                body,
+                alignment == BaselineAlignment.Superscript
+                    ? TableCellTextFormatKind.Superscript
+                    : TableCellTextFormatKind.Subscript,
+                selection));
     }
 
     /// <summary>Sets font family on the current RichTextBox selection. No-op if not active or null.</summary>
     public void ApplyFont(string? fontFamily)
     {
-        if (_richBox is null || string.IsNullOrEmpty(fontFamily))
+        if (string.IsNullOrWhiteSpace(fontFamily))
             return;
 
-        _richBox.Selection.ApplyPropertyValue(
-            TextElement.FontFamilyProperty,
-            new FontFamily(fontFamily));
+        ApplyShapeRunMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyTextValueFormat(
+                body,
+                TableCellTextValueFormatKind.FontFamily,
+                fontFamily,
+                selection));
     }
 
     /// <summary>Sets font size in points on the current RichTextBox selection. No-op if not active.</summary>
     public void ApplyFontSize(double? sizePt)
     {
-        if (_richBox is null || sizePt is null)
+        if (sizePt is null)
             return;
 
-        _richBox.Selection.ApplyPropertyValue(
-            TextElement.FontSizeProperty,
-            sizePt.Value * (96.0 / 72.0));
+        ApplyShapeRunMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyTextValueFormat(
+                body,
+                TableCellTextValueFormatKind.FontSize,
+                sizePt,
+                selection));
     }
 
     /// <summary>Sets text color on the current RichTextBox selection. No-op if not active.</summary>
     public void ApplyColor(ThemeAwareColor? color)
     {
-        if (_richBox is null || color is null)
+        if (color is null)
             return;
 
-        var wpfColor = TextBodyFlowDocumentConverter.ResolveModelColor(color);
-        if (wpfColor is null)
-            return;
-
-        _richBox.Selection.ApplyPropertyValue(
-            TextElement.ForegroundProperty,
-            new SolidColorBrush(wpfColor.Value));
+        ApplyShapeRunMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyTextValueFormat(
+                body,
+                TableCellTextValueFormatKind.Color,
+                color,
+                selection));
     }
 
     public bool TryApplyActiveShapeParagraphAlignment(TextAlign alignment) =>
@@ -376,6 +376,10 @@ public sealed class InCanvasTextEditor : IDisposable
         _richBox.Focus();
         return true;
     }
+
+    private bool ApplyShapeRunMutation(
+        Func<TextBody, (int Start, int End)?, TextBody> mutate) =>
+        ApplyShapeParagraphMutation(mutate);
 
     private (int Start, int End)? CurrentSelection()
     {

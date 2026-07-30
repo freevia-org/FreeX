@@ -61,7 +61,33 @@ try {
     }
     $grpSpPr.AppendChild($xfrm) | Out-Null
     $group.AppendChild($grpSpPr) | Out-Null
-    $group.AppendChild($shape.CloneNode($true)) | Out-Null
+
+    # Keep the grouped-child fixture deliberately rich: two paragraphs and
+    # multiple native runs are needed to exercise range formatting across the
+    # paragraph boundary in both renderers.
+    $groupedShape = $shape.CloneNode($true)
+    $txBody = $groupedShape.SelectSingleNode("./p:txBody", $ns)
+    $paragraph = $txBody.SelectSingleNode("./a:p", $ns)
+    $runs = @($paragraph.SelectNodes("./a:r", $ns))
+    foreach ($run in $runs) { $paragraph.RemoveChild($run) | Out-Null }
+
+    function New-TextRun([string]$value) {
+        $run = $document.CreateElement("a", "r", $aNs)
+        $run.AppendChild($document.CreateElement("a", "rPr", $aNs)) | Out-Null
+        $text = $document.CreateElement("a", "t", $aNs)
+        $text.InnerText = $value
+        $run.AppendChild($text) | Out-Null
+        return $run
+    }
+
+    $paragraph.AppendChild((New-TextRun "Slide 1")) | Out-Null
+    $paragraph.AppendChild((New-TextRun " has")) | Out-Null
+    $secondParagraph = $document.CreateElement("a", "p", $aNs)
+    $secondParagraph.AppendChild((New-TextRun " speaker")) | Out-Null
+    $secondParagraph.AppendChild((New-TextRun " notes")) | Out-Null
+    $txBody.AppendChild($secondParagraph) | Out-Null
+
+    $group.AppendChild($groupedShape) | Out-Null
     $shapeTree.ReplaceChild($group, $shape) | Out-Null
 
     $settings = New-Object Xml.XmlWriterSettings
