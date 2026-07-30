@@ -40,6 +40,39 @@ public sealed class TableCellEditPlannerTests
     }
 
     [Fact]
+    public void GroupedTableChild_UsesSharedCellEditingRoutes()
+    {
+        var table = MakeMergedTableShape();
+        var group = new SlideShape { Id = 70, Kind = SlideShapeKind.Group };
+        group.Children.Add(table);
+        var slide = new Slide { Shapes = { group } };
+
+        var state = TableCellEditPlanner.PlanSelectedCell(slide, [table.Id], (0, 0));
+        state.HasSelectedTable.Should().BeTrue();
+        state.CanEditText.Should().BeTrue();
+
+        var begin = TableCellEditPlanner.BeginEdit(
+            slideIndex: 0,
+            slide,
+            table.Id,
+            row: 0,
+            col: 0,
+            new SlideTransformCore(2, 10, 20, 960, 540),
+            minimumWidth: 30,
+            minimumHeight: 18);
+        begin.Status.Should().Be(TableCellEditStartStatus.Ready);
+
+        var navigation = TableCellEditPlanner.PlanNavigation(
+            slide,
+            [table.Id],
+            activeCell: (0, 0),
+            TableCellNavigationDirection.Next);
+        navigation.Status.Should().Be(TableCellNavigationStatus.Ready);
+        navigation.Row.Should().Be(0);
+        navigation.Col.Should().Be(2);
+    }
+
+    [Fact]
     public void BeginEdit_ContinuationCell_ReturnsAnchorPlacementAndEditPlanner()
     {
         var presentation = Presentation.CreateEmpty();
