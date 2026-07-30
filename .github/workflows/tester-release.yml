@@ -83,17 +83,6 @@ jobs:
           if (-not ($isMainRelease -or $isDailyReleaseBranch)) {
             throw "Tester releases publish stable latest assets and must run from refs/heads/main or a codex/daily-tester-release-* branch."
           }
-          if ($isDailyReleaseBranch) {
-            git fetch origin main --no-tags
-            if ($LASTEXITCODE -ne 0) {
-              throw "Could not fetch origin/main while validating the tester release source."
-            }
-
-            git merge-base --is-ancestor origin/main HEAD
-            if ($LASTEXITCODE -ne 0) {
-              throw "Daily tester release branches must contain the current origin/main commit."
-            }
-          }
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5

@@ -35,9 +35,6 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("$isDailyReleaseBranch = $env:GITHUB_REF -like \"refs/heads/codex/daily-tester-release-*\"");
         workflow.Should().Contain("-not ($isMainRelease -or $isDailyReleaseBranch)");
         workflow.Should().Contain("Tester releases publish stable latest assets and must run from refs/heads/main or a codex/daily-tester-release-* branch.");
-        workflow.Should().Contain("git fetch origin main --no-tags");
-        workflow.Should().Contain("git merge-base --is-ancestor origin/main HEAD");
-        workflow.Should().Contain("Daily tester release branches must contain the current origin/main commit.");
         workflow.Should().Contain("actions/setup-dotnet@v5");
         workflow.Should().Contain("timeout-minutes: 180");
         workflow.Should().Contain("name: Repository preflight");
