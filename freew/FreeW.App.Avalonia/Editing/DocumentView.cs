@@ -19743,11 +19743,11 @@ public sealed class DocumentView : Control
             : isSecondaryFillGoldStress
                 ? new Vector(-24, -19)
                 : isPrimaryGlowBlueStress
-                    ? new Vector(0, 3)
+                    ? new Vector(-1, 3)
                 : default;
         var warpedTextVerticalScale = isImportedGradFillMultiArchUp ? 0.74 : isPrimaryGlowBlueStress ? 1.125 : 1.0;
         var warpedTextFitWidthRatio = isPrimaryGlowBlueStress
-            ? 0.97
+            ? 0.964
             : isSecondaryFillGoldStress
                 ? 0.64
                 : 0.80;
