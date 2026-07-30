@@ -3053,7 +3053,7 @@ public static class SmartArtLayoutEngine
             return false;
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
-        return id.Split('/').Last() is "picturelineup" or "continuouspicturelist";
+        return id.Split('/').Last() is "picturelineup" or "picturestrips" or "continuouspicturelist";
     }
 
     private static bool IsPictureGridLayout(string uniqueId)
