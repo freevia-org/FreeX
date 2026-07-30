@@ -984,6 +984,9 @@ public static class ChartSmartArtVisualPlanner
                 || string.Equals(smartArt.ColorSchemeId, "accent0_1", StringComparison.OrdinalIgnoreCase))
             && (string.IsNullOrWhiteSpace(smartArt.StyleId)
                 || string.Equals(smartArt.StyleId, "simple1", StringComparison.OrdinalIgnoreCase));
+        var useUniformAccentModerateProcessStyle = isBasicProcessLayout
+            && string.Equals(colorScheme.Id, "accent1", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(style.Id, "moderate1", StringComparison.OrdinalIgnoreCase);
         FlattenNodes(
             smartArt.Nodes,
             depth: 0,
@@ -991,7 +994,8 @@ public static class ChartSmartArtVisualPlanner
             colorScheme,
             style,
             isBasicProcessLayout,
-            useNativeDefaultProcessStyle);
+            useNativeDefaultProcessStyle,
+            useUniformAccentModerateProcessStyle);
 
         var isCurrentWordPyramid = IsCurrentWordPyramidStyle(layoutId, smartArt);
         if (IsNativeWordOrgChartStyle(layoutId, colorScheme, style))
@@ -1079,14 +1083,15 @@ public static class ChartSmartArtVisualPlanner
         SmartArtColorScheme colorScheme,
         SmartArtStyle style,
         bool isBasicProcessLayout,
-        bool useNativeDefaultProcessStyle)
+        bool useNativeDefaultProcessStyle,
+        bool useUniformAccentModerateProcessStyle)
     {
         foreach (var node in nodes)
         {
             var colorIndex = into.Count;
             var baseFillHex = useNativeDefaultProcessStyle
                 ? "#156082"
-                : NormalizeHex(colorScheme.FillHexAt(colorIndex));
+                : NormalizeHex(colorScheme.FillHexAt(useUniformAccentModerateProcessStyle ? 0 : colorIndex));
             var fillHex = AdjustBrightness(baseFillHex, style.BrightnessAdjust);
             var connectorHex = useNativeDefaultProcessStyle
                 ? AdjustBrightness("#AAB6C1", style.BrightnessAdjust)
@@ -1111,7 +1116,8 @@ public static class ChartSmartArtVisualPlanner
                 colorScheme,
                 style,
                 isBasicProcessLayout,
-                useNativeDefaultProcessStyle);
+                useNativeDefaultProcessStyle,
+                useUniformAccentModerateProcessStyle);
         }
     }
 

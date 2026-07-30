@@ -634,4 +634,17 @@ public sealed class DrawingObjectVisualPlannerTests
             DrawingObjectVisualKind.Shape,
             DrawingObjectVisualKind.WordArt);
     }
+
+    [Fact]
+    public void SmartArtPlan_UsesUniformDarkAccentForModerateBasicProcess()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Check"]);
+        smartArt.LayoutId = "process1";
+        smartArt.ColorSchemeId = "accent1";
+        smartArt.StyleId = "moderate1";
+
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+
+        plan.Nodes.Select(node => node.FillHex).Should().Equal("#1F3864", "#1F3864");
+    }
 }
