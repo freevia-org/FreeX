@@ -1,7 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FreeW.Core.Model;
 
@@ -34,6 +36,40 @@ public sealed class FontDialogVisualParityTests
             buttons.Should().OnlyContain(button => button.Height == 20);
             ((ISolidColorBrush)buttons.Single(button => button.IsCancel).BorderBrush!).Color
                 .Should().Be(Color.FromRgb(0x70, 0x70, 0x70));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Font_combo_glyph_uses_the_compact_Wpf_arrow_geometry_and_trailing_alignment()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new FontDialog(new RunFormatting { FontSizePt = 12 });
+            try
+            {
+                dialog.Width = 460;
+                dialog.Height = 340;
+                dialog.Show();
+                dialog.Measure(new Size(460, 340));
+                dialog.Arrange(new Rect(0, 0, 460, 340));
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var glyphs = dialog.GetVisualDescendants()
+                    .OfType<PathIcon>()
+                    .Where(path => path.Name == "DropDownGlyph")
+                    .ToArray();
+
+                glyphs.Should().NotBeEmpty();
+                glyphs.Should().OnlyContain(path =>
+                    path.Width == 8
+                    && path.Height == 5
+                    && path.HorizontalAlignment == global::Avalonia.Layout.HorizontalAlignment.Right);
+            }
+            finally
+            {
+                dialog.Close();
+            }
         }, CancellationToken.None);
     }
 
