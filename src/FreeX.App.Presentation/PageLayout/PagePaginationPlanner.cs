@@ -1,14 +1,66 @@
+using System.Linq;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
 
 /// <summary>
-/// One contiguous run of rows or columns that belong to a single page along one axis, identified by
-/// its first and last 1-based sheet index. Title (repeat) rows/columns that are reprinted on every
-/// page are folded into the segment, so the segment spans the page's whole printed extent.
+/// The rows or columns that belong to a single page along one axis: <see cref="Indexes"/> is the
+/// explicit, gap-aware list of 1-based sheet indexes actually printed on the page (hidden, filtered,
+/// and outline-collapsed rows/columns already excluded by <see cref="PrintLayoutPlanner.BuildRowPlans"/>
+/// / <see cref="PrintLayoutPlanner.BuildColumnPlans"/>). <see cref="Start"/>/<see cref="End"/> are the
+/// first and last of that list and are a lossy summary -- do not reconstruct the printed set by
+/// iterating <see cref="Start"/>..<see cref="End"/>, since a hidden row/column in the interior of the
+/// page is absent from <see cref="Indexes"/> but would be wrongly reinstated by that range. Use
+/// <see cref="Start"/>/<see cref="End"/> only for bounding-box math (e.g. page-break-preview overlay
+/// geometry) where the full extent, not the printed set, is what is needed.
 /// </summary>
-public readonly record struct PageAxisSegment(uint Start, uint End);
+public readonly record struct PageAxisSegment(uint Start, uint End, IReadOnlyList<uint> Indexes)
+{
+    /// <summary>
+    /// Convenience constructor for callers/tests that only know a contiguous bound (no hidden gaps),
+    /// e.g. fixed test fixtures with nothing hidden. Builds <see cref="Indexes"/> as the full
+    /// <paramref name="start"/>..<paramref name="end"/> range. Real pagination plans should go through
+    /// the 3-arg constructor with the plan's actual (possibly gap-filtered) index list instead.
+    /// </summary>
+    public PageAxisSegment(uint start, uint end)
+        : this(start, end, BuildContiguousRange(start, end))
+    {
+    }
+
+    private static IReadOnlyList<uint> BuildContiguousRange(uint start, uint end)
+    {
+        if (end < start)
+            return [];
+
+        var range = new List<uint>((int)(end - start + 1));
+        for (var value = start; value <= end; value++)
+            range.Add(value);
+
+        return range;
+    }
+
+    /// <summary>
+    /// Value equality treats <see cref="Indexes"/> by content (sequence), not by list reference/instance
+    /// identity -- the default record-struct equality would otherwise compare object references and
+    /// spuriously report two segments with identical printed rows/columns as unequal.
+    /// </summary>
+    public bool Equals(PageAxisSegment other) =>
+        Start == other.Start &&
+        End == other.End &&
+        (Indexes ?? []).SequenceEqual(other.Indexes ?? []);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Start);
+        hash.Add(End);
+        foreach (var index in Indexes ?? [])
+            hash.Add(index);
+
+        return hash.ToHashCode();
+    }
+}
 
 /// <summary>
 /// The per-axis page capacity used to slice a print range into pages: how many rows fit on one page
@@ -627,10 +679,18 @@ public static class PagePaginationPlanner
             : count;
     }
 
-    private static IReadOnlyList<PageAxisSegment> BuildSegments(IReadOnlyList<PrintPageRowPlan> plans) =>
+    /// <summary>
+    /// Builds the row page segments from a print row page plan, keeping each page's explicit,
+    /// hidden-row-excluding <see cref="PrintPageRowPlan.BodyRows"/> list (falling back to
+    /// <see cref="PrintPageRowPlan.TitleRows"/> for a title-only page). Public so
+    /// <c>WorkbookPdfContentBuilder</c>'s equivalent plan-to-segment step shares this single
+    /// implementation instead of re-deriving a lossy copy.
+    /// </summary>
+    public static IReadOnlyList<PageAxisSegment> BuildSegments(IReadOnlyList<PrintPageRowPlan> plans) =>
         BuildSegments(plans, static plan => plan.BodyRows, static plan => plan.TitleRows);
 
-    private static IReadOnlyList<PageAxisSegment> BuildSegments(IReadOnlyList<PrintPageColumnPlan> plans) =>
+    /// <summary>Column-axis counterpart of <see cref="BuildSegments(IReadOnlyList{PrintPageRowPlan})"/>.</summary>
+    public static IReadOnlyList<PageAxisSegment> BuildSegments(IReadOnlyList<PrintPageColumnPlan> plans) =>
         BuildSegments(plans, static plan => plan.BodyColumns, static plan => plan.TitleColumns);
 
     private static IReadOnlyList<PageAxisSegment> BuildSegments<TPlan>(
@@ -647,7 +707,7 @@ public static class PagePaginationPlanner
             if (indexes.Count == 0)
                 continue;
 
-            segments.Add(new PageAxisSegment(indexes[0], indexes[^1]));
+            segments.Add(new PageAxisSegment(indexes[0], indexes[^1], indexes));
         }
 
         return segments;

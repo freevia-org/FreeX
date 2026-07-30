@@ -63,6 +63,18 @@ internal static class XlsxWorksheetAutoFilterMaterializer
                 sheet.FilterHiddenRows.Add(row);
                 if (RowFailsOnlyValueListFilters(sheet, row, filters))
                     sheet.ValueFilterHiddenRows.Add(row);
+
+                // R95-io-autofilter-load-hiddenrows-1: the row's raw XML "hidden" bit
+                // (unconditionally loaded into sheet.HiddenRows by ApplySheetXmlLayout BEFORE this
+                // method runs) is fully explained by this reloaded filter's own criteria -- Excel
+                // writes the same single hidden bit for a manually-hidden row and a filtered-out row,
+                // so reclassify it here the same way FilterCommand.Apply's live RecomputeHiddenRows
+                // hides rows purely via FilterHiddenRows/ValueFilterHiddenRows, never HiddenRows.
+                // Leaving the row double-counted in HiddenRows would make it permanently un-clearable:
+                // every filter-clearing path (FilterCommand.RecomputeHiddenRows,
+                // ToggleWorksheetAutoFilterCommand.Apply) only ever mutates FilterHiddenRows-adjacent
+                // sets, never HiddenRows, so Clear Filter could never surface the row again.
+                sheet.HiddenRows.Remove(row);
             }
         }
     }

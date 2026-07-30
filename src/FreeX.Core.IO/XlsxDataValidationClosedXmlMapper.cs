@@ -211,22 +211,26 @@ internal static class XlsxDataValidationClosedXmlMapper
         // test documents the un-prefixed on-disk convention) -- strip it back off here before
         // serializing. A quoted inline literal (e.g. "Red,Green,Blue") never carries the marker,
         // so only unmark when the second character isn't the opening quote of a literal.
-        var unmarked = formula.Length > 1 && formula[0] == '=' && formula[1] != '"'
-            ? formula.Substring(1)
-            : formula;
+        //
+        // That same leading-'=' marker is also the ONLY authority this function trusts for deciding
+        // literal-vs-reference (mirroring DataValidationCopySupport.RewriteValidationFormula's
+        // identical "the leading '=' is the actual runtime authority" convention). It must NOT be
+        // re-derived by sniffing the text for ':', '$', or '!' -- a literal list item can legitimately
+        // contain any of those (e.g. "9:00,10:00,11:00", "$100,$200,$300", "Yes!,No!"), and treating
+        // their mere presence as "already a reference" leaves a genuine literal unquoted on save,
+        // producing an invalid <formula1> that Excel cannot parse (R95_ regression coverage).
+        var isReferenceMarked = formula.Length > 1 && formula[0] == '=' && formula[1] != '"';
+        var unmarked = isReferenceMarked ? formula.Substring(1) : formula;
+
+        if (isReferenceMarked)
+            return unmarked;
 
         var trimmed = unmarked.Trim();
         if (trimmed.Length < 2 || !trimmed.Contains(',', StringComparison.Ordinal))
             return unmarked;
 
-        if (trimmed.StartsWith('"') && trimmed.EndsWith('"') ||
-            trimmed.StartsWith('=') ||
-            trimmed.Contains('!', StringComparison.Ordinal) ||
-            trimmed.Contains(':', StringComparison.Ordinal) ||
-            trimmed.Contains('$', StringComparison.Ordinal))
-        {
+        if ((trimmed.StartsWith('"') && trimmed.EndsWith('"')) || trimmed.StartsWith('='))
             return unmarked;
-        }
 
         return $"\"{trimmed.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
     }

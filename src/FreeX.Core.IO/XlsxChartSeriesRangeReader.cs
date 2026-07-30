@@ -276,23 +276,32 @@ internal static class XlsxChartSeriesRangeReader
         ReadSeriesRangeFormulas(series, containerName).FirstOrDefault();
 
     /// <summary>
-    /// Collects <see cref="ChartSeriesVerbatimFormulas"/> for each series element when
-    /// the chart contains at least one formula that cannot be parsed as a rectangular range.
-    /// Returns null when all formulas are parseable (normal path — verbatim bypass not needed).
+    /// Collects <see cref="ChartSeriesVerbatimFormulas"/> for every series element whose OWN
+    /// formula(s) cannot be parsed as a rectangular range (named range, multi-area reference, or
+    /// external-workbook link). Returns null when no series needs the verbatim bypass.
+    /// <para>
+    /// R95-io-chart-series-verbatim-scope: this is scoped PER SERIES, not chart-wide. A chart
+    /// containing one unparsable series (e.g. a dynamic-range series bound to a defined name)
+    /// alongside ordinary parseable-range series must not force every other series onto the
+    /// verbatim path too — doing so previously discarded their perfectly good numRef/strRef
+    /// numCache/strCache on save, and forced their numeric/date category axis down to strRef.
+    /// Only the series that actually has an unparsable formula gets an entry here; unaffected
+    /// series get no entry, so <c>GetVerbatimFormulas</c> returns null for them and the ordinary
+    /// positional/cached path in <c>XlsxChartXmlWriter</c> applies unchanged.
+    /// </para>
     /// </summary>
     public static List<ChartSeriesVerbatimFormulas>? TryCollectVerbatimFormulas(
         IEnumerable<XElement> allSeriesElements,
         SheetId sheetId)
     {
         var seriesList = allSeriesElements.ToList();
-        var needsVerbatim = seriesList.Any(series => HasUnparsableFormula(series, sheetId));
-        if (!needsVerbatim)
-            return null;
-
-        var result = new List<ChartSeriesVerbatimFormulas>(seriesList.Count);
+        List<ChartSeriesVerbatimFormulas>? result = null;
         for (var i = 0; i < seriesList.Count; i++)
         {
             var series = seriesList[i];
+            if (!HasUnparsableFormula(series, sheetId))
+                continue;
+
             var seriesIndex = ReadSeriesIndex(series, i);
             var isScatterOrBubble = ElementByLocalName(series, "xVal") is not null ||
                 ElementByLocalName(series, "yVal") is not null;
@@ -301,7 +310,7 @@ internal static class XlsxChartSeriesRangeReader
             // XlsxChartXmlWriter.BuildScatterChartSeries already reads them back on write), and
             // bubbleSize (Bubble only) gets its own dedicated field since it has no equivalent
             // to repurpose.
-            result.Add(new ChartSeriesVerbatimFormulas(
+            (result ??= []).Add(new ChartSeriesVerbatimFormulas(
                 SeriesIndex: seriesIndex,
                 ValFormula: ReadFirstFormula(series, isScatterOrBubble ? "yVal" : "val"),
                 CatFormula: ReadFirstFormula(series, isScatterOrBubble ? "xVal" : "cat"),

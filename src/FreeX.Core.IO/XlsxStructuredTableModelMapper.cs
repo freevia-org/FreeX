@@ -60,7 +60,17 @@ internal static class XlsxStructuredTableModelMapper
             for (var row = firstDataRow; row <= lastDataRow; row++)
             {
                 if (!RowMatchesAllFilters(sheet, row, filters))
+                {
                     sheet.FilterHiddenRows.Add(row);
+                    // R95-io-autofilter-load-hiddenrows-1: see the matching fix in
+                    // XlsxWorksheetAutoFilterMaterializer.MaterializeFilters -- the row's raw XML
+                    // "hidden" bit was already unioned into sheet.HiddenRows before this method ran,
+                    // and is now fully explained by this reloaded table filter's own criteria, so it
+                    // must be reclassified as filter-hidden ONLY. Leaving it in HiddenRows too would
+                    // make it permanently un-clearable, since StructuredTableFilterCommand and
+                    // FilterCommand's clearing paths only ever mutate FilterHiddenRows-adjacent sets.
+                    sheet.HiddenRows.Remove(row);
+                }
             }
 
             return;
@@ -73,7 +83,13 @@ internal static class XlsxStructuredTableModelMapper
         for (var row = firstDataRow; row <= lastDataRow; row++)
         {
             if (sheet.HiddenRows.Contains(row))
+            {
                 sheet.FilterHiddenRows.Add(row);
+                // R95-io-autofilter-load-hiddenrows-1: "reclassify" means MOVE, not duplicate --
+                // without removing the row from HiddenRows here it stays double-classified forever
+                // (see the sibling fix above), since no filter-clearing path ever mutates HiddenRows.
+                sheet.HiddenRows.Remove(row);
+            }
         }
     }
 

@@ -266,7 +266,8 @@ public sealed partial class XlsxFileAdapter
                 XlsxChartXmlWriter.ToChartXml,
                 XlsxChartXmlWriter.GetContentType,
                 XlsxChartXmlWriter.GetRelationshipType,
-                GetSourceDrawingPathsBySheet(workbook));
+                GetSourceDrawingPathsBySheet(workbook),
+                GetSourceChartHyperlinksBySheet(workbook));
         }
 
         if (featurePlan.HasSupportedDrawingObjects)
@@ -276,7 +277,8 @@ public sealed partial class XlsxFileAdapter
                 packageStream,
                 workbook,
                 GetSourceDrawingPathsBySheet(workbook),
-                startPictureIndex: GetSourceMaxPictureIndex(workbook) + 1);
+                startPictureIndex: GetSourceMaxPictureIndex(workbook) + 1,
+                sourceObjectHyperlinksBySheet: GetSourceDrawingObjectHyperlinksBySheet(workbook));
         }
 
         if (featurePlan.HasStructuredTables)
@@ -1556,6 +1558,114 @@ public sealed partial class XlsxFileAdapter
 
     private static readonly IReadOnlyDictionary<string, string> EmptyDrawingPathsBySheet =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// R95-io-chart-hyperlink-real-pipeline: maps each source-package sheet's OWN drawing part's chart
+    /// graphicFrame hyperlinks (object-level AND chart-title) to <see cref="ChartHyperlinkPair"/>
+    /// entries, positionally matching document order -- read directly from the TRUE source .xlsx
+    /// package via <see cref="XlsxWorksheetChartWriter.ReadSourceChartHyperlinks"/>.
+    /// <para>
+    /// This is the chart-writer sibling of <see cref="GetSourceDrawingObjectHyperlinksBySheet"/> below,
+    /// fixing the identical bug for charts: <see cref="XlsxWorksheetChartWriter"/>'s R41
+    /// hyperlink-preservation code used to read the CURRENT (pre-rebuild) drawing/chart bytes out of the
+    /// in-progress package being built for this very save -- but through a real
+    /// <see cref="XlsxFileAdapter.Save"/>, that package is a freshly-ClosedXML-generated workbook with
+    /// no original drawing/chart parts at all (ClosedXML always builds brand new, chart-less XML), so
+    /// every chart-object and chart-title hyperlink was silently and permanently dropped on the very
+    /// first save after opening a file that has one. R41's own tests never caught this because they call
+    /// <c>XlsxWorksheetChartWriter.Save</c> directly with a hand-seeded package standing in for "the
+    /// archive", which is exactly the shape the real pipeline does not have.
+    /// </para>
+    /// </summary>
+    private static IReadOnlyDictionary<string, IReadOnlyList<ChartHyperlinkPair>> GetSourceChartHyperlinksBySheet(Workbook workbook)
+    {
+        var drawingPathsBySheet = GetSourceDrawingPathsBySheet(workbook);
+        if (drawingPathsBySheet.Count == 0 || !SourcePackages.TryGetValue(workbook, out var sourcePackage))
+            return EmptyChartHyperlinksBySheet;
+
+        try
+        {
+            using var sourceStream = sourcePackage.OpenRead();
+            using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read);
+
+            XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var result = new Dictionary<string, IReadOnlyList<ChartHyperlinkPair>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (sheetName, drawingPath) in drawingPathsBySheet)
+            {
+                var hyperlinks = XlsxWorksheetChartWriter.ReadSourceChartHyperlinks(
+                    sourceArchive, drawingPath, spreadsheetDrawingNs, drawingNs, chartNs, relNs, packageRelNs);
+                if (hyperlinks.Count > 0)
+                    result[sheetName] = hyperlinks;
+            }
+
+            return result;
+        }
+        catch
+        {
+            return EmptyChartHyperlinksBySheet;
+        }
+    }
+
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<ChartHyperlinkPair>> EmptyChartHyperlinksBySheet =
+        new Dictionary<string, IReadOnlyList<ChartHyperlinkPair>>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// R95-io-drawing-hyperlink-2-2: maps each source-package sheet's OWN drawing part's
+    /// picture/text-box/shape object-level hyperlinks (an <c>a:hlinkClick</c> on a <c>xdr:cNvPr</c>),
+    /// keyed by the object's stable <c>cNvPr@name</c> -- read directly from the TRUE source .xlsx
+    /// package via <see cref="XlsxWorksheetDrawingObjectWriter.ReadOldDrawingObjectHyperlinksByName"/>.
+    /// <para>
+    /// This must read the TRUE source package (like <see cref="GetSourceDrawingPathsBySheet"/> does),
+    /// NOT the in-progress generated package: at the point <see cref="XlsxWorksheetDrawingObjectWriter.Save"/>
+    /// runs, the generated package is a freshly built ClosedXML workbook with no drawing parts of its
+    /// own yet, so it never carries the original hyperlink bytes. Without this, a fill/outline/gradient/
+    /// effect edit on a shape (or a colour/rotation edit on a text box) -- which clears
+    /// <c>IsSourceLoaded</c> so the writer reconstructs the object's anchor from the edited model --
+    /// silently and permanently dropped any hyperlink the object carried, even though the edit itself
+    /// has nothing to do with the hyperlink.
+    /// </para>
+    /// </summary>
+    private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, (string Target, string? TargetMode)>> GetSourceDrawingObjectHyperlinksBySheet(Workbook workbook)
+    {
+        var drawingPathsBySheet = GetSourceDrawingPathsBySheet(workbook);
+        if (drawingPathsBySheet.Count == 0 || !SourcePackages.TryGetValue(workbook, out var sourcePackage))
+            return EmptyDrawingObjectHyperlinksBySheet;
+
+        try
+        {
+            using var sourceStream = sourcePackage.OpenRead();
+            using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read);
+
+            XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var result = new Dictionary<string, IReadOnlyDictionary<string, (string, string?)>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (sheetName, drawingPath) in drawingPathsBySheet)
+            {
+                var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
+                var hyperlinksByName = XlsxWorksheetDrawingObjectWriter.ReadOldDrawingObjectHyperlinksByName(
+                    sourceArchive, drawingPath, drawingRelsPath, spreadsheetDrawingNs, drawingNs, relNs, packageRelNs);
+                if (hyperlinksByName.Count > 0)
+                    result[sheetName] = hyperlinksByName;
+            }
+
+            return result;
+        }
+        catch
+        {
+            return EmptyDrawingObjectHyperlinksBySheet;
+        }
+    }
+
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, (string Target, string? TargetMode)>> EmptyDrawingObjectHyperlinksBySheet =
+        new Dictionary<string, IReadOnlyDictionary<string, (string, string?)>>(StringComparer.OrdinalIgnoreCase);
 
     // Returns the highest N found in xl/media/freexPictureN.* entries in the source package, or 0
     // if there is no source package or no such entries. The caller adds 1 to get the first safe

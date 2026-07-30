@@ -5,6 +5,15 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
 
+/// <summary>
+/// R95-io-chart-hyperlink-real-pipeline: a chart graphicFrame's object-level hyperlink and its chart
+/// title's hyperlink, as read from the TRUE source package (see
+/// <see cref="XlsxWorksheetChartWriter.ReadSourceChartHyperlinks"/>). Either or both may be null.
+/// </summary>
+internal readonly record struct ChartHyperlinkPair(
+    (string Target, string? TargetMode)? ObjectHyperlink,
+    (string Target, string? TargetMode)? TitleHyperlink);
+
 internal static class XlsxWorksheetChartWriter
 {
     private const string ChartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
@@ -45,7 +54,17 @@ internal static class XlsxWorksheetChartWriter
         Func<ChartModel, Workbook, Sheet, XDocument> createChartXml,
         Func<ChartModel, string> getChartContentType,
         Func<ChartModel, string> getChartRelationshipType,
-        IReadOnlyDictionary<string, string>? sourceDrawingPathsBySheet = null)
+        IReadOnlyDictionary<string, string>? sourceDrawingPathsBySheet = null,
+        // R95-io-chart-hyperlink-real-pipeline: per-sheet, positional (matching document order of chart
+        // graphicFrames) hyperlink pairs read from the TRUE source .xlsx package -- see
+        // XlsxFileAdapter.GetSourceChartHyperlinksBySheet. Through the real XlsxFileAdapter.Save
+        // pipeline, `archive` below (xlsxStream) is the in-progress, freshly-ClosedXML-generated
+        // package, which NEVER contains the original source chart/drawing bytes (ClosedXML always
+        // builds a brand-new, chart-less workbook). The old archive-based ReadOldChartGraphicFrameHyperlinks/
+        // ReadOldChartTitleHyperlink fallback below is kept only so direct unit tests that hand-seed a
+        // package and call this method without going through XlsxFileAdapter keep working; the real
+        // product entry point always supplies this parameter.
+        IReadOnlyDictionary<string, IReadOnlyList<ChartHyperlinkPair>>? sourceChartHyperlinksBySheet = null)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -114,7 +133,10 @@ internal static class XlsxWorksheetChartWriter
             var drawingPath = reusesOwnSourceDrawingPath
                 ? ownDrawingPath!
                 : AllocateFreshDrawingPath(archive, reservedDrawingPaths, usedDrawingPaths);
-            WriteWorksheetCharts(archive, worksheetPath, workbook, sheet, supportedCharts, drawingPath, reusesOwnSourceDrawingPath, ref chartIndex, createChartXml, getChartContentType, getChartRelationshipType);
+            var sourceChartHyperlinks = sourceChartHyperlinksBySheet?.TryGetValue(name, out var sheetHyperlinks) == true
+                ? sheetHyperlinks
+                : null;
+            WriteWorksheetCharts(archive, worksheetPath, workbook, sheet, supportedCharts, drawingPath, reusesOwnSourceDrawingPath, ref chartIndex, createChartXml, getChartContentType, getChartRelationshipType, sourceChartHyperlinks);
         }
     }
 
@@ -151,7 +173,8 @@ internal static class XlsxWorksheetChartWriter
         ref int chartIndex,
         Func<ChartModel, Workbook, Sheet, XDocument> createChartXml,
         Func<ChartModel, string> getChartContentType,
-        Func<ChartModel, string> getChartRelationshipType)
+        Func<ChartModel, string> getChartRelationshipType,
+        IReadOnlyList<ChartHyperlinkPair>? sourceChartHyperlinks)
     {
         var worksheetEntry = archive.GetEntry(worksheetPath);
         if (worksheetEntry is null)
@@ -168,14 +191,22 @@ internal static class XlsxWorksheetChartWriter
 
         var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
 
-        // R41-io-hyperlink-drawing-rels-3-1: capture each existing chart graphicFrame's object-level
-        // hyperlink BEFORE the drawing part is deleted and every chart's anchor is rebuilt from
-        // ChartModel (which has no Hyperlink property to carry this across). Matched positionally: the
-        // Nth chart graphicFrame found in the OLD drawing (document order) corresponds to the Nth chart
-        // written by this same pass -- consistent with how this file already numbers chart parts/anchors
-        // positionally elsewhere (e.g. chartIndex).
-        var oldChartHyperlinks = ReadOldChartGraphicFrameHyperlinks(
-            archive, drawingPath, drawingRelsPath, spreadsheetDrawingNs, drawingNs, relNs, packageRelNs);
+        // R41-io-hyperlink-drawing-rels-3-1 / R95-io-chart-hyperlink-real-pipeline: capture each existing
+        // chart graphicFrame's object-level hyperlink BEFORE the drawing part is deleted and every
+        // chart's anchor is rebuilt from ChartModel (which has no Hyperlink property to carry this
+        // across). Matched positionally: the Nth chart graphicFrame found in the OLD drawing (document
+        // order) corresponds to the Nth chart written by this same pass -- consistent with how this file
+        // already numbers chart parts/anchors positionally elsewhere (e.g. chartIndex).
+        //
+        // Prefer sourceChartHyperlinks (read by the caller from the TRUE source package -- see the
+        // XlsxWorksheetChartWriter.Save doc comment) when supplied; that is what every real save through
+        // XlsxFileAdapter provides. Fall back to reading `archive` itself only for direct-call unit tests
+        // that hand-seed the package and never go through XlsxFileAdapter -- through the real pipeline
+        // `archive` is a freshly-ClosedXML-generated package with no old drawing content to read.
+        var oldChartHyperlinks = sourceChartHyperlinks is not null
+            ? sourceChartHyperlinks.Select(pair => pair.ObjectHyperlink).ToList()
+            : ReadOldChartGraphicFrameHyperlinks(
+                archive, drawingPath, drawingRelsPath, spreadsheetDrawingNs, drawingNs, relNs, packageRelNs);
 
         archive.GetEntry(drawingPath)?.Delete();
         archive.GetEntry(drawingRelsPath)?.Delete();
@@ -191,9 +222,15 @@ internal static class XlsxWorksheetChartWriter
             chartContentTypes[currentChartIndex] = getChartContentType(chart);
             var chartPath = $"xl/charts/chart{currentChartIndex}.xml";
 
-            // R41-io-hyperlink-drawing-rels-3-2: capture the OLD chart part's main-title hyperlink (if
-            // any) BEFORE it is deleted/overwritten below, so it can be grafted onto the rebuilt title.
-            var titleHyperlink = ReadOldChartTitleHyperlink(archive, chartPath, packageRelNs, chartNs, drawingNs, relNs);
+            // R41-io-hyperlink-drawing-rels-3-2 / R95-io-chart-hyperlink-real-pipeline: capture the OLD
+            // chart part's main-title hyperlink (if any) BEFORE it is deleted/overwritten below, so it
+            // can be grafted onto the rebuilt title. Prefer sourceChartHyperlinks (see the comment above
+            // and on XlsxWorksheetChartWriter.Save) -- matched positionally by chartPosition, the same
+            // index used for oldChartHyperlinks above. Falls back to the chartPath-identity archive read
+            // only for direct-call unit tests that never go through XlsxFileAdapter.
+            var titleHyperlink = sourceChartHyperlinks is not null
+                ? (chartPosition < sourceChartHyperlinks.Count ? sourceChartHyperlinks[chartPosition].TitleHyperlink : null)
+                : ReadOldChartTitleHyperlink(archive, chartPath, packageRelNs, chartNs, drawingNs, relNs);
 
             archive.GetEntry(chartPath)?.Delete();
             var chartXml = createChartXml(chart, workbook, sheet);
@@ -453,6 +490,156 @@ internal static class XlsxWorksheetChartWriter
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// R95-io-chart-hyperlink-real-pipeline: reads a sheet's chart graphicFrames from the TRUE source
+    /// .xlsx package's drawing part (<paramref name="drawingPath"/>, resolved against
+    /// <paramref name="sourceArchive"/> -- the caller's snapshot of the file as originally opened, NOT
+    /// the in-progress package a real <see cref="XlsxFileAdapter"/> save is rebuilding), in document
+    /// order, and resolves each one's:
+    /// <list type="bullet">
+    /// <item>object-level hyperlink -- an <c>a:hlinkClick</c> on the graphicFrame's <c>xdr:cNvPr</c>,
+    /// via the drawing part's own relationships.</item>
+    /// <item>chart title hyperlink -- an <c>a:hlinkClick</c> on the chart's main-title run's
+    /// <c>a:rPr</c>, via the ACTUAL chart part this graphicFrame's own <c>c:chart</c>/<c>cx:chart</c>
+    /// relationship points at (resolved through the drawing's relationships, not assumed by naming
+    /// convention), and that chart part's own relationships.</item>
+    /// </list>
+    /// Returns one <see cref="ChartHyperlinkPair"/> per chart graphicFrame found (nulls where a
+    /// hyperlink is absent), positionally matching the order <c>WriteWorksheetCharts</c> iterates
+    /// <c>sheet.Charts</c> -- see the comment on <see cref="Save"/>. Returns an empty list if the
+    /// drawing part doesn't exist or can't be parsed.
+    /// </summary>
+    internal static List<ChartHyperlinkPair> ReadSourceChartHyperlinks(
+        ZipArchive sourceArchive,
+        string drawingPath,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        XNamespace chartNs,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var result = new List<ChartHyperlinkPair>();
+        if (sourceArchive.GetEntry(drawingPath) is not { } drawingEntry)
+            return result;
+
+        XDocument drawingXml;
+        try
+        {
+            drawingXml = XlsxPackageXmlEditor.LoadXml(drawingEntry);
+        }
+        catch
+        {
+            return result;
+        }
+
+        var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
+        var drawingRelTargets = LoadRelationshipTargets(sourceArchive, drawingRelsPath, packageRelNs);
+
+        foreach (var graphicFrame in drawingXml.Descendants(spreadsheetDrawingNs + "graphicFrame"))
+        {
+            var graphicData = graphicFrame.Descendants(drawingNs + "graphicData")
+                .FirstOrDefault(gd => (gd.Attribute("uri")?.Value ?? "").Contains("chart", StringComparison.OrdinalIgnoreCase));
+            if (graphicData is null)
+                continue;
+
+            var hlinkClick = graphicFrame
+                .Element(spreadsheetDrawingNs + "nvGraphicFramePr")?
+                .Element(spreadsheetDrawingNs + "cNvPr")?
+                .Element(drawingNs + "hlinkClick");
+            var objectRelId = hlinkClick?.Attribute(relNs + "id")?.Value;
+            (string, string?)? objectHyperlink = objectRelId is not null && drawingRelTargets.TryGetValue(objectRelId, out var resolvedObject)
+                ? resolvedObject
+                : null;
+
+            // Resolve the ACTUAL chart part this graphicFrame points at (its own c:chart/cx:chart r:id),
+            // not an assumed "chart{N}.xml" identity -- the chart writer's own numbering only matches
+            // the source file's numbering when nothing structurally changed.
+            (string, string?)? titleHyperlink = null;
+            var chartRelId = graphicData.Elements().FirstOrDefault(e => e.Attribute(relNs + "id") is not null)?.Attribute(relNs + "id")?.Value;
+            if (chartRelId is not null && drawingRelTargets.TryGetValue(chartRelId, out var chartRelTarget))
+            {
+                var chartPath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, chartRelTarget.Target);
+                titleHyperlink = ReadSourceChartTitleHyperlink(sourceArchive, chartPath, packageRelNs, chartNs, drawingNs, relNs);
+            }
+
+            result.Add(new ChartHyperlinkPair(objectHyperlink, titleHyperlink));
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, (string Target, string? TargetMode)> LoadRelationshipTargets(
+        ZipArchive archive, string relsPath, XNamespace packageRelNs)
+    {
+        var targets = new Dictionary<string, (string, string?)>(StringComparer.OrdinalIgnoreCase);
+        if (archive.GetEntry(relsPath) is not { } relsEntry)
+            return targets;
+
+        try
+        {
+            var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+            foreach (var rel in relsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+            {
+                var id = rel.Attribute("Id")?.Value;
+                var target = rel.Attribute("Target")?.Value;
+                if (string.IsNullOrEmpty(id) || target is null)
+                    continue;
+                targets[id] = (target, rel.Attribute("TargetMode")?.Value);
+            }
+        }
+        catch
+        {
+            // Malformed rels part: fall through with no resolvable relationships.
+        }
+
+        return targets;
+    }
+
+    /// <summary>
+    /// R95-io-chart-hyperlink-real-pipeline sibling of <see cref="ReadOldChartTitleHyperlink"/>: same
+    /// title-hyperlink resolution, but against an explicit <paramref name="sourceArchive"/>/<paramref
+    /// name="chartPath"/> pair resolved by the caller (<see cref="ReadSourceChartHyperlinks"/>) rather
+    /// than an assumed "chart{currentChartIndex}.xml" identity.
+    /// </summary>
+    private static (string Target, string? TargetMode)? ReadSourceChartTitleHyperlink(
+        ZipArchive sourceArchive,
+        string chartPath,
+        XNamespace packageRelNs,
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        XNamespace relNs)
+    {
+        if (sourceArchive.GetEntry(chartPath) is not { } chartEntry)
+            return null;
+
+        XDocument chartXml;
+        try
+        {
+            chartXml = XlsxPackageXmlEditor.LoadXml(chartEntry);
+        }
+        catch
+        {
+            return null;
+        }
+
+        var hlinkClick = chartXml.Root?
+            .Element(chartNs + "chart")?
+            .Element(chartNs + "title")?
+            .Element(chartNs + "tx")?
+            .Element(chartNs + "rich")?
+            .Element(drawingNs + "p")?
+            .Element(drawingNs + "r")?
+            .Element(drawingNs + "rPr")?
+            .Element(drawingNs + "hlinkClick");
+        var relId = hlinkClick?.Attribute(relNs + "id")?.Value;
+        if (relId is null)
+            return null;
+
+        var chartRelsPath = XlsxPackagePath.GetRelationshipPartPath(chartPath);
+        var chartRelTargets = LoadRelationshipTargets(sourceArchive, chartRelsPath, packageRelNs);
+        return chartRelTargets.TryGetValue(relId, out var resolved) ? resolved : null;
     }
 
     /// <summary>

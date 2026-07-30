@@ -182,9 +182,35 @@ internal static class XlsxExternalLinkSchemaNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(sheetName, XName.Get("val"));
-        changed |= NormalizeOptionalTextAttribute(sheetName, "val");
+        changed |= NormalizeSheetNameValueAttribute(sheetName);
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(sheetName);
         return changed;
+    }
+
+    /// <summary>
+    /// Removes <c>sheetName/@val</c> only when it is missing or blank; otherwise preserves it
+    /// verbatim, including any leading/trailing spaces. Unlike most cached string attributes,
+    /// this one is NOT safe to route through <see cref="NormalizeOptionalTextAttribute"/>'s
+    /// unconditional trim: Excel permits leading/trailing spaces in sheet names, and the exact
+    /// same (untrimmed) name is separately embedded in the quoted sheet-qualifier of any worksheet
+    /// formula that references it (e.g. <c>'[1]Sheet 1 '!A1</c>), in a package part this
+    /// normalizer never touches. Trimming here would desync the two representations, so on the
+    /// next load <see cref="Model.ExternalLinkModel.TryFindSheetIndex"/>'s exact string match
+    /// would fail and a previously-resolving external reference would turn into #REF!.
+    /// </summary>
+    private static bool NormalizeSheetNameValueAttribute(XElement sheetName)
+    {
+        var attribute = sheetName.Attribute("val");
+        if (attribute is null)
+            return false;
+
+        if (string.IsNullOrWhiteSpace(attribute.Value))
+        {
+            attribute.Remove();
+            return true;
+        }
+
+        return false;
     }
 
     private static bool NormalizeDefinedNamesElement(XElement definedNames)

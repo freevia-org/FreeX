@@ -541,6 +541,15 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // become #REF! just like ordinary cell/CF/DV formulas do via DeleteSheetOp — otherwise
     // they keep dangling text naming a sheet that no longer exists.
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimDeleteSnapshot;
+    // R95: Sheet.Hyperlinks / Sheet.HyperlinkMetadata.Bookmark carry the same kind of
+    // sheet-qualified string reference as CF/DV/FormControl above (mirrors RenameSheetCommand's
+    // O25/P113 blocks, same two fields) and must be rewritten to #REF! across ALL surviving
+    // sheets whose 'Place in This Document' hyperlink names the deleted sheet — otherwise the
+    // stale target text survives the delete and can silently reattach to an unrelated sheet
+    // later re-created/renamed with the same name (same failure mode the T6/P84 string-ref
+    // clears above guard against for PivotCache/Slicer/Picture/Timeline).
+    private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _hyperlinkBookmarkDeleteSnapshot;
+    private List<(SheetId Sheet, CellAddress Address, string OldTarget)>? _hyperlinkTargetDeleteSnapshot;
 
     public string Label => "Delete Sheet";
 
@@ -756,6 +765,88 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             }
         }
 
+        // R95: rewrite 'Place in This Document' hyperlink bookmarks/targets across ALL surviving
+        // sheets that reference the deleted sheet, producing #REF! — mirrors RenameSheetCommand's
+        // O25/P113 pass (same two fields, same bookmark-vs-bare-target split), but using deleteOp
+        // so FormulaRewriter converts the sheet-qualified ref to #REF! instead of a new name.
+        _hyperlinkBookmarkDeleteSnapshot = [];
+        _hyperlinkTargetDeleteSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            List<KeyValuePair<CellAddress, HyperlinkMetadata>>? changed = null;
+            List<KeyValuePair<CellAddress, string>>? targetChanged = null;
+            foreach (var pair in s.HyperlinkMetadata)
+            {
+                var meta = pair.Value;
+                if (meta.LinkType != HyperlinkTargetKind.PlaceInThisDocument)
+                    continue;
+
+                var bookmark = meta.Bookmark;
+                if (string.IsNullOrEmpty(bookmark))
+                {
+                    // No bookmark recorded — the sheet-qualified ref lives directly on
+                    // sheet.Hyperlinks[addr] instead (see SetHyperlinkCommand).
+                    if (!s.Hyperlinks.TryGetValue(pair.Key, out var target) || string.IsNullOrEmpty(target))
+                        continue;
+
+                    var tBangIndex = target.IndexOf('!', StringComparison.Ordinal);
+                    if (tBangIndex < 0)
+                        continue;
+
+                    var tRawSheetPart = target[..tBangIndex].Trim('\'');
+                    var tSheetPart = tRawSheetPart.Contains("''", StringComparison.Ordinal)
+                        ? tRawSheetPart.Replace("''", "'", StringComparison.Ordinal)
+                        : tRawSheetPart;
+                    if (!string.Equals(tSheetPart, deletedSheetName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var rewrittenTarget = FormulaRewriter.Rewrite(target, deleteOp, s.Name);
+                    if (rewrittenTarget is null || rewrittenTarget == target)
+                        continue;
+
+                    (targetChanged ??= []).Add(new KeyValuePair<CellAddress, string>(pair.Key, rewrittenTarget));
+                    continue;
+                }
+
+                var bangIndex = bookmark.IndexOf('!', StringComparison.Ordinal);
+                if (bangIndex < 0)
+                    continue;
+
+                // Unescape doubled single-quotes ('' -> ') in a quoted sheet name before comparing
+                // against deletedSheetName, mirroring RenameSheetCommand's O27 handling.
+                var rawSheetPart = bookmark[..bangIndex].Trim('\'');
+                var sheetPart = rawSheetPart.Contains("''", StringComparison.Ordinal)
+                    ? rawSheetPart.Replace("''", "'", StringComparison.Ordinal)
+                    : rawSheetPart;
+                if (!string.Equals(sheetPart, deletedSheetName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var rewritten = FormulaRewriter.Rewrite(bookmark, deleteOp, s.Name);
+                if (rewritten is null || rewritten == bookmark)
+                    continue;
+
+                (changed ??= []).Add(new KeyValuePair<CellAddress, HyperlinkMetadata>(pair.Key, meta with { Bookmark = rewritten }));
+            }
+
+            if (changed is not null)
+            {
+                foreach (var (addr, newMeta) in changed)
+                {
+                    _hyperlinkBookmarkDeleteSnapshot.Add((s.Id, addr, s.HyperlinkMetadata[addr].Bookmark));
+                    s.HyperlinkMetadata[addr] = newMeta;
+                }
+            }
+
+            if (targetChanged is not null)
+            {
+                foreach (var (addr, newTarget) in targetChanged)
+                {
+                    _hyperlinkTargetDeleteSnapshot.Add((s.Id, addr, s.Hyperlinks[addr]));
+                    s.Hyperlinks[addr] = newTarget;
+                }
+            }
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -832,6 +923,29 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             if (_timelineNameDeleteSnapshot is not null)
                 foreach (var (timeline, oldValue) in _timelineNameDeleteSnapshot)
                     timeline.SourceSheetName = oldValue;
+
+            // R95 restore: hyperlink bookmarks/targets rewritten to #REF!
+            if (_hyperlinkBookmarkDeleteSnapshot is not null)
+            {
+                foreach (var (sheetId, addr, oldBookmark) in _hyperlinkBookmarkDeleteSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    if (sh.HyperlinkMetadata.TryGetValue(addr, out var meta))
+                        sh.HyperlinkMetadata[addr] = meta with { Bookmark = oldBookmark };
+                }
+            }
+
+            if (_hyperlinkTargetDeleteSnapshot is not null)
+            {
+                foreach (var (sheetId, addr, oldTarget) in _hyperlinkTargetDeleteSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    if (sh.Hyperlinks.ContainsKey(addr))
+                        sh.Hyperlinks[addr] = oldTarget;
+                }
+            }
         }
     }
 
