@@ -200,6 +200,30 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void GroupedSmartArt_LayoutAndConvertRoutesRemainUndoable()
+    {
+        var (session, _) = MakeSmartArtSession();
+        var slide = session.CurrentSlide!;
+        var smartArt = slide.Shapes.Single();
+        slide.Shapes.Clear();
+        var group = new SlideShape { Id = 70, Name = "Group", Kind = SlideShapeKind.Group };
+        group.Children.Add(smartArt);
+        slide.Shapes.Add(group);
+
+        session.ApplySmartArtLayout(7, SmartArtLayoutPreset.BasicProcess).Should().BeTrue();
+        ShapeHitTester.FindShape(slide, 7)!.SmartArt!.Data!.LayoutUniqueId
+            .Should().EndWith("/layout/basicProcess");
+        session.Undo();
+        session.Redo();
+
+        session.ConvertSmartArtToShapes(7).Should().BeTrue();
+        group.Children.Should().NotContain(child => child.Id == 7);
+        group.Children.Should().NotBeEmpty();
+        session.Undo();
+        group.Children.Should().ContainSingle(child => child.Id == 7 && child.Kind == SlideShapeKind.SmartArt);
+    }
+
+    [Fact]
     public void ApplySmartArtPictureLayout_RefreshesPlaceholdersAndRemainsUndoableWithoutImages()
     {
         var (session, _) = MakeSmartArtSession();
