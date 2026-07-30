@@ -3236,24 +3236,55 @@ public sealed class SetFloatingRotationCommand(
 }
 
 /// <summary>
-/// Set the rotation and flips on one direct child of a floating drawing group.
+/// Set the rotation and flips on one child of a floating drawing group.
 /// The group remains the owning floating run; this command only changes the child's
 /// local transform and is undoable through the normal document command bus.
 /// </summary>
-public sealed class SetDrawingGroupChildRotationCommand(
-    int paragraphIndex, int runIndex, int childIndex,
-    double angleDeg, bool flipH, bool flipV) : IDocumentCommand
+public sealed class SetDrawingGroupChildRotationCommand : IDocumentCommand
 {
+    private readonly int _paragraphIndex;
+    private readonly int _runIndex;
+    private readonly IReadOnlyList<int> _childPath;
+    private readonly double _angleDeg;
+    private readonly bool _flipH;
+    private readonly bool _flipV;
     private double _previousAngle;
     private bool _previousFlipH;
     private bool _previousFlipV;
     private bool _applied;
 
+    public SetDrawingGroupChildRotationCommand(
+        int paragraphIndex,
+        int runIndex,
+        int childIndex,
+        double angleDeg,
+        bool flipH,
+        bool flipV)
+        : this(paragraphIndex, runIndex, [childIndex], angleDeg, flipH, flipV)
+    {
+    }
+
+    public SetDrawingGroupChildRotationCommand(
+        int paragraphIndex,
+        int runIndex,
+        IReadOnlyList<int> childPath,
+        double angleDeg,
+        bool flipH,
+        bool flipV)
+    {
+        _paragraphIndex = paragraphIndex;
+        _runIndex = runIndex;
+        _childPath = childPath.ToArray();
+        _angleDeg = angleDeg;
+        _flipH = flipH;
+        _flipV = flipV;
+    }
+
     public string Label => "Rotate Group Child";
 
     public void Apply(IDocumentCommandContext context)
     {
-        if (!TryMutate(context, angleDeg, flipH, flipV,
+        if (!TryMutate(context, _angleDeg, _flipH, _flipV,
                 out _previousAngle, out _previousFlipH, out _previousFlipV))
             return;
 
@@ -3283,15 +3314,17 @@ public sealed class SetDrawingGroupChildRotationCommand(
         previousFlipH = false;
         previousFlipV = false;
 
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
-            || runIndex < 0
-            || runIndex >= paragraph.Runs.Count
-            || paragraph.Runs[runIndex].DrawingGroup is not { } group
-            || childIndex < 0
-            || childIndex >= group.Children.Count)
+        if (context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
+            || _runIndex < 0
+            || _runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[_runIndex].DrawingGroup is not { } rootGroup
+            || !DrawingGroupChildPathResolver.TryGetChild(
+                rootGroup,
+                _childPath,
+                out _,
+                out var child))
             return false;
 
-        var child = group.Children[childIndex];
         switch (child)
         {
             case InlineImage image:
@@ -3337,22 +3370,49 @@ public sealed class SetDrawingGroupChildRotationCommand(
 }
 
 /// <summary>
-/// Set the group-local offset of one direct child. The owning group remains the floating run;
-/// only the child's <see cref="DrawingGroup.ChildOffsets"/> entry changes.
+/// Set the group-local offset of one child. The owning group remains inside the floating run;
+/// only the selected child's <see cref="DrawingGroup.ChildOffsets"/> entry changes.
 /// </summary>
-public sealed class SetDrawingGroupChildPositionCommand(
-    int paragraphIndex, int runIndex, int childIndex,
-    double horizontalOffsetPt, double verticalOffsetPt) : IDocumentCommand
+public sealed class SetDrawingGroupChildPositionCommand : IDocumentCommand
 {
+    private readonly int _paragraphIndex;
+    private readonly int _runIndex;
+    private readonly IReadOnlyList<int> _childPath;
+    private readonly double _horizontalOffsetPt;
+    private readonly double _verticalOffsetPt;
     private double _previousHorizontalOffsetPt;
     private double _previousVerticalOffsetPt;
     private bool _applied;
+
+    public SetDrawingGroupChildPositionCommand(
+        int paragraphIndex,
+        int runIndex,
+        int childIndex,
+        double horizontalOffsetPt,
+        double verticalOffsetPt)
+        : this(paragraphIndex, runIndex, [childIndex], horizontalOffsetPt, verticalOffsetPt)
+    {
+    }
+
+    public SetDrawingGroupChildPositionCommand(
+        int paragraphIndex,
+        int runIndex,
+        IReadOnlyList<int> childPath,
+        double horizontalOffsetPt,
+        double verticalOffsetPt)
+    {
+        _paragraphIndex = paragraphIndex;
+        _runIndex = runIndex;
+        _childPath = childPath.ToArray();
+        _horizontalOffsetPt = horizontalOffsetPt;
+        _verticalOffsetPt = verticalOffsetPt;
+    }
 
     public string Label => "Move Group Child";
 
     public void Apply(IDocumentCommandContext context)
     {
-        if (!TryMutate(context, horizontalOffsetPt, verticalOffsetPt,
+        if (!TryMutate(context, _horizontalOffsetPt, _verticalOffsetPt,
                 out _previousHorizontalOffsetPt, out _previousVerticalOffsetPt))
             return;
 
@@ -3378,11 +3438,10 @@ public sealed class SetDrawingGroupChildPositionCommand(
     {
         previousHorizontalOffsetPt = 0;
         previousVerticalOffsetPt = 0;
-        if (!TryGetGroup(context, out var group)
-            || childIndex < 0
-            || childIndex >= group.Children.Count)
+        if (!TryGetChild(context, out var group, out var child))
             return false;
 
+        var childIndex = _childPath[^1];
         EnsureOffsetSlot(group, childIndex);
         var previous = group.ChildOffsets[childIndex];
         previousHorizontalOffsetPt = previous.X;
@@ -3391,17 +3450,21 @@ public sealed class SetDrawingGroupChildPositionCommand(
         return true;
     }
 
-    private bool TryGetGroup(IDocumentCommandContext context, out DrawingGroup group)
+    private bool TryGetChild(
+        IDocumentCommandContext context,
+        out DrawingGroup owningGroup,
+        out object child)
     {
-        group = null!;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
-            || runIndex < 0
-            || runIndex >= paragraph.Runs.Count
-            || paragraph.Runs[runIndex].DrawingGroup is not { } candidate)
+        owningGroup = null!;
+        child = null!;
+        if (context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
+            || _runIndex < 0
+            || _runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[_runIndex].DrawingGroup is not { } candidate)
             return false;
 
-        group = candidate;
-        return true;
+        return DrawingGroupChildPathResolver.TryGetChild(
+            candidate, _childPath, out owningGroup, out child);
     }
 
     public static void EnsureOffsetSlot(DrawingGroup group, int childIndex)
@@ -3412,24 +3475,51 @@ public sealed class SetDrawingGroupChildPositionCommand(
 }
 
 /// <summary>
-/// Set the local width and height of one direct group child. WordArt has no stored width/height;
+/// Set the local width and height of one group child. WordArt has no stored width/height;
 /// its font size is scaled proportionally so its derived child bounds follow the resize gesture.
 /// </summary>
-public sealed class SetDrawingGroupChildSizeCommand(
-    int paragraphIndex, int runIndex, int childIndex,
-    double widthPt, double heightPt) : IDocumentCommand
+public sealed class SetDrawingGroupChildSizeCommand : IDocumentCommand
 {
+    private readonly int _paragraphIndex;
+    private readonly int _runIndex;
+    private readonly IReadOnlyList<int> _childPath;
+    private readonly double _widthPt;
+    private readonly double _heightPt;
     private double _previousWidthPt;
     private double _previousHeightPt;
     private double _previousWordArtFontSizePt;
     private bool _applied;
 
+    public SetDrawingGroupChildSizeCommand(
+        int paragraphIndex,
+        int runIndex,
+        int childIndex,
+        double widthPt,
+        double heightPt)
+        : this(paragraphIndex, runIndex, [childIndex], widthPt, heightPt)
+    {
+    }
+
+    public SetDrawingGroupChildSizeCommand(
+        int paragraphIndex,
+        int runIndex,
+        IReadOnlyList<int> childPath,
+        double widthPt,
+        double heightPt)
+    {
+        _paragraphIndex = paragraphIndex;
+        _runIndex = runIndex;
+        _childPath = childPath.ToArray();
+        _widthPt = widthPt;
+        _heightPt = heightPt;
+    }
+
     public string Label => "Resize Group Child";
 
     public void Apply(IDocumentCommandContext context)
     {
-        if (widthPt <= 0 || heightPt <= 0
-            || !TryMutate(context, widthPt, heightPt,
+        if (_widthPt <= 0 || _heightPt <= 0
+            || !TryMutate(context, _widthPt, _heightPt,
                 out _previousWidthPt, out _previousHeightPt, out _previousWordArtFontSizePt))
             return;
 
@@ -3464,6 +3554,7 @@ public sealed class SetDrawingGroupChildSizeCommand(
             || height <= 0)
             return false;
 
+        var childIndex = _childPath[^1];
         previousWidth = group.ChildWidthPt(childIndex);
         previousHeight = group.ChildHeightPt(childIndex);
         switch (child)
@@ -3504,17 +3595,14 @@ public sealed class SetDrawingGroupChildSizeCommand(
     {
         group = null!;
         child = null!;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
-            || runIndex < 0
-            || runIndex >= paragraph.Runs.Count
-            || paragraph.Runs[runIndex].DrawingGroup is not { } candidate
-            || childIndex < 0
-            || childIndex >= candidate.Children.Count)
+        if (context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
+            || _runIndex < 0
+            || _runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[_runIndex].DrawingGroup is not { } candidate)
             return false;
 
-        group = candidate;
-        child = candidate.Children[childIndex];
-        return true;
+        return DrawingGroupChildPathResolver.TryGetChild(
+            candidate, _childPath, out group, out child);
     }
 }
 

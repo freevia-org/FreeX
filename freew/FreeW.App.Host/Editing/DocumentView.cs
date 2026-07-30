@@ -180,9 +180,16 @@ public sealed class DocumentView : RichTextBox
     // The floating non-image object currently selected on the overlay canvas (Shape/Chart/SmartArt/WordArt/DrawingGroup).
     // Null when the selected floating object is an InlineImage (use _selectedFloatingImage) or none.
     private object? _selectedFloatingObject;
-    // A direct child selection keeps the owning group active for group-level commands while the
-    // shared child geometry commands target the selected local child.
-    private (FreeW.Core.Model.DrawingGroup Group, int ChildIndex)? _selectedFloatingGroupChild;
+    // A nested child selection keeps the top-level owning group active for group-level commands while
+    // the shared child geometry commands target the selected local child through its full path.
+    private sealed record FloatingGroupChildSelection(
+        FreeW.Core.Model.DrawingGroup RootGroup,
+        IReadOnlyList<int> ChildPath)
+    {
+        public int ChildIndex => ChildPath[^1];
+    }
+
+    private FloatingGroupChildSelection? _selectedFloatingGroupChild;
 
     // Multi-select: the set of currently selected floating objects (each an InlineImage / Shape / Chart /
     // SmartArt / WordArt / FreeW.Core.Model.DrawingGroup). Populated by Shift/Ctrl-click; the single-select path keeps this
@@ -6623,10 +6630,14 @@ public sealed class DocumentView : RichTextBox
     private FrameworkElement BuildFloatingGroupVisual(
         DrawingObjectVisualPlan plan,
         FreeW.Core.Model.DrawingGroup group,
-        bool enableSelection = true)
+        bool enableSelection = true,
+        FreeW.Core.Model.DrawingGroup? selectionRoot = null,
+        IReadOnlyList<int>? selectionPathPrefix = null)
     {
         var widthPx = plan.Rect.WidthDip;
         var heightPx = plan.Rect.HeightDip;
+        selectionRoot ??= group;
+        selectionPathPrefix ??= [];
 
         var isSelected = enableSelection && _selectedFloatingObjects.Contains(group);
 
@@ -6645,7 +6656,15 @@ public sealed class DocumentView : RichTextBox
             double offsetY;
             if (plannedChildren.TryGetValue(i, out var plannedChild))
             {
-                childElement = BuildGroupPlannedChildVisual(group.Children[i], plannedChild.Visual);
+                childElement = group.Children[i] is FreeW.Core.Model.DrawingGroup nestedGroup
+                    && plannedChild.Visual.Kind == DrawingObjectVisualKind.Group
+                    ? BuildFloatingGroupVisual(
+                        plannedChild.Visual,
+                        nestedGroup,
+                        enableSelection,
+                        selectionRoot,
+                        selectionPathPrefix.Append(i).ToArray())
+                    : BuildGroupPlannedChildVisual(group.Children[i], plannedChild.Visual);
                 offsetX = plannedChild.OffsetXDip;
                 offsetY = plannedChild.OffsetYDip;
             }
@@ -6662,11 +6681,12 @@ public sealed class DocumentView : RichTextBox
             if (enableSelection)
             {
                 var childIndex = i;
+                var childPath = selectionPathPrefix.Append(childIndex).ToArray();
                 childElement.MouseLeftButtonDown += (_, e) =>
                 {
                     var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
                     if (!addToMulti)
-                        SelectFloatingGroupChild(group, childIndex);
+                        SelectFloatingGroupChild(selectionRoot, childPath);
                     e.Handled = true;
                 };
             }
@@ -6845,11 +6865,23 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Select one direct child while retaining its owning group as the active selection.</summary>
     internal void SelectFloatingGroupChild(FreeW.Core.Model.DrawingGroup group, int childIndex)
+        => SelectFloatingGroupChild(group, [childIndex]);
+
+    /// <summary>Select a direct or nested child while retaining the top-level group as active.</summary>
+    internal void SelectFloatingGroupChild(
+        FreeW.Core.Model.DrawingGroup group,
+        IReadOnlyList<int> childPath)
     {
-        if (childIndex < 0 || childIndex >= group.Children.Count)
+        if (!DrawingGroupChildPathResolver.TryGetChild(
+                group,
+                childPath,
+                out _,
+                out _))
             return;
 
-        _selectedFloatingGroupChild = (group, childIndex);
+        _selectedFloatingGroupChild = new FloatingGroupChildSelection(
+            group,
+            childPath.ToArray());
         _selectedFloatingObjects.Clear();
         _selectedFloatingObjects.Add(group);
         _selectedFloatingObject = group;
@@ -6866,16 +6898,23 @@ public sealed class DocumentView : RichTextBox
             return false;
 
         CommitToModel();
-        var (blockIndex, runIndex) = FindFloatingObjectLocation(selected.Group);
+        var (blockIndex, runIndex) = FindFloatingObjectLocation(selected.RootGroup);
         if (blockIndex < 0)
             return false;
 
-        SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(selected.Group, selected.ChildIndex);
-        var offset = selected.Group.ChildOffsets[selected.ChildIndex];
+        if (!DrawingGroupChildPathResolver.TryGetChild(
+                selected.RootGroup,
+                selected.ChildPath,
+                out var owningGroup,
+                out _))
+            return false;
+
+        SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(owningGroup, selected.ChildIndex);
+        var offset = owningGroup.ChildOffsets[selected.ChildIndex];
         _commands.Execute(new SetDrawingGroupChildPositionCommand(
             blockIndex,
             runIndex,
-            selected.ChildIndex,
+            selected.ChildPath,
             offset.X + dxPt,
             offset.Y + dyPt));
         SyncFloatingObjectsCanvas();
@@ -6893,8 +6932,15 @@ public sealed class DocumentView : RichTextBox
             return false;
 
         CommitToModel();
-        var (blockIndex, runIndex) = FindFloatingObjectLocation(selected.Group);
+        var (blockIndex, runIndex) = FindFloatingObjectLocation(selected.RootGroup);
         if (blockIndex < 0)
+            return false;
+
+        if (!DrawingGroupChildPathResolver.TryGetChild(
+                selected.RootGroup,
+                selected.ChildPath,
+                out var owningGroup,
+                out _))
             return false;
 
         var commands = new List<IDocumentCommand>
@@ -6902,18 +6948,18 @@ public sealed class DocumentView : RichTextBox
             new SetDrawingGroupChildSizeCommand(
                 blockIndex,
                 runIndex,
-                selected.ChildIndex,
+                selected.ChildPath,
                 widthPt,
                 heightPt)
         };
         if (Math.Abs(dxPt) > 0.01 || Math.Abs(dyPt) > 0.01)
         {
-            SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(selected.Group, selected.ChildIndex);
-            var offset = selected.Group.ChildOffsets[selected.ChildIndex];
+            SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(owningGroup, selected.ChildIndex);
+            var offset = owningGroup.ChildOffsets[selected.ChildIndex];
             commands.Add(new SetDrawingGroupChildPositionCommand(
                 blockIndex,
                 runIndex,
-                selected.ChildIndex,
+                selected.ChildPath,
                 offset.X + dxPt,
                 offset.Y + dyPt));
         }
@@ -6926,8 +6972,15 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Returns the current multi-select set as a read-only snapshot.</summary>
     internal IReadOnlyList<object> SelectedFloatingObjects => _selectedFloatingObjects.AsReadOnly();
 
-    /// <summary>Returns the selected direct child within a group, when child editing is active.</summary>
-    internal (FreeW.Core.Model.DrawingGroup Group, int ChildIndex)? SelectedFloatingGroupChild => _selectedFloatingGroupChild;
+    /// <summary>Returns the selected child within a group, when child editing is active.</summary>
+    internal (FreeW.Core.Model.DrawingGroup Group, int ChildIndex)? SelectedFloatingGroupChild =>
+        _selectedFloatingGroupChild is { } selected
+            ? (selected.RootGroup, selected.ChildIndex)
+            : null;
+
+    /// <summary>Returns the complete root-relative path for the selected group child.</summary>
+    internal IReadOnlyList<int>? SelectedFloatingGroupChildPath =>
+        _selectedFloatingGroupChild?.ChildPath;
 
     /// <summary>Returns true when two or more floating objects are currently multi-selected.</summary>
     internal bool HasMultipleFloatingObjectsSelected => _selectedFloatingObjects.Count >= 2;
