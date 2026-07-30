@@ -61,7 +61,7 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         script.Should().Contain("expectedName = \"PhysicalTextBox\"");
         script.Should().Contain("observedSelectedObjectKind");
         script.Should().Contain("baselineStage -ne \"neutral-cell-selected\"");
-        script.Should().Contain("baselineNameBox -ne \"G10\"");
+        script.Should().Contain("baselineNameBox -ne \"J20\"");
         script.Should().Contain("expectedOrder='$(@($actualOrder) -join ',')'");
     }
 

@@ -333,8 +333,8 @@ function Assert-NameBoxDropdownObjectPostcondition {
         if ([string]$row.baselineStage -ne "neutral-cell-selected" -or
             -not [string]::IsNullOrEmpty([string]$row.baselineSelectedObjectKind) -or
             -not [string]::IsNullOrEmpty([string]$row.baselineSelectedObjectId) -or
-            [string]$row.baselineNameBox -ne "G10" -or
-            [string]$row.baselineActiveCell -ne "G10" -or
+            [string]$row.baselineNameBox -ne "J20" -or
+            [string]$row.baselineActiveCell -ne "J20" -or
             [string]$row.observedStage -ne "object-selected" -or
             [string]$row.observedItemKind -ne "Object" -or
             [string]$row.status -ne "passed") {

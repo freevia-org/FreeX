@@ -279,7 +279,7 @@ probe_name_box_dropdown() {
 
     # Start from a neutral blank cell so clipboard data cannot be inherited from
     # a prior selection or mistaken for dropdown navigation.
-    select_cell 6 9 G10 || true
+    select_cell 9 19 J20 || true
     capture "name-box-dropdown-defined-before.png"
     before_root="$output/name-box-dropdown-defined-before-root.png"
     scrot "$before_root"
@@ -313,9 +313,9 @@ probe_name_box_dropdown() {
         capture "name-box-dropdown-defined-name.png"
     fi
 
-    # Repeat from neutral G10 and require a fresh popup before selecting the
+    # Repeat from neutral J20, outside every fixture object, and require a fresh popup before selecting the
     # third entry, PhysicalTable. Its one-row body must copy exactly North/120.
-    select_cell 6 9 G10 || true
+    select_cell 9 19 J20 || true
     capture "name-box-dropdown-table-before.png"
     before_root="$output/name-box-dropdown-table-before-root.png"
     scrot "$before_root"
@@ -351,7 +351,7 @@ probe_name_box_dropdown() {
     if $defined_passed; then
         record "name-box-dropdown-defined-name-physical" "passed" \
             "name-box-dropdown-defined-before.png; name-box-dropdown-open-root.png; name-box-dropdown-defined-before-x11.txt; name-box-dropdown-defined-open-x11.txt; name-box-dropdown-defined-windows.txt; name-box-dropdown-defined-name.png; defined-clipboard=$defined_clipboard" \
-            "The production Avalonia Name Box flyout created an additional visible X11 popup window and its focused first entry produced the exact Region clipboard value from neutral G10." \
+            "The production Avalonia Name Box flyout created an additional visible X11 popup window and its focused defined-name entry produced the exact Region clipboard value from neutral J20." \
             "$artifacts"
     else
         record "name-box-dropdown-defined-name-physical" "failed" "$artifacts" \
@@ -360,7 +360,7 @@ probe_name_box_dropdown() {
     if $table_passed; then
         record "name-box-dropdown-table-physical" "passed" \
             "name-box-dropdown-table-before.png; name-box-dropdown-table-open-root.png; name-box-dropdown-table-before-x11.txt; name-box-dropdown-table-open-x11.txt; name-box-dropdown-table-windows.txt; name-box-dropdown-table.png; table-clipboard=$table_clipboard" \
-            "The non-defined-name table entry was selected through the focused production flyout with an additional visible X11 popup window, from neutral G10, and copied the exact one-row table body North/120." \
+            "The non-defined-name table entry was selected through the focused production flyout with an additional visible X11 popup window, from neutral J20, and copied the exact one-row table body North/120." \
             "$artifacts"
     else
         record "name-box-dropdown-table-physical" "failed" "$artifacts" \
@@ -447,7 +447,7 @@ probe_name_box_object() {
     local observed_sequence=0 observed_stage="" observed_name="" observed_item_kind="" observed_object_kind="" observed_selected_kind="" observed_id="" observed_name_box="" observed_cell=""
     local passed=false note=""
 
-    if ! select_cell 6 9 G10; then
+    if ! select_cell 9 19 J20; then
         neutral_ok=false
     fi
     capture "$before_file"
@@ -457,8 +457,8 @@ probe_name_box_object() {
     if [[ "$baseline_stage" != "neutral-cell-selected" ||
           -n "$baseline_selected_kind" ||
           -n "$baseline_selected_id" ||
-          "$baseline_name_box" != "G10" ||
-          "$baseline_cell" != "G10" ]]; then
+          "$baseline_name_box" != "J20" ||
+          "$baseline_cell" != "J20" ]]; then
         neutral_ok=false
     fi
 
@@ -503,9 +503,9 @@ probe_name_box_object() {
            [[ "$observed_name_box" == "$expected_name" ]] &&
            [[ -n "$observed_cell" ]]; then
             passed=true
-            note="Physical Name Box selection from neutral G10 produced fresh sequence $observed_sequence with exact $expected_kind identity $expected_id and Name Box text $expected_name."
+            note="Physical Name Box selection from neutral J20 produced fresh sequence $observed_sequence with exact $expected_kind identity $expected_id and Name Box text $expected_name."
         else
-            note="Expected fresh $expected_kind selection '$expected_name'/$expected_id from neutral G10, observed sequence=$observed_sequence stage=$observed_stage item=$observed_name/$observed_item_kind/$observed_object_kind selected=$observed_selected_kind id=$observed_id nameBox=$observed_name_box activeCell=$observed_cell baseline=$baseline_sequence."
+            note="Expected fresh $expected_kind selection '$expected_name'/$expected_id from neutral J20, observed sequence=$observed_sequence stage=$observed_stage item=$observed_name/$observed_item_kind/$observed_object_kind selected=$observed_selected_kind id=$observed_id nameBox=$observed_name_box activeCell=$observed_cell baseline=$baseline_sequence."
         fi
     else
         capture "$selected_file"
