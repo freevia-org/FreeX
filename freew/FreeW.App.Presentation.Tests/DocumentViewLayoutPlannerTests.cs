@@ -1121,6 +1121,72 @@ public sealed class DocumentViewLayoutPlannerTests
             groupFlipH: true).Should().BeTrue();
     }
 
+    [Fact]
+    public void NestedGroupChildTransformHelpersComposeInnerAndOuterTransforms()
+    {
+        var outerRect = new DocumentFloatRect(140, 90, 260, 150);
+        var innerRect = new DocumentFloatRect(196, 126, 128, 72);
+        var leafRect = new DocumentFloatRect(238, 154, 64, 32);
+        var parents = new DocumentFloatTransform[]
+        {
+            new(innerRect, RotationAngle: -18, FlipV: true),
+            new(outerRect, RotationAngle: 27, FlipH: true)
+        };
+
+        var visibleCenter = DocumentViewLayoutPlanner.TransformPointThroughGroupChain(
+            new DocumentFloatPoint(leafRect.CenterXDip, leafRect.CenterYDip),
+            leafRect,
+            childRotationAngle: 13,
+            childFlipH: true,
+            childFlipV: false,
+            parents);
+
+        DocumentViewLayoutPlanner.ContainsFloatingGroupChildPointThroughGroupChain(
+            leafRect,
+            visibleCenter,
+            childRotationAngle: 13,
+            childFlipH: true,
+            childFlipV: false,
+            parents).Should().BeTrue();
+
+        var localCenter = DocumentViewLayoutPlanner.UnTransformPointThroughGroupChain(
+            visibleCenter,
+            leafRect,
+            childRotationAngle: 13,
+            childFlipH: true,
+            childFlipV: false,
+            parents);
+        localCenter.XDip.Should().BeApproximately(leafRect.CenterXDip, 0.001);
+        localCenter.YDip.Should().BeApproximately(leafRect.CenterYDip, 0.001);
+
+        var handles = DocumentViewLayoutPlanner.BuildFloatingGroupChildHandleRectsThroughGroupChain(
+            leafRect,
+            handleSizeDip: 8,
+            childRotationAngle: 13,
+            childFlipH: true,
+            childFlipV: false,
+            parents);
+        var bottomRight = handles.Single(handle =>
+            handle.Handle == DocumentFloatingHandle.BottomRight);
+        DocumentViewLayoutPlanner.HitTestFloatingGroupChildHandleThroughGroupChain(
+            leafRect,
+            new DocumentFloatPoint(bottomRight.Rect.CenterXDip, bottomRight.Rect.CenterYDip),
+            handleSizeDip: 8,
+            hitPaddingDip: 1,
+            childRotationAngle: 13,
+            childFlipH: true,
+            childFlipV: false,
+            parents).Should().Be(DocumentFloatingHandle.BottomRight);
+
+        var moved = DocumentViewLayoutPlanner.BuildFloatingGroupChildMoveRectThroughGroupChain(
+            leafRect,
+            visibleCenter,
+            new DocumentFloatPoint(visibleCenter.XDip + 22, visibleCenter.YDip - 14),
+            parents);
+        moved.XDip.Should().NotBeApproximately(leafRect.XDip + 22, 0.01);
+        moved.YDip.Should().NotBeApproximately(leafRect.YDip - 14, 0.01);
+    }
+
     private static Paragraph BuildAllFloatingKindsParagraph()
     {
         var paragraph = new Paragraph();

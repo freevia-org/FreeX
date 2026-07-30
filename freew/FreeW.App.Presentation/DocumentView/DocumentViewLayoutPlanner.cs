@@ -271,6 +271,16 @@ public sealed record DocumentFloatRect(double XDip, double YDip, double WidthDip
             HeightDip + 2 * paddingDip);
 }
 
+/// <summary>
+/// One composed drawing-group transform. Parent transforms are supplied from the nearest owning
+/// group outward so the shared pointer/handle helpers can apply the exact same order as rendering.
+/// </summary>
+public sealed record DocumentFloatTransform(
+    DocumentFloatRect Rect,
+    double RotationAngle = 0,
+    bool FlipH = false,
+    bool FlipV = false);
+
 public sealed record DocumentDropCapLayoutPlan(
     int BlockIndex,
     int RunIndex,
@@ -1955,6 +1965,228 @@ public static class DocumentViewLayoutPlanner
         if (flipH) x = -x;
         if (flipV) y = -y;
         return new DocumentFloatPoint(x, y);
+    }
+
+    /// <summary>Applies a child transform followed by parent transforms nearest-to-outer.</summary>
+    public static DocumentFloatPoint TransformPointThroughGroupChain(
+        DocumentFloatPoint point,
+        DocumentFloatRect childRect,
+        double childRotationAngle,
+        bool childFlipH,
+        bool childFlipV,
+        IReadOnlyList<DocumentFloatTransform> parentTransforms)
+    {
+        var transformed = TransformPoint(
+            point,
+            childRect,
+            childRotationAngle,
+            childFlipH,
+            childFlipV);
+        foreach (var parent in parentTransforms)
+            transformed = TransformPoint(
+                transformed,
+                parent.Rect,
+                parent.RotationAngle,
+                parent.FlipH,
+                parent.FlipV);
+        return transformed;
+    }
+
+    /// <summary>Maps a screen point back through parent transforms and then the child transform.</summary>
+    public static DocumentFloatPoint UnTransformPointThroughGroupChain(
+        DocumentFloatPoint point,
+        DocumentFloatRect childRect,
+        double childRotationAngle,
+        bool childFlipH,
+        bool childFlipV,
+        IReadOnlyList<DocumentFloatTransform> parentTransforms)
+    {
+        var transformed = point;
+        for (var index = parentTransforms.Count - 1; index >= 0; index--)
+        {
+            var parent = parentTransforms[index];
+            transformed = UnTransformPoint(
+                transformed,
+                parent.Rect,
+                parent.RotationAngle,
+                parent.FlipH,
+                parent.FlipV);
+        }
+
+        return UnTransformPoint(
+            transformed,
+            childRect,
+            childRotationAngle,
+            childFlipH,
+            childFlipV);
+    }
+
+    /// <summary>Maps a screen-space delta into the selected child's local axes.</summary>
+    public static DocumentFloatPoint UnTransformVectorThroughGroupChain(
+        DocumentFloatPoint vector,
+        IReadOnlyList<DocumentFloatTransform> parentTransforms)
+    {
+        var transformed = vector;
+        for (var index = parentTransforms.Count - 1; index >= 0; index--)
+        {
+            var parent = parentTransforms[index];
+            transformed = UnTransformVector(
+                transformed,
+                parent.RotationAngle,
+                parent.FlipH,
+                parent.FlipV);
+        }
+        return transformed;
+    }
+
+    public static IReadOnlyList<DocumentFloatingHandleRect> BuildFloatingGroupChildHandleRectsThroughGroupChain(
+        DocumentFloatRect childRect,
+        double handleSizeDip,
+        double childRotationAngle,
+        bool childFlipH,
+        bool childFlipV,
+        IReadOnlyList<DocumentFloatTransform> parentTransforms)
+    {
+        // Build raw model-space handle centres, then apply the leaf and ancestor transforms once.
+        // Applying the leaf transform here and again through the composed helper moves handles away
+        // from the rendered corners for rotated or flipped nested children.
+        return BuildFloatingHandleRects(
+                childRect,
+                handleSizeDip)
+            .Select(handle =>
+            {
+                var center = TransformPointThroughGroupChain(
+                    new DocumentFloatPoint(handle.Rect.CenterXDip, handle.Rect.CenterYDip),
+                    childRect,
+                    childRotationAngle,
+                    childFlipH,
+                    childFlipV,
+                    parentTransforms);
+                return new DocumentFloatingHandleRect(
+                    handle.Handle,
+                    new DocumentFloatRect(
+                        center.XDip - handle.Rect.WidthDip / 2,
+                        center.YDip - handle.Rect.HeightDip / 2,
+                        handle.Rect.WidthDip,
+                        handle.Rect.HeightDip));
+            })
+            .ToList();
+    }
+
+    public static DocumentFloatingHandle HitTestFloatingGroupChildHandleThroughGroupChain(
+        DocumentFloatRect childRect,
+        DocumentFloatPoint point,
+        double handleSizeDip,
+        double hitPaddingDip,
+        double childRotationAngle,
+        bool childFlipH,
+        bool childFlipV,
+        IReadOnlyList<DocumentFloatTransform> parentTransforms)
+    {
+        foreach (var handle in BuildFloatingGroupChildHandleRectsThroughGroupChain(
+            childRect,
+            handleSizeDip,
+            childRotationAngle,
+            childFlipH,
+            childFlipV,
+            parentTransforms))
+        {
+            if (handle.Rect.Inflate(Math.Max(0, hitPaddingDip)).Contains(point))
+                return handle.Handle;
+        }
+
+        return DocumentFloatingHandle.None;
+    }
+
+    public static bool ContainsFloatingGroupChildPointThroughGroupChain(
+        DocumentFloatRect childRect,
+        DocumentFloatPoint point,
+        double childRotationAngle,
+        bool childFlipH,
+        bool childFlipV,
+        IReadOnlyList<DocumentFloatTransform> parentTransforms)
+    {
+        var corners = new[]
+        {
+            new DocumentFloatPoint(childRect.LeftDip, childRect.TopDip),
+            new DocumentFloatPoint(childRect.RightDip, childRect.TopDip),
+            new DocumentFloatPoint(childRect.RightDip, childRect.BottomDip),
+            new DocumentFloatPoint(childRect.LeftDip, childRect.BottomDip)
+        }
+        .Select(corner => TransformPointThroughGroupChain(
+            corner,
+            childRect,
+            childRotationAngle,
+            childFlipH,
+            childFlipV,
+            parentTransforms))
+        .ToArray();
+
+        var inside = false;
+        for (var index = 0; index < corners.Length; index++)
+        {
+            var next = corners[(index + 1) % corners.Length];
+            var crosses = (corners[index].YDip > point.YDip) != (next.YDip > point.YDip);
+            if (crosses
+                && point.XDip < (next.XDip - corners[index].XDip)
+                    * (point.YDip - corners[index].YDip)
+                    / (next.YDip - corners[index].YDip)
+                    + corners[index].XDip)
+                inside = !inside;
+        }
+        return inside;
+    }
+
+    public static DocumentFloatRect BuildFloatingGroupChildMoveRectThroughGroupChain(
+        DocumentFloatRect childRect,
+        DocumentFloatPoint pointerDown,
+        DocumentFloatPoint pointer,
+        IReadOnlyList<DocumentFloatTransform> parentTransforms)
+    {
+        var localDown = UnTransformPointThroughGroupChain(
+            pointerDown,
+            childRect,
+            0,
+            false,
+            false,
+            parentTransforms);
+        var localPointer = UnTransformPointThroughGroupChain(
+            pointer,
+            childRect,
+            0,
+            false,
+            false,
+            parentTransforms);
+        return BuildFloatingMoveRect(childRect, localDown, localPointer);
+    }
+
+    public static DocumentFloatRect BuildFloatingGroupChildResizeRectThroughGroupChain(
+        DocumentFloatRect childRect,
+        DocumentFloatingHandle handle,
+        DocumentFloatPoint pointer,
+        bool preserveAspect,
+        double minimumSizeDip,
+        double childRotationAngle,
+        bool childFlipH,
+        bool childFlipV,
+        IReadOnlyList<DocumentFloatTransform> parentTransforms)
+    {
+        var localPointer = UnTransformPointThroughGroupChain(
+            pointer,
+            childRect,
+            0,
+            false,
+            false,
+            parentTransforms);
+        return BuildFloatingResizeRect(
+            childRect,
+            handle,
+            localPointer,
+            preserveAspect,
+            minimumSizeDip,
+            childRotationAngle,
+            childFlipH,
+            childFlipV);
     }
 
     public static IReadOnlyList<DocumentFloatingHandleRect> BuildFloatingGroupChildHandleRects(

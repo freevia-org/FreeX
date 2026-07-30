@@ -567,6 +567,56 @@ public sealed class DrawingGroupRoundTripTests
     }
 
     [Fact]
+    public void DrawingGroup_NestedChildEditGeometry_RoundTripsExactLeafOffsetAndSize()
+    {
+        var inner = new DrawingGroup
+        {
+            WidthPt = 126,
+            HeightPt = 72,
+            RotationAngle = -16,
+            FlipV = true
+        };
+        inner.Children.Add(new Shape(ShapeKind.Rectangle, 36, 22));
+        inner.ChildOffsets.Add((10, 8));
+        inner.Children.Add(new Shape(ShapeKind.Ellipse, 82, 52)
+        {
+            RotationAngle = 13,
+            FlipH = true,
+            FlipV = true
+        });
+        inner.ChildOffsets.Add((79, 43));
+
+        var outer = new DrawingGroup
+        {
+            WidthPt = 252,
+            HeightPt = 144,
+            RotationAngle = 24,
+            FlipH = true
+        };
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((28, 22));
+        outer.Children.Add(new Shape(ShapeKind.Rectangle, 54, 34));
+        outer.ChildOffsets.Add((168, 76));
+
+        var recovered = RoundTrip(DocumentWith(outer));
+        var readOuter = ((Paragraph)recovered.Blocks[0]).Runs.Single().DrawingGroup!;
+        var readInner = readOuter.Children[0].Should().BeOfType<DrawingGroup>().Subject;
+        var readLeaf = readInner.Children[1].Should().BeOfType<Shape>().Subject;
+
+        readOuter.WidthPt.Should().BeApproximately(252, 0.001);
+        readOuter.HeightPt.Should().BeApproximately(144, 0.001);
+        readInner.WidthPt.Should().BeApproximately(126, 0.001);
+        readInner.HeightPt.Should().BeApproximately(72, 0.001);
+        readInner.ChildOffsets[1].X.Should().BeApproximately(79, 0.001);
+        readInner.ChildOffsets[1].Y.Should().BeApproximately(43, 0.001);
+        readLeaf.WidthPt.Should().BeApproximately(82, 0.001);
+        readLeaf.HeightPt.Should().BeApproximately(52, 0.001);
+        readLeaf.RotationAngle.Should().BeApproximately(13, 0.001);
+        readLeaf.FlipH.Should().BeTrue();
+        readLeaf.FlipV.Should().BeTrue();
+    }
+
+    [Fact]
     public void DrawingGroup_ChildCoordinateSpace_IsMappedIntoRenderedGroupBounds()
     {
         var bytes = RewriteDocumentXml(WriteBytes(DocumentWith(TwoMemberGroup())), document =>

@@ -212,6 +212,66 @@ public sealed class DrawingGroupModelTests
         second.HeightPt.Should().Be(36);
     }
 
+    [Fact]
+    public void NestedChildPathCommands_EditLeafOnlyAndUndoWithoutChangingEitherOwningGroup()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+
+        var inner = new DrawingGroup
+        {
+            WidthPt = 120,
+            HeightPt = 64,
+            RotationAngle = -18,
+            FlipV = true
+        };
+        var leaf = new Shape(ShapeKind.Ellipse, 42, 24);
+        inner.Children.Add(new Shape(ShapeKind.Rectangle, 30, 18));
+        inner.ChildOffsets.Add((8, 6));
+        inner.Children.Add(leaf);
+        inner.ChildOffsets.Add((54, 26));
+
+        var outer = new DrawingGroup
+        {
+            WidthPt = 240,
+            HeightPt = 144,
+            RotationAngle = 27,
+            FlipH = true
+        };
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((24, 18));
+        outer.Children.Add(new Shape(ShapeKind.Rectangle, 48, 30));
+        outer.ChildOffsets.Add((156, 72));
+
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+        doc.Blocks.Add(paragraph);
+        var context = new TestCtx(doc);
+        var path = new[] { 0, 1 };
+        var outerSize = (outer.WidthPt, outer.HeightPt);
+        var innerSize = (inner.WidthPt, inner.HeightPt);
+        var offsetBefore = inner.ChildOffsets[1];
+        var sizeBefore = (leaf.WidthPt, leaf.HeightPt);
+
+        var position = new SetDrawingGroupChildPositionCommand(0, 0, path, 82, 44);
+        var size = new SetDrawingGroupChildSizeCommand(0, 0, path, 78, 46);
+        position.Apply(context);
+        size.Apply(context);
+
+        inner.ChildOffsets[1].Should().Be((82, 44));
+        (leaf.WidthPt, leaf.HeightPt).Should().Be((78, 46));
+        (outer.WidthPt, outer.HeightPt).Should().Be(outerSize);
+        (inner.WidthPt, inner.HeightPt).Should().Be(innerSize);
+
+        size.Revert(context);
+        position.Revert(context);
+
+        inner.ChildOffsets[1].Should().Be(offsetBefore);
+        (leaf.WidthPt, leaf.HeightPt).Should().Be(sizeBefore);
+        (outer.WidthPt, outer.HeightPt).Should().Be(outerSize);
+        (inner.WidthPt, inner.HeightPt).Should().Be(innerSize);
+    }
+
     // ── GroupFloatingObjectsCommand ──────────────────────────────────────────────────────────────
 
     [Fact]

@@ -80,6 +80,50 @@ public sealed class DrawingGroupHostTests
         return doc;
     }
 
+    private static TextDocument NestedChildDoc(
+        out DrawingGroup outer,
+        out DrawingGroup inner,
+        out Shape leaf)
+    {
+        inner = new DrawingGroup
+        {
+            WidthPt = 126,
+            HeightPt = 72,
+            RotationAngle = -16,
+            FlipV = true
+        };
+        inner.Children.Add(new Shape(ShapeKind.Rectangle, 36, 22));
+        inner.ChildOffsets.Add((10, 8));
+        leaf = new Shape(ShapeKind.Ellipse, 44, 28);
+        inner.Children.Add(leaf);
+        inner.ChildOffsets.Add((58, 30));
+
+        outer = new DrawingGroup
+        {
+            WidthPt = 252,
+            HeightPt = 144,
+            RotationAngle = 24,
+            FlipH = true,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 72,
+                VerticalOffsetPt = 36,
+                ZOrderIndex = 4
+            }
+        };
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((28, 22));
+        outer.Children.Add(new Shape(ShapeKind.Rectangle, 54, 34));
+        outer.ChildOffsets.Add((168, 76));
+
+        var document = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+        document.Blocks.Add(paragraph);
+        return document;
+    }
+
     // ── Multi-select management ──────────────────────────────────────────────────────────────────
 
     [StaFact]
@@ -273,6 +317,38 @@ public sealed class DrawingGroupHostTests
         view.Undo();
         nested.ChildOffsets[1].Should().Be(offsetBefore);
         child.WidthPt.Should().Be(widthBefore);
+    }
+
+    [StaFact]
+    public void NestedGroupChild_MoveResizeUndoThroughWpfHost_KeepBothOwningGroupsUnchanged()
+    {
+        var doc = NestedChildDoc(out var outer, out var inner, out var leaf);
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        view.SelectFloatingObject(outer);
+        view.SelectFloatingGroupChild(outer, [0, 1]);
+
+        view.SelectedFloatingGroupChildPath.Should().Equal([0, 1]);
+        var outerSize = (outer.WidthPt, outer.HeightPt);
+        var innerSize = (inner.WidthPt, inner.HeightPt);
+        var offsetBefore = inner.ChildOffsets[1];
+        var sizeBefore = (leaf.WidthPt, leaf.HeightPt);
+
+        view.MoveSelectedFloatingGroupChild(21, 13).Should().BeTrue();
+        view.ResizeSelectedFloatingGroupChild(82, 52).Should().BeTrue();
+        view.CommitToModel();
+
+        inner.ChildOffsets[1].Should().Be((offsetBefore.X + 21, offsetBefore.Y + 13));
+        (leaf.WidthPt, leaf.HeightPt).Should().Be((82, 52));
+        (outer.WidthPt, outer.HeightPt).Should().Be(outerSize);
+        (inner.WidthPt, inner.HeightPt).Should().Be(innerSize);
+
+        view.Undo();
+        view.Undo();
+        inner.ChildOffsets[1].Should().Be(offsetBefore);
+        (leaf.WidthPt, leaf.HeightPt).Should().Be(sizeBefore);
+        (outer.WidthPt, outer.HeightPt).Should().Be(outerSize);
+        (inner.WidthPt, inner.HeightPt).Should().Be(innerSize);
     }
 
     // ── IsGroupSelected ──────────────────────────────────────────────────────────────────────────

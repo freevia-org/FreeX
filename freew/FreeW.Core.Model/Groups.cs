@@ -85,3 +85,73 @@ public sealed class DrawingGroup
         _ => 36
     };
 }
+
+/// <summary>
+/// Resolves a child path relative to a top-level <see cref="DrawingGroup"/> run.
+/// A path such as <c>[0, 1]</c> means child 1 of the nested group at child 0.
+/// Keeping this traversal in the model lets WPF, Avalonia, commands, and persistence tests
+/// agree on the same owning group without duplicating platform-specific lookup logic.
+/// </summary>
+public static class DrawingGroupChildPathResolver
+{
+    public static bool TryGetChild(
+        DrawingGroup root,
+        IReadOnlyList<int> childPath,
+        out DrawingGroup owningGroup,
+        out object child)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(childPath);
+
+        owningGroup = null!;
+        child = null!;
+        if (childPath.Count == 0)
+            return false;
+
+        var current = root;
+        for (var depth = 0; depth < childPath.Count; depth++)
+        {
+            var index = childPath[depth];
+            if (index < 0 || index >= current.Children.Count)
+                return false;
+
+            var candidate = current.Children[index];
+            if (depth == childPath.Count - 1)
+            {
+                owningGroup = current;
+                child = candidate;
+                return true;
+            }
+
+            if (candidate is not DrawingGroup nested)
+                return false;
+            current = nested;
+        }
+
+        return false;
+    }
+
+    public static bool TryGetGroup(
+        DrawingGroup root,
+        IReadOnlyList<int> groupPath,
+        out DrawingGroup group)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(groupPath);
+
+        group = root;
+        foreach (var index in groupPath)
+        {
+            if (index < 0 || index >= group.Children.Count
+                || group.Children[index] is not DrawingGroup nested)
+            {
+                group = null!;
+                return false;
+            }
+
+            group = nested;
+        }
+
+        return true;
+    }
+}

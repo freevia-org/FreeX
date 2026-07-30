@@ -216,10 +216,19 @@ public sealed class DocumentView : Control
     // Multi-select set for object arrange and nested-group commands. Valid DrawingGroups are
     // groupable members just like the concrete floating object runs they contain.
     private readonly List<(int BlockIndex, int RunIndex, string Kind)> _selectedFloatingObjects = [];
-    // Direct child selection keeps the owning group selected for group-level commands while exposing
-    // the child identity for child-local editing. The child index is stable for the undoable model
-    // command until the group is structurally edited.
-    private (int BlockIndex, int RunIndex, int ChildIndex, string Kind, Rect Rect)? _selectedFloatingGroupChild;
+    // Nested child selection keeps the top-level group selected for group-level commands while
+    // exposing the complete child path for child-local editing.
+    private sealed record FloatingGroupChildSelection(
+        int BlockIndex,
+        int RunIndex,
+        IReadOnlyList<int> ChildPath,
+        string Kind,
+        Rect Rect)
+    {
+        public int ChildIndex => ChildPath[^1];
+    }
+
+    private FloatingGroupChildSelection? _selectedFloatingGroupChild;
     // AV-HANDLES: drag state — non-null while the user is dragging a selected float (move OR resize).
     // PointerDown : pointer page-space position when the drag started.
     // FloatRect   : the float's page-space Rect at drag start (used to revert on Esc + as the resize base).
@@ -7258,15 +7267,19 @@ public sealed class DocumentView : Control
         // AV-FLSEL: draw selection outline + 8 resize handles over the selected floating object.
         if (_selectedFloatingGroupChild is { } selChild)
         {
-            var transform = GetFloatingGroupChildRotation(
-                selChild.BlockIndex, selChild.RunIndex, selChild.ChildIndex);
-            if (TryGetFloatingGroupData(selChild.BlockIndex, selChild.RunIndex, out var ownerGroup))
+            if (TryGetFloatingGroupChildGeometry(
+                    selChild.BlockIndex,
+                    selChild.RunIndex,
+                    selChild.ChildPath,
+                    out var geometry))
             {
-                var currentChildRect = ownerGroup.Children
-                    .FirstOrDefault(item => item.ChildIndex == selChild.ChildIndex)?.Rect
-                    ?? selChild.Rect;
-                DrawFloatingGroupChildSelection(context, ownerGroup, currentChildRect,
-                    transform.Angle, transform.FlipH, transform.FlipV);
+                DrawFloatingGroupChildSelection(
+                    context,
+                    geometry.Child.Rect,
+                    geometry.Child.RotationAngle,
+                    geometry.Child.FlipH,
+                    geometry.Child.FlipV,
+                    geometry.ParentTransforms);
             }
         }
         else if (_selectedFloating is { } selFl)
@@ -8334,23 +8347,19 @@ public sealed class DocumentView : Control
     {
         var dict = new Dictionary<FloatHandle, Rect>();
         if (_selectedFloatingGroupChild is { } child
-            && TryGetFloatingGroupData(child.BlockIndex, child.RunIndex, out var groupData))
+            && TryGetFloatingGroupChildGeometry(
+                child.BlockIndex,
+                child.RunIndex,
+                child.ChildPath,
+                out var geometry))
         {
-            var currentChildRect = groupData.Children
-                .FirstOrDefault(item => item.ChildIndex == child.ChildIndex)?.Rect
-                ?? child.Rect;
-            var childTransform = GetFloatingGroupChildRotation(
-                child.BlockIndex, child.RunIndex, child.ChildIndex);
-            foreach (var handle in DocumentViewLayoutPlanner.BuildFloatingGroupChildHandleRects(
-                         ToPlannerRect(groupData.Rect),
-                         ToPlannerRect(currentChildRect),
+            foreach (var handle in DocumentViewLayoutPlanner.BuildFloatingGroupChildHandleRectsThroughGroupChain(
+                         ToPlannerRect(geometry.Child.Rect),
                          FloatHandleSize,
-                         childTransform.Angle,
-                         childTransform.FlipH,
-                         childTransform.FlipV,
-                         groupData.RotationAngle,
-                         groupData.FlipH,
-                         groupData.FlipV))
+                         geometry.Child.RotationAngle,
+                         geometry.Child.FlipH,
+                         geometry.Child.FlipV,
+                         geometry.ParentTransforms))
                 dict[FromPlannerHandle(handle.Handle)] = ToAvaloniaRect(handle.Rect);
             return dict;
         }
@@ -8375,25 +8384,21 @@ public sealed class DocumentView : Control
     private FloatHandle HitTestHandle(Point point)
     {
         if (_selectedFloatingGroupChild is { } child
-            && TryGetFloatingGroupData(child.BlockIndex, child.RunIndex, out var groupData))
+            && TryGetFloatingGroupChildGeometry(
+                child.BlockIndex,
+                child.RunIndex,
+                child.ChildPath,
+                out var geometry))
         {
-            var currentChildRect = groupData.Children
-                .FirstOrDefault(item => item.ChildIndex == child.ChildIndex)?.Rect
-                ?? child.Rect;
-            var childTransform = GetFloatingGroupChildRotation(
-                child.BlockIndex, child.RunIndex, child.ChildIndex);
-            var resolved = FromPlannerHandle(DocumentViewLayoutPlanner.HitTestFloatingGroupChildHandle(
-                ToPlannerRect(groupData.Rect),
-                ToPlannerRect(currentChildRect),
+            var resolved = FromPlannerHandle(DocumentViewLayoutPlanner.HitTestFloatingGroupChildHandleThroughGroupChain(
+                ToPlannerRect(geometry.Child.Rect),
                 ToPlannerPoint(point),
                 FloatHandleSize,
                 hitPaddingDip: 2,
-                childTransform.Angle,
-                childTransform.FlipH,
-                childTransform.FlipV,
-                groupData.RotationAngle,
-                groupData.FlipH,
-                groupData.FlipV));
+                geometry.Child.RotationAngle,
+                geometry.Child.FlipH,
+                geometry.Child.FlipV,
+                geometry.ParentTransforms));
             return resolved;
         }
 
@@ -8514,13 +8519,27 @@ public sealed class DocumentView : Control
         if (_selectedFloating is not { } sel) return FloatHandle.None;
         var handle = HitTestHandle(start);
         if (handle == FloatHandle.None) return FloatHandle.None;
-        var dragRect = _selectedFloatingGroupChild is { } child
-            && child.BlockIndex == sel.BlockIndex
-            && child.RunIndex == sel.RunIndex
-                ? child.Rect
-                : sel.Rect;
+        var dragRect = SelectedFloatingDragRect(sel);
         _floatDragState = (start, dragRect, handle);
         return handle;
+    }
+
+    internal Rect? FloatDragBaseRectForTest => _floatDragState?.FloatRect;
+
+    private Rect SelectedFloatingDragRect(
+        (int BlockIndex, int RunIndex, string Kind, Rect Rect) selection)
+    {
+        if (_selectedFloatingGroupChild is { } child
+            && child.BlockIndex == selection.BlockIndex
+            && child.RunIndex == selection.RunIndex
+            && TryGetFloatingGroupChildGeometry(
+                child.BlockIndex,
+                child.RunIndex,
+                child.ChildPath,
+                out var geometry))
+            return geometry.Child.Rect;
+
+        return selection.Rect;
     }
 
     /// <summary>
@@ -8571,34 +8590,29 @@ public sealed class DocumentView : Control
         if (_floatDragState is not { } drag || _selectedFloating is not { } sel) return;
         Rect newRect;
         if (_selectedFloatingGroupChild is { } child
-            && TryGetFloatingGroupData(child.BlockIndex, child.RunIndex, out var groupData))
+            && TryGetFloatingGroupChildGeometry(
+                child.BlockIndex,
+                child.RunIndex,
+                child.ChildPath,
+                out var geometry))
         {
-            var childTransform = GetFloatingGroupChildRotation(
-                child.BlockIndex, child.RunIndex, child.ChildIndex);
-            var groupRect = ToPlannerRect(groupData.Rect);
             var childRect = ToPlannerRect(drag.FloatRect);
             var plannerRect = drag.Handle == FloatHandle.Body
-                ? DocumentViewLayoutPlanner.BuildFloatingGroupChildMoveRect(
-                    groupRect,
+                ? DocumentViewLayoutPlanner.BuildFloatingGroupChildMoveRectThroughGroupChain(
                     childRect,
                     ToPlannerPoint(drag.PointerDown),
                     ToPlannerPoint(point),
-                    groupData.RotationAngle,
-                    groupData.FlipH,
-                    groupData.FlipV)
-                : DocumentViewLayoutPlanner.BuildFloatingGroupChildResizeRect(
-                    groupRect,
+                    geometry.ParentTransforms)
+                : DocumentViewLayoutPlanner.BuildFloatingGroupChildResizeRectThroughGroupChain(
                     childRect,
                     ToPlannerHandle(drag.Handle),
                     ToPlannerPoint(point),
                     shift,
                     MinFloatSizePt * PxPerPoint,
-                    childTransform.Angle,
-                    childTransform.FlipH,
-                    childTransform.FlipV,
-                    groupData.RotationAngle,
-                    groupData.FlipH,
-                    groupData.FlipV);
+                    geometry.Child.RotationAngle,
+                    geometry.Child.FlipH,
+                    geometry.Child.FlipV,
+                    geometry.ParentTransforms);
             newRect = ToAvaloniaRect(plannerRect);
         }
         else if (drag.Handle == FloatHandle.Body)
@@ -8643,34 +8657,29 @@ public sealed class DocumentView : Control
         if (_selectedFloatingGroupChild is { } child
             && child.BlockIndex == sel.BlockIndex
             && child.RunIndex == sel.RunIndex
-            && TryGetFloatingGroupData(child.BlockIndex, child.RunIndex, out var groupData))
+            && TryGetFloatingGroupChildGeometry(
+                child.BlockIndex,
+                child.RunIndex,
+                child.ChildPath,
+                out var geometry))
         {
-            var childTransform = GetFloatingGroupChildRotation(
-                child.BlockIndex, child.RunIndex, child.ChildIndex);
-            var groupRect = ToPlannerRect(groupData.Rect);
             var baseRect = ToPlannerRect(drag.FloatRect);
             var newRect = drag.Handle == FloatHandle.Body
-                ? DocumentViewLayoutPlanner.BuildFloatingGroupChildMoveRect(
-                    groupRect,
+                ? DocumentViewLayoutPlanner.BuildFloatingGroupChildMoveRectThroughGroupChain(
                     baseRect,
                     ToPlannerPoint(drag.PointerDown),
                     ToPlannerPoint(releasePoint),
-                    groupData.RotationAngle,
-                    groupData.FlipH,
-                    groupData.FlipV)
-                : DocumentViewLayoutPlanner.BuildFloatingGroupChildResizeRect(
-                    groupRect,
+                    geometry.ParentTransforms)
+                : DocumentViewLayoutPlanner.BuildFloatingGroupChildResizeRectThroughGroupChain(
                     baseRect,
                     ToPlannerHandle(drag.Handle),
                     ToPlannerPoint(releasePoint),
                     shift,
                     MinFloatSizePt * PxPerPoint,
-                    childTransform.Angle,
-                    childTransform.FlipH,
-                    childTransform.FlipV,
-                    groupData.RotationAngle,
-                    groupData.FlipH,
-                    groupData.FlipV);
+                    geometry.Child.RotationAngle,
+                    geometry.Child.FlipH,
+                    geometry.Child.FlipV,
+                    geometry.ParentTransforms);
 
             if (drag.Handle == FloatHandle.Body)
             {
@@ -8678,7 +8687,7 @@ public sealed class DocumentView : Control
                 var dyPt = (newRect.YDip - baseRect.YDip) / PxPerPoint;
                 if (Math.Abs(dxPt) >= 1 || Math.Abs(dyPt) >= 1)
                     CommitFloatingGroupChildMove(sel.BlockIndex, sel.RunIndex,
-                        child.ChildIndex, dxPt, dyPt);
+                        child.ChildPath, dxPt, dyPt);
             }
             else if (Math.Abs(newRect.WidthDip - baseRect.WidthDip) >= 1
                 || Math.Abs(newRect.HeightDip - baseRect.HeightDip) >= 1
@@ -8688,7 +8697,7 @@ public sealed class DocumentView : Control
                 CommitFloatingGroupChildResize(
                     sel.BlockIndex,
                     sel.RunIndex,
-                    child.ChildIndex,
+                    child.ChildPath,
                     baseRect,
                     newRect);
             }
@@ -8829,40 +8838,119 @@ public sealed class DocumentView : Control
         return true;
     }
 
-    private bool TryHitTestFloatingGroupChild(
+    private sealed record FloatingGroupChildGeometry(
+        FloatingGroupData OwnerGroup,
+        FloatingGroupChildData Child,
+        IReadOnlyList<DocumentFloatTransform> ParentTransforms);
+
+    private static DocumentFloatTransform ToGroupTransform(FloatingGroupData group) =>
+        new(
+            ToPlannerRect(group.Rect),
+            group.RotationAngle,
+            group.FlipH,
+            group.FlipV);
+
+    private static bool TryFindFloatingGroupChildGeometry(
+        FloatingGroupData group,
+        IReadOnlyList<int> childPath,
+        int depth,
+        IReadOnlyList<DocumentFloatTransform> parentTransforms,
+        out FloatingGroupChildGeometry geometry)
+    {
+        geometry = null!;
+        if (depth < 0 || depth >= childPath.Count)
+            return false;
+
+        var child = group.Children.FirstOrDefault(
+            candidate => candidate.ChildIndex == childPath[depth]);
+        if (child is null)
+            return false;
+
+        if (depth == childPath.Count - 1)
+        {
+            geometry = new FloatingGroupChildGeometry(
+                group,
+                child,
+                parentTransforms);
+            return true;
+        }
+
+        return child.Group is not null
+            && TryFindFloatingGroupChildGeometry(
+                child.Group,
+                childPath,
+                depth + 1,
+                new[] { ToGroupTransform(child.Group) }
+                    .Concat(parentTransforms)
+                    .ToArray(),
+                out geometry);
+    }
+
+    private bool TryGetFloatingGroupChildGeometry(
+        int blockIndex,
+        int runIndex,
+        IReadOnlyList<int> childPath,
+        out FloatingGroupChildGeometry geometry)
+    {
+        geometry = null!;
+        return TryGetFloatingGroupData(blockIndex, runIndex, out var rootGroup)
+            && TryFindFloatingGroupChildGeometry(
+                rootGroup,
+                childPath,
+                0,
+                new[] { ToGroupTransform(rootGroup) },
+                out geometry);
+    }
+
+    private static bool TryHitNestedFloatingGroupChild(
+        FloatingGroupData group,
         Point point,
-        out (int BlockIndex, int RunIndex, int ChildIndex, string Kind, Rect Rect) hit)
+        IReadOnlyList<DocumentFloatTransform> parentTransforms,
+        IReadOnlyList<int> pathPrefix,
+        out (IReadOnlyList<int> Path, FloatingGroupChildData Child) hit)
     {
         hit = default;
-
-        foreach (var group in _floatingGroups
-            .Where(group => ContainsTransformedPoint(point, group.Rect,
-                group.RotationAngle, group.FlipH, group.FlipV))
-            .OrderBy(group => group.BehindText ? 1 : 0)
-            .ThenByDescending(group => group.ZOrder)
-            .ThenByDescending(group => group.BlockIndex)
-            .ThenByDescending(group => group.RunIndex))
+        foreach (var child in group.Children.AsEnumerable().Reverse())
         {
-            // Children are painted in list order, so the last matching child is in front.
-            foreach (var child in group.Children.AsEnumerable().Reverse())
+            var path = pathPrefix.Append(child.ChildIndex).ToArray();
+            if (child.Group is not null)
             {
-                var (angle, flipH, flipV) = GetFloatingGroupChildRotation(
-                    group.BlockIndex, group.RunIndex, child.ChildIndex);
-                var contains = DocumentViewLayoutPlanner.ContainsFloatingGroupChildPoint(
-                        ToPlannerRect(group.Rect),
-                        ToPlannerRect(child.Rect),
-                        ToPlannerPoint(point),
-                        angle,
-                        flipH,
-                        flipV,
-                        group.RotationAngle,
-                        group.FlipH,
-                        group.FlipV);
-                if (!contains)
-                    continue;
+                var nestedTransforms = new[] { ToGroupTransform(child.Group) }
+                    .Concat(parentTransforms)
+                    .ToArray();
+                if (TryHitNestedFloatingGroupChild(
+                        child.Group,
+                        point,
+                        nestedTransforms,
+                        path,
+                        out hit))
+                    return true;
 
-                hit = (group.BlockIndex, group.RunIndex, child.ChildIndex,
-                    child.Kind.ToString(), child.Rect);
+                var nestedGroupRect = ToPlannerRect(child.Rect);
+                if (DocumentViewLayoutPlanner.ContainsFloatingGroupChildPointThroughGroupChain(
+                        nestedGroupRect,
+                        ToPlannerPoint(point),
+                        child.RotationAngle,
+                        child.FlipH,
+                        child.FlipV,
+                        parentTransforms))
+                {
+                    hit = (path, child);
+                    return true;
+                }
+                continue;
+            }
+
+            var childPlannerRect = ToPlannerRect(child.Rect);
+            if (DocumentViewLayoutPlanner.ContainsFloatingGroupChildPointThroughGroupChain(
+                    childPlannerRect,
+                    ToPlannerPoint(point),
+                    child.RotationAngle,
+                    child.FlipH,
+                    child.FlipV,
+                    parentTransforms))
+            {
+                hit = (path, child);
                 return true;
             }
         }
@@ -8870,15 +8958,46 @@ public sealed class DocumentView : Control
         return false;
     }
 
+    private bool TryHitTestFloatingGroupChild(
+        Point point,
+        out FloatingGroupChildSelection hit)
+    {
+        hit = null!;
+
+        foreach (var group in _floatingGroups
+            .OrderBy(group => group.BehindText ? 1 : 0)
+            .ThenByDescending(group => group.ZOrder)
+            .ThenByDescending(group => group.BlockIndex)
+            .ThenByDescending(group => group.RunIndex))
+        {
+            if (!TryHitNestedFloatingGroupChild(
+                    group,
+                    point,
+                    new[] { ToGroupTransform(group) },
+                    [],
+                    out var nestedHit))
+                continue;
+
+            hit = new FloatingGroupChildSelection(
+                group.BlockIndex,
+                group.RunIndex,
+                nestedHit.Path,
+                nestedHit.Child.Kind.ToString(),
+                nestedHit.Child.Rect);
+            return true;
+        }
+
+        return false;
+    }
+
     private static void DrawFloatingGroupChildSelection(
         DrawingContext context,
-        FloatingGroupData group,
         Rect childRect,
         double childAngle,
         bool childFlipH,
-        bool childFlipV)
+        bool childFlipV,
+        IReadOnlyList<DocumentFloatTransform> parentTransforms)
     {
-        var groupPlanRect = ToPlannerRect(group.Rect);
         var childPlanRect = ToPlannerRect(childRect);
         var corners = new[]
         {
@@ -8887,26 +9006,26 @@ public sealed class DocumentView : Control
             new DocumentFloatPoint(childPlanRect.RightDip, childPlanRect.BottomDip),
             new DocumentFloatPoint(childPlanRect.LeftDip, childPlanRect.BottomDip)
         }
-        .Select(corner => DocumentViewLayoutPlanner.TransformPoint(corner, childPlanRect,
-            childAngle, childFlipH, childFlipV))
-        .Select(corner => DocumentViewLayoutPlanner.TransformPoint(corner, groupPlanRect,
-            group.RotationAngle, group.FlipH, group.FlipV))
+        .Select(corner => DocumentViewLayoutPlanner.TransformPointThroughGroupChain(
+            corner,
+            childPlanRect,
+            childAngle,
+            childFlipH,
+            childFlipV,
+            parentTransforms))
         .Select(corner => new Point(corner.XDip, corner.YDip))
         .ToArray();
 
         for (var index = 0; index < corners.Length; index++)
             context.DrawLine(FloatSelectionPen, corners[index], corners[(index + 1) % corners.Length]);
 
-        foreach (var handle in DocumentViewLayoutPlanner.BuildFloatingGroupChildHandleRects(
-                     groupPlanRect,
+        foreach (var handle in DocumentViewLayoutPlanner.BuildFloatingGroupChildHandleRectsThroughGroupChain(
                      childPlanRect,
                      FloatHandleSize,
                      childAngle,
                      childFlipH,
                      childFlipV,
-                     group.RotationAngle,
-                     group.FlipH,
-                     group.FlipV))
+                     parentTransforms))
         {
             var rect = ToAvaloniaRect(handle.Rect);
             context.FillRectangle(FloatHandleFill, rect);
@@ -8928,14 +9047,23 @@ public sealed class DocumentView : Control
 
     private (double Angle, bool FlipH, bool FlipV) GetFloatingGroupChildRotation(
         int blockIndex, int runIndex, int childIndex)
+        => GetFloatingGroupChildRotation(blockIndex, runIndex, [childIndex]);
+
+    private (double Angle, bool FlipH, bool FlipV) GetFloatingGroupChildRotation(
+        int blockIndex,
+        int runIndex,
+        IReadOnlyList<int> childPath)
     {
         if (!TryGetRun(blockIndex, runIndex, out var run)
             || run.DrawingGroup is not { } group
-            || childIndex < 0
-            || childIndex >= group.Children.Count)
+            || !DrawingGroupChildPathResolver.TryGetChild(
+                group,
+                childPath,
+                out _,
+                out var child))
             return (0, false, false);
 
-        return group.Children[childIndex] switch
+        return child switch
         {
             InlineImage image => (image.RotationAngle, image.FlipH, image.FlipV),
             Shape shape => (shape.RotationAngle, shape.FlipH, shape.FlipV),
@@ -8948,7 +9076,12 @@ public sealed class DocumentView : Control
 
     internal (int BlockIndex, int RunIndex, int ChildIndex, string Kind, Rect Rect)?
         HitTestFloatingGroupChildForTest(Point point) =>
-        TryHitTestFloatingGroupChild(point, out var hit) ? hit : null;
+        TryHitTestFloatingGroupChild(point, out var hit)
+            ? (hit.BlockIndex, hit.RunIndex, hit.ChildIndex, hit.Kind, hit.Rect)
+            : null;
+
+    internal IReadOnlyList<int>? SelectedFloatingGroupChildPathForTest =>
+        _selectedFloatingGroupChild?.ChildPath;
 
     internal IReadOnlyList<(int ChildIndex, Rect Rect)> FloatingGroupChildRectsForTest(
         int blockIndex, int runIndex) =>
@@ -8956,25 +9089,41 @@ public sealed class DocumentView : Control
             ? groupData.Children.Select(child => (child.ChildIndex, child.Rect)).ToArray()
             : [];
 
+    internal Rect? FloatingGroupChildRectForPathForTest(
+        int blockIndex,
+        int runIndex,
+        IReadOnlyList<int> childPath) =>
+        TryGetFloatingGroupChildGeometry(
+            blockIndex,
+            runIndex,
+            childPath,
+            out var geometry)
+            ? geometry.Child.Rect
+            : null;
+
     private void CommitFloatingGroupChildMove(
         int blockIndex,
         int runIndex,
-        int childIndex,
+        IReadOnlyList<int> childPath,
         double dxPt,
         double dyPt)
     {
         if (!TryGetRun(blockIndex, runIndex, out var run)
-            || run.DrawingGroup is not { } group
-            || childIndex < 0
-            || childIndex >= group.Children.Count)
+            || run.DrawingGroup is not { } rootGroup
+            || !DrawingGroupChildPathResolver.TryGetChild(
+                rootGroup,
+                childPath,
+                out var owningGroup,
+                out _))
             return;
 
-        SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(group, childIndex);
-        var offset = group.ChildOffsets[childIndex];
+        var childIndex = childPath[^1];
+        SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(owningGroup, childIndex);
+        var offset = owningGroup.ChildOffsets[childIndex];
         _bus.Execute(new SetDrawingGroupChildPositionCommand(
             blockIndex,
             runIndex,
-            childIndex,
+            childPath,
             offset.X + dxPt,
             offset.Y + dyPt));
         InvalidateLayoutAndVisual();
@@ -8985,16 +9134,20 @@ public sealed class DocumentView : Control
     private void CommitFloatingGroupChildResize(
         int blockIndex,
         int runIndex,
-        int childIndex,
+        IReadOnlyList<int> childPath,
         DocumentFloatRect baseRect,
         DocumentFloatRect newRect)
     {
         if (!TryGetRun(blockIndex, runIndex, out var run)
-            || run.DrawingGroup is not { } group
-            || childIndex < 0
-            || childIndex >= group.Children.Count)
+            || run.DrawingGroup is not { } rootGroup
+            || !DrawingGroupChildPathResolver.TryGetChild(
+                rootGroup,
+                childPath,
+                out var owningGroup,
+                out _))
             return;
 
+        var childIndex = childPath[^1];
         var newWidthPt = newRect.WidthDip / PxPerPoint;
         var newHeightPt = newRect.HeightDip / PxPerPoint;
         var dxPt = (newRect.XDip - baseRect.XDip) / PxPerPoint;
@@ -9004,19 +9157,19 @@ public sealed class DocumentView : Control
             new SetDrawingGroupChildSizeCommand(
                 blockIndex,
                 runIndex,
-                childIndex,
+                childPath,
                 newWidthPt,
                 newHeightPt)
         };
 
         if (Math.Abs(dxPt) > 0.01 || Math.Abs(dyPt) > 0.01)
         {
-            SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(group, childIndex);
-            var offset = group.ChildOffsets[childIndex];
+            SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(owningGroup, childIndex);
+            var offset = owningGroup.ChildOffsets[childIndex];
             commands.Add(new SetDrawingGroupChildPositionCommand(
                 blockIndex,
                 runIndex,
-                childIndex,
+                childPath,
                 offset.X + dxPt,
                 offset.Y + dyPt));
         }
@@ -9043,18 +9196,19 @@ public sealed class DocumentView : Control
         if (_selectedFloatingGroupChild is { } child
             && child.BlockIndex == blockIndex
             && child.RunIndex == runIndex
-            && run.DrawingGroup is { } group
-            && TryGetFloatingGroupData(blockIndex, runIndex, out var groupData))
+            && TryGetFloatingGroupChildGeometry(
+                blockIndex,
+                runIndex,
+                child.ChildPath,
+                out var geometry))
         {
-            var localDelta = DocumentViewLayoutPlanner.UnTransformVector(
+            var localDelta = DocumentViewLayoutPlanner.UnTransformVectorThroughGroupChain(
                 new DocumentFloatPoint(dxPt * PxPerPoint, dyPt * PxPerPoint),
-                groupData.RotationAngle,
-                groupData.FlipH,
-                groupData.FlipV);
+                geometry.ParentTransforms);
             CommitFloatingGroupChildMove(
                 blockIndex,
                 runIndex,
-                child.ChildIndex,
+                child.ChildPath,
                 localDelta.XDip / PxPerPoint,
                 localDelta.YDip / PxPerPoint);
             return;
@@ -9119,22 +9273,19 @@ public sealed class DocumentView : Control
         if (_selectedFloatingGroupChild is not { } selected
             || selected.BlockIndex != blockIndex
             || selected.RunIndex != runIndex
-            || !TryGetFloatingGroupData(blockIndex, runIndex, out var groupData))
+            || !TryGetFloatingGroupChildGeometry(
+                blockIndex,
+                runIndex,
+                selected.ChildPath,
+                out var geometry))
         {
-            return;
-        }
-
-        var child = groupData.Children.FirstOrDefault(item => item.ChildIndex == selected.ChildIndex);
-        if (child is null)
-        {
-            _selectedFloatingGroupChild = null;
             return;
         }
 
         _selectedFloatingGroupChild = selected with
         {
-            Kind = child.Kind.ToString(),
-            Rect = child.Rect
+            Kind = geometry.Child.Kind.ToString(),
+            Rect = geometry.Child.Rect
         };
     }
 
@@ -9162,7 +9313,13 @@ public sealed class DocumentView : Control
     /// retain their existing behavior.
     /// </summary>
     public (int BlockIndex, int RunIndex, int ChildIndex, string Kind, Rect Rect)? SelectedFloatingGroupChildInfo
-        => _selectedFloatingGroupChild;
+        => _selectedFloatingGroupChild is { } child
+            ? (child.BlockIndex, child.RunIndex, child.ChildIndex, child.Kind, child.Rect)
+            : null;
+
+    /// <summary>Root-relative path of the selected group child, or null when no child is selected.</summary>
+    public IReadOnlyList<int>? SelectedFloatingGroupChildPath =>
+        _selectedFloatingGroupChild?.ChildPath;
 
     /// <summary>The currently selected floating image, or null when the active object is not an image.</summary>
     public InlineImage? SelectedFloatingImage()
@@ -9790,7 +9947,7 @@ public sealed class DocumentView : Control
     }
 
     private void SelectFloatingGroupChildCore(
-        (int BlockIndex, int RunIndex, int ChildIndex, string Kind, Rect Rect) hit)
+        FloatingGroupChildSelection hit)
     {
         // Keep the group as the active floating object so group-level commands continue to target
         // the owning run, while the child identity drives the local edit route and outline.
@@ -9799,6 +9956,18 @@ public sealed class DocumentView : Control
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateVisual();
     }
+
+    private static bool IsSameFloatingGroupChild(
+        FloatingGroupChildSelection selected,
+        FloatingGroupChildSelection hit) =>
+        selected.BlockIndex == hit.BlockIndex
+        && selected.RunIndex == hit.RunIndex
+        && selected.ChildPath.SequenceEqual(hit.ChildPath);
+
+    internal bool SelectedFloatingGroupChildMatchesPointForTest(Point point) =>
+        _selectedFloatingGroupChild is { } selected
+        && TryHitTestFloatingGroupChild(point, out var hit)
+        && IsSameFloatingGroupChild(selected, hit);
 
     internal bool SelectFloatingGroupChildForTest(Point point)
     {
@@ -10354,14 +10523,12 @@ public sealed class DocumentView : Control
         if (_selectedFloatingGroupChild is { } child
             && child.BlockIndex == sel.BlockIndex
             && child.RunIndex == sel.RunIndex
-            && para.Runs[sel.RunIndex].DrawingGroup is { } selectedGroup
-            && child.ChildIndex >= 0
-            && child.ChildIndex < selectedGroup.Children.Count)
+            && para.Runs[sel.RunIndex].DrawingGroup is not null)
         {
             var transform = GetFloatingGroupChildRotation(
-                child.BlockIndex, child.RunIndex, child.ChildIndex);
+                child.BlockIndex, child.RunIndex, child.ChildPath);
             _bus.Execute(new SetDrawingGroupChildRotationCommand(
-                child.BlockIndex, child.RunIndex, child.ChildIndex,
+                child.BlockIndex, child.RunIndex, child.ChildPath,
                 angleDeg, transform.FlipH, transform.FlipV));
             InvalidateLayoutAndVisual();
             Relayout(FallbackWidth);
@@ -10399,16 +10566,14 @@ public sealed class DocumentView : Control
         if (_selectedFloatingGroupChild is { } child
             && child.BlockIndex == sel.BlockIndex
             && child.RunIndex == sel.RunIndex
-            && para.Runs[sel.RunIndex].DrawingGroup is { } selectedGroup
-            && child.ChildIndex >= 0
-            && child.ChildIndex < selectedGroup.Children.Count)
+            && para.Runs[sel.RunIndex].DrawingGroup is not null)
         {
             var transform = GetFloatingGroupChildRotation(
-                child.BlockIndex, child.RunIndex, child.ChildIndex);
+                child.BlockIndex, child.RunIndex, child.ChildPath);
             var newFlipH = horizontal ? !transform.FlipH : transform.FlipH;
             var newFlipV = horizontal ? transform.FlipV : !transform.FlipV;
             _bus.Execute(new SetDrawingGroupChildRotationCommand(
-                child.BlockIndex, child.RunIndex, child.ChildIndex,
+                child.BlockIndex, child.RunIndex, child.ChildPath,
                 transform.Angle, newFlipH, newFlipV));
             InvalidateLayoutAndVisual();
             Relayout(FallbackWidth);
@@ -11247,7 +11412,7 @@ public sealed class DocumentView : Control
             var handle = HitTestHandle(point);
             if (handle is not FloatHandle.None and not FloatHandle.Body)
             {
-                _floatDragState = (point, curSel.Rect, handle);
+                _floatDragState = (point, SelectedFloatingDragRect(curSel), handle);
                 Cursor = CursorForHandle(handle);
                 InvalidateVisual();
                 e.Handled = true;
@@ -11260,9 +11425,7 @@ public sealed class DocumentView : Control
         if (!extendFloatingSelection && TryHitTestFloatingGroupChild(point, out var groupChildHit))
         {
             if (_selectedFloatingGroupChild is { } selectedChild
-                && selectedChild.BlockIndex == groupChildHit.BlockIndex
-                && selectedChild.RunIndex == groupChildHit.RunIndex
-                && selectedChild.ChildIndex == groupChildHit.ChildIndex)
+                && IsSameFloatingGroupChild(selectedChild, groupChildHit))
             {
                 _floatDragState = (point, groupChildHit.Rect, FloatHandle.Body);
                 Cursor = CursorForHandle(FloatHandle.Body);
@@ -19263,6 +19426,9 @@ public sealed class DocumentView : Control
         // Resolved page-space sub-rect for this child (group origin + child offset).
         public Rect Rect;
         public int ChildIndex;
+        public double RotationAngle;
+        public bool FlipH;
+        public bool FlipV;
         // What kind of child: Image, Shape, Chart, WordArt, SmartArt, Group.
         public enum ChildKind { Image, Shape, Chart, WordArt, SmartArt, Group }
         public ChildKind Kind;
@@ -19398,7 +19564,31 @@ public sealed class DocumentView : Control
             var childData = new FloatingGroupChildData
             {
                 Rect = childRect,
-                ChildIndex = childSnapshot.ChildIndex
+                ChildIndex = childSnapshot.ChildIndex,
+                RotationAngle = child switch
+                {
+                    InlineImage image => image.RotationAngle,
+                    Shape shape => shape.RotationAngle,
+                    WordArt wordArt => wordArt.RotationAngle,
+                    FreeW.Core.Model.DrawingGroup nested => nested.RotationAngle,
+                    _ => 0
+                },
+                FlipH = child switch
+                {
+                    InlineImage image => image.FlipH,
+                    Shape shape => shape.FlipH,
+                    WordArt wordArt => wordArt.FlipH,
+                    FreeW.Core.Model.DrawingGroup nested => nested.FlipH,
+                    _ => false
+                },
+                FlipV = child switch
+                {
+                    InlineImage image => image.FlipV,
+                    Shape shape => shape.FlipV,
+                    WordArt wordArt => wordArt.FlipV,
+                    FreeW.Core.Model.DrawingGroup nested => nested.FlipV,
+                    _ => false
+                }
             };
 
             switch (childSnapshot.Kind)
