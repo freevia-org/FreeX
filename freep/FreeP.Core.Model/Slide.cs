@@ -628,6 +628,13 @@ public sealed class Slide
     /// </summary>
     public List<ShapeAnimation> Animations { get; } = new();
 
+    /// <summary>
+    /// Preserved PowerPoint paragraph-build list from <c>p:timing/p:bldLst</c>.
+    /// The shared playback model does not yet expose fragment-level text builds, so this
+    /// payload is retained verbatim for edit/save round-trips instead of being discarded.
+    /// </summary>
+    public string? AnimationBuildListXml { get; set; }
+
     // ── Speaker notes ─────────────────────────────────────────────────────────────
 
     /// <summary>

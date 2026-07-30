@@ -47,6 +47,7 @@ public static class SlideCloner
             copy.Shapes.Add(CloneShape(shape));
 
         copy.Transition = slide.Transition is null ? null : CloneTransition(slide.Transition);
+        copy.AnimationBuildListXml = slide.AnimationBuildListXml;
         foreach (var anim in slide.Animations)
             copy.Animations.Add(CloneAnimation(anim));
 
