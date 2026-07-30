@@ -5981,11 +5981,19 @@ public sealed partial class MainWindow : Window
             "Remove animation",
             () => RemoveAnimationPaneItem(item.Index));
         removeButton.Foreground = new SolidColorBrush(Color.FromRgb(0xC0, 0x20, 0x20));
+        var paragraphBuildPlan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
+            Editor.CurrentSlide,
+            item.ShapeId);
+        var paragraphBuildButton = BuildAnimationPaneActionButton(
+            "¶",
+            paragraphBuildPlan.ShouldApply,
+            paragraphBuildPlan.DisabledReason ?? paragraphBuildPlan.DisplayText,
+            () => ToggleParagraphBuild(item.ShapeId));
         var actionPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
-            Children = { moveEarlierButton, moveLaterButton, removeButton },
+            Children = { moveEarlierButton, moveLaterButton, paragraphBuildButton, removeButton },
         };
 
         var innerGrid = new Grid
@@ -6073,6 +6081,25 @@ public sealed partial class MainWindow : Window
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, _) => SelectAnimationPaneItem(item.Index);
         return border;
+    }
+
+    private void ToggleParagraphBuild(uint shapeId)
+    {
+        var plan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
+            Editor.CurrentSlide,
+            shapeId);
+        if (AnimationPanePlanner.TryApplyParagraphBuildMutation(Editor, plan))
+            RefreshVisibleAnimationPane(_selectedAnimationIndex);
+    }
+
+    internal AnimationPaneParagraphBuildMutationPlan ToggleParagraphBuildForTests(uint shapeId)
+    {
+        var plan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
+            Editor.CurrentSlide,
+            shapeId);
+        AnimationPanePlanner.TryApplyParagraphBuildMutation(Editor, plan);
+        RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        return plan;
     }
 
     private static Button BuildAnimationPaneActionButton(
