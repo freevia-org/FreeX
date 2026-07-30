@@ -1183,7 +1183,7 @@ public sealed class EditingSession
         if (CurrentSlide is null) return;
         foreach (var id in _selectedShapeIds)
         {
-            var s = CurrentSlide.Shapes.FirstOrDefault(sh => sh.Id == id);
+            var s = FindShape(CurrentSlide.Shapes, id);
             if (s?.TextBody is null) continue;
             for (int pi = 0; pi < s.TextBody.Paragraphs.Count; pi++)
             for (int ri = 0; ri < s.TextBody.Paragraphs[pi].Runs.Count; ri++)
@@ -1197,7 +1197,7 @@ public sealed class EditingSession
         if (CurrentSlide is null) return;
         foreach (var id in _selectedShapeIds)
         {
-            var s = CurrentSlide.Shapes.FirstOrDefault(sh => sh.Id == id);
+            var s = FindShape(CurrentSlide.Shapes, id);
             if (s?.TextBody is null) continue;
             for (int pi = 0; pi < s.TextBody.Paragraphs.Count; pi++)
             for (int ri = 0; ri < s.TextBody.Paragraphs[pi].Runs.Count; ri++)
@@ -1211,7 +1211,7 @@ public sealed class EditingSession
         if (CurrentSlide is null) return;
         foreach (var id in _selectedShapeIds)
         {
-            var s = CurrentSlide.Shapes.FirstOrDefault(sh => sh.Id == id);
+            var s = FindShape(CurrentSlide.Shapes, id);
             if (s?.TextBody is null) continue;
             for (int pi = 0; pi < s.TextBody.Paragraphs.Count; pi++)
             for (int ri = 0; ri < s.TextBody.Paragraphs[pi].Runs.Count; ri++)
@@ -1226,7 +1226,7 @@ public sealed class EditingSession
             return 0;
 
         var commands = _selectedShapeIds
-            .Where(id => CurrentSlide.Shapes.FirstOrDefault(shape => shape.Id == id)?.TextBody is not null)
+            .Where(id => FindShape(CurrentSlide.Shapes, id)?.TextBody is not null)
             .Select(id => (IPresentationCommand)new SetShapeTextAutoFitCommand(_currentSlideIndex, id, kind))
             .ToArray();
 
@@ -1244,7 +1244,7 @@ public sealed class EditingSession
             return 0;
 
         var commands = _selectedShapeIds
-            .Where(id => CurrentSlide.Shapes.FirstOrDefault(shape => shape.Id == id)?.TextBody is not null)
+            .Where(id => FindShape(CurrentSlide.Shapes, id)?.TextBody is not null)
             .Select(id => (IPresentationCommand)new SetShapeTextVerticalTypeCommand(
                 _currentSlideIndex,
                 id,
@@ -1265,7 +1265,7 @@ public sealed class EditingSession
             return 0;
 
         var commands = _selectedShapeIds
-            .Where(id => CurrentSlide.Shapes.FirstOrDefault(shape => shape.Id == id)?.TextBody is not null)
+            .Where(id => FindShape(CurrentSlide.Shapes, id)?.TextBody is not null)
             .Select(id => (IPresentationCommand)new SetShapeTextColumnCountCommand(
                 _currentSlideIndex,
                 id,
@@ -3467,7 +3467,7 @@ public sealed class EditingSession
         var allRuns = new List<(int si, uint shapeId, int pi, int ri, Run run)>();
         foreach (var id in _selectedShapeIds)
         {
-            var s = CurrentSlide.Shapes.FirstOrDefault(sh => sh.Id == id);
+            var s = FindShape(CurrentSlide.Shapes, id);
             if (s?.TextBody is null) continue;
             for (int pi = 0; pi < s.TextBody.Paragraphs.Count; pi++)
             for (int ri = 0; ri < s.TextBody.Paragraphs[pi].Runs.Count; ri++)
