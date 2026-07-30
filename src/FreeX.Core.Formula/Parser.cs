@@ -958,23 +958,25 @@ public sealed class Parser
                 using var nesting = EnterNesting(openParen);
                 var expr = ParseExpression();
 
-                // R85-formula-areas-union: Excel's union operator groups multiple reference
-                // "areas" behind an extra set of parens, e.g. AREAS((A1:B2,D5,F1:F10)) = 3. A
-                // comma here means the caller is trying exactly that. FreeX's reference value
-                // model (RangeValue, see FreeX.Core.Model.ScalarValue) represents exactly one
-                // rectangular area tied to a single SheetName/StartRow/StartCol, with no
-                // multi-area variant, and RangeRefNode-shaped fast paths span 15+ files across
-                // the evaluator, FormulaRewriter's row/col-shift logic, and FormulaSerializer's
-                // round-trip -- adding a real multi-area AST node and value kind is a large,
-                // cross-cutting feature deliberately deferred rather than forced into a surgical
-                // fix. Detect the shape explicitly here (rather than falling through to the
-                // generic "expected )" message from Expect below) so the resulting #VALUE! --
-                // raised by FormulaEvaluator.Evaluate's top-level FormulaParseException handler,
-                // exactly like any other unparseable formula -- is a deliberate, documented
-                // decision instead of an accidental byproduct of a generic parse failure.
+                // R85/R93-formula-areas-union: Excel's union operator groups multiple reference
+                // "areas" behind an extra set of parens, e.g. AREAS((A1:B2,D5,F1:F10)) = 3, and
+                // SUM((A1:A2,B1:B2)) sums across both areas. A comma here means the caller is
+                // trying exactly that -- collect every comma-separated operand at this paren depth
+                // into a UnionNode rather than rejecting the shape outright (R85's prior behavior).
+                // See UnionNode/UnionValue for why this stays a Core.Formula-only construct instead
+                // of a new Core.Model.ScalarValue kind.
                 if (Current.Type == TokenType.Comma)
-                    throw new FormulaParseException(
-                        $"Union references ('(A1:B2,D5)' style) are not supported at position {Current.Position}");
+                {
+                    var areas = new List<FormulaNode> { expr };
+                    while (Current.Type == TokenType.Comma)
+                    {
+                        Advance();
+                        areas.Add(ParseExpression());
+                    }
+
+                    Expect(TokenType.CloseParen);
+                    return new UnionNode(areas);
+                }
 
                 Expect(TokenType.CloseParen);
                 return expr;

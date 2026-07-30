@@ -23,6 +23,23 @@ public static partial class BuiltInFunctions
                 total += value;
                 continue;
             }
+            // R93-AREAS-union-value-model: a union reference argument (e.g. the
+            // "(A1:A2,B1:B2)" in SUM((A1:A2,B1:B2))) evaluates to a UnionValue rather than a
+            // RangeValue -- sum every cell across every area, same rules as a plain range
+            // (text/blanks ignored, an error cell short-circuits the whole SUM).
+            if (arg is UnionValue union)
+            {
+                foreach (var area in union.Areas)
+                {
+                    foreach (var cell in area.Flatten())
+                    {
+                        if (cell is ErrorValue cellErr) return cellErr;
+                        if (cell is BlankValue or TextValue) continue;
+                        total += ToNumber(cell);
+                    }
+                }
+                continue;
+            }
             if (arg is BlankValue or TextValue) continue; // SUM ignores text and blanks in ranges
             total += ToNumber(arg);
         }
@@ -85,6 +102,21 @@ public static partial class BuiltInFunctions
                 if (!double.IsFinite(value)) return ErrorValue.Num;
                 total += value;
                 count++;
+                continue;
+            }
+            // R93-AREAS-union-value-model: see the identical Sum() case above.
+            if (arg is UnionValue union)
+            {
+                foreach (var area in union.Areas)
+                {
+                    foreach (var cell in area.Flatten())
+                    {
+                        if (cell is ErrorValue cellErr) return cellErr;
+                        if (cell is BlankValue or TextValue) continue;
+                        total += ToNumber(cell);
+                        count++;
+                    }
+                }
                 continue;
             }
             if (arg is BlankValue or TextValue) continue;

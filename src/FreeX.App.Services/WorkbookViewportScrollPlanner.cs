@@ -176,8 +176,19 @@ public static class WorkbookViewportScrollPlanner
     {
         ArgumentNullException.ThrowIfNull(viewport);
 
-        var frozenRows = sheet?.FrozenRows ?? 0;
-        var frozenColumns = sheet?.FrozenCols ?? 0;
+        // Per-window Freeze Panes (R93 keyboard-nav-scroll-reveal-1): the shared Sheet.FrozenRows/
+        // FrozenCols reflect only whichever window last set them, so a keyboard-nav reveal in a
+        // window whose Freeze Panes differ from a sibling window's must NOT read those fields.
+        // viewport.FrozenPanes already carries this call's effective per-view frozen counts --
+        // WorkbookSession.BuildViewport bakes GetEffectiveFrozenRows()/GetEffectiveFrozenCols()
+        // into it via ViewportRequest's FrozenRowsOverride/FrozenColsOverride (see
+        // WorkbookSession's _viewFrozenRowsOverrides remarks) -- exactly like every other viewport
+        // consumer already does (GridView.Rendering.cs's frozenColsRight/Left,
+        // GridView.Rendering.Headers.cs's RenderFreezeDivider, Avalonia's
+        // AddFreezePaneDividerOverlay). A null FrozenPanes means this call's effective frozen
+        // counts are genuinely (0, 0) -- it is NOT a signal to fall back to the shared Sheet.
+        var frozenRows = viewport.FrozenPanes?.Rows ?? 0;
+        var frozenColumns = viewport.FrozenPanes?.Cols ?? 0;
 
         // Window > Split (viewport.SplitPanes) is distinct from Freeze Panes: the split's top/left
         // panes are pinned (never scroll) and the bottom-left/top-right panes can be scrolled

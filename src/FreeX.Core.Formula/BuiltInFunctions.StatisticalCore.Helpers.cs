@@ -90,6 +90,19 @@ public static partial class BuiltInFunctions
                 if (!TryDirectTextNumber(direct, out double value)) return (null, ErrorValue.Value);
                 list.Add(value);
             }
+            else if (a is UnionValue union)
+            {
+                // R93-AREAS-union-value-model: a union reference argument (e.g.
+                // AVERAGE((A1:A2,B1:B2))) evaluates to a UnionValue rather than a RangeValue --
+                // fold every numeric cell across every area, ignoring text/blanks like a plain
+                // range, matching CollectRangeNumbers' rules below.
+                foreach (var area in union.Areas)
+                {
+                    var (areaNums, areaErr) = CollectRangeNumbers(area);
+                    if (areaErr is not null) return (null, areaErr);
+                    list.AddRange(areaNums!);
+                }
+            }
         }
         return (list, null);
     }

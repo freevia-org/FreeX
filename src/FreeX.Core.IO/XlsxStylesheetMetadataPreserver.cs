@@ -884,7 +884,13 @@ internal static class XlsxStylesheetMetadataPreserver
     {
         var fontXml = ResolveIndexedRecordXml(xf, "fontId", fontsList, workbookNs + "font");
         var fillXml = ResolveIndexedRecordXml(xf, "fillId", fillsList, workbookNs + "fill");
-        var borderXml = ResolveIndexedRecordXml(xf, "borderId", bordersList, workbookNs + "border");
+        // R93-named-style-xfId: a border/alignment/protection comparison must not depend on
+        // whether the record was written out in its minimal (schema-default, e.g. a bare
+        // <left/> with no style attribute) or fully-explicit (e.g. ClosedXML's own rebuilt
+        // <left style="none"><color .../></left>) form -- both mean the same "no border" --
+        // via BuildXfBorderSignatureXml's default-filling below, unlike the raw indexed-record
+        // XML comparison ResolveIndexedRecordXml still uses for font/fill.
+        var borderXml = BuildXfBorderSignatureXml(xf, bordersList, workbookNs);
         var numFmtKey = ResolveNumFmtSignatureKey(xf, numFmtsList, workbookNs);
 
         // R53-io-cellstyle-named-3-2: include alignment/protection so two named cell styles that
@@ -892,13 +898,126 @@ internal static class XlsxStylesheetMetadataPreserver
         // alignment) don't collapse onto the same signature and get treated as an unresolvable
         // cross-style collision (see ambiguousNamedStyleSignatures below) even though the rebuild
         // legitimately produced two distinguishable target xfs for them.
-        var alignmentXml = ResolveDirectChildXml(xf, workbookNs + "alignment");
-        var protectionXml = ResolveDirectChildXml(xf, workbookNs + "protection");
+        //
+        // R93-named-style-xfId: a source xf that never declares <alignment>/<protection> at all
+        // (the overwhelming common case -- only a cell with actual custom alignment/protection
+        // ever writes one) means "every attribute at its ECMA-376 default", while ClosedXML's own
+        // rebuilt xf ALWAYS bakes an explicit, fully-attributed <alignment>/<protection> even for
+        // a cell that never asked for one. Comparing the raw XML directly (absent vs. fully
+        // spelled-out defaults) made this signature mismatch for virtually every real cellXfs
+        // entry, so a named style's cellXfs link almost never actually reconnected after a real
+        // full-rebuild save. Normalizing both sides to the same explicit-defaults form (below)
+        // fixes that without weakening the disambiguation R53 added this pair for in the first
+        // place (a cell that DOES declare a non-default alignment/protection still compares by
+        // its real values, same as before).
+        var alignmentXml = BuildNamespaceAgnosticXml(NormalizeAlignmentForSignature(xf.Element(workbookNs + "alignment"), workbookNs + "alignment"));
+        var protectionXml = BuildNamespaceAgnosticXml(NormalizeProtectionForSignature(xf.Element(workbookNs + "protection"), workbookNs + "protection"));
         return string.Join(SignatureSeparator, fontXml, fillXml, borderXml, numFmtKey, alignmentXml, protectionXml);
     }
 
-    private static string ResolveDirectChildXml(XElement xf, XName childName) =>
-        BuildNamespaceAgnosticXml(xf.Element(childName));
+    // ECMA-376 CT_CellAlignment attribute defaults (Part 1, §18.8.1) -- an <alignment> element
+    // that omits one of these means that attribute takes exactly this value, identical in effect
+    // to an xf that omits <alignment> entirely (every attribute at its default).
+    private static readonly (string Name, string Default)[] AlignmentAttributeDefaults =
+    [
+        ("horizontal", "general"),
+        ("vertical", "bottom"),
+        ("textRotation", "0"),
+        ("wrapText", "0"),
+        ("indent", "0"),
+        ("relativeIndent", "0"),
+        ("justifyLastLine", "0"),
+        ("shrinkToFit", "0"),
+        ("readingOrder", "0"),
+    ];
+
+    // ECMA-376 CT_CellProtection attribute defaults (Part 1, §18.8.33): locked defaults to true.
+    private static readonly (string Name, string Default)[] ProtectionAttributeDefaults =
+    [
+        ("locked", "1"),
+        ("hidden", "0"),
+    ];
+
+    private static XElement NormalizeAlignmentForSignature(XElement? alignment, XName elementName)
+    {
+        var normalized = new XElement(elementName);
+        foreach (var (name, defaultValue) in AlignmentAttributeDefaults)
+        {
+            normalized.SetAttributeValue(
+                name,
+                NormalizeOoxmlBooleanLikeValue(alignment?.Attribute(name)?.Value) ?? defaultValue);
+        }
+
+        return normalized;
+    }
+
+    private static XElement NormalizeProtectionForSignature(XElement? protection, XName elementName)
+    {
+        var normalized = new XElement(elementName);
+        foreach (var (name, defaultValue) in ProtectionAttributeDefaults)
+        {
+            normalized.SetAttributeValue(
+                name,
+                NormalizeOoxmlBooleanLikeValue(protection?.Attribute(name)?.Value) ?? defaultValue);
+        }
+
+        return normalized;
+    }
+
+    // OOXML's xsd:boolean permits both "0"/"1" and "false"/"true" for the same value; ClosedXML
+    // and a hand/third-party-authored source file are not guaranteed to agree on which spelling
+    // they use, so canonicalize to "0"/"1" before comparing. Non-boolean attribute values (e.g.
+    // "general" for horizontal) pass through unchanged.
+    private static string? NormalizeOoxmlBooleanLikeValue(string? raw) => raw switch
+    {
+        null => null,
+        "1" or "true" => "1",
+        "0" or "false" => "0",
+        _ => raw
+    };
+
+    // CT_Border side elements (left/right/top/bottom/diagonal/vertical/horizontal) default their
+    // own "style" attribute to "none" (ECMA-376 Part 1, §18.8.4) when omitted -- and a side with
+    // style="none" renders no border regardless of what (if anything) its <color> child says, so
+    // that color is immaterial to two borders rendering identically and must not be compared when
+    // style is (or defaults to) "none". <border>'s own diagonalUp/diagonalDown attributes default
+    // to "0" per the same clause.
+    private static readonly string[] BorderSideNames = ["left", "right", "top", "bottom", "diagonal", "vertical", "horizontal"];
+
+    private static string BuildXfBorderSignatureXml(XElement xf, XElement? bordersList, XNamespace workbookNs)
+    {
+        if (bordersList is null || !TryGetIntAttribute(xf, "borderId", out var index))
+            return string.Empty;
+
+        var items = bordersList.Elements(workbookNs + "border").ToList();
+        if (index < 0 || index >= items.Count)
+            return string.Empty;
+
+        var source = items[index];
+        var normalized = new XElement(
+            workbookNs + "border",
+            new XAttribute("diagonalUp", NormalizeOoxmlBooleanLikeValue(source.Attribute("diagonalUp")?.Value) ?? "0"),
+            new XAttribute("diagonalDown", NormalizeOoxmlBooleanLikeValue(source.Attribute("diagonalDown")?.Value) ?? "0"));
+
+        foreach (var sideName in BorderSideNames)
+        {
+            var side = source.Element(workbookNs + sideName);
+            var style = side?.Attribute("style")?.Value;
+            style = string.IsNullOrEmpty(style) ? "none" : style;
+
+            var normalizedSide = new XElement(workbookNs + sideName, new XAttribute("style", style));
+            if (!string.Equals(style, "none", StringComparison.OrdinalIgnoreCase))
+            {
+                var color = side?.Element(workbookNs + "color");
+                if (color is not null)
+                    normalizedSide.Add(new XElement(color));
+            }
+
+            normalized.Add(normalizedSide);
+        }
+
+        return BuildNamespaceAgnosticXml(normalized);
+    }
 
     private static string ResolveIndexedRecordXml(XElement xf, string attributeName, XElement? list, XName itemName)
     {

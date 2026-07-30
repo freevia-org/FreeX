@@ -253,6 +253,16 @@ public static class FormulaSerializer
                 WriteNode(endpoint.End, sb);
                 break;
 
+            case UnionNode union:
+                sb.Append('(');
+                for (var i = 0; i < union.Areas.Count; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    WriteNode(union.Areas[i], sb);
+                }
+                sb.Append(')');
+                break;
+
             case UnaryOpNode u when u.Operator == UnaryOperator.Percent:
                 if (u.Operand is BinaryOpNode)
                 {

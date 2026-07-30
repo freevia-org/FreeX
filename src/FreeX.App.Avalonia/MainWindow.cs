@@ -528,6 +528,13 @@ public sealed partial class MainWindow : Window
     private int _functionAutocompleteTokenStart;
     private int _functionAutocompleteTokenLength;
     private bool FunctionAutocompleteIsOpen => _functionAutocompletePopup?.IsOpen == true;
+
+    // R93-formula-editing-assist-5-2: the live argument-signature tooltip driven by
+    // FormulaSignatureHelpPlanner (FreeX.App.Presentation.FormulaBar) -- ported from the WPF host's
+    // _signatureHelpPopup/_signatureHelpTextBlock (MainWindow.Editing.cs), which had a consumer for
+    // this planner while this shell had none.
+    private Popup? _signatureHelpPopup;
+    private TextBlock? _signatureHelpTextBlock;
     private Canvas? _cellAffordanceOverlay;
     private readonly List<Control> _formulaReferenceGridHighlightVisuals = [];
     private const double FormulaReferenceGripSize = 6;
@@ -948,6 +955,46 @@ public sealed partial class MainWindow : Window
     internal bool FunctionAutocompleteOpenForTest => FunctionAutocompleteIsOpen;
 
     internal IReadOnlyList<string> FunctionAutocompleteCandidatesForTest => _functionAutocompleteCandidates;
+
+    /// <summary>
+    /// R93-formula-editing-assist-5-2 test seam: whether the live argument-signature tooltip is
+    /// currently open, and the text it renders (function name plus its bracketed-optional argument
+    /// list, e.g. "VLOOKUP(lookup_value, table_array, col_index_num, [range_lookup])"). Not used by
+    /// production code paths.
+    /// </summary>
+    internal bool SignatureHelpOpenForTest => _signatureHelpPopup?.IsOpen == true;
+
+    internal string SignatureHelpTextForTest => _signatureHelpTextBlock?.Inlines is { } inlines
+        ? string.Concat(inlines.OfType<Run>().Select(run => run.Text))
+        : "";
+
+    /// <summary>
+    /// R93-formula-editing-assist-5-2 test seam: the 0-based index (within
+    /// <see cref="SignatureHelpTextForTest"/>'s argument list) of the run currently rendered bold
+    /// (the argument the caret sits inside), or -1 when the tooltip is closed.
+    /// </summary>
+    internal int SignatureHelpBoldArgumentIndexForTest
+    {
+        get
+        {
+            if (_signatureHelpTextBlock?.Inlines is not { } inlines)
+                return -1;
+
+            var argumentIndex = -1;
+            foreach (var run in inlines.OfType<Run>().Skip(1))
+            {
+                var text = run.Text ?? "";
+                if (text is ", " or ")")
+                    continue;
+
+                argumentIndex++;
+                if (run.FontWeight == FontWeight.Bold)
+                    return argumentIndex;
+            }
+
+            return -1;
+        }
+    }
 
     /// <summary>
     /// R92-meta-2 test seam: drives the Formula Bar's real TextChanged handling with the Text and
@@ -9272,6 +9319,7 @@ public sealed partial class MainWindow : Window
             RefreshFormulaReferenceHighlights();
             RefreshFormulaReferenceGridHighlights();
             RefreshFormulaFunctionAutocomplete(editor);
+            RefreshFormulaSignatureHelp(editor);
 
             var suppressed = _suppressNextInlineCellValueAutoCompleteSuggestion;
             _suppressNextInlineCellValueAutoCompleteSuggestion = false;
@@ -9406,6 +9454,7 @@ public sealed partial class MainWindow : Window
         // actually just typed (mirrors the WPF host, whose native TextBox typing keeps caret and
         // text in sync before TextChanged fires, so it never needed this second pass).
         RefreshFormulaFunctionAutocomplete(inlineEditor);
+        RefreshFormulaSignatureHelp(inlineEditor);
         return true;
     }
 
@@ -9611,6 +9660,7 @@ public sealed partial class MainWindow : Window
     private void ClearInlineCellEditorState()
     {
         HideFormulaFunctionAutocomplete();
+        HideFormulaSignatureHelp();
         _inlineCellEditor = null;
         _inlineCellReferenceTextOverlay = null;
         _inlineCellEditorForeground = null;
@@ -10633,12 +10683,14 @@ public sealed partial class MainWindow : Window
             ClearFormulaReferenceGridHighlights();
             RefreshFormulaReferenceGrips();
             HideFormulaFunctionAutocomplete();
+            HideFormulaSignatureHelp();
             return;
         }
 
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
         RefreshFormulaFunctionAutocomplete(_formulaBox);
+        RefreshFormulaSignatureHelp(_formulaBox);
     }
 
     private IReadOnlyList<FormulaReferenceHighlight> GetFormulaReferenceHighlights(string text) =>
@@ -11138,6 +11190,77 @@ public sealed partial class MainWindow : Window
         HideFormulaFunctionAutocomplete();
         ApplyTextBoxEdit(editor, new ExcelTextEdit(text, caretIndex, 0));
         SynchronizeFormulaEditors(editor);
+    }
+
+    // ── R93-formula-editing-assist: live argument-signature tooltip ─────────────────────────────
+    // Ported from the WPF host's RefreshFormulaSignatureHelp/EnsureSignatureHelpPopup
+    // (MainWindow.Editing.cs) onto FormulaSignatureHelpPlanner, the same portable planner the host
+    // already uses -- so this shell's formula editors (the Formula Bar and the in-cell inline
+    // editor) show the same "VLOOKUP(lookup_value, table_array, **col_index_num**, ...)" live
+    // argument tooltip Windows users already see once the caret sits inside an open function call.
+
+    /// <summary>
+    /// Recomputes and shows/hides the live argument-signature tooltip for the given formula editor.
+    /// Called alongside <see cref="RefreshFormulaFunctionAutocomplete"/> on every formula-editor
+    /// TextChanged pass (the in-cell inline editor and the Formula Bar).
+    /// </summary>
+    private void RefreshFormulaSignatureHelp(TextBox editor)
+    {
+        var info = FormulaSignatureHelpPlanner.Resolve(editor.Text, editor.CaretIndex);
+        if (info is null)
+        {
+            HideFormulaSignatureHelp();
+            return;
+        }
+
+        EnsureSignatureHelpPopup();
+        _signatureHelpTextBlock!.Inlines?.Clear();
+        _signatureHelpTextBlock.Inlines?.Add(new Run(info.FunctionName + "("));
+        for (var i = 0; i < info.Arguments.Count; i++)
+        {
+            if (i > 0)
+                _signatureHelpTextBlock.Inlines?.Add(new Run(", "));
+
+            var argument = info.Arguments[i];
+            var displayName = argument.Optional ? $"[{argument.Name}]" : argument.Name;
+            _signatureHelpTextBlock.Inlines?.Add(new Run(displayName)
+            {
+                FontWeight = argument.IsCurrent ? FontWeight.Bold : FontWeight.Normal
+            });
+        }
+        _signatureHelpTextBlock.Inlines?.Add(new Run(")"));
+
+        _signatureHelpPopup!.PlacementTarget = editor;
+        _signatureHelpPopup.Placement = PlacementMode.Top;
+        _signatureHelpPopup.IsOpen = true;
+    }
+
+    private void HideFormulaSignatureHelp()
+    {
+        if (_signatureHelpPopup is not null)
+            _signatureHelpPopup.IsOpen = false;
+    }
+
+    private void EnsureSignatureHelpPopup()
+    {
+        if (_signatureHelpPopup is not null)
+            return;
+
+        _signatureHelpTextBlock = new TextBlock
+        {
+            Padding = new Thickness(4, 2, 4, 2),
+        };
+        _signatureHelpPopup = new Popup
+        {
+            Child = new Border
+            {
+                Background = Brushes.LightYellow,
+                BorderBrush = Brushes.Gray,
+                BorderThickness = new Thickness(1),
+                Child = _signatureHelpTextBlock,
+            },
+            IsLightDismissEnabled = false,
+        };
     }
 
     /// <summary>
@@ -18859,6 +18982,7 @@ public sealed partial class MainWindow : Window
         _formulaBoxEditOriginalText = null;
         ClearFormulaRangeEntryState();
         HideFormulaFunctionAutocomplete();
+        HideFormulaSignatureHelp();
         // R75-render-selection-marquee-4-2: mirrors the WPF host's TryExecuteEditCells, which
         // cancels an active Copy/Cut marching-ants marquee as soon as an ordinary cell edit is
         // committed -- a subsequent Paste must not silently move/copy a source range the user has

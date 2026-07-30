@@ -61,6 +61,10 @@ public static partial class BuiltInFunctions
     private static ScalarValue Areas(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
+        // R93-AREAS-union-value-model: a UnionNode argument (e.g. the "(A1:B2,D5,F1:F10)" in
+        // AREAS((A1:B2,D5,F1:F10))) evaluates to a UnionValue -- AREAS reports its area count
+        // directly, rather than the always-1 a single RangeValue reports.
+        if (args[0] is UnionValue union) return new NumberValue(union.Areas.Count);
         if (args[0] is RangeValue) return new NumberValue(1);
         return ErrorValue.Value;
     }

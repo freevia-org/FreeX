@@ -165,8 +165,20 @@ public static class FormulaRewriter
                 Start = RewriteNode(nre.Start, op, hostSheetName, ref changed),
                 End   = RewriteNode(nre.End,   op, hostSheetName, ref changed)
             },
+            UnionNode union => RewriteUnion(union, op, hostSheetName, ref changed),
             _ => node   // NumberNode, StringNode, BooleanNode, NamedRangeNode, ErrorNode
         };
+    }
+
+    // A ref parameter can't be captured by a lambda (e.g. a List.Select projection), so each area
+    // is rewritten in an explicit loop rather than LINQ.
+    private static FormulaNode RewriteUnion(
+        UnionNode union, RewriteOperation op, string hostSheetName, ref bool changed)
+    {
+        var areas = new List<FormulaNode>(union.Areas.Count);
+        foreach (var area in union.Areas)
+            areas.Add(RewriteNode(area, op, hostSheetName, ref changed));
+        return union with { Areas = areas };
     }
 
     // ── Table rename ──────────────────────────────────────────────────────────

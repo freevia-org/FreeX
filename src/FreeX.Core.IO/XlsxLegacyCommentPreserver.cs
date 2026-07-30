@@ -364,7 +364,16 @@ internal static class XlsxLegacyCommentPreserver
             return null;
 
         // For NEW notes (in model but not in source) try to copy from ClosedXML's target XML.
+        // R93-threaded-comment-extLst: also covers a brand-new threaded comment (no shim entry in
+        // the source at all) added to a sheet that ALSO has an existing legacy note requiring
+        // reconciliation -- XlsxFileAdapter.Save's early ClosedXML population phase writes that
+        // thread's legacy compatibility shim into the freshly-generated target comments part (see
+        // the ThreadedComments loop there), but without including its address here, this
+        // reconciliation pass would silently drop that freshly-written shim on the floor (it only
+        // ever rebuilds commentList from source entries + this "new address" copy step).
         var newModelAddresses = sheet.Comments.Keys
+            .Concat(sheet.ThreadedComments.Keys)
+            .Distinct()
             .Where(addr => !sourceRefsHandled.Contains(addr.ToA1()))
             .ToList();
 
