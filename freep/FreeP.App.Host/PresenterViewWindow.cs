@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -31,6 +32,9 @@ public sealed class PresenterViewWindow : Window
     private readonly TextBlock _recordingStatusText;
     private readonly Action? _goBack;
     private readonly Action? _goNext;
+    private readonly Action<int>? _goToSlide;
+    private readonly TextBox _slideNumberBox;
+    private readonly Button _goToSlideButton;
     private readonly ComboBox _pointerModeCombo;
     private readonly Action<SlideShowScreenMode>? _setScreenMode;
     private readonly Action<SlideShowPresenterPointerMode>? _selectPointerMode;
@@ -52,12 +56,14 @@ public sealed class PresenterViewWindow : Window
         Action<SlideShowTimingIntent>? setTimingIntent = null,
         Action<SlideShowRecordingMediaIntent>? setMediaIntent = null,
         Func<SlideShowRecordingReviewPlan>? recordingReviewProvider = null,
-        Func<SlideShowRecordingReviewApplyResult>? applyRecordingReview = null)
+        Func<SlideShowRecordingReviewApplyResult>? applyRecordingReview = null,
+        Action<int>? goToSlide = null)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _stateProvider = stateProvider ?? throw new ArgumentNullException(nameof(stateProvider));
         _goBack = goBack;
         _goNext = goNext;
+        _goToSlide = goToSlide;
         _setScreenMode = setScreenMode;
         _selectPointerMode = selectPointerMode;
         _clearInk = clearInk;
@@ -103,6 +109,24 @@ public sealed class PresenterViewWindow : Window
             _goNext?.Invoke();
             RefreshFromState();
         });
+        _slideNumberBox = new TextBox
+        {
+            Width = 48,
+            Height = 28,
+            Margin = new Thickness(6, 0, 0, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            ToolTip = "Go to slide number",
+        };
+        _slideNumberBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == System.Windows.Input.Key.Enter)
+            {
+                SubmitSlideNumber();
+                e.Handled = true;
+            }
+        };
+        _goToSlideButton = MakeActionButton("Go", SubmitSlideNumber);
+        _goToSlideButton.IsEnabled = _goToSlide is not null;
         _recordTimingsButton = MakeActionButton("Record timings", () =>
         {
             if (_setTimingIntent is not null)
@@ -161,6 +185,8 @@ public sealed class PresenterViewWindow : Window
         });
         controls.Children.Add(_backButton);
         controls.Children.Add(_advanceButton);
+        controls.Children.Add(_slideNumberBox);
+        controls.Children.Add(_goToSlideButton);
         controls.Children.Add(_recordTimingsButton);
         controls.Children.Add(_rehearseTimingsButton);
         controls.Children.Add(_narrationButton);
@@ -270,6 +296,11 @@ public sealed class PresenterViewWindow : Window
             _currentLabel.Text = plan.CurrentSlideLabel;
             _nextLabel.Text = plan.NextSlideLabel;
             _notesText.Text = plan.NotesText;
+            if (!_slideNumberBox.IsKeyboardFocusWithin && state.HostState.CurrentSlideIndex >= 0)
+            {
+                _slideNumberBox.Text = (state.HostState.CurrentSlideIndex + 1)
+                    .ToString(CultureInfo.InvariantCulture);
+            }
             _backButton.IsEnabled = plan.CanGoBack && _goBack is not null;
             _advanceButton.IsEnabled = plan.CanAdvance && _goNext is not null;
             _recordTimingsButton.Content = plan.IsRecordingTimings ? "Stop recording" : "Record timings";
@@ -313,6 +344,20 @@ public sealed class PresenterViewWindow : Window
         VerticalAlignment = VerticalAlignment.Stretch,
         Margin = new Thickness(0, 6, 0, 0),
     };
+
+    private void SubmitSlideNumber()
+    {
+        if (_goToSlide is null ||
+            !SlideShowSlideNumberPlanner.TryParseSlideNumber(
+                _slideNumberBox.Text,
+                out var oneBasedSlideNumber))
+        {
+            return;
+        }
+
+        _goToSlide(oneBasedSlideNumber);
+        RefreshFromState();
+    }
 
     private static Border BuildPreviewPanel(
         string heading,

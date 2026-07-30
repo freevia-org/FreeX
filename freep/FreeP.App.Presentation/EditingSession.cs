@@ -1096,6 +1096,18 @@ public sealed class EditingSession
     /// <summary>Gets the transition for the current slide, or null if none.</summary>
     public SlideTransition? CurrentSlideTransition => CurrentSlide?.Transition;
 
+    /// <summary>Replaces the current slide's paragraph-build XML as one undoable edit.</summary>
+    public void SetCurrentSlideAnimationBuildList(string? buildListXml)
+    {
+        if (CurrentSlide is null)
+            return;
+
+        if (string.Equals(CurrentSlide.AnimationBuildListXml, buildListXml, StringComparison.Ordinal))
+            return;
+
+        Bus.Execute(new SetSlideAnimationBuildListCommand(_currentSlideIndex, buildListXml));
+    }
+
     // ── Animation operations ──────────────────────────────────────────────────────
 
     /// <summary>Read-only ordered animation list for the current slide.</summary>

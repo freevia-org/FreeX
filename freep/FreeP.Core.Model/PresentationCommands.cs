@@ -2252,6 +2252,45 @@ public sealed class SetSlideTransitionCommand : IPresentationCommand
 }
 
 /// <summary>
+/// Replaces the raw PowerPoint paragraph-build list on a slide. The build list is
+/// intentionally kept as source XML because PowerPoint stores timing metadata that
+/// is broader than the current shared model. The command makes authoring changes
+/// undoable without discarding unrelated timing entries.
+/// </summary>
+public sealed class SetSlideAnimationBuildListCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly string? _newBuildListXml;
+    private string? _oldBuildListXml;
+
+    public SetSlideAnimationBuildListCommand(int slideIndex, string? buildListXml)
+    {
+        _slideIndex = slideIndex;
+        _newBuildListXml = buildListXml;
+    }
+
+    public string Label => "Set Text Build";
+
+    public void Apply(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
+            return;
+
+        var slide = p.Slides[_slideIndex];
+        _oldBuildListXml = slide.AnimationBuildListXml;
+        slide.AnimationBuildListXml = _newBuildListXml;
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
+            return;
+
+        p.Slides[_slideIndex].AnimationBuildListXml = _oldBuildListXml;
+    }
+}
+
+/// <summary>
 /// Appends a <see cref="ShapeAnimation"/> to the animation list of the slide at
 /// <paramref name="slideIndex"/>.
 /// </summary>

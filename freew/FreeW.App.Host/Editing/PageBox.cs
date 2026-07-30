@@ -661,6 +661,8 @@ internal sealed class PageBox : Border
             panel.Children.Add(new Border
             {
                 Height = FootnoteSeparatorHeight,
+                Width = plan.SeparatorWidthDip,
+                HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(marginLeft, 2, marginRight, 2),
                 Background = Brushes.Black
             });

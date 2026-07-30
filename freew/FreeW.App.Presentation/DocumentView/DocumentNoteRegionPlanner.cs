@@ -89,7 +89,9 @@ public static class DocumentNoteRegionPlanner
             isSyntheticPage,
             isSyntheticPage ? "Endnotes" : null,
             SeparatorXOffsetDip: 0,
-            SeparatorWidthDip: Math.Max(0, contentWidthDip),
+            // Word uses the same short two-inch separator for endnotes as footnotes, whether
+            // they continue on the final body page or begin a dedicated endnote page.
+            SeparatorWidthDip: Math.Min(FootnoteSeparatorWidthDip, Math.Max(0, contentWidthDip)),
             TextFontSizePt: NoteTextFontSizePt,
             LabelFontSizePt: NoteTextFontSizePt * LabelScale,
             EstimatedHeightDip: height,
