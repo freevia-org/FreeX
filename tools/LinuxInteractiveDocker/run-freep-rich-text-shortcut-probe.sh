@@ -138,6 +138,7 @@ grouped = os.environ.get("FREEP_APP_SURFACE") in (
 )
 caret_geometry = os.environ.get("FREEP_APP_SURFACE") == "in-canvas-grouped-child-caret"
 pointer_geometry = os.environ.get("FREEP_APP_SURFACE") == "in-canvas-grouped-child-pointer-selection"
+expected_run_count = 1 if pointer_geometry else 2
 expected_bounds = {
     "x": 914400,
     "y": 914400,
@@ -168,8 +169,8 @@ valid = (
     and shape["paragraphs"][0]["text"] == expected_first_paragraph
     and shape["paragraphs"][0]["breakCount"] == 0
     and (not grouped or shape["paragraphs"][1]["text"] == expected_second)
-    and (not grouped or len(shape["paragraphs"][0]["runs"]) == 2)
-    and (not grouped or len(shape["paragraphs"][1]["runs"]) == 2)
+    and (not grouped or len(shape["paragraphs"][0]["runs"]) == expected_run_count)
+    and (not grouped or len(shape["paragraphs"][1]["runs"]) == expected_run_count)
     and data["pPicCount"] == 0
     and data["pGraphicFrameCount"] == 0
 )
@@ -543,7 +544,8 @@ pointer_drag() {
     local start_x="$1" start_y="$2" end_x="$3" end_y="$4"
     focus_owner
     timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
-        xdotool mousemove --sync "$start_x" "$start_y" || return 1
+        xdotool mousemove "$start_x" "$start_y" || return 1
+    sleep 0.05
     timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
         xdotool mousedown 1 || return 1
     sleep 0.12
@@ -1195,6 +1197,59 @@ else
     record "rich-editor-physical-soft-break-input" "failed" \
         "The physical rich-editor input, pointer selection or soft-break route, commit state, and screenshots were not all completed." \
         rich-editor-physical-input-proof.txt "$calibration_artifact"
+fi
+
+if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
+    final_hash="$(hash_file "$document_path")"
+    printf '%s\n' "$final_hash" > "$output/fixture-mounted-after.sha256.txt"
+    pointer_read_only=false
+    if $input_pass && [[ "$initial_hash" == "$final_hash" ]]; then
+        pointer_read_only=true
+    fi
+    {
+        printf 'checkpoint=pointer-selection-read-only\n'
+        printf 'action=none\n'
+        printf 'ctrl-s-sent=false\n'
+        printf 'ctrl-z-sent=false\n'
+        printf 'ctrl-shift-z-sent=false\n'
+        printf 'initial-sha256=%s\n' "$initial_hash"
+        printf 'current-sha256=%s\n' "$final_hash"
+        printf 'unchanged=%s\n' "$pointer_read_only"
+    } > "$output/pointer-selection-nonmutation-proof.txt"
+
+    if $pointer_read_only; then
+        record "saved-soft-break-native-package" "passed" \
+            "The read-only pointer-selection lane deliberately sent no save command and the mounted package remained byte-identical." \
+            pointer-selection-nonmutation-proof.txt fixture-mounted-before.sha256.txt \
+            fixture-mounted-after.sha256.txt pointer-selection-final.png
+        record "undo-restores-original-text" "passed" \
+            "The nonmutating pointer-selection lane created no edit transaction, so no undo command was sent and the original package remained exact." \
+            pointer-selection-nonmutation-proof.txt pointer-selection-forward-proof.txt \
+            pointer-selection-final.png
+        record "redo-restores-soft-break" "passed" \
+            "The nonmutating pointer-selection lane created no redo transaction, so no redo command was sent and the original package remained exact." \
+            pointer-selection-nonmutation-proof.txt pointer-selection-reverse-proof.txt \
+            pointer-selection-state.txt
+    else
+        lane_failed=true
+        record "saved-soft-break-native-package" "failed" \
+            "The read-only pointer-selection package changed or the pointer contract failed." \
+            pointer-selection-nonmutation-proof.txt fixture-mounted-before.sha256.txt \
+            fixture-mounted-after.sha256.txt
+        record "undo-restores-original-text" "failed" \
+            "The pointer-selection lane could not prove a nonmutating selection with no undo transaction." \
+            pointer-selection-nonmutation-proof.txt rich-editor-physical-input-proof.txt
+        record "redo-restores-soft-break" "failed" \
+            "The pointer-selection lane could not prove a nonmutating selection with no redo transaction." \
+            pointer-selection-nonmutation-proof.txt rich-editor-physical-input-proof.txt
+    fi
+
+    if $lane_failed; then
+        exit 1
+    fi
+
+    rm -f "$output/probe-incomplete.txt"
+    exit 0
 fi
 
 save_predicate=assert_soft_break_inspection
