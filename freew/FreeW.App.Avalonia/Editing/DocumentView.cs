@@ -215,6 +215,8 @@ public sealed class DocumentView : Control
     private (int BlockIndex, int RunIndex, string Kind, Rect Rect)? _selectedFloating;
     // AV-SHAPETEXT: bounded one-paragraph caret for the selected floating text box.
     private (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? _shapeCaret;
+    // Path of the nested grouped child currently being edited, or null for a direct floating shape.
+    private IReadOnlyList<int>? _activeShapeTextChildPath;
     // AV-SHAPETEXTSEL: the fixed end of a drag selection inside the active text box. This is deliberately
     // separate from the body _selectionAnchor so a shape-text selection can never leak into document text.
     private (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? _shapeSelectionAnchor;
@@ -531,6 +533,7 @@ public sealed class DocumentView : Control
         _selectedFloatingGroupChild = null;
         _shapeCaret = null;
         _shapeSelectionAnchor = null;
+        _activeShapeTextChildPath = null;
         _shapeTextSelectionDragState = null;
         _selectedFloatingObjects.Clear();
         _floatDragState   = null;
@@ -6412,7 +6415,8 @@ public sealed class DocumentView : Control
                 origin.Y + stop.Y,
                 stop.Height,
                 rotationRadians,
-                rotationCenter);
+                rotationCenter,
+                shapeData.ChildPath);
         }
     }
 
@@ -6429,10 +6433,12 @@ public sealed class DocumentView : Control
         double y,
         double height,
         double rotationRadians,
-        Point rotationCenter) =>
+        Point rotationCenter,
+        IReadOnlyList<int>? childPath = null) =>
         _shapeTextCaretStops.Add(new ShapeTextCaretStop(
             blockIndex, runIndex, paragraphIndex, textRunIndex, offset, x, y, height,
-            rotationRadians, rotationCenter.X, rotationCenter.Y));
+            rotationRadians, rotationCenter.X, rotationCenter.Y,
+            childPath?.ToArray()));
 
     private static FloatingShapeData BuildFloatingShapeData(
         DrawingObjectVisualPlan plan,
@@ -7754,8 +7760,9 @@ public sealed class DocumentView : Control
         if (ShapeTextSelectionInfo is not { } selection
             || selection.Start.BlockIndex != shapeData.BlockIndex
             || selection.Start.RunIndex != shapeData.RunIndex
-            || !TryGetRun(shapeData.BlockIndex, shapeData.RunIndex, out var ownerRun)
-            || ownerRun.Shape is not { } shape)
+            || !TryGetShapeTextTarget(
+                shapeData.BlockIndex, shapeData.RunIndex, shapeData.ChildPath,
+                out _, out var shape))
             return;
 
         IDisposable? rotation = null;
@@ -9690,13 +9697,46 @@ public sealed class DocumentView : Control
     /// </summary>
     public bool EnterSelectedShapeTextEditing()
     {
-        if (IsEditingLocked || _selectedFloating is not { Kind: "Shape" } selected
-            || !TryGetRun(selected.BlockIndex, selected.RunIndex, out var shapeRun)
-            || shapeRun.Shape is not { Kind: ShapeKind.TextBox }
-            || !TryGetShapeTextRun(selected.BlockIndex, selected.RunIndex, 0, 0, out var run))
+        if (IsEditingLocked)
             return false;
 
-        _shapeCaret = (selected.BlockIndex, selected.RunIndex, 0, 0, run.Text.Length);
+        int blockIndex;
+        int runIndex;
+        Shape shape;
+        IReadOnlyList<int>? childPath;
+        if (_selectedFloatingGroupChild is { Kind: "Shape" } selectedChild
+            && TryGetRun(selectedChild.BlockIndex, selectedChild.RunIndex, out var groupRun)
+            && groupRun.DrawingGroup is { } rootGroup
+            && DrawingGroupChildPathResolver.TryGetChild(
+                rootGroup, selectedChild.ChildPath, out _, out var child)
+            && child is Shape nestedShape)
+        {
+            blockIndex = selectedChild.BlockIndex;
+            runIndex = selectedChild.RunIndex;
+            shape = nestedShape;
+            childPath = selectedChild.ChildPath;
+        }
+        else if (_selectedFloating is { Kind: "Shape" } selected
+            && TryGetRun(selected.BlockIndex, selected.RunIndex, out var shapeRun)
+            && shapeRun.Shape is { } directShape)
+        {
+            blockIndex = selected.BlockIndex;
+            runIndex = selected.RunIndex;
+            shape = directShape;
+            childPath = null;
+        }
+        else
+        {
+            return false;
+        }
+
+        if (shape.TextParagraphs.Count == 0
+            || !TryGetShapeTextRun(blockIndex, runIndex, 0, 0, out var run, childPath))
+            return false;
+
+        _activeShapeTextChildPath = childPath;
+
+        _shapeCaret = (blockIndex, runIndex, 0, 0, run.Text.Length);
         _shapeSelectionAnchor = _shapeCaret;
         Focus();
         InvalidateVisual();
@@ -9714,24 +9754,56 @@ public sealed class DocumentView : Control
         out (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) resolved)
     {
         resolved = default;
-        if (!TryHitTestFloat(point, out var floatHit)
-            || floatHit.BlockIndex != active.BlockIndex
-            || floatHit.RunIndex != active.RunIndex
-            || floatHit.Kind != "Shape")
-            return false;
+        IReadOnlyList<int>? activePath = _activeShapeTextChildPath;
+        Point localPoint;
+        if (activePath is { Count: > 0 })
+        {
+            if (!TryHitTestFloatingGroupChild(point, out var groupHit)
+                || groupHit.BlockIndex != active.BlockIndex
+                || groupHit.RunIndex != active.RunIndex
+                || !groupHit.ChildPath.SequenceEqual(activePath)
+                || !TryGetFloatingGroupChildGeometry(
+                    active.BlockIndex, active.RunIndex, activePath, out var geometry))
+                return false;
+
+            var local = DocumentViewLayoutPlanner.UnTransformPointThroughGroupChain(
+                ToPlannerPoint(point),
+                ToPlannerRect(geometry.Child.Rect),
+                geometry.Child.RotationAngle,
+                geometry.Child.FlipH,
+                geometry.Child.FlipV,
+                geometry.ParentTransforms);
+            localPoint = new Point(local.XDip, local.YDip);
+        }
+        else
+        {
+            if (!TryHitTestFloat(point, out var floatHit)
+                || floatHit.BlockIndex != active.BlockIndex
+                || floatHit.RunIndex != active.RunIndex
+                || floatHit.Kind != "Shape")
+                return false;
+            localPoint = point;
+        }
 
         var stops = _shapeTextCaretStops
             .Where(candidate => candidate.BlockIndex == active.BlockIndex
-                && candidate.RunIndex == active.RunIndex)
+                && candidate.RunIndex == active.RunIndex
+                && ((candidate.ChildPath is null && activePath is null)
+                    || (candidate.ChildPath is not null
+                        && activePath is not null
+                        && candidate.ChildPath.SequenceEqual(activePath))))
             .ToArray();
         if (stops.Length == 0)
             return false;
 
-        var first = stops[0];
-        var localPoint = RotateAround(
-            point,
-            new Point(first.RotationCenterX, first.RotationCenterY),
-            -first.RotationRadians);
+        if (activePath is null)
+        {
+            var first = stops[0];
+            localPoint = RotateAround(
+                localPoint,
+                new Point(first.RotationCenterX, first.RotationCenterY),
+                -first.RotationRadians);
+        }
         var stop = stops
             .OrderBy(candidate => VerticalDistance(localPoint.Y, candidate.Y, candidate.Height))
             .ThenBy(candidate => Math.Abs(localPoint.X - candidate.X))
@@ -9847,8 +9919,9 @@ public sealed class DocumentView : Control
     internal bool SelectShapeTextRangeForTest(int paragraphIndex, int startOffset, int endOffset)
     {
         if (_shapeCaret is not { } caret
-            || !TryGetRun(caret.BlockIndex, caret.RunIndex, out var ownerRun)
-            || ownerRun.Shape is not { } shape
+            || !TryGetShapeTextTarget(
+                caret.BlockIndex, caret.RunIndex, _activeShapeTextChildPath,
+                out _, out var shape)
             || paragraphIndex < 0
             || paragraphIndex >= shape.TextParagraphs.Count)
             return false;
@@ -10083,14 +10156,16 @@ public sealed class DocumentView : Control
     {
         if (ShapeTextSelectionInfo is not { } selection
             || _shapeCaret is not { } current
-            || !TryGetRun(current.BlockIndex, current.RunIndex, out var ownerRun)
-            || ownerRun.Shape is not { } shape
+            || !TryGetShapeTextTarget(
+                current.BlockIndex, current.RunIndex, _activeShapeTextChildPath,
+                out _, out var shape)
             || !IsValidShapeTextSelection(shape, selection, current.BlockIndex, current.RunIndex))
             return;
 
         var plan = BuildShapeTextReplacement(shape, selection, replacement);
         _bus.Execute(new ReplaceShapeTextParagraphsCommand(
-            current.BlockIndex, current.RunIndex, plan.Paragraphs));
+            current.BlockIndex, current.RunIndex, plan.Paragraphs,
+            _activeShapeTextChildPath));
         _shapeCaret = plan.Caret;
         _shapeSelectionAnchor = plan.Caret;
         InvalidateLayoutAndVisual();
@@ -10101,8 +10176,9 @@ public sealed class DocumentView : Control
     {
         if (ShapeTextSelectionInfo is not { } selection
             || _shapeCaret is not { } current
-            || !TryGetRun(current.BlockIndex, current.RunIndex, out var ownerRun)
-            || ownerRun.Shape is not { } shape
+            || !TryGetShapeTextTarget(
+                current.BlockIndex, current.RunIndex, _activeShapeTextChildPath,
+                out _, out var shape)
             || !IsValidShapeTextSelection(shape, selection, current.BlockIndex, current.RunIndex))
             return;
 
@@ -10125,7 +10201,8 @@ public sealed class DocumentView : Control
             paragraphs.Add(CloneShapeParagraphWithRange(source, from, to, transform));
         }
 
-        _bus.Execute(new ReplaceShapeTextParagraphsCommand(current.BlockIndex, current.RunIndex, paragraphs));
+        _bus.Execute(new ReplaceShapeTextParagraphsCommand(
+            current.BlockIndex, current.RunIndex, paragraphs, _activeShapeTextChildPath));
         var rebuiltShape = new Shape();
         rebuiltShape.TextParagraphs.AddRange(paragraphs);
         _shapeSelectionAnchor = ShapeTextPositionAtOffset(rebuiltShape, current.BlockIndex, current.RunIndex,
@@ -10149,7 +10226,8 @@ public sealed class DocumentView : Control
             caret.RunIndex,
             caret.TextParagraphIndex,
             caret.TextRunIndex,
-            caret.Offset));
+            caret.Offset,
+            _activeShapeTextChildPath));
         _shapeCaret = caret with
         {
             TextParagraphIndex = caret.TextParagraphIndex + 1,
@@ -10168,6 +10246,7 @@ public sealed class DocumentView : Control
         FinishShapeTextSelectionDrag(releasePointerCapture: true);
         _shapeCaret = null;
         _shapeSelectionAnchor = null;
+        _activeShapeTextChildPath = null;
         InvalidateVisual();
         CaretMoved?.Invoke();
     }
@@ -10179,6 +10258,7 @@ public sealed class DocumentView : Control
         FinishShapeTextSelectionDrag(releasePointerCapture: true);
         _shapeCaret = null;
         _shapeSelectionAnchor = null;
+        _activeShapeTextChildPath = null;
         _selectedFloating = null;
         _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
@@ -10218,6 +10298,7 @@ public sealed class DocumentView : Control
         FinishShapeTextSelectionDrag(releasePointerCapture: true);
         _shapeCaret = null;
         _shapeSelectionAnchor = null;
+        _activeShapeTextChildPath = null;
         _selectedFloatingGroupChild = null;
         _shapeEditPointsTarget = null;
         _shapeEditPointDragState = null;
@@ -10309,11 +10390,11 @@ public sealed class DocumentView : Control
         int runIndex,
         int textParagraphIndex,
         int textRunIndex,
-        out Run textRun)
+        out Run textRun,
+        IReadOnlyList<int>? childPath = null)
     {
         textRun = null!;
-        if (!TryGetRun(blockIndex, runIndex, out var run)
-            || run.Shape is not { } shape
+        if (!TryGetShapeTextTarget(blockIndex, runIndex, childPath, out _, out var shape)
             || textParagraphIndex < 0 || textParagraphIndex >= shape.TextParagraphs.Count)
             return false;
 
@@ -10322,6 +10403,36 @@ public sealed class DocumentView : Control
             return false;
 
         textRun = paragraph.Runs[textRunIndex];
+        return true;
+    }
+
+    private bool TryGetShapeTextTarget(
+        int blockIndex,
+        int runIndex,
+        IReadOnlyList<int>? childPath,
+        out Run ownerRun,
+        out Shape shape)
+    {
+        ownerRun = null!;
+        shape = null!;
+        if (!TryGetRun(blockIndex, runIndex, out ownerRun))
+            return false;
+
+        childPath ??= _activeShapeTextChildPath;
+        if (childPath is { Count: > 0 })
+        {
+            if (ownerRun.DrawingGroup is not { } group
+                || !DrawingGroupChildPathResolver.TryGetChild(
+                    group, childPath, out _, out var child)
+                || child is not Shape nestedShape)
+                return false;
+            shape = nestedShape;
+            return true;
+        }
+
+        if (ownerRun.Shape is not { } directShape)
+            return false;
+        shape = directShape;
         return true;
     }
 
@@ -11740,6 +11851,21 @@ public sealed class DocumentView : Control
             if (_selectedFloatingGroupChild is { } selectedChild
                 && IsSameFloatingGroupChild(selectedChild, groupChildHit))
             {
+                if (groupChildHit.Kind == "Shape"
+                    && TryGetShapeTextTarget(
+                        groupChildHit.BlockIndex,
+                        groupChildHit.RunIndex,
+                        groupChildHit.ChildPath,
+                        out _,
+                        out var selectedTextShape)
+                    && selectedTextShape.TextParagraphs.Count > 0
+                    && EnterSelectedShapeTextEditing())
+                {
+                    _floatDragState = null;
+                    Cursor = Cursor.Default;
+                    e.Handled = true;
+                    return;
+                }
                 _floatDragState = (point, groupChildHit.Rect, FloatHandle.Body);
                 Cursor = CursorForHandle(FloatHandle.Body);
             }
@@ -11780,6 +11906,8 @@ public sealed class DocumentView : Control
         if (_selectedFloating is not null)
         {
             _shapeCaret = null;
+            _shapeSelectionAnchor = null;
+            _activeShapeTextChildPath = null;
             _selectedFloating = null;
             _selectedFloatingGroupChild = null;
             _selectedFloatingObjects.Clear();
@@ -12198,11 +12326,22 @@ public sealed class DocumentView : Control
         // AV-FLSEL: when a float is selected, intercept navigation/delete keys before body text.
         if (_selectedFloating is { } selFloat)
         {
+            if (e.Key == Key.F2
+                && _selectedFloatingGroupChild is { Kind: "Shape" }
+                && EnterSelectedShapeTextEditing())
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (e.Key == Key.Enter)
             {
-                if (selFloat.Kind == "Shape" && EnterSelectedShapeTextEditing())
+                if ((selFloat.Kind == "Shape"
+                        || _selectedFloatingGroupChild is { Kind: "Shape" })
+                    && EnterSelectedShapeTextEditing())
                     e.Handled = true;
-                else if (selFloat.Kind != "Shape")
+                else if (selFloat.Kind != "Shape"
+                    && _selectedFloatingGroupChild is not { Kind: "Shape" })
                     e.Handled = true;
                 return;
             }
@@ -12222,6 +12361,7 @@ public sealed class DocumentView : Control
                     if (_selectedFloatingGroupChild is not null)
                     {
                         _selectedFloatingGroupChild = null;
+                        _activeShapeTextChildPath = null;
                         Cursor = Cursor.Default;
                         RaiseFloatingSelectionChangedIfIdentityChanged();
                         InvalidateVisual();
@@ -12519,7 +12659,8 @@ public sealed class DocumentView : Control
             caret.RunIndex,
             caret.TextParagraphIndex,
             caret.TextRunIndex,
-            run.Text.Insert(offset, text)));
+            run.Text.Insert(offset, text),
+            _activeShapeTextChildPath));
         SetShapeTextCaretOffset(offset + text.Length);
         _shapeSelectionAnchor = _shapeCaret;
         InvalidateLayoutAndVisual();
@@ -12567,7 +12708,8 @@ public sealed class DocumentView : Control
             _bus.Execute(new MergeShapeTextParagraphWithPreviousCommand(
                 caret.BlockIndex,
                 caret.RunIndex,
-                caret.TextParagraphIndex));
+                caret.TextParagraphIndex,
+                _activeShapeTextChildPath));
 
             var previousParagraphIndex = caret.TextParagraphIndex - 1;
             if (TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, previousParagraphIndex, 0, out var previousRun))
@@ -12594,7 +12736,8 @@ public sealed class DocumentView : Control
             caret.RunIndex,
             caret.TextParagraphIndex,
             caret.TextRunIndex,
-            run.Text.Remove(deleteAt, 1)));
+            run.Text.Remove(deleteAt, 1),
+            _activeShapeTextChildPath));
         SetShapeTextCaretOffset(backward ? deleteAt : offset);
         _shapeSelectionAnchor = _shapeCaret;
         InvalidateLayoutAndVisual();
@@ -17813,8 +17956,9 @@ public sealed class DocumentView : Control
         if (ShapeTextSelectionInfo is { } shapeSelection)
         {
             if (_shapeCaret is not { } shapeCaret
-                || !TryGetRun(shapeCaret.BlockIndex, shapeCaret.RunIndex, out var ownerRun)
-                || ownerRun.Shape is not { } shape
+                || !TryGetShapeTextTarget(
+                    shapeCaret.BlockIndex, shapeCaret.RunIndex, _activeShapeTextChildPath,
+                    out _, out var shape)
                 || !IsValidShapeTextSelection(shape, shapeSelection, shapeCaret.BlockIndex, shapeCaret.RunIndex))
                 return;
 
@@ -19638,7 +19782,8 @@ public sealed class DocumentView : Control
         double Height,
         double RotationRadians,
         double RotationCenterX,
-        double RotationCenterY);
+        double RotationCenterY,
+        IReadOnlyList<int>? ChildPath);
 
     private sealed class FloatingShapeData
     {
@@ -19648,6 +19793,7 @@ public sealed class DocumentView : Control
         // AV-FLSEL: model location so hit-test can issue commands.
         public int BlockIndex;
         public int RunIndex;
+        public IReadOnlyList<int>? ChildPath;
 
         // Geometry
         public ShapeKind Kind;
@@ -19859,7 +20005,8 @@ public sealed class DocumentView : Control
 
     private FloatingGroupData BuildFloatingGroupData(
         FreeW.Core.Model.DrawingGroup group,
-        DocumentFloatingObjectSnapshot snapshot)
+        DocumentFloatingObjectSnapshot snapshot,
+        IReadOnlyList<int>? pathPrefix = null)
     {
         var children = new List<FloatingGroupChildData>();
         var planChildren = DrawingObjectVisualPlanner.BuildVisualPlan(group, snapshot)
@@ -19871,6 +20018,7 @@ public sealed class DocumentView : Control
                 continue;
 
             var child = group.Children[childSnapshot.ChildIndex];
+            var childPath = (pathPrefix ?? []).Append(childSnapshot.ChildIndex).ToArray();
             var childRect = planChildren.TryGetValue(childSnapshot.ChildIndex, out var planChild)
                 ? ToAvaloniaRect(planChild.Visual.Rect)
                 : ToAvaloniaRect(childSnapshot.Rect);
@@ -19915,7 +20063,13 @@ public sealed class DocumentView : Control
                     if (!planChildren.TryGetValue(childSnapshot.ChildIndex, out var shapePlan))
                         continue;
                     childData.Kind = FloatingGroupChildData.ChildKind.Shape;
-                    childData.Shape = BuildFloatingShapeData(shapePlan.Visual);
+                    childData.Shape = BuildFloatingShapeData(
+                        shapePlan.Visual, snapshot.BlockIndex, snapshot.RunIndex);
+                    childData.Shape.Rect = childRect;
+                    childData.Shape.ChildPath = childPath;
+                    childData.Shape.TextLayout = BuildFloatingShapeTextLayout(
+                        childData.Shape, childRect);
+                    BuildShapeTextCaretStops(childData.Shape);
                     break;
 
                 case DocumentFloatingObjectKind.Chart when child is Chart chart:
@@ -19949,7 +20103,8 @@ public sealed class DocumentView : Control
                             nestedGroup.RotationAngle,
                             nestedGroup.FlipH,
                             nestedGroup.FlipV,
-                            snapshot.WrapTextSide));
+                            snapshot.WrapTextSide),
+                        childPath);
                     break;
 
                 default:

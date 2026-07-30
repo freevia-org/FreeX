@@ -896,6 +896,92 @@ public sealed class DocumentViewFloatingSelectionTests
     }
 
     [Fact]
+    public async Task Nested_grouped_text_box_supports_composed_caret_editing_and_path_undo()
+    {
+        string? editedText = null;
+        string? undoneText = null;
+        string? redoneText = null;
+        IReadOnlyList<int>? selectedPath = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var leaf = Shape.TextBoxWith("hello", 96, 42);
+            leaf.RotationAngle = 11;
+            var inner = new DrawingGroup { WidthPt = 150, HeightPt = 72, RotationAngle = -14, FlipV = true };
+            inner.Children.Add(new Shape(ShapeKind.Rectangle, 24, 18));
+            inner.ChildOffsets.Add((4, 5));
+            inner.Children.Add(leaf);
+            inner.ChildOffsets.Add((38, 20));
+            var outer = new DrawingGroup
+            {
+                WidthPt = 240,
+                HeightPt = 130,
+                RotationAngle = 22,
+                FlipH = true,
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.Square,
+                    HorizontalAnchor = HorizontalAnchor.Page,
+                    VerticalAnchor = VerticalAnchor.Page,
+                    HorizontalOffsetPt = 72,
+                    VerticalOffsetPt = 36,
+                    ZOrderIndex = 2
+                }
+            };
+            outer.Children.Add(inner);
+            outer.ChildOffsets.Add((24, 18));
+            outer.Children.Add(new Shape(ShapeKind.Ellipse, 30, 20));
+            outer.ChildOffsets.Add((180, 80));
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+            doc.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 2000));
+            view.SelectFloating(0, 0);
+            var path = new[] { 0, 1 };
+            var leafRect = view.FloatingGroupChildRectForPathForTest(0, 0, path)!.Value;
+            var innerRect = view.FloatingGroupChildRectForPathForTest(0, 0, [0])!.Value;
+            var parents = new DocumentFloatTransform[]
+            {
+                new(PlannerRect(innerRect), inner.RotationAngle, inner.FlipH, inner.FlipV),
+                new(PlannerRect(view.SelectedFloatingInfo!.Value.Rect), outer.RotationAngle, outer.FlipH, outer.FlipV)
+            };
+            var leafPlannerRect = PlannerRect(leafRect);
+            var visibleCenter = DocumentViewLayoutPlanner.TransformPointThroughGroupChain(
+                new DocumentFloatPoint(leafPlannerRect.CenterXDip, leafPlannerRect.CenterYDip),
+                leafPlannerRect, leaf.RotationAngle, leaf.FlipH, leaf.FlipV, parents);
+            view.SelectFloatingGroupChildForTest(
+                new Point(visibleCenter.XDip, visibleCenter.YDip)).Should().BeTrue();
+            selectedPath = view.SelectedFloatingGroupChildPath;
+            view.EnterSelectedShapeTextEditing().Should().BeTrue();
+            view.PlaceShapeTextCaretForTest(
+                new Point(visibleCenter.XDip, visibleCenter.YDip)).Should().BeTrue();
+            view.SelectShapeTextRangeForTest(0, 1, 4).Should().BeTrue();
+            view.ToggleBold();
+            view.InsertText("i");
+            view.InsertShapeTextParagraphBreak();
+            view.InsertText("world");
+            // The original trailing "o" remains after the caret split; backspace must edit the
+            // nested leaf rather than stretching or flattening the selection.
+            view.BackspacePublic();
+            editedText = leaf.PlainText;
+            view.Undo();
+            undoneText = leaf.PlainText;
+            view.Redo();
+            redoneText = leaf.PlainText;
+        });
+
+        if (!ran) return;
+        selectedPath.Should().Equal(0, 1);
+        editedText.Should().Be("hi\nworlo");
+        undoneText.Should().Be("hi\nworldo");
+        redoneText.Should().Be("hi\nworlo");
+    }
+
+    [Fact]
     public async Task Nested_branches_with_same_terminal_index_keep_child_paths_distinct()
     {
         var firstPath = Array.Empty<int>();
