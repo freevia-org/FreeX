@@ -8,6 +8,41 @@ public enum InCanvasTextNavigationKey
     End,
 }
 
+public enum InCanvasTextVerticalDirection
+{
+    Up,
+    Down,
+}
+
+/// <summary>
+/// A renderer-measured caret position on one visual line. Logical positions are the shared
+/// editor offsets; X is in the renderer's common editor coordinate space.
+/// </summary>
+public readonly record struct InCanvasTextVisualCaret(int LogicalPosition, double X);
+
+/// <summary>
+/// Renderer-measured geometry for one wrapped visual line. The host supplies these points;
+/// navigation and boundary selection remain shared.
+/// </summary>
+public sealed record InCanvasTextVisualLineGeometry(
+    int Start,
+    int End,
+    IReadOnlyList<InCanvasTextVisualCaret> Carets)
+{
+    public InCanvasTextVisualCaret FirstCaret => Carets[0];
+
+    public InCanvasTextVisualCaret LastCaret => Carets[^1];
+
+    public bool Contains(int logicalPosition) =>
+        logicalPosition >= Start && logicalPosition <= End;
+}
+
+public readonly record struct InCanvasTextVerticalNavigationResult(
+    int LogicalPosition,
+    double PreferredX,
+    int VisualLineIndex,
+    bool Moved);
+
 /// <summary>
 /// Framework-neutral logical navigation for the Avalonia in-canvas editor, matching the
 /// corresponding native WPF RichTextBox semantics. Visual line movement remains renderer-owned.
@@ -58,6 +93,107 @@ public static class InCanvasRichTextNavigationPlanner
         int upper = Math.Max(selectionStart, selectionEnd);
         return caret <= lower ? upper : lower;
     }
+
+    public static InCanvasTextVerticalNavigationResult MoveCaretVertically(
+        IReadOnlyList<InCanvasTextVisualLineGeometry> lines,
+        int caret,
+        InCanvasTextVerticalDirection direction,
+        double? preferredX = null,
+        int? currentVisualLineIndex = null)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        if (lines.Count == 0)
+            return new(caret, preferredX ?? 0, 0, false);
+
+        int currentLine = currentVisualLineIndex is int supplied
+            && supplied >= 0
+            && supplied < lines.Count
+            ? supplied
+            : FindVerticalLine(lines, caret, direction);
+        var current = lines[currentLine];
+        double x = preferredX ?? FindCaret(current, caret).X;
+        int targetLine = currentLine + (direction == InCanvasTextVerticalDirection.Up ? -1 : 1);
+        if (targetLine < 0)
+            return new(caret, x, currentLine, false);
+        if (targetLine >= lines.Count)
+            return new(caret, x, currentLine, false);
+
+        var target = lines[targetLine];
+        var targetCaret = target.Carets
+            .OrderBy(point => Math.Abs(point.X - x))
+            .ThenBy(point => point.LogicalPosition)
+            .First();
+        return new(targetCaret.LogicalPosition, x, targetLine, true);
+    }
+
+    public static int MoveCaretToVisualLineBoundary(
+        IReadOnlyList<InCanvasTextVisualLineGeometry> lines,
+        int caret,
+        bool end)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        if (lines.Count == 0)
+            return caret;
+
+        int lineIndex = FindBoundaryLine(lines, caret);
+        return end
+            ? lines[lineIndex].LastCaret.LogicalPosition
+            : lines[lineIndex].FirstCaret.LogicalPosition;
+    }
+
+    private static int FindVerticalLine(
+        IReadOnlyList<InCanvasTextVisualLineGeometry> lines,
+        int caret,
+        InCanvasTextVerticalDirection direction)
+    {
+        var candidates = lines
+            .Select((line, index) => (line, index))
+            .Where(item => item.line.Contains(caret))
+            .ToArray();
+        if (candidates.Length == 0)
+            return caret < lines[0].Start ? 0 : lines.Count - 1;
+
+        // A wrapped-line boundary belongs to the line being left, so Down crosses forward
+        // and Up crosses backward while preserving the same logical caret offset.
+        if (direction == InCanvasTextVerticalDirection.Down)
+        {
+            var leaving = candidates.FirstOrDefault(item => item.line.End == caret);
+            return candidates.Any(item => item.line.End == caret)
+                ? leaving.index
+                : candidates[0].index;
+        }
+
+        var entering = candidates.LastOrDefault(item => item.line.Start == caret);
+        return candidates.Any(item => item.line.Start == caret)
+            ? entering.index
+            : candidates[^1].index;
+    }
+
+    private static int FindBoundaryLine(
+        IReadOnlyList<InCanvasTextVisualLineGeometry> lines,
+        int caret)
+    {
+        var exactStart = lines
+            .Select((line, index) => (line, index))
+            .Where(item => item.line.Start == caret)
+            .Select(item => item.index)
+            .LastOrDefault(-1);
+        if (exactStart >= 0)
+            return exactStart;
+
+        var containing = lines
+            .Select((line, index) => (line, index))
+            .LastOrDefault(item => item.line.Contains(caret));
+        return containing.index;
+    }
+
+    private static InCanvasTextVisualCaret FindCaret(
+        InCanvasTextVisualLineGeometry line,
+        int caret) =>
+        line.Carets
+            .OrderBy(point => Math.Abs(point.LogicalPosition - caret))
+            .ThenBy(point => point.LogicalPosition)
+            .First();
 
     private static int MoveParagraphBoundary(string text, int position, bool end)
     {

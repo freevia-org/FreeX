@@ -103,6 +103,7 @@ if (string.Equals(args[0], "inspect-nested", StringComparison.OrdinalIgnoreCase)
             Console.WriteLine($"child-text-paragraphs={textShape.TextParagraphs.Count}");
             Console.WriteLine($"child-text-runs={textShape.TextParagraphs.Sum(paragraph => paragraph.Runs.Count)}");
             Console.WriteLine($"child-text-direction={textShape.TextDirection}");
+            Console.WriteLine($"child-text-alignment={textShape.TextParagraphs.FirstOrDefault()?.Formatting.Alignment ?? TextAlignment.Left}");
         }
         return 0;
 }

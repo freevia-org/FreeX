@@ -213,4 +213,71 @@ public sealed class R92_FormulaReferenceGripEditingTests
             }
         }, CancellationToken.None);
     }
+
+    [Fact]
+    public async Task ThreeDSheetRange_NativeXlsxRoundTrip_PreservesEscapedReverseQualifierAndResult()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var summarySheet = window.Session.Workbook.Sheets[0];
+            summarySheet.Name = "Summary";
+            var forwardSheet = window.Session.Workbook.AddSheet("Revenue Data");
+            var reverseSheet = window.Session.Workbook.AddSheet("O'Brien Data");
+            window.Session.SelectSheet(summarySheet.Id);
+            window.Show();
+            window.Measure(new Size(1120, 720));
+            window.Arrange(new Rect(0, 0, 1120, 720));
+            try
+            {
+                for (uint row = 2; row <= 4; row++)
+                {
+                    for (uint col = 2; col <= 4; col++)
+                    {
+                        forwardSheet.SetCell(new CellAddress(forwardSheet.Id, row, col),
+                            new NumberValue((row - 1) * 3 + col - 1));
+                        reverseSheet.SetCell(new CellAddress(reverseSheet.Id, row, col),
+                            new NumberValue(10 + (row - 1) * 3 + col - 1));
+                    }
+                }
+
+                var formulaAddress = new CellAddress(summarySheet.Id, 8, 7);
+                var formula = "=SUM('O''Brien Data:Revenue Data'!B2:C3)";
+                summarySheet.SetCell(formulaAddress, Cell.FromFormula(formula[1..]));
+                window.Session.SelectCell(formulaAddress);
+                window.BeginFormulaEditForTest(formulaAddress, formula);
+
+                window.SelectFormulaReferenceSheetForTest(forwardSheet.Id).Should().BeTrue();
+                window.FormulaReferenceGripCountForTest.Should().Be(1);
+                window.RaiseFormulaReferenceGripDragForTest(
+                    highlightIndex: 0,
+                    new CellAddress(forwardSheet.Id, 4, 4)).Should().BeTrue();
+                window.FormulaBoxTextForTest.Should().Be("=SUM('O''Brien Data:Revenue Data'!B2:D4)");
+
+                window.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs
+                {
+                    Key = Key.Enter,
+                    PhysicalKey = PhysicalKey.Enter,
+                });
+
+                summarySheet.GetCell(formulaAddress)!.FormulaText
+                    .Should().Be("SUM('O''Brien Data:Revenue Data'!B2:D4)");
+                summarySheet.GetValue(formulaAddress).Should().Be(new NumberValue(234));
+
+                using var stream = new MemoryStream();
+                new XlsxFileAdapter().Save(window.Session.Workbook, stream);
+                stream.Position = 0;
+                var reopened = new XlsxFileAdapter().Load(stream);
+                var reopenedSummary = reopened.Sheets.Single(sheet => sheet.Name == "Summary");
+                var reopenedFormulaAddress = new CellAddress(reopenedSummary.Id, 8, 7);
+                reopenedSummary.GetCell(reopenedFormulaAddress)!.FormulaText
+                    .Should().Be("SUM('O''Brien Data:Revenue Data'!B2:D4)");
+                reopenedSummary.GetValue(reopenedFormulaAddress).Should().Be(new NumberValue(234));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
 }

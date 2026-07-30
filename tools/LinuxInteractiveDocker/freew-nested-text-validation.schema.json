@@ -7,16 +7,17 @@
   "required": ["schemaVersion", "suite", "platform", "shell", "app", "coverage", "contractValidation", "screenshots", "summary", "results", "persistedText"],
   "properties": {
     "schemaVersion": { "const": 1 },
-    "suite": { "enum": ["freew-linux-nested-text-wave64-physical", "freew-linux-nested-text-wave65-physical"] },
+    "suite": { "enum": ["freew-linux-nested-text-wave64-physical", "freew-linux-nested-text-wave65-physical", "freew-linux-nested-text-wave66-physical"] },
     "platform": { "const": "linux" },
     "shell": { "const": "avalonia" },
     "app": { "const": "FreeW" },
-    "coverage": { "type": "object", "required": ["scope", "exhaustive"], "properties": { "scope": { "enum": ["physical nested grouped-child text selection, insertion, save, and reopen", "physical nested grouped-child text-direction selection, ribbon command, save, and reopen"] }, "exhaustive": { "const": false } } },
+    "coverage": { "type": "object", "required": ["scope", "exhaustive"], "properties": { "scope": { "enum": ["physical nested grouped-child text selection, insertion, save, and reopen", "physical nested grouped-child text-direction selection, ribbon command, save, and reopen", "physical nested grouped-child paragraph-alignment selection, ribbon command, save, and reopen"] }, "exhaustive": { "const": false } } },
     "contractValidation": { "type": "object", "required": ["status", "validator", "contractReference"], "properties": { "status": { "const": "passed" }, "validator": { "type": "string" }, "contractReference": { "const": "tools/LinuxInteractiveDocker/freew-nested-text-validation.schema.json" } } },
     "screenshots": { "type": "array", "minItems": 3, "items": { "type": "object", "required": ["name", "kind"], "properties": { "name": { "type": "string" }, "kind": { "const": "screenshot" } } } },
     "summary": { "type": "object", "required": ["passed", "failed", "total"], "properties": { "passed": { "const": 4 }, "failed": { "const": 0 }, "total": { "const": 4 } } },
     "results": { "type": "array", "minItems": 3, "items": { "type": "object", "required": ["id", "status", "evidence", "note"], "properties": { "id": { "type": "string" }, "status": { "const": "passed" }, "evidence": { "type": "array", "minItems": 1, "items": { "type": "string" } }, "note": { "type": "string" } } } },
     "persistedText": { "type": "object", "required": ["before", "after", "reopened", "exact"], "properties": { "before": { "type": "string" }, "after": { "type": "string" }, "reopened": { "type": "string" }, "exact": { "const": true } } },
-    "persistedDirection": { "type": "object", "required": ["before", "after", "reopened", "exact"], "properties": { "before": { "type": "string" }, "after": { "type": "string" }, "reopened": { "type": "string" }, "exact": { "const": true } } }
+    "persistedDirection": { "type": "object", "required": ["before", "after", "reopened", "exact"], "properties": { "before": { "type": "string" }, "after": { "type": "string" }, "reopened": { "type": "string" }, "exact": { "const": true } } },
+    "persistedAlignment": { "type": "object", "required": ["before", "after", "reopened", "exact"], "properties": { "before": { "type": "string" }, "after": { "type": "string" }, "reopened": { "type": "string" }, "exact": { "const": true } } }
   }
 }

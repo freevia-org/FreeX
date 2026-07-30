@@ -404,6 +404,35 @@ send_owner_shift_rights() {
     sleep "$settle_seconds"
 }
 
+send_owner_verticals() {
+    local key="$1" count="$2"
+    focus_owner
+    for ((index = 0; index < count; index++)); do
+        timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+            xdotool key "$key" || return 1
+        sleep 0.08
+    done
+    sleep "$settle_seconds"
+}
+
+send_owner_shift_verticals() {
+    local key="$1" count="$2"
+    focus_owner
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool keydown Shift || return 1
+    for ((index = 0; index < count; index++)); do
+        timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+            xdotool key "$key" || {
+                xdotool keyup Shift >/dev/null 2>&1 || true
+                return 1
+            }
+        sleep 0.08
+    done
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool keyup Shift || return 1
+    sleep "$settle_seconds"
+}
+
 capture_window_state() {
     local name="$1"
     {
@@ -682,6 +711,7 @@ fi
 input_commands_ok=true
 grouped_formatting=false
 grouped_caret=false
+grouped_vertical=false
 focus_owner
 xdotool mousemove --sync "$shape_center_x" "$shape_center_y" >/dev/null 2>&1 ||
     input_commands_ok=false
@@ -699,6 +729,12 @@ if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ||
         # exercise Delete and Backspace at the paragraph separator. Undo each
         # boundary edit before the final in-paragraph type-to-replace edit.
         if capture "grouped-caret-selection.png"; then :; else input_commands_ok=false; fi
+        send_owner_document_boundary Home || input_commands_ok=false
+        send_owner_verticals Down 2 || input_commands_ok=false
+        if capture "grouped-caret-vertical-down.png"; then :; else input_commands_ok=false; fi
+        send_owner_shift_verticals Up 2 || input_commands_ok=false
+        if capture "grouped-caret-vertical-shift-up.png"; then :; else input_commands_ok=false; fi
+        grouped_vertical=true
         send_owner_document_boundary End || input_commands_ok=false
         send_owner_document_boundary Home || input_commands_ok=false
         send_owner_document_boundary Home || input_commands_ok=false
@@ -801,7 +837,9 @@ capture_window_state "soft-break-committed-state.txt"
           "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
         printf 'selection=physical Ctrl+Home then fourteen Shift+Right keys across the paragraph boundary\n'
         if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
-            printf 'navigation=physical Ctrl+Home/Ctrl+End, Shift selection, Delete and Backspace across paragraph boundary\n'
+            printf 'navigation=physical Ctrl+Home/Ctrl+End, Up/Down, Shift+Up/Shift+Down, Shift selection, Delete and Backspace across paragraph boundary\n'
+            printf 'vertical-input-route=%s\n' "$grouped_vertical"
+            printf 'vertical-semantic-postcondition=managed tests; this probe has no reliable clipboard/state readback for caret offsets\n'
             printf 'type-replace=physical selection replacement with Child\n'
             printf 'grouped-caret=%s\n' "$grouped_caret"
         else
@@ -820,14 +858,29 @@ capture_window_state "soft-break-committed-state.txt"
     printf 'commit-screenshot-captured=%s\n' "$commit_capture"
 } > "$output/rich-editor-physical-input-proof.txt"
 
+vertical_pass=true
+if [[ "$app_surface" == "in-canvas-grouped-child-caret" && "$grouped_vertical" != true ]]; then
+    vertical_pass=false
+fi
 input_pass=false
-if $visible_pass && $input_commands_ok && $input_capture && $commit_capture; then
+input_evidence=(
+    rich-editor-physical-input-proof.txt
+    shape-pointer-calibration.txt
+)
+if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+    input_evidence+=(grouped-caret-vertical-down.png grouped-caret-vertical-shift-up.png)
+fi
+input_evidence+=(
+    soft-break-input.png
+    soft-break-input-state.txt
+    soft-break-committed.png
+    soft-break-committed-state.txt
+)
+if $visible_pass && $input_commands_ok && $input_capture && $commit_capture && $vertical_pass; then
     input_pass=true
     record "rich-editor-physical-soft-break-input" "passed" \
         "Physical X11 input entered shape ID2, replaced its text, sent Shift+Enter between the ASCII tokens, and committed naturally outside the shape." \
-        rich-editor-physical-input-proof.txt shape-pointer-calibration.txt \
-        soft-break-input.png soft-break-input-state.txt \
-        soft-break-committed.png soft-break-committed-state.txt
+        "${input_evidence[@]}"
 else
     lane_failed=true
     record "rich-editor-physical-soft-break-input" "failed" \

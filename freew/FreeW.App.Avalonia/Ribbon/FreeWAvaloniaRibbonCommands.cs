@@ -1787,7 +1787,9 @@ internal static class FreeWAvaloniaRibbonCommands
 
         public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
 
-        private bool IsEnabled() => editor.SelectedFloatingInfo?.Kind == requiredKind;
+        private bool IsEnabled() => requiredKind == "Shape"
+            ? editor.SelectedFloatingShape() is not null
+            : editor.SelectedFloatingInfo?.Kind == requiredKind;
     }
 
     private sealed class FloatingObjectPositionCommand(

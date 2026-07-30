@@ -112,46 +112,28 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         return item.Paragraph.GlobalStart + localTextPosition;
     }
 
-    internal int MoveCaretVertically(int logicalPosition, int lineDelta)
+    internal InCanvasTextVerticalNavigationResult MoveCaretVertically(
+        int logicalPosition,
+        int lineDelta,
+        double? preferredX = null,
+        int? currentVisualLineIndex = null)
     {
         EnsureLayouts();
         if (_layouts.Count == 0 || lineDelta == 0)
-            return Math.Clamp(logicalPosition, 0, _plan.PlainText.Length);
+            return new(
+                Math.Clamp(logicalPosition, 0, _plan.PlainText.Length),
+                preferredX ?? 0,
+                0,
+                false);
 
-        int paragraphIndex = FindParagraphIndex(logicalPosition);
-        var current = _layouts[paragraphIndex];
-        int displayPosition = ToDisplayPosition(current.Paragraph, logicalPosition);
-        int lineIndex = current.Layout.GetLineIndexFromCharacterIndex(displayPosition, trailingEdge: false);
-        var caret = current.Layout.HitTestTextPosition(displayPosition);
-        int targetLine = lineIndex + Math.Sign(lineDelta);
-        int targetParagraph = paragraphIndex;
-
-        if (targetLine < 0)
-        {
-            if (targetParagraph == 0)
-                return 0;
-            targetParagraph--;
-            targetLine = _layouts[targetParagraph].Layout.TextLines.Count - 1;
-        }
-        else if (targetLine >= current.Layout.TextLines.Count)
-        {
-            if (targetParagraph + 1 >= _layouts.Count)
-                return _plan.PlainText.Length;
-            targetParagraph++;
-            targetLine = 0;
-        }
-
-        var target = _layouts[targetParagraph];
-        double targetY = target.Layout.TextLines
-            .Take(targetLine)
-            .Sum(line => line.Height)
-            + target.Layout.TextLines[targetLine].Height / 2;
-        var hit = target.Layout.HitTestPoint(new Point(caret.X, targetY));
-        int local = Math.Clamp(
-            hit.TextPosition,
-            0,
-            target.Paragraph.Text.Length);
-        return target.Paragraph.GlobalStart + local;
+        return InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            BuildVisualLineGeometry(),
+            Math.Clamp(logicalPosition, 0, _plan.PlainText.Length),
+            lineDelta < 0
+                ? InCanvasTextVerticalDirection.Up
+                : InCanvasTextVerticalDirection.Down,
+            preferredX,
+            currentVisualLineIndex);
     }
 
     internal int MoveCaretToVisualLineBoundary(int logicalPosition, bool end)
@@ -160,18 +142,10 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         if (_layouts.Count == 0)
             return 0;
 
-        var item = _layouts[FindParagraphIndex(logicalPosition)];
-        int displayPosition = ToDisplayPosition(item.Paragraph, logicalPosition);
-        int lineIndex = item.Layout.GetLineIndexFromCharacterIndex(displayPosition, trailingEdge: end);
-        var line = item.Layout.TextLines[lineIndex];
-        int displayBoundary = end
-            ? line.FirstTextSourceIndex + line.Length - line.NewLineLength
-            : line.FirstTextSourceIndex;
-        int local = Math.Clamp(
-            displayBoundary,
-            0,
-            item.Paragraph.Text.Length);
-        return item.Paragraph.GlobalStart + local;
+        return InCanvasRichTextNavigationPlanner.MoveCaretToVisualLineBoundary(
+            BuildVisualLineGeometry(),
+            Math.Clamp(logicalPosition, 0, _plan.PlainText.Length),
+            end);
     }
 
     public override void Render(DrawingContext context)
@@ -410,6 +384,40 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             item.Origin.Y + hit.Y,
             CaretWidth,
             Math.Max(1, hit.Height));
+    }
+
+    private IReadOnlyList<InCanvasTextVisualLineGeometry> BuildVisualLineGeometry()
+    {
+        var result = new List<InCanvasTextVisualLineGeometry>();
+        foreach (var item in _layouts)
+        {
+            foreach (var line in item.Layout.TextLines)
+            {
+                int localStart = Math.Clamp(
+                    line.FirstTextSourceIndex,
+                    0,
+                    item.Paragraph.Text.Length);
+                int localEnd = Math.Clamp(
+                    localStart + Math.Max(0, line.Length - line.NewLineLength),
+                    localStart,
+                    item.Paragraph.Text.Length);
+                var carets = Enumerable.Range(localStart, localEnd - localStart + 1)
+                    .Select(localPosition =>
+                    {
+                        var hit = item.Layout.HitTestTextPosition(localPosition);
+                        return new InCanvasTextVisualCaret(
+                            item.Paragraph.GlobalStart + localPosition,
+                            item.Origin.X + hit.X);
+                    })
+                    .ToArray();
+                result.Add(new InCanvasTextVisualLineGeometry(
+                    item.Paragraph.GlobalStart + localStart,
+                    item.Paragraph.GlobalStart + localEnd,
+                    carets));
+            }
+        }
+
+        return result;
     }
 
     private int FindParagraphIndex(int logicalPosition)

@@ -597,7 +597,7 @@ public sealed class AvaloniaRichTextEditorTests
                 var caret = editor.RichTextView.CaretRect;
                 caret.Height.Should().BeGreaterThan(25,
                     "the caret height must come from the 28pt rendered run, not the uniform input font");
-                int down = editor.RichTextView.MoveCaretVertically(11, 1);
+                int down = editor.RichTextView.MoveCaretVertically(11, 1).LogicalPosition;
                 down.Should().NotBe(11);
 
                 editor.SelectionStart = 4;
@@ -708,6 +708,175 @@ public sealed class AvaloniaRichTextEditorTests
                     .Should().Equal(
                         [0, 2],
                         "shift navigation keeps the existing selection anchor instead of a stale pointer anchor");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task VerticalKeys_KeepPreferredXAcrossWrappedLinesAndParagraphBoundary()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs = { new Run { Text = "ABCDEFGHIJKLMNOPQRST" } },
+            });
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs = { new Run { Text = "tail" } },
+            });
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC)
+            {
+                Width = 90,
+                Height = 160,
+            };
+            var window = Show(editor, 90, 160);
+            try
+            {
+                editor.FocusEditor().Should().BeTrue();
+                editor.SelectionStart = 2;
+                editor.SelectionEnd = 2;
+
+                Press(window, Key.Down, PhysicalKey.ArrowDown, RawInputModifiers.None);
+                await DrainInputAsync();
+                int firstDown = editor.InputBox.CaretIndex;
+                firstDown.Should().BeGreaterThan(2);
+
+                Press(window, Key.Down, PhysicalKey.ArrowDown, RawInputModifiers.None);
+                await DrainInputAsync();
+                int paragraphDown = editor.InputBox.CaretIndex;
+                paragraphDown.Should().BeGreaterThan(firstDown);
+
+                Press(window, Key.Up, PhysicalKey.ArrowUp, RawInputModifiers.None);
+                await DrainInputAsync();
+                editor.InputBox.CaretIndex.Should().Be(firstDown);
+
+                Press(window, Key.Up, PhysicalKey.ArrowUp, RawInputModifiers.Shift);
+                await DrainInputAsync();
+                new[] { editor.SelectionStart, editor.SelectionEnd }
+                    .Order().Should().Equal(2, firstDown);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task VerticalPreferredX_ResetsAfterHorizontalBoundaryPointerAndMutationInput()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var editor = new AvaloniaRichTextEditor(
+                TextBodyWithParagraphs("ABCDEFGHIJKLMNOPQRST", "tail"),
+                backgroundAlpha: 0xCC)
+            {
+                Width = 90,
+                Height = 160,
+            };
+            var window = Show(editor, 90, 160);
+            try
+            {
+                editor.FocusEditor().Should().BeTrue();
+                editor.SelectionStart = 2;
+                editor.SelectionEnd = 2;
+
+                Press(window, Key.Down, PhysicalKey.ArrowDown, RawInputModifiers.None);
+                await DrainInputAsync();
+                editor.PreferredVerticalCaretX.Should().NotBeNull();
+
+                Press(window, Key.Left, PhysicalKey.ArrowLeft, RawInputModifiers.None);
+                await DrainInputAsync();
+                editor.PreferredVerticalCaretX.Should().BeNull();
+
+                Press(window, Key.Down, PhysicalKey.ArrowDown, RawInputModifiers.None);
+                await DrainInputAsync();
+                editor.PreferredVerticalCaretX.Should().NotBeNull();
+
+                Press(window, Key.Home, PhysicalKey.Home, RawInputModifiers.None);
+                await DrainInputAsync();
+                editor.PreferredVerticalCaretX.Should().BeNull();
+
+                Press(window, Key.Down, PhysicalKey.ArrowDown, RawInputModifiers.None);
+                await DrainInputAsync();
+                Press(window, Key.End, PhysicalKey.End, RawInputModifiers.None);
+                await DrainInputAsync();
+                editor.PreferredVerticalCaretX.Should().BeNull();
+
+                Press(window, Key.Down, PhysicalKey.ArrowDown, RawInputModifiers.None);
+                await DrainInputAsync();
+                editor.PreferredVerticalCaretX.Should().NotBeNull();
+
+                window.MouseDown(
+                    new Point(8, 8),
+                    MouseButton.Left,
+                    RawInputModifiers.LeftMouseButton);
+                window.MouseUp(new Point(8, 8), MouseButton.Left, RawInputModifiers.None);
+                await DrainInputAsync();
+                editor.PreferredVerticalCaretX.Should().BeNull();
+
+                Press(window, Key.Down, PhysicalKey.ArrowDown, RawInputModifiers.None);
+                await DrainInputAsync();
+                editor.PreferredVerticalCaretX.Should().NotBeNull();
+                RaiseRawTextInput(editor.InputBox, "Z");
+                await DrainInputAsync();
+                editor.PreferredVerticalCaretX.Should().BeNull();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ShiftVerticalKeys_PreserveAnchorAcrossRepeatedDownAndUp()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var editor = new AvaloniaRichTextEditor(
+                TextBodyWithParagraphs("ABCDEFGHIJKLMNOPQRST", "tail"),
+                backgroundAlpha: 0xCC)
+            {
+                Width = 90,
+                Height = 160,
+            };
+            var window = Show(editor, 90, 160);
+            try
+            {
+                editor.FocusEditor().Should().BeTrue();
+                editor.SelectionStart = 2;
+                editor.SelectionEnd = 2;
+
+                Press(window, Key.Down, PhysicalKey.ArrowDown, RawInputModifiers.Shift);
+                await DrainInputAsync();
+                int firstDown = editor.InputBox.CaretIndex;
+                new[] { editor.SelectionStart, editor.SelectionEnd }
+                    .Order().Should().Equal(2, firstDown);
+
+                Press(window, Key.Down, PhysicalKey.ArrowDown, RawInputModifiers.Shift);
+                await DrainInputAsync();
+                int secondDown = editor.InputBox.CaretIndex;
+                secondDown.Should().BeGreaterThan(firstDown);
+                new[] { editor.SelectionStart, editor.SelectionEnd }
+                    .Order().Should().Equal(2, secondDown);
+
+                Press(window, Key.Up, PhysicalKey.ArrowUp, RawInputModifiers.Shift);
+                await DrainInputAsync();
+                editor.InputBox.CaretIndex.Should().Be(firstDown);
+                new[] { editor.SelectionStart, editor.SelectionEnd }
+                    .Order().Should().Equal(2, firstDown);
+
+                Press(window, Key.Up, PhysicalKey.ArrowUp, RawInputModifiers.Shift);
+                await DrainInputAsync();
+                editor.SelectionStart.Should().Be(2);
+                editor.SelectionEnd.Should().Be(2);
             }
             finally
             {
@@ -930,6 +1099,14 @@ public sealed class AvaloniaRichTextEditorTests
                 new Run { Text = "Italic", Italic = true },
             },
         });
+        return body;
+    }
+
+    private static TextBody TextBodyWithParagraphs(string first, string second)
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = first } } });
+        body.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = second } } });
         return body;
     }
 

@@ -2,7 +2,7 @@
 param(
     [int]$Port = 6094,
     [string]$OutputDir = "freew/artifacts/wave64-linux",
-    [ValidateSet("nested-text", "nested-text-direction")]
+    [ValidateSet("nested-text", "nested-text-direction", "nested-text-alignment")]
     [string]$Selector = "nested-text"
 )
 
@@ -18,6 +18,7 @@ $sessionPath = Join-Path $resolvedOutput "freew/current-session.json"
 $containerName = "freex-linux-interactive-freew-$Port"
 $started = $false
 $isTextDirection = $Selector -eq "nested-text-direction"
+$isAlignment = $Selector -eq "nested-text-alignment"
 
 function Invoke-Fixture { param([string]$Action, [string]$Path)
     $lines = @(& dotnet run --project $fixtureProject --configuration Release --no-restore -- $Action $Path 2>&1)
@@ -39,6 +40,7 @@ try {
     if ($before['child-text'] -ne 'Nested leaf') { throw "Unexpected fixture text: '$($before['child-text'])'." }
     if ($before['child-kind'] -ne 'Shape') { throw "Nested text fixture leaf is not a Shape." }
     if ($before['child-text-direction'] -ne 'Horizontal') { throw "Unexpected fixture text direction: '$($before['child-text-direction'])'." }
+    if ($before['child-text-alignment'] -ne 'Left') { throw "Unexpected fixture text alignment: '$($before['child-text-alignment'])'." }
 
     & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath -Replace
     $started = $true
@@ -52,11 +54,14 @@ try {
     # Run-LinuxInteractiveDocker copies DocumentPath into its bind-mounted documents directory;
     # inspect that saved copy rather than the untouched source fixture.
     $after = Read-Geometry inspect-nested-text $savedDocumentPath
-    $expectedText = if ($isTextDirection) { 'Nested leaf' } else { 'Nested leaf!' }
+    $expectedText = if ($isTextDirection -or $isAlignment) { 'Nested leaf' } else { 'Nested leaf!' }
     $expectedDirection = if ($isTextDirection) { 'Rotate90' } else { 'Horizontal' }
+    $expectedAlignment = if ($isAlignment) { 'Center' } else { 'Left' }
     if ($after['child-text'] -ne $expectedText) { throw "Saved nested text mismatch: '$($after['child-text'])'." }
     if ($after['child-text-direction'] -ne $expectedDirection) { throw "Saved nested text direction mismatch: '$($after['child-text-direction'])'." }
+    if ($after['child-text-alignment'] -ne $expectedAlignment) { throw "Saved nested text alignment mismatch: '$($after['child-text-alignment'])'." }
     if ($after['outer-transform'] -ne $before['outer-transform'] -or $after['inner-transform'] -ne $before['inner-transform']) { throw "Nested group transforms changed during text editing." }
+    if ($after['child-transform'] -ne $before['child-transform']) { throw "Nested leaf transform changed during text alignment." }
 
     & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port
     $started = $false
@@ -72,11 +77,14 @@ try {
     $reopened = Read-Geometry inspect-nested-text $savedDocumentPath
     if ($reopened['child-text'] -ne $expectedText) { throw "Reopened nested text mismatch: '$($reopened['child-text'])'." }
     if ($reopened['child-text-direction'] -ne $expectedDirection) { throw "Reopened nested text direction mismatch: '$($reopened['child-text-direction'])'." }
+    if ($reopened['child-text-alignment'] -ne $expectedAlignment) { throw "Reopened nested text alignment mismatch: '$($reopened['child-text-alignment'])'." }
 
     $probe = Get-Content (Join-Path $probeSessionDir "nested-text-wave64/probe-results.json") -Raw | ConvertFrom-Json
-    $suite = if ($isTextDirection) { "freew-linux-nested-text-wave65-physical" } else { "freew-linux-nested-text-wave64-physical" }
+    $suite = if ($isTextDirection) { "freew-linux-nested-text-wave65-physical" } elseif ($isAlignment) { "freew-linux-nested-text-wave66-physical" } else { "freew-linux-nested-text-wave64-physical" }
     $scope = if ($isTextDirection) {
         "physical nested grouped-child text-direction selection, ribbon command, save, and reopen"
+    } elseif ($isAlignment) {
+        "physical nested grouped-child paragraph-alignment selection, ribbon command, save, and reopen"
     } else {
         "physical nested grouped-child text selection, insertion, save, and reopen"
     }
@@ -84,6 +92,12 @@ try {
         @(
             [ordered]@{ name = "01-baseline.png"; kind = "screenshot" },
             [ordered]@{ name = "02-nested-text-direction-rotate90.png"; kind = "screenshot" },
+            [ordered]@{ name = "04-reopened.png"; kind = "screenshot" }
+        )
+    } elseif ($isAlignment) {
+        @(
+            [ordered]@{ name = "01-baseline.png"; kind = "screenshot" },
+            [ordered]@{ name = "02-nested-text-alignment-center.png"; kind = "screenshot" },
             [ordered]@{ name = "04-reopened.png"; kind = "screenshot" }
         )
     } else {
@@ -96,10 +110,10 @@ try {
     }
     $results = @($probe.results) + @(
         [ordered]@{
-            id = if ($isTextDirection) { "nested-text-direction-x11-reopen" } else { "nested-text-x11-reopen" }
+            id = if ($isTextDirection) { "nested-text-direction-x11-reopen" } elseif ($isAlignment) { "nested-text-alignment-x11-reopen" } else { "nested-text-x11-reopen" }
             status = "passed"
             evidence = @("04-reopened.png")
-            note = "The saved DOCX reopened with the exact nested child text, direction, child path, and group transforms."
+            note = "The saved DOCX reopened with the exact nested child text, alignment/direction, child path, and group transforms."
         }
     )
     $manifest = [ordered]@{
@@ -115,10 +129,11 @@ try {
         results = $results
         persistedText = [ordered]@{ before = $before['child-text']; after = $after['child-text']; reopened = $reopened['child-text']; exact = $true }
         persistedDirection = [ordered]@{ before = $before['child-text-direction']; after = $after['child-text-direction']; reopened = $reopened['child-text-direction']; exact = $true }
-        preservedStructure = [ordered]@{ childPath = "0,1"; childKind = $reopened['child-kind']; outerTransformUnchanged = $true; innerTransformUnchanged = $true }
+        persistedAlignment = [ordered]@{ before = $before['child-text-alignment']; after = $after['child-text-alignment']; reopened = $reopened['child-text-alignment']; exact = $true }
+        preservedStructure = [ordered]@{ childPath = "0,1"; childKind = $reopened['child-kind']; outerTransformUnchanged = $true; innerTransformUnchanged = $true; childTransformUnchanged = $true }
         evidence = [ordered]@{ session = $probeSessionDir; reopenSession = $reopenSessionDir; fixture = $savedDocumentPath }
     }
-    $manifestName = if ($isTextDirection) { "freew-wave65-nested-text-direction-validation.json" } else { "freew-wave64-nested-text-validation.json" }
+    $manifestName = if ($isTextDirection) { "freew-wave65-nested-text-direction-validation.json" } elseif ($isAlignment) { "freew-wave66-nested-text-alignment-validation.json" } else { "freew-wave64-nested-text-validation.json" }
     $manifestPath = Join-Path $resolvedOutput $manifestName
     $manifest | ConvertTo-Json -Depth 12 | Set-Content $manifestPath -Encoding utf8
     Write-Host "Nested text physical validation passed. Manifest: $manifestPath"

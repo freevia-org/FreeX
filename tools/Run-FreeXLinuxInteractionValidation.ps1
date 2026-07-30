@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "sheet-tabs", "pivot-field-list", "autofilter-recalculation", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "grid-drag")]
+    [ValidateSet("all", "sheet-tabs", "pivot-field-list", "autofilter-recalculation", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -52,6 +52,8 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $harness = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $containerName = "freex-linux-interactive-freex-$Port"
 $x11ProbeScript = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freex-input-probes.sh"
+$native3dFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave66Native3DFixture.ps1"
+$native3dSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-native-3d-formula-validation.schema.json"
 $runnerSchemaVersion = 2
 $resumeRequested = -not [string]::IsNullOrWhiteSpace($ResumeReportDirectory)
 $reportStamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
@@ -170,6 +172,69 @@ function Ensure-ReportProvenance {
         return
     }
     Assert-ProvenanceMatchesCurrent -Expected $script:reportProvenance
+}
+
+function Assert-Native3DPostcondition {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    if (-not (Test-Path -LiteralPath $native3dSchemaPath -PathType Leaf)) {
+        throw "Native 3-D validation schema is missing: $native3dSchemaPath"
+    }
+    $schema = Get-Content -LiteralPath $native3dSchemaPath -Raw | ConvertFrom-Json
+    if ([int]$schema.properties.schemaVersion.const -ne 1 -or
+        [string]$schema.properties.format.const -ne "xlsx" -or
+        @($schema.required) -join "," -ne "schemaVersion,format,source,save,reopen,package") {
+        throw "Native 3-D validation schema is not the expected version 1 XLSX contract."
+    }
+
+    $postconditionPath = Join-Path $EvidenceDirectory "formula-3d-native-xlsx-postcondition.json"
+    if (-not (Test-Path -LiteralPath $postconditionPath -PathType Leaf)) {
+        throw "Native 3-D probe did not emit its required postcondition JSON: $postconditionPath"
+    }
+    try {
+        $postcondition = Get-Content -LiteralPath $postconditionPath -Raw | ConvertFrom-Json
+    } catch {
+        throw "Native 3-D postcondition is not valid JSON: $postconditionPath"
+    }
+
+    $expectedRoot = @("schemaVersion", "format", "source", "save", "reopen", "package")
+    $actualRoot = @($postcondition.PSObject.Properties.Name)
+    if ((@($actualRoot | Sort-Object) -join ",") -ne (@($expectedRoot | Sort-Object) -join ",")) {
+        throw "Native 3-D postcondition root fields do not match the committed schema."
+    }
+    $expectedPoint = "=SUM('O''Brien Data:Revenue Data'!B2:C3)"
+    $expectedResized = "=SUM('O''Brien Data:Revenue Data'!B2:D4)"
+    $expectedPackageFormula = "SUM('O''Brien Data:Revenue Data'!B2:D4)"
+    $expectedNestedFields = @{
+        source = @("path", "pointFormula", "pointResult")
+        save = @("clean", "resizedFormula", "resizedResult")
+        reopen = @("physical", "formula", "result")
+        package = @("zip", "workbook", "formula", "cachedResult")
+    }
+    foreach ($section in $expectedNestedFields.Keys) {
+        $actualFields = @($postcondition.$section.PSObject.Properties.Name)
+        $expectedFields = @($expectedNestedFields[$section])
+        if ((@($actualFields | Sort-Object) -join ",") -ne (@($expectedFields | Sort-Object) -join ",")) {
+            throw "Native 3-D postcondition '$section' fields do not match the committed schema."
+        }
+    }
+    if ([int]$postcondition.schemaVersion -ne 1 -or
+        [string]$postcondition.format -ne "xlsx" -or
+        [string]::IsNullOrWhiteSpace([string]$postcondition.source.path) -or
+        [string]$postcondition.source.pointFormula -ne $expectedPoint -or
+        [string]$postcondition.source.pointResult -notmatch '^88(?:\.0+)?$' -or
+        $postcondition.save.clean -ne $true -or
+        [string]$postcondition.save.resizedFormula -ne $expectedResized -or
+        [string]$postcondition.save.resizedResult -notmatch '^234(?:\.0+)?$' -or
+        $postcondition.reopen.physical -ne $true -or
+        [string]$postcondition.reopen.formula -ne $expectedResized -or
+        [string]$postcondition.reopen.result -notmatch '^234(?:\.0+)?$' -or
+        $postcondition.package.zip -ne $true -or
+        $postcondition.package.workbook -ne $true -or
+        [string]$postcondition.package.formula -ne $expectedPackageFormula -or
+        [string]$postcondition.package.cachedResult -notmatch '^234(?:\.0+)?$') {
+        throw "Native 3-D postcondition failed exact formula/result/save/reopen/package validation."
+    }
 }
 
 function Start-ValidationSession {
@@ -715,6 +780,15 @@ function Merge-ContextMenuAggregateResults {
 }
 
 try {
+    if ($PhysicalProbeSelector -eq "formula-3d-native-xlsx") {
+        if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
+            $PhysicalDocumentPath = Join-Path $reportDirectory "fixtures/freex-wave66-native-3d.xlsx"
+            & $native3dFixtureGenerator -OutputPath $PhysicalDocumentPath
+        }
+        if ([IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx") {
+            throw "formula-3d-native-xlsx requires an .xlsx PhysicalDocumentPath."
+        }
+    }
     if ($SkipX11) {
         if ([string]::IsNullOrWhiteSpace($ExistingX11Manifest) -or
             -not (Test-Path -LiteralPath $ExistingX11Manifest -PathType Leaf)) {
@@ -776,6 +850,10 @@ try {
     } elseif ($PhysicalProbeSelector -eq "formula-3d-grip") {
         @(
             "formula-bar-point-mode-3d-sheet-range-grip"
+        )
+    } elseif ($PhysicalProbeSelector -eq "formula-3d-native-xlsx") {
+        @(
+            "formula-bar-point-mode-3d-native-xlsx"
         )
     } elseif ($PhysicalProbeSelector -eq "formula-multi-area-point") {
         @(
@@ -847,6 +925,10 @@ try {
     } elseif ($PhysicalProbeSelector -eq "formula-3d-grip") {
         @(
             "formula-bar-point-mode-3d-sheet-range-grip"
+        )
+    } elseif ($PhysicalProbeSelector -eq "formula-3d-native-xlsx") {
+        @(
+            "formula-bar-point-mode-3d-native-xlsx"
         )
     } elseif ($PhysicalProbeSelector -eq "formula-multi-area-point") {
         @(
@@ -940,6 +1022,9 @@ try {
     if ([string]$x11Manifest.calibration.status -ne "passed") {
         $reason = [string]$x11Manifest.calibration.reason
         throw "Physical X11 evidence is not authoritative because geometry calibration did not pass: $reason"
+    }
+    if ($PhysicalProbeSelector -eq "formula-3d-native-xlsx") {
+        Assert-Native3DPostcondition -EvidenceDirectory $x11EvidenceDirectory
     }
     $x11ReportDirectory = Join-Path $reportDirectory "x11-validation"
     New-Item -ItemType Directory -Path $x11ReportDirectory -Force | Out-Null

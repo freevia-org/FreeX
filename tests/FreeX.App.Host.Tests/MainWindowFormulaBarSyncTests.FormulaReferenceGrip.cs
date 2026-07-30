@@ -116,4 +116,51 @@ public sealed partial class MainWindowFormulaBarSyncTests
             sourceSheet.GetValue(formulaAddress).Should().Be(new NumberValue(225));
         });
     }
+
+    [Fact]
+    public void ThreeDSheetRange_NativeXlsxRoundTrip_PreservesEscapedReverseQualifierAndResult()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var summarySheet = harness.FirstSheet;
+            summarySheet.Name = "Summary";
+            var forwardSheet = harness.AddSheet("Revenue Data");
+            var reverseSheet = harness.AddSheet("O'Brien Data");
+
+            for (uint row = 2; row <= 4; row++)
+            {
+                for (uint col = 2; col <= 4; col++)
+                {
+                    forwardSheet.SetCell(new CellAddress(forwardSheet.Id, row, col),
+                        new NumberValue((row - 1) * 3 + col - 1));
+                    reverseSheet.SetCell(new CellAddress(reverseSheet.Id, row, col),
+                        new NumberValue(10 + (row - 1) * 3 + col - 1));
+                }
+            }
+
+            var formulaAddress = new CellAddress(summarySheet.Id, 8, 7);
+            harness.SetCellFormula(8, 7, "SUM('O''Brien Data:Revenue Data'!B2:C3)");
+            harness.SelectActiveCell(8, 7);
+            harness.EditActiveCellInFormulaBar();
+            harness.SelectFormulaSheetTab(forwardSheet.Id, ModifierKeys.None);
+            harness.RaiseFormulaReferenceGripDrag(0, 4, 4).Should().BeTrue();
+            harness.FormulaBarText.Should().Be("=SUM('O''Brien Data:Revenue Data'!B2:D4)");
+            harness.CommitEdit().Should().BeTrue();
+
+            summarySheet.GetCell(formulaAddress)!.FormulaText
+                .Should().Be("SUM('O''Brien Data:Revenue Data'!B2:D4)");
+            summarySheet.GetValue(formulaAddress).Should().Be(new NumberValue(234));
+
+            using var stream = new MemoryStream();
+            new XlsxFileAdapter().Save(harness.ActiveWorkbook, stream);
+            stream.Position = 0;
+            var reopened = new XlsxFileAdapter().Load(stream);
+            var reopenedSummary = reopened.Sheets.Single(sheet => sheet.Name == "Summary");
+            var reopenedFormulaAddress = new CellAddress(reopenedSummary.Id, 8, 7);
+            reopenedSummary.GetCell(reopenedFormulaAddress)!.FormulaText
+                .Should().Be("SUM('O''Brien Data:Revenue Data'!B2:D4)");
+            reopenedSummary.GetValue(reopenedFormulaAddress).Should().Be(new NumberValue(234));
+        });
+    }
 }

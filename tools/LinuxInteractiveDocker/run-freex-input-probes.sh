@@ -933,7 +933,7 @@ probe_formula_bar_point_mode_3d() {
 
 probe_formula_bar_point_mode_3d_range_grip() {
     local committed_formula="" committed_result="" resized_formula="" resized_result=""
-    local point_passed=false grip_passed=false result_passed=false save_passed=false
+    local point_passed=false point_result_passed=false grip_passed=false result_passed=false save_passed=false
     local expected_point="=SUM(Sheet2:Sheet3!B2:C3)"
     local expected_resized="=SUM(Sheet2:Sheet3!B2:D4)"
     local artifacts="formula-3d-grip-create.png;formula-3d-grip-point.png;formula-3d-grip-middle.png;formula-3d-grip-dragging.png;formula-3d-grip-committed.png;formula-3d-grip-postcondition.txt"
@@ -1040,6 +1040,171 @@ probe_formula_bar_point_mode_3d_range_grip() {
             "Physical X11 point mode selected B2:C3 across Sheet2:Sheet3, then the middle-sheet grip resized it to B2:D4 while preserving the complete 3-D qualifier and calculating 171." "$artifacts"
     else
         record "formula-bar-point-mode-3d-sheet-range-grip" "failed" "$artifacts" "Expected point formula '$expected_point', resized formula '$expected_resized', result 171, and a clean save; observed point='$committed_formula', resized='$resized_formula', result='$resized_result', save-clean=$save_passed." "$artifacts"
+    fi
+    send_key Escape || true
+}
+
+probe_formula_bar_point_mode_3d_native_xlsx() {
+    local committed_formula="" committed_result="" resized_formula="" resized_result=""
+    local reopened_formula="" reopened_result="" package_probe="" package_formula="" package_cached=""
+    local point_passed=false grip_passed=false result_passed=false save_passed=false
+    local reopen_passed=false dialog_closed=false package_passed=false dialog_open=false
+    local expected_point="=SUM('O''Brien Data:Revenue Data'!B2:C3)"
+    local expected_resized="=SUM('O''Brien Data:Revenue Data'!B2:D4)"
+    local expected_package_formula="SUM('O''Brien Data:Revenue Data'!B2:D4)"
+    local artifacts="formula-3d-native-xlsx-point.png;formula-3d-native-xlsx-middle.png;formula-3d-native-xlsx-dragging.png;formula-3d-native-xlsx-saved.png;formula-3d-native-xlsx-reopened.png;formula-3d-native-xlsx-postcondition.json"
+
+    # The fixture is a real OOXML package copied into /documents by the host runner. Its authored
+    # reverse 3-D formula is the point-mode starting state; this probe must preserve that qualifier
+    # while the middle-sheet grip changes only the cell suffix.
+    select_sheet_tab 0
+    if select_cell 6 9 G10; then
+        committed_formula="$(copy_cell_formula 6 9 G10 || true)"
+        committed_result="$(copy_cell_display 6 9 G10 || true)"
+        capture "formula-3d-native-xlsx-point.png"
+        [[ "$(normalize_formula "$committed_formula")" == "$(normalize_formula "$expected_point")" ]] && point_passed=true
+        [[ "$committed_result" =~ ^88([.]0+)?$ ]] && point_result_passed=true
+    fi
+
+    # Reopen the point formula on the first endpoint sheet. The reverse span still projects onto
+    # Revenue Data, proving that the active sheet need not be the textual start endpoint.
+    if select_cell 6 9 G10 && send_key F2; then
+        select_sheet_tab 1
+        capture "formula-3d-native-xlsx-middle.png"
+        focus_app
+        xdotool_mousemove_sync "$((a1_x + 3 * cell_width - 22))" "$((a1_y + 3 * cell_height - 6))"
+        xdotool mousedown 1
+        sleep 0.22
+        xdotool_mousemove_sync "$(cell_center_x 3)" "$(cell_center_y 3)"
+        sleep 0.22
+        capture "formula-3d-native-xlsx-dragging.png"
+        xdotool mouseup 1
+        sleep "$settle_seconds"
+        focus_app
+        xdotool_mousemove_sync 500 198 click 1
+        sleep "$settle_seconds"
+        send_key Return
+        capture "formula-3d-native-xlsx-saved.png"
+    fi
+
+    select_sheet_tab 0
+    resized_formula="$(copy_cell_formula 6 9 G10 || true)"
+    resized_result="$(copy_cell_display 6 9 G10 || true)"
+    send_key ctrl+s
+    wait_for_document_clean && save_passed=true
+    [[ "$(normalize_formula "$resized_formula")" == "$(normalize_formula "$expected_resized")" ]] && grip_passed=true
+    [[ "$resized_result" =~ ^234([.]0+)?$ ]] && result_passed=true
+
+    # Inspect the saved ZIP package before reopening it. This records the native package state
+    # separately from the UI clipboard values, including the worksheet formula cache.
+    package_probe="$(python3 - "$document_path" <<'PY'
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+
+main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+try:
+    with zipfile.ZipFile(sys.argv[1]) as package:
+        workbook = ET.fromstring(package.read("xl/workbook.xml"))
+        worksheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+        cell = next(node for node in worksheet.findall(".//" + main + "c") if node.attrib.get("r") == "G10")
+        formula = cell.findtext(main + "f", default="")
+        cached = cell.findtext(main + "v", default="")
+        names = [node.attrib.get("name", "") for node in workbook.findall(".//" + main + "sheet")]
+        if names != ["Summary", "Revenue Data", "O'Brien Data", "Tail"]:
+            raise ValueError("unexpected worksheet order")
+        print(f"{formula}|{cached}")
+except (OSError, KeyError, ET.ParseError, StopIteration, ValueError):
+    raise SystemExit(1)
+PY
+    )" || package_probe=""
+    if [[ "$package_probe" == *"|"* ]]; then
+        package_formula="${package_probe%%|*}"
+        package_cached="${package_probe#*|}"
+        if [[ "$(normalize_formula "$package_formula")" == "$(normalize_formula "$expected_package_formula")" && "$package_cached" =~ ^234([.]0+)?$ ]]; then
+            package_passed=true
+        fi
+    fi
+
+    # Reopen the saved native package through the production Open command. Linux presents a GTK
+    # picker here; Ctrl+L enters the mounted absolute path without inventing a host-specific UI.
+    local before_windows after_windows
+    before_windows="$(visible_window_count)"
+    send_key ctrl+F12
+    for _ in $(seq 1 12); do
+        after_windows="$(visible_window_count)"
+        if (( after_windows > before_windows )); then
+            dialog_open=true
+            break
+        fi
+        sleep 0.2
+    done
+    if $dialog_open; then
+        xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+        xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+        xdotool key --clearmodifiers Return
+        sleep "$settle_seconds"
+        xdotool key --clearmodifiers Return
+        for _ in $(seq 1 16); do
+            after_windows="$(visible_window_count)"
+            if (( after_windows <= before_windows )); then
+                dialog_closed=true
+                break
+            fi
+            sleep 0.25
+        done
+    fi
+    if $dialog_closed; then
+        sleep "$dialog_settle_seconds"
+        capture "formula-3d-native-xlsx-reopened.png"
+        select_sheet_tab 0
+        reopened_formula="$(copy_cell_formula 6 9 G10 || true)"
+        reopened_result="$(copy_cell_display 6 9 G10 || true)"
+        if [[ "$(normalize_formula "$reopened_formula")" == "$(normalize_formula "$expected_resized")" && "$reopened_result" =~ ^234([.]0+)?$ ]]; then
+            reopen_passed=true
+        fi
+    fi
+
+    local postcondition_path="$output/formula-3d-native-xlsx-postcondition.json"
+    python3 - "$document_path" "$committed_formula" "$committed_result" "$resized_formula" "$resized_result" "$save_passed" "$reopen_passed" "$reopened_formula" "$reopened_result" "$package_probe" > "$postcondition_path" <<'PY'
+import json
+import os
+import sys
+
+package_probe = sys.argv[10]
+package_formula, package_cached = package_probe.split("|", 1) if "|" in package_probe else ("", "")
+payload = {
+    "schemaVersion": 1,
+    "format": "xlsx",
+    "source": {
+        "path": os.path.basename(sys.argv[1]),
+        "pointFormula": sys.argv[2],
+        "pointResult": sys.argv[3],
+    },
+    "save": {
+        "clean": sys.argv[6] == "true",
+        "resizedFormula": sys.argv[4],
+        "resizedResult": sys.argv[5],
+    },
+    "reopen": {
+        "physical": sys.argv[7] == "true",
+        "formula": sys.argv[8],
+        "result": sys.argv[9],
+    },
+    "package": {
+        "zip": bool(package_probe),
+        "workbook": bool(package_probe),
+        "formula": package_formula,
+        "cachedResult": package_cached,
+    },
+}
+print(json.dumps(payload, separators=(",", ":")))
+PY
+
+    if $point_passed && $point_result_passed && $grip_passed && $result_passed && $save_passed && $package_passed && $reopen_passed; then
+        record "formula-bar-point-mode-3d-native-xlsx" "passed" "$artifacts; formula=$reopened_formula; result=$reopened_result; package-formula=$package_formula; package-cached-result=$package_cached" "Physical X11 pointing and middle-sheet grip resizing used a native XLSX package, preserved the escaped reverse 3-D qualifier, saved cleanly, reopened through the production Open route, and retained result 234." "$artifacts"
+    else
+        record "formula-bar-point-mode-3d-native-xlsx" "failed" "$artifacts; formula=$reopened_formula; result=$reopened_result; package-formula=$package_formula; package-cached-result=$package_cached" "Native XLSX 3-D point/grip workflow did not satisfy point=$point_passed point-result=$point_result_passed grip=$grip_passed result=$result_passed save=$save_passed package=$package_passed reopen=$reopen_passed." "$artifacts"
     fi
     send_key Escape || true
 }
@@ -2174,6 +2339,19 @@ if [[ "$probe_selector" == "formula-3d-grip" ]]; then
     probe_formula_bar_point_mode_3d_range_grip
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused 3-D range/grip probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "formula-3d-native-xlsx" ]]; then
+    # Focused iteration mode for the native OOXML point/grip/save/reopen workflow.
+    probe_formula_bar_point_mode_3d_native_xlsx
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused native XLSX 3-D formula probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
