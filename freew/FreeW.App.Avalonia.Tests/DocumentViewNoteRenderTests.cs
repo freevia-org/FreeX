@@ -575,6 +575,48 @@ public sealed class DocumentViewNoteRenderTests
             .Should().Contain("later short footnote");
     }
 
+    [Fact]
+    public async Task LongFootnote_FinalFragmentSharesTheFollowingBodyPage()
+    {
+        IReadOnlyList<(string Text, double X, double Y, bool IsNumberMarker)>? items = null;
+        IReadOnlyList<IReadOnlyList<(char Ch, double X, double W, double Y, double LineHeight, bool IsSubscript)>>? followingBodies = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var reference = new Paragraph("Reference body");
+            reference.Runs.Add(Run.FootnoteReference(1));
+            doc.Blocks.Add(reference);
+            for (var index = 1; index <= 60; index++)
+                doc.Blocks.Add(new Paragraph($"Following body {index}."));
+            doc.Footnotes[1] = new Footnote(1,
+                string.Join(" ", Enumerable.Range(1, 700).Select(index => $"tail{index}")));
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 10000));
+            items = view.NoteRenderItems;
+            followingBodies = Enumerable.Range(1, 60)
+                .Select(view.GetPlacedForBlock)
+                .ToList();
+        });
+
+        if (!ran) return;
+
+        followingBodies.Should().NotBeNull();
+        var tail = items!.First(item => item.Text.Contains("tail700", StringComparison.Ordinal));
+        var resumedBodyPage = followingBodies!
+            .Where(body => body.Count > 0)
+            .Select(body => (int)Math.Floor((body[0].Y - 24) / (1056 + 20)))
+            .Where(page => page > 0)
+            .DefaultIfEmpty(-1)
+            .First();
+        var tailPage = (int)Math.Floor((tail.Y - 24) / (1056 + 20));
+        resumedBodyPage.Should().BeGreaterThanOrEqualTo(1);
+        tailPage.Should().Be(resumedBodyPage,
+            "Word resumes later body content above an overflowing footnote's final fragment rather than giving every fragment its own page");
+    }
+
     // ── Test 11 (DB3): footnote numbers respect StartAt ───────────────────────────────────────────────
 
     [Fact]

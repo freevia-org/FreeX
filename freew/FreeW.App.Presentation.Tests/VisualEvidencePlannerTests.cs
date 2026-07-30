@@ -549,7 +549,7 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
-    public void SharedNoteRegionPlanner_InsertsContinuationPagesAfterTheirOwningBodyPage()
+    public void SharedNoteRegionPlanner_ResumesBodyBeforeFinalContinuationFragment()
     {
         var first = new DocumentFootnoteContinuationPlan([
             new DocumentFootnoteContinuationPagePlan(1, DocumentFootnoteSeparatorKind.Initial, 80, 80, []),
@@ -567,17 +567,18 @@ public sealed class VisualEvidencePlannerTests
             [2] = last
         });
 
-        physical.PhysicalPageCount.Should().Be(7);
+        physical.PhysicalPageCount.Should().Be(5);
         physical.PhysicalPageForBodyPage(0).Should().Be(0);
-        physical.PhysicalPageForBodyPage(1).Should().Be(3);
-        physical.PhysicalPageForBodyPage(2).Should().Be(4);
-        physical.PhysicalPageForBodyPage(3).Should().Be(6);
+        physical.PhysicalPageForBodyPage(1).Should().Be(2);
+        physical.PhysicalPageForBodyPage(2).Should().Be(3);
+        physical.PhysicalPageForBodyPage(3).Should().Be(4);
+        physical.Pages.Single(page => page.LogicalBodyPageIndex == 1)
+            .FootnotePage!.SeparatorKind.Should().Be(DocumentFootnoteSeparatorKind.Continuation);
+        physical.Pages.Single(page => page.LogicalBodyPageIndex == 3)
+            .FootnotePage!.SeparatorKind.Should().Be(DocumentFootnoteSeparatorKind.Continuation);
         physical.Pages.Where(page => page.IsContinuationOnly)
             .Select(page => page.FootnotePage!.SeparatorKind)
-            .Should().Equal(
-                DocumentFootnoteSeparatorKind.Continuation,
-                DocumentFootnoteSeparatorKind.Continuation,
-                DocumentFootnoteSeparatorKind.Continuation);
+            .Should().Equal(DocumentFootnoteSeparatorKind.Continuation);
     }
 
     [Fact]
