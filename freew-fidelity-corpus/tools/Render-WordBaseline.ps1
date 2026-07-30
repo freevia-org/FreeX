@@ -130,6 +130,7 @@ foreach ($docx in @($files)) {
         $exportArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $wordExportScript, '-InputPath', $docx, '-OutputPath', $pdf)
         if ($ReuseRunningWord) { $exportArgs += '-ReuseRunningWord' }
         if ($HiddenWord) { $exportArgs += '-HiddenWord' }
+        if ($TracePath) { $exportArgs += @('-TracePath', $TracePath) }
         & $powerShellExe @exportArgs
         if ($LASTEXITCODE -ne 0) { throw "Word PDF child exited with code $LASTEXITCODE." }
         if (-not (Test-Path -LiteralPath $pdf)) { throw 'Word PDF child completed without creating a PDF.' }

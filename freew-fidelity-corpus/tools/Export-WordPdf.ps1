@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][string]$OutputPath,
     [switch]$ReuseRunningWord,
     [switch]$HiddenWord,
-    [ValidateRange(1, 120)][int]$ReadyTimeoutSeconds = 30
+    [ValidateRange(1, 120)][int]$ReadyTimeoutSeconds = 30,
+    [string]$TracePath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,6 +14,14 @@ $document = $null
 $ownsWord = $false
 $originalDisplayAlerts = $null
 $originalAutomationSecurity = $null
+
+function Write-WordPdfTrace([string]$Message) {
+    $line = "$(Get-Date -Format 'o') [WordPdf] $Message"
+    Write-Host $line
+    if ($TracePath) {
+        Add-Content -LiteralPath $TracePath -Value $line
+    }
+}
 
 function Wait-WordReady([object]$Application, [int]$TimeoutSeconds) {
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
@@ -28,7 +37,7 @@ function Wait-WordReady([object]$Application, [int]$TimeoutSeconds) {
             if (-not [string]::IsNullOrWhiteSpace($name) -and
                 -not [string]::IsNullOrWhiteSpace($version) -and
                 $saving -eq 0 -and $printing -eq 0) {
-                Write-Host "[WordPdf] ready: $name $version; documents=$documents"
+                Write-WordPdfTrace "ready: $name $version; documents=$documents"
                 return
             }
 
@@ -48,38 +57,52 @@ function Wait-WordReady([object]$Application, [int]$TimeoutSeconds) {
 
 try {
     if ($ReuseRunningWord) {
+        Write-WordPdfTrace 'acquiring running Word COM instance'
         $word = [System.Runtime.InteropServices.Marshal]::GetActiveObject('Word.Application')
         $originalDisplayAlerts = $word.DisplayAlerts
         $originalAutomationSecurity = $word.AutomationSecurity
     }
     else {
+        Write-WordPdfTrace "creating isolated Word COM instance; visible=$(-not $HiddenWord)"
         $word = New-Object -ComObject Word.Application
         $word.Visible = -not $HiddenWord
         $ownsWord = $true
     }
 
     Wait-WordReady $word $ReadyTimeoutSeconds
+    $wordPid = 0
+    try {
+        $wordPid = [int](Get-Process -Name WINWORD -ErrorAction SilentlyContinue |
+            Sort-Object StartTime -Descending |
+            Select-Object -First 1 -ExpandProperty Id)
+    }
+    catch { }
+    Write-WordPdfTrace "Word ready; pid=$wordPid; inputLength=$($InputPath.Length); outputLength=$($OutputPath.Length)"
     $word.DisplayAlerts = 0
     $word.AutomationSecurity = 3 # msoAutomationSecurityForceDisable
-    Write-Host "[WordPdf] opening: $InputPath"
+    Write-WordPdfTrace "opening: $InputPath"
     $document = $word.Documents.Open([IO.Path]::GetFullPath($InputPath), $false, $true)
     Wait-WordReady $word $ReadyTimeoutSeconds
-    Write-Host "[WordPdf] exporting: $OutputPath"
+    Write-WordPdfTrace "opened read-only; exporting: $OutputPath"
     $document.ExportAsFixedFormat([IO.Path]::GetFullPath($OutputPath), 17) # wdExportFormatPDF
-    Write-Host "[WordPdf] exported: $OutputPath"
+    if (-not (Test-Path -LiteralPath $OutputPath)) {
+        throw "Word returned from ExportAsFixedFormat without creating '$OutputPath'."
+    }
+    Write-WordPdfTrace "exported: $OutputPath"
 }
 finally {
     if ($null -ne $document) {
-        try { $document.Close($false) } catch {}
+        try { $document.Close($false); Write-WordPdfTrace 'closed read-only document' } catch {}
         [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($document)
     }
     if ($null -ne $word) {
         if ($ownsWord) {
-            try { $word.Quit() } catch {}
+            try { $word.Quit(); Write-WordPdfTrace 'quit owned Word instance' } catch {}
         }
         else {
             try { $word.DisplayAlerts = $originalDisplayAlerts } catch {}
             try { $word.AutomationSecurity = $originalAutomationSecurity } catch {}
+            Write-WordPdfTrace 'released running Word instance without quitting it'
         }
         [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($word)
     }
