@@ -32,14 +32,19 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.AlternatingProcess, "alternatingProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.ArrowRibbon, "arrowRibbon", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.CircleProcess, "circleProcess", SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.CircleArrowProcess, "circleArrowProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.FunnelProcess, "funnelProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalProcess, "verticalProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, "verticalBoxList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalChevronList, "verticalChevronList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.VerticalArrowList, "verticalArrowList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, "verticalBulletList", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.HorizontalBulletList, "horizontalBulletList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.HorizontalBlockList, "horizontalBlockList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.TrapezoidList, "trapezoidList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, "basicCycle", SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.MultidirectionalCycle, "multidirectionalCycle", SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.SegmentedCycle, "segmentedCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.ContinuousCycle, "continuousCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.GearCycle, "gearCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.TextCycle, "textCycle", SmartArtFamily.Cycle)]
@@ -51,8 +56,10 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.DescendingBlockList, "descendingBlockList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicPyramid, "basicPyramid", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PyramidList, "pyramidList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.InvertedPyramid, "invertedPyramid", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.RadialCycle, "radialCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicRadial, "radial1", SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.RadialCluster, "RadialCluster", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.RadialList, "radialList", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicMatrix, "basicMatrix", SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.TitledMatrix, "titledMatrix", SmartArtFamily.Matrix)]
@@ -60,6 +67,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.BasicRelationship, "relationship1", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.OpposingIdeas, "opposingIdeas", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.ConvergingRadial, "convergingRadial", SmartArtFamily.Relationship)]
+    [InlineData(SmartArtLayoutPreset.DivergingRadial, "divergingRadial", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.BasicVenn, "basicVenn", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.RadialVenn, "radialVenn", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.TargetList, "targetList", SmartArtFamily.Relationship)]
@@ -74,6 +82,9 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.PictureAccentList, "pictureAccentList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureStack, "pictureStack", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureLineup, "pictureLineup", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.PictureStrips, "pictureStrips", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.HorizontalPictureList, "horizontalPictureList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.VerticalPictureList, "verticalPictureList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.ContinuousPictureList, "continuousPictureList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureGrid, "pictureGrid", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.LabeledHierarchy, "labeledHierarchy", SmartArtFamily.Hierarchy)]
@@ -87,7 +98,7 @@ public sealed class SmartArtEditingPlannerTests
         {
             Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan"), ("n2", "Build")),
         };
-        if (preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid))
+        if (preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.HorizontalPictureList or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid or SmartArtLayoutPreset.VerticalPictureList))
         {
             foreach (var node in smartArt.Data!.Nodes)
                 node.Picture = new ImagePart { Bytes = [0x89, 0x50, 0x4E, 0x47], ContentType = "image/png" };

@@ -2750,6 +2750,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ArrowRibbon)));
         r.Register(SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.CircleProcess)));
+        r.Register(SmartArtAuthoringPlanner.CircleArrowProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.CircleArrowProcess)));
         r.Register(SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.FunnelProcess)));
         r.Register(SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,
@@ -2758,14 +2760,22 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBoxList)));
         r.Register(SmartArtAuthoringPlanner.VerticalChevronListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalChevronList)));
+        r.Register(SmartArtAuthoringPlanner.VerticalArrowListLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalArrowList)));
         r.Register(SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBulletList)));
         r.Register(SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.HorizontalBulletList)));
         r.Register(SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.HorizontalBlockList)));
+        r.Register(SmartArtAuthoringPlanner.TrapezoidListLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TrapezoidList)));
         r.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicCycle)));
+        r.Register(SmartArtAuthoringPlanner.MultidirectionalCycleLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.MultidirectionalCycle)));
+        r.Register(SmartArtAuthoringPlanner.SegmentedCycleLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.SegmentedCycle)));
         r.Register(SmartArtAuthoringPlanner.ContinuousCycleLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ContinuousCycle)));
         r.Register(SmartArtAuthoringPlanner.GearCycleLayoutCommandId,
@@ -2788,10 +2798,14 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicPyramid)));
         r.Register(SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PyramidList)));
+        r.Register(SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.InvertedPyramid)));
         r.Register(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialCycle)));
         r.Register(SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicRadial)));
+        r.Register(SmartArtAuthoringPlanner.RadialClusterLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialCluster)));
         r.Register(SmartArtAuthoringPlanner.RadialListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialList)));
         r.Register(SmartArtAuthoringPlanner.BasicMatrixLayoutCommandId,
@@ -2806,6 +2820,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.OpposingIdeas)));
         r.Register(SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ConvergingRadial)));
+        r.Register(SmartArtAuthoringPlanner.DivergingRadialLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.DivergingRadial)));
         r.Register(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicVenn)));
         r.Register(SmartArtAuthoringPlanner.RadialVennLayoutCommandId,
@@ -2834,6 +2850,12 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureStack)));
         r.Register(SmartArtAuthoringPlanner.PictureLineupLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureLineup)));
+        r.Register(SmartArtAuthoringPlanner.PictureStripsLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureStrips)));
+        r.Register(SmartArtAuthoringPlanner.HorizontalPictureListLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.HorizontalPictureList)));
+        r.Register(SmartArtAuthoringPlanner.VerticalPictureListLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalPictureList)));
         r.Register(SmartArtAuthoringPlanner.ContinuousPictureListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ContinuousPictureList)));
         r.Register(SmartArtAuthoringPlanner.PictureGridLayoutCommandId,
