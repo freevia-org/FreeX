@@ -1482,9 +1482,6 @@ public partial class MainWindow
         int pixelHeight;
         try
         {
-            if (!System.Windows.Clipboard.ContainsImage())
-                return false;
-
             // R91-io-clipboard-image-formats-5-4: prefer an alpha-preserving raw "PNG" clipboard
             // format when the source app placed one (Chrome/Edge and many image editors place both a
             // flattened CF_DIB/CF_BITMAP entry AND a separate "PNG" entry with the real alpha channel
@@ -1505,6 +1502,9 @@ public partial class MainWindow
             }
             else
             {
+                if (!System.Windows.Clipboard.ContainsImage())
+                    return false;
+
                 var image = System.Windows.Clipboard.GetImage();
                 if (image is null)
                     return false;
