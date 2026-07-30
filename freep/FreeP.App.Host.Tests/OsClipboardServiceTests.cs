@@ -753,6 +753,37 @@ Header\cell Value\cell\row}"),
     }
 
     [StaFact]
+    public void Paste_XamlPackageImages_InsertsAllPackageResourcesInOrder()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <BlockUIContainer><Image Source="Images/first.png" /></BlockUIContainer>
+              <BlockUIContainer><Image Source="Images/second.jpg" /></BlockUIContainer>
+            </FlowDocument>
+            """;
+        var first = new byte[] { 0x01, 0x02 };
+        var second = new byte[] { 0x03, 0x04, 0x05 };
+        var fake = new FakeOsClipboard
+        {
+            XamlPackageBytes = CreateXamlPackage(
+                xaml,
+                ("Images/first.png", first),
+                ("Images/second.jpg", second)),
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        service.PasteWithResult(editor).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        editor.CurrentSlide.Shapes[0].Picture!.Bytes.Should().Equal(first);
+        editor.CurrentSlide.Shapes[0].Picture!.ContentType.Should().Be("image/png");
+        editor.CurrentSlide.Shapes[1].Picture!.Bytes.Should().Equal(second);
+        editor.CurrentSlide.Shapes[1].Picture!.ContentType.Should().Be("image/jpeg");
+    }
+
+    [StaFact]
     public void Paste_InternalClipboardFallback_WhenOsEmpty()
     {
         var fake = new FakeOsClipboard();   // empty OS clipboard

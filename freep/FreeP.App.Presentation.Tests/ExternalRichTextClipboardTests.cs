@@ -74,6 +74,33 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_PreservesAllImagePayloadsInDocumentOrder()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <BlockUIContainer><Image Source="Images/first.png" /></BlockUIContainer>
+              <BlockUIContainer><Image Source="Images/second.jpg" /></BlockUIContainer>
+            </FlowDocument>
+            """;
+        var first = new byte[] { 0x01, 0x02 };
+        var second = new byte[] { 0x03, 0x04, 0x05 };
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml,
+                ("Images/first.png", first),
+                ("Images/second.jpg", second)));
+
+        payload.Should().NotBeNull();
+        payload!.GetImagePayloads().Should().HaveCount(2);
+        payload.GetImagePayloads()[0].Bytes.Should().Equal(first);
+        payload.GetImagePayloads()[0].ContentType.Should().Be("image/png");
+        payload.GetImagePayloads()[1].Bytes.Should().Equal(second);
+        payload.GetImagePayloads()[1].ContentType.Should().Be("image/jpeg");
+        payload.ImageBytes.Should().Equal(first);
+        payload.ImageContentType.Should().Be("image/png");
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_RejectsOversizedTableRows()
     {
         var cells = string.Concat(Enumerable.Repeat(
@@ -474,12 +501,23 @@ Three\cell Four\cell\row}";
             .Should().NotBeNull();
     }
 
-    private static byte[] CreateXamlPackage(string xaml)
+    private static byte[] CreateXamlPackage(
+        string xaml,
+        params (string Name, byte[] Bytes)[] resources)
     {
         using var output = new MemoryStream();
         using (var package = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
-        using (var writer = new StreamWriter(package.CreateEntry("Xaml/Document.xaml").Open(), Encoding.UTF8))
+        {
+            foreach (var resource in resources)
+            {
+                var entry = package.CreateEntry(resource.Name);
+                using var stream = entry.Open();
+                stream.Write(resource.Bytes);
+            }
+
+            using var writer = new StreamWriter(package.CreateEntry("Xaml/Document.xaml").Open(), Encoding.UTF8);
             writer.Write(xaml);
+        }
         return output.ToArray();
     }
 }
