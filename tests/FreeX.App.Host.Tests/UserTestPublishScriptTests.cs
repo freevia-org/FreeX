@@ -50,6 +50,9 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("[string]$RuntimeIdentifier = \"win-x64\"");
         script.Should().Contain("\"-r\", $RuntimeIdentifier");
         script.Should().Contain("$LASTEXITCODE");
+        script.Should().Contain("--tester-release-smoke");
+        script.Should().Contain("$smokeReport.BorderPixelSnapPassed");
+        script.Should().Contain("Published app smoke passed:");
         script.Should().Contain("$artifactExePath = Join-Path $artifactRoot \"$artifactName.exe\"");
         script.Should().Contain("$artifactExeHashPath = \"$artifactExePath.sha256\"");
         script.Should().Contain("Remove-Item -LiteralPath $artifactExeHashPath -Force");

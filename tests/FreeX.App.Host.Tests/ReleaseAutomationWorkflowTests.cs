@@ -35,6 +35,9 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("$isDailyReleaseBranch = $env:GITHUB_REF -like \"refs/heads/codex/daily-tester-release-*\"");
         workflow.Should().Contain("-not ($isMainRelease -or $isDailyReleaseBranch)");
         workflow.Should().Contain("Tester releases publish stable latest assets and must run from refs/heads/main or a codex/daily-tester-release-* branch.");
+        workflow.Should().Contain("git fetch origin main --no-tags");
+        workflow.Should().Contain("git merge-base --is-ancestor origin/main HEAD");
+        workflow.Should().Contain("Daily tester release branches must contain the current origin/main commit.");
         workflow.Should().Contain("actions/setup-dotnet@v5");
         workflow.Should().Contain("timeout-minutes: 180");
         workflow.Should().Contain("name: Repository preflight");
@@ -188,7 +191,7 @@ public sealed class ReleaseAutomationWorkflowTests
         script.Should().Contain("function ConvertTo-MsixPackageVersion");
         script.Should().Contain("function Import-MsixSigningCertificate");
         script.Should().Contain("function Get-MsixManifestPublisher");
-        script.Should().Contain("function ConvertTo-XmlAttributeValue");
+        script.Should().Contain("ConvertTo-ToolXmlAttribute");
         script.Should().Contain("MSIX packages require MsixCertificatePath; pass -AllowUnsignedMsix only for local packaging validation.");
         script.Should().Contain("ConvertTo-SecureString -String $CertificatePassword -AsPlainText -Force");
         script.Should().Contain("Cert:\\CurrentUser\\My");
@@ -196,7 +199,7 @@ public sealed class ReleaseAutomationWorkflowTests
         script.Should().Contain("$msixVersion = ConvertTo-MsixPackageVersion -DisplayVersion $Version");
         script.Should().Contain("$msixParts[$i] = $msixParts[$i] % 65536");
         script.Should().Contain("$msixPublisher = Get-MsixManifestPublisher -Certificate $importedSigningCertificate");
-        script.Should().Contain("$msixPublisherAttribute = ConvertTo-XmlAttributeValue -Value $msixPublisher");
+        script.Should().Contain("$msixPublisherAttribute = ConvertTo-ToolXmlAttribute -Value $msixPublisher");
         script.Should().Contain("<Identity Name=\"FreeX.Tester\" Publisher=\"$msixPublisherAttribute\" Version=\"$msixVersion\" />");
         script.Should().Contain("EntryPoint=\"Windows.FullTrustApplication\"");
         script.Should().Contain("<rescap:Capability Name=\"runFullTrust\" />");

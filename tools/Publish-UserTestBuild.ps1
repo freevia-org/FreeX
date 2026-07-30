@@ -327,6 +327,29 @@ if (-not (Test-Path -LiteralPath $defaultExePath)) {
     throw "Expected apphost was not published at $defaultExePath"
 }
 
+$smokeReportName = "tester-release-smoke.json"
+$smokeReportPath = Join-Path $publishDir $smokeReportName
+$smokeProcess = Start-Process `
+    -FilePath $defaultExePath `
+    -ArgumentList @("--tester-release-smoke", $smokeReportName) `
+    -WorkingDirectory $publishDir `
+    -WindowStyle Hidden `
+    -Wait `
+    -PassThru
+if ($smokeProcess.ExitCode -ne 0) {
+    throw "Published app tester-release smoke failed with exit code $($smokeProcess.ExitCode)."
+}
+if (-not (Test-Path -LiteralPath $smokeReportPath -PathType Leaf)) {
+    throw "Published app tester-release smoke did not create $smokeReportPath"
+}
+
+$smokeReport = Get-Content -LiteralPath $smokeReportPath -Raw | ConvertFrom-Json
+if ($smokeReport.Success -ne $true -or $smokeReport.BorderPixelSnapPassed -ne $true) {
+    throw "Published app tester-release smoke reported failure: $($smokeReport.Errors -join '; ')"
+}
+Write-Host "Published app smoke passed: $($smokeReport.ActionableRibbonCommandCount) ribbon commands, $($smokeReport.RibbonHandlerCount) handlers, pixel-snapped borders."
+Remove-Item -LiteralPath $smokeReportPath -Force
+
 $runtimeUrl = "https://dotnet.microsoft.com/download/dotnet/10.0"
 
 if ($PublishMode -eq "Velopack") {
