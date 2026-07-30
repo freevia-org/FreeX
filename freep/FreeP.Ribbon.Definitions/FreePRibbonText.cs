@@ -363,6 +363,12 @@ internal static class FreePRibbonText
     public static RibbonText ArrangeAlignTopCommand { get; } = new("Ribbon_Command_ArrangeAlignTop_Label", "Ribbon_Command_ArrangeAlignTop_KeyTip");
     public static RibbonText ArrangeAlignMiddleCommand { get; } = new("Ribbon_Command_ArrangeAlignMiddle_Label", "Ribbon_Command_ArrangeAlignMiddle_KeyTip");
     public static RibbonText ArrangeAlignBottomCommand { get; } = new("Ribbon_Command_ArrangeAlignBottom_Label", "Ribbon_Command_ArrangeAlignBottom_KeyTip");
+    public static RibbonText ArrangeAlignLeftToSlideCommand { get; } = new("Ribbon_Command_ArrangeAlignLeftToSlide_Label", "Ribbon_Command_ArrangeAlignLeftToSlide_KeyTip");
+    public static RibbonText ArrangeAlignCenterHorizontalToSlideCommand { get; } = new("Ribbon_Command_ArrangeAlignCenterHorizontalToSlide_Label", "Ribbon_Command_ArrangeAlignCenterHorizontalToSlide_KeyTip");
+    public static RibbonText ArrangeAlignRightToSlideCommand { get; } = new("Ribbon_Command_ArrangeAlignRightToSlide_Label", "Ribbon_Command_ArrangeAlignRightToSlide_KeyTip");
+    public static RibbonText ArrangeAlignTopToSlideCommand { get; } = new("Ribbon_Command_ArrangeAlignTopToSlide_Label", "Ribbon_Command_ArrangeAlignTopToSlide_KeyTip");
+    public static RibbonText ArrangeAlignMiddleToSlideCommand { get; } = new("Ribbon_Command_ArrangeAlignMiddleToSlide_Label", "Ribbon_Command_ArrangeAlignMiddleToSlide_KeyTip");
+    public static RibbonText ArrangeAlignBottomToSlideCommand { get; } = new("Ribbon_Command_ArrangeAlignBottomToSlide_Label", "Ribbon_Command_ArrangeAlignBottomToSlide_KeyTip");
     public static RibbonText ArrangeDistributeHorizontalCommand { get; } = new("Ribbon_Command_ArrangeDistributeHorizontal_Label", "Ribbon_Command_ArrangeDistributeHorizontal_KeyTip");
     public static RibbonText ArrangeDistributeVerticalCommand { get; } = new("Ribbon_Command_ArrangeDistributeVertical_Label", "Ribbon_Command_ArrangeDistributeVertical_KeyTip");
 

@@ -844,6 +844,19 @@ internal static class FreePRibbonCommands
         registry.Register("freep.arrange.align-bottom",
             new ActionRibbonCommand(() => editor.AlignBottom()));
 
+        registry.Register("freep.arrange.align-left-to-slide",
+            new ActionRibbonCommand(() => editor.AlignLeftToSlide()));
+        registry.Register("freep.arrange.align-center-h-to-slide",
+            new ActionRibbonCommand(() => editor.AlignCenterHToSlide()));
+        registry.Register("freep.arrange.align-right-to-slide",
+            new ActionRibbonCommand(() => editor.AlignRightToSlide()));
+        registry.Register("freep.arrange.align-top-to-slide",
+            new ActionRibbonCommand(() => editor.AlignTopToSlide()));
+        registry.Register("freep.arrange.align-middle-to-slide",
+            new ActionRibbonCommand(() => editor.AlignMiddleToSlide()));
+        registry.Register("freep.arrange.align-bottom-to-slide",
+            new ActionRibbonCommand(() => editor.AlignBottomToSlide()));
+
         registry.Register("freep.arrange.distribute-h",
             new ActionRibbonCommand(() => editor.DistributeHorizontally()));
 

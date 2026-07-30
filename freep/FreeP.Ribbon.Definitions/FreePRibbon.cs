@@ -334,6 +334,18 @@ public static class FreePRibbon
             RibbonCommandIconKind.Align, FreePRibbonText.ArrangeAlignMiddleCommand.KeyTip);
         group.Medium("freep.arrange.align-bottom", FreePRibbonText.ArrangeAlignBottomCommand.Label,
             RibbonCommandIconKind.ArrowDown, FreePRibbonText.ArrangeAlignBottomCommand.KeyTip);
+        group.Medium("freep.arrange.align-left-to-slide", FreePRibbonText.ArrangeAlignLeftToSlideCommand.Label,
+            RibbonCommandIconKind.AlignLeft, FreePRibbonText.ArrangeAlignLeftToSlideCommand.KeyTip);
+        group.Medium("freep.arrange.align-center-h-to-slide", FreePRibbonText.ArrangeAlignCenterHorizontalToSlideCommand.Label,
+            RibbonCommandIconKind.AlignCenter, FreePRibbonText.ArrangeAlignCenterHorizontalToSlideCommand.KeyTip);
+        group.Medium("freep.arrange.align-right-to-slide", FreePRibbonText.ArrangeAlignRightToSlideCommand.Label,
+            RibbonCommandIconKind.AlignRight, FreePRibbonText.ArrangeAlignRightToSlideCommand.KeyTip);
+        group.Medium("freep.arrange.align-top-to-slide", FreePRibbonText.ArrangeAlignTopToSlideCommand.Label,
+            RibbonCommandIconKind.ArrowUp, FreePRibbonText.ArrangeAlignTopToSlideCommand.KeyTip);
+        group.Medium("freep.arrange.align-middle-to-slide", FreePRibbonText.ArrangeAlignMiddleToSlideCommand.Label,
+            RibbonCommandIconKind.Align, FreePRibbonText.ArrangeAlignMiddleToSlideCommand.KeyTip);
+        group.Medium("freep.arrange.align-bottom-to-slide", FreePRibbonText.ArrangeAlignBottomToSlideCommand.Label,
+            RibbonCommandIconKind.ArrowDown, FreePRibbonText.ArrangeAlignBottomToSlideCommand.KeyTip);
         group.Separator();
         group.Medium("freep.arrange.distribute-h", FreePRibbonText.ArrangeDistributeHorizontalCommand.Label,
             RibbonCommandIconKind.AlignCenter, FreePRibbonText.ArrangeDistributeHorizontalCommand.KeyTip);

@@ -161,6 +161,12 @@ public sealed partial class MainWindow : Window
         ("freep.arrange.align-top", static editor => editor.AlignTop()),
         ("freep.arrange.align-middle", static editor => editor.AlignMiddle()),
         ("freep.arrange.align-bottom", static editor => editor.AlignBottom()),
+        ("freep.arrange.align-left-to-slide", static editor => editor.AlignLeftToSlide()),
+        ("freep.arrange.align-center-h-to-slide", static editor => editor.AlignCenterHToSlide()),
+        ("freep.arrange.align-right-to-slide", static editor => editor.AlignRightToSlide()),
+        ("freep.arrange.align-top-to-slide", static editor => editor.AlignTopToSlide()),
+        ("freep.arrange.align-middle-to-slide", static editor => editor.AlignMiddleToSlide()),
+        ("freep.arrange.align-bottom-to-slide", static editor => editor.AlignBottomToSlide()),
         ("freep.arrange.distribute-h", static editor => editor.DistributeHorizontally()),
         ("freep.arrange.distribute-v", static editor => editor.DistributeVertically()),
     ];

@@ -6751,6 +6751,12 @@ public sealed class MainWindowHeadlessTests
     [InlineData("freep.arrange.align-top")]
     [InlineData("freep.arrange.align-middle")]
     [InlineData("freep.arrange.align-bottom")]
+    [InlineData("freep.arrange.align-left-to-slide")]
+    [InlineData("freep.arrange.align-center-h-to-slide")]
+    [InlineData("freep.arrange.align-right-to-slide")]
+    [InlineData("freep.arrange.align-top-to-slide")]
+    [InlineData("freep.arrange.align-middle-to-slide")]
+    [InlineData("freep.arrange.align-bottom-to-slide")]
     [InlineData("freep.arrange.distribute-h")]
     [InlineData("freep.arrange.distribute-v")]
     public async Task Ribbon_arrange_commands_are_registered(string commandId)

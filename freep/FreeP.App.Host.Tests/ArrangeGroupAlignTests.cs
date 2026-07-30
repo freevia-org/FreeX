@@ -422,6 +422,43 @@ public sealed class ArrangeGroupAlignTests
     // ── Distribute ────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void AlignToSlide_UsesCanvasEdgesAndCenter()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 100, 200, 200, 100));
+        slide.Shapes.Add(MakeRect(11, 300, 400, 100, 200));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.AlignCenterHToSlide();
+
+        slide.Shapes.First(s => s.Id == 10).OffsetXEmu.Should().Be((pres.SlideSizeCxEmu - 200) / 2);
+        slide.Shapes.First(s => s.Id == 11).OffsetXEmu.Should().Be((pres.SlideSizeCxEmu - 100) / 2);
+
+        session.AlignBottomToSlide();
+        slide.Shapes.First(s => s.Id == 10).OffsetYEmu.Should().Be(pres.SlideSizeCyEmu - 100);
+        slide.Shapes.First(s => s.Id == 11).OffsetYEmu.Should().Be(pres.SlideSizeCyEmu - 200);
+    }
+
+    [Fact]
+    public void AlignToSlide_IsUndoableInOneStep()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 100, 200, 200, 100));
+        session.SelectSlide(0);
+        session.Select(10);
+
+        session.AlignRightToSlide();
+        slide.Shapes[0].OffsetXEmu.Should().Be(pres.SlideSizeCxEmu - 200);
+
+        session.Undo();
+        slide.Shapes[0].OffsetXEmu.Should().Be(100);
+    }
+
+    [Fact]
     public void DistributeHorizontally_ThreeShapes_EvensSpacing()
     {
         var (pres, session) = CreateSession();

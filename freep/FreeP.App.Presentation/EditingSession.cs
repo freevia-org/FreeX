@@ -3377,10 +3377,29 @@ public sealed class EditingSession
     /// <summary>Aligns selected shapes' bottom edges. One undo step.</summary>
     public void AlignBottom()       => ExecuteAlignCommand(AlignKind.Bottom);
 
+    /// <summary>Aligns selected shapes to the slide's left edge. One undo step.</summary>
+    public void AlignLeftToSlide() => ExecuteAlignToSlideCommand(AlignKind.Left);
+    /// <summary>Centers selected shapes on the slide horizontally. One undo step.</summary>
+    public void AlignCenterHToSlide() => ExecuteAlignToSlideCommand(AlignKind.CenterH);
+    /// <summary>Aligns selected shapes to the slide's right edge. One undo step.</summary>
+    public void AlignRightToSlide() => ExecuteAlignToSlideCommand(AlignKind.Right);
+    /// <summary>Aligns selected shapes to the slide's top edge. One undo step.</summary>
+    public void AlignTopToSlide() => ExecuteAlignToSlideCommand(AlignKind.Top);
+    /// <summary>Centers selected shapes on the slide vertically. One undo step.</summary>
+    public void AlignMiddleToSlide() => ExecuteAlignToSlideCommand(AlignKind.Middle);
+    /// <summary>Aligns selected shapes to the slide's bottom edge. One undo step.</summary>
+    public void AlignBottomToSlide() => ExecuteAlignToSlideCommand(AlignKind.Bottom);
+
     private void ExecuteAlignCommand(AlignKind kind)
     {
         if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
         Bus.Execute(new AlignShapesCommand(_currentSlideIndex, _selectedShapeIds, kind));
+    }
+
+    private void ExecuteAlignToSlideCommand(AlignKind kind)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new AlignShapesToSlideCommand(_currentSlideIndex, _selectedShapeIds, kind));
     }
 
     // ── Distribute ────────────────────────────────────────────────────────────────
