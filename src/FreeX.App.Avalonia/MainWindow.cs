@@ -19054,6 +19054,8 @@ public sealed partial class MainWindow : Window
         {
             Child = new Border
             {
+                Width = NameBoxDropdownParityCaptureWidth,
+                Height = NameBoxDropdownParityCaptureHeight,
                 Background = Brushes.White,
                 BorderBrush = FormulaBarControlBorder,
                 BorderThickness = new Thickness(1),

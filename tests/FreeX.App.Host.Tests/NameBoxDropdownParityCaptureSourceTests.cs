@@ -46,6 +46,8 @@ public sealed class NameBoxDropdownParityCaptureSourceTests
         avaloniaSource.Should().Contain("SeedNameBoxDropdownPhysicalFixture");
         avaloniaSource.Should().Contain("67000000-0000-0000-0000-000000000001");
         avaloniaSource.Should().Contain("67000000-0000-0000-0000-000000000004");
+        avaloniaSource.Should().Contain("Width = NameBoxDropdownParityCaptureWidth");
+        avaloniaSource.Should().Contain("Height = NameBoxDropdownParityCaptureHeight");
     }
 
     [Fact]
