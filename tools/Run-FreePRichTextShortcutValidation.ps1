@@ -192,7 +192,15 @@ function Assert-PointerSelectionSemanticContract {
     }
     $visualState = Get-Content -LiteralPath $visualStatePath -Raw | ConvertFrom-Json
     $expectedText = "Wide words make this first paragraph wrap at unequal visual line widths`ntail paragraph crosses the boundary"
-    $expectedTextHash = ([Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($expectedText)))).ToLowerInvariant()
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $expectedTextHash = ([BitConverter]::ToString(
+            $sha256.ComputeHash([Text.Encoding]::UTF8.GetBytes($expectedText)))
+        ).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        $sha256.Dispose()
+    }
     $fixtureBeforePath = Join-Path $EvidenceDirectory "fixture-mounted-before.sha256.txt"
     $fixtureBefore = (Get-Content -LiteralPath $fixtureBeforePath -Raw).Trim()
     if ($visualState.contractId -ne "freep.rich-text.selection-visual.v1" -or

@@ -1101,13 +1101,15 @@ public sealed partial class MainWindow : Window
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         // ── Interaction overlay stack ───────────────────────────────────────────
-        // A Panel stack: SlideCanvas at the bottom, SelectionAdornerLayer on top (transparent to
-        // pointer events), and a Canvas for the text-edit TextBox overlay on the very top.
+        // A Panel stack: SlideCanvas at the bottom, the text-edit overlay above it,
+        // and the non-interactive selection adorner at the top, matching WPF's
+        // AdornerDecorator z-order.
         _adorner = new SelectionAdornerLayer
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment   = VerticalAlignment.Stretch,
             IsHitTestVisible    = false,
+            Margin              = new Thickness(FreePShellVisualMetrics.CanvasMargin),
         };
 
         // Text-overlay: a Canvas that hosts TextBox children during text editing.
@@ -1117,8 +1119,8 @@ public sealed partial class MainWindow : Window
             IsHitTestVisible = false,
         };
 
-        // Match WPF's stage layering: the canvas and selection adorners share the
-        // 40-DIP canvas margin, while the text editor overlay spans the full stage.
+        // Match WPF's stage geometry: the canvas uses the 40-DIP canvas margin,
+        // while the text editor overlay spans the full stage.
         // Text editor placements are planned in canvas coordinates, so applying the
         // margin to that overlay would shift the native WPF-equivalent viewport.
         var canvasContent = new Grid
@@ -1129,7 +1131,6 @@ public sealed partial class MainWindow : Window
         };
 
         canvasContent.Children.Add(_slideCanvas);
-        canvasContent.Children.Add(_adorner);
 
         var canvasStack = new Grid
         {
@@ -1138,6 +1139,7 @@ public sealed partial class MainWindow : Window
         };
         canvasStack.Children.Add(canvasContent);
         canvasStack.Children.Add(textOverlay);
+        canvasStack.Children.Add(_adorner);
 
         _canvasHost = new Border
         {

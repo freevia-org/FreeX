@@ -114,17 +114,21 @@ public sealed class MainWindowHeadlessTests
 
                 var adorner = window.GetVisualDescendants()
                     .OfType<SelectionAdornerLayer>()
-                    .Single(candidate =>
-                        candidate.Parent is Grid parent &&
-                        parent.Children.OfType<SlideCanvas>().Any());
-                var canvasContent = adorner.Parent.Should().BeOfType<Grid>().Subject;
+                    .Single();
+                var stack = adorner.Parent.Should().BeOfType<Grid>().Subject;
+                var canvasContent = stack.Children
+                    .OfType<Grid>()
+                    .Single(candidate => candidate.Children.OfType<SlideCanvas>().Any());
                 var canvas = canvasContent.Children.OfType<SlideCanvas>().Single();
-                var stack = canvasContent.Parent.Should().BeOfType<Grid>().Subject;
                 var textOverlay = stack.Children.OfType<Canvas>().Single();
                 textOverlay.IsVisible = true;
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
 
                 canvasContent.Margin.Should().Be(new Thickness(FreePShellVisualMetrics.CanvasMargin));
+                adorner.Margin.Should().Be(new Thickness(FreePShellVisualMetrics.CanvasMargin));
+                stack.Children.IndexOf(textOverlay).Should().BeLessThan(
+                    stack.Children.IndexOf(adorner),
+                    "WPF paints selection chrome above the active text editor");
                 canvas.Margin.Should().Be(default(Thickness));
 
                 var canvasOrigin = canvas.TranslatePoint(default, window);

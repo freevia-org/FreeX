@@ -364,7 +364,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             defaultFontSize,
             foregroundOverride ?? DefaultForeground,
             ToAvaloniaAlignment(paragraph.Alignment),
-            TextWrapping.NoWrap,
+            _plan.Wrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
             TextTrimming.None,
             textDecorations: null,
             paragraph.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight,

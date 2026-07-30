@@ -14,6 +14,8 @@ namespace FreeP.App.Rendering.Avalonia;
 /// </summary>
 public sealed class AvaloniaInCanvasTextEditor : IDisposable
 {
+    private const double WpfRasterAlignmentOffsetX = -0.25;
+
     private readonly SlideCanvas _canvas;
     private readonly EditingSession _editor;
     private readonly Panel _overlay;
@@ -736,7 +738,13 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         InCanvasEditorPlacement placement)
     {
         if (!placement.HasTransform)
+        {
+            // Avalonia snaps Canvas placement to the current device scale while WPF
+            // preserves the shared fractional origin. Keep the layout box unchanged
+            // and align only the rendered left edge to the WPF raster.
+            editor.RenderTransform = new TranslateTransform(WpfRasterAlignmentOffsetX, 0);
             return;
+        }
 
         double originX = placement.EffectiveTransformOriginX;
         double originY = placement.EffectiveTransformOriginY;

@@ -20,6 +20,25 @@ public sealed class AvaloniaRichTextEditorTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(SlideHeadlessApp).Assembly);
 
     [Fact]
+    public async Task Editor_UsesSharedBodyWrapPolicyForInputAndRichLayout()
+    {
+        await Session.Dispatch(() =>
+        {
+            var wrapped = new AvaloniaRichTextEditor(
+                new TextBody { Wrap = true },
+                backgroundAlpha: 0xCC);
+            var unwrapped = new AvaloniaRichTextEditor(
+                new TextBody { Wrap = false },
+                backgroundAlpha: 0xCC);
+
+            wrapped.InputBox.TextWrapping.Should().Be(TextWrapping.Wrap);
+            wrapped.RichTextView.VisualPlan.Wrap.Should().BeTrue();
+            unwrapped.InputBox.TextWrapping.Should().Be(TextWrapping.NoWrap);
+            unwrapped.RichTextView.VisualPlan.Wrap.Should().BeFalse();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task SelectedRunHyperlink_UsesRichTextBufferAndRoundTripsThroughEditedBody()
     {
         await Session.Dispatch(async () =>

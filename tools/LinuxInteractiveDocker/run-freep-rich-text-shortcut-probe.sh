@@ -801,12 +801,13 @@ if [[ ! "${X:-}" =~ ^-?[0-9]+$ || ! "${Y:-}" =~ ^-?[0-9]+$ ||
 fi
 
 pane_width=180
+canvas_margin=40
 stage_body_top=$((Y + 137))
 stage_body_height=$((HEIGHT - 241))
-fit_box_x=$((X + pane_width + 40))
-fit_box_y=$((stage_body_top + 40))
-fit_box_width=$((WIDTH - pane_width - 80))
-fit_box_height=$((stage_body_height - 80))
+fit_box_x=$((X + pane_width + canvas_margin))
+fit_box_y=$((stage_body_top + canvas_margin))
+fit_box_width=$((WIDTH - pane_width - 2 * canvas_margin))
+fit_box_height=$((stage_body_height - 2 * canvas_margin))
 slide_width_emu=12192000
 slide_height_emu=6858000
 shape_center_x_emu=2286000
@@ -878,17 +879,29 @@ fi
         pointer_shape_bottom_y=$((slide_y +
             (slide_height_px * (914400 + 2743200) + slide_height_emu / 2) /
             slide_height_emu))
-        pointer_anchor_x=$((pointer_shape_left_x + 8))
-        pointer_anchor_y=$((pointer_shape_top_y + 8))
-        pointer_caret_x=$((pointer_shape_right_x - 8))
-        pointer_caret_y=$((pointer_shape_bottom_y - 8))
-        pointer_edge_x=$((pointer_shape_right_x - 8))
-        pointer_edge_y=$((pointer_shape_bottom_y + 64))
+        # Shape activation targets the margined slide canvas. The rich editor is
+        # hosted by the full-stage overlay and consumes canvas-local placement,
+        # so its physical X11 rectangle is offset by the shared canvas margin.
+        pointer_editor_left_x=$((pointer_shape_left_x - canvas_margin))
+        pointer_editor_top_y=$((pointer_shape_top_y - canvas_margin))
+        pointer_editor_right_x=$((pointer_shape_right_x - canvas_margin))
+        pointer_editor_bottom_y=$((pointer_shape_bottom_y - canvas_margin))
+        pointer_anchor_x=$((pointer_editor_left_x + 8))
+        pointer_anchor_y=$((pointer_editor_top_y + 8))
+        pointer_caret_x=$((pointer_editor_right_x - 8))
+        pointer_caret_y=$((pointer_editor_bottom_y - 8))
+        pointer_edge_x=$((pointer_editor_right_x - 8))
+        pointer_edge_y=$((pointer_editor_bottom_y + 64))
         printf 'drag-contract=first visual line to captured pointer beyond editor bottom across paragraph boundary\n'
+        printf 'editor-overlay-offset=%s\n' "$canvas_margin"
         printf 'pointer-shape-rect=%s,%s,%s,%s\n' \
             "$pointer_shape_left_x" "$pointer_shape_top_y" \
             "$((pointer_shape_right_x - pointer_shape_left_x))" \
             "$((pointer_shape_bottom_y - pointer_shape_top_y))"
+        printf 'pointer-editor-rect=%s,%s,%s,%s\n' \
+            "$pointer_editor_left_x" "$pointer_editor_top_y" \
+            "$((pointer_editor_right_x - pointer_editor_left_x))" \
+            "$((pointer_editor_bottom_y - pointer_editor_top_y))"
         printf 'pointer-anchor=%s,%s\n' "$pointer_anchor_x" "$pointer_anchor_y"
         printf 'pointer-caret=%s,%s\n' "$pointer_caret_x" "$pointer_caret_y"
         printf 'pointer-edge=%s,%s\n' "$pointer_edge_x" "$pointer_edge_y"

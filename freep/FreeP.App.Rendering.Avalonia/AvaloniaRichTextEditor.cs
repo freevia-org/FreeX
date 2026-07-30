@@ -57,6 +57,9 @@ internal sealed class AvaloniaRichTextEditor : Grid
         _fallbackFontFamily = fallbackFontFamily;
         _fallbackFontSizePt = fallbackFontSizePt;
         _richTextView = new AvaloniaRichTextEditingSurface();
+        var textWrapping = body?.Wrap == false
+            ? TextWrapping.NoWrap
+            : TextWrapping.Wrap;
         _pointerAutoScrollTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromMilliseconds(30),
@@ -69,9 +72,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         InputBox = new TextBox
         {
             AcceptsReturn = true,
-            // WPF's FlowDocument disables pagination with a very large column, so
-            // the editor viewport clips a long line instead of wrapping it.
-            TextWrapping = TextWrapping.NoWrap,
+            TextWrapping = textWrapping,
             Text = _buffer.PlainText,
             Padding = new Thickness(2),
             Background = Brushes.Transparent,

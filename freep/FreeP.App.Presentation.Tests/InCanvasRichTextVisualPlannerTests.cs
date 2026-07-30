@@ -30,6 +30,17 @@ public sealed class InCanvasRichTextVisualPlannerTests
     }
 
     [Fact]
+    public void Create_PreservesBodyWrapPolicy()
+    {
+        InCanvasRichTextVisualPlanner.Create(new TextBody { Wrap = true })
+            .Wrap.Should().BeTrue();
+        InCanvasRichTextVisualPlanner.Create(new TextBody { Wrap = false })
+            .Wrap.Should().BeFalse();
+        InCanvasRichTextVisualPlanner.Create(null)
+            .Wrap.Should().BeTrue();
+    }
+
+    [Fact]
     public void Create_MapsMixedRunsAndParagraphOffsetsWithoutFlattening()
     {
         var body = new TextBody();

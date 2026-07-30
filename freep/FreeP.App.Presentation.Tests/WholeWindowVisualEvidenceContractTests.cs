@@ -44,6 +44,8 @@ public sealed class WholeWindowVisualEvidenceContractTests
         WholeWindowVisualEvidenceCatalog.All.Count(scenario => scenario.Kind == WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay).Should().Be(2);
         WholeWindowVisualEvidenceCatalog.Get("editor.rich-text-selection").ActivationId.Should().Be("selection");
         WholeWindowVisualEvidenceCatalog.Get("editor.rich-text-caret").ActivationId.Should().Be("caret");
+        DialogPaneVisualEvidenceFixtureFactory.CreateRichEditorBody().Wrap.Should().BeFalse(
+            "the deterministic mixed-font pair uses the shared no-wrap editor path");
     }
 
     [Fact]

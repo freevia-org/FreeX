@@ -256,6 +256,25 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void WpfAuthority_UsesSharedBodyWrapPolicy()
+    {
+        var wrappedBody = new TextBody { Wrap = true };
+        var wrapped = TextBodyFlowDocumentConverter.ToFlowDocument(wrappedBody);
+        var unwrapped = TextBodyFlowDocumentConverter.ToFlowDocument(
+            new TextBody { Wrap = false });
+
+        wrapped.PageWidth.Should().BeNaN();
+        wrapped.ColumnWidth.Should().BeNaN();
+        unwrapped.PageWidth.Should().Be(100_000);
+        unwrapped.ColumnWidth.Should().Be(100_000);
+
+        TextBodyFlowDocumentConverter.FromFlowDocument(wrapped, wrappedBody)
+            .Wrap.Should().BeTrue();
+        TextBodyFlowDocumentConverter.FromFlowDocument(unwrapped, new TextBody { Wrap = false })
+            .Wrap.Should().BeFalse();
+    }
+
+    [StaFact]
     public void WpfAuthority_RendersAlignmentAndMixedRuns_ButKeepsBulletMetadataNonvisual()
     {
         var body = MakeVisualEvidenceBody();
