@@ -295,36 +295,40 @@ jobs:
             throw "No $app release assets were downloaded."
           }
 
-          $notes = @"
-          # $app v$version Tester Release
+          $notes = @'
+          # {{APP}} v{{VERSION}} Tester Release
 
-          Assets are built independently for each selected platform from commit $env:GITHUB_SHA.
+          Assets are built independently for each selected platform from commit {{SHA}}.
 
           ## Install and deploy
 
           ### Windows x64
 
-          1. Download `$app-v$version-win-x64.exe` and its `.sha256` file.
-          2. Verify the download: `Get-FileHash .\\$app-v$version-win-x64.exe -Algorithm SHA256`; compare the hash with the `.sha256` file.
+          1. Download `{{APP}}-v{{VERSION}}-win-x64.exe` and its `.sha256` file.
+          2. Verify the download: `Get-FileHash .\{{APP}}-v{{VERSION}}-win-x64.exe -Algorithm SHA256`; compare the hash with the `.sha256` file.
           3. Move the executable to the directory from which the user will run it, then launch it. It is self-contained and needs no .NET installation or installer.
           4. To update, close the app and replace the executable in that directory.
 
           ### Linux x64 and ARM64
 
           1. Choose `linux-x64` for Intel/AMD 64-bit systems or `linux-arm64` for 64-bit ARM systems. Download the matching `.zip` and `.sha256` file.
-          2. Verify it with `sha256sum -c $app-v$version-linux-<architecture>.zip.sha256`.
-          3. Extract it into a stable per-user directory, for example `unzip $app-v$version-linux-<architecture>.zip -d ~/$app`.
-          4. Run `chmod +x ~/$app/$app` once, then start it with `~/$app/$app`. To update, close the app and replace the extracted directory.
+          2. Verify it with `sha256sum -c {{APP}}-v{{VERSION}}-linux-<architecture>.zip.sha256`.
+          3. Extract it into a stable per-user directory, for example `unzip {{APP}}-v{{VERSION}}-linux-<architecture>.zip -d ~/{{APP}}`.
+          4. Run `chmod +x ~/{{APP}}/{{APP}}` once, then start it with `~/{{APP}}/{{APP}}`. To update, close the app and replace the extracted directory.
 
           ### macOS Intel and Apple silicon
 
           1. Choose `osx-x64` for Intel Macs or `osx-arm64` for Apple silicon. Download the matching `.zip` and `.sha256` file.
-          2. Verify it with `shasum -a 256 -c $app-v$version-osx-<architecture>.zip.sha256`.
-          3. Extract it into a stable per-user directory, for example `unzip $app-v$version-osx-<architecture>.zip -d ~/$app`.
-          4. Run `chmod +x ~/$app/$app` once, then start it with `~/$app/$app`. To update, close the app and replace the extracted directory.
+          2. Verify it with `shasum -a 256 -c {{APP}}-v{{VERSION}}-osx-<architecture>.zip.sha256`.
+          3. Extract it into a stable per-user directory, for example `unzip {{APP}}-v{{VERSION}}-osx-<architecture>.zip -d ~/{{APP}}`.
+          4. Run `chmod +x ~/{{APP}}/{{APP}}` once, then start it with `~/{{APP}}/{{APP}}`. To update, close the app and replace the extracted directory.
 
           These tester packages are self-contained. Do not run them from inside the archive; keep the extracted Linux or macOS directory intact. The macOS assets are unsigned portable archives, not signed or notarized `.app` bundles.
-          "@
+          '@
+          $notes = $notes.
+            Replace("{{APP}}", $app).
+            Replace("{{VERSION}}", $version).
+            Replace("{{SHA}}", $env:GITHUB_SHA)
 
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {

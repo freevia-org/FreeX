@@ -317,8 +317,10 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("### Linux x64 and ARM64");
         workflow.Should().Contain("### macOS Intel and Apple silicon");
         workflow.Should().Contain("unsigned portable archives, not signed or notarized `.app` bundles");
-        workflow.Should().Contain("sha256sum -c $app-v$version-linux-<architecture>.zip.sha256");
-        workflow.Should().Contain("shasum -a 256 -c $app-v$version-osx-<architecture>.zip.sha256");
+        workflow.Should().Contain("$notes = @'");
+        workflow.Should().Contain("sha256sum -c {{APP}}-v{{VERSION}}-linux-<architecture>.zip.sha256");
+        workflow.Should().Contain("shasum -a 256 -c {{APP}}-v{{VERSION}}-osx-<architecture>.zip.sha256");
+        workflow.Should().Contain("Replace(\"{{SHA}}\", $env:GITHUB_SHA)");
         workflow.Should().Contain("$notes | gh release edit $tag --title $title --notes-file -");
         workflow.Should().Contain("$notes | gh release create $tag @assets --target $env:GITHUB_SHA --title $title --notes-file - @releaseArgs");
         workflow.Should().NotContain("## Assets");
