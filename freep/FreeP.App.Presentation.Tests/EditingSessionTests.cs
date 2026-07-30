@@ -886,6 +886,112 @@ public sealed class EditingSessionTests
         outer.Children.Should().ContainSingle(shape => shape.Id == inner.Id);
     }
 
+    [Fact]
+    public void NestedGroupedSelection_AlignAndZOrderUseContainingSiblingList()
+    {
+        var sess = Make();
+        var first = MakeShape(31);
+        first.OffsetYEmu = 100;
+        var second = MakeShape(32);
+        second.OffsetXEmu = 400;
+        second.OffsetYEmu = 300;
+        var inner = new SlideShape { Id = 33, Kind = SlideShapeKind.Group };
+        inner.Children.Add(first);
+        inner.Children.Add(second);
+        var outer = new SlideShape { Id = 34, Kind = SlideShapeKind.Group };
+        outer.Children.Add(inner);
+        sess.CurrentSlide!.Shapes.Add(outer);
+
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+        sess.AlignTop();
+        first.OffsetYEmu.Should().Be(second.OffsetYEmu);
+        sess.Undo();
+        first.OffsetYEmu.Should().Be(100);
+        second.OffsetYEmu.Should().Be(300);
+
+        sess.Select(first.Id);
+        sess.BringToFront();
+        inner.Children[^1].Id.Should().Be(first.Id);
+        sess.Undo();
+        inner.Children[0].Id.Should().Be(first.Id);
+    }
+
+    [Fact]
+    public void FlipSelectedShapes_TogglesAxisAndUndoRestoresIt()
+    {
+        var sess = Make();
+        var first = MakeShape(51);
+        var second = MakeShape(52);
+        sess.CurrentSlide!.Shapes.Add(first);
+        sess.CurrentSlide.Shapes.Add(second);
+
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+        sess.FlipSelectedHorizontal();
+
+        first.FlipH.Should().BeTrue();
+        second.FlipH.Should().BeTrue();
+        first.FlipV.Should().BeFalse();
+        second.FlipV.Should().BeFalse();
+
+        sess.Undo();
+        first.FlipH.Should().BeFalse();
+        second.FlipH.Should().BeFalse();
+        sess.Redo();
+        first.FlipH.Should().BeTrue();
+        second.FlipH.Should().BeTrue();
+
+        sess.FlipSelectedVertical();
+        first.FlipV.Should().BeTrue();
+        second.FlipV.Should().BeTrue();
+        sess.Undo();
+        first.FlipV.Should().BeFalse();
+        second.FlipV.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FlipShape_TogglesExistingStateAndCanBeUndone()
+    {
+        var sess = Make();
+        var shape = MakeShape(53);
+        shape.FlipV = true;
+        sess.CurrentSlide!.Shapes.Add(shape);
+
+        sess.FlipShape(shape.Id, horizontal: false);
+        shape.FlipV.Should().BeFalse();
+        sess.Undo();
+        shape.FlipV.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GroupSelectedShapes_GroupsNestedChildrenAndUndoRestoresParentList()
+    {
+        var sess = Make();
+        var first = MakeShape(41);
+        var second = MakeShape(42);
+        second.OffsetXEmu = 400;
+        var parent = new SlideShape { Id = 43, Kind = SlideShapeKind.Group };
+        parent.Children.Add(first);
+        parent.Children.Add(second);
+        sess.CurrentSlide!.Shapes.Add(parent);
+
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+        sess.GroupSelectedShapes();
+
+        sess.SelectedShapeIds.Should().ContainSingle();
+        parent.Children.Should().ContainSingle();
+        var nestedGroup = parent.Children[0];
+        nestedGroup.Kind.Should().Be(SlideShapeKind.Group);
+        nestedGroup.Children.Select(shape => shape.Id).Should().Equal(first.Id, second.Id);
+
+        sess.Undo();
+        parent.Children.Select(shape => shape.Id).Should().Equal(first.Id, second.Id);
+        sess.Redo();
+        parent.Children.Should().ContainSingle(shape => shape.Id == nestedGroup.Id);
+    }
+
     [Theory]
     [InlineData(DrawingShapeKind.ElbowConnector)]
     [InlineData(DrawingShapeKind.CurvedConnector)]
