@@ -262,31 +262,48 @@ public static class SheetPdfPageSetupResolver
                     baseColsPerPage = ApplyUniformScaleToFreeAxis(naturalColsPerPage, uniformScale);
                 }
             }
-            else
+            else if (wideConstrained && tallConstrained)
             {
-                // Neither axis constrained or both constrained (each targets its own explicit page
-                // count): resolve each axis independently, as before.
-                if (tallConstrained)
+                // R100-services-print-scale-uniform-both-axes: mirrors PagePaginationPlanner's
+                // "wideConstrained && tallConstrained" branch (R20-print-area-page-setup-3). When
+                // BOTH FitToPagesWide and FitToPagesTall are explicitly set, Excel derives ONE
+                // uniform scale -- the smaller (more aggressive shrink) of the two per-axis scales
+                // that would independently satisfy each axis's own explicit page-count target -- and
+                // applies that SAME scale to BOTH axes. Resolving each axis to its own exact page
+                // count independently (the old behavior here) produces a non-uniform scale Excel's
+                // rendering model can never actually apply, over-paginating whichever axis needed
+                // less shrink (e.g. "2 wide x 5 tall" over a range that already fits in 5 row-pages
+                // at 100% used to still force exactly 5 row-pages even though the column-driven
+                // shrink alone would have collapsed it to ~2).
+                var colsIfWideOnly = naturalColsPerPage;
+                var bodyCols = CountBodyItems(printRange.Start.Col, printRange.End.Col, sheet.PrintTitleColumns);
+                if (bodyCols > 0)
                 {
-                    var bodyRows = CountBodyItems(printRange.Start.Row, printRange.End.Row, sheet.PrintTitleRows);
-                    if (bodyRows > 0)
-                    {
-                        var titleRows = CountRepeatItems(sheet.PrintTitleRows, CellAddress.MaxRow);
-                        var bodyRowsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyRows / (double)scaleToFit.FitToPagesTall!.Value));
-                        baseRowsPerPage = Math.Max(1u, bodyRowsPerPage + titleRows);
-                    }
+                    var titleCols = CountRepeatItems(sheet.PrintTitleColumns, CellAddress.MaxCol);
+                    var bodyColsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyCols / (double)scaleToFit.FitToPagesWide!.Value));
+                    colsIfWideOnly = Math.Max(1u, bodyColsPerPage + titleCols);
                 }
 
-                if (wideConstrained)
+                var rowsIfTallOnly = naturalRowsPerPage;
+                var bodyRows = CountBodyItems(printRange.Start.Row, printRange.End.Row, sheet.PrintTitleRows);
+                if (bodyRows > 0)
                 {
-                    var bodyCols = CountBodyItems(printRange.Start.Col, printRange.End.Col, sheet.PrintTitleColumns);
-                    if (bodyCols > 0)
-                    {
-                        var titleCols = CountRepeatItems(sheet.PrintTitleColumns, CellAddress.MaxCol);
-                        var bodyColsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyCols / (double)scaleToFit.FitToPagesWide!.Value));
-                        baseColsPerPage = Math.Max(1u, bodyColsPerPage + titleCols);
-                    }
+                    var titleRows = CountRepeatItems(sheet.PrintTitleRows, CellAddress.MaxRow);
+                    var bodyRowsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyRows / (double)scaleToFit.FitToPagesTall!.Value));
+                    rowsIfTallOnly = Math.Max(1u, bodyRowsPerPage + titleRows);
                 }
+
+                var widthScale = ComputeScaleFraction(naturalColsPerPage, colsIfWideOnly);
+                var heightScale = ComputeScaleFraction(naturalRowsPerPage, rowsIfTallOnly);
+                var uniformScale = Math.Min(widthScale, heightScale);
+
+                baseColsPerPage = ApplyUniformScaleToFreeAxis(naturalColsPerPage, uniformScale);
+                baseRowsPerPage = ApplyUniformScaleToFreeAxis(naturalRowsPerPage, uniformScale);
+            }
+            else
+            {
+                // Neither axis constrained: baseRowsPerPage/baseColsPerPage stay at their natural
+                // (unscaled) values.
             }
         }
 

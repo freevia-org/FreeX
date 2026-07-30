@@ -6945,6 +6945,84 @@ public partial class FileAdapterSmokeTests
         loadedStyle.Hidden.Should().BeTrue();
     }
 
+    // R100: cell-level theme-color bindings (FontThemeColor/FillThemeColor/FillPatternThemeColor)
+    // must round-trip through the native .fxl adapter the same way CellBorder.ThemeColor already does,
+    // so a theme-linked cell color keeps following the workbook theme after a save/load cycle (parity
+    // with the XLSX-path fix in R19_ThemeCellColorTests.cs).
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_CellStyleThemeColors()
+    {
+        var workbook = new Workbook("StyleThemeNativeTest");
+        var sheet = workbook.AddSheet("S1");
+        var address = new CellAddress(sheet.Id, 6, 7);
+        var cell = Cell.FromValue(new TextValue("themed"));
+        cell.StyleId = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(12, 34, 56),
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.25),
+            FillColor = new CellColor(200, 210, 220),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, -0.4),
+            FillPatternStyle = CellFillPatternStyle.DarkGrid,
+            FillPatternColor = new CellColor(90, 80, 70),
+            FillPatternThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.1),
+        });
+        sheet.SetCell(address, cell);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedCell = loaded.GetSheetAt(0).GetCell(new CellAddress(loaded.GetSheetAt(0).Id, 6, 7));
+        loadedCell.Should().NotBeNull();
+        var loadedStyle = loaded.GetStyle(loadedCell!.StyleId);
+
+        loadedStyle.FontThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.25));
+        loadedStyle.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, -0.4));
+        loadedStyle.FillPatternThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.1));
+
+        // Baked-fallback colors must still be preserved alongside the theme bindings.
+        loadedStyle.FontColor.Should().Be(new CellColor(12, 34, 56));
+        loadedStyle.FillColor.Should().Be(new CellColor(200, 210, 220));
+        loadedStyle.FillPatternColor.Should().Be(new CellColor(90, 80, 70));
+    }
+
+    // R100 sibling: styles with NO theme-color bindings must still round-trip as before (null stays null),
+    // guarding against the new mapper always materializing a default WorkbookThemeColorReference.
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_CellStyleWithoutThemeColors_StaysNull()
+    {
+        var workbook = new Workbook("StyleNoThemeNativeTest");
+        var sheet = workbook.AddSheet("S1");
+        var address = new CellAddress(sheet.Id, 8, 9);
+        var cell = Cell.FromValue(new TextValue("plain"));
+        cell.StyleId = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(1, 2, 3),
+            FillColor = new CellColor(4, 5, 6),
+        });
+        sheet.SetCell(address, cell);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedCell = loaded.GetSheetAt(0).GetCell(new CellAddress(loaded.GetSheetAt(0).Id, 8, 9));
+        loadedCell.Should().NotBeNull();
+        var loadedStyle = loaded.GetStyle(loadedCell!.StyleId);
+
+        loadedStyle.FontThemeColor.Should().BeNull();
+        loadedStyle.FillThemeColor.Should().BeNull();
+        loadedStyle.FillPatternThemeColor.Should().BeNull();
+        loadedStyle.FontColor.Should().Be(new CellColor(1, 2, 3));
+        loadedStyle.FillColor.Should().Be(new CellColor(4, 5, 6));
+    }
+
     [Fact]
     public void NativeJsonAdapter_RoundTrip_StyleOnlyCells()
     {

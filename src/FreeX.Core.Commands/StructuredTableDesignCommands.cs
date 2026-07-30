@@ -13,6 +13,19 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
     private readonly List<PivotCacheModel> _renamedPivotCaches = [];
+    // R100: workbook-wide CF/DV/chart formula rewrites, so a manual table rename (Table
+    // Design > Table Name, and the Name Manager) fixes every conditional-format rule,
+    // data-validation rule, and chart series/error-bar formula in the ENTIRE workbook that
+    // referenced the old name -- not just ordinary sheet-cell formulas (RewriteAllFormulas
+    // above) and this table's own CalculatedColumnFormula/TotalsRowFormula metadata
+    // (RewriteTableSelfReferenceFormulas above). Mirrors the fix already applied to
+    // DuplicateSheetCommand's CF/DV/chart rewrite for a cloned table's renamed identity,
+    // but scoped to the whole workbook instead of just the freshly duplicated sheet, since
+    // an ordinary rename can be referenced from ANY sheet.
+    private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
+    private readonly Dictionary<(Guid Id, int Slot), string?> _cfThresholdSnapshot = [];
+    private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
+    private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
 
     public string Label => "Table Name";
 
@@ -64,6 +77,50 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
         RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, renameOp, _formulaSnapshot);
         RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, renameOp, _namedFormulaSnapshot);
 
+        // R100: a structured reference to this table can also be embedded in a conditional-
+        // format rule's FormulaText/threshold values, a data-validation rule's Formula1/
+        // Formula2, or a chart's series/data-label/error-bar formula -- on THIS table's own
+        // sheet or any other sheet in the workbook. None of those are cell formulas, so
+        // RewriteAllFormulas above never touches them; left unrewritten they would keep
+        // naming the OLD table and silently break (CF/DV formulas evaluate to #NAME?, chart
+        // series lose their data). RewriteRuleFormulas is the same revert-safe primitive the
+        // row/col insert/delete commands already use for CF/DV formula-text rewrites; run it
+        // over every sheet here since a table rename (unlike a row/col shift) can affect
+        // rules anywhere in the workbook. Chart formulas use a dedicated table-rename-safe
+        // rewrite (RewriteAllChartFormulasForTableRename) instead of the shared
+        // RewriteChartVerbatimFormulas helper -- that helper pre-splits on every unquoted
+        // top-level comma to support multi-area range unions, which corrupts a structured
+        // reference like "Table1[[#Headers],[Values]]" (the comma is INSIDE the brackets).
+        _cfFormulaSnapshot.Clear();
+        _cfThresholdSnapshot.Clear();
+        _dvFormulaSnapshot.Clear();
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            RowColumnShiftHelpers.RewriteRuleFormulas(
+                s, renameOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        }
+
+        // The CF viewport context cache is keyed on (sheet.Id, sheet.ContentVersion,
+        // sheet.ConditionalFormats.Version) and caches a precompiled AST per CF rule object
+        // reference, so mutating cf.FormulaText in place above never invalidates it on its
+        // own -- bump Version explicitly (mirrors RenameSheetCommand's T7 pass) or a stale
+        // cache hit would keep evaluating the OLD table name after the rename.
+        if (_cfFormulaSnapshot.Count > 0 || _cfThresholdSnapshot.Count > 0)
+        {
+            foreach (var s in ctx.Workbook.Sheets)
+            {
+                if (s.ConditionalFormats.Any(cf =>
+                        _cfFormulaSnapshot.ContainsKey(cf.Id) ||
+                        _cfThresholdSnapshot.Keys.Any(k => k.Id == cf.Id)))
+                {
+                    s.ConditionalFormats.NotifyRulesChanged();
+                }
+            }
+        }
+
+        _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+        RowColumnShiftHelpers.RewriteAllChartFormulasForTableRename(ctx.Workbook, renameOp);
+
         // N32's table-sourced pivot re-derivation (PivotTableRefreshService.Refresh) looks up the
         // live table purely by cache.SourceTableName — if that stays pointed at the old name after a
         // rename, the lookup fails forever and the pivot silently stops tracking the table's extent.
@@ -92,6 +149,33 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
+
+        // R100: mirror the CF/DV/chart rewrite above.
+        var cfSheetsToNotify = _cfFormulaSnapshot.Count > 0 || _cfThresholdSnapshot.Count > 0
+            ? new HashSet<SheetId>()
+            : null;
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            if (cfSheetsToNotify is not null &&
+                s.ConditionalFormats.Any(cf =>
+                    _cfFormulaSnapshot.ContainsKey(cf.Id) ||
+                    _cfThresholdSnapshot.Keys.Any(k => k.Id == cf.Id)))
+            {
+                cfSheetsToNotify.Add(s.Id);
+            }
+
+            RowColumnShiftHelpers.RestoreRuleFormulas(
+                s, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        }
+
+        if (cfSheetsToNotify is not null)
+        {
+            foreach (var sheetId in cfSheetsToNotify)
+                ctx.Workbook.GetSheet(sheetId)?.ConditionalFormats.NotifyRulesChanged();
+        }
+
+        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
+        _chartVerbatimSnapshot = null;
 
         foreach (var cache in _renamedPivotCaches)
             cache.SourceTableName = _previousTable.Name;

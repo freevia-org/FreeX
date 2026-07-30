@@ -120,6 +120,13 @@ public sealed partial class XlsxFileAdapter
             XlsxUnsupportedConditionalFormattingPreserver.Preserve(sourceArchive, generatedArchive);
 
         XlsxWorksheetSinglePassNormalizer.NormalizeWorksheets(generatedArchive);
+        // R100-io-hyperlink-1: must run after every worksheet-content preserver above AND the
+        // single-pass normalizer, once each worksheet's <hyperlink> elements are fully finalized
+        // (including any late reemission, e.g. a stripped whole-column/row hyperlink written back
+        // by XlsxWorksheetMetadataPreserver.Preserve) -- see
+        // XlsxWorksheetHyperlinkRelationshipPruner's doc comment for why this cannot run any
+        // earlier (e.g. inline in XlsxPackageMetadataMerger.MergeRelationshipParts).
+        XlsxWorksheetHyperlinkRelationshipPruner.PruneOrphanedExternalRelationships(sourceArchive, generatedArchive, context);
         XlsxRichTextFontNormalizer.NormalizePackage(generatedArchive);
         XlsxSharedStringPackageGraphNormalizer.NormalizePackage(generatedArchive);
         XlsxDocumentThumbnailPackageGraphNormalizer.NormalizePackage(generatedArchive);

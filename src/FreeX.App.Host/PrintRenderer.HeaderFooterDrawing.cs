@@ -15,6 +15,7 @@ public static partial class PrintRenderer
         double pageH,
         double marginLeft,
         double marginRight,
+        double marginBottom,
         double headerMargin,
         double footerMargin,
         WorksheetHeaderFooter header,
@@ -32,7 +33,18 @@ public static partial class PrintRenderer
         var headerHeight = CalculateHeaderFooterLineHeight(header, headerPictures, draftQuality);
         var footerHeight = CalculateHeaderFooterLineHeight(footer, footerPictures, draftQuality);
         var headerY = Math.Max(4, headerMargin - headerHeight);
-        var footerY = Math.Max(4, pageH - footerMargin - footerHeight);
+        // R100-app-host-footer-margin-overlap-1: mirrors the header-side fix (R99, this file's
+        // headerY above) and WorkbookPdfContentBuilder's footerY clamp
+        // (footerY = Math.Min(footerEdgePt + 2, contentBottom)) for the PDF tier. The printed grid's
+        // own bottom edge sits at pageH - Math.Max(marginBottom, footerMargin) -- the same
+        // bodyBottomInches the pagination planner already used to size this page's row capacity
+        // (PagePaginationPlanner.CalculatePageCapacityDetail) -- so once FooterMargin exceeds
+        // BottomMargin, the unclamped "pageH - footerMargin - footerHeight" placed the footer text
+        // band entirely inside that same grid span, printing the footer on top of the last row(s).
+        // Clamping footerY to never start above the grid's own bottom edge keeps the footer band
+        // below the grid, matching Excel and the already-fixed PDF export tier.
+        var gridBottomEdge = pageH - Math.Max(marginBottom, footerMargin);
+        var footerY = Math.Max(Math.Max(4, pageH - footerMargin - footerHeight), gridBottomEdge);
         var leftInset = alignWithMargins ? marginLeft : 0.3 * 96.0;
         var rightInset = alignWithMargins ? marginRight : 0.3 * 96.0;
         DrawHeaderFooterLine(dc, textOverlays, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality, workbookDirectory);

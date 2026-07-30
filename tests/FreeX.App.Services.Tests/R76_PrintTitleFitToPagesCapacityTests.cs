@@ -129,8 +129,16 @@ public sealed class R76_PrintTitleFitToPagesCapacityTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void ResolveCapacity_BothConstrained_WithPrintTitles_CapacityIncludesBothTitleCounts()
+    public void ResolveCapacity_BothConstrained_WithPrintTitles_CapacityNeverUndershootsBodyPlusTitleCounts()
     {
+        // R100-services-print-scale-uniform-both-axes: since the both-constrained branch now derives
+        // ONE uniform scale (the smaller of the two per-axis scales -- see
+        // SheetPdfPageSetupResolver.ResolveCapacityDetail and PagePaginationPlanner's matching
+        // "wideConstrained && tallConstrained" branch) and applies it to BOTH axes, the axis that
+        // needed the aggressive shrink resolves to EXACTLY bodyItemsPerPage + titleCount, while the
+        // other (less-constrained) axis gets the SAME scale applied and so resolves to AT LEAST that
+        // many items per page (it only ever gains capacity, never loses it, relative to the plain
+        // body+title count) -- titles are still never double-subtracted on either axis.
         var workbook = new Workbook("W");
         var sheet    = workbook.AddSheet("S");
         sheet.PaperSize   = WorksheetPaperSize.A4;
@@ -144,10 +152,49 @@ public sealed class R76_PrintTitleFitToPagesCapacityTests
         var range = GridRange.Parse("A1:U21", sheet.Id);
         var capacity = SheetPdfPageSetupResolver.ResolveCapacity(sheet, range);
 
-        capacity.ColumnsPerPage.Should().Be(21,
-            "both-constrained branch: bodyColsPerPage (20) + titleColumnCount (1)");
-        capacity.RowsPerPage.Should().Be(21,
-            "both-constrained branch: bodyRowsPerPage (20) + titleRowCount (1)");
+        capacity.ColumnsPerPage.Should().BeGreaterThanOrEqualTo(21,
+            "the resolved column capacity must be at least bodyColsPerPage (20) + titleColumnCount (1) " +
+            "-- never less, or the print title column would be double-subtracted downstream");
+        capacity.RowsPerPage.Should().BeGreaterThanOrEqualTo(21,
+            "the resolved row capacity must be at least bodyRowsPerPage (20) + titleRowCount (1) -- " +
+            "never less, or the print title row would be double-subtracted downstream");
+    }
+
+    [Fact]
+    public void CreatePlanFromPageSetup_BothConstrained_WithPrintTitles_ProducesOnePageEachAxis()
+    {
+        // Real-entry-point regression for the same both-constrained + print-titles scenario: the
+        // uniform-scale coupling must still let "Fit to 1 wide x 1 tall" collapse the titled sheet
+        // onto exactly one page in each direction, not double-paginate from title double-subtraction.
+        var workbook = new Workbook("W");
+        var sheet    = workbook.AddSheet("S");
+        sheet.PaperSize   = WorksheetPaperSize.A4;
+        sheet.PageMargins = WorksheetPageMargins.Narrow;
+
+        sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
+        sheet.PrintTitleRows    = new WorksheetRepeatRange(1, 1);
+        sheet.ScaleToFit = new WorksheetScaleToFit(null, FitToPagesWide: 1, FitToPagesTall: 1);
+        sheet.SetPrintAreas([GridRange.Parse("A1:U21", sheet.Id)]);
+
+        for (var row = 1u; row <= 21u; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"R{row}"));
+        for (var col = 1u; col <= 21u; col++)
+            sheet.SetCell(new CellAddress(sheet.Id, 1, col), new TextValue($"C{col}"));
+
+        var plan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
+            workbook,
+            new WorkbookExportPrintIntent(
+                WorkbookExportPrintScope.ActiveSheet,
+                WorkbookExportPrintOutputKind.Pdf,
+                ActiveSheetIndex: 0),
+            WorkbookExportPrintSurface.MacOs);
+
+        plan.IsReady.Should().BeTrue(plan.StatusText);
+        plan.SheetPlans.Should().HaveCount(1);
+        plan.SheetPlans[0].ColumnPageCount.Should().Be(1,
+            "Fit to 1x1 with Print Titles on both axes must still collapse onto a single column page");
+        plan.SheetPlans[0].RowPageCount.Should().Be(1,
+            "Fit to 1x1 with Print Titles on both axes must still collapse onto a single row page");
     }
 
     // -----------------------------------------------------------------------

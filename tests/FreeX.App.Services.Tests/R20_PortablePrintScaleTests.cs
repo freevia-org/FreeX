@@ -102,24 +102,55 @@ public sealed class R20_print_avalonia_portable_Tests
     }
 
     [Fact]
-    public void ResolveCapacity_BothAxesConstrained_ResolvesEachAxisIndependently()
+    public void ResolveCapacity_BothAxesConstrained_AppliesUniformMinScaleToBothAxes()
     {
-        // When BOTH FitToPagesWide and FitToPagesTall are explicitly set, each axis targets its own
-        // requested page count independently -- the uniform-scale coupling only applies when exactly
-        // one axis is constrained (matching PagePaginationPlanner's "else" branch).
+        // R100-services-print-scale-uniform-both-axes: when BOTH FitToPagesWide and FitToPagesTall
+        // are explicitly set, Excel derives ONE uniform scale -- min(widthScale, heightScale) -- and
+        // applies it to BOTH axes (matching PagePaginationPlanner's dedicated
+        // "wideConstrained && tallConstrained" branch, R20-print-area-page-setup-3). Resolving each
+        // axis to its own exact page count independently (the pre-fix behavior this test used to
+        // assert) produces a non-uniform per-axis scale Excel's rendering model can never apply, and
+        // over-paginates whichever axis needed less shrink.
         var workbook = new Workbook("W");
         var sheet    = workbook.AddSheet("S");
         sheet.PaperSize   = WorksheetPaperSize.A4;
         sheet.PageMargins = WorksheetPageMargins.Narrow;
-        sheet.ScaleToFit  = new WorksheetScaleToFit(ScalePercent: null, FitToPagesWide: 2, FitToPagesTall: 5);
+        sheet.ScaleToFit  = WorksheetScaleToFit.Default;
 
+        // Discover the natural (unscaled) per-page capacity so the range can be sized in terms of it
+        // instead of hardcoding brittle pixel-derived row/column counts.
+        var probeRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2000, 2000));
+        var natural = SheetPdfPageSetupResolver.ResolveCapacity(sheet, probeRange);
+
+        // Size the range so 100%-scale pagination is exactly 6 column-pages x 5 row-pages -- i.e. the
+        // row axis is ALREADY exactly at its FitToPagesTall=5 target unscaled, while the column axis
+        // needs real shrink to hit FitToPagesWide=2.
+        var totalCols = natural.ColumnsPerPage * 6;
+        var totalRows = natural.RowsPerPage * 5;
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
-            new CellAddress(sheet.Id, 100, 20));
+            new CellAddress(sheet.Id, totalRows, totalCols));
+
+        var naturalCapacity = SheetPdfPageSetupResolver.ResolveCapacity(sheet, range);
+        ((uint)Math.Ceiling(totalCols / (double)naturalCapacity.ColumnsPerPage)).Should().Be(6u,
+            "sanity check: range sized to 6 natural column-pages");
+        ((uint)Math.Ceiling(totalRows / (double)naturalCapacity.RowsPerPage)).Should().Be(5u,
+            "sanity check: range sized to 5 natural row-pages -- already exactly at the FitToPagesTall target");
+
+        sheet.ScaleToFit = new WorksheetScaleToFit(ScalePercent: null, FitToPagesWide: 2, FitToPagesTall: 5);
         var capacity = SheetPdfPageSetupResolver.ResolveCapacity(sheet, range);
 
-        // 20 body columns over 2 pages => 10 columns/page; 100 body rows over 5 pages => 20 rows/page.
-        capacity.ColumnsPerPage.Should().Be(10u);
-        capacity.RowsPerPage.Should().Be(20u);
+        var columnPages = (uint)Math.Ceiling(totalCols / (double)capacity.ColumnsPerPage);
+        var rowPages = (uint)Math.Ceiling(totalRows / (double)capacity.RowsPerPage);
+
+        columnPages.Should().Be(2u, "the column axis must hit its explicit Fit-to-2-wide target");
+        rowPages.Should().BeLessThan(5u,
+            "Excel applies the SAME uniform scale (min(2/6, 5/5) = 33%) to the row axis too, so it " +
+            "shrinks along with the column axis instead of staying at its already-met 5-page target");
+        (columnPages * rowPages).Should().BeLessThan(10u,
+            "the pre-fix independent-per-axis resolution produces 2x5=10 pages; the uniform-scale fix " +
+            "produces roughly 2x2=4");
     }
 }

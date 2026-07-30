@@ -73,7 +73,9 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
         }
 
         var firstDataRow = _range.Start.Row + 1;
-        var lastDataRow = _range.End.Row;
+        // R100-commands-filter-totalsrow-1: see FilterCommand.RecomputeHiddenRows -- exclude a
+        // structured table's shown Totals Row from the filterable/Top-N data set.
+        var lastDataRow = StructuredTableEditEffects.GetFilterableLastRow(sheet, _range);
 
         // R96-commands-topbottom-filterval-1: compute the boundary value (and the kept-row mask)
         // BEFORE building the persisted Top10 criterion below, so the boundary Excel's tie-inclusive

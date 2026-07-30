@@ -265,8 +265,19 @@ internal static partial class XlsxChartXmlWriter
 
     /// <summary>
     /// Returns true when every non-blank cell in the category strip's data points contains a
-    /// numeric value. An all-blank strip returns false (fall back to strRef).
+    /// numeric OR date/time value. An all-blank strip returns false (fall back to strRef).
     /// </summary>
+    /// <remarks>
+    /// R100-io-chart-category-date-axis: <see cref="DateTimeValue"/> is FreeX's own sealed record
+    /// for dates — it is NOT a <see cref="NumberValue"/> — but Excel dates are stored as plain
+    /// numeric serials too and a date category column must round-trip as a
+    /// <c>&lt;c:cat&gt;&lt;c:numRef&gt;</c> date axis (with its own formatCode, see
+    /// <see cref="GetStripNumberFormatCode"/>), never as text. Treating only
+    /// <c>value is not NumberValue</c> as "not numeric" silently demoted every date category axis
+    /// to <c>&lt;c:strRef&gt;</c>/&lt;c:strCache&gt;, printing the bare OA serial (e.g. "45658") as
+    /// literal text with no date formatting at all — even when merely re-saving a chart Excel
+    /// itself authored with a proper date axis.
+    /// </remarks>
     private static bool IsCategoryRangeNumeric(Sheet sheet, ChartSeriesStripLayout layout)
     {
         var hasAnyValue = false;
@@ -277,7 +288,7 @@ internal static partial class XlsxChartXmlWriter
                 : sheet.GetValue(point, layout.CategoryStrip);
             if (value is BlankValue)
                 continue;
-            if (value is not NumberValue)
+            if (value is not NumberValue and not DateTimeValue)
                 return false;
             hasAnyValue = true;
         }

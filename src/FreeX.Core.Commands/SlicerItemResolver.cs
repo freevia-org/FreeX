@@ -83,7 +83,7 @@ public static class SlicerItemResolver
                 if (columnOffset < 0)
                     return [];
 
-                return DistinctColumnValues(sheet, table.Range, columnOffset);
+                return DistinctColumnValues(sheet, table, columnOffset);
             }
         }
 
@@ -103,17 +103,21 @@ public static class SlicerItemResolver
         return -1;
     }
 
-    private static IReadOnlyList<string> DistinctColumnValues(Sheet sheet, GridRange range, int columnOffset)
+    private static IReadOnlyList<string> DistinctColumnValues(Sheet sheet, StructuredTableModel table, int columnOffset)
     {
+        var range = table.Range;
         var col = range.Start.Col + (uint)columnOffset;
         if (col > range.End.Col)
             return [];
 
-        // Skip the header row (the table's first row is the header).
-        var firstDataRow = range.Start.Row + 1;
+        // Skip the header row (the table's first row is the header) and, when shown, the Totals
+        // Row -- R100-commands-filter-totalsrow-1: real Excel never offers the Totals Row as a
+        // selectable slicer item, matching GetDataBodyRowBounds's totals-row-aware bound already
+        // used by every table-editing command.
+        var (firstDataRow, lastDataRow) = StructuredTableEditEffects.GetDataBodyRowBounds(table);
         var seen = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
         var items = new List<string>();
-        for (var row = firstDataRow; row <= range.End.Row; row++)
+        for (var row = firstDataRow; row <= lastDataRow; row++)
         {
             var text = ToDisplayText(sheet.GetCell(row, col)?.Value ?? BlankValue.Instance);
             if (string.IsNullOrEmpty(text))
