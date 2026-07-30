@@ -147,7 +147,7 @@ internal static class SmartArtInsertionFactory
         int nodeCount,
         IReadOnlyList<SlideObjectPicturePayload>? pictures)
     {
-        if (preset is not (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid))
+        if (preset is not (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid))
             return null;
 
         if (pictures is null || pictures.Count == 0)
@@ -291,6 +291,7 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.PictureAccentList => ("urn:microsoft.com/office/officeart/2005/8/layout/pictureAccentList", SmartArtFamily.List),
             SmartArtLayoutPreset.PictureStack => ("urn:microsoft.com/office/officeart/2005/8/layout/pictureStack", SmartArtFamily.List),
             SmartArtLayoutPreset.PictureLineup => ("urn:microsoft.com/office/officeart/2005/8/layout/pictureLineup", SmartArtFamily.List),
+            SmartArtLayoutPreset.PictureStrips => ("urn:microsoft.com/office/officeart/2005/8/layout/pictureStrips", SmartArtFamily.List),
             SmartArtLayoutPreset.ContinuousPictureList => ("urn:microsoft.com/office/officeart/2005/8/layout/continuousPictureList", SmartArtFamily.List),
             SmartArtLayoutPreset.LabeledHierarchy => ("urn:microsoft.com/office/officeart/2005/8/layout/labeledHierarchy", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.TableHierarchy => ("urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy", SmartArtFamily.Hierarchy),

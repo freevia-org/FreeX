@@ -77,6 +77,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.PictureAccentList, "pictureAccentList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureStack, "pictureStack", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureLineup, "pictureLineup", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.PictureStrips, "pictureStrips", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.ContinuousPictureList, "continuousPictureList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureGrid, "pictureGrid", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.LabeledHierarchy, "labeledHierarchy", SmartArtFamily.Hierarchy)]
@@ -90,7 +91,7 @@ public sealed class SmartArtEditingPlannerTests
         {
             Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan"), ("n2", "Build")),
         };
-        if (preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid))
+        if (preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid))
         {
             foreach (var node in smartArt.Data!.Nodes)
                 node.Picture = new ImagePart { Bytes = [0x89, 0x50, 0x4E, 0x47], ContentType = "image/png" };
