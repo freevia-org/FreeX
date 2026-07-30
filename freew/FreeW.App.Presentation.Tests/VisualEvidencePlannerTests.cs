@@ -505,6 +505,30 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedNoteRegionPlanner_FragmentsLongFootnotesWithoutDroppingWords()
+    {
+        var document = new TextDocument();
+        document.Footnotes[1] = new Footnote(1, string.Join(" ", Enumerable.Range(1, 80).Select(i => $"word{i}")));
+
+        var plan = DocumentNoteRegionPlanner.BuildFootnoteContinuation(
+            document,
+            [1],
+            firstPageNumber: 1,
+            contentWidthDip: 192,
+            firstAvailableHeightDip: 36,
+            continuationAvailableHeightDip: 30);
+
+        plan.Pages.Should().HaveCountGreaterThan(1);
+        plan.Pages[0].SeparatorKind.Should().Be(DocumentFootnoteSeparatorKind.Initial);
+        plan.Pages[1].SeparatorKind.Should().Be(DocumentFootnoteSeparatorKind.Continuation);
+        plan.Pages.SelectMany(page => page.Fragments).Where(fragment => fragment.StartsNote)
+            .Should().ContainSingle(fragment => fragment.Label == "1");
+        string.Join(" ", plan.Pages.SelectMany(page => page.Fragments).Select(fragment => fragment.Text))
+            .Should().Be(string.Join(" ", Enumerable.Range(1, 80).Select(i => $"word{i}")));
+        plan.Pages[^1].Fragments[^1].EndsNote.Should().BeTrue();
+    }
+
+    [Fact]
     public void SharedReviewFactories_BuildF2ReviewContracts()
     {
         var tracked = FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument();

@@ -31,6 +31,45 @@ public sealed record DocumentNoteRegionPlan(
     public bool HasContent => Rows.Count > 0;
 }
 
+/// <summary>Whether a footnote fragment begins a region, continues an earlier page, or needs no rule.</summary>
+public enum DocumentFootnoteSeparatorKind
+{
+    None,
+    Initial,
+    Continuation
+}
+
+/// <summary>A page-bounded part of one logical footnote. Only its first fragment repeats the marker label.</summary>
+public sealed record DocumentFootnoteContinuationFragment(
+    int NoteId,
+    int SequenceIndex,
+    string? Label,
+    string Text,
+    bool StartsNote,
+    bool EndsNote,
+    double EstimatedHeightDip);
+
+/// <summary>Footnote fragments assigned to one physical page before the following body content is laid out.</summary>
+public sealed record DocumentFootnoteContinuationPagePlan(
+    int PageNumber,
+    DocumentFootnoteSeparatorKind SeparatorKind,
+    double AvailableHeightDip,
+    double EstimatedHeightDip,
+    IReadOnlyList<DocumentFootnoteContinuationFragment> Fragments)
+{
+    public bool HasContent => Fragments.Count > 0;
+}
+
+/// <summary>
+/// A fragment-aware footnote continuation plan. Hosts use this to insert continuation pages ahead of later
+/// body content rather than clipping a tall note or reserving its entire height on every page.
+/// </summary>
+public sealed record DocumentFootnoteContinuationPlan(
+    IReadOnlyList<DocumentFootnoteContinuationPagePlan> Pages)
+{
+    public bool HasContinuation => Pages.Count > 1;
+}
+
 public static class DocumentNoteRegionPlanner
 {
     public const double NoteTextFontSizePt = 9.0;
@@ -66,6 +105,94 @@ public static class DocumentNoteRegionPlanner
             LabelFontSizePt: NoteTextFontSizePt * LabelScale,
             EstimatedHeightDip: height,
             Rows: rows);
+    }
+
+    /// <summary>
+    /// Splits the supplied footnotes into physical-page fragments using the same width and line-height estimate
+    /// as the ordinary note region. The first page has its own available note band; following pages use the
+    /// continuation band. Text is split only at word boundaries and every source word appears in order.
+    /// </summary>
+    public static DocumentFootnoteContinuationPlan BuildFootnoteContinuation(
+        TextDocument document,
+        IReadOnlyList<int> footnoteIds,
+        int firstPageNumber,
+        double contentWidthDip,
+        double firstAvailableHeightDip,
+        double continuationAvailableHeightDip)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(footnoteIds);
+
+        var rows = BuildRows(document, footnoteIds, isFootnote: true, contentWidthDip);
+        if (rows.Count == 0)
+            return new DocumentFootnoteContinuationPlan([]);
+
+        var lineHeight = NoteTextFontSizePt * PxPerPoint * 1.25;
+        var charsPerLine = ApproximateCharsPerLine(contentWidthDip);
+        var states = rows.Select(row => new FootnoteFragmentState(
+            row,
+            row.Text.ReplaceLineEndings(" ").Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList())).ToList();
+        var pages = new List<DocumentFootnoteContinuationPagePlan>();
+        var stateIndex = 0;
+        var pageNumber = Math.Max(1, firstPageNumber);
+        var continuesPriorPage = false;
+
+        while (stateIndex < states.Count)
+        {
+            var available = Math.Max(lineHeight, pages.Count == 0
+                ? firstAvailableHeightDip
+                : continuationAvailableHeightDip);
+            var separator = pages.Count == 0
+                ? DocumentFootnoteSeparatorKind.Initial
+                : continuesPriorPage
+                    ? DocumentFootnoteSeparatorKind.Continuation
+                    : DocumentFootnoteSeparatorKind.None;
+            var remainingHeight = Math.Max(lineHeight, available - (separator == DocumentFootnoteSeparatorKind.None ? 0 : 8));
+            var fragments = new List<DocumentFootnoteContinuationFragment>();
+
+            while (stateIndex < states.Count && remainingHeight >= lineHeight)
+            {
+                var state = states[stateIndex];
+                var maxLines = Math.Max(1, (int)Math.Floor(remainingHeight / lineHeight));
+                var maxCharacters = Math.Max(1, maxLines * charsPerLine);
+                var wordCount = WordsThatFit(state.RemainingWords, maxCharacters);
+                var text = string.Join(" ", state.RemainingWords.Take(wordCount));
+                state.RemainingWords.RemoveRange(0, wordCount);
+
+                var estimatedLines = Math.Max(1, (int)Math.Ceiling(text.Length / (double)charsPerLine));
+                var estimatedHeight = Math.Ceiling(estimatedLines * lineHeight);
+                var endsNote = state.RemainingWords.Count == 0;
+                fragments.Add(new DocumentFootnoteContinuationFragment(
+                    state.Row.NoteId,
+                    state.Row.SequenceIndex,
+                    state.StartsNote ? state.Row.Label : null,
+                    text,
+                    state.StartsNote,
+                    endsNote,
+                    estimatedHeight));
+                state.StartsNote = false;
+                remainingHeight -= estimatedHeight;
+
+                if (endsNote)
+                    stateIndex++;
+                else
+                    break;
+            }
+
+            // The minimum one-line band above guarantees forward progress even for a single long word.
+            if (fragments.Count == 0)
+                break;
+
+            continuesPriorPage = !fragments[^1].EndsNote;
+            pages.Add(new DocumentFootnoteContinuationPagePlan(
+                pageNumber++,
+                separator,
+                available,
+                Math.Ceiling(available - remainingHeight),
+                fragments));
+        }
+
+        return new DocumentFootnoteContinuationPlan(pages);
     }
 
     public static DocumentNoteRegionPlan BuildEndnoteRegion(
@@ -187,11 +314,42 @@ public static class DocumentNoteRegionPlanner
     private static double EstimateRowHeight(string text, double contentWidthDip)
     {
         var fontHeight = NoteTextFontSizePt * PxPerPoint * 1.25;
-        var usableWidth = Math.Max(80, contentWidthDip - 20);
-        var approxCharsPerLine = Math.Max(12, (int)Math.Floor(usableWidth / 6.0));
+        var approxCharsPerLine = ApproximateCharsPerLine(contentWidthDip);
         var normalized = text.ReplaceLineEndings(" ");
         var lines = Math.Max(1, (int)Math.Ceiling(normalized.Length / (double)approxCharsPerLine));
         return Math.Ceiling(lines * fontHeight);
+    }
+
+    private static int ApproximateCharsPerLine(double contentWidthDip)
+    {
+        var usableWidth = Math.Max(80, contentWidthDip - 20);
+        return Math.Max(12, (int)Math.Floor(usableWidth / 6.0));
+    }
+
+    private static int WordsThatFit(IReadOnlyList<string> words, int maxCharacters)
+    {
+        if (words.Count == 0)
+            return 0;
+
+        var length = 0;
+        for (var i = 0; i < words.Count; i++)
+        {
+            var nextLength = length + (i == 0 ? 0 : 1) + words[i].Length;
+            if (i > 0 && nextLength > maxCharacters)
+                return i;
+            length = nextLength;
+            if (length >= maxCharacters)
+                return i + 1;
+        }
+
+        return words.Count;
+    }
+
+    private sealed class FootnoteFragmentState(DocumentNoteRegionRow row, List<string> remainingWords)
+    {
+        public DocumentNoteRegionRow Row { get; } = row;
+        public List<string> RemainingWords { get; } = remainingWords;
+        public bool StartsNote { get; set; } = true;
     }
 
     private static string ToRoman(int value, bool lower)
