@@ -1,4 +1,5 @@
 using FreeP.App.Compositor;
+using FreeP.Core.IO;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -1489,6 +1490,30 @@ public sealed class TableCellEditPlannerTests
         plan.Status.Should().Be(TableCellEditStartStatus.CellOutOfRange);
         plan.IsReady.Should().BeFalse();
         plan.EditPlanner.Should().BeNull();
+    }
+
+    [Fact]
+    public void TableGraphicFrameTransform_RoundTripsThroughPptxReaderAndWriter()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = MakeMergedTableShape();
+        shape.RotationDeg = 30;
+        shape.FlipH = true;
+        shape.FlipV = true;
+        slide.Shapes.Add(shape);
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var loaded = PptxPackageReader.Read(stream);
+        var roundTripped = loaded.Slides[0].Shapes.Single();
+
+        roundTripped.Kind.Should().Be(SlideShapeKind.Table);
+        roundTripped.RotationDeg.Should().BeApproximately(30, 0.001);
+        roundTripped.FlipH.Should().BeTrue();
+        roundTripped.FlipV.Should().BeTrue();
     }
 
     private static SlideShape MakeMergedTableShape()

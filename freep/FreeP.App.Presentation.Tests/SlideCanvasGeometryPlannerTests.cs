@@ -67,6 +67,74 @@ public sealed class SlideCanvasGeometryPlannerTests
     }
 
     [Fact]
+    public void PlanTableCellEditorPlacement_UsesTransformedTableFrameCenter()
+    {
+        var table = new ShapeBoundsDip(100, 50, 288, 96);
+        var cell = new CellRectDip(196, 50, 96, 48);
+        var view = new SlideTransformCore(2, 10, 20, 960, 540);
+
+        var placement = SlideCanvasGeometryPlanner.PlanTableCellEditorPlacement(
+            cell,
+            table,
+            view,
+            minimumWidth: 30,
+            minimumHeight: 18,
+            rotationDegrees: 30,
+            flipHorizontal: true,
+            flipVertical: false);
+
+        var tableCenter = view.SlideToScreen(244, 98);
+        var cellCenter = view.SlideToScreen(244, 74);
+        var expectedCenter = ShapeTransformPlanner.TransformPoint(
+            tableCenter.X,
+            tableCenter.Y,
+            cellCenter.X,
+            cellCenter.Y,
+            rotationDeg: 30,
+            flipH: true,
+            flipV: false);
+
+        placement.HasTransform.Should().BeTrue();
+        placement.RotationDegrees.Should().Be(30);
+        placement.FlipHorizontal.Should().BeTrue();
+        placement.FlipVertical.Should().BeFalse();
+        (placement.Left + placement.Width / 2).Should().BeApproximately(expectedCenter.X, 0.001);
+        (placement.Top + placement.Height / 2).Should().BeApproximately(expectedCenter.Y, 0.001);
+        placement.TransformOriginX.Should().Be(placement.Width / 2);
+        placement.TransformOriginY.Should().Be(placement.Height / 2);
+    }
+
+    [Fact]
+    public void TableCellHitTester_InvertsRotationAndFlipBeforeGridHitTest()
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = ToEmu(100),
+            OffsetYEmu = ToEmu(50),
+            ExtentCxEmu = ToEmu(288),
+            ExtentCyEmu = ToEmu(96),
+            RotationDeg = 30,
+            FlipH = true,
+            FlipV = true,
+            Table = MakeTable(),
+        };
+
+        var transformedCellCenter = ShapeTransformPlanner.TransformPoint(
+            centerX: 244,
+            centerY: 98,
+            pointX: 244,
+            pointY: 74,
+            rotationDeg: 30,
+            flipH: true,
+            flipV: true);
+
+        TableCellHitTester.HitTest(shape, transformedCellCenter.X, transformedCellCenter.Y)
+            .Should().Be((0, 1));
+    }
+
+    [Fact]
     public void PlanMove_AppliesGridSnapToPreviewAndCommitDelta()
     {
         var transform = new SlideTransformCore(2, 10, 20, 400, 300);
@@ -152,6 +220,8 @@ public sealed class SlideCanvasGeometryPlannerTests
         wpfTable.Should().Contain("TableCellEditPlanner.BeginEdit");
         wpfTable.Should().Contain("TableCellEditPlanner.PlanSelectedCell");
         wpfTable.Should().Contain("ApplyInitialSelection(_cellTextBox, editStart.InitialSelection)");
+        wpfTable.Should().Contain("ApplyPlacementTransform(_cellTextBox, placement)");
+        wpfTable.Should().Contain("ApplyPlacementTransform(_cellHighlight, placement)");
         wpfTable.Should().Contain("RichTextBox");
         wpfTable.Should().Contain("ExecuteCellFormattingCommand(EditingCommands.ToggleBold)");
         wpfTable.Should().Contain("ApplyWithPreservedSelection");
@@ -164,6 +234,9 @@ public sealed class SlideCanvasGeometryPlannerTests
         avaloniaTable.Should().Contain("TableCellEditPlanner.BeginEdit");
         avaloniaTable.Should().Contain("TableCellEditPlanner.PlanSelectedCell");
         avaloniaTable.Should().Contain("TableCellEditPlanner.PlanTextFormat");
+
+        avaloniaText.Should().Contain("ApplyPlacementTransform(_cellTextBox, placement)");
+        avaloniaText.Should().Contain("ApplyPlacementTransform(_cellHighlight, placement)");
 
         var wpfAdorner = ReadWorkspaceFile(
             "freep",
@@ -207,5 +280,19 @@ public sealed class SlideCanvasGeometryPlannerTests
         throw new FileNotFoundException(
             "Could not locate workspace file.",
             Path.Combine(relativeParts));
+    }
+
+    private static TableShape MakeTable()
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(ToEmu(96));
+        table.ColumnWidthsEmu.Add(ToEmu(96));
+        table.ColumnWidthsEmu.Add(ToEmu(96));
+        var row = new TableRow { HeightEmu = ToEmu(48) };
+        row.Cells.Add(new TableCell());
+        row.Cells.Add(new TableCell());
+        row.Cells.Add(new TableCell());
+        table.Rows.Add(row);
+        return table;
     }
 }

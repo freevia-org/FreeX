@@ -477,6 +477,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
 
         Canvas.SetLeft(_cellTextBox, placement.Left);
         Canvas.SetTop(_cellTextBox, placement.Top);
+        ApplyPlacementTransform(_cellTextBox, placement);
 
         _cellTextBox.InputBox.LostFocus += OnCellTextBoxLostFocus;
         _cellTextBox.InputBox.KeyDown += OnCellTextBoxKeyDown;
@@ -728,7 +729,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
     private void OnCellTextBoxLostFocus(object? sender, RoutedEventArgs e) => CommitCellEdit();
 
     private static void ApplyPlacementTransform(
-        AvaloniaRichTextEditor editor,
+        Control editor,
         InCanvasEditorPlacement placement)
     {
         if (!placement.HasTransform)
@@ -845,19 +846,25 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             return;
         }
 
-        var screenRect = SlideCanvasGeometryPlanner.DipBoundsToScreen(cellRect.Value, _canvas.CurrentTransform);
+        var placement = TableCellEditPlanner.PlanCellEditorPlacement(
+            shape,
+            cellRect.Value,
+            _canvas.CurrentTransform,
+            minimumWidth: 0,
+            minimumHeight: 0);
         _cellHighlight = new Border
         {
-            Width = Math.Max(1, screenRect.Width),
-            Height = Math.Max(1, screenRect.Height),
+            Width = Math.Max(1, placement.Width),
+            Height = Math.Max(1, placement.Height),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
             BorderThickness = new Thickness(2),
             Background = new SolidColorBrush(Color.FromArgb(0x18, 0x21, 0x96, 0xF3)),
             IsHitTestVisible = false,
         };
 
-        Canvas.SetLeft(_cellHighlight, screenRect.Left);
-        Canvas.SetTop(_cellHighlight, screenRect.Top);
+        Canvas.SetLeft(_cellHighlight, placement.Left);
+        Canvas.SetTop(_cellHighlight, placement.Top);
+        ApplyPlacementTransform(_cellHighlight, placement);
         _overlay.Children.Insert(0, _cellHighlight);
         UpdateOverlayState();
     }

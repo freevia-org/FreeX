@@ -5552,6 +5552,12 @@ public sealed class DocumentView : Control
         colOffsets[cols] = running;
 
         const double pad = 5;
+        // Word preserves the nominal table grid and treats tblCellSpacing as a gap around each
+        // physical cell surface. Keep row measurement and pagination on the nominal grid; only
+        // the painted cell and its content origin consume this surface reservation.
+        var cellSpacingInset = table.CellSpacingPt is > 0
+            ? table.CellSpacingPt.Value * PxPerPoint
+            : 0;
         var borders = table.Formatting.Borders || _showTableGridlines;
         var tableLayoutPlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(
             table,
@@ -5573,6 +5579,23 @@ public sealed class DocumentView : Control
             string.IsNullOrWhiteSpace(fillPlan.EffectiveFillHex)
                 ? null
                 : BrushFor(fillPlan.EffectiveFillHex);
+
+        Rect SurfaceRectFor(double x, double y, double width, double height, int startCol, int span, int rowIndex)
+        {
+            if (cellSpacingInset <= 0)
+                return new Rect(x, y, width, height);
+
+            var endCol = startCol + span;
+            var left = startCol == 0 ? 2 * cellSpacingInset : cellSpacingInset;
+            var right = endCol == cols ? 2 * cellSpacingInset : cellSpacingInset;
+            var top = rowIndex == 0 ? 2 * cellSpacingInset : cellSpacingInset;
+            var bottom = rowIndex == table.Rows.Count - 1 ? 2 * cellSpacingInset : cellSpacingInset;
+            return new Rect(
+                x + left,
+                y + top,
+                Math.Max(1, width - left - right),
+                Math.Max(1, height - top - bottom));
+        }
 
         (double Before, double After) CellParagraphSpacing(Paragraph paragraph)
         {
@@ -5724,7 +5747,7 @@ public sealed class DocumentView : Control
                 for (var s = 0; s < span; s++)
                     cellWidth += colWidths[startCol + s];
                 var cellX = rowColLeft + colOffsets[startCol];
-                var rect = new Rect(cellX, rowPageSpaceY, cellWidth, rowHeight);
+                var rect = SurfaceRectFor(cellX, rowPageSpaceY, cellWidth, rowHeight, startCol, span, r);
                 var fill = EffectiveFillBrush(EffectiveFillFor(r, cellIndex));
                 var cellBorderPlan = TableCellBorderVisualPlanner.Build(cellModel.Borders, PxPerPoint);
                 _rects.Add((rect, fill, borders, cellBorderPlan.HasVisibleEdges ? cellBorderPlan : null));
@@ -5771,7 +5794,7 @@ public sealed class DocumentView : Control
                         Math.Max(0.0, cellAvailableHeight - contentHeight),
                     _ => 0.0  // Top (default)
                 };
-                var contentTopY = rowPageSpaceY + pad + vAlignOffset;
+                var contentTopY = rect.Top + pad + vAlignOffset;
 
                 var ty = contentTopY;
                 // BE2+BE1: iterate paragraphs independently — each paragraph's wrapped lines render
@@ -5790,12 +5813,12 @@ public sealed class DocumentView : Control
                     {
                         // Markers are visual chrome, so they reserve the first-line leading space but
                         // are not added to editable table-cell character offsets.
-                        _markers.Add((cellX + pad, ty, preservedMarker.Text, fmt));
+                        _markers.Add((rect.Left + pad, ty, preservedMarker.Text, fmt));
                     }
 
                     foreach (var (lineHeight, chars) in paraLines)
                     {
-                        var tx = cellX + pad + markerInset;
+                        var tx = rect.Left + pad + markerInset;
                         foreach (var (ch, w) in chars)
                         {
                             _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, fmt, ch,
@@ -5812,7 +5835,7 @@ public sealed class DocumentView : Control
 
                     // BE1: sentinel at end of this paragraph (at the end of its last visual line).
                     (double Height, List<(char Ch, double W)> Chars)? lastParaLine = paraLines.Count > 0 ? paraLines[^1] : null;
-                    var sentinelX = cellX + pad + (lastParaLine.HasValue ? lastParaLine.Value.Chars.Sum(c => c.W) : 0);
+                    var sentinelX = rect.Left + pad + (lastParaLine.HasValue ? lastParaLine.Value.Chars.Sum(c => c.W) : 0);
                     var sentinelY = lastParaLine.HasValue
                         ? ty - paragraphSpacing.After - lastParaLine.Value.Height
                         : contentTopY;

@@ -457,6 +457,25 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("ForEach-Object { $_ -split ',' }");
     }
 
+    [Fact]
+    public void WordPdfExporter_ProbesWordReadinessAndEmitsLifecycleStages()
+    {
+        var source = File.ReadAllText(RepositoryFile(
+            "freew-fidelity-corpus",
+            "tools",
+            "Export-WordPdf.ps1"));
+
+        source.Should().Contain("[ValidateRange(1, 120)][int]$ReadyTimeoutSeconds = 30");
+        source.Should().Contain("function Wait-WordReady");
+        source.Should().Contain("$Application.Documents.Count");
+        source.Should().Contain("$Application.BackgroundSavingStatus");
+        source.Should().Contain("$Application.BackgroundPrintingStatus");
+        source.Should().Contain("Wait-WordReady $word $ReadyTimeoutSeconds");
+        source.Should().Contain("[WordPdf] opening:");
+        source.Should().Contain("[WordPdf] exporting:");
+        source.Should().Contain("Word did not become ready within $TimeoutSeconds seconds.");
+    }
+
     private static string RepositoryFile(params string[] parts)
     {
         var directory = AppContext.BaseDirectory;

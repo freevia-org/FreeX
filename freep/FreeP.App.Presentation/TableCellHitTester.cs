@@ -28,12 +28,24 @@ public static class TableCellHitTester
         var table = tableShape.Table;
         var frameX = tableShape.OffsetXEmu / EmuPerDip;
         var frameY = tableShape.OffsetYEmu / EmuPerDip;
+        var frameWidth = tableShape.ExtentCxEmu / EmuPerDip;
+        var frameHeight = tableShape.ExtentCyEmu / EmuPerDip;
+        var frameCenterX = frameX + frameWidth / 2.0;
+        var frameCenterY = frameY + frameHeight / 2.0;
+        var localPoint = ShapeTransformPlanner.InverseTransformPoint(
+            frameCenterX,
+            frameCenterY,
+            slidePtX,
+            slidePtY,
+            tableShape.RotationDeg,
+            tableShape.FlipH,
+            tableShape.FlipV);
         var hit = TableGridGeometryPlanner.HitTest(
             BuildGeometry(table),
             frameX,
             frameY,
-            slidePtX,
-            slidePtY);
+            localPoint.X,
+            localPoint.Y);
 
         return hit is { } cell
             ? (cell.Row, cell.Col)

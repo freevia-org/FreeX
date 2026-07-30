@@ -53,6 +53,43 @@ public sealed class SlideShowControllerTests
         return slide;
     }
 
+    [Fact]
+    public void ParagraphBuildPlanner_CreatesTextOnlyParagraphOverlays()
+    {
+        var slide = new Slide
+        {
+            AnimationBuildListXml =
+                "<p:bldLst xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">" +
+                "<p:bldP spid=\"7\" grpId=\"0\" build=\"p\" /></p:bldLst>"
+        };
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Name = "Paragraphs",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x44, 0x72, 0xC4))),
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph { Runs = { new Run { Text = "First" } } },
+                    new Paragraph { Runs = { new Run { Text = "Second" } } },
+                }
+            }
+        };
+
+        SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, shape.Id).Should().BeTrue();
+        var overlays = SlideShowAnimationBuildPlanner.CreateParagraphShapes(shape);
+        overlays.Should().HaveCount(2);
+        overlays[0].TextBody!.Paragraphs.Should().ContainSingle();
+        overlays[0].PlainText.Should().Be("First");
+        overlays[1].PlainText.Should().Be("Second");
+        overlays[0].Fill.Should().BeNull();
+        overlays[0].Outline.Should().BeNull();
+        overlays[0].Effects.Should().BeNull();
+    }
+
     // ── BuildSteps: grouping rules ────────────────────────────────────────────────
 
     [Fact]

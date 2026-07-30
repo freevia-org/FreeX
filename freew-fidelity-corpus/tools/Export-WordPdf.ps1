@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory = $true)][string]$InputPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
     [switch]$ReuseRunningWord,
-    [switch]$HiddenWord
+    [switch]$HiddenWord,
+    [ValidateRange(1, 120)][int]$ReadyTimeoutSeconds = 30
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,6 +13,38 @@ $document = $null
 $ownsWord = $false
 $originalDisplayAlerts = $null
 $originalAutomationSecurity = $null
+
+function Wait-WordReady([object]$Application, [int]$TimeoutSeconds) {
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    $lastFailure = $null
+
+    do {
+        try {
+            $name = [string]$Application.Name
+            $version = [string]$Application.Version
+            $documents = [int]$Application.Documents.Count
+            $saving = [int]$Application.BackgroundSavingStatus
+            $printing = [int]$Application.BackgroundPrintingStatus
+            if (-not [string]::IsNullOrWhiteSpace($name) -and
+                -not [string]::IsNullOrWhiteSpace($version) -and
+                $saving -eq 0 -and $printing -eq 0) {
+                Write-Host "[WordPdf] ready: $name $version; documents=$documents"
+                return
+            }
+
+            $lastFailure = "Word reported background save=$saving, print=$printing."
+        }
+        catch {
+            $lastFailure = $_.Exception.Message
+        }
+
+        Start-Sleep -Milliseconds 250
+    }
+    while ([DateTime]::UtcNow -lt $deadline)
+
+    $detail = if ($lastFailure) { " Last observation: $lastFailure" } else { '' }
+    throw "Word did not become ready within $TimeoutSeconds seconds.$detail"
+}
 
 try {
     if ($ReuseRunningWord) {
@@ -25,10 +58,15 @@ try {
         $ownsWord = $true
     }
 
+    Wait-WordReady $word $ReadyTimeoutSeconds
     $word.DisplayAlerts = 0
     $word.AutomationSecurity = 3 # msoAutomationSecurityForceDisable
+    Write-Host "[WordPdf] opening: $InputPath"
     $document = $word.Documents.Open([IO.Path]::GetFullPath($InputPath), $false, $true)
+    Wait-WordReady $word $ReadyTimeoutSeconds
+    Write-Host "[WordPdf] exporting: $OutputPath"
     $document.ExportAsFixedFormat([IO.Path]::GetFullPath($OutputPath), 17) # wdExportFormatPDF
+    Write-Host "[WordPdf] exported: $OutputPath"
 }
 finally {
     if ($null -ne $document) {

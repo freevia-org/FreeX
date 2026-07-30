@@ -1025,7 +1025,10 @@ public static class PptxPackageReader
         // Animations (main sequence only)
         var timingEl = xml.Root.Element(P + "timing");
         if (timingEl is not null)
+        {
             ReadAnimations(timingEl, slide);
+            slide.AnimationBuildListXml = timingEl.Element(P + "bldLst")?.ToString(SaveOptions.DisableFormatting);
+        }
 
         // Speaker notes — follow notesSlide relationship if present
         var notesTarget = OpcRelationships.FirstTargetByType(slideRels, NotesSlideRelType);
@@ -1383,6 +1386,9 @@ public static class PptxPackageReader
                 OffsetYEmu = offY,
                 ExtentCxEmu = extCx,
                 ExtentCyEmu = extCy,
+                RotationDeg = ParseLong(xfrmEl?.Attribute("rot")?.Value) / 60000.0,
+                FlipH = xfrmEl?.Attribute("flipH")?.Value is "1" or "true",
+                FlipV = xfrmEl?.Attribute("flipV")?.Value is "1" or "true",
                 Hyperlink = ResolveHlinkClick(cNvPr?.Element(A + "hlinkClick"), slideRels, allSlides, slideDir, slidePartPathToId),
                 Table = tableShape
             };

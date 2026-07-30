@@ -126,6 +126,7 @@ public sealed class InCanvasTableCellEditor
 
         Canvas.SetLeft(_cellTextBox, placement.Left);
         Canvas.SetTop (_cellTextBox, placement.Top);
+        ApplyPlacementTransform(_cellTextBox, placement);
 
         _cellTextBox.LostFocus    += (_, _) => CommitCellEdit();
         _cellTextBox.KeyDown      += OnCellTextBoxKeyDown;
@@ -567,22 +568,57 @@ public sealed class InCanvasTableCellEditor
         var cellRect = TableCellHitTester.GetCellRect(shape, cellState.Row.Value, cellState.Col.Value);
         if (cellRect is null) return;
 
-        var xf = _canvas.CurrentTransform;
-        var screenRect = SlideCanvasGeometryPlanner.DipBoundsToScreen(cellRect.Value, xf.Core);
+        var placement = TableCellEditPlanner.PlanCellEditorPlacement(
+            shape,
+            cellRect.Value,
+            _canvas.CurrentTransform.Core,
+            minimumWidth: 0,
+            minimumHeight: 0);
 
         _cellHighlight = new Rectangle
         {
-            Width           = Math.Max(1, screenRect.Width),
-            Height          = Math.Max(1, screenRect.Height),
+            Width           = Math.Max(1, placement.Width),
+            Height          = Math.Max(1, placement.Height),
             Stroke          = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
             StrokeThickness = 2.0,
             Fill            = new SolidColorBrush(Color.FromArgb(0x18, 0x21, 0x96, 0xF3)),
             IsHitTestVisible = false,
         };
 
-        Canvas.SetLeft(_cellHighlight, screenRect.Left);
-        Canvas.SetTop (_cellHighlight, screenRect.Top);
+        Canvas.SetLeft(_cellHighlight, placement.Left);
+        Canvas.SetTop (_cellHighlight, placement.Top);
+        ApplyPlacementTransform(_cellHighlight, placement);
         _overlay.Children.Add(_cellHighlight);
+    }
+
+    private static void ApplyPlacementTransform(
+        FrameworkElement editor,
+        InCanvasEditorPlacement placement)
+    {
+        if (!placement.HasTransform)
+            return;
+
+        double originX = placement.EffectiveTransformOriginX;
+        double originY = placement.EffectiveTransformOriginY;
+        var transform = new TransformGroup();
+        if (placement.FlipHorizontal || placement.FlipVertical)
+        {
+            transform.Children.Add(new ScaleTransform(
+                placement.FlipHorizontal ? -1 : 1,
+                placement.FlipVertical ? -1 : 1,
+                originX,
+                originY));
+        }
+
+        if (Math.Abs(placement.RotationDegrees) > 0.0001)
+        {
+            transform.Children.Add(new RotateTransform(
+                placement.RotationDegrees,
+                originX,
+                originY));
+        }
+
+        editor.RenderTransform = transform;
     }
 
 }

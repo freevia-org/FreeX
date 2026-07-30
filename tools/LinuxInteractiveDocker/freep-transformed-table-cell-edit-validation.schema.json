@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "freep.transformed-table-cell-edit.x11.v1",
+  "type": "object",
+  "required": ["schemaVersion", "suite", "platform", "shell", "app", "fixture", "package", "results", "summary"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "suite": { "const": "freep-linux-transformed-table-cell-edit-physical" },
+    "platform": { "const": "linux" },
+    "shell": { "const": "avalonia" },
+    "app": { "const": "FreeP" },
+    "fixture": {
+      "type": "object",
+      "required": ["file", "shapeId", "name", "bounds", "rotation", "flipH", "flipV", "text"]
+    },
+    "package": {
+      "type": "object",
+      "required": ["savedText", "bounds", "rotation", "flipH", "flipV"]
+    },
+    "results": { "type": "array", "minItems": 5 },
+    "summary": {
+      "type": "object",
+      "required": ["passed", "failed", "total"]
+    }
+  }
+}
