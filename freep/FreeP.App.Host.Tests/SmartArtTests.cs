@@ -51,6 +51,7 @@ public sealed class SmartArtTests : IDisposable
         bool pictureStack = false,
         bool pictureLineup = false,
         bool pictureStrips = false,
+        bool horizontalPictureList = false,
         bool verticalPictureList = false,
         bool continuousPictureList = false,
         bool pictureGrid = false,
@@ -87,7 +88,7 @@ public sealed class SmartArtTests : IDisposable
         {
             var text = nodeTexts[nodeIndex];
             int idx = shapeIdx++;
-            if ((pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || verticalPictureList || continuousPictureList || pictureGrid)
+            if ((pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || horizontalPictureList || verticalPictureList || continuousPictureList || pictureGrid)
                 && includeNodeImage
                 && (pictureNodeIndexes is null || pictureNodeIndexes.Contains(nodeIndex)))
             {
@@ -139,7 +140,7 @@ public sealed class SmartArtTests : IDisposable
                 new XElement(dspNs + "spTree", fallbackEls)));
 
         // Build minimal diagram data XML (just a root element)
-        var dataXml = pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || verticalPictureList || continuousPictureList || pictureGrid
+        var dataXml = pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || horizontalPictureList || verticalPictureList || continuousPictureList || pictureGrid
             ? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
                 new XElement(dgmNs + "dataModel",
                     new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
@@ -160,13 +161,15 @@ public sealed class SmartArtTests : IDisposable
         var layoutXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(dgmNs + "layoutDef",
                 new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
-                pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || verticalPictureList || continuousPictureList || pictureGrid
+                pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || horizontalPictureList || verticalPictureList || continuousPictureList || pictureGrid
                     ? new XAttribute("uniqueId", pictureGrid
                         ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid"
                         : continuousPictureList
                             ? "urn:microsoft.com/office/officeart/2005/8/layout/continuousPictureList"
                         : pictureStrips
                             ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureStrips"
+                        : horizontalPictureList
+                            ? "urn:microsoft.com/office/officeart/2005/8/layout/horizontalPictureList"
                         : verticalPictureList
                             ? "urn:microsoft.com/office/officeart/2005/8/layout/verticalPictureList"
                         : pictureLineup
@@ -1013,6 +1016,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.PictureStack, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureLineup, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureStrips, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.HorizontalPictureList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalPictureList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.ContinuousPictureList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureGrid, SmartArtFamily.List)]
@@ -1029,10 +1033,11 @@ public sealed class SmartArtTests : IDisposable
             pictureStack: preset == SmartArtLayoutPreset.PictureStack,
             pictureLineup: preset == SmartArtLayoutPreset.PictureLineup,
             pictureStrips: preset == SmartArtLayoutPreset.PictureStrips,
+            horizontalPictureList: preset == SmartArtLayoutPreset.HorizontalPictureList,
             verticalPictureList: preset == SmartArtLayoutPreset.VerticalPictureList,
             continuousPictureList: preset == SmartArtLayoutPreset.ContinuousPictureList,
             pictureGrid: preset == SmartArtLayoutPreset.PictureGrid,
-            includeNodeImage: preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid or SmartArtLayoutPreset.VerticalPictureList));
+            includeNodeImage: preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.HorizontalPictureList or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid or SmartArtLayoutPreset.VerticalPictureList));
         var savedPath = Path.Combine(_tempDir, $"smartart-layout-{preset}.pptx");
         var presentation = PptxPackageReader.Read(sourcePath);
         var smartArt = presentation.Slides[0].Shapes
