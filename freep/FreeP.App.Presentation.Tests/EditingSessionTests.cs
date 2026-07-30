@@ -1154,6 +1154,33 @@ public sealed class EditingSessionTests
         group.Children.Select(shape => shape.Id).Should().Equal(second.Id, first.Id);
         sess.SendBackward();
         group.Children.Select(shape => shape.Id).Should().Equal(first.Id, second.Id);
+
+    }
+
+    [Fact]
+    public void GroupedChildTextFormatting_UsesSharedUndoableRoutes()
+    {
+        var session = Make();
+        var group = new SlideShape { Id = 20, Name = "Group", Kind = SlideShapeKind.Group };
+        var child = MakeShape(21);
+        var run = new Run { Text = "grouped", Bold = false };
+        child.TextBody = new TextBody
+        {
+            Paragraphs = { new Paragraph { Runs = { run } } },
+        };
+        group.Children.Add(child);
+        session.CurrentSlide!.Shapes.Add(group);
+        session.Select(child.Id);
+
+        session.ToggleBoldOnSelection();
+        session.SetFontOnSelection("Arial");
+        session.SetFontSizeOnSelection(18);
+        session.SetTextAutoFitOnSelection(TextAutoFitKind.Shape).Should().Be(1);
+
+        run.Bold.Should().BeTrue();
+        run.FontFamily.Should().Be("Arial");
+        run.FontSizePt.Should().Be(18);
+        child.TextBody.AutoFitKind.Should().Be(TextAutoFitKind.Shape);
     }
 
     [Fact]
