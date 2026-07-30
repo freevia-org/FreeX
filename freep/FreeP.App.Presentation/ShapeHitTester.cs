@@ -16,6 +16,59 @@ namespace FreeP.App.Compositor;
 public static class ShapeHitTester
 {
     /// <summary>
+    /// Returns the child-index path for a shape id. The first index addresses the slide's
+    /// top-level shape list; subsequent indexes address group children.
+    /// </summary>
+    public static IReadOnlyList<int>? FindShapePath(Slide slide, uint shapeId)
+    {
+        ArgumentNullException.ThrowIfNull(slide);
+        var path = new List<int>();
+        return TryFindShapePath(slide.Shapes, shapeId, path) ? path.ToArray() : null;
+    }
+
+    /// <summary>Resolves a previously captured slide/group child path.</summary>
+    public static SlideShape? ResolveShapePath(Slide slide, IReadOnlyList<int> path)
+    {
+        ArgumentNullException.ThrowIfNull(slide);
+        ArgumentNullException.ThrowIfNull(path);
+        if (path.Count == 0)
+            return null;
+
+        IReadOnlyList<SlideShape> shapes = slide.Shapes;
+        SlideShape? current = null;
+        foreach (var index in path)
+        {
+            if (index < 0 || index >= shapes.Count)
+                return null;
+
+            current = shapes[index];
+            shapes = current.Children;
+        }
+
+        return current;
+    }
+
+    /// <summary>Finds a shape and its shared slide/group child path in one traversal.</summary>
+    public static bool TryFindShape(
+        Slide slide,
+        uint shapeId,
+        out SlideShape? shape,
+        out IReadOnlyList<int>? path)
+    {
+        ArgumentNullException.ThrowIfNull(slide);
+        var indexes = new List<int>();
+        if (TryFindShape(slide.Shapes, shapeId, indexes, out shape))
+        {
+            path = indexes.ToArray();
+            return true;
+        }
+
+        path = null;
+        shape = null;
+        return false;
+    }
+
+    /// <summary>
     /// Returns the id of the topmost shape whose axis-aligned bounding box contains
     /// <paramref name="slidePtX"/>,<paramref name="slidePtY"/> (slide DIP coords), or null if none.
     /// Z-order: the last shape in the list is topmost (painter order = back-to-front).
@@ -49,7 +102,7 @@ public static class ShapeHitTester
     public static SlideShape? FindShape(Slide slide, uint shapeId)
     {
         ArgumentNullException.ThrowIfNull(slide);
-        return FindShape(slide.Shapes, shapeId);
+        return TryFindShape(slide, shapeId, out var shape, out _) ? shape : null;
     }
 
     /// <summary>
@@ -140,6 +193,48 @@ public static class ShapeHitTester
         }
 
         return null;
+    }
+
+    private static bool TryFindShapePath(
+        IReadOnlyList<SlideShape> shapes,
+        uint shapeId,
+        List<int> path)
+    {
+        for (var index = 0; index < shapes.Count; index++)
+        {
+            path.Add(index);
+            if (shapes[index].Id == shapeId || TryFindShapePath(shapes[index].Children, shapeId, path))
+                return true;
+            path.RemoveAt(path.Count - 1);
+        }
+
+        return false;
+    }
+
+    private static bool TryFindShape(
+        IReadOnlyList<SlideShape> shapes,
+        uint shapeId,
+        List<int> path,
+        out SlideShape? shape)
+    {
+        for (var index = 0; index < shapes.Count; index++)
+        {
+            var candidate = shapes[index];
+            path.Add(index);
+            if (candidate.Id == shapeId)
+            {
+                shape = candidate;
+                return true;
+            }
+
+            if (TryFindShape(candidate.Children, shapeId, path, out shape))
+                return true;
+
+            path.RemoveAt(path.Count - 1);
+        }
+
+        shape = null;
+        return false;
     }
 
 }

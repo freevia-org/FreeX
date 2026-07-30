@@ -17,6 +17,7 @@ param(
     [string]$PublishDir = "",
     [switch]$SkipPublish,
     [switch]$SkipImageBuild,
+    [switch]$GroupedChild,
     [switch]$Replace,
     [switch]$KeepContainer
 )
@@ -25,6 +26,18 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetFullPath($OutputDir) } else { [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir)) }
 $fixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx"
+$surface = "in-canvas-rich-text-soft-break"
+$scope = "physical FreeP rich-editor soft-break evidence lane"
+if ($GroupedChild) {
+    $fixturePath = Join-Path $resolvedOutputRoot "fixtures/21-comments-notes-grouped-child.pptx"
+    $surface = "in-canvas-grouped-child-rich-text"
+    $scope = "physical FreeP grouped-child rich-editor edit-save-reopen lane"
+    $generator = Join-Path $repoRoot "tools/FreeP.RenderCompare/Generate-GroupedTextFixture.ps1"
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $generator `
+        -Source (Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx") `
+        -Destination $fixturePath
+    if ($LASTEXITCODE -ne 0) { throw "Grouped-child fixture generation failed with exit code $LASTEXITCODE." }
+}
 $fixtureFileName = Split-Path -Leaf $fixturePath
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freep-rich-text-shortcut-probe.sh"
@@ -63,10 +76,9 @@ function Assert-ManifestContract {
     if ($schema.'$schema' -notmatch "json-schema.org") { throw "Manifest contract reference is not a JSON Schema document." }
     $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
     if ($manifest.contractValidation.status -ne "pending") { throw "Probe must leave contractValidation pending until the runner passes strict validation." }
-    $scope = "physical FreeP rich-editor soft-break evidence lane"
     if ($manifest.schemaVersion -ne 1 -or $manifest.suite -ne "freep-linux-rich-text-shortcut-physical" -or
         $manifest.platform -ne "linux" -or $manifest.shell -ne "avalonia" -or $manifest.app -ne "FreeP" -or
-        $manifest.baseline -ne $false -or $manifest.appSurface -ne "in-canvas-rich-text-soft-break" -or
+        $manifest.baseline -ne $false -or $manifest.appSurface -ne $surface -or
         $manifest.coverage.exhaustive -ne $false -or $manifest.coverage.scope -ne $scope -or
         $manifest.window.pattern -ne $fixtureFileName -or $manifest.window.visible -ne $true -or
         ([string]$manifest.window.title).IndexOf($fixtureFileName, [StringComparison]::Ordinal) -lt 0 -or
@@ -121,7 +133,7 @@ try {
     $probeLog = Join-Path $evidenceDirectory "probe.log"; New-Item -ItemType File -Path $probeLog -Force | Out-Null
     $sourceBefore = Join-Path $evidenceDirectory "fixture-source-before.sha256.txt"; $sourceAfter = Join-Path $evidenceDirectory "fixture-source-after.sha256.txt"
     (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath $sourceBefore -Encoding ascii
-    $dockerArguments = @("exec", "--env", "FREEP_DOCUMENT_PATH=/documents/$fixtureFileName", "--env", "FREEP_EXPECTED_DOCUMENT_NAME=$fixtureFileName", "--env", "FREEP_EXPECTED_WINDOW_PATTERN=FreeP", "--env", "FREEP_SCREEN_WIDTH=$Width", "--env", "FREEP_SCREEN_HEIGHT=$Height", "--env", "FREEP_SCREEN_DPI=$Dpi", [string]$session.containerName, "bash", "/work/freep-rich-text-shortcut-probe.sh", "/work/freep-rich-text-shortcut-validation")
+    $dockerArguments = @("exec", "--env", "FREEP_DOCUMENT_PATH=/documents/$fixtureFileName", "--env", "FREEP_EXPECTED_DOCUMENT_NAME=$fixtureFileName", "--env", "FREEP_EXPECTED_WINDOW_PATTERN=FreeP", "--env", "FREEP_APP_SURFACE=$surface", "--env", "FREEP_COVERAGE_SCOPE=$scope", "--env", "FREEP_SCREEN_WIDTH=$Width", "--env", "FREEP_SCREEN_HEIGHT=$Height", "--env", "FREEP_SCREEN_DPI=$Dpi", [string]$session.containerName, "bash", "/work/freep-rich-text-shortcut-probe.sh", "/work/freep-rich-text-shortcut-validation")
     Push-Location $repoRoot; try { $probeOutput = @(& docker @dockerArguments 2>&1); $probeExitCode = $LASTEXITCODE } finally { Pop-Location }
     if ($probeOutput.Count -gt 0) { $probeOutput | Set-Content -LiteralPath $probeLog -Encoding utf8 } else { "docker exec produced no stdout/stderr; inspect the manifest and runtime evidence." | Set-Content -LiteralPath $probeLog -Encoding utf8 }
     (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath $sourceAfter -Encoding ascii
@@ -133,7 +145,7 @@ try {
         $failureScreenshotName = $null; $initialScreenshotPath = Join-Path $sessionDirectory "screenshots/initial.png"
         if (Test-Path -LiteralPath $initialScreenshotPath -PathType Leaf) { $failureScreenshotName = "probe-runner-failure.png"; Copy-Item -LiteralPath $initialScreenshotPath -Destination (Join-Path $evidenceDirectory $failureScreenshotName) -Force }
         $failureScreenshots = if ($null -eq $failureScreenshotName) { @() } else { @([ordered]@{ name = $failureScreenshotName; kind = "screenshot" }) }
-        [ordered]@{ schemaVersion = 1; suite = "freep-linux-rich-text-shortcut-physical"; platform = "linux"; shell = "avalonia"; app = "FreeP"; baseline = $false; appSurface = "in-canvas-rich-text-soft-break"; window = [ordered]@{ id = if ([string]::IsNullOrWhiteSpace([string]$ready.windowId)) { "unknown-owner" } else { [string]$ready.windowId }; title = if ([string]::IsNullOrWhiteSpace([string]$ready.windowTitle)) { "FreeP $fixtureFileName" } else { [string]$ready.windowTitle }; pattern = $fixtureFileName; visible = $true }; parameters = [ordered]@{ width = $Width; height = $Height; dpi = $Dpi; fixture = $fixtureFileName }; coverage = [ordered]@{ scope = "physical FreeP rich-editor soft-break evidence lane"; exhaustive = $false; familyContract = "tools/Run-FamilyLinuxInteractionValidation.ps1 keeps its exact FreeP family contract." }; contractValidation = [ordered]@{ status = "pending"; validator = "tools/Run-FreePRichTextShortcutValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freep-rich-text-shortcut-validation.schema.json" }; screenshots = $failureScreenshots; summary = [ordered]@{ passed = 0; failed = 5; total = 5 }; results = $failureResults } | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+        [ordered]@{ schemaVersion = 1; suite = "freep-linux-rich-text-shortcut-physical"; platform = "linux"; shell = "avalonia"; app = "FreeP"; baseline = $false; appSurface = $surface; window = [ordered]@{ id = if ([string]::IsNullOrWhiteSpace([string]$ready.windowId)) { "unknown-owner" } else { [string]$ready.windowId }; title = if ([string]::IsNullOrWhiteSpace([string]$ready.windowTitle)) { "FreeP $fixtureFileName" } else { [string]$ready.windowTitle }; pattern = $fixtureFileName; visible = $true }; parameters = [ordered]@{ width = $Width; height = $Height; dpi = $Dpi; fixture = $fixtureFileName }; coverage = [ordered]@{ scope = $scope; exhaustive = $false; familyContract = "tools/Run-FamilyLinuxInteractionValidation.ps1 keeps its exact FreeP family contract." }; contractValidation = [ordered]@{ status = "pending"; validator = "tools/Run-FreePRichTextShortcutValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freep-rich-text-shortcut-validation.schema.json" }; screenshots = $failureScreenshots; summary = [ordered]@{ passed = 0; failed = 5; total = 5 }; results = $failureResults } | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $manifestPath -Encoding utf8
         Write-Warning "Probe did not write a manifest; deterministic failure manifest created at $manifestPath"
     } else {
         $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json

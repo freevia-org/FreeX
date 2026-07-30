@@ -412,7 +412,7 @@ public sealed class InCanvasTextEditor : IDisposable
         if (!hitId.HasValue)
             return;
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == hitId.Value);
+        var shape = ShapeHitTester.FindShape(slide, hitId.Value);
         if (shape?.TextBody is null)
             return;
 

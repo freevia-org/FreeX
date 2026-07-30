@@ -186,6 +186,8 @@ output="${1:-/work/freep-rich-text-shortcut-validation}"
 document_path="${FREEP_DOCUMENT_PATH:-}"
 expected_document_name="${FREEP_EXPECTED_DOCUMENT_NAME:-$(basename "${document_path:-presentation.pptx}")}"
 window_pattern="${FREEP_EXPECTED_WINDOW_PATTERN:-FreeP}"
+app_surface="${FREEP_APP_SURFACE:-in-canvas-rich-text-soft-break}"
+coverage_scope="${FREEP_COVERAGE_SCOPE:-physical FreeP rich-editor soft-break evidence lane}"
 input_delay_ms="${FREEP_X11_INPUT_DELAY_MS:-160}"
 settle_seconds="${FREEP_X11_SETTLE_SECONDS:-0.45}"
 pointer_timeout_seconds="${FREEP_X11_POINTER_TIMEOUT_SECONDS:-3}"
@@ -330,6 +332,11 @@ import os
 import sys
 
 records_path, screenshots_path, manifest_path, owner_id, owner_title, fixture, exit_code = sys.argv[1:]
+app_surface = os.environ.get("FREEP_APP_SURFACE", "in-canvas-rich-text-soft-break")
+coverage_scope = os.environ.get(
+    "FREEP_COVERAGE_SCOPE",
+    "physical FreeP rich-editor soft-break evidence lane",
+)
 ids = [
     "visible-window-discovery",
     "rich-editor-physical-soft-break-input",
@@ -371,7 +378,7 @@ manifest = {
     "shell": "avalonia",
     "app": "FreeP",
     "baseline": False,
-    "appSurface": "in-canvas-rich-text-soft-break",
+    "appSurface": app_surface,
     "window": {
         "id": owner_id,
         "title": owner_title,
@@ -385,7 +392,7 @@ manifest = {
         "fixture": fixture,
     },
     "coverage": {
-        "scope": "physical FreeP rich-editor soft-break evidence lane",
+        "scope": coverage_scope,
         "exhaustive": False,
     },
     "contractValidation": {

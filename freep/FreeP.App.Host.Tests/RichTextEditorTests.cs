@@ -712,6 +712,49 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void InCanvasTextEditor_NestedChild_UsesSharedPathPlacementAndCommitCancel()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var child = new SlideShape
+        {
+            Id = 11,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 1828800,
+            ExtentCyEmu = 914400,
+            RotationDeg = 22,
+            FlipV = true,
+            TextBody = MakeTwoRunBody(),
+        };
+        var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        group.Children.Add(child);
+        slide.Shapes.Add(group);
+
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var canvas = new SlideCanvas { Presentation = presentation, Slide = slide };
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+
+        canvas.TextEditor!.Activate(child.Id);
+        canvas.TextEditor.IsActive.Should().BeTrue();
+        var box = overlay.Children.OfType<System.Windows.Controls.RichTextBox>().Single();
+        box.RenderTransform.Should().BeOfType<TransformGroup>();
+        box.Selection.Text = "Nested edited";
+        canvas.TextEditor.Commit();
+        InCanvasTextEditPlanner.ExtractPlainText(child.TextBody).Should().Be("Nested edited");
+
+        editor.Undo();
+        InCanvasTextEditPlanner.ExtractPlainText(child.TextBody).Should().Be("Hello world");
+
+        canvas.TextEditor.Activate(child.Id);
+        overlay.Children.OfType<System.Windows.Controls.RichTextBox>().Single().Selection.Text = "Discarded";
+        canvas.TextEditor.Cancel();
+        InCanvasTextEditPlanner.ExtractPlainText(child.TextBody).Should().Be("Hello world");
+    }
+
+    [StaFact]
     public void InCanvasTextEditor_ActiveShapeSuppression_FollowsEditorLifecycle()
     {
         var p = Presentation.CreateEmpty();

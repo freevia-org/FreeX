@@ -130,7 +130,7 @@ public sealed class InCanvasTextEditPlanner
         if (slide is null)
             return NotReady(InCanvasTextEditStartStatus.MissingSlide, shapeId, kind);
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
+        var shape = ShapeHitTester.FindShape(slide, shapeId);
         if (shape is null)
             return NotReady(InCanvasTextEditStartStatus.ShapeNotFound, shapeId, kind);
         if (shape.TextBody is null)
@@ -313,7 +313,7 @@ public sealed class InCanvasTextEditPlanner
         if (slide is null)
             return (InCanvasShapeTextFormatStatus.MissingSlide, null);
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
+        var shape = ShapeHitTester.FindShape(slide, shapeId);
         if (shape is null)
             return (InCanvasShapeTextFormatStatus.ShapeNotFound, null);
         if (shape.TextBody is null)
@@ -951,7 +951,7 @@ public sealed class SetShapeTextBodyCommand : IPresentationCommand
         if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
             return null;
 
-        return presentation.Slides[_slideIndex].Shapes.FirstOrDefault(s => s.Id == _shapeId);
+        return ShapeHitTester.FindShape(presentation.Slides[_slideIndex], _shapeId);
     }
 }
 

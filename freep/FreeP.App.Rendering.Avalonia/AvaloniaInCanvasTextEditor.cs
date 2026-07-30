@@ -656,7 +656,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             return;
         }
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == hitId.Value);
+        var shape = ShapeHitTester.FindShape(slide, hitId.Value);
         if (shape?.TextBody is null)
         {
             CommitCellEdit();
@@ -682,7 +682,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             return false;
         }
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == hitId.Value);
+        var shape = ShapeHitTester.FindShape(slide, hitId.Value);
         if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
             return false;
 
@@ -832,7 +832,9 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             return;
         }
 
-        var shape = _editor.CurrentSlide?.Shapes.FirstOrDefault(s => s.Id == state.ShapeId.Value);
+        var shape = _editor.CurrentSlide is { } currentSlide
+            ? ShapeHitTester.FindShape(currentSlide, state.ShapeId.Value)
+            : null;
         if (shape?.Kind != SlideShapeKind.Table)
         {
             UpdateOverlayState();

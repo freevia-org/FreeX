@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://freex.local/schemas/freep-linux-rich-text-shortcut-physical-v1.json",
   "title": "FreeP Linux physical rich-text soft-break evidence",
-  "description": "Strict host contract for the dedicated non-exhaustive physical X11 rich-text soft-break lane.",
+  "description": "Strict host contract for the dedicated non-exhaustive physical X11 rich-text lane, including the grouped-child variant.",
   "type": "object",
   "additionalProperties": true,
   "required": ["schemaVersion", "suite", "platform", "shell", "app", "baseline", "appSurface", "window", "parameters", "coverage", "contractValidation", "screenshots", "summary", "results"],
@@ -13,7 +13,7 @@
     "shell": { "const": "avalonia" },
     "app": { "const": "FreeP" },
     "baseline": { "const": false },
-    "appSurface": { "const": "in-canvas-rich-text-soft-break" },
+    "appSurface": { "enum": ["in-canvas-rich-text-soft-break", "in-canvas-grouped-child-rich-text"] },
     "window": {
       "type": "object",
       "additionalProperties": true,
@@ -30,7 +30,7 @@
       "additionalProperties": true,
       "required": ["scope", "exhaustive"],
       "properties": {
-        "scope": { "const": "physical FreeP rich-editor soft-break evidence lane" },
+        "scope": { "enum": ["physical FreeP rich-editor soft-break evidence lane", "physical FreeP grouped-child rich-editor edit-save-reopen lane"] },
         "exhaustive": { "const": false }
       }
     },

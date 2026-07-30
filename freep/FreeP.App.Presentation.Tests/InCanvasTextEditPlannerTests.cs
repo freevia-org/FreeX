@@ -5,6 +5,77 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class InCanvasTextEditPlannerTests
 {
     [Fact]
+    public void NestedShapeTextEdit_ResolvesPath_PlacesWithChildTransform_AndUndoRestores()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var child = new SlideShape
+        {
+            Id = 3,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 1828800,
+            ExtentCyEmu = 914400,
+            RotationDeg = 22,
+            FlipV = true,
+            TextBody = MakeBody("Nested original"),
+        };
+        var nestedGroup = new SlideShape { Id = 2, Kind = SlideShapeKind.Group };
+        nestedGroup.Children.Add(child);
+        var outerGroup = new SlideShape { Id = 1, Kind = SlideShapeKind.Group };
+        outerGroup.Children.Add(nestedGroup);
+        slide.Shapes.Add(outerGroup);
+
+        ShapeHitTester.FindShapePath(slide, child.Id).Should().Equal(0, 0, 0);
+        ShapeHitTester.ResolveShapePath(slide, [0, 0, 0]).Should().BeSameAs(child);
+
+        var plan = InCanvasTextEditPlanner.BeginShapeEdit(
+            0,
+            presentation,
+            slide,
+            child.Id,
+            new SlideTransformCore(2, 10, 20, 960, 540),
+            minimumWidth: 40,
+            minimumHeight: 20,
+            InCanvasTextEditKind.RichText);
+
+        plan.IsReady.Should().BeTrue();
+        plan.Placement!.Value.RotationDegrees.Should().Be(22);
+        plan.Placement.Value.FlipVertical.Should().BeTrue();
+        plan.Placement.Value.Left.Should().Be(202);
+        plan.Placement.Value.Top.Should().Be(116);
+
+        var decision = plan.EditPlanner!.CommitRichText(MakeBody("Nested edited"));
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(decision.Command!);
+        child.TextBody.Should().NotBeNull();
+        InCanvasTextEditPlanner.ExtractPlainText(child.TextBody).Should().Be("Nested edited");
+
+        bus.Undo();
+        InCanvasTextEditPlanner.ExtractPlainText(child.TextBody).Should().Be("Nested original");
+    }
+
+    [Fact]
+    public void NestedShapeTextEdit_CancelDoesNotChangeDescendant()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var child = new SlideShape { Id = 2, TextBody = MakeBody("Keep me") };
+        var group = new SlideShape { Id = 1, Kind = SlideShapeKind.Group };
+        group.Children.Add(child);
+        slide.Shapes.Add(group);
+
+        var plan = InCanvasTextEditPlanner.BeginShapeEdit(
+            0, presentation, slide, child.Id, SlideTransformCore.Identity,
+            40, 20, InCanvasTextEditKind.RichText);
+
+        plan.EditPlanner!.Cancel().Outcome.Should().Be(InCanvasTextEditOutcome.Canceled);
+        InCanvasTextEditPlanner.ExtractPlainText(child.TextBody).Should().Be("Keep me");
+    }
+
+    [Fact]
     public void BeginShapeEdit_RichText_ReturnsPlacementSnapshotAndPlanner()
     {
         var presentation = Presentation.CreateEmpty();

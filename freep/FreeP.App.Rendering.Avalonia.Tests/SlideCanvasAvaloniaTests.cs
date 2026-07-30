@@ -436,6 +436,59 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task InCanvasTextEditor_NestedChild_UsesSharedPathPlacementAndCommitCancel()
+    {
+        Presentation? presentation = null;
+        EditingSession? editor = null;
+        SlideShape? child = null;
+
+        await Run(() =>
+        {
+            presentation = MakePresentation(presence =>
+            {
+                presence.Slides[0].Shapes.Clear();
+                child = new SlideShape
+                {
+                    Id = 11,
+                    OffsetXEmu = 914400,
+                    OffsetYEmu = 457200,
+                    ExtentCxEmu = 1828800,
+                    ExtentCyEmu = 914400,
+                    RotationDeg = 22,
+                    FlipV = true,
+                    TextBody = MakeTextBody("Nested original"),
+                };
+                var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+                group.Children.Add(child);
+                presence.Slides[0].Shapes.Add(group);
+            });
+
+            editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.Activate(child!.Id);
+            textEditor.IsActive.Should().BeTrue();
+            var richEditor = RichEditor(overlay);
+            richEditor.RenderTransform.Should().BeOfType<MatrixTransform>();
+            richEditor.InputBox.Text = "Nested edited";
+            textEditor.Commit();
+            InCanvasTextEditPlanner.ExtractPlainText(child.TextBody).Should().Be("Nested edited");
+
+            editor.Undo();
+            InCanvasTextEditPlanner.ExtractPlainText(child.TextBody).Should().Be("Nested original");
+
+            textEditor.Activate(child.Id);
+            RichEditor(overlay).InputBox.Text = "Discarded";
+            textEditor.Cancel();
+        });
+
+        InCanvasTextEditPlanner.ExtractPlainText(child!.TextBody).Should().Be("Nested original");
+        editor!.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task InCanvasTextEditor_ActiveShapeSuppression_FollowsEditorLifecycle()
     {
         await Run(() =>

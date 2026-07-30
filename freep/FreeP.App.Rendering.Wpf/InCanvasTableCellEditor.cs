@@ -197,7 +197,7 @@ public sealed class InCanvasTableCellEditor
         uint? hitId = ShapeHitTester.HitTest(slide, _editor.Presentation, slidePt.X, slidePt.Y);
         if (!hitId.HasValue) { CommitCellEdit(); return; }
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == hitId.Value);
+        var shape = ShapeHitTester.FindShape(slide, hitId.Value);
         if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
         {
             // Clicked a non-table — commit any open cell edit.
@@ -236,7 +236,7 @@ public sealed class InCanvasTableCellEditor
         uint? hitId = ShapeHitTester.HitTest(slide, _editor.Presentation, slidePt.X, slidePt.Y);
         if (!hitId.HasValue) return;
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == hitId.Value);
+        var shape = ShapeHitTester.FindShape(slide, hitId.Value);
         if (shape?.Kind != SlideShapeKind.Table || shape.Table is null) return;
 
         // Set active cell at right-click position.
