@@ -260,6 +260,16 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_AppliesExplicitParagraphSpacingInsideTableCells()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("(double Before, double After) CellParagraphSpacing(Paragraph paragraph)");
+        source.Should().Contain("formatting.SpaceAfterIsSet ? Math.Max(0, formatting.SpaceAfterPt) * PxPerPoint : 0");
+        source.Should().Contain("ty += paragraphSpacing.After;");
+    }
+
+    [Fact]
     public void AvaloniaDocumentView_UsesWordArtFillAsFieldAndContrastingText()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
