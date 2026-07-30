@@ -4277,7 +4277,9 @@ public sealed partial class MainWindow : Window
         _sheetTabsHost.Content = BuildSheetTabs();
         UpdateSheetTabNavigationVisibility();
         if (!_cellAddressBoxHasPendingEdit)
-            _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
+            _cellAddressText.Text =
+                ResolveSelectedDrawingObjectNameBoxText() ??
+                FormatCellReference(_session.ActiveCell);
         _isApplyingFormulaBoxText = true;
         try
         {
@@ -5778,6 +5780,23 @@ public sealed partial class MainWindow : Window
     private bool IsSelectedDrawingObject(DrawingObjectBounds drawingObject) =>
         _selectedDrawingObjectKind == drawingObject.Kind &&
         _selectedDrawingObjectId == drawingObject.Id;
+
+    private string? ResolveSelectedDrawingObjectNameBoxText()
+    {
+        if (_selectedDrawingObjectKind is not { } selectedKind ||
+            _selectedDrawingObjectId is not { } selectedId)
+        {
+            return null;
+        }
+
+        return NameBoxDropdownPlanner
+            .Build(_session.Workbook, _session.ActiveSheet.Id)
+            .FirstOrDefault(item =>
+                item.Kind == NameBoxNavigationItemKind.Object &&
+                item.ObjectKind == selectedKind &&
+                item.ObjectId == selectedId)
+            ?.Name;
+    }
 
     private void ClearSelectedDrawingObject()
     {

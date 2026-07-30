@@ -412,6 +412,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
                 window.SelectedDrawingObjectKindForTest.Should().Be(expected.Item2);
                 window.SelectedDrawingObjectIdForTest.Should().Be(expected.Item3);
                 window.Session.ActiveSheet.Id.Should().Be(second.Id);
+                window.CellAddressBoxTextForTest.Should().Be(expected.Item1,
+                    "the WPF Name Box keeps the selected drawing object's name instead of its anchor cell");
             }
 
             window.Close();
