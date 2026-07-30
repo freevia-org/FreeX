@@ -123,6 +123,7 @@ public enum SmartArtLayoutPreset
     PictureStack,
     PictureLineup,
     PictureStrips,
+    HorizontalPictureList,
     ContinuousPictureList,
     LabeledHierarchy,
     TableHierarchy,
@@ -263,6 +264,7 @@ public static class SmartArtAuthoringPlanner
     public const string PictureStackLayoutCommandId = "freep.smartart.layout.picture-stack";
     public const string PictureLineupLayoutCommandId = "freep.smartart.layout.picture-lineup";
     public const string PictureStripsLayoutCommandId = "freep.smartart.layout.picture-strips";
+    public const string HorizontalPictureListLayoutCommandId = "freep.smartart.layout.horizontal-picture-list";
     public const string ContinuousPictureListLayoutCommandId = "freep.smartart.layout.continuous-picture-list";
     public const string LabeledHierarchyLayoutCommandId = "freep.smartart.layout.labeled-hierarchy";
     public const string TableHierarchyLayoutCommandId = "freep.smartart.layout.table-hierarchy";
@@ -465,6 +467,7 @@ public static class SmartArtAuthoringPlanner
             SmartArtLayoutPreset.PictureStack or
             SmartArtLayoutPreset.PictureLineup or
             SmartArtLayoutPreset.PictureStrips or
+            SmartArtLayoutPreset.HorizontalPictureList or
             SmartArtLayoutPreset.ContinuousPictureList or
             SmartArtLayoutPreset.PictureGrid or
             SmartArtLayoutPreset.VerticalPictureList);
@@ -617,6 +620,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/pictureLineup", SmartArtFamily.List),
             SmartArtLayoutPreset.PictureStrips =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/pictureStrips", SmartArtFamily.List),
+            SmartArtLayoutPreset.HorizontalPictureList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalPictureList", SmartArtFamily.List),
             SmartArtLayoutPreset.ContinuousPictureList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/continuousPictureList", SmartArtFamily.List),
             SmartArtLayoutPreset.LabeledHierarchy =>
