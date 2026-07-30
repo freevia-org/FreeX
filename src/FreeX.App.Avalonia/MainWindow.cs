@@ -7597,6 +7597,7 @@ public sealed partial class MainWindow : Window
         _selectionMoveSourceRange = null;
         _selectionMovePreviewRange = null;
         RevertNameBoxAfterCellSelectionDragEnd();
+        RecordNameBoxDropdownPhysicalEvidence(item: null, stage: "neutral-cell-selected");
 
         // In Draw Border mode the drag-release triggers the border apply (mirrors WPF MouseUp behaviour).
         if (_borderDrawModeActive)
@@ -12778,7 +12779,6 @@ public sealed partial class MainWindow : Window
         ClearSelectionExtensionState();
         ClearSelectedDrawingObject();
         _session.SelectCell(address);
-        RecordNameBoxDropdownPhysicalEvidence(item: null, stage: "neutral-cell-selected");
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
         ApplyFormatPainterAfterTargetSelection();

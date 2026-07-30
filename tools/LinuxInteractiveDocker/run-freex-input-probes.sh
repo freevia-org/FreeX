@@ -412,7 +412,7 @@ payload = json.loads(lines[-1])
 def value(key):
     item = payload.get(key)
     return "" if item is None else str(item)
-print("\t".join(value(key) for key in (
+print("\x1f".join(value(key) for key in (
     "sequence", "stage", "itemName", "itemKind", "itemObjectKind",
     "selectedObjectKind", "selectedObjectId", "nameBoxText", "activeCell")))
 PY
@@ -452,7 +452,7 @@ probe_name_box_object() {
     fi
     capture "$before_file"
     baseline_event="$(read_name_box_event "$probe_output/name-box-dropdown-object-state.jsonl" || true)"
-    IFS=$'\t' read -r baseline_sequence baseline_stage _ _ _ baseline_selected_kind baseline_selected_id baseline_name_box baseline_cell <<< "$baseline_event"
+    IFS=$'\x1f' read -r baseline_sequence baseline_stage _ _ _ baseline_selected_kind baseline_selected_id baseline_name_box baseline_cell <<< "$baseline_event"
     [[ "$baseline_sequence" =~ ^[0-9]+$ ]] || baseline_sequence=0
     if [[ "$baseline_stage" != "neutral-cell-selected" ||
           -n "$baseline_selected_kind" ||
@@ -485,7 +485,7 @@ probe_name_box_object() {
 
         for _ in $(seq 1 12); do
             event="$(read_name_box_event "$probe_output/name-box-dropdown-object-state.jsonl" || true)"
-            IFS=$'\t' read -r observed_sequence observed_stage observed_name observed_item_kind observed_object_kind observed_selected_kind observed_id observed_name_box observed_cell <<< "$event"
+            IFS=$'\x1f' read -r observed_sequence observed_stage observed_name observed_item_kind observed_object_kind observed_selected_kind observed_id observed_name_box observed_cell <<< "$event"
             [[ "$observed_sequence" =~ ^[0-9]+$ ]] || observed_sequence=0
             if (( observed_sequence > baseline_sequence )); then
                 break

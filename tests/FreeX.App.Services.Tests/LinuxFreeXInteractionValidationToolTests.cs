@@ -75,4 +75,41 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         script.Should().Contain(
             "    stream.write(\"\\n\")\nPY\n}\n\nread_name_box_event() {");
     }
+
+    [Fact]
+    public void NameBoxObjectEventsPreserveEmptyFieldsAndCaptureTheSettledPointerSelection()
+    {
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+        var window = File.ReadAllText(RepositoryFileLocator.Find(
+                "src", "FreeX.App.Avalonia", "MainWindow.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        probe.Should().Contain("print(\"\\x1f\".join(value(key)");
+        probe.Should().Contain("IFS=$'\\x1f' read -r baseline_sequence");
+        probe.Should().Contain("IFS=$'\\x1f' read -r observed_sequence");
+
+        var releaseStart = window.IndexOf(
+            "private async Task EndCellSelectionDragAsync",
+            StringComparison.Ordinal);
+        var releaseEnd = window.IndexOf(
+            "private bool TryResolveCellPointerAddress",
+            releaseStart,
+            StringComparison.Ordinal);
+        releaseStart.Should().BeGreaterThanOrEqualTo(0);
+        releaseEnd.Should().BeGreaterThan(releaseStart);
+        window[releaseStart..releaseEnd].Should().Contain(
+            "RevertNameBoxAfterCellSelectionDragEnd();\n" +
+            "        RecordNameBoxDropdownPhysicalEvidence(item: null, stage: \"neutral-cell-selected\");");
+
+        var selectCellStart = window.IndexOf(
+            "private void SelectCell(CellAddress address)",
+            StringComparison.Ordinal);
+        var selectCellEnd = window.IndexOf(
+            "private void SelectRange(CellAddress address)",
+            selectCellStart,
+            StringComparison.Ordinal);
+        window[selectCellStart..selectCellEnd].Should().NotContain(
+            "RecordNameBoxDropdownPhysicalEvidence");
+    }
 }
