@@ -353,6 +353,8 @@ internal static class FreePRibbonText
     public static RibbonText ArrangeBringForwardCommand { get; } = new("Ribbon_Command_ArrangeBringForward_Label", "Ribbon_Command_ArrangeBringForward_KeyTip");
     public static RibbonText ArrangeSendBackwardCommand { get; } = new("Ribbon_Command_ArrangeSendBackward_Label", "Ribbon_Command_ArrangeSendBackward_KeyTip");
     public static RibbonText ArrangeSendToBackCommand { get; } = new("Ribbon_Command_ArrangeSendToBack_Label", "Ribbon_Command_ArrangeSendToBack_KeyTip");
+    public static RibbonText ArrangeFlipHorizontalCommand { get; } = new("Ribbon_Command_ArrangeFlipHorizontal_Label", "Ribbon_Command_ArrangeFlipHorizontal_KeyTip");
+    public static RibbonText ArrangeFlipVerticalCommand { get; } = new("Ribbon_Command_ArrangeFlipVertical_Label", "Ribbon_Command_ArrangeFlipVertical_KeyTip");
     public static RibbonText ArrangeAlignLeftCommand { get; } = new("Ribbon_Command_ArrangeAlignLeft_Label", "Ribbon_Command_ArrangeAlignLeft_KeyTip");
     public static RibbonText ArrangeAlignCenterHorizontalCommand { get; } = new("Ribbon_Command_ArrangeAlignCenterHorizontal_Label", "Ribbon_Command_ArrangeAlignCenterHorizontal_KeyTip");
     public static RibbonText ArrangeAlignRightCommand { get; } = new("Ribbon_Command_ArrangeAlignRight_Label", "Ribbon_Command_ArrangeAlignRight_KeyTip");

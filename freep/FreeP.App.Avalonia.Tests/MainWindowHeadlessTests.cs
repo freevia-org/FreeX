@@ -6741,6 +6741,8 @@ public sealed class MainWindowHeadlessTests
     [InlineData("freep.arrange.bring-forward")]
     [InlineData("freep.arrange.send-backward")]
     [InlineData("freep.arrange.send-to-back")]
+    [InlineData("freep.arrange.flip-horizontal")]
+    [InlineData("freep.arrange.flip-vertical")]
     [InlineData("freep.arrange.align-left")]
     [InlineData("freep.arrange.align-center-h")]
     [InlineData("freep.arrange.align-right")]

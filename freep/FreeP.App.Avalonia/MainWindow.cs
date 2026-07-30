@@ -151,6 +151,8 @@ public sealed partial class MainWindow : Window
         ("freep.arrange.bring-forward", static editor => editor.BringForward()),
         ("freep.arrange.send-backward", static editor => editor.SendBackward()),
         ("freep.arrange.send-to-back", static editor => editor.SendToBack()),
+        ("freep.arrange.flip-horizontal", static editor => editor.FlipSelectedHorizontal()),
+        ("freep.arrange.flip-vertical", static editor => editor.FlipSelectedVertical()),
         ("freep.arrange.align-left", static editor => editor.AlignLeft()),
         ("freep.arrange.align-center-h", static editor => editor.AlignCenterH()),
         ("freep.arrange.align-right", static editor => editor.AlignRight()),

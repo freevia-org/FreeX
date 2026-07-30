@@ -1126,6 +1126,18 @@
   <data name="Ribbon_Command_ArrangeSendToBack_KeyTip" xml:space="preserve">
     <value>B</value>
   </data>
+  <data name="Ribbon_Command_ArrangeFlipHorizontal_Label" xml:space="preserve">
+    <value>Flip Horizontal</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeFlipHorizontal_KeyTip" xml:space="preserve">
+    <value>H</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeFlipVertical_Label" xml:space="preserve">
+    <value>Flip Vertical</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeFlipVertical_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
   <data name="Ribbon_Command_ArrangeAlignLeft_Label" xml:space="preserve">
     <value>Align Left</value>
   </data>

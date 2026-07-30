@@ -814,6 +814,12 @@ internal static class FreePRibbonCommands
         registry.Register("freep.arrange.send-to-back",
             new ActionRibbonCommand(() => editor.SendToBack()));
 
+        registry.Register("freep.arrange.flip-horizontal",
+            new ActionRibbonCommand(() => editor.FlipSelectedHorizontal()));
+
+        registry.Register("freep.arrange.flip-vertical",
+            new ActionRibbonCommand(() => editor.FlipSelectedVertical()));
+
         registry.Register("freep.arrange.align-left",
             new ActionRibbonCommand(() => editor.AlignLeft()));
 

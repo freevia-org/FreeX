@@ -313,6 +313,10 @@ public static class FreePRibbon
             RibbonCommandIconKind.ArrowDown, FreePRibbonText.ArrangeSendBackwardCommand.KeyTip);
         group.Medium("freep.arrange.send-to-back", FreePRibbonText.ArrangeSendToBackCommand.Label,
             RibbonCommandIconKind.ArrowDown, FreePRibbonText.ArrangeSendToBackCommand.KeyTip);
+        group.Medium("freep.arrange.flip-horizontal", FreePRibbonText.ArrangeFlipHorizontalCommand.Label,
+            RibbonCommandIconKind.ArrowLeftRight, FreePRibbonText.ArrangeFlipHorizontalCommand.KeyTip);
+        group.Medium("freep.arrange.flip-vertical", FreePRibbonText.ArrangeFlipVerticalCommand.Label,
+            RibbonCommandIconKind.Align, FreePRibbonText.ArrangeFlipVerticalCommand.KeyTip);
         group.Separator();
         group.Medium("freep.arrange.align-left", FreePRibbonText.ArrangeAlignLeftCommand.Label,
             RibbonCommandIconKind.AlignLeft, FreePRibbonText.ArrangeAlignLeftCommand.KeyTip);
