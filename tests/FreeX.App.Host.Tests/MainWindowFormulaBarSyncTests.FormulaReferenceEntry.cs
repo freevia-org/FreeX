@@ -471,7 +471,8 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
             harness.SetFormulaEditCell(10, 7);
             harness.FocusFormulaBar();
-            harness.SetFormulaBarText("=SUM(");
+            harness.SetFormulaBarText("=");
+            harness.SetFormulaBarText("=SUM()");
             harness.SetFormulaBarCaretIndex("=SUM(".Length);
             harness.SelectWholeColumn(2);
 
@@ -485,7 +486,8 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
             harness.SetFormulaEditCell(11, 7);
             harness.FocusFormulaBar();
-            harness.SetFormulaBarText("=SUM(");
+            harness.SetFormulaBarText("=");
+            harness.SetFormulaBarText("=SUM()");
             harness.SetFormulaBarCaretIndex("=SUM(".Length);
             harness.SelectWholeRow(3);
 
