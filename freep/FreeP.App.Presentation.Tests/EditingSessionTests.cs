@@ -150,6 +150,41 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void GroupedChildPictureAndGeometryEdits_RouteThroughUndoableSession()
+    {
+        var session = Make();
+        var group = new SlideShape { Id = 10, Name = "Group", Kind = SlideShapeKind.Group };
+        var custom = MakeShape(11);
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 0, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 100, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 50, Y: 100));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        custom.CustomGeometry.Add(path);
+        var picture = new SlideShape
+        {
+            Id = 12,
+            Name = "Grouped Picture",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { Bytes = [1, 2, 3], ContentType = "image/png" },
+        };
+        group.Children.Add(custom);
+        group.Children.Add(picture);
+        session.CurrentSlide!.Shapes.Add(group);
+
+        session.TryInsertCustomGeometryPoint(11, "custom:0:1").Should().BeTrue();
+        session.TryDeleteCustomGeometryPoint(11, "custom:0:2").Should().BeTrue();
+        session.SetPictureCrop(12, new PictureCropValues(0.1, 0.2, 0.1, 0.05)).Should().BeTrue();
+        session.SetPictureColorEffects(12, PictureColorEffectAuthoringPlanner.Grayscale()).Should().BeTrue();
+
+        picture.PictureFormat.Should().NotBeNull();
+        picture.PictureFormat!.CropLeft.Should().Be(0.1);
+        picture.PictureFormat.CropTop.Should().Be(0.2);
+        picture.PictureFormat.Grayscale.Should().BeTrue();
+        session.Bus.CanUndo.Should().BeTrue();
+    }
+
+    [Fact]
     public void ApplySmartArtLayout_RefreshesNativeDataAndDrawingCacheThroughSharedSession()
     {
         var (session, _) = MakeSmartArtSession();

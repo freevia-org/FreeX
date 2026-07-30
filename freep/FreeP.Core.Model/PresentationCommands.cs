@@ -669,7 +669,21 @@ file static class ShapeHelper
     internal static SlideShape? Find(Presentation p, int slideIndex, uint shapeId)
     {
         if (slideIndex < 0 || slideIndex >= p.Slides.Count) return null;
-        return p.Slides[slideIndex].Shapes.FirstOrDefault(s => s.Id == shapeId);
+        return Find(p.Slides[slideIndex].Shapes, shapeId);
+    }
+
+    private static SlideShape? Find(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+
+            if (shape.Children.Count > 0 && Find(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
     }
 
     internal static List<SlideShape>? Shapes(Presentation p, int slideIndex)
