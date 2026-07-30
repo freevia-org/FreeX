@@ -262,17 +262,25 @@ public static class DocumentNoteRegionPlanner
     {
         var rows = new List<DocumentNoteRegionRow>();
         var options = isFootnote ? document.FootnoteNumbering : document.EndnoteNumbering;
-        var sequence = Math.Max(1, options.StartAt);
+        IEnumerable<int> documentIds = isFootnote ? document.Footnotes.Keys : document.Endnotes.Keys;
+        var orderedDocumentIds = documentIds
+            .OrderBy(id => id)
+            .ToList();
+        var sequenceById = orderedDocumentIds
+            .Select((id, index) => (id, sequence: Math.Max(1, options.StartAt) + index))
+            .ToDictionary(pair => pair.id, pair => pair.sequence);
 
         foreach (var id in ids)
         {
             var text = ResolvePlainText(document, id, isFootnote);
             if (string.IsNullOrWhiteSpace(text))
             {
-                sequence++;
                 continue;
             }
 
+            var sequence = sequenceById.TryGetValue(id, out var resolvedSequence)
+                ? resolvedSequence
+                : Math.Max(1, options.StartAt);
             var label = ComputeDisplayNumber(sequence, options);
             rows.Add(new DocumentNoteRegionRow(
                 id,
@@ -280,7 +288,6 @@ public static class DocumentNoteRegionPlanner
                 label,
                 text,
                 EstimateRowHeight(text, contentWidthDip)));
-            sequence++;
         }
 
         return rows;

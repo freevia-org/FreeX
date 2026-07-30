@@ -159,6 +159,11 @@ public sealed class DocumentView : Control
     // Populated by BuildFootnoteItems after a first-pass body layout; ReserveContentY uses it to shrink
     // the effective text area on that page so body text reflows above the footnote band.
     private readonly Dictionary<int, double> _footnoteBandHeightByPage = new();
+    // Long footnotes may continue on inserted physical pages. Keys are logical body-page indices;
+    // the map is deliberately kept separate from _pageCount because body layout still advances in
+    // logical page slots while its rendered coordinates use the physical page map.
+    private readonly Dictionary<int, DocumentFootnoteContinuationPlan> _footnoteContinuationByBodyPage = new();
+    private int _bodyPageCount;
     // FO4: inline (non-floating) charts, WordArt, SmartArt — rendered in the text flow like inline images.
     private readonly List<FloatingChartData>    _inlineCharts    = new();
     private readonly List<FloatingWordArtData>  _inlineWordArts  = new();
@@ -3423,6 +3428,8 @@ public sealed class DocumentView : Control
         _noteSeparators.Clear();      // AV-NOTERENDER
         _endnoteExtentDip = 0;        // AV-NOTERENDER
         _footnoteBandHeightByPage.Clear(); // DB1/DB2
+        _footnoteContinuationByBodyPage.Clear();
+        _bodyPageCount = 0;
         _tabLeaderSpans.Clear(); // AV-TAB
 
         _surfacePlan = DocumentViewLayoutPlanner.BuildSurfacePlan(
@@ -3505,12 +3512,13 @@ public sealed class DocumentView : Control
             var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
             var totalSlots = lastSlot + 1;
             _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
+            _bodyPageCount = _pageCount;
             _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
 
             // DB1: measure true footnote band heights (needs first-pass placed positions to resolve pages).
             if (_doc.Footnotes.Count > 0)
             {
-                ComputeFootnoteBandHeights();
+                ComputeFootnoteContinuationPlans();
 
                 // DB1 second pass: re-flow the body with per-page footnote reservations active.
                 // ReserveContentY now consults _footnoteBandHeightByPage to shrink each page's
@@ -3541,7 +3549,8 @@ public sealed class DocumentView : Control
                 // Recompute page count from the second pass.
                 lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
                 totalSlots = lastSlot + 1;
-                _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
+                _bodyPageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
+                _pageCount = _bodyPageCount + _footnoteContinuationByBodyPage.Sum(pair => Math.Max(0, pair.Value.Pages.Count - 1));
                 _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
             }
         }
@@ -3549,6 +3558,7 @@ public sealed class DocumentView : Control
         {
             // Web/Draft: single continuous column — total height is just the content plus margins.
             _pageCount = 1;
+            _bodyPageCount = 1;
             _contentHeight = _layoutContentY + _marginBottomDip;
         }
 
@@ -4364,9 +4374,10 @@ public sealed class DocumentView : Control
         var lineH = Math.Max(1, Build("Ag", noteFmt).Height);
 
         // Emit the number marker first (superscript), then the text flows after it on the same line.
-        var numText = number + " ";
+        var numText = string.IsNullOrEmpty(number) ? string.Empty : number + " ";
         var numWidth = BuildForLayout(numText, numFmt).WidthIncludingTrailingWhitespace;
-        _noteItems.Add(new NoteRenderItem { Text = numText, Fmt = numFmt, X = x, Y = y });
+        if (!string.IsNullOrEmpty(numText))
+            _noteItems.Add(new NoteRenderItem { Text = numText, Fmt = numFmt, X = x, Y = y });
 
         var textLeft = x + numWidth;
         var lineLeft = textLeft;
@@ -4408,14 +4419,14 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// DB1 first-pass helper: populates <see cref="_footnoteBandHeightByPage"/> with the TRUE height
-    /// of each page's footnote band (separator + all notes' true wrapped heights), without emitting any
-    /// render items. Called before the second body-layout pass so <see cref="ReserveContentY"/> can use
-    /// per-page reservations to shrink the effective body text area on each page that has footnotes.
+    /// Plans the first page of a footnote in its reference page band and moves only the remaining
+    /// fragments onto inserted physical pages. This avoids the old global-height reservation, which could
+    /// leave every following body page with only one line of usable content.
     /// </summary>
-    private void ComputeFootnoteBandHeights()
+    private void ComputeFootnoteContinuationPlans()
     {
         _footnoteBandHeightByPage.Clear();
+        _footnoteContinuationByBodyPage.Clear();
         if (_doc.Footnotes.Count == 0) return;
 
         // Group footnote ids by the page hosting their reference (using first-pass placed positions).
@@ -4428,29 +4439,30 @@ public sealed class DocumentView : Control
             list.Add(id);
         }
 
-        // Compute display sequence numbers respecting StartAt and sort order.
-        var opts = _doc.FootnoteNumbering;
-        var seqBase = Math.Max(1, opts.StartAt);
-
         foreach (var (pg, ids) in byPage)
         {
-            var totalHeight = FootnoteSeparatorHeight + FootnoteTopPadding;
-            var seq = seqBase;
-            for (var index = 0; index < ids.Count; index++)
-            {
-                var id = ids[index];
-                var note = _doc.Footnotes[id];
-                var displayNum = ComputeNoteDisplayNumber(seq, opts);
-                seq++;
-                var content = note.Content.Count > 0
-                    ? note.Content
-                    : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
-                totalHeight += MeasureNoteContentHeight(displayNum, content, _contentLeft, _contentWidth);
-                totalHeight += index == ids.Count - 1
-                    ? FootnoteTrailingPadding
-                    : FootnoteInterNoteSpacing;
-            }
-            _footnoteBandHeightByPage[pg] = totalHeight;
+            // A reference page gives a note a substantial, bounded portion of its text area. Word then
+            // carries the remainder into continuation pages before it resumes later body content.
+            var firstBand = Math.Max(
+                Build("Ag", RunFormatting.Default with { FontSizePt = NoteFontSizePt }).Height,
+                _layoutTextAreaHeight * 0.35);
+            var continuationBand = Math.Max(firstBand, _layoutTextAreaHeight - FootnoteTopPadding);
+            var plan = DocumentNoteRegionPlanner.BuildFootnoteContinuation(
+                _doc,
+                ids,
+                pg + 1,
+                _contentWidth,
+                firstBand,
+                continuationBand);
+
+            if (plan.Pages.Count == 0)
+                continue;
+
+            // Keep the first body page's reservation equal to the actual planned fragment, rather than
+            // the entire logical note. Normal one-page notes retain the existing rendering path below.
+            _footnoteBandHeightByPage[pg] = Math.Min(firstBand, plan.Pages[0].EstimatedHeightDip + FootnoteTopPadding);
+            if (plan.HasContinuation)
+                _footnoteContinuationByBodyPage[pg] = plan;
         }
     }
 
@@ -4479,13 +4491,32 @@ public sealed class DocumentView : Control
     {
         if (_doc.Footnotes.Count == 0) return;
 
+        if (_footnoteContinuationByBodyPage.Count > 0)
+        {
+            BuildFootnoteContinuationItems();
+            BuildFootnoteItemsLegacy(_footnoteContinuationByBodyPage.Values
+                .SelectMany(plan => plan.Pages)
+                .SelectMany(page => page.Fragments)
+                .Select(fragment => fragment.NoteId)
+                .ToHashSet());
+            return;
+        }
+
+        BuildFootnoteItemsLegacy(excludedNoteIds: null);
+    }
+
+    private void BuildFootnoteItemsLegacy(IReadOnlySet<int>? excludedNoteIds)
+    {
+
         const double DefaultHfDistancePt = 36.0;
 
         // Group footnote ids by the page hosting their reference, preserving id order.
         var byPage = new Dictionary<int, List<int>>();
         foreach (var id in _doc.Footnotes.Keys.OrderBy(k => k))
         {
-            var pg = ResolveNoteReferencePage(id, footnote: true);
+            if (excludedNoteIds?.Contains(id) == true)
+                continue;
+            var pg = LogicalBodyPageForPhysicalPage(ResolveNoteReferencePage(id, footnote: true));
             if (!byPage.TryGetValue(pg, out var list))
                 byPage[pg] = list = new List<int>();
             list.Add(id);
@@ -4495,12 +4526,14 @@ public sealed class DocumentView : Control
         var footerDistDip = footerDistPt * PxPerPoint;
 
         // DB3: footnote numbering options — format (Decimal/LowerRoman/…) + StartAt offset.
-        var opts     = _doc.FootnoteNumbering;
-        var seqIndex = Math.Max(1, opts.StartAt); // 1-based display sequence counter
+        var opts = _doc.FootnoteNumbering;
+        var sequenceById = _doc.Footnotes.Keys.OrderBy(id => id)
+            .Select((id, index) => (id, sequence: Math.Max(1, opts.StartAt) + index))
+            .ToDictionary(pair => pair.id, pair => pair.sequence);
 
         foreach (var (pg, ids) in byPage.OrderBy(kv => kv.Key))
         {
-            var pageTop    = _surfacePlan.PageTopDip(pg);
+            var pageTop    = _surfacePlan.PageTopDip(PhysicalPageForBodyPage(pg));
             var pageBottom = pageTop + _pageHeightPx;
             // Body text area bottom on this page (page-space), using the reserved effective height.
             var bandReservation = _footnoteBandHeightByPage.TryGetValue(pg, out var bh) ? bh : 0.0;
@@ -4512,12 +4545,11 @@ public sealed class DocumentView : Control
 
             // DB2: true total band height = separator + true wrapped heights of all notes on this page.
             var trueHeight = FootnoteTopPadding + FootnoteSeparatorHeight;
-            var localSeq = seqIndex;
             for (var index = 0; index < ids.Count; index++)
             {
                 var id = ids[index];
                 var note2 = _doc.Footnotes[id];
-                var dn = ComputeNoteDisplayNumber(localSeq++, opts);
+                var dn = ComputeNoteDisplayNumber(sequenceById[id], opts);
                 var content2 = note2.Content.Count > 0
                     ? note2.Content
                     : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
@@ -4546,8 +4578,7 @@ public sealed class DocumentView : Control
                 var id = ids[index];
                 var note = _doc.Footnotes[id];
                 // DB3: compute display number from NoteNumberingOptions.
-                var displayNum = ComputeNoteDisplayNumber(seqIndex, opts);
-                seqIndex++;
+                var displayNum = ComputeNoteDisplayNumber(sequenceById[id], opts);
 
                 var content = note.Content.Count > 0
                     ? note.Content
@@ -4694,7 +4725,16 @@ public sealed class DocumentView : Control
     /// </summary>
     private double ContentYToPageSpaceY(double contentY)
     {
-        return _surfacePlan.ContentYToPageSpaceY(contentY, _colCount);
+        if (!_surfacePlan.IsPrintLayout || _footnoteContinuationByBodyPage.Count == 0)
+            return _surfacePlan.ContentYToPageSpaceY(contentY, _colCount);
+
+        var textAreaHeight = Math.Max(1, _surfacePlan.TextAreaHeightDip);
+        var slot = Math.Max(0, (int)(contentY / textAreaHeight));
+        var logicalBodyPage = slot / Math.Max(1, _colCount);
+        var offsetWithinSlot = contentY - slot * textAreaHeight;
+        return _surfacePlan.PageTopDip(PhysicalPageForBodyPage(logicalBodyPage))
+            + _surfacePlan.MarginTopDip
+            + offsetWithinSlot;
     }
 
     /// <summary>
@@ -4705,6 +4745,70 @@ public sealed class DocumentView : Control
     private int PageIndexFromPageSpaceY(double pageSpaceY)
     {
         return _surfacePlan.PageIndexFromPageSpaceY(pageSpaceY);
+    }
+
+    private void BuildFootnoteContinuationItems()
+    {
+        const double DefaultHfDistancePt = 36.0;
+        var footerDistPt = _doc.Page.FooterDistancePt > 0 ? _doc.Page.FooterDistancePt : DefaultHfDistancePt;
+        var footerDistDip = footerDistPt * PxPerPoint;
+        var separatorWidth = Math.Min(DocumentNoteRegionPlanner.FootnoteSeparatorWidthDip, _contentWidth);
+
+        foreach (var (logicalBodyPage, continuation) in _footnoteContinuationByBodyPage.OrderBy(pair => pair.Key))
+        {
+            for (var fragmentPageIndex = 0; fragmentPageIndex < continuation.Pages.Count; fragmentPageIndex++)
+            {
+                var page = continuation.Pages[fragmentPageIndex];
+                var physicalPage = PhysicalPageForFootnoteFragment(logicalBodyPage, fragmentPageIndex);
+                var pageTop = _surfacePlan.PageTopDip(physicalPage);
+                var pageBottom = pageTop + _pageHeightPx;
+                var footnoteBottom = Math.Min(pageBottom - _marginBottomDip, pageBottom - footerDistDip);
+                var bandHeight = Math.Min(page.AvailableHeightDip, footnoteBottom - (pageTop + _marginTopDip));
+                var bandTop = Math.Max(pageTop + _marginTopDip, footnoteBottom - bandHeight);
+
+                if (page.SeparatorKind != DocumentFootnoteSeparatorKind.None)
+                    _noteSeparators.Add((_contentLeft, _contentLeft + separatorWidth, bandTop));
+
+                var y = bandTop + FootnoteTopPadding;
+                foreach (var fragment in page.Fragments)
+                {
+                    y = LayoutNoteContent(
+                        fragment.Label ?? string.Empty,
+                        [new Paragraph(fragment.EndsNote ? fragment.Text : fragment.Text + " ")],
+                        _contentLeft,
+                        y,
+                        _contentWidth);
+                }
+            }
+        }
+    }
+
+    private int PhysicalPageForBodyPage(int logicalBodyPage)
+    {
+        var physical = Math.Max(0, logicalBodyPage);
+        foreach (var (bodyPage, continuation) in _footnoteContinuationByBodyPage)
+        {
+            if (bodyPage >= logicalBodyPage)
+                continue;
+            physical += Math.Max(0, continuation.Pages.Count - 1);
+        }
+        return physical;
+    }
+
+    private int PhysicalPageForFootnoteFragment(int logicalBodyPage, int fragmentPageIndex) =>
+        PhysicalPageForBodyPage(logicalBodyPage) + Math.Max(0, fragmentPageIndex);
+
+    private int LogicalBodyPageForPhysicalPage(int physicalPage)
+    {
+        for (var logicalBodyPage = 0; logicalBodyPage < Math.Max(1, _bodyPageCount); logicalBodyPage++)
+        {
+            if (PhysicalPageForBodyPage(logicalBodyPage) == physicalPage)
+                return logicalBodyPage;
+        }
+
+        // A note reference cannot normally land inside a continuation-only page. Keep the nearest
+        // preceding body page as a defensive fallback for unusual zero-width source runs.
+        return Math.Clamp(physicalPage, 0, Math.Max(0, _bodyPageCount - 1));
     }
 
     /// <summary>
