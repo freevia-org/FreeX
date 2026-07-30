@@ -39,6 +39,20 @@ public sealed class InCanvasRichTextPointerSelectionPlannerTests
         text[range.Start..range.End].Should().Be("wrapped visual lines\npara");
     }
 
+    [Theory]
+    [InlineData("first\nsecond", 2, 0, 6)]
+    [InlineData("first\nsecond", 8, 6, 12)]
+    [InlineData("single", 3, 0, 6)]
+    public void PlanParagraph_MatchesRichTextBoxParagraphMarkerSemantics(
+        string text,
+        int logicalPosition,
+        int expectedStart,
+        int expectedEnd)
+    {
+        InCanvasRichTextPointerSelectionPlanner.PlanParagraph(text, logicalPosition)
+            .Should().Be((expectedStart, expectedEnd));
+    }
+
     [Fact]
     public void Plan_RejectsNegativeDocumentLength()
     {

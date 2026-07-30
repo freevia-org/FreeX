@@ -24,6 +24,11 @@ public sealed class LinuxPointerSelectionValidationSourceTests
         probe.Should().Contain("pointer-editor-rect=%s,%s,%s,%s");
         probe.Should().Contain("pointer_drag \"$pointer_anchor_x\" \"$pointer_anchor_y\" \"$pointer_edge_x\" \"$pointer_edge_y\"");
         probe.Should().Contain("drag-contract=first visual line to captured pointer beyond editor bottom across paragraph boundary");
+        probe.Should().Contain("pointer_paragraph_readback=false");
+        probe.Should().Contain("xdotool click --clearmodifiers --repeat 3 --delay 120 1");
+        probe.Should().Contain("pointer-paragraph-selection");
+        probe.Should().Contain("Wide words make this first paragraph wrap at unequal visual line widths\\n");
+        probe.Should().Contain("$pointer_paragraph_readback");
 
         var runner = File.ReadAllText(RepoFile(
                 "tools/Run-FreePRichTextShortcutValidation.ps1"))

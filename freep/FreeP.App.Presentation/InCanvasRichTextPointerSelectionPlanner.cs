@@ -35,6 +35,34 @@ public static class InCanvasRichTextPointerSelectionPlanner
     }
 
     /// <summary>
+    /// Plans the range selected by a paragraph gesture. WPF RichTextBox includes the
+    /// paragraph separator for every paragraph that has a following paragraph, so the
+    /// logical selection must carry that newline into copy/delete operations too.
+    /// </summary>
+    public static (int Start, int End) PlanParagraph(
+        string text,
+        int logicalPosition)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        if (text.Length == 0)
+            return (0, 0);
+
+        int position = Math.Clamp(logicalPosition, 0, text.Length);
+        int start = position;
+        while (start > 0 && text[start - 1] != '\n')
+            start--;
+
+        int end = position;
+        while (end < text.Length && text[end] != '\n')
+            end++;
+        if (end < text.Length)
+            end++;
+
+        return (start, end);
+    }
+
+    /// <summary>
     /// Returns -1 while the pointer is in the top edge band, 1 while it is in the
     /// bottom edge band, and 0 while it is away from either edge.  Coordinates may
     /// be outside the editor because native text controls continue a captured drag
