@@ -44,6 +44,8 @@ public sealed class PresenterViewWindow : Window
     private readonly Action<SlideShowRecordingMediaIntent>? _setMediaIntent;
     private readonly Func<SlideShowRecordingReviewPlan>? _recordingReviewProvider;
     private readonly Func<SlideShowRecordingReviewApplyResult>? _applyRecordingReview;
+    private readonly Action<int, string?>? _setNotesText;
+    private bool _notesDirty;
     private bool _refreshing;
 
     public PresenterViewWindow(
@@ -58,7 +60,8 @@ public sealed class PresenterViewWindow : Window
         Action<SlideShowRecordingMediaIntent>? setMediaIntent = null,
         Func<SlideShowRecordingReviewPlan>? recordingReviewProvider = null,
         Func<SlideShowRecordingReviewApplyResult>? applyRecordingReview = null,
-        Action<int>? goToSlide = null)
+        Action<int>? goToSlide = null,
+        Action<int, string?>? setNotesText = null)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _stateProvider = stateProvider ?? throw new ArgumentNullException(nameof(stateProvider));
@@ -72,6 +75,7 @@ public sealed class PresenterViewWindow : Window
         _setMediaIntent = setMediaIntent;
         _recordingReviewProvider = recordingReviewProvider;
         _applyRecordingReview = applyRecordingReview;
+        _setNotesText = setNotesText;
 
         Title = "Presenter View";
         Width = 1200;
@@ -101,11 +105,13 @@ public sealed class PresenterViewWindow : Window
         };
         _backButton = MakeActionButton("Previous", () =>
         {
+            CommitNotes();
             _goBack?.Invoke();
             RefreshFromState();
         });
         _advanceButton = MakeActionButton("Next", () =>
         {
+            CommitNotes();
             _goNext?.Invoke();
             RefreshFromState();
         });
@@ -247,7 +253,7 @@ public sealed class PresenterViewWindow : Window
         notesHeading.Margin = new Thickness(0, 0, 0, 6);
         _notesText = new TextBox
         {
-            IsReadOnly = true,
+            IsReadOnly = _setNotesText is null,
             TextWrapping = TextWrapping.Wrap,
             AcceptsReturn = true,
             Background = new SolidColorBrush(Color.FromRgb(45, 50, 61)),
@@ -255,6 +261,12 @@ public sealed class PresenterViewWindow : Window
             BorderBrush = new SolidColorBrush(Color.FromRgb(80, 87, 102)),
             Padding = new Thickness(10),
         };
+        _notesText.TextChanged += (_, _) =>
+        {
+            if (!_refreshing && _setNotesText is not null)
+                _notesDirty = true;
+        };
+        _notesText.LostFocus += (_, _) => CommitNotes();
         Grid.SetRow(_notesText, 1);
         notesPanel.Children.Add(notesHeading);
         notesPanel.Children.Add(_notesText);
@@ -281,11 +293,18 @@ public sealed class PresenterViewWindow : Window
             RefreshFromState();
             _refreshTimer.Start();
         };
-        Closed += (_, _) => _refreshTimer.Stop();
+        Closed += (_, _) =>
+        {
+            CommitNotes();
+            _refreshTimer.Stop();
+        };
     }
 
     public void RefreshFromState()
     {
+        if (!_notesText.IsFocused && _notesDirty)
+            CommitNotes();
+
         var state = _stateProvider();
         var plan = SlideShowPresenterViewPlanner.Build(state);
         _refreshing = true;
@@ -295,7 +314,8 @@ public sealed class PresenterViewWindow : Window
             _elapsedText.Text = $"Elapsed {plan.ElapsedText}";
             _currentLabel.Text = plan.CurrentSlideLabel;
             _nextLabel.Text = plan.NextSlideLabel;
-            _notesText.Text = plan.NotesText;
+            if (!_notesText.IsFocused && !_notesDirty)
+                _notesText.Text = plan.NotesText;
             if (!_slideNumberBox.IsFocused && state.HostState.CurrentSlideIndex >= 0)
             {
                 _slideNumberBox.Text = (state.HostState.CurrentSlideIndex + 1).ToString();
@@ -346,6 +366,7 @@ public sealed class PresenterViewWindow : Window
 
     private void SubmitSlideNumber()
     {
+        CommitNotes();
         if (_goToSlide is null ||
             !SlideShowSlideNumberPlanner.TryParseSlideNumber(
                 _slideNumberBox.Text,
@@ -356,6 +377,19 @@ public sealed class PresenterViewWindow : Window
 
         _goToSlide(oneBasedSlideNumber);
         RefreshFromState();
+    }
+
+    private void CommitNotes()
+    {
+        if (!_notesDirty || _setNotesText is null)
+            return;
+
+        var slideIndex = _stateProvider().CurrentSlide?.SlideIndex;
+        if (slideIndex is not int index)
+            return;
+
+        _notesDirty = false;
+        _setNotesText(index, _notesText.Text);
     }
 
     private static Border BuildPreviewPanel(

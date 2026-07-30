@@ -69,6 +69,7 @@ public sealed class SlideShowWindow : Window
     private readonly SlideShowPlaybackRoute _playbackRoute;
     private readonly SlideShowController _controller;
     private readonly SlideShowSessionController _session;
+    private readonly Action<int, string?>? _setSlideNotesText;
     private readonly AvaloniaSlideShowMediaController _mediaController;
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private PresenterViewWindow? _presenterViewWindow;
@@ -141,17 +142,27 @@ public sealed class SlideShowWindow : Window
     /// <param name="presentation">The presentation that owns slide size, theme, and timing state.</param>
     /// <param name="playbackRoute">The ordered slide route to play.</param>
     public SlideShowWindow(Presentation presentation, SlideShowPlaybackRoute playbackRoute)
-        : this(presentation, playbackRoute, captureBackend: null)
+        : this(presentation, playbackRoute, captureBackend: null, setSlideNotesText: null)
+    {
+    }
+
+    public SlideShowWindow(
+        Presentation presentation,
+        SlideShowPlaybackRoute playbackRoute,
+        Action<int, string?>? setSlideNotesText)
+        : this(presentation, playbackRoute, captureBackend: null, setSlideNotesText)
     {
     }
 
     internal SlideShowWindow(
         Presentation presentation,
         SlideShowPlaybackRoute playbackRoute,
-        ISlideShowRecordingCaptureBackend? captureBackend)
+        ISlideShowRecordingCaptureBackend? captureBackend,
+        Action<int, string?>? setSlideNotesText = null)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _playbackRoute = playbackRoute ?? throw new ArgumentNullException(nameof(playbackRoute));
+        _setSlideNotesText = setSlideNotesText;
         _controller = new SlideShowController(
             _playbackRoute.Slides,
             _playbackRoute.StartIndex,
@@ -406,7 +417,8 @@ public sealed class SlideShowWindow : Window
             media => SetPresenterMediaIntent(media),
             () => RecordingReviewPlan,
             () => ApplyRecordingReview(),
-            slideNumber => ExecuteSlideNumberJump(slideNumber));
+            slideNumber => ExecuteSlideNumberJump(slideNumber),
+            (slideIndex, text) => _setSlideNotesText?.Invoke(slideIndex, text));
         _presenterViewWindow = window;
         window.Closed += (_, _) =>
         {
