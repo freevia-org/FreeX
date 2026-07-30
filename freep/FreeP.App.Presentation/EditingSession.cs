@@ -978,6 +978,20 @@ public sealed class EditingSession
             Bus.Execute(new SetShapeFillCommand(_currentSlideIndex, id, fill));
     }
 
+    /// <summary>Applies one fill-transparency preset to every selected color-bearing shape.</summary>
+    public void SetSelectedShapeFillTransparency(byte alpha)
+    {
+        foreach (var id in _selectedShapeIds)
+            Bus.Execute(new SetShapeFillTransparencyCommand(_currentSlideIndex, id, alpha));
+    }
+
+    /// <summary>Applies one outline-transparency preset to every selected stroked shape.</summary>
+    public void SetSelectedShapeOutlineTransparency(byte alpha)
+    {
+        foreach (var id in _selectedShapeIds)
+            Bus.Execute(new SetShapeOutlineTransparencyCommand(_currentSlideIndex, id, alpha));
+    }
+
     /// <summary>Sets outline on all selected shapes.</summary>
     public void SetSelectedOutline(ShapeOutline? outline)
     {

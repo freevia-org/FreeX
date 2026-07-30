@@ -207,6 +207,30 @@ internal static class FreePRibbonCommands
         registry.Register(
             ShapeEffectAuthoringPlanner.Shape3dStrongCommandId,
             new ActionRibbonCommand(() => editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dStrong())));
+        registry.Register(
+            ShapeFillAuthoringPlanner.OpaqueCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedShapeFillTransparency(
+                ShapeFillAuthoringPlanner.OpaqueAlpha)));
+        registry.Register(
+            ShapeFillAuthoringPlanner.HalfCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedShapeFillTransparency(
+                ShapeFillAuthoringPlanner.HalfTransparentAlpha)));
+        registry.Register(
+            ShapeFillAuthoringPlanner.TransparentCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedShapeFillTransparency(
+                ShapeFillAuthoringPlanner.TransparentAlpha)));
+        registry.Register(
+            ShapeOutlineAuthoringPlanner.OpaqueCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedShapeOutlineTransparency(
+                ShapeOutlineAuthoringPlanner.OpaqueAlpha)));
+        registry.Register(
+            ShapeOutlineAuthoringPlanner.HalfCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedShapeOutlineTransparency(
+                ShapeOutlineAuthoringPlanner.HalfTransparentAlpha)));
+        registry.Register(
+            ShapeOutlineAuthoringPlanner.TransparentCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedShapeOutlineTransparency(
+                ShapeOutlineAuthoringPlanner.TransparentAlpha)));
         RegisterHeaderFooterCommands(registry, editor, onHeaderFooter);
         registry.Register(SmartArtAuthoringPlanner.ThemeAccentsCommandId,
             new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.ThemeAccents)));
@@ -264,6 +288,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.ArrowRibbon)));
         registry.Register(SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.CircleProcess)));
+        registry.Register(SmartArtAuthoringPlanner.CircleArrowProcessLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.CircleArrowProcess)));
         registry.Register(SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.FunnelProcess)));
         registry.Register(SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,
@@ -272,14 +298,22 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalBoxList)));
         registry.Register(SmartArtAuthoringPlanner.VerticalChevronListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalChevronList)));
+        registry.Register(SmartArtAuthoringPlanner.VerticalArrowListLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalArrowList)));
         registry.Register(SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalBulletList)));
         registry.Register(SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.HorizontalBulletList)));
         registry.Register(SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.HorizontalBlockList)));
+        registry.Register(SmartArtAuthoringPlanner.TrapezoidListLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.TrapezoidList)));
         registry.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicCycle)));
+        registry.Register(SmartArtAuthoringPlanner.MultidirectionalCycleLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.MultidirectionalCycle)));
+        registry.Register(SmartArtAuthoringPlanner.SegmentedCycleLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.SegmentedCycle)));
         registry.Register(SmartArtAuthoringPlanner.ContinuousCycleLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.ContinuousCycle)));
         registry.Register(SmartArtAuthoringPlanner.GearCycleLayoutCommandId,
@@ -302,10 +336,14 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicPyramid)));
         registry.Register(SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.PyramidList)));
+        registry.Register(SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.InvertedPyramid)));
         registry.Register(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.RadialCycle)));
         registry.Register(SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicRadial)));
+        registry.Register(SmartArtAuthoringPlanner.RadialClusterLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.RadialCluster)));
         registry.Register(SmartArtAuthoringPlanner.RadialListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.RadialList)));
         registry.Register(SmartArtAuthoringPlanner.BasicMatrixLayoutCommandId,
@@ -320,6 +358,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.OpposingIdeas)));
         registry.Register(SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.ConvergingRadial)));
+        registry.Register(SmartArtAuthoringPlanner.DivergingRadialLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.DivergingRadial)));
         registry.Register(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicVenn)));
         registry.Register(SmartArtAuthoringPlanner.RadialVennLayoutCommandId,
@@ -348,6 +388,12 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.PictureStack)));
         registry.Register(SmartArtAuthoringPlanner.PictureLineupLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.PictureLineup)));
+        registry.Register(SmartArtAuthoringPlanner.PictureStripsLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.PictureStrips)));
+        registry.Register(SmartArtAuthoringPlanner.HorizontalPictureListLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.HorizontalPictureList)));
+        registry.Register(SmartArtAuthoringPlanner.VerticalPictureListLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalPictureList)));
         registry.Register(SmartArtAuthoringPlanner.ContinuousPictureListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.ContinuousPictureList)));
         registry.Register(SmartArtAuthoringPlanner.PictureGridLayoutCommandId,

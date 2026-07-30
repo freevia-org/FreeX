@@ -733,6 +733,42 @@
   <data name="Ribbon_Command_Shape3dStrong_KeyTip" xml:space="preserve">
     <value>S3H</value>
   </data>
+  <data name="Ribbon_Command_ShapeFillOpaque_Label" xml:space="preserve">
+    <value>Opaque Fill</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFillOpaque_KeyTip" xml:space="preserve">
+    <value>FO</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFillHalfTransparent_Label" xml:space="preserve">
+    <value>50% Transparent Fill</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFillHalfTransparent_KeyTip" xml:space="preserve">
+    <value>F5</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFillTransparent_Label" xml:space="preserve">
+    <value>Transparent Fill</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFillTransparent_KeyTip" xml:space="preserve">
+    <value>FT</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOutlineOpaque_Label" xml:space="preserve">
+    <value>Opaque Outline</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOutlineOpaque_KeyTip" xml:space="preserve">
+    <value>OO</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOutlineHalfTransparent_Label" xml:space="preserve">
+    <value>50% Transparent Outline</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOutlineHalfTransparent_KeyTip" xml:space="preserve">
+    <value>O5</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOutlineTransparent_Label" xml:space="preserve">
+    <value>Transparent Outline</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOutlineTransparent_KeyTip" xml:space="preserve">
+    <value>OT</value>
+  </data>
   <data name="Ribbon_Command_Picture_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
@@ -1426,11 +1462,29 @@
   <data name="Ribbon_Command_SmartArtHorizontalBlockList_KeyTip" xml:space="preserve">
     <value>HBL</value>
   </data>
+  <data name="Ribbon_Command_SmartArtTrapezoidList_Label" xml:space="preserve">
+    <value>Trapezoid List</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtTrapezoidList_KeyTip" xml:space="preserve">
+    <value>TL</value>
+  </data>
   <data name="Ribbon_Command_SmartArtBasicCycle_Label" xml:space="preserve">
     <value>Basic Cycle</value>
   </data>
   <data name="Ribbon_Command_SmartArtBasicCycle_KeyTip" xml:space="preserve">
     <value>C</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMultidirectionalCycle_Label" xml:space="preserve">
+    <value>Multidirectional Cycle</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMultidirectionalCycle_KeyTip" xml:space="preserve">
+    <value>MC</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtSegmentedCycle_Label" xml:space="preserve">
+    <value>Segmented Cycle</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtSegmentedCycle_KeyTip" xml:space="preserve">
+    <value>SC</value>
   </data>
   <data name="Ribbon_Command_SmartArtContinuousCycle_Label" xml:space="preserve">
     <value>Continuous Cycle</value>
@@ -1492,6 +1546,12 @@
   <data name="Ribbon_Command_SmartArtPyramidList_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
+  <data name="Ribbon_Command_SmartArtInvertedPyramid_Label" xml:space="preserve">
+    <value>Inverted Pyramid</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtInvertedPyramid_KeyTip" xml:space="preserve">
+    <value>IP</value>
+  </data>
   <data name="Ribbon_Command_SmartArtRadialCycle_Label" xml:space="preserve">
     <value>Radial Cycle</value>
   </data>
@@ -1503,6 +1563,12 @@
   </data>
   <data name="Ribbon_Command_SmartArtBasicRadial_KeyTip" xml:space="preserve">
     <value>B</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtRadialCluster_Label" xml:space="preserve">
+    <value>Radial Cluster</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtRadialCluster_KeyTip" xml:space="preserve">
+    <value>RC</value>
   </data>
   <data name="Ribbon_Command_SmartArtBasicMatrix_Label" xml:space="preserve">
     <value>Basic Matrix</value>
@@ -1539,6 +1605,12 @@
   </data>
   <data name="Ribbon_Command_SmartArtConvergingRadial_KeyTip" xml:space="preserve">
     <value>CR</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtDivergingRadial_Label" xml:space="preserve">
+    <value>Diverging Radial</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtDivergingRadial_KeyTip" xml:space="preserve">
+    <value>DR</value>
   </data>
   <data name="Ribbon_Command_SmartArtBasicVenn_Label" xml:space="preserve">
     <value>Basic Venn</value>
@@ -1623,6 +1695,24 @@
   </data>
   <data name="Ribbon_Command_SmartArtPictureLineup_KeyTip" xml:space="preserve">
     <value>L</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPictureStrips_Label" xml:space="preserve">
+    <value>Picture Strips</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPictureStrips_KeyTip" xml:space="preserve">
+    <value>PS</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtHorizontalPictureList_Label" xml:space="preserve">
+    <value>Horizontal Picture List</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtHorizontalPictureList_KeyTip" xml:space="preserve">
+    <value>HP</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtVerticalPictureList_Label" xml:space="preserve">
+    <value>Vertical Picture List</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtVerticalPictureList_KeyTip" xml:space="preserve">
+    <value>VP</value>
   </data>
   <data name="Ribbon_Command_SmartArtContinuousPictureList_Label" xml:space="preserve">
     <value>Continuous Picture List</value>

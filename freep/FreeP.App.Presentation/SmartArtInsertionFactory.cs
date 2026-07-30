@@ -147,7 +147,7 @@ internal static class SmartArtInsertionFactory
         int nodeCount,
         IReadOnlyList<SlideObjectPicturePayload>? pictures)
     {
-        if (preset is not (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid))
+        if (preset is not (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.HorizontalPictureList or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid or SmartArtLayoutPreset.VerticalPictureList))
             return null;
 
         if (pictures is null || pictures.Count == 0)
@@ -246,14 +246,20 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.AlternatingProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.ArrowRibbon => ("urn:microsoft.com/office/officeart/2005/8/layout/arrowRibbon", SmartArtFamily.Process),
             SmartArtLayoutPreset.CircleProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/circleProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.CircleArrowProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/circleArrowProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.FunnelProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.VerticalProcess => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.VerticalBoxList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalChevronList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalChevronList", SmartArtFamily.List),
+            SmartArtLayoutPreset.VerticalArrowList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalBulletList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.VerticalPictureList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalPictureList", SmartArtFamily.List),
             SmartArtLayoutPreset.HorizontalBulletList => ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBulletList", SmartArtFamily.List),
             SmartArtLayoutPreset.HorizontalBlockList => ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBlockList", SmartArtFamily.List),
+            SmartArtLayoutPreset.TrapezoidList => ("urn:microsoft.com/office/officeart/2005/8/layout/trapezoidList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.MultidirectionalCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/multidirectionalCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.SegmentedCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/segmentedCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.ContinuousCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/continuousCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.GearCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/gearCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.TextCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/textCycle", SmartArtFamily.Cycle),
@@ -265,8 +271,10 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.DescendingBlockList => ("urn:microsoft.com/office/officeart/2005/8/layout/descendingBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicPyramid => ("urn:microsoft.com/office/officeart/2005/8/layout/basicPyramid", SmartArtFamily.List),
             SmartArtLayoutPreset.PyramidList => ("urn:microsoft.com/office/officeart/2005/8/layout/pyramidList", SmartArtFamily.List),
+            SmartArtLayoutPreset.InvertedPyramid => ("urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid", SmartArtFamily.List),
             SmartArtLayoutPreset.RadialCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/radialCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicRadial => ("urn:microsoft.com/office/officeart/2005/8/layout/radial1", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.RadialCluster => ("urn:microsoft.com/office/officeart/2008/layout/RadialCluster", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.RadialList => ("urn:microsoft.com/office/officeart/2005/8/layout/radialList", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicMatrix => ("urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix", SmartArtFamily.Matrix),
             SmartArtLayoutPreset.TitledMatrix => ("urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix", SmartArtFamily.Matrix),
@@ -274,6 +282,7 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.BasicRelationship => ("urn:microsoft.com/office/officeart/2005/8/layout/relationship1", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.OpposingIdeas => ("urn:microsoft.com/office/officeart/2005/8/layout/opposingIdeas", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.ConvergingRadial => ("urn:microsoft.com/office/officeart/2005/8/layout/convergingRadial", SmartArtFamily.Relationship),
+            SmartArtLayoutPreset.DivergingRadial => ("urn:microsoft.com/office/officeart/2005/8/layout/divergingRadial", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.BasicVenn => ("urn:microsoft.com/office/officeart/2005/8/layout/basicVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.RadialVenn => ("urn:microsoft.com/office/officeart/2005/8/layout/radialVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.TargetList => ("urn:microsoft.com/office/officeart/2005/8/layout/targetList", SmartArtFamily.Relationship),
@@ -288,6 +297,8 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.PictureAccentList => ("urn:microsoft.com/office/officeart/2005/8/layout/pictureAccentList", SmartArtFamily.List),
             SmartArtLayoutPreset.PictureStack => ("urn:microsoft.com/office/officeart/2005/8/layout/pictureStack", SmartArtFamily.List),
             SmartArtLayoutPreset.PictureLineup => ("urn:microsoft.com/office/officeart/2005/8/layout/pictureLineup", SmartArtFamily.List),
+            SmartArtLayoutPreset.PictureStrips => ("urn:microsoft.com/office/officeart/2005/8/layout/pictureStrips", SmartArtFamily.List),
+            SmartArtLayoutPreset.HorizontalPictureList => ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalPictureList", SmartArtFamily.List),
             SmartArtLayoutPreset.ContinuousPictureList => ("urn:microsoft.com/office/officeart/2005/8/layout/continuousPictureList", SmartArtFamily.List),
             SmartArtLayoutPreset.LabeledHierarchy => ("urn:microsoft.com/office/officeart/2005/8/layout/labeledHierarchy", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.TableHierarchy => ("urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy", SmartArtFamily.Hierarchy),

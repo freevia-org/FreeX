@@ -573,6 +573,24 @@ public static class FreePRibbon
             group.Medium(ShapeEffectAuthoringPlanner.Shape3dStrongCommandId,
                 FreePRibbonText.Shape3dStrongCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.Shape3dStrongCommand.KeyTip);
+            group.Medium(ShapeFillAuthoringPlanner.OpaqueCommandId,
+                FreePRibbonText.ShapeFillOpaqueCommand.Label, RibbonCommandIconKind.Fill,
+                FreePRibbonText.ShapeFillOpaqueCommand.KeyTip);
+            group.Medium(ShapeFillAuthoringPlanner.HalfCommandId,
+                FreePRibbonText.ShapeFillHalfTransparentCommand.Label, RibbonCommandIconKind.Fill,
+                FreePRibbonText.ShapeFillHalfTransparentCommand.KeyTip);
+            group.Medium(ShapeFillAuthoringPlanner.TransparentCommandId,
+                FreePRibbonText.ShapeFillTransparentCommand.Label, RibbonCommandIconKind.Fill,
+                FreePRibbonText.ShapeFillTransparentCommand.KeyTip);
+            group.Medium(ShapeOutlineAuthoringPlanner.OpaqueCommandId,
+                FreePRibbonText.ShapeOutlineOpaqueCommand.Label, RibbonCommandIconKind.Border,
+                FreePRibbonText.ShapeOutlineOpaqueCommand.KeyTip);
+            group.Medium(ShapeOutlineAuthoringPlanner.HalfCommandId,
+                FreePRibbonText.ShapeOutlineHalfTransparentCommand.Label, RibbonCommandIconKind.Border,
+                FreePRibbonText.ShapeOutlineHalfTransparentCommand.KeyTip);
+            group.Medium(ShapeOutlineAuthoringPlanner.TransparentCommandId,
+                FreePRibbonText.ShapeOutlineTransparentCommand.Label, RibbonCommandIconKind.Border,
+                FreePRibbonText.ShapeOutlineTransparentCommand.KeyTip);
             group.Medium(OleInsertionPlanner.InsertEmbeddedObjectCommandId,
                 FreePRibbonText.InsertEmbeddedObjectCommand.Label, RibbonCommandIconKind.RibbonShape,
                 FreePRibbonText.InsertEmbeddedObjectCommand.KeyTip);
@@ -795,6 +813,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
                 FreePRibbonText.SmartArtCircleProcessCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtCircleProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.CircleArrowProcessLayoutCommandId,
+                FreePRibbonText.SmartArtCircleArrowProcessCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtCircleArrowProcessCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
                 FreePRibbonText.SmartArtFunnelProcessCommand.Label, RibbonCommandIconKind.Rectangle,
                 FreePRibbonText.SmartArtFunnelProcessCommand.KeyTip);
@@ -807,6 +828,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.VerticalChevronListLayoutCommandId,
                 FreePRibbonText.SmartArtVerticalChevronListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtVerticalChevronListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.VerticalArrowListLayoutCommandId,
+                FreePRibbonText.SmartArtVerticalArrowListCommand.Label, RibbonCommandIconKind.ArrowDown,
+                FreePRibbonText.SmartArtVerticalArrowListCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
                 FreePRibbonText.SmartArtVerticalBulletListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtVerticalBulletListCommand.KeyTip);
@@ -816,9 +840,18 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
                 FreePRibbonText.SmartArtHorizontalBlockListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtHorizontalBlockListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.TrapezoidListLayoutCommandId,
+                FreePRibbonText.SmartArtTrapezoidListCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtTrapezoidListCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
                 FreePRibbonText.SmartArtBasicCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtBasicCycleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.MultidirectionalCycleLayoutCommandId,
+                FreePRibbonText.SmartArtMultidirectionalCycleCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtMultidirectionalCycleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.SegmentedCycleLayoutCommandId,
+                FreePRibbonText.SmartArtSegmentedCycleCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtSegmentedCycleCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.ContinuousCycleLayoutCommandId,
                 FreePRibbonText.SmartArtContinuousCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtContinuousCycleCommand.KeyTip);
@@ -852,12 +885,18 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
                 FreePRibbonText.SmartArtPyramidListCommand.Label, RibbonCommandIconKind.Rectangle,
                 FreePRibbonText.SmartArtPyramidListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId,
+                FreePRibbonText.SmartArtInvertedPyramidCommand.Label, RibbonCommandIconKind.Rectangle,
+                FreePRibbonText.SmartArtInvertedPyramidCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
                 FreePRibbonText.SmartArtRadialCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtRadialCycleCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
                 FreePRibbonText.SmartArtBasicRadialCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtBasicRadialCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.RadialClusterLayoutCommandId,
+                FreePRibbonText.SmartArtRadialClusterCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtRadialClusterCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.RadialListLayoutCommandId,
                 FreePRibbonText.SmartArtRadialListCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtRadialListCommand.KeyTip);
@@ -879,6 +918,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId,
                 FreePRibbonText.SmartArtConvergingRadialCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtConvergingRadialCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.DivergingRadialLayoutCommandId,
+                FreePRibbonText.SmartArtDivergingRadialCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtDivergingRadialCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
                 FreePRibbonText.SmartArtBasicVennCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.SmartArtBasicVennCommand.KeyTip);
@@ -921,6 +963,15 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.PictureLineupLayoutCommandId,
                 FreePRibbonText.SmartArtPictureLineupCommand.Label, RibbonCommandIconKind.Picture,
                 FreePRibbonText.SmartArtPictureLineupCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.PictureStripsLayoutCommandId,
+                FreePRibbonText.SmartArtPictureStripsCommand.Label, RibbonCommandIconKind.Picture,
+                FreePRibbonText.SmartArtPictureStripsCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.HorizontalPictureListLayoutCommandId,
+                FreePRibbonText.SmartArtHorizontalPictureListCommand.Label, RibbonCommandIconKind.Picture,
+                FreePRibbonText.SmartArtHorizontalPictureListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.VerticalPictureListLayoutCommandId,
+                FreePRibbonText.SmartArtVerticalPictureListCommand.Label, RibbonCommandIconKind.Picture,
+                FreePRibbonText.SmartArtVerticalPictureListCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.ContinuousPictureListLayoutCommandId,
                 FreePRibbonText.SmartArtContinuousPictureListCommand.Label, RibbonCommandIconKind.Picture,
                 FreePRibbonText.SmartArtContinuousPictureListCommand.KeyTip);
