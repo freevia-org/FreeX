@@ -27,10 +27,12 @@ internal static class XlsxWorksheetAutoFilterMaterializer
         // supported value-list/Top10/Average filter too, leaving FilterHiddenRows/
         // ActiveValueFilterColumns/ColumnFilterOwnedRows empty and making Clear Filter and the
         // dropdown checklist behave as if there were no filter at all. Whatever BuildFilters DID
-        // manage to build is materialized below; unsupported columns are simply left alone (their
-        // raw hidden-row bits loaded from the row XML are untouched, since nothing here un-hides
-        // rows -- it only ever adds to FilterHiddenRows).
-        var filters = BuildFilters(sheet, autoFilter, range, out _);
+        // manage to build is materialized below. When BuildFilters reports unsupportedColumnCount > 0,
+        // a row that passes every filter we COULD build but is still raw-hidden must be explained by
+        // one of the skipped columns' real (unrepresentable) criteria -- see the fallback in the loop
+        // below (R98-io-autofilter-unsupported-hiddenrows-1), which mirrors
+        // XlsxStructuredTableModelMapper.MaterializeFilters' identical fallback for structured tables.
+        var filters = BuildFilters(sheet, autoFilter, range, out var unsupportedColumnCount, out var singleUnsupportedColumn);
 
         // G2/G32: sheet.ActiveValueFilterColumns/ValueFilterHiddenRows form an ownership pair that
         // FilterCommand.RecomputeHiddenRows relies on to know which rows it may safely un-hide later
@@ -63,6 +65,56 @@ internal static class XlsxWorksheetAutoFilterMaterializer
                 sheet.FilterHiddenRows.Add(row);
                 if (RowFailsOnlyValueListFilters(sheet, row, filters))
                     sheet.ValueFilterHiddenRows.Add(row);
+
+                // R95-io-autofilter-load-hiddenrows-1: the row's raw XML "hidden" bit
+                // (unconditionally loaded into sheet.HiddenRows by ApplySheetXmlLayout BEFORE this
+                // method runs) is fully explained by this reloaded filter's own criteria -- Excel
+                // writes the same single hidden bit for a manually-hidden row and a filtered-out row,
+                // so reclassify it here the same way FilterCommand.Apply's live RecomputeHiddenRows
+                // hides rows purely via FilterHiddenRows/ValueFilterHiddenRows, never HiddenRows.
+                // Leaving the row double-counted in HiddenRows would make it permanently un-clearable:
+                // every filter-clearing path (FilterCommand.RecomputeHiddenRows,
+                // ToggleWorksheetAutoFilterCommand.Apply) only ever mutates FilterHiddenRows-adjacent
+                // sets, never HiddenRows, so Clear Filter could never surface the row again.
+                sheet.HiddenRows.Remove(row);
+            }
+            else if (unsupportedColumnCount > 0 && sheet.HiddenRows.Contains(row))
+            {
+                // R98-io-autofilter-unsupported-hiddenrows-1: at least one filterColumn used criteria
+                // BuildFilters cannot represent (CustomFilters/DateGroups/ColorFilter/IconFilter/
+                // unrecognized native filter attributes -- e.g. a Custom Number/Text Filter, the
+                // default date-grouped Year/Month/Day checklist, or a Cell/Font Color filter). This row
+                // passes every filter we COULD build, yet its raw XML hidden bit is still set, so that
+                // bit can only be explained by the skipped column's real (unrepresentable) Excel
+                // criteria hiding it -- mirroring XlsxStructuredTableModelMapper.MaterializeFilters'
+                // identical fallback for structured tables. Reclassify it into FilterHiddenRows (not
+                // ValueFilterHiddenRows -- no value-list filter owns it) so Clear Filter / Toggle
+                // AutoFilter off can restore it exactly like any other filter-hidden row, instead of it
+                // being stranded forever in HiddenRows (which no filter-clearing path ever touches).
+                sheet.FilterHiddenRows.Add(row);
+                sheet.HiddenRows.Remove(row);
+
+                // R98-io-autofilter-unsupported-hiddenrows-1: when exactly ONE column is unsupported
+                // (the common case -- a single Custom/date-group/color/icon filter), register this row
+                // into Sheet.ColumnFilterOwnedRows for that column too, mirroring how a LIVE
+                // TopBottomFilterCommand/AverageFilterCommand apply registers ownership
+                // (FilterHiddenRowUpdater.ApplyColumnOwnedVisibility). Without this, only "Toggle
+                // AutoFilter off" (which unconditionally clears the whole range) could ever restore the
+                // row -- "Clear Filter From <Column>" on this exact column
+                // (FilterCommand.ClearColumnOwnedRange) would find nothing owned and leave it hidden.
+                // Left null (no registration) when a second, different unsupported column also exists,
+                // since which one actually hid any given row is then ambiguous -- Toggle AutoFilter off
+                // still restores it in that case.
+                if (singleUnsupportedColumn is { } ownerColumn)
+                {
+                    if (!sheet.ColumnFilterOwnedRows.TryGetValue(ownerColumn, out var owned))
+                    {
+                        owned = [];
+                        sheet.ColumnFilterOwnedRows[ownerColumn] = owned;
+                    }
+
+                    owned.Add(row);
+                }
             }
         }
     }
@@ -97,10 +149,20 @@ internal static class XlsxWorksheetAutoFilterMaterializer
         Sheet sheet,
         WorksheetAutoFilterModel autoFilter,
         GridRange range,
-        out int unfilteredColumnCount)
+        out int unsupportedColumnCount,
+        out uint? singleUnsupportedColumn)
     {
         var filters = new List<WorksheetAutoFilterState>();
-        unfilteredColumnCount = 0;
+        unsupportedColumnCount = 0;
+        // R98-io-autofilter-unsupported-hiddenrows-1: tracks the one column responsible for every
+        // unsupported filterColumn seen so far, so MaterializeFilters' fallback can register
+        // Sheet.ColumnFilterOwnedRows ownership for it and let FilterCommand's per-column "Clear
+        // Filter From <Column>" restore its rows too (not just Toggle AutoFilter off). Once a SECOND,
+        // different unsupported column is seen (or one can't even be attributed to a real column --
+        // an out-of-range colId), which unsupported column actually hid any given still-raw-hidden row
+        // becomes ambiguous, so ownership registration is disabled (left null) rather than guessed.
+        var unsupportedColumnsSeen = new HashSet<uint>();
+        var hasUnattributableUnsupportedColumn = false;
 
         // R65-services-autofilter-6-3: Top10/Average filter columns must rank/average over rows
         // still visible under every OTHER active column's filter, exactly like the live
@@ -115,7 +177,17 @@ internal static class XlsxWorksheetAutoFilterMaterializer
         foreach (var filterColumn in autoFilter.FilterColumns)
         {
             if (filterColumn.ColumnId < 0)
+            {
+                // R98-io-autofilter-unsupported-hiddenrows-1: an out-of-range colId can't be attributed
+                // to a real column, but it still means this <filterColumn> element's real Excel
+                // criteria went unrepresented -- count it so MaterializeFilters' fallback can reclassify
+                // any raw-hidden row this AutoFilter's XML left unexplained by a supported filter.
+                unsupportedColumnCount++;
+                hasUnattributableUnsupportedColumn = true;
                 continue;
+            }
+
+            var column = range.Start.Col + (uint)filterColumn.ColumnId;
             if (filterColumn.CustomFilters.Count > 0 ||
                 filterColumn.CustomFiltersAndRaw is not null ||
                 filterColumn.NativeCustomFiltersAttributes?.Count > 0 ||
@@ -125,10 +197,14 @@ internal static class XlsxWorksheetAutoFilterMaterializer
                 filterColumn.IconFilter is not null ||
                 filterColumn.NativeFilterXmls.Count > 0)
             {
+                // R98-io-autofilter-unsupported-hiddenrows-1: this column's real Excel criteria (Custom
+                // Number/Text Filter, the default date-grouped Year/Month/Day checklist, a Cell/Font
+                // Color filter, or some other native-only filter kind) cannot be represented here.
+                unsupportedColumnCount++;
+                unsupportedColumnsSeen.Add(column);
                 continue;
             }
 
-            var column = range.Start.Col + (uint)filterColumn.ColumnId;
             if (filterColumn.Top10 is { } top10)
             {
                 pendingRanked.Add((column, top10, false));
@@ -138,7 +214,13 @@ internal static class XlsxWorksheetAutoFilterMaterializer
             if (filterColumn.DynamicFilter is { } dynamicFilter)
             {
                 if (!IsAverageDynamicFilter(dynamicFilter, out var above))
+                {
+                    // A dynamicFilter type other than above/belowAverage (e.g. "today", "nextMonth",
+                    // "Q1", ...) is not currently represented either -- count it the same way.
+                    unsupportedColumnCount++;
+                    unsupportedColumnsSeen.Add(column);
                     continue;
+                }
 
                 pendingRanked.Add((column, null, above));
                 continue;
@@ -149,12 +231,10 @@ internal static class XlsxWorksheetAutoFilterMaterializer
             // (the showButton attribute lands in NativeAttributes, which is why it still passes the
             // ReadFilterColumns inclusion guard above). Treat it as unfiltered rather than materializing
             // an empty allowed-set, which would otherwise make every row fail RowMatchesAllFilters and
-            // hide the entire data range.
+            // hide the entire data range. This is a legitimate "nothing to filter" column, not an
+            // unsupported one, so it must NOT bump unsupportedColumnCount.
             if (filterColumn.Values.Count == 0 && !filterColumn.IncludeBlank)
-            {
-                unfilteredColumnCount++;
                 continue;
-            }
 
             filters.Add(new WorksheetAutoFilterState(
                 column,
@@ -171,6 +251,9 @@ internal static class XlsxWorksheetAutoFilterMaterializer
             filters.Add(new WorksheetAutoFilterState(column, null, false, keptRows));
         }
 
+        singleUnsupportedColumn = !hasUnattributableUnsupportedColumn && unsupportedColumnsSeen.Count == 1
+            ? unsupportedColumnsSeen.Single()
+            : null;
         return filters;
     }
 

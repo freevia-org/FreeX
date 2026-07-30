@@ -112,6 +112,104 @@ public sealed class WholeWindowVisualEvidenceTests
         }
     }
 
+    [Fact]
+    public void Rich_editor_selection_crop_contract_rejects_missing_evidence()
+    {
+        var bounds = new FreeP.App.Compositor.WholeWindowVisualEvidenceBounds(0, 0, 40, 20);
+        var destination = Path.Combine(Path.GetTempPath(), "freep-selection-crop-" + Guid.NewGuid().ToString("N"), "crop.png");
+
+        ImageDiff.TryWriteCrop("missing-selection-capture.png", bounds, destination).Should().BeFalse();
+        File.Exists(destination).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Rich_editor_selection_state_defaults_to_missing_evidence()
+    {
+        FreeP.App.Compositor.WholeWindowVisualEvidenceRichEditorState.Empty.Active.Should().BeFalse();
+        FreeP.App.Compositor.WholeWindowVisualEvidenceRichEditorState.Empty.Bounds.IsVisible.Should().BeFalse();
+        FreeP.App.Compositor.WholeWindowVisualEvidenceRichEditorState.Empty.SelectedText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Rich_editor_selection_chrome_matches_native_wpf_contract()
+    {
+        FreeP.App.Compositor.InCanvasRichTextSelectionVisualContract.BackgroundRed.Should().Be(0x00);
+        FreeP.App.Compositor.InCanvasRichTextSelectionVisualContract.BackgroundGreen.Should().Be(0x78);
+        FreeP.App.Compositor.InCanvasRichTextSelectionVisualContract.BackgroundBlue.Should().Be(0xD7);
+        FreeP.App.Compositor.InCanvasRichTextSelectionVisualContract.ForegroundRed.Should().Be(0xFF);
+        FreeP.App.Compositor.InCanvasRichTextSelectionVisualContract.ForegroundGreen.Should().Be(0xFF);
+        FreeP.App.Compositor.InCanvasRichTextSelectionVisualContract.ForegroundBlue.Should().Be(0xFF);
+    }
+
+    [Theory]
+    [InlineData(35, 10, 40, 10, 35)]
+    [InlineData(-4, 50, 40, 0, 40)]
+    public void Rich_editor_selection_range_is_clamped_and_ordered(
+        int start,
+        int end,
+        int textLength,
+        int expectedStart,
+        int expectedEnd)
+    {
+        var range = FreeP.App.Compositor.InCanvasRichTextSelectionVisualContract.NormalizeRange(
+            start,
+            end,
+            textLength);
+
+        range.Start.Should().Be(expectedStart);
+        range.End.Should().Be(expectedEnd);
+    }
+
+    [Fact]
+    public void Markdown_detail_rows_match_the_nine_column_report_header()
+    {
+        var comparison = new WholeWindowVisualEvidenceComparison(
+            "editor.rich-text-selection",
+            FreeP.App.Compositor.WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay,
+            FreeP.App.Compositor.DialogPaneVisualEvidenceClassification.Pass,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            [],
+            ["detail row"],
+            null);
+        var host = new FreeP.App.Compositor.WholeWindowVisualEvidenceHostManifest(
+            1,
+            "wpf",
+            "test",
+            96,
+            1280,
+            760,
+            "test",
+            [],
+            []);
+        var summary = new WholeWindowVisualEvidenceSummary(
+            1,
+            "test",
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            new Dictionary<string, int>(),
+            new Dictionary<string, int>(),
+            host,
+            host with { Host = "avalonia" },
+            [comparison],
+            [],
+            []);
+
+        var markdown = WholeWindowVisualEvidence.BuildMarkdown(summary);
+        var header = markdown.Split('\n').Single(line => line.StartsWith("| Scenario |", StringComparison.Ordinal));
+        var detail = markdown.Split('\n').Single(line => line.Contains("detail row", StringComparison.Ordinal));
+
+        header.Split('|').Length.Should().Be(11);
+        detail.Split('|').Length.Should().Be(11);
+    }
+
     private static void WriteSolidPng(string path, int width, int height, byte red, byte green, byte blue, byte alpha)
     {
         var pixels = new byte[width * height * 4];

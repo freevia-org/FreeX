@@ -30,6 +30,9 @@ internal sealed record InteractionValidationOptions(
     public const string CoreSectionArgument = "--interaction-validation-core-section";
     public const string ContextStartArgument = "--interaction-validation-context-start";
     public const string ContextCountArgument = "--interaction-validation-context-count";
+    public const string NameBoxDropdownPhysicalFixtureArgument = "--freex-name-box-dropdown-physical";
+    public const string NameBoxDropdownPhysicalEvidenceArgument = "--freex-name-box-dropdown-physical-evidence";
+    public const string NameBoxDropdownParityPhysicalFixtureArgument = "--freex-name-box-dropdown-parity-physical";
 
     public static bool TryParse(
         IReadOnlyList<string> args,

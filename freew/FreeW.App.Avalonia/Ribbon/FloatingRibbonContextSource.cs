@@ -38,7 +38,8 @@ internal sealed class FloatingRibbonContextSource : IRibbonContextSource
 
     private readonly DocumentView _editor;
     private RibbonContextState _current = RibbonContextState.None;
-    // Tracks which key (if any) is currently active so we only raise ContextChanged on a real transition.
+    // Tracks which key (if any) is currently active. Selection changes within the same context still
+    // propagate so the renderer can refresh command state for a different shape or grouped child.
     private string? _activeKey;
 
     public RibbonContextState Current => _current;
@@ -55,18 +56,18 @@ internal sealed class FloatingRibbonContextSource : IRibbonContextSource
 
     /// <summary>
     /// Maps the current floating selection to the desired activation key (or null when nothing is
-    /// selected) and raises <see cref="ContextChanged"/> when the active key actually changes.
+    /// selected) and raises <see cref="ContextChanged"/> for every selection identity change.
     /// </summary>
     private void Sync()
     {
         var desiredKey = KeyForSelection();
-        if (desiredKey == _activeKey)
-            return;
-
-        _activeKey = desiredKey;
-        _current = desiredKey is null
-            ? RibbonContextState.None
-            : RibbonContextState.None.With(desiredKey);
+        if (desiredKey != _activeKey)
+        {
+            _activeKey = desiredKey;
+            _current = desiredKey is null
+                ? RibbonContextState.None
+                : RibbonContextState.None.With(desiredKey);
+        }
         ContextChanged?.Invoke(this, EventArgs.Empty);
     }
 

@@ -114,8 +114,15 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
 
         source.Should().Contain("public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)");
         source.Should().Contain("public double ControlHeight { get; init; } = 24;");
+        source.Should().Contain("public double? TextBoxHeight { get; init; }");
+        source.Should().Contain("public double? ComboBoxHeight { get; init; }");
+        source.Should().Contain("public double? TabHeight { get; init; }");
         source.Should().Contain("public double ButtonHeight { get; init; } = 26;");
         source.Should().Contain("public double FontSize { get; init; } = 12;");
+        source.Should().Contain("public IBrush? FocusedInputBorderBrush { get; init; }");
+        source.Should().Contain("public IBrush? ButtonBorderBrush { get; init; }");
+        source.Should().Contain("public IBrush? DialogTabPaneBorderBrush { get; init; }");
+        source.Should().Contain("public bool RemoveFocusAdorner { get; init; }");
         source.Should().Contain("public Thickness ButtonPadding { get; init; } = new(12, 3);");
         source.Should().Contain("public Thickness TextBoxPadding { get; init; } = new(4, 1);");
         source.Should().Contain("public Thickness ComboBoxPadding { get; init; } = new(5, 0, 4, 0);");
@@ -128,10 +135,15 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("button.MinHeight = style.ButtonHeight;");
         source.Should().Contain("button.MaxHeight = style.ButtonHeight;");
         source.Should().Contain("button.Background = ButtonBackgroundBrush;");
-        source.Should().Contain("button.BorderBrush = isDefault ? DefaultButtonBorderBrush : ButtonBorderBrush;");
+        source.Should().Contain("? style.DefaultButtonBorderBrush ?? DefaultButtonBorderBrush");
+        source.Should().Contain(": style.ButtonBorderBrush ?? ButtonBorderBrush;");
         source.Should().Contain("button.IsDefault = true;");
         source.Should().Contain("if (fixedHeight)");
+        source.Should().Contain("var height = style.TextBoxHeight ?? style.ControlHeight;");
         source.Should().Contain("textBox.Padding = style.TextBoxPadding;");
+        source.Should().Contain("textBox.FocusAdorner = null;");
+        source.Should().Contain("style.FocusedInputBorderBrush ?? inputBorder");
+        source.Should().Contain("var height = style.ComboBoxHeight ?? style.ControlHeight;");
         source.Should().Contain("comboBox.Padding = style.ComboBoxPadding;");
         source.Should().Contain("public static void ApplyCheckBox(");
         source.Should().Contain("public static void ApplyRadioButton(");
@@ -141,6 +153,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("public static void ApplyClassicTabChrome(");
         source.Should().Contain("Name(\"PART_ItemsPresenter\")");
         source.Should().Contain("Name(\"PART_SelectedContentHost\")");
+        source.Should().Contain("style.DialogTabPaneBorderBrush ?? DialogTabPaneBorderBrush");
+        source.Should().Contain("style.TabHeight ?? style.ControlHeight");
         source.Should().Contain("new Thickness(0, 0, -1, -1)");
         source.Should().Contain("FuncControlTemplate<TabItem>");
     }

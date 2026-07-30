@@ -18,6 +18,9 @@ namespace Free.Shared.Shell.Avalonia;
 public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
 {
     public double ControlHeight { get; init; } = 24;
+    public double? TextBoxHeight { get; init; }
+    public double? ComboBoxHeight { get; init; }
+    public double? TabHeight { get; init; }
     public double ButtonHeight { get; init; } = 26;
     public double FontSize { get; init; } = 12;
     public Thickness ButtonPadding { get; init; } = new(12, 3);
@@ -31,8 +34,14 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public IBrush? TextBoxBackgroundBrush { get; init; }
     public IBrush? DisabledTextBoxBackgroundBrush { get; init; }
     public IBrush? TextSelectionBrush { get; init; }
+    public IBrush? FocusedInputBorderBrush { get; init; }
+    public IBrush? ForegroundBrush { get; init; }
+    public IBrush? ButtonBorderBrush { get; init; }
+    public IBrush? DefaultButtonBorderBrush { get; init; }
+    public IBrush? DialogTabPaneBorderBrush { get; init; }
     public IBrush? DialogInactiveTabBorderBrush { get; init; }
     public IBrush? DialogInactiveTabBackgroundBrush { get; init; }
+    public bool RemoveFocusAdorner { get; init; }
 }
 
 /// <summary>
@@ -42,6 +51,7 @@ public static class AvaloniaCompactDialogChrome
 {
     public const string DialogWindowClass = "free-compact-dialog-window";
     public const string ClassicTabClass = "free-classic-dialog-tabs";
+    public const string CompactComboBoxClass = "free-compact-dialog-combo";
 
     public static FontFamily WindowsUiFontFamily { get; } = new(
         "Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, " +
@@ -83,7 +93,7 @@ public static class AvaloniaCompactDialogChrome
 
         window.Classes.Add(DialogWindowClass);
         window.Background = Brushes.White;
-        window.Foreground = DialogForegroundBrush;
+        window.Foreground = style.ForegroundBrush ?? DialogForegroundBrush;
         window.FontFamily = style.FontFamily;
         window.FontSize = style.FontSize;
         window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -104,7 +114,7 @@ public static class AvaloniaCompactDialogChrome
             {
                 textBlock.FontFamily = style.FontFamily;
                 textBlock.FontSize = style.FontSize;
-                textBlock.Foreground = DialogForegroundBrush;
+                textBlock.Foreground = style.ForegroundBrush ?? DialogForegroundBrush;
             }
 
             switch (control)
@@ -159,7 +169,9 @@ public static class AvaloniaCompactDialogChrome
         button.Padding = style.ButtonPadding;
         button.CornerRadius = new CornerRadius(0);
         button.Background = ButtonBackgroundBrush;
-        button.BorderBrush = isDefault ? DefaultButtonBorderBrush : ButtonBorderBrush;
+        button.BorderBrush = isDefault
+            ? style.DefaultButtonBorderBrush ?? DefaultButtonBorderBrush
+            : style.ButtonBorderBrush ?? ButtonBorderBrush;
         button.BorderThickness = new Thickness(1);
         button.FontSize = style.FontSize;
         button.FontFamily = style.FontFamily;
@@ -176,9 +188,10 @@ public static class AvaloniaCompactDialogChrome
 
         if (fixedHeight)
         {
-            textBox.Height = style.ControlHeight;
-            textBox.MinHeight = style.ControlHeight;
-            textBox.MaxHeight = style.ControlHeight;
+            var height = style.TextBoxHeight ?? style.ControlHeight;
+            textBox.Height = height;
+            textBox.MinHeight = height;
+            textBox.MaxHeight = height;
         }
         textBox.Padding = style.TextBoxPadding;
         textBox.CornerRadius = new CornerRadius(0);
@@ -192,6 +205,18 @@ public static class AvaloniaCompactDialogChrome
         if (style.TextSelectionBrush is not null)
             textBox.SelectionForegroundBrush = Brushes.Black;
         textBox.VerticalContentAlignment = VerticalAlignment.Center;
+        if (style.RemoveFocusAdorner)
+        {
+            textBox.FocusAdorner = null;
+            textBox.Styles.Add(new Style(selector => selector.OfType<TextBox>().Class(":focus"))
+            {
+                Setters =
+                {
+                    new Setter(TextBox.BorderBrushProperty, style.FocusedInputBorderBrush ?? inputBorder),
+                    new Setter(TextBox.BorderThicknessProperty, new Thickness(1)),
+                },
+            });
+        }
         var textBoxBackground = style.TextBoxBackgroundBrush ?? Brushes.White;
         textBox.Styles.Add(new Style(selector => selector.OfType<Border>())
         {
@@ -267,9 +292,10 @@ public static class AvaloniaCompactDialogChrome
         ArgumentNullException.ThrowIfNull(comboBox);
         ArgumentNullException.ThrowIfNull(style);
 
-        comboBox.Height = style.ControlHeight;
-        comboBox.MinHeight = style.ControlHeight;
-        comboBox.MaxHeight = style.ControlHeight;
+        var height = style.ComboBoxHeight ?? style.ControlHeight;
+        comboBox.Height = height;
+        comboBox.MinHeight = height;
+        comboBox.MaxHeight = height;
         comboBox.Padding = style.ComboBoxPadding;
         comboBox.CornerRadius = new CornerRadius(0);
         comboBox.FontSize = style.FontSize;
@@ -285,6 +311,10 @@ public static class AvaloniaCompactDialogChrome
         comboBox.BorderBrush = style.InputBorderBrush ?? InputBorderBrush;
         comboBox.BorderThickness = new Thickness(1);
         comboBox.VerticalContentAlignment = VerticalAlignment.Center;
+        if (comboBox.Classes.Contains(CompactComboBoxClass))
+            return;
+
+        comboBox.Classes.Add(CompactComboBoxClass);
         // Fluent renders the selected value through named template parts, so setting only the
         // ComboBox surface does not reach the field behind the text and arrow. Keep those parts
         // on the same WPF-authority surface when a dialog opts into a palette.
@@ -300,6 +330,42 @@ public static class AvaloniaCompactDialogChrome
                 new Setter(ContentPresenter.ForegroundProperty, DialogForegroundBrush),
             },
         });
+        // Fluent's default DropDownGlyph is wider and sits inside a padded button slot. The WPF
+        // compact-dialog template uses a small, centered V at the trailing edge with no filled
+        // slot. Keep the platform popup/editing behavior and normalize only the glyph geometry.
+        comboBox.Styles.Add(new Style(selector => selector.OfType<global::Avalonia.Controls.PathIcon>().Name("DropDownGlyph"))
+        {
+            Setters =
+            {
+                new Setter(global::Avalonia.Controls.PathIcon.ForegroundProperty, DialogForegroundBrush),
+                new Setter(Layoutable.WidthProperty, 8d),
+                new Setter(Layoutable.HeightProperty, 5d),
+                new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 4, 0)),
+                new Setter(Layoutable.HorizontalAlignmentProperty, HorizontalAlignment.Right),
+                new Setter(Layoutable.VerticalAlignmentProperty, VerticalAlignment.Center),
+            },
+        });
+
+        void ApplyWpfComboGlyph()
+        {
+            comboBox.ApplyTemplate();
+            foreach (var glyph in comboBox.GetVisualDescendants()
+                .OfType<global::Avalonia.Controls.PathIcon>()
+                .Where(path => path.Name == "DropDownGlyph"))
+            {
+                glyph.Data = Geometry.Parse("M 0 0 L 4 4 L 8 0 L 8 1 L 4 5 L 0 1 Z");
+                glyph.Foreground = DialogForegroundBrush;
+                glyph.Width = 8;
+                glyph.Height = 5;
+                glyph.Margin = new Thickness(0, 0, 4, 0);
+                glyph.HorizontalAlignment = HorizontalAlignment.Right;
+                glyph.VerticalAlignment = VerticalAlignment.Center;
+            }
+        }
+
+        comboBox.AttachedToVisualTree += (_, _) =>
+            Dispatcher.UIThread.Post(ApplyWpfComboGlyph, DispatcherPriority.Render);
+        Dispatcher.UIThread.Post(ApplyWpfComboGlyph, DispatcherPriority.Render);
     }
 
     public static void ApplyCheckBox(CheckBox checkBox, AvaloniaCompactDialogChromeStyle style)
@@ -348,6 +414,8 @@ public static class AvaloniaCompactDialogChrome
             };
             var content = new ContentPresenter
             {
+                FontFamily = style.FontFamily,
+                FontSize = style.FontSize,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 Foreground = DialogForegroundBrush,
             };
@@ -655,7 +723,8 @@ public static class AvaloniaCompactDialogChrome
             .Template()
             .OfType<ContentPresenter>()
             .Name("PART_SelectedContentHost"));
-        contentPaneStyle.Setters.Add(new Setter(Border.BorderBrushProperty, DialogTabPaneBorderBrush));
+        var tabPaneBorder = style.DialogTabPaneBorderBrush ?? DialogTabPaneBorderBrush;
+        contentPaneStyle.Setters.Add(new Setter(Border.BorderBrushProperty, tabPaneBorder));
         contentPaneStyle.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(1)));
         // Avalonia's platform TabControl template reserves an 11px body inset. The
         // WPF dialog pane is flush with the surrounding content, so cancel that
@@ -702,14 +771,14 @@ public static class AvaloniaCompactDialogChrome
         tabStyle.Setters.Add(new Setter(TemplatedControl.ForegroundProperty, Brushes.Black));
         tabStyle.Setters.Add(new Setter(TemplatedControl.FontFamilyProperty, style.FontFamily));
         tabStyle.Setters.Add(new Setter(TemplatedControl.FontSizeProperty, style.FontSize));
-        tabStyle.Setters.Add(new Setter(Layoutable.MinHeightProperty, style.ControlHeight));
+        tabStyle.Setters.Add(new Setter(Layoutable.MinHeightProperty, style.TabHeight ?? style.ControlHeight));
         tabStyle.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(6, 2)));
         tabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, -1, 0)));
         tabControl.Styles.Add(tabStyle);
 
         var selectedTabStyle = new Style(s => s.OfType<TabItem>().Class(":selected"));
         selectedTabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, Brushes.White));
-        selectedTabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, DialogTabPaneBorderBrush));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, tabPaneBorder));
         selectedTabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
         selectedTabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, -1, -1)));
         selectedTabStyle.Setters.Add(new Setter(TabItem.ZIndexProperty, 1));

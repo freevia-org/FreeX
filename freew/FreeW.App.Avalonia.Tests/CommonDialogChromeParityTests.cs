@@ -92,6 +92,23 @@ public sealed class CommonDialogChromeParityTests
     }
 
     [Fact]
+    public void Combo_box_chrome_is_idempotent_for_local_template_state()
+    {
+        var comboBox = new ComboBox();
+        var style = AvaloniaCompactDialogChrome.WindowsStyle;
+
+        AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, style);
+        var styleCount = comboBox.Styles.Count;
+        var classCount = comboBox.Classes.Count;
+
+        AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, style);
+
+        comboBox.Styles.Count.Should().Be(styleCount);
+        comboBox.Classes.Count.Should().Be(classCount);
+        comboBox.Classes.Should().Contain(AvaloniaCompactDialogChrome.CompactComboBoxClass);
+    }
+
+    [Fact]
     public async Task Shared_descendant_chrome_normalizes_non_table_text_and_checkbox_controls()
     {
         await Session.Dispatch(() =>

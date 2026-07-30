@@ -381,6 +381,39 @@ public sealed class CellStyle : IEquatable<CellStyle>
     /// <summary>Original modeled dxf child XML used to merge nested native metadata into regenerated style XML.</summary>
     public IReadOnlyDictionary<string, string>? NativeDifferentialElementXmls { get; set; }
 
+    /// <summary>
+    /// For CF dxf-derived styles only: tri-state mirror of <see cref="Bold"/> that distinguishes a dxf
+    /// which never mentions this attribute (null) from one that explicitly turns it on (true) or off
+    /// (false). The plain <see cref="Bold"/> property cannot make that distinction on its own - both
+    /// "not mentioned" and "explicitly off" read as false there - so conditional-format merge/stacking
+    /// consults this field (populated by <c>XlsxDifferentialStyleReader</c>) to correctly apply an
+    /// explicit un-bold over an already-bold base cell. Left null for every non-dxf style producer
+    /// (base cell styles, UI/paste-built styles), which keeps their existing "true means on, false means
+    /// untouched" semantics unchanged.
+    /// </summary>
+    public bool? DxfBold { get; set; }
+
+    /// <summary>Tri-state mirror of <see cref="Italic"/> for CF dxf styles. See <see cref="DxfBold"/>.</summary>
+    public bool? DxfItalic { get; set; }
+
+    /// <summary>Tri-state mirror of <see cref="Underline"/> for CF dxf styles. See <see cref="DxfBold"/>.</summary>
+    public bool? DxfUnderline { get; set; }
+
+    /// <summary>Tri-state mirror of <see cref="Strikethrough"/> for CF dxf styles. See <see cref="DxfBold"/>.</summary>
+    public bool? DxfStrikethrough { get; set; }
+
+    /// <summary>
+    /// For CF dxf-derived styles only: mirrors <see cref="FontColor"/> but distinguishes a dxf that
+    /// never mentions a font color (null) from one that explicitly sets it - including an explicit
+    /// choice of black (<see cref="CellColor.Black"/>), which is otherwise indistinguishable from the
+    /// plain <see cref="FontColor"/> property's own default value. Conditional-format merge/stacking
+    /// consults this field (populated by <c>XlsxDifferentialStyleReader</c>) so an explicit CF black
+    /// still wins stacking/base-style precedence instead of being read as "unset". Left null for every
+    /// non-dxf style producer (base cell styles, UI/paste-built styles), which keeps their existing
+    /// "non-black means explicitly set" heuristic unchanged. See <see cref="DxfBold"/>.
+    /// </summary>
+    public CellColor? DxfFontColor { get; set; }
+
     /// <summary>Returns a fresh default-valued instance.</summary>
     public static readonly CellStyle Default = new();
 
@@ -426,6 +459,11 @@ public sealed class CellStyle : IEquatable<CellStyle>
         NativeDifferentialAttributes = NativeDifferentialAttributes,
         NativeDifferentialChildXmls = NativeDifferentialChildXmls,
         NativeDifferentialElementXmls = NativeDifferentialElementXmls,
+        DxfBold = DxfBold,
+        DxfItalic = DxfItalic,
+        DxfUnderline = DxfUnderline,
+        DxfStrikethrough = DxfStrikethrough,
+        DxfFontColor = DxfFontColor,
     };
 
     /// <inheritdoc/>
@@ -474,7 +512,12 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && FontFamily == other.FontFamily
             && DictionaryEquals(NativeDifferentialAttributes, other.NativeDifferentialAttributes)
             && ListEquals(NativeDifferentialChildXmls, other.NativeDifferentialChildXmls)
-            && DictionaryEquals(NativeDifferentialElementXmls, other.NativeDifferentialElementXmls);
+            && DictionaryEquals(NativeDifferentialElementXmls, other.NativeDifferentialElementXmls)
+            && DxfBold == other.DxfBold
+            && DxfItalic == other.DxfItalic
+            && DxfUnderline == other.DxfUnderline
+            && DxfStrikethrough == other.DxfStrikethrough
+            && DxfFontColor == other.DxfFontColor;
     }
 
     private static bool GradientFillEquals(CellGradientFill? a, CellGradientFill? b)
@@ -552,6 +595,11 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(GetDictionaryHashCode(NativeDifferentialAttributes));
         h.Add(GetListHashCode(NativeDifferentialChildXmls));
         h.Add(GetDictionaryHashCode(NativeDifferentialElementXmls));
+        h.Add(DxfBold);
+        h.Add(DxfItalic);
+        h.Add(DxfUnderline);
+        h.Add(DxfStrikethrough);
+        h.Add(DxfFontColor);
         return h.ToHashCode();
     }
 

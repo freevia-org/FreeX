@@ -7,6 +7,10 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorksheetDrawingObjectWriter
 {
+    // R95-io-drawing-hyperlink-2-2: mirrors XlsxWorksheetChartWriter's HyperlinkRelationshipType --
+    // the OOXML package relationship type for an a:hlinkClick's r:id target.
+    private const string HyperlinkRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+
     public static bool HasSupportedObjects(Workbook workbook)
     {
         foreach (var sheet in workbook.Sheets)
@@ -103,7 +107,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         Workbook workbook,
         IReadOnlyDictionary<string, string>? sourceDrawingPathsBySheet = null,
         HashSet<string>? usedDrawingPaths = null,
-        int startPictureIndex = 1)
+        int startPictureIndex = 1,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, (string Target, string? TargetMode)>>? sourceObjectHyperlinksBySheet = null)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -168,12 +173,18 @@ internal static class XlsxWorksheetDrawingObjectWriter
                               localUsedPaths.Add(ownDrawingPath)
                 ? ownDrawingPath
                 : AllocateFreshDrawingPath(archive, reservedDrawingPaths, localUsedPaths);
-            WriteWorksheetDrawingObjects(archive, worksheetPath, sheet, pictures, textBoxes, shapes, drawingPath, ref pictureIndex);
+            var objectHyperlinksByName = sourceObjectHyperlinksBySheet?.TryGetValue(name, out var sheetHyperlinks) == true
+                ? sheetHyperlinks
+                : EmptyObjectHyperlinksByName;
+            WriteWorksheetDrawingObjects(archive, worksheetPath, sheet, pictures, textBoxes, shapes, drawingPath, ref pictureIndex, objectHyperlinksByName);
         }
     }
 
     private static readonly IReadOnlyDictionary<string, string> EmptyDrawingPathsBySheet =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly IReadOnlyDictionary<string, (string Target, string? TargetMode)> EmptyObjectHyperlinksByName =
+        new Dictionary<string, (string, string?)>(StringComparer.Ordinal);
 
     // Picks the next xl/drawings/drawingN.xml part name that is free: not reserved by a source-package
     // drawing (those get restored at their original paths), not already present in the archive (covers
@@ -219,7 +230,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         IReadOnlyList<TextBoxModel> textBoxes,
         IReadOnlyList<DrawingShapeModel> shapes,
         string drawingPath,
-        ref int pictureIndex)
+        ref int pictureIndex,
+        IReadOnlyDictionary<string, (string Target, string? TargetMode)> oldObjectHyperlinksByName)
     {
         var worksheetEntry = archive.GetEntry(worksheetPath);
         if (worksheetEntry is null)
@@ -232,6 +244,19 @@ internal static class XlsxWorksheetDrawingObjectWriter
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
 
         var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
+
+        // R95-io-drawing-hyperlink-2-2: each existing picture/text-box/shape's object-level hyperlink
+        // (an a:hlinkClick on its xdr:cNvPr) is captured by the CALLER (XlsxFileAdapter, via
+        // GetSourceDrawingObjectHyperlinksBySheet) from the TRUE source .xlsx package and passed in as
+        // oldObjectHyperlinksByName -- NOT read from `archive` here. At this point in the save
+        // pipeline `archive` is the in-progress GENERATED package (freshly built by ClosedXML from the
+        // FreeX model, with no drawing parts of its own yet), so it never carries the original
+        // hyperlink bytes; only the true source package does. Matched by the object's stable
+        // cNvPr@name (the same key GetRewrittenSourceObjectNames/the drawing-part merger already rely
+        // on to recognise a rewritten object as the same logical object across the reader/writer
+        // round-trip) rather than position, since pictures/text boxes/shapes -- unlike charts, which
+        // XlsxWorksheetChartWriter matches positionally -- can be freely reordered, added, or removed
+        // independently of one another.
         archive.GetEntry(drawingPath)?.Delete();
         archive.GetEntry(drawingRelsPath)?.Delete();
 
@@ -239,6 +264,52 @@ internal static class XlsxWorksheetDrawingObjectWriter
         var anchors = new List<XElement>();
         var nextPictureIndex = pictureIndex;
         var shapeIndex = 1;
+        var hyperlinkRelIndex = 1;
+
+        // R97-model-drawing-hyperlink-2-2: builds the rebuilt anchor's <a:hlinkClick> element for an
+        // object, PREFERRING the object's own DrawingShapeModel/TextBoxModel/PictureModel.Hyperlink
+        // field (populated for every loaded object, and carried through clone/paste --
+        // DuplicateSheetDrawingCloner, PasteShapesCommand/PasteTextBoxesCommand/PastePicturesCommand)
+        // and falling back to the R95 mechanism -- re-reading the pre-rebuild hyperlink from the TRUE
+        // source .xlsx package by the object's stable cNvPr@name (oldObjectHyperlinksByName) -- only
+        // when the model itself carries none. The fallback keeps a plain source-loaded object (whose
+        // model was never populated by an older snapshot / a caller that skips the model field)
+        // round-tripping exactly as it did before the model field existed; the model is preferred so a
+        // CLONE (which has no source-package entry under its own sheet's name at all) still gets its
+        // hyperlink. Returns null when the object has no hyperlink from either source.
+        XElement? BuildObjectHyperlinkElement(DrawingObjectHyperlink? modelHyperlink, string? name)
+        {
+            string target;
+            string? targetMode;
+            string? tooltip = null;
+            if (modelHyperlink is not null)
+            {
+                target = modelHyperlink.Target;
+                targetMode = modelHyperlink.TargetMode;
+                tooltip = modelHyperlink.Tooltip;
+            }
+            else if (!string.IsNullOrEmpty(name) && oldObjectHyperlinksByName.TryGetValue(name, out var oldHyperlink))
+            {
+                target = oldHyperlink.Target;
+                targetMode = oldHyperlink.TargetMode;
+            }
+            else
+            {
+                return null;
+            }
+
+            var relId = "rIdFreeXObjectHyperlink" + hyperlinkRelIndex++;
+            drawingRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", relId),
+                new XAttribute("Type", HyperlinkRelationshipType),
+                new XAttribute("Target", target),
+                string.IsNullOrWhiteSpace(targetMode) ? null : new XAttribute("TargetMode", targetMode)));
+            return new XElement(
+                drawingNs + "hlinkClick",
+                new XAttribute(relNs + "id", relId),
+                string.IsNullOrWhiteSpace(tooltip) ? null : new XAttribute("tooltip", tooltip));
+        }
         if (sheet.DrawingObjectZOrder.Count > 0)
         {
             var picturesById = CreateObjectMap(pictures, picture => picture.Id);
@@ -294,7 +365,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     linkRelId,
                     spreadsheetDrawingNs,
                     drawingNs,
-                    relNs));
+                    relNs,
+                    BuildObjectHyperlinkElement(picture.Hyperlink, picture.Name)));
                 return;
             }
 
@@ -360,7 +432,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 spreadsheetDrawingNs,
                 drawingNs,
                 relNs,
-                svgRelId));
+                svgRelId,
+                BuildObjectHyperlinkElement(picture.Hyperlink, picture.Name)));
         }
 
         void AddTextBoxAnchor(TextBoxModel textBox)
@@ -369,7 +442,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 textBox,
                 shapeIndex++,
                 spreadsheetDrawingNs,
-                drawingNs));
+                drawingNs,
+                relNs,
+                BuildObjectHyperlinkElement(textBox.Hyperlink, textBox.Name)));
         }
 
         void AddShapeAnchor(DrawingShapeModel shape)
@@ -377,6 +452,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
             anchors.Add(ToOneCellDrawingShapeAnchor(
                 shape,
                 shapeIndex++,
+                BuildObjectHyperlinkElement(shape.Hyperlink, shape.Name),
                 spreadsheetDrawingNs,
                 drawingNs));
         }
@@ -415,6 +491,87 @@ internal static class XlsxWorksheetDrawingObjectWriter
         XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
     }
 
+    /// <summary>
+    /// R95-io-drawing-hyperlink-2-2: reads a drawing part's picture/text-box/shape/connector
+    /// <c>xdr:cNvPr</c> elements (i.e. everything under <c>xdr:nvPicPr</c>, <c>xdr:nvSpPr</c>, or
+    /// <c>xdr:nvCxnSpPr</c> -- deliberately excluding <c>xdr:nvGraphicFramePr</c>, which is chart
+    /// territory handled separately by <c>XlsxWorksheetChartWriter.ReadOldChartGraphicFrameHyperlinks</c>)
+    /// and resolves each one's object-level hyperlink (an <c>a:hlinkClick</c> on its <c>cNvPr</c>) via
+    /// the drawing's OWN relationships part. Returns a name-keyed map (ordinal, matching
+    /// <see cref="GetRewrittenSourceObjectNames"/>'s comparer) so the caller can re-attach a hyperlink
+    /// to the SAME logical object once its anchor is rebuilt from the (now-edited) model -- which,
+    /// unlike the positionally-matched chart case, may reorder/add/remove pictures, text boxes and
+    /// shapes independently of one another, so position cannot be used as the key. Returns an empty map
+    /// if the drawing part doesn't exist or can't be parsed (nothing to preserve).
+    /// <para>
+    /// Called by <c>XlsxFileAdapter.GetSourceDrawingObjectHyperlinksBySheet</c> against the TRUE
+    /// source .xlsx package (not the in-progress generated package -- see the caller-side comment on
+    /// <see cref="WriteWorksheetDrawingObjects"/> for why the generated package can't be used here).
+    /// </para>
+    /// </summary>
+    internal static Dictionary<string, (string Target, string? TargetMode)> ReadOldDrawingObjectHyperlinksByName(
+        ZipArchive archive,
+        string drawingPath,
+        string drawingRelsPath,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var result = new Dictionary<string, (string, string?)>(StringComparer.Ordinal);
+        if (archive.GetEntry(drawingPath) is not { } oldDrawingEntry)
+            return result;
+
+        XDocument oldDrawingXml;
+        try
+        {
+            oldDrawingXml = XlsxPackageXmlEditor.LoadXml(oldDrawingEntry);
+        }
+        catch
+        {
+            return result;
+        }
+
+        var oldRelTargets = new Dictionary<string, (string Target, string? TargetMode)>(StringComparer.OrdinalIgnoreCase);
+        if (archive.GetEntry(drawingRelsPath) is { } oldRelsEntry)
+        {
+            try
+            {
+                var oldRelsXml = XlsxPackageXmlEditor.LoadXml(oldRelsEntry);
+                foreach (var rel in oldRelsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+                {
+                    var id = rel.Attribute("Id")?.Value;
+                    var target = rel.Attribute("Target")?.Value;
+                    if (string.IsNullOrEmpty(id) || target is null)
+                        continue;
+                    oldRelTargets[id] = (target, rel.Attribute("TargetMode")?.Value);
+                }
+            }
+            catch
+            {
+                // Malformed rels part: fall through with no resolvable relationships, so every
+                // hyperlink below resolves to nothing (nothing preserved for this drawing part).
+            }
+        }
+
+        foreach (var cNvPr in oldDrawingXml.Descendants(spreadsheetDrawingNs + "cNvPr"))
+        {
+            var parentLocalName = cNvPr.Parent?.Name.LocalName;
+            if (parentLocalName is not ("nvPicPr" or "nvSpPr" or "nvCxnSpPr"))
+                continue;
+
+            var name = cNvPr.Attribute("name")?.Value;
+            if (string.IsNullOrEmpty(name))
+                continue;
+
+            var relId = cNvPr.Element(drawingNs + "hlinkClick")?.Attribute(relNs + "id")?.Value;
+            if (relId is not null && oldRelTargets.TryGetValue(relId, out var resolved))
+                result[name] = resolved;
+        }
+
+        return result;
+    }
+
     private static XElement ToOneCellPictureAnchor(
         PictureModel picture,
         int pictureIndex,
@@ -422,7 +579,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace relNs,
-        string? svgRelId = null) =>
+        string? svgRelId = null,
+        XElement? hlinkClick = null) =>
         new(spreadsheetDrawingNs + "oneCellAnchor",
             new XElement(spreadsheetDrawingNs + "from",
                 new XElement(spreadsheetDrawingNs + "col", Math.Max(0, (long)picture.Anchor.Col - 1).ToString(CultureInfo.InvariantCulture)),
@@ -439,6 +597,12 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XAttribute("name", DrawingName(picture.Name, $"Picture {pictureIndex}")),
                         string.IsNullOrWhiteSpace(picture.Title) ? null : new XAttribute("title", picture.Title),
                         string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText),
+                        // R95/R97-io-drawing-hyperlink: re-attach the object-level hyperlink (from the
+                        // model's own Hyperlink field, or -- for a plain source-loaded object -- the
+                        // pre-rebuild drawing part; see BuildObjectHyperlinkElement). CT_NonVisualDrawingProps
+                        // element order is hlinkClick?, hlinkHover?, extLst? -- must precede the decorative
+                        // extLst below.
+                        hlinkClick,
                         ToDecorativeExtLst(drawingNs, picture.IsDecorative)),
                     new XElement(spreadsheetDrawingNs + "cNvPicPr")),
                 new XElement(spreadsheetDrawingNs + "blipFill",
@@ -483,7 +647,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         string linkRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
-        XNamespace relNs) =>
+        XNamespace relNs,
+        XElement? hlinkClick = null) =>
         new(spreadsheetDrawingNs + "oneCellAnchor",
             new XElement(spreadsheetDrawingNs + "from",
                 new XElement(spreadsheetDrawingNs + "col", Math.Max(0, (long)picture.Anchor.Col - 1).ToString(CultureInfo.InvariantCulture)),
@@ -500,6 +665,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XAttribute("name", DrawingName(picture.Name, $"Picture {pictureIndex}")),
                         string.IsNullOrWhiteSpace(picture.Title) ? null : new XAttribute("title", picture.Title),
                         string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText),
+                        // R95/R97-io-drawing-hyperlink: see ToOneCellPictureAnchor's matching comment.
+                        hlinkClick,
                         ToDecorativeExtLst(drawingNs, picture.IsDecorative)),
                     new XElement(spreadsheetDrawingNs + "cNvPicPr")),
                 new XElement(spreadsheetDrawingNs + "blipFill",
@@ -730,7 +897,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
         TextBoxModel textBox,
         int shapeIndex,
         XNamespace spreadsheetDrawingNs,
-        XNamespace drawingNs) =>
+        XNamespace drawingNs,
+        XNamespace relNs,
+        XElement? hlinkClick = null) =>
         new(spreadsheetDrawingNs + "oneCellAnchor",
             ToDrawingAnchorFrom(textBox.Anchor, spreadsheetDrawingNs, textBox.AnchorOffsetX, textBox.AnchorOffsetY),
             new XElement(spreadsheetDrawingNs + "ext",
@@ -742,7 +911,11 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XAttribute("id", shapeIndex + 100),
                         new XAttribute("name", DrawingName(textBox.Name, $"TextBox {shapeIndex}")),
                         string.IsNullOrWhiteSpace(textBox.Title) ? null : new XAttribute("title", textBox.Title),
-                        string.IsNullOrWhiteSpace(textBox.AltText) ? null : new XAttribute("descr", textBox.AltText)),
+                        string.IsNullOrWhiteSpace(textBox.AltText) ? null : new XAttribute("descr", textBox.AltText),
+                        // R95/R97-io-drawing-hyperlink: re-attach the object-level hyperlink (model
+                        // field, or -- for a plain source-loaded object -- the pre-rebuild drawing
+                        // part; see BuildObjectHyperlinkElement).
+                        hlinkClick),
                     new XElement(spreadsheetDrawingNs + "cNvSpPr", new XAttribute("txBox", "1"))),
                 ToShapePropertiesForDrawingObject(
                     "rect",
@@ -820,9 +993,14 @@ internal static class XlsxWorksheetDrawingObjectWriter
     private static XElement ToOneCellDrawingShapeAnchor(
         DrawingShapeModel shape,
         int shapeIndex,
+        XElement? hlinkClick,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs)
     {
+        // R95/R97-io-drawing-hyperlink: re-attach the object-level hyperlink (model field, or -- for
+        // a plain source-loaded object -- the pre-rebuild drawing part; see
+        // BuildObjectHyperlinkElement). Shared between the cxnSp and sp branches below since both
+        // cNvPr elements carry it identically.
         var shapeProperties = ToShapePropertiesForDrawingObject(
             DrawingMlPresetGeometryMap.GetPreset(shape.Kind),
             shape.RotationDegrees,
@@ -859,7 +1037,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XAttribute("id", shapeIndex + 200),
                         new XAttribute("name", DrawingName(shape.Name, $"Shape {shapeIndex}")),
                         string.IsNullOrWhiteSpace(shape.Title) ? null : new XAttribute("title", shape.Title),
-                        string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText)),
+                        string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText),
+                        hlinkClick),
                     new XElement(spreadsheetDrawingNs + "cNvCxnSpPr",
                         // R90-shape-5-3: preserve which shapes this connector's endpoints were glued
                         // to (stCxn/endCxn) so a connector loaded from a source file that goes through
@@ -874,7 +1053,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XAttribute("id", shapeIndex + 200),
                         new XAttribute("name", DrawingName(shape.Name, $"Shape {shapeIndex}")),
                         string.IsNullOrWhiteSpace(shape.Title) ? null : new XAttribute("title", shape.Title),
-                        string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText)),
+                        string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText),
+                        hlinkClick),
                     new XElement(spreadsheetDrawingNs + "cNvSpPr")),
                 shapeProperties,
                 shape.HasShapeText ? ToShapeTxBody(shape, drawingNs, spreadsheetDrawingNs) : null);

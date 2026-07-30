@@ -215,6 +215,59 @@ public sealed partial class FormulaEvaluator
         // reading the number (same reasoning as the NPV rate-argument exclusion above).
         (name is not ("FORECAST" or "FORECAST.LINEAR") || argIndex > 0);
 
+    // R94-formula-union-selection-range: the subset of StructuredRangeFunctions whose
+    // range/array argument is consumed as a flat, shape-agnostic bag of numeric cell values
+    // (CollectRangeNumbers/CollectRangeNumbersForSelection iterate a RangeValue's Cells in
+    // row-major order regardless of RowCount/ColCount) via each function's own
+    // "args[i] is RangeValue r ? r : wrap-as-1x1" fallback -- e.g. LargeScalar/SmallScalar's
+    // range, RankScalar/RankAvgScalar's range, PercentileIncScalar/QuartileIncScalar/
+    // TrimmeanScalar's rv, PercentrankIncScalar/PercentrankExcScalar's rv, Countblank's range.
+    // A parenthesized union argument (e.g. LARGE((A1:A5,C1:C5),1)) evaluates to a UnionValue,
+    // not a RangeValue, so that per-function fallback silently misreads the whole UnionValue
+    // object as one opaque scalar cell -- CollectRangeNumbersForSelection's cell-type switch
+    // doesn't recognize UnionValue, so it contributes zero numbers instead of every cell across
+    // every area (see BuiltInFunctions.StatisticalCore.Helpers.cs). Since these functions only
+    // ever flatten their range argument (never index into its 2-D shape), it's safe to
+    // materialize a UnionValue argument into one synthetic Nx1 RangeValue holding every area's
+    // cells concatenated in order (MaterializeUnionRangeValue in FormulaEvaluator.References.cs)
+    // -- unlike VLOOKUP/INDEX/MATCH/FILTER/SORT/MMULT and the rest of StructuredRangeFunctions,
+    // which index by row/column shape or pair multiple same-shaped ranges and are NOT safe to
+    // treat this way without per-function verification (left as siblingLeads).
+    //
+    // R97-union-deferred-backlog additions:
+    //  - DEVSQ: its variadic loop (BuiltInFunctions.StatisticalCore.Variance.cs) has its own
+    //    "args[i] is RangeValue rv -> CollectRangeNumbers(rv)" case-by-case switch with NO
+    //    range-wrap fallback for anything else -- a raw UnionValue argument matched none of the
+    //    switch's arms and was silently skipped (contributed zero numbers) rather than misread,
+    //    a differently-shaped bug from LARGE/SMALL's "zero across the board" #NUM!. DEVSQ only
+    //    ever flattens its arguments (same as SUM/AVERAGE's shape-agnostic bag, just without
+    //    AggregateFunctions' variadic-scalar-spread contract because DEVSQ is a
+    //    StructuredRangeFunction), so materializing here is exactly as safe as for LARGE/SMALL.
+    //  - FREQUENCY: takes two INDEPENDENT array arguments, data_array and bins_array, each of
+    //    which is separately flattened into a flat list of numbers (BuiltInFunctions.
+    //    StatisticalDistributions.Descriptive.cs's Frequency: "args[0] is RangeValue rvd" and
+    //    "args[1] is RangeValue rvb" are two unrelated checks, never paired/shape-compared against
+    //    each other unlike MAXIFS/MINIFS's range+criteria pairing below). The per-argument
+    //    expansion loop in FormulaEvaluator.Functions.cs that consults this set runs once per
+    //    argument position independently, so adding FREQUENCY here materializes data_array and/or
+    //    bins_array separately, whichever one(s) are unions -- safe for the same reason DEVSQ is.
+    //    Before this fix a union data_array/bins_array matched neither Frequency's
+    //    "is RangeValue"/"TryCellNumber" branches and silently contributed nothing (an empty
+    //    data set / zero bins) instead of erroring or computing the right answer.
+    private static readonly HashSet<string> UnionMaterializableRangeFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "LARGE", "SMALL", "RANK", "RANK.EQ", "RANK.AVG",
+        "PERCENTILE", "PERCENTILE.INC", "PERCENTILE.EXC",
+        "QUARTILE", "QUARTILE.INC", "QUARTILE.EXC",
+        "TRIMMEAN",
+        "PERCENTRANK", "PERCENTRANK.INC", "PERCENTRANK.EXC",
+        "COUNTBLANK",
+        "DEVSQ", "FREQUENCY"
+    };
+
+    private static bool IsUnionMaterializableRangeFunction(string name) =>
+        UnionMaterializableRangeFunctions.Contains(name);
+
     private static bool IsStructuredRangeFunction(string name) =>
         StructuredRangeFunctions.Contains(name);
 

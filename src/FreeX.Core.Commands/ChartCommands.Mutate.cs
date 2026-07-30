@@ -213,6 +213,12 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
     private int? _previousErrorBarSeriesIndex;
     private bool? _previousShowLinearTrendline;
     private bool? _previousShowErrorBars;
+    private List<ChartSeriesFormat>? _previousSeriesFormats;
+    private List<ChartPointFillFormat>? _previousPointFillColors;
+    private List<ChartSeriesDataLabelFormat>? _previousSeriesDataLabelFormats;
+    private List<ChartPointDataLabelFormat>? _previousPointDataLabelFormats;
+    private List<ChartSeriesRawXmlEntry>? _previousAdditionalSeriesErrorBarsXml;
+    private List<ChartSeriesRawXmlEntry>? _previousAdditionalSeriesTrendlinesXml;
     private bool _clearedMappingsForSourceChange;
 
     public string Label => "Select Chart Data";
@@ -274,7 +280,9 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             // otherwise they silently mis-apply to whichever unrelated series now sits at that
             // index after the re-index. The same applies to pie-slice explosions, "value from
             // cells" range data labels, secondary-axis/combo-line/combo-scatter series-index
-            // lists, and the scalar trendline/error-bar series indexes.
+            // lists, the scalar trendline/error-bar series indexes, and per-series/per-point
+            // formatting (fill/line/marker colors, data-label formats, and the verbatim
+            // extra-errBars/trendline XML passthroughs) -- all keyed by SeriesIndex too.
             _previousSeriesColumnMappings = chart.SeriesColumnMappings;
             _previousVerbatimSeriesFormulas = chart.VerbatimSeriesFormulas;
             _previousSeriesOrderOverrides = chart.SeriesOrderOverrides;
@@ -290,6 +298,12 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             _previousErrorBarSeriesIndex = chart.ErrorBarSeriesIndex;
             _previousShowLinearTrendline = chart.ShowLinearTrendline;
             _previousShowErrorBars = chart.ShowErrorBars;
+            _previousSeriesFormats = chart.SeriesFormats;
+            _previousPointFillColors = chart.PointFillColors;
+            _previousSeriesDataLabelFormats = chart.SeriesDataLabelFormats;
+            _previousPointDataLabelFormats = chart.PointDataLabelFormats;
+            _previousAdditionalSeriesErrorBarsXml = chart.AdditionalSeriesErrorBarsXml;
+            _previousAdditionalSeriesTrendlinesXml = chart.AdditionalSeriesTrendlinesXml;
             _clearedMappingsForSourceChange = true;
             chart.SeriesColumnMappings = [];
             chart.VerbatimSeriesFormulas = null;
@@ -306,6 +320,12 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             chart.ErrorBarSeriesIndex = 0;
             chart.ShowLinearTrendline = false;
             chart.ShowErrorBars = false;
+            chart.SeriesFormats = [];
+            chart.PointFillColors = [];
+            chart.SeriesDataLabelFormats = [];
+            chart.PointDataLabelFormats = [];
+            chart.AdditionalSeriesErrorBarsXml = [];
+            chart.AdditionalSeriesTrendlinesXml = [];
         }
 
         chart.DataRange = _dataRange;
@@ -344,6 +364,12 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             chart.ErrorBarSeriesIndex = _previousErrorBarSeriesIndex ?? 0;
             chart.ShowLinearTrendline = _previousShowLinearTrendline ?? false;
             chart.ShowErrorBars = _previousShowErrorBars ?? false;
+            chart.SeriesFormats = _previousSeriesFormats ?? [];
+            chart.PointFillColors = _previousPointFillColors ?? [];
+            chart.SeriesDataLabelFormats = _previousSeriesDataLabelFormats ?? [];
+            chart.PointDataLabelFormats = _previousPointDataLabelFormats ?? [];
+            chart.AdditionalSeriesErrorBarsXml = _previousAdditionalSeriesErrorBarsXml ?? [];
+            chart.AdditionalSeriesTrendlinesXml = _previousAdditionalSeriesTrendlinesXml ?? [];
         }
 
         _previousDataRange = null;
@@ -365,6 +391,12 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         _previousErrorBarSeriesIndex = null;
         _previousShowLinearTrendline = null;
         _previousShowErrorBars = null;
+        _previousSeriesFormats = null;
+        _previousPointFillColors = null;
+        _previousSeriesDataLabelFormats = null;
+        _previousPointDataLabelFormats = null;
+        _previousAdditionalSeriesErrorBarsXml = null;
+        _previousAdditionalSeriesTrendlinesXml = null;
         _clearedMappingsForSourceChange = false;
     }
 }

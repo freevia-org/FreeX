@@ -350,6 +350,45 @@ public static class PasteCommandFactory
             if (operationFormatEdits is { Count: > 0 })
                 specialExtraCommands.Add(new PasteFormatsCommand(targetSheetId, operationFormatEdits));
 
+            // R96-paste-special-floating-objects: a Paste Special (mode All + Transpose/SkipBlanks/a
+            // non-Default ContentKind) with a single-cell destination must carry comments and any
+            // anchored picture/shape/textbox/chart exactly like a plain Ctrl+V and the tiled-destination
+            // branch already do -- Skip Blanks/Transpose only change how the cell grid is filled, not
+            // whether comments or floating objects travel with the paste (real Excel ground truth).
+            // Previously this branch only ever emitted PasteMergedRegionsCommand/PasteFormatsCommand,
+            // silently dropping comments and floating objects whenever any Paste Special option was set.
+            if (specialCarriesFormatting)
+            {
+                var specialFootprint = new GridRange(
+                    destination,
+                    new CellAddress(targetSheetId, destination.Row + pasteRows - 1, destination.Col + pasteCols - 1));
+
+                if (ShouldCarryComments(sourceSheet, sourceRange, targetSheet, specialFootprint))
+                {
+                    specialExtraCommands.AddRange(BuildCommentCarryCommands(
+                        targetSheetId, sourceRange, destination, specialFootprint, options.Transpose));
+                }
+
+                var picturesToCarry = FindPicturesAnchoredIn(sourceSheet, sourceRange);
+                if (picturesToCarry.Count > 0)
+                    specialExtraCommands.Add(new PastePicturesCommand(targetSheetId, sourceRange, destination, picturesToCarry, options.Transpose));
+
+                var shapesToCarry = FindShapesAnchoredIn(sourceSheet, sourceRange);
+                if (shapesToCarry.Count > 0)
+                    specialExtraCommands.Add(new PasteShapesCommand(targetSheetId, sourceRange, destination, shapesToCarry, options.Transpose));
+
+                var textBoxesToCarry = FindTextBoxesAnchoredIn(sourceSheet, sourceRange);
+                if (textBoxesToCarry.Count > 0)
+                    specialExtraCommands.Add(new PasteTextBoxesCommand(targetSheetId, sourceRange, destination, textBoxesToCarry, options.Transpose));
+
+                var chartsToCarry = FindChartsAnchoredIn(sourceSheet, sourceRange);
+                if (chartsToCarry.Count > 0)
+                {
+                    specialExtraCommands.Add(new PasteChartsCommand(
+                        sourceRange.Start.Sheet, targetSheetId, sourceRange, destination, chartsToCarry, options.Transpose));
+                }
+            }
+
             return specialExtraCommands.Count == 0
                 ? pasteSpecialCommand
                 : new CompositeWorkbookCommand("Paste Special", [pasteSpecialCommand, .. specialExtraCommands]);

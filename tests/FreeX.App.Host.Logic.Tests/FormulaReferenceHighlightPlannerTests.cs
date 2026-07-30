@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -205,6 +206,127 @@ public sealed class FormulaReferenceHighlightPlannerTests
         highlights[0].Range.Should().Be(new GridRange(
             new CellAddress(OtherSheet, 2, 2),
             new CellAddress(OtherSheet, 2, 2)));
+    }
+
+    [Fact]
+    public void GetHighlights_ProjectsUnquotedThreeDSheetRangeOntoAnyInclusiveSheet_IncludingReverseSpan()
+    {
+        var first = SheetId.New();
+        var middle = SheetId.New();
+        var last = SheetId.New();
+        var names = new Dictionary<string, SheetId>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Sheet1"] = first,
+            ["Sheet2"] = middle,
+            ["Sheet3"] = last,
+        };
+
+        foreach (var formula in new[] { "=SUM(Sheet1:Sheet3!A1:B2)", "=SUM(Sheet3:Sheet1!A1:B2)" })
+        {
+            var highlights = FormulaReferenceHighlightPlanner.GetHighlights(
+                formula,
+                middle,
+                sheetName => names.GetValueOrDefault(sheetName),
+                resolveStructuredReference: null,
+                sheetId => sheetId == first ? 0 : sheetId == middle ? 1 : sheetId == last ? 2 : null);
+
+            highlights.Should().ContainSingle();
+            highlights[0].Text.Should().Be(formula[5..^1]);
+            highlights[0].SheetName.Should().Be(formula.Contains("Sheet1:Sheet3", StringComparison.Ordinal) ? "Sheet1" : "Sheet3");
+            highlights[0].SheetEndName.Should().Be(formula.Contains("Sheet1:Sheet3", StringComparison.Ordinal) ? "Sheet3" : "Sheet1");
+            highlights[0].Range.Should().Be(new GridRange(
+                new CellAddress(middle, 1, 1),
+                new CellAddress(middle, 2, 2)));
+        }
+    }
+
+    [Fact]
+    public void GetHighlights_QuotedThreeDSheetRangeDecodesEscapesAndSkipsOutsideSheets()
+    {
+        var first = SheetId.New();
+        var middle = SheetId.New();
+        var last = SheetId.New();
+        var names = new Dictionary<string, SheetId>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["O'Brien"] = first,
+            ["Middle Sheet"] = middle,
+            ["Final Sheet"] = last,
+        };
+
+        var formula = "=SUM('O''Brien:Final Sheet'!A1:B2)";
+        var highlights = FormulaReferenceHighlightPlanner.GetHighlights(
+            formula,
+            middle,
+            sheetName => names.GetValueOrDefault(sheetName),
+            resolveStructuredReference: null,
+            sheetId => sheetId == first ? 0 : sheetId == middle ? 1 : sheetId == last ? 2 : null);
+
+        highlights.Should().ContainSingle();
+        highlights[0].SheetName.Should().Be("O'Brien");
+        highlights[0].SheetEndName.Should().Be("Final Sheet");
+        highlights[0].Range.Should().Be(new GridRange(
+            new CellAddress(middle, 1, 1),
+            new CellAddress(middle, 2, 2)));
+
+        FormulaReferenceHighlightPlanner.GetHighlights(
+                formula + "+C3",
+                SheetId.New(),
+                sheetName => names.GetValueOrDefault(sheetName),
+                resolveStructuredReference: null,
+                sheetId => sheetId == first ? 0 : sheetId == middle ? 1 : sheetId == last ? 2 : null)
+            .Select(highlight => highlight.Text)
+            .Should()
+            .Equal("C3");
+
+        // The legacy overload has no workbook-order callback, so it intentionally renders only
+        // when the active sheet is one of the two resolved endpoints; callers that need middle
+        // sheets use the five-argument overload above.
+        FormulaReferenceHighlightPlanner.GetHighlights(
+                "=SUM('O''Brien:Final Sheet'!A1:B2)",
+                first,
+                sheetName => names.GetValueOrDefault(sheetName),
+                resolveStructuredReference: null)
+            .Should()
+            .ContainSingle();
+
+        FormulaReferenceHighlightPlanner.GetHighlights(
+                "=SUM('O''Brien:Final Sheet'!A1:B2)",
+                middle,
+                sheetName => names.GetValueOrDefault(sheetName),
+                resolveStructuredReference: null)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public void FormulaReferenceGripResize_PreservesExactThreeDSheetQualifier()
+    {
+        var formula = "=SUM('O''Brien:Final Sheet'!A1:B2)";
+        var highlight = FormulaReferenceHighlightPlanner.GetHighlights(
+                formula,
+                OtherSheet,
+                sheetName => sheetName switch
+                {
+                    "O'Brien" => CurrentSheet,
+                    "Final Sheet" => OtherSheet,
+                    _ => null,
+                },
+                resolveStructuredReference: null,
+                sheetId => sheetId == CurrentSheet ? 0 : sheetId == OtherSheet ? 1 : null)
+            .Should()
+            .ContainSingle()
+            .Which;
+
+        var resized = FormulaReferenceDragResizePlanner.ApplyResize(
+            formula,
+            highlight.TextStart,
+            highlight.TextLength,
+            new GridRange(
+                new CellAddress(OtherSheet, 1, 1),
+                new CellAddress(OtherSheet, 3, 3)),
+            useR1C1ReferenceStyle: false);
+
+        resized.Text.Should().Be("=SUM('O''Brien:Final Sheet'!A1:C3)");
     }
 
     [Fact]

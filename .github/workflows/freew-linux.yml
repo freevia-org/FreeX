@@ -1,15 +1,21 @@
 name: FreeW Linux App Preview
 
 # Manual trigger only — this lane is intentionally not run on push/PR.
-# Dispatch with: gh workflow run freew-linux.yml --ref <branch>
+# Dispatch with: gh workflow run freew-linux.yml --ref <branch> -f release_version=0.8.149
 on:
   workflow_dispatch:
+    inputs:
+      release_version:
+        description: Release version, for example 0.8.149
+        required: true
+        default: "0.1.0"
+        type: string
 
 permissions:
   contents: read
 
 env:
-  FREEW_APP_VERSION: 0.1.0
+  FREEW_APP_VERSION: ${{ inputs.release_version }}
 
 jobs:
   freew-linux-app:

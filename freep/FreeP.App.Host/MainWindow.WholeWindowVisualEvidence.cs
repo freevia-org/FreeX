@@ -196,7 +196,7 @@ public sealed partial class MainWindow
                 $"Backstage pane is '{_backstage.EvidencePaneLabel ?? "unavailable"}'; expected '{scenario.ActivationId}'."));
         }
 
-        return new WholeWindowVisualEvidenceSemanticState(
+        var semantic = new WholeWindowVisualEvidenceSemanticState(
             scenario.Id,
             "wpf",
             scenario.ActivationId,
@@ -230,6 +230,22 @@ public sealed partial class MainWindow
             BoundsRelativeTo(root, statusRoot),
             VisibleAuxiliaryPanesForEvidence(),
             assertions);
+        if (scenario.Kind != WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay ||
+            !StringComparer.Ordinal.Equals(scenario.ActivationId, "selection"))
+            return semantic;
+
+        var editor = SlideCanvas.TextEditor;
+        return semantic with
+        {
+            RichEditor = new WholeWindowVisualEvidenceRichEditorState(
+                editor?.IsActive == true,
+                DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectionStart,
+                DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectionEnd,
+                editor?.SelectedText ?? string.Empty,
+                editor?.ActiveRichTextVisual is FrameworkElement richVisual
+                    ? BoundsRelativeTo(root, richVisual)
+                    : new WholeWindowVisualEvidenceBounds(0, 0, 0, 0)),
+        };
     }
 
     private bool PrepareViewStateForVisualEvidence(string activationId)

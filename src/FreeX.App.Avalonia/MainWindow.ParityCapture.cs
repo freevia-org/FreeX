@@ -68,6 +68,8 @@ public sealed partial class MainWindow
     private const int ParityCaptureWindowWidth = 1120;
     private const int ParityCaptureWindowHeight = 720;
     private const int ParityCaptureTitleBarHeight = 30;
+    internal const int NameBoxDropdownParityCaptureWidth = 208;
+    internal const int NameBoxDropdownParityCaptureHeight = 136;
     private const int ParityCaptureDialogWaitMilliseconds = 8000;
     private const int ParityCaptureDialogPollMilliseconds = 50;
     private const int ForecastSheetParityDialogWidth = 320;
@@ -327,6 +329,9 @@ public sealed partial class MainWindow
         }
 
         // ── Dialogs: open each, render the dialog window, close it. ──
+        if (!interactionOnly && (captureAll || string.Equals(requestedSurfaceId, "popup.nameBoxDropdown", StringComparison.Ordinal)))
+            results.Add(CaptureNameBoxDropdownSurface(outputDirectory));
+
         var dialogOpeners = ParityDialogOpeners();
         if (interactionOnly)
             dialogOpeners = dialogOpeners.Concat(ParityInteractionOnlyDialogOpeners()).ToArray();
@@ -2244,6 +2249,124 @@ public sealed partial class MainWindow
             return new ParitySurfaceResult(surfaceId, kind, surfaceId + ".png", Captured: false, $"Ribbon tab '{tabId}' is not present in the strip.");
 
         return CaptureWindowSurface(outputDirectory, surfaceId, kind);
+    }
+
+    private ParitySurfaceResult CaptureNameBoxDropdownSurface(string outputDirectory)
+    {
+        const string surfaceId = "popup.nameBoxDropdown";
+        const string pngName = surfaceId + ".png";
+        const string provenance = "managed-popup-diagnostic";
+
+        try
+        {
+            var stalePngPath = Path.Combine(outputDirectory, pngName);
+            if (File.Exists(stalePngPath))
+                File.Delete(stalePngPath);
+
+            SeedNameBoxDropdownParityFixture();
+            ShowCellAddressAutocompletePopup();
+            LayoutWindow();
+
+            if (_cellAddressAutocompletePopup?.Child is not Visual)
+                throw new InvalidOperationException("The Avalonia Name Box popup did not expose its production child.");
+
+            return new ParitySurfaceResult(
+                surfaceId,
+                ParitySurfaceKind.Overlay,
+                pngName,
+                Captured: false,
+                "Managed popup opening is diagnostic only. Authoritative Avalonia parity requires the live native X11 popup crop from the name-box-dropdown-parity physical selector.",
+                EvidenceProvenance: provenance);
+        }
+        catch (Exception ex)
+        {
+            return new ParitySurfaceResult(
+                surfaceId,
+                ParitySurfaceKind.Overlay,
+                pngName,
+                Captured: false,
+                $"{ex.GetType().Name}: {ex.Message}",
+                EvidenceProvenance: provenance);
+        }
+        finally
+        {
+            if (_cellAddressAutocompletePopup is { } popup)
+                popup.IsOpen = false;
+            LayoutWindow();
+        }
+    }
+
+    /// <summary>
+    /// Seeds the same five Name Box entries used by the WPF screenshot tour. This is capture-only data and
+    /// deliberately has different ids from the Wave68 physical-selection fixture so the two contracts cannot
+    /// accidentally change one another's object-selection behavior.
+    /// </summary>
+    private void SeedNameBoxDropdownParityFixture()
+    {
+        var sheet = _session.ActiveSheet;
+        const string salesName = "Sales";
+        foreach (var name in _session.Workbook.NamedRanges.Keys.ToArray())
+            _session.Workbook.RemoveNamedRange(name);
+        foreach (var scopedName in _session.Workbook.ScopedNamedRanges.Keys.ToArray())
+            _session.Workbook.RemoveScopedNamedRange(scopedName.Name, scopedName.Sheet);
+        foreach (var workbookSheet in _session.Workbook.Sheets)
+        {
+            workbookSheet.StructuredTables.Clear();
+            workbookSheet.DrawingShapes.Clear();
+            workbookSheet.Pictures.Clear();
+            workbookSheet.TextBoxes.Clear();
+            workbookSheet.Charts.Clear();
+        }
+
+        _session.Workbook.NamedRanges[salesName] = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 3));
+
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Id = Guid.Parse("68000000-0000-0000-0000-000000000001"),
+            Name = "Tour Name Box Shape",
+            Anchor = new CellAddress(sheet.Id, 22, 8),
+            Width = 96,
+            Height = 48,
+            IsVisible = true,
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Id = Guid.Parse("68000000-0000-0000-0000-000000000002"),
+            Name = "Tour Name Box Picture",
+            Anchor = new CellAddress(sheet.Id, 23, 8),
+            Kind = PictureKind.Image,
+            ImageBytes = [1, 2, 3, 4],
+            ContentType = "image/png",
+            Width = 96,
+            Height = 48,
+            IsVisible = true,
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Id = Guid.Parse("68000000-0000-0000-0000-000000000003"),
+            Name = "Tour Name Box Text Box",
+            Anchor = new CellAddress(sheet.Id, 24, 8),
+            Text = "Tour Name Box text box",
+            Width = 120,
+            Height = 48,
+            IsVisible = true,
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Id = Guid.Parse("68000000-0000-0000-0000-000000000004"),
+            Name = "Tour Name Box Chart",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 25, 8),
+                new CellAddress(sheet.Id, 26, 9)),
+            IsVisible = true,
+        });
+
+        _session.SelectRange(new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 3)));
+        RefreshShell(_statusText.Text ?? "Ready");
     }
 
     /// <summary>Renders the whole shell window to <c>&lt;surfaceId&gt;.png</c>.</summary>

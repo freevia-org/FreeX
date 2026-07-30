@@ -193,4 +193,18 @@ public sealed class ToolHarnessDedupSourceTests
         imageDiff.Should().NotContain("new byte[width * height * 4]");
         imageDiff.Should().NotContain("bitmap.CopyPixels(pixels, width * 4, 0)");
     }
+
+    [Fact]
+    public void FreePWholeWindowEvidenceManifest_AccountsForRichEditorSelectionArtifacts()
+    {
+        var generator = TestWorkspaceFiles.ReadRepoText(
+            "tools",
+            "Generate-FreePWholeWindowVisualEvidenceManifest.ps1");
+
+        generator.Should().Contain("$selectionArtifactCount = 3");
+        generator.Should().Contain("diff/editor.rich-text-selection.wpf-selection.png");
+        generator.Should().Contain("diff/editor.rich-text-selection.avalonia-selection.png");
+        generator.Should().Contain("diff/editor.rich-text-selection.selection.png");
+        generator.Should().Contain("$artifact.diffPngCount -ne ($expectedScenarioCount + $selectionArtifactCount)");
+    }
 }

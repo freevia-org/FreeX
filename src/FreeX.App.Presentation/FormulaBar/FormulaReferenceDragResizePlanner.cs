@@ -64,31 +64,10 @@ public static class FormulaReferenceDragResizePlanner
 
     private static string ExtractSheetQualifier(string referenceText)
     {
-        if (referenceText.Length == 0)
+        if (referenceText.Length == 0 ||
+            !FormulaReferenceHighlightPlanner.TryParseSheetQualifier(referenceText, 0, out var qualifier))
             return "";
 
-        if (referenceText[0] == '\'')
-        {
-            for (var index = 1; index < referenceText.Length; index++)
-            {
-                if (referenceText[index] != '\'')
-                    continue;
-
-                if (index + 1 < referenceText.Length && referenceText[index + 1] == '\'')
-                {
-                    index++;
-                    continue;
-                }
-
-                return index + 1 < referenceText.Length && referenceText[index + 1] == '!'
-                    ? referenceText[..(index + 2)]
-                    : "";
-            }
-
-            return "";
-        }
-
-        var bangIndex = referenceText.IndexOf('!');
-        return bangIndex >= 0 ? referenceText[..(bangIndex + 1)] : "";
+        return referenceText[..qualifier.AfterQualifier];
     }
 }

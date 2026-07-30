@@ -18,6 +18,8 @@ param(
     [switch]$SkipPublish,
     [switch]$SkipImageBuild,
     [switch]$GroupedChild,
+    [switch]$GroupedCaret,
+    [switch]$PointerSelection,
     [switch]$Replace,
     [switch]$KeepContainer
 )
@@ -28,6 +30,7 @@ $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetF
 $fixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx"
 $surface = "in-canvas-rich-text-soft-break"
 $scope = "physical FreeP rich-editor soft-break evidence lane"
+if (@($GroupedChild, $GroupedCaret, $PointerSelection).Where({ $_ }).Count -gt 1) { throw "GroupedChild, GroupedCaret, and PointerSelection are mutually exclusive." }
 if ($GroupedChild) {
     $fixturePath = Join-Path $resolvedOutputRoot "fixtures/21-comments-notes-grouped-child.pptx"
     $surface = "in-canvas-grouped-child-rich-text"
@@ -37,6 +40,26 @@ if ($GroupedChild) {
         -Source (Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx") `
         -Destination $fixturePath
     if ($LASTEXITCODE -ne 0) { throw "Grouped-child fixture generation failed with exit code $LASTEXITCODE." }
+}
+elseif ($GroupedCaret) {
+    $fixturePath = Join-Path $resolvedOutputRoot "fixtures/21-comments-notes-grouped-child-caret.pptx"
+    $surface = "in-canvas-grouped-child-caret"
+    $scope = "physical FreeP grouped-child caret navigation selection edit-save-reopen lane"
+    $generator = Join-Path $repoRoot "tools/FreeP.RenderCompare/Generate-GroupedTextFixture.ps1"
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $generator `
+        -Source (Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx") `
+        -Destination $fixturePath -CaretGeometry
+    if ($LASTEXITCODE -ne 0) { throw "Grouped-child fixture generation failed with exit code $LASTEXITCODE." }
+}
+elseif ($PointerSelection) {
+    $fixturePath = Join-Path $resolvedOutputRoot "fixtures/21-comments-notes-grouped-child-pointer-selection.pptx"
+    $surface = "in-canvas-grouped-child-pointer-selection"
+    $scope = "physical FreeP grouped-child pointer drag selection across unequal wrapped visual lines and a paragraph boundary"
+    $generator = Join-Path $repoRoot "tools/FreeP.RenderCompare/Generate-GroupedTextFixture.ps1"
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $generator `
+        -Source (Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx") `
+        -Destination $fixturePath -PointerSelectionGeometry
+    if ($LASTEXITCODE -ne 0) { throw "Pointer-selection fixture generation failed with exit code $LASTEXITCODE." }
 }
 $fixtureFileName = Split-Path -Leaf $fixturePath
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
@@ -67,6 +90,127 @@ function Add-ResultEvidence {
         if (-not [string]::IsNullOrWhiteSpace([string]$name) -and -not $evidence.Contains([string]$name)) { $evidence.Add([string]$name) }
     }
     $Result.evidence = $evidence.ToArray()
+}
+
+function Assert-ExactClipboardTranscript {
+    param(
+        [Parameter(Mandatory = $true)][string]$EvidenceDirectory,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+    $expectedPath = Join-Path $EvidenceDirectory "$Name-expected.txt"
+    $actualPath = Join-Path $EvidenceDirectory "$Name-actual.txt"
+    $proofPath = Join-Path $EvidenceDirectory "$Name-proof.txt"
+    foreach ($path in @($expectedPath, $actualPath, $proofPath)) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) {
+            throw "Clipboard transcript artifact is missing or empty: $path"
+        }
+    }
+    $expectedBytes = [IO.File]::ReadAllBytes($expectedPath)
+    $actualBytes = [IO.File]::ReadAllBytes($actualPath)
+    if ([Convert]::ToBase64String($expectedBytes) -ne [Convert]::ToBase64String($actualBytes)) {
+        throw "Clipboard transcript '$Name' does not exactly match its expected bytes."
+    }
+    $proof = Get-Content -LiteralPath $proofPath -Raw
+    if ($proof -notmatch '(?m)^tool=xclip$' -or
+        $proof -notmatch '(?m)^selection=clipboard$' -or
+        $proof -notmatch '(?m)^status=true$' -or
+        $proof -notmatch '(?m)^exact-match=true$') {
+        throw "Clipboard transcript '$Name' did not report a bounded exact xclip match."
+    }
+}
+
+function Assert-GroupedCaretSemanticContract {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$EvidenceDirectory
+    )
+    if ($surface -ne "in-canvas-grouped-child-caret") { return }
+    if ($null -eq $Manifest.semanticReadback -or
+        $Manifest.semanticReadback.tool -ne "xclip" -or
+        $Manifest.semanticReadback.selection -ne "clipboard" -or
+        [string]::Join("|", @($Manifest.semanticReadback.transcripts)) -ne
+        "grouped-caret-selection|grouped-caret-vertical-down|grouped-caret-vertical-roundtrip" -or
+        $Manifest.semanticReadback.reopenProof -ne "grouped-caret-reopen-proof.txt") {
+        throw "Grouped-caret manifest is missing its exact Wave67 semantic readback declaration."
+    }
+    foreach ($name in @(
+        "grouped-caret-selection",
+        "grouped-caret-vertical-down",
+        "grouped-caret-vertical-roundtrip"
+    )) {
+        Assert-ExactClipboardTranscript -EvidenceDirectory $EvidenceDirectory -Name $name
+    }
+    $reopenProofPath = Join-Path $EvidenceDirectory "grouped-caret-reopen-proof.txt"
+    $reopenScreenshotPath = Join-Path $EvidenceDirectory "grouped-caret-reopened.png"
+    if (-not (Test-Path -LiteralPath $reopenProofPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $reopenScreenshotPath -PathType Leaf) -or
+        (Get-Item -LiteralPath $reopenScreenshotPath).Length -le 0) {
+        throw "Grouped-caret reopen proof or screenshot is missing."
+    }
+    $reopenProof = Get-Content -LiteralPath $reopenProofPath -Raw
+    if ($reopenProof -notmatch '(?m)^dialog-open=true$' -or
+        $reopenProof -notmatch '(?m)^dialog-closed=true$' -or
+        $reopenProof -notmatch '(?m)^clipboard-readback=true$' -or
+        $reopenProof -notmatch '(?m)^screenshot-captured=true$' -or
+        $reopenProof -notmatch '(?m)^reopen-pass=true$') {
+        throw "Grouped-caret reopen proof did not prove open, close, exact clipboard readback, and screenshot capture."
+    }
+    Assert-ExactClipboardTranscript -EvidenceDirectory $EvidenceDirectory -Name "grouped-caret-reopened"
+}
+
+function Assert-PointerSelectionSemanticContract {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$EvidenceDirectory
+    )
+    if ($surface -ne "in-canvas-grouped-child-pointer-selection") { return }
+    if ($null -eq $Manifest.semanticReadback -or
+        $Manifest.semanticReadback.tool -ne "xclip" -or
+        $Manifest.semanticReadback.selection -ne "clipboard" -or
+        [string]::Join("|", @($Manifest.semanticReadback.transcripts)) -ne
+        "pointer-selection-forward|pointer-selection-reverse" -or
+        $Manifest.semanticReadback.geometryProof -ne "pointer-selection-calibration.txt") {
+        throw "Pointer-selection manifest is missing its exact semantic readback declaration."
+    }
+    foreach ($name in @("pointer-selection-forward", "pointer-selection-reverse")) {
+        Assert-ExactClipboardTranscript -EvidenceDirectory $EvidenceDirectory -Name $name
+    }
+    $proofPath = Join-Path $EvidenceDirectory "pointer-selection-calibration.txt"
+    foreach ($path in @($proofPath, (Join-Path $EvidenceDirectory "pointer-selection-forward.png"), (Join-Path $EvidenceDirectory "pointer-selection-reverse.png"))) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) {
+            throw "Pointer-selection geometry or screenshot evidence is missing: $path"
+        }
+    }
+    $proof = Get-Content -LiteralPath $proofPath -Raw
+    if ($proof -notmatch '(?m)^drag-contract=first visual line to captured pointer beyond editor bottom across paragraph boundary$') {
+        throw "Pointer-selection calibration proof does not describe the bounded drag contract."
+    }
+    $visualStatePath = Join-Path $EvidenceDirectory "pointer-selection-visual-state.json"
+    if (-not (Test-Path -LiteralPath $visualStatePath -PathType Leaf) -or
+        (Get-Item -LiteralPath $visualStatePath).Length -le 0) {
+        throw "Pointer-selection paired visual state is missing."
+    }
+    $visualState = Get-Content -LiteralPath $visualStatePath -Raw | ConvertFrom-Json
+    $expectedText = "Wide words make this first paragraph wrap at unequal visual line widths`ntail paragraph crosses the boundary"
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $expectedTextHash = ([BitConverter]::ToString(
+            $sha256.ComputeHash([Text.Encoding]::UTF8.GetBytes($expectedText)))
+        ).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        $sha256.Dispose()
+    }
+    $fixtureBeforePath = Join-Path $EvidenceDirectory "fixture-mounted-before.sha256.txt"
+    $fixtureBefore = (Get-Content -LiteralPath $fixtureBeforePath -Raw).Trim()
+    if ($visualState.contractId -ne "freep.rich-text.selection-visual.v1" -or
+        $visualState.fixtureSha256 -ne $fixtureBefore -or
+        $visualState.selectedText -ne $expectedText -or
+        $visualState.selectedTextSha256 -ne $expectedTextHash -or
+        $visualState.capture -ne "pointer-selection-forward.png" -or
+        $visualState.direction -ne "forward") {
+        throw "Pointer-selection paired visual state is stale or does not describe the exact selected-text capture."
+    }
 }
 
 function Assert-ManifestContract {
@@ -138,7 +282,16 @@ try {
     if ($probeOutput.Count -gt 0) { $probeOutput | Set-Content -LiteralPath $probeLog -Encoding utf8 } else { "docker exec produced no stdout/stderr; inspect the manifest and runtime evidence." | Set-Content -LiteralPath $probeLog -Encoding utf8 }
     (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath $sourceAfter -Encoding ascii
     $mountedDocument = Join-Path $resolvedOutputRoot "freep/documents/$fixtureFileName"; $mountedAfter = Join-Path $evidenceDirectory "fixture-host-mounted-after.sha256.txt"
-    if (Test-Path -LiteralPath $mountedDocument -PathType Leaf) { (Get-FileHash -LiteralPath $mountedDocument -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath $mountedAfter -Encoding ascii } else { "MISSING mounted document: $mountedDocument" | Set-Content -LiteralPath $mountedAfter -Encoding utf8 }
+    $hostMountedAfterAvailable = $false
+    try {
+        if (Test-Path -LiteralPath $mountedDocument -PathType Leaf) {
+            $mountedHash = (Get-FileHash -LiteralPath $mountedDocument -Algorithm SHA256).Hash.ToLowerInvariant()
+            Set-Content -LiteralPath $mountedAfter -Value $mountedHash -Encoding ascii -ErrorAction Stop
+            $hostMountedAfterAvailable = $true
+        }
+    } catch {
+        Write-Warning "Optional host-mounted-after hash unavailable: $($_.Exception.Message)"
+    }
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
         $failureEvidenceName = "probe-runner-failure.txt"; @("The dedicated FreeP rich-text probe exited without writing its manifest.", "docker-exit-code=$probeExitCode", "probe-log=$probeLog", "probe-output=$([string]::Join([Environment]::NewLine, @($probeOutput)))") | Set-Content -LiteralPath (Join-Path $evidenceDirectory $failureEvidenceName) -Encoding utf8
         $failureResults = @($requiredIds | ForEach-Object { [ordered]@{ id = $_; category = "physical-x11-rich-text-shortcut"; status = "failed"; evidenceLevel = "physical-x11-input"; evidence = @($failureEvidenceName); note = "Probe runner exited before producing row-specific evidence." } })
@@ -151,17 +304,24 @@ try {
         $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
         $savedResult = @($manifest.results | Where-Object { $_.id -eq "saved-soft-break-native-package" })[0]
         if ($null -eq $savedResult) { throw "Probe manifest is missing saved-soft-break-native-package." }
-        Add-ResultEvidence -Result $savedResult -Names @("fixture-source-before.sha256.txt", "fixture-source-after.sha256.txt", "fixture-mounted-before.sha256.txt", "fixture-mounted-after.sha256.txt", "fixture-host-mounted-after.sha256.txt")
-        $hashPaths = [ordered]@{ "source-before" = $sourceBefore; "source-after" = $sourceAfter; "mounted-before" = (Join-Path $evidenceDirectory "fixture-mounted-before.sha256.txt"); "mounted-after" = (Join-Path $evidenceDirectory "fixture-mounted-after.sha256.txt"); "host-mounted-after" = $mountedAfter }
+        $evidenceNames = @("fixture-source-before.sha256.txt", "fixture-source-after.sha256.txt", "fixture-mounted-before.sha256.txt", "fixture-mounted-after.sha256.txt")
+        $hashPaths = [ordered]@{ "source-before" = $sourceBefore; "source-after" = $sourceAfter; "mounted-before" = (Join-Path $evidenceDirectory "fixture-mounted-before.sha256.txt"); "mounted-after" = (Join-Path $evidenceDirectory "fixture-mounted-after.sha256.txt") }
+        if ($hostMountedAfterAvailable) { $evidenceNames += "fixture-host-mounted-after.sha256.txt"; $hashPaths["host-mounted-after"] = $mountedAfter }
+        Add-ResultEvidence -Result $savedResult -Names $evidenceNames
         $hashes = @{}; $hashFailures = [System.Collections.Generic.List[string]]::new()
         foreach ($entry in $hashPaths.GetEnumerator()) { if (-not (Test-Path -LiteralPath $entry.Value -PathType Leaf)) { $hashFailures.Add("$($entry.Key) hash artifact is missing"); continue }; if ((Get-Item -LiteralPath $entry.Value).Length -le 0) { $hashFailures.Add("$($entry.Key) hash artifact is empty"); continue }; $value = (Get-Content -LiteralPath $entry.Value -Raw).Trim(); if ($value -notmatch '^[0-9a-f]{64}$') { $hashFailures.Add("$($entry.Key) hash is not an exact lowercase 64-hex value"); continue }; $hashes[$entry.Key] = $value }
         foreach ($pair in @(@("source-before", "source-after"), @("source-before", "mounted-before"), @("mounted-after", "host-mounted-after"))) { if ($hashes.ContainsKey($pair[0]) -and $hashes.ContainsKey($pair[1]) -and $hashes[$pair[0]] -ne $hashes[$pair[1]]) { $hashFailures.Add("$($pair[0]) does not equal $($pair[1])") } }
-        if ($hashes.ContainsKey("mounted-before") -and $hashes.ContainsKey("mounted-after") -and $hashes["mounted-before"] -eq $hashes["mounted-after"]) { $hashFailures.Add("mounted-after does not differ from mounted-before after the final soft-break redo checkpoint save") }
+        if ($surface -eq "in-canvas-grouped-child-pointer-selection") {
+            if ($hashes.ContainsKey("mounted-before") -and $hashes.ContainsKey("mounted-after") -and $hashes["mounted-before"] -ne $hashes["mounted-after"]) { $hashFailures.Add("pointer-selection fixture changed even though the bounded contract is readback-only") }
+        }
+        elseif ($hashes.ContainsKey("mounted-before") -and $hashes.ContainsKey("mounted-after") -and $hashes["mounted-before"] -eq $hashes["mounted-after"]) { $hashFailures.Add("mounted-after does not differ from mounted-before after the final soft-break redo checkpoint save") }
         if ($hashFailures.Count -gt 0) { $savedResult.status = "failed"; $savedResult.note = "Rich-text source and saved working-copy SHA256 invariants failed: $([string]::Join('; ', $hashFailures))." }
         $manifest.summary.passed = @($manifest.results | Where-Object { $_.status -eq "passed" }).Count; $manifest.summary.failed = @($manifest.results | Where-Object { $_.status -eq "failed" }).Count; $manifest.summary.total = @($manifest.results).Count
         $manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $manifestPath -Encoding utf8
     }
     Wait-ForManifestEvidence -ManifestPath $manifestPath -EvidenceDirectory $evidenceDirectory
+    Assert-GroupedCaretSemanticContract -Manifest $manifest -EvidenceDirectory $evidenceDirectory
+    Assert-PointerSelectionSemanticContract -Manifest $manifest -EvidenceDirectory $evidenceDirectory
     $manifest = Assert-ManifestContract -ManifestPath $manifestPath -EvidenceDirectory $evidenceDirectory
     Write-Host "Manifest contract validation: $($manifest.contractValidation.status)"; Write-Host "Results: $($manifest.summary.passed) passed, $($manifest.summary.failed) failed, $($manifest.summary.total) total"; Write-Host "Manifest: $manifestPath"; Write-Host "Fixture: $fixturePath"
     if ($probeExitCode -ne 0 -or $manifest.summary.failed -gt 0) { throw "FreeP rich-text shortcut validation failed with probe exit code $probeExitCode and $($manifest.summary.failed) failed result(s). Evidence retained at $manifestPath." }

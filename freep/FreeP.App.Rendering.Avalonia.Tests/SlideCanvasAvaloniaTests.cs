@@ -207,6 +207,20 @@ public sealed class SlideCanvasAvaloniaTests
         return body;
     }
 
+    private static TextBody MakeMultiParagraphRichBody()
+    {
+        var body = new TextBody { Wrap = true };
+        var first = new Paragraph { Align = TextAlign.Left };
+        first.Runs.Add(new Run { Text = "Alpha", FontFamily = "Calibri", FontSizePt = 12 });
+        first.Runs.Add(new Run { Text = " Beta", FontFamily = "Calibri", FontSizePt = 14, Italic = true, ItalicSet = true });
+        var second = new Paragraph { Align = TextAlign.Left };
+        second.Runs.Add(new Run { Text = "Gamma", FontFamily = "Arial", FontSizePt = 16 });
+        second.Runs.Add(new Run { Text = " Delta", FontFamily = "Arial", FontSizePt = 18, Bold = true, BoldSet = true });
+        body.Paragraphs.Add(first);
+        body.Paragraphs.Add(second);
+        return body;
+    }
+
     private static TextBody MakeMixedRunTextBody()
     {
         var body = new TextBody { Wrap = true };
@@ -486,6 +500,66 @@ public sealed class SlideCanvasAvaloniaTests
 
         InCanvasTextEditPlanner.ExtractPlainText(child!.TextBody).Should().Be("Nested original");
         editor!.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task InCanvasTextEditor_NestedChild_FormatsCrossParagraphSelectionThroughSharedPlanner()
+    {
+        Presentation? presentation = null;
+        EditingSession? editor = null;
+        SlideShape? child = null;
+
+        await Run(() =>
+        {
+            presentation = MakePresentation(presence =>
+            {
+                presence.Slides[0].Shapes.Clear();
+                child = new SlideShape
+                {
+                    Id = 12,
+                    OffsetXEmu = 914400,
+                    OffsetYEmu = 457200,
+                    ExtentCxEmu = 1828800,
+                    ExtentCyEmu = 914400,
+                    TextBody = MakeMultiParagraphRichBody(),
+                };
+                var inner = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+                inner.Children.Add(child);
+                var outer = new SlideShape { Id = 9, Kind = SlideShapeKind.Group };
+                outer.Children.Add(inner);
+                presence.Slides[0].Shapes.Add(outer);
+            });
+
+            editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.Activate(child!.Id);
+            textEditor.TrySelectTextRange(2, 10).Should().BeTrue();
+            textEditor.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
+            textEditor.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Italic).Should().BeTrue();
+            textEditor.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Underline).Should().BeTrue();
+            textEditor.TryApplyActiveShapeFontFamily("Consolas").Should().BeTrue();
+            textEditor.TryApplyActiveShapeFontSize(20).Should().BeTrue();
+            textEditor.TryApplyActiveShapeColor(new ThemeAwareColor(new SrgbColor(0x22, 0x66, 0xAA))).Should().BeTrue();
+            textEditor.Commit();
+        });
+
+        var edited = child!.TextBody!;
+        InCanvasTextEditPlanner.ExtractPlainText(edited).Should().Be("Alpha Beta\nGamma Delta");
+        edited.Paragraphs.SelectMany(p => p.Runs).Should().Contain(run =>
+            run.Text.Contains("pha", StringComparison.Ordinal) &&
+            run.Bold && run.Italic && run.Underline &&
+            run.FontFamily == "Consolas" && run.FontSizePt == 20 &&
+            run.Color != null && run.Color.Resolved == new SrgbColor(0x22, 0x66, 0xAA));
+
+        editor!.Undo();
+        child.TextBody!.Paragraphs.SelectMany(p => p.Runs).Should().NotContain(run =>
+            run.FontFamily == "Consolas" || run.FontSizePt == 20 || run.Underline);
+        editor.Redo();
+        child.TextBody!.Paragraphs.SelectMany(p => p.Runs).Should().Contain(run =>
+            run.FontFamily == "Consolas" && run.FontSizePt == 20 && run.Underline);
     }
 
     [Fact]

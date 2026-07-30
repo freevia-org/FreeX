@@ -14,6 +14,12 @@ $resolvedRoot = Resolve-ToolRepoPath -Path $EvidenceRoot -RepoRoot $repoRoot
 $resolvedManifest = Resolve-ToolRepoPath -Path $ManifestPath -RepoRoot $repoRoot
 $summaryPath = Join-Path $resolvedRoot "summary.json"
 $expectedScenarioCount = 33
+$selectionArtifactCount = 3
+$requiredSelectionArtifactPaths = @(
+    "diff/editor.rich-text-selection.wpf-selection.png",
+    "diff/editor.rich-text-selection.avalonia-selection.png",
+    "diff/editor.rich-text-selection.selection.png"
+)
 $requiredPaths = @(
     $summaryPath,
     (Join-Path $resolvedRoot "report.md"),
@@ -44,6 +50,13 @@ if ($summary.duplicateCaptureCount -ne 0) {
 function Get-EvidencePath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
     Join-Path $resolvedRoot ($RelativePath.Replace('/', [IO.Path]::DirectorySeparatorChar))
+}
+
+foreach ($relativePath in $requiredSelectionArtifactPaths) {
+    $path = Get-EvidencePath -RelativePath $relativePath
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) {
+        throw "FreeP whole-window rich-editor selection artifact is missing or empty: $relativePath"
+    }
 }
 
 function Test-RecordedImage {
@@ -157,6 +170,8 @@ $inputPaths = @(
     "freep\FreeP.App.Presentation\WholeWindowVisualEvidenceContract.cs",
     "freep\FreeP.App.Presentation\DialogPaneVisualEvidenceFixture.cs",
     "freep\FreeP.App.Presentation\FreePShellVisualMetrics.cs",
+    "freep\FreeP.App.Presentation\InCanvasRichTextSelectionVisualContract.cs",
+    "freep\FreeP.App.Presentation\InCanvasRichTextVisualPlanner.cs",
     "freep\FreeP.App.Host\WpfWholeWindowVisualEvidenceCapture.cs",
     "freep\FreeP.App.Host\MainWindow.cs",
     "freep\FreeP.App.Host\MainWindow.WholeWindowVisualEvidence.cs",
@@ -164,6 +179,7 @@ $inputPaths = @(
     "freep\FreeP.App.Avalonia\MainWindow.cs",
     "freep\FreeP.App.Avalonia\MainWindow.WholeWindowVisualEvidence.cs",
     "freep\FreeP.App.Rendering.Wpf\InCanvasTextEditor.cs",
+    "freep\FreeP.App.Rendering.Wpf\TextBodyFlowDocumentConverter.cs",
     "freep\FreeP.App.Rendering.Avalonia\AvaloniaInCanvasTextEditor.cs",
     "freep\FreeP.App.Rendering.Avalonia\AvaloniaRichTextEditor.cs",
     "freep\FreeP.App.Rendering.Avalonia\AvaloniaRichTextEditingSurface.cs",
@@ -195,11 +211,15 @@ $artifact = [ordered]@{
     fullPngCount = @($files | Where-Object path -Match '/full/.*\.png$').Count
     clientPngCount = @($files | Where-Object path -Match '/client/.*\.png$').Count
     diffPngCount = @($files | Where-Object path -Match '^diff/.*\.png$').Count
+    selectionArtifactCount = @($files | Where-Object { $requiredSelectionArtifactPaths -contains $_.path }).Count
     fileCount = @($files).Count
     inputs = @($inputs)
     files = @($files)
 }
-if ($artifact.fullPngCount -ne (2 * $expectedScenarioCount) -or $artifact.clientPngCount -ne (2 * $expectedScenarioCount) -or $artifact.diffPngCount -ne $expectedScenarioCount) {
+if ($artifact.fullPngCount -ne (2 * $expectedScenarioCount) -or
+    $artifact.clientPngCount -ne (2 * $expectedScenarioCount) -or
+    $artifact.diffPngCount -ne ($expectedScenarioCount + $selectionArtifactCount) -or
+    $artifact.selectionArtifactCount -ne $selectionArtifactCount) {
     throw "FreeP whole-window evidence PNG counts are incomplete."
 }
 

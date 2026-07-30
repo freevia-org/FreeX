@@ -7,13 +7,20 @@ namespace FreeX.Core.IO.Tests;
 public sealed class XlsxExternalLinkMetadataReaderTests
 {
     [Fact]
-    public void Load_IgnoresWorkbookExternalReferenceRelationshipWithExternalTargetMode()
+    public void Load_ReservesOrdinalSlotForWorkbookExternalReferenceRelationshipWithExternalTargetMode()
     {
         using var package = CreateWorkbookWithExternalReferenceToExternalTarget();
 
         var links = XlsxExternalLinkMetadataReader.Load(package);
 
-        links.Should().BeEmpty();
+        // The relationship's TargetMode="External" means it can't be resolved to an internal
+        // package part, so no cached sheet/defined-name data is available for it -- but Excel's
+        // '[n]' formula numbering still reserves this externalReference's ordinal slot. A single
+        // unresolvable link with nothing after it therefore surfaces as one empty placeholder
+        // rather than being dropped from the list entirely.
+        links.Should().ContainSingle();
+        links[0].PackagePart.Should().BeEmpty();
+        links[0].SheetNames.Should().BeEmpty();
     }
 
     private static MemoryStream CreateWorkbookWithExternalReferenceToExternalTarget()

@@ -321,6 +321,85 @@ public sealed class NativeJsonFidelityInventoryTests
         }
     }
 
+    // R96: CellStyleDto had no Dxf* tri-state mirror properties (DxfBold/DxfItalic/DxfUnderline/
+    // DxfStrikethrough/DxfFontColor), so a ConditionalFormat.FormatIfTrue that explicitly turns an
+    // attribute OFF (or to black) over an already-on base style silently lost that distinction on
+    // every .fxl save/reload -- EffectiveToggle(null, false) no longer applies the explicit un-bold
+    // (see ViewportConditionalFormatEvaluator.MergeStyles). This exercises the REAL adapter Save/Load
+    // entry point (not a hand-built DTO), matching how a real conditional-format save/reopen behaves.
+    [Fact]
+    public void R96_NativeJsonAdapter_RoundTrips_ConditionalFormat_DxfTriStateOverrides()
+    {
+        var wb = new Workbook("DxfTriStateWorkbook");
+        var main = wb.AddSheet("Main");
+        var cfRange = new GridRange(new CellAddress(main.Id, 1, 1), new CellAddress(main.Id, 5, 1));
+
+        main.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = cfRange,
+            Priority = 1,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "50",
+            FormatIfTrue = new CellStyle
+            {
+                Bold = true,
+                // Explicit "turn OFF" / "explicit black" tri-state overrides -- the whole point of
+                // the Dxf* mirror fields is to distinguish these from "dxf never mentioned it" (null).
+                DxfBold = false,
+                DxfItalic = false,
+                DxfUnderline = true,
+                DxfStrikethrough = false,
+                DxfFontColor = CellColor.Black
+            }
+        });
+
+        var loaded = RoundTrip(wb);
+        var dst = loaded.GetSheetAt(0);
+
+        dst.ConditionalFormats.Should().HaveCount(1);
+        var formatIfTrue = dst.ConditionalFormats[0].FormatIfTrue;
+        formatIfTrue.Should().NotBeNull();
+        formatIfTrue!.DxfBold.Should().Be(false);
+        formatIfTrue.DxfItalic.Should().Be(false);
+        formatIfTrue.DxfUnderline.Should().Be(true);
+        formatIfTrue.DxfStrikethrough.Should().Be(false);
+        formatIfTrue.DxfFontColor.Should().Be(CellColor.Black);
+    }
+
+    // Sibling/no-regression: a CellStyle whose Dxf* fields were never populated (the common case --
+    // ordinary cell styles, or dxf styles that never mention these attributes) must still round-trip
+    // as null, not get coerced to some other tri-state value by the new mapping.
+    [Fact]
+    public void R96_NativeJsonAdapter_RoundTrips_ConditionalFormat_DxfTriStateAbsent()
+    {
+        var wb = new Workbook("DxfTriStateAbsentWorkbook");
+        var main = wb.AddSheet("Main");
+        var cfRange = new GridRange(new CellAddress(main.Id, 1, 1), new CellAddress(main.Id, 5, 1));
+
+        main.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = cfRange,
+            Priority = 1,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "50",
+            FormatIfTrue = new CellStyle { Bold = true }
+        });
+
+        var loaded = RoundTrip(wb);
+        var dst = loaded.GetSheetAt(0);
+
+        var formatIfTrue = dst.ConditionalFormats[0].FormatIfTrue;
+        formatIfTrue.Should().NotBeNull();
+        formatIfTrue!.Bold.Should().BeTrue();
+        formatIfTrue.DxfBold.Should().BeNull();
+        formatIfTrue.DxfItalic.Should().BeNull();
+        formatIfTrue.DxfUnderline.Should().BeNull();
+        formatIfTrue.DxfStrikethrough.Should().BeNull();
+        formatIfTrue.DxfFontColor.Should().BeNull();
+    }
+
     [Fact]
     public void NativeJsonAdapter_RoundTrips_Sparklines()
     {

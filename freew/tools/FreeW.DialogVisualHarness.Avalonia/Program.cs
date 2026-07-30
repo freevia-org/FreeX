@@ -255,7 +255,7 @@ static Semantics ReadSemantics(Window dialog)
         c is SelectingItemsControl selector ? selector.SelectedIndex : null)).ToArray();
     var buttons = dialog.GetVisualDescendants()
         .OfType<Button>()
-        .Where(button => button is not ToggleButton)
+        .Where(button => button is not ToggleButton and not RepeatButton)
         .ToArray();
     var focused = FindVisualChildren<Control>(dialog).FirstOrDefault(c => c.IsFocused);
     return new Semantics(

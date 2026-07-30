@@ -1124,9 +1124,21 @@ public sealed partial class XlsxFileAdapter
                 SourcePackages.Add(workbook, preparedPackage);
                 if (!allowsBaseline)
                 {
+                    // Structurally identical to the eligibility gate above: this runs strictly
+                    // before TryGetPatchableValueChanges (the actual cell diff), so it cannot know
+                    // whether the user's edit touched a formula. Baseline creation can fail for
+                    // reasons entirely orthogonal to what changed (cell-count limit, an unreadable
+                    // worksheet-path map, chart/pivot source-range indexing, a missing sheet path,
+                    // ambiguous source cell styles, or an unexpected exception), so -- like the
+                    // eligibility gate -- treat every baseline-unavailable rejection as calc-chain
+                    // invalidating. Otherwise the stale source calcChain.xml would survive the
+                    // full-rebuild fallback (CopyUnknownPackageParts copies it back unconditionally)
+                    // alongside freshly recalculated formula cells. See R39_CalcChainEligibilityGateFallbackTests
+                    // for the sibling fix this mirrors.
                     return Fail(
                         preparedPackage.CellPatchBaselineBlockReason ?? "patch_blocked_baseline_unavailable",
-                        out diagnostics);
+                        out diagnostics,
+                        invalidatesCalcChain: true);
                 }
             }
 
@@ -1135,7 +1147,8 @@ public sealed partial class XlsxFileAdapter
                     preparedPackage.IsCellPatchBaselineLazy
                         ? "patch_blocked_deferred_baseline_not_materialized"
                         : preparedPackage.CellPatchBaselineBlockReason ?? "patch_blocked_baseline_unavailable",
-                    out diagnostics);
+                    out diagnostics,
+                    invalidatesCalcChain: true);
 
             if (!cellPatchBaseline.TryGetPatchableValueChanges(
                     workbook,

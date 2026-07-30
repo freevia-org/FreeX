@@ -108,7 +108,16 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
         NotifyStackChanged(workbookId);
         return new CommandOutcome(
             true,
-            AffectedCells: entry.Payload ?? GetAffectedCells(command),
+            // R96-commands-undo-affected-cells-1: prefer the command's LIVE AffectedCells (queried
+            // now, after Revert just ran) over the frozen entry.Payload captured at the original
+            // forward Apply. For most IAffectedCellsCommand implementations Revert never mutates
+            // the backing AffectedCells field, so this is equivalent to the old entry.Payload-first
+            // order -- but a command whose Revert relocates cells to a DIFFERENT address than Apply
+            // reported (InsertRowsCommand/DeleteRowsCommand/InsertColumnsCommand/DeleteColumnsCommand)
+            // updates that field in Revert to the true post-Revert address set, and this order is
+            // the only way Undo can observe it (Revert returns void, so there is no fresh outcome to
+            // read the way Redo reads Apply's outcome).
+            AffectedCells: GetAffectedCells(command) ?? entry.Payload,
             RequiresFullRecalc: command is IWholeWorkbookRecalcCommand);
     }
 

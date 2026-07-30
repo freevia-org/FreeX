@@ -20,6 +20,18 @@ public sealed class MergeCellsCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        // Guard the same worksheet ceiling CopyRangeCommand/MoveRangeCommand already enforce for
+        // their own destination ranges. Every caller of this command derives _range from a
+        // UI selection (already bounded) EXCEPT FormatPainterCommandFactory's merge-tiling path,
+        // which rounds a target range's row/column counts UP to a whole multiple of the source
+        // merge's own span (ExpandTargetToMergeMultiple) -- a target anchored close enough to the
+        // sheet edge can round past CellAddress.MaxRow/MaxCol with no clamp of its own. Rejecting
+        // here (the single choke point every merge-creating command ultimately funnels through)
+        // stops that out-of-bounds region from ever reaching sheet.AddMergedRegion, instead of
+        // requiring every caller to remember its own bounds check.
+        if (!WorksheetBounds.IsValidAddress(_range.Start) || !WorksheetBounds.IsValidAddress(_range.End))
+            return new CommandOutcome(false, "Merge range is outside the worksheet bounds.");
+
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatCells) is { } protectedOutcome)
             return protectedOutcome;

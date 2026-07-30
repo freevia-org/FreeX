@@ -48,12 +48,13 @@ internal static class TextBodyFlowDocumentConverter
         // 100000 DIPs (~1041 feet) is large enough that the FlowDocument never paginates
         // inside a RichTextBox, while staying within WPF's accepted finite range.
         const double VeryLargeWidth = 100_000.0;
+        double flowWidth = body?.Wrap == false ? VeryLargeWidth : double.NaN;
 
         var doc = new FlowDocument
         {
             // Disable pagination — we render in a RichTextBox / scroll viewer.
-            PageWidth   = VeryLargeWidth,
-            ColumnWidth = VeryLargeWidth,
+            PageWidth   = flowWidth,
+            ColumnWidth = flowWidth,
             FontFamily  = new FontFamily(InCanvasRichTextEditorDefaults.FallbackFontFamily),
             FontSize    = fallbackFontSizePt * PtToDip,
         };
@@ -123,15 +124,15 @@ internal static class TextBodyFlowDocumentConverter
     /// Contiguous WPF Runs that share identical properties within the same logical span are
     /// preserved as distinct model runs; merging is not performed (keeping round-trip lossless).
     ///
-    /// The returned body has <c>Wrap = true</c>; alignment, font, color, bold, italic, underline,
-    /// and strikethrough are extracted. Color is stored as a resolved sRGB <see cref="ThemeAwareColor"/>
-    /// (scheme ref not available during editing, by design).
+    /// The returned body preserves the original wrap policy; alignment, font, color, bold, italic,
+    /// underline, and strikethrough are extracted. Color is stored as a resolved sRGB
+    /// <see cref="ThemeAwareColor"/> (scheme ref not available during editing, by design).
     /// </summary>
     public static TextBody FromFlowDocument(FlowDocument doc, TextBody? originalBody = null)
     {
         var body = new TextBody
         {
-            Wrap          = true,
+            Wrap          = originalBody?.Wrap ?? true,
             Anchor        = originalBody?.Anchor,
             InsetLeftPt   = originalBody?.InsetLeftPt,
             InsetRightPt  = originalBody?.InsetRightPt,

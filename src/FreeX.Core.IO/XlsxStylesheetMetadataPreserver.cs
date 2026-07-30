@@ -539,6 +539,21 @@ internal static class XlsxStylesheetMetadataPreserver
         style.NativeDifferentialAttributes = null;
         style.NativeDifferentialChildXmls = null;
         style.NativeDifferentialElementXmls = null;
+
+        // Dxf*/tri-state fields record "was this toggle explicitly authored vs never mentioned" for
+        // in-memory CF-stacking logic (see CellStyle.cs), not how the style renders: Bold=false with
+        // DxfBold=null (never mentioned) and Bold=false with DxfBold=false (explicit <b val="0"/>) are
+        // visually identical. None of FreeX's dxf writers ever re-emit an explicit off-toggle (they only
+        // check e.g. `style.Bold != def.Bold`, which is only true when Bold==true), so a rebuilt dxf for
+        // an explicit-off source always reads back with the tri-state field null even when the source had
+        // it set to false. Leaving these fields in the comparison would make an otherwise render-identical
+        // pair compare unequal and silently drop the source's native XML from the merge. Clear them here so
+        // the comparison stays scoped to modeled font/fill/border/number-format, as documented above.
+        style.DxfBold = null;
+        style.DxfItalic = null;
+        style.DxfUnderline = null;
+        style.DxfStrikethrough = null;
+        style.DxfFontColor = null;
     }
 
     private static bool MergeDifferentialStyleContainerAttributes(XElement sourceDifferentialStyles, XElement targetDifferentialStyles)
@@ -882,14 +897,19 @@ internal static class XlsxStylesheetMetadataPreserver
         XElement? numFmtsList,
         XNamespace workbookNs)
     {
-        var fontXml = ResolveIndexedRecordXml(xf, "fontId", fontsList, workbookNs + "font");
-        var fillXml = ResolveIndexedRecordXml(xf, "fillId", fillsList, workbookNs + "fill");
-        // R93-named-style-xfId: a border/alignment/protection comparison must not depend on
-        // whether the record was written out in its minimal (schema-default, e.g. a bare
-        // <left/> with no style attribute) or fully-explicit (e.g. ClosedXML's own rebuilt
-        // <left style="none"><color .../></left>) form -- both mean the same "no border" --
-        // via BuildXfBorderSignatureXml's default-filling below, unlike the raw indexed-record
-        // XML comparison ResolveIndexedRecordXml still uses for font/fill.
+        // R94-named-style-xfId: font/fill get the same default-normalization treatment as
+        // border/alignment/protection below, via BuildXfFontSignatureXml/BuildXfFillSignatureXml
+        // rather than a raw indexed-record XML comparison. ClosedXML's own rebuilt font ALWAYS
+        // writes an explicit <vertAlign val="baseline"/> and a fixed self-closing <b/>/<i/>/...
+        // toggle form, in a fixed element order that is NOT the ECMA-376 schema sequence, while a
+        // real Excel-authored (or third-party) source file typically omits vertAlign entirely when
+        // it is the default, may write toggle attributes as val="1"/"true" instead of a bare
+        // element, and orders/omits <scheme>/<charset> (which ClosedXML's rebuild never carries
+        // through at all) differently. Comparing that raw XML directly made the signature mismatch
+        // for virtually every real font, for the same reason the R93 alignment/protection/border
+        // gap did -- see BuildXfFontSignatureXml for the exact default-filling applied.
+        var fontXml = BuildXfFontSignatureXml(xf, fontsList, workbookNs);
+        var fillXml = BuildXfFillSignatureXml(xf, fillsList, workbookNs);
         var borderXml = BuildXfBorderSignatureXml(xf, bordersList, workbookNs);
         var numFmtKey = ResolveNumFmtSignatureKey(xf, numFmtsList, workbookNs);
 
@@ -1019,16 +1039,150 @@ internal static class XlsxStylesheetMetadataPreserver
         return BuildNamespaceAgnosticXml(normalized);
     }
 
-    private static string ResolveIndexedRecordXml(XElement xf, string attributeName, XElement? list, XName itemName)
+    // R94-named-style-xfId: CT_BooleanProperty toggle children (ECMA-376 Part 1, §18.8.2/§18.8.20/
+    // §18.8.24/§18.8.36/§18.8.44/§18.8.13/§18.8.14 for extend/condense/outline/shadow/strike/b/i
+    // respectively) all share the same semantics -- the element's mere presence with no "val" means
+    // "on" (default true), an explicit val="0"/"false" means "off", and OMITTING the element
+    // entirely also means "off". So a bare source `<b/>` and ClosedXML's own rebuilt `<b/>` already
+    // agree, but a source `<b val="1"/>` (equally schema-legal) would not raw-string-match it. Both
+    // the "off via omission" and "off via explicit val=0" forms collapse to the SAME omitted-element
+    // normalized shape, since they render identically.
+    private static readonly string[] FontToggleElementNames = ["b", "condense", "extend", "i", "outline", "shadow", "strike"];
+
+    private static XElement NormalizeFontForSignature(XElement font, XNamespace workbookNs)
     {
-        if (list is null || !TryGetIntAttribute(xf, attributeName, out var index))
+        var normalized = new XElement(workbookNs + "font");
+
+        foreach (var toggleName in FontToggleElementNames)
+        {
+            var element = font.Element(workbookNs + toggleName);
+            if (element is null)
+                continue;
+
+            var isOn = NormalizeOoxmlBooleanLikeValue(element.Attribute("val")?.Value) ?? "1";
+            if (isOn == "1")
+                normalized.Add(new XElement(workbookNs + toggleName));
+        }
+
+        // CT_UnderlineProperty (§18.8.3): val is an enum (single/double/singleAccounting/
+        // doubleAccounting/none), not a plain boolean, and defaults to "single" when the element is
+        // present without val. val="none" renders no underline, same as the element being absent
+        // entirely, so both normalize to "no <u> element" rather than comparing "none" against absence.
+        var underline = font.Element(workbookNs + "u");
+        if (underline is not null)
+        {
+            var underlineVal = underline.Attribute("val")?.Value;
+            underlineVal = string.IsNullOrEmpty(underlineVal) ? "single" : underlineVal;
+            if (!string.Equals(underlineVal, "none", StringComparison.OrdinalIgnoreCase))
+                normalized.Add(new XElement(workbookNs + "u", new XAttribute("val", underlineVal)));
+        }
+
+        // CT_VerticalAlignFontProperty (§18.8.42): the ENTIRE <vertAlign> element is optional and its
+        // absence means "baseline" (neither super- nor subscript) -- but ClosedXML's own rebuild
+        // ALWAYS emits an explicit <vertAlign val="baseline"/> even for a plain font that never asked
+        // for one, exactly the same "absent vs. fully-spelled-out default" mismatch R93 fixed for
+        // <alignment>/<protection>.
+        var vertAlign = font.Element(workbookNs + "vertAlign")?.Attribute("val")?.Value;
+        normalized.Add(new XElement(workbookNs + "vertAlign",
+            new XAttribute("val", string.IsNullOrEmpty(vertAlign) ? "baseline" : vertAlign)));
+
+        // sz (§18.8.38) has no ECMA-376 default -- two fonts with different (or missing) sz are NOT
+        // renders-equivalent, so it is carried through verbatim (present or absent) rather than defaulted.
+        var sz = font.Element(workbookNs + "sz")?.Attribute("val")?.Value;
+        if (!string.IsNullOrEmpty(sz))
+            normalized.Add(new XElement(workbookNs + "sz", new XAttribute("val", sz)));
+
+        // color (§18.8.3 CT_Color) has no single schema default that lets an absent color compare
+        // equal to some concrete rgb/theme/indexed value without resolving the theme palette, which
+        // this signature has no access to -- so it is compared structurally as-is (present-and-equal,
+        // or both-absent), same residual scope as R93 left for numFmt/alignment colour-adjacent cases.
+        var color = font.Element(workbookNs + "color");
+        if (color is not null)
+            normalized.Add(new XElement(color));
+
+        // name (§18.8.29) has no default and must match exactly -- two different font families are
+        // never renders-equivalent.
+        var name = font.Element(workbookNs + "name")?.Attribute("val")?.Value;
+        if (!string.IsNullOrEmpty(name))
+            normalized.Add(new XElement(workbookNs + "name", new XAttribute("val", name)));
+
+        // family (§18.8.18 CT_IntProperty): 0 ("Not applicable") is the conventional value when a
+        // font's family classification is unknown/unset, which is exactly what an absent <family>
+        // element also means -- default both to "0" so one representation doesn't spuriously differ
+        // from the other.
+        var family = font.Element(workbookNs + "family")?.Attribute("val")?.Value;
+        normalized.Add(new XElement(workbookNs + "family",
+            new XAttribute("val", string.IsNullOrEmpty(family) ? "0" : family)));
+
+        // charset (§18.8.5) and scheme (§18.8.35) are intentionally OMITTED from the signature:
+        // ClosedXML's own rebuilt font never carries either through (confirmed empirically -- its
+        // rebuild output for every font, regardless of source, is exactly <vertAlign>/<sz>/<color>/
+        // <name>/<family>, no <charset> or <scheme>), so comparing them would never let a source font
+        // that legitimately uses one (e.g. Excel's own default-font <scheme val="minor"/>) match its
+        // rebuilt counterpart -- the opposite of what this normalization exists to fix.
+        return normalized;
+    }
+
+    private static string BuildXfFontSignatureXml(XElement xf, XElement? fontsList, XNamespace workbookNs)
+    {
+        if (fontsList is null || !TryGetIntAttribute(xf, "fontId", out var index))
             return string.Empty;
 
-        var items = list.Elements(itemName).ToList();
+        var items = fontsList.Elements(workbookNs + "font").ToList();
         if (index < 0 || index >= items.Count)
             return string.Empty;
 
-        return BuildNamespaceAgnosticXml(items[index]);
+        return BuildNamespaceAgnosticXml(NormalizeFontForSignature(items[index], workbookNs));
+    }
+
+    // CT_PatternFill (§18.8.32): patternType defaults to "none" when omitted, and a "none" pattern
+    // renders no fill colour at all regardless of what (if anything) fgColor/bgColor say -- the same
+    // "colour immaterial when the pattern/style defaults away" rule BuildXfBorderSignatureXml already
+    // applies to border sides.
+    private static XElement NormalizeFillForSignature(XElement fill, XNamespace workbookNs)
+    {
+        var normalized = new XElement(workbookNs + "fill");
+
+        var patternFill = fill.Element(workbookNs + "patternFill");
+        if (patternFill is null)
+        {
+            // Not a pattern fill (e.g. a gradientFill) -- out of scope for this normalization; carry
+            // the child through as-is so gradient fills still compare (in)equal exactly as before.
+            var gradientFill = fill.Element(workbookNs + "gradientFill");
+            if (gradientFill is not null)
+                normalized.Add(new XElement(gradientFill));
+            return normalized;
+        }
+
+        var patternType = patternFill.Attribute("patternType")?.Value;
+        patternType = string.IsNullOrEmpty(patternType) ? "none" : patternType;
+
+        var normalizedPattern = new XElement(workbookNs + "patternFill", new XAttribute("patternType", patternType));
+        if (!string.Equals(patternType, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            var fgColor = patternFill.Element(workbookNs + "fgColor");
+            if (fgColor is not null)
+                normalizedPattern.Add(new XElement(fgColor));
+
+            var bgColor = patternFill.Element(workbookNs + "bgColor");
+            if (bgColor is not null)
+                normalizedPattern.Add(new XElement(bgColor));
+        }
+
+        normalized.Add(normalizedPattern);
+        return normalized;
+    }
+
+    private static string BuildXfFillSignatureXml(XElement xf, XElement? fillsList, XNamespace workbookNs)
+    {
+        if (fillsList is null || !TryGetIntAttribute(xf, "fillId", out var index))
+            return string.Empty;
+
+        var items = fillsList.Elements(workbookNs + "fill").ToList();
+        if (index < 0 || index >= items.Count)
+            return string.Empty;
+
+        return BuildNamespaceAgnosticXml(NormalizeFillForSignature(items[index], workbookNs));
     }
 
     // Real Excel-authored styles.xml uses the default (unprefixed) spreadsheetml namespace, while

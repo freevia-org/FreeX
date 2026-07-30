@@ -163,6 +163,37 @@ public sealed class DrawingShapeModel
     public bool IsSourceLoaded { get; set; }
 
     /// <summary>
+    /// R97-model-drawing-hyperlink-2-2: this shape's object-level hyperlink (an
+    /// <c>&lt;a:hlinkClick&gt;</c> on its <c>cNvPr</c>), populated on load and carried through
+    /// clone/paste (<c>DuplicateSheetDrawingCloner</c>, <c>PasteShapesCommand</c>) so a copy of a
+    /// hyperlinked shape keeps its hyperlink even when the copy is not itself source-loaded (and so
+    /// has nothing for <c>XlsxWorksheetDrawingObjectWriter</c> to re-read from the source package).
+    /// <see langword="null"/> means "no hyperlink".
+    /// </summary>
+    public DrawingObjectHyperlink? Hyperlink { get; set; }
+
+    /// <summary>
+    /// R94 fix: this shape's <see cref="Width"/>/<see cref="Height"/> as they stood immediately after
+    /// LOAD -- either the size computed from the source anchor's original cell span
+    /// (<c>XlsxDrawingAnchorApplier.GetAnchorSize</c>/its xfrm-extent preference) or, when that
+    /// computation yields 0 for an axis because the anchor's own span falls entirely within hidden
+    /// rows/columns, the class-default <see cref="Width"/>/<see cref="Height"/> the model retains in
+    /// that case (R94-hidden-span fix) -- captured by that same applier call and never touched
+    /// afterward except by a fresh reload. Used by <c>XlsxSourceDrawingGeometryRewriter</c> to tell a
+    /// genuine user resize (<see cref="Width"/>/<see cref="Height"/> diverging from this baseline)
+    /// apart from an incidental sheet layout change -- a row/column elsewhere hidden or resized between
+    /// load and save -- which would otherwise make the SAME never-touched anchor appear to need its
+    /// <c>to</c> marker rewritten, because the marker's pixel-to-cell walk is evaluated against the
+    /// CURRENT sheet layout while these fields freeze the layout as of load. Always non-null once the
+    /// shape has been through <c>ApplyToShape</c>; null only when the shape was never source-loaded
+    /// (e.g. freshly inserted).
+    /// </summary>
+    public double? SourceLoadedWidthPixels { get; set; }
+
+    /// <summary>See <see cref="SourceLoadedWidthPixels"/>; the same baseline for <see cref="Height"/>.</summary>
+    public double? SourceLoadedHeightPixels { get; set; }
+
+    /// <summary>
     /// Outline stroke width in points (1 pt = 12700 EMU).  Zero means "use the renderer default".
     /// Null/negative is treated as zero.  Set from <c>&lt;a:ln w="..."/&gt;</c>.
     /// </summary>

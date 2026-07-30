@@ -18,7 +18,7 @@ public static partial class BuiltInFunctions
 
         var matchModeArg = args.Count > 2 ? args[2] : BlankValue.Instance;
         var searchModeArg = args.Count > 3 ? args[3] : BlankValue.Instance;
-        return MapTernaryTextArgs(args[0], matchModeArg, searchModeArg, (lookupValue, matchModeValue, searchModeValue) => XmatchScalar(lookupValue, lookupVector, matchModeValue, searchModeValue));
+        return MapTernaryTextArgsGrowBroadcast(args[0], matchModeArg, searchModeArg, (lookupValue, matchModeValue, searchModeValue) => XmatchScalar(lookupValue, lookupVector, matchModeValue, searchModeValue));
     }
 
     private static ScalarValue XmatchScalar(ScalarValue lookupValue, LookupRangeVector lookupVector, ScalarValue matchModeValue, ScalarValue searchModeValue)
@@ -135,7 +135,7 @@ public static partial class BuiltInFunctions
         if (args[0] is RangeValue lookupValueRange)
             return XlookupRangeLookupValues(lookupValueRange, lookupVector, returnArr, lookupIsVertical, ifNotFound, matchModeArg, searchModeArg);
 
-        return MapTernaryTextArgs(lookupValue, matchModeArg, searchModeArg,
+        return MapTernaryTextArgsGrowBroadcast(lookupValue, matchModeArg, searchModeArg,
             (lookupValueScalar, matchModeValue, searchModeValue) =>
                 XlookupScalar(lookupValueScalar, lookupVector, returnArr, lookupIsVertical, ifNotFound, matchModeValue, searchModeValue));
     }

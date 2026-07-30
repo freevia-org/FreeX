@@ -1,9 +1,12 @@
 using System.Reflection;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using FreeW.App.Localization;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -92,16 +95,61 @@ public sealed class ParagraphDialogVisualParityTests
             var dialog = new ParagraphDialog(ParagraphFormatting.Default);
             var left = Field<TextBox>(dialog, "_left");
             var special = Field<ComboBox>(dialog, "_special");
+            var specialAmount = Field<TextBox>(dialog, "_specialAmount");
 
             ((ISolidColorBrush)left.BorderBrush!).Color.Should().Be(Color.FromRgb(0xAB, 0xAD, 0xB3));
             ((ISolidColorBrush)left.SelectionBrush!).Color.Should().Be(Color.FromRgb(0x56, 0x9D, 0xE5));
             ((ISolidColorBrush)special.Background!).Color.Should().Be(Color.FromRgb(0xF0, 0xF0, 0xF0));
+            left.Height.Should().Be(18);
+            left.FocusAdorner.Should().BeNull();
+            special.Height.Should().Be(22);
+            ((ISolidColorBrush)specialAmount.BorderBrush!).Color
+                .Should().Be(Color.FromRgb(0xD0, 0xD1, 0xD4));
 
             var sharedTextBox = new TextBox();
             AvaloniaCompactDialogChrome.ApplyTextBox(
                 sharedTextBox,
                 AvaloniaCompactDialogChrome.WindowsStyle);
             ((ISolidColorBrush)sharedTextBox.BorderBrush!).Color.Should().Be(Color.FromRgb(0xAB, 0xAD, 0xB3));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Paragraph_dialog_materializes_Wpf_textbox_and_checkbox_geometry()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new ParagraphDialog(ParagraphFormatting.Default);
+            try
+            {
+                dialog.Width = 380;
+                dialog.Height = 345;
+                dialog.Show();
+                dialog.Measure(new Size(380, 345));
+                dialog.Arrange(new Rect(0, 0, 380, 345));
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var fields = new[] { "_left", "_right", "_specialAmount", "_before", "_after", "_lineSpacing" }
+                    .Select(name => Field<TextBox>(dialog, name))
+                    .ToArray();
+                fields.SelectMany(box => box.GetVisualDescendants().OfType<Border>())
+                    .Where(border => border.Name == "PART_BorderElement")
+                    .Should().HaveCount(6)
+                    .And.OnlyContain(border => border.Bounds.Height == 18);
+
+                var indicators = dialog.GetVisualDescendants()
+                    .OfType<CheckBox>()
+                    .SelectMany(check => check.GetVisualDescendants().OfType<Border>())
+                    .Where(border => border.Bounds.Width == 14 && border.Bounds.Height == 13)
+                    .ToArray();
+                indicators.Should().HaveCount(1);
+            }
+            finally
+            {
+                dialog.Close();
+            }
         }, CancellationToken.None);
     }
 
@@ -151,6 +199,7 @@ public sealed class ParagraphDialogVisualParityTests
             "scenario.RouteId is \"font\" or \"paragraph\" or \"multilevel-list\" or \"paste-special\" or \"style\" or \"manage-styles\"");
         wpfHarness.Should().Contain("scenario.RouteId is \"font\" or \"paragraph\"");
         wpfHarness.Should().Contain("Populate(dialog, scenario);");
+        avaloniaHarness.Should().Contain("button is not ToggleButton and not RepeatButton");
     }
 
     private static T Field<T>(ParagraphDialog dialog, string name) where T : class =>

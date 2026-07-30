@@ -171,6 +171,10 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         public SheetId CurrentSheetId => (SheetId)_currentSheetIdField.GetValue(_window)!;
 
+        public CellAddress? FormulaEditCell => (CellAddress?)_formulaEditCellField.GetValue(_window);
+
+        public Workbook ActiveWorkbook => Workbook;
+
         public GridRange? SelectedRange => ((SheetGridView)_window.FindName("SheetGrid")).SelectedRange;
 
         public double VerticalScrollValue => ((ScrollBar)_window.FindName("VerticalScroll")).Value;

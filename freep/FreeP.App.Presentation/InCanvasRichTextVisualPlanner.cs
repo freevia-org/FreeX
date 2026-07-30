@@ -39,7 +39,8 @@ public sealed record InCanvasRichTextVisualParagraph(
 
 public sealed record InCanvasRichTextVisualPlan(
     string PlainText,
-    IReadOnlyList<InCanvasRichTextVisualParagraph> Paragraphs);
+    IReadOnlyList<InCanvasRichTextVisualParagraph> Paragraphs,
+    bool Wrap);
 
 /// <summary>
 /// Framework-neutral visual contract for in-canvas rich editors. It keeps paragraph alignment,
@@ -53,7 +54,10 @@ public static class InCanvasRichTextVisualPlanner
     {
         string plainText = InCanvasTextEditPlanner.ExtractPlainText(body);
         if (body is null || body.Paragraphs.Count == 0)
-            return new InCanvasRichTextVisualPlan(plainText, [EmptyParagraph()]);
+            return new InCanvasRichTextVisualPlan(
+                plainText,
+                [EmptyParagraph()],
+                body?.Wrap ?? true);
 
         var paragraphs = new List<InCanvasRichTextVisualParagraph>(body.Paragraphs.Count);
         int globalStart = 0;
@@ -148,7 +152,7 @@ public static class InCanvasRichTextVisualPlanner
             globalStart += text.Length + (paragraphIndex + 1 < body.Paragraphs.Count ? 1 : 0);
         }
 
-        return new InCanvasRichTextVisualPlan(plainText, paragraphs);
+        return new InCanvasRichTextVisualPlan(plainText, paragraphs, body.Wrap);
     }
 
     private static InCanvasRichTextVisualParagraph EmptyParagraph() => new(

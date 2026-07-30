@@ -7,6 +7,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
@@ -1270,28 +1271,51 @@ public partial class MainWindow
 
     private void CellAddressBox_DropDownOpened(object sender, EventArgs e)
     {
-        var names = _workbook.NamedRanges.Keys
-            .Concat(_workbook.ScopedNamedRanges.Keys
-                .Where(key => key.Sheet.Equals(_currentSheetId))
-                .Select(key => key.Name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        CellAddressBox.ItemsSource = names;
+        CellAddressBox.ItemsSource = NameBoxDropdownPlanner.Build(_workbook, _currentSheetId);
     }
 
     private void CellAddressBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (sender is not ComboBox { IsDropDownOpen: true, SelectedItem: string name })
+        if (sender is not ComboBox { IsDropDownOpen: true, SelectedItem: NameBoxNavigationItem item })
             return;
 
-        CellAddressBox.Text = name;
-        if (!TryParseNameBoxReferenceRange(name, out var selectedRange))
+        CellAddressBox.Text = item.Name;
+        if (item.Range is { } selectedRange)
+            NavigateNameBoxTo(selectedRange);
+        else if (!TrySelectNameBoxObject(item))
             return;
 
-        NavigateNameBoxTo(selectedRange);
         FocusSheetGridIfNeeded();
+    }
+
+    private bool TrySelectNameBoxObject(NameBoxNavigationItem item)
+    {
+        if (item.Kind != NameBoxNavigationItemKind.Object ||
+            item.ObjectKind is not { } objectKind ||
+            item.ObjectId is not { } objectId ||
+            item.Anchor is not { } anchor)
+        {
+            return false;
+        }
+
+        if (!_currentSheetId.Equals(item.SheetId))
+        {
+            _currentSheetId = item.SheetId;
+            RefreshSheetTabs();
+        }
+
+        SelectInsertedDrawingObject(
+            objectId,
+            objectKind switch
+            {
+                SelectionPaneObjectKind.Chart => FreeX.App.UI.ObjectKind.Chart,
+                SelectionPaneObjectKind.Picture => FreeX.App.UI.ObjectKind.Picture,
+                SelectionPaneObjectKind.TextBox => FreeX.App.UI.ObjectKind.TextBox,
+                SelectionPaneObjectKind.Shape => FreeX.App.UI.ObjectKind.Shape,
+                _ => FreeX.App.UI.ObjectKind.None,
+            },
+            anchor);
+        return true;
     }
 
     private void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -1366,15 +1390,7 @@ public partial class MainWindow
             if (table is null)
                 continue;
 
-            var rowCount = checked((int)table.Range.RowCount);
-            var headerRows = (uint)Math.Clamp(table.HeaderRowCount ?? 1, 0, rowCount);
-            var startRow = table.Range.Start.Row + headerRows;
-            var endRow = table.TotalsRowShown ? table.Range.End.Row - 1 : table.Range.End.Row;
-            range = startRow > endRow
-                ? table.Range
-                : new GridRange(
-                    new CellAddress(table.Range.Start.Sheet, startRow, table.Range.Start.Col),
-                    new CellAddress(table.Range.Start.Sheet, endRow, table.Range.End.Col));
+            range = NameBoxDropdownPlanner.GetTableDataBodyRange(table);
             return true;
         }
 

@@ -515,6 +515,30 @@ internal static partial class ViewportConditionalFormatEvaluator
         return result ?? EmptyDefaultMergedFormatStyles;
     }
 
+    /// <summary>
+    /// Resolves a CF dxf's tri-state decision for one of the Bold/Italic/Underline/Strikethrough
+    /// toggles: <paramref name="dxfValue"/> (the style's <c>Dxf*</c> field) wins when the dxf reader
+    /// recorded an explicit on/off; otherwise falls back to treating <paramref name="plainValue"/> of
+    /// true as an implicit "on" (matching every non-dxf CF style producer's existing convention) and
+    /// false as "not specified". Returns null when the attribute was never specified at all, in which
+    /// case the caller must leave the base/accumulated value untouched.
+    /// </summary>
+    private static bool? EffectiveToggle(bool? dxfValue, bool plainValue) =>
+        dxfValue ?? (plainValue ? true : null);
+
+    /// <summary>
+    /// Resolves a CF dxf-derived style's font color decision, mirroring <see cref="EffectiveToggle"/>:
+    /// <paramref name="dxfFontColor"/> (the style's <see cref="CellStyle.DxfFontColor"/>) wins when the
+    /// dxf reader recorded an explicit color - including an explicit black, which the plain
+    /// <paramref name="plainFontColor"/> value cannot distinguish from "never specified". Falls back to
+    /// treating a non-black <paramref name="plainFontColor"/> as an implicit "explicitly set" (matching
+    /// every non-dxf CF style producer's existing convention: UI/paste-built rules never set
+    /// DxfFontColor). Returns null when no color was specified at all, in which case the caller must
+    /// leave the base/accumulated color untouched.
+    /// </summary>
+    private static CellColor? EffectiveFontColor(CellColor? dxfFontColor, CellColor plainFontColor) =>
+        dxfFontColor ?? (plainFontColor != CellColor.Black ? plainFontColor : null);
+
     public static CellStyle MergeStyles(CellStyle? baseStyle, CellStyle cfStyle)
     {
         var result = (baseStyle ?? CellStyle.Default).Clone();
@@ -535,16 +559,45 @@ internal static partial class ViewportConditionalFormatEvaluator
         if (cfStyle.FillColor.HasValue)
             result.FillColor = cfStyle.FillColor;
 
-        if (cfStyle.Bold)
-            result.Bold = true;
-        if (cfStyle.Italic)
-            result.Italic = true;
-        if (cfStyle.Underline)
-            result.Underline = true;
-        if (cfStyle.Strikethrough)
-            result.Strikethrough = true;
-        if (cfStyle.FontColor != CellColor.Black)
-            result.FontColor = cfStyle.FontColor;
+        // Bold/Italic/Underline/Strikethrough: a dxf that explicitly turns one of these off (e.g. Format
+        // Cells > Font > Font style = Regular over an already-bold base cell) must clear it, not just
+        // leave it alone - Excel's CF format wins over the base format for every attribute the dxf
+        // specifies, including "off". EffectiveToggle resolves the CF's tri-state Dxf* field (explicit
+        // on/off) when present, falling back to the legacy "true means on, false means untouched"
+        // reading of the plain bool for CF styles that never went through the dxf reader (tests, UI/paste
+        // -built rules). The resolved value is also written back onto Dxf* on the result so a later merge
+        // layer (e.g. this style being stacked again, or merged onto the real base cell style) still sees
+        // that this attribute was explicitly decided.
+        if (EffectiveToggle(cfStyle.DxfBold, cfStyle.Bold) is { } boldOverride)
+        {
+            result.Bold = boldOverride;
+            result.DxfBold = boldOverride;
+        }
+        if (EffectiveToggle(cfStyle.DxfItalic, cfStyle.Italic) is { } italicOverride)
+        {
+            result.Italic = italicOverride;
+            result.DxfItalic = italicOverride;
+        }
+        if (EffectiveToggle(cfStyle.DxfUnderline, cfStyle.Underline) is { } underlineOverride)
+        {
+            result.Underline = underlineOverride;
+            result.DxfUnderline = underlineOverride;
+        }
+        if (EffectiveToggle(cfStyle.DxfStrikethrough, cfStyle.Strikethrough) is { } strikeOverride)
+        {
+            result.Strikethrough = strikeOverride;
+            result.DxfStrikethrough = strikeOverride;
+        }
+        // An explicit CF font color always overrides the base cell's color, including an explicit
+        // choice of black - EffectiveFontColor consults DxfFontColor (set by the dxf reader) so a
+        // deliberately-authored black doesn't get mistaken for "no color specified" and skipped in
+        // favor of the base cell's own color. The resolved value is also written back onto
+        // DxfFontColor on the result so a later stacking layer still sees this as explicitly decided.
+        if (EffectiveFontColor(cfStyle.DxfFontColor, cfStyle.FontColor) is { } fontColorOverride)
+        {
+            result.FontColor = fontColorOverride;
+            result.DxfFontColor = fontColorOverride;
+        }
 
         // dxf number format: override cell format when the CF explicitly specifies one.
         if (!string.IsNullOrEmpty(cfStyle.NumberFormat) &&
@@ -578,16 +631,44 @@ internal static partial class ViewportConditionalFormatEvaluator
         if (!result.FillPatternColor.HasValue && cfStyle.FillPatternColor.HasValue)
             result.FillPatternColor = cfStyle.FillPatternColor;
 
-        if (cfStyle.Bold)
-            result.Bold = true;
-        if (cfStyle.Italic)
-            result.Italic = true;
-        if (cfStyle.Underline)
-            result.Underline = true;
-        if (cfStyle.Strikethrough)
-            result.Strikethrough = true;
-        if (result.FontColor == CellColor.Black && cfStyle.FontColor != CellColor.Black)
-            result.FontColor = cfStyle.FontColor;
+        // First matching (highest-priority) rule that explicitly decides Bold/Italic/Underline/
+        // Strikethrough wins, exactly like the "first matching rule wins" borders/number-format rule
+        // below - so a lower-priority rule's explicit un-bold never re-overrides a higher-priority
+        // rule's explicit bold, and vice-versa. result.Dxf* (already resolved on `result` by an earlier
+        // MergeStyles/StackDifferentialStyle call, since accumulatedStyle is always itself prior merge
+        // output) records whether this attribute has already been explicitly decided by a
+        // higher-priority rule in the stack.
+        if (!result.DxfBold.HasValue && EffectiveToggle(cfStyle.DxfBold, cfStyle.Bold) is { } boldOverride)
+        {
+            result.Bold = boldOverride;
+            result.DxfBold = boldOverride;
+        }
+        if (!result.DxfItalic.HasValue && EffectiveToggle(cfStyle.DxfItalic, cfStyle.Italic) is { } italicOverride)
+        {
+            result.Italic = italicOverride;
+            result.DxfItalic = italicOverride;
+        }
+        if (!result.DxfUnderline.HasValue && EffectiveToggle(cfStyle.DxfUnderline, cfStyle.Underline) is { } underlineOverride)
+        {
+            result.Underline = underlineOverride;
+            result.DxfUnderline = underlineOverride;
+        }
+        if (!result.DxfStrikethrough.HasValue && EffectiveToggle(cfStyle.DxfStrikethrough, cfStyle.Strikethrough) is { } strikeOverride)
+        {
+            result.Strikethrough = strikeOverride;
+            result.DxfStrikethrough = strikeOverride;
+        }
+        // First matching (highest-priority) rule that explicitly decides a font color wins, exactly
+        // like the Bold/Italic/Underline/Strikethrough handling above: result.DxfFontColor (already
+        // resolved on `result` by an earlier MergeStyles/StackDifferentialStyle call) records whether
+        // a higher-priority rule already explicitly decided this attribute - including an explicit
+        // black - so a lower-priority rule's non-black color never silently overwrites it.
+        if (!result.DxfFontColor.HasValue &&
+            EffectiveFontColor(cfStyle.DxfFontColor, cfStyle.FontColor) is { } fontColorOverride)
+        {
+            result.FontColor = fontColorOverride;
+            result.DxfFontColor = fontColorOverride;
+        }
 
         // dxf number format: first matching rule wins (highest-priority rule that specifies a format).
         if (string.Equals(result.NumberFormat, "General", StringComparison.OrdinalIgnoreCase) &&

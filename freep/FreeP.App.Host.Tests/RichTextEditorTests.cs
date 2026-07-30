@@ -256,6 +256,25 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void WpfAuthority_UsesSharedBodyWrapPolicy()
+    {
+        var wrappedBody = new TextBody { Wrap = true };
+        var wrapped = TextBodyFlowDocumentConverter.ToFlowDocument(wrappedBody);
+        var unwrapped = TextBodyFlowDocumentConverter.ToFlowDocument(
+            new TextBody { Wrap = false });
+
+        wrapped.PageWidth.Should().BeNaN();
+        wrapped.ColumnWidth.Should().BeNaN();
+        unwrapped.PageWidth.Should().Be(100_000);
+        unwrapped.ColumnWidth.Should().Be(100_000);
+
+        TextBodyFlowDocumentConverter.FromFlowDocument(wrapped, wrappedBody)
+            .Wrap.Should().BeTrue();
+        TextBodyFlowDocumentConverter.FromFlowDocument(unwrapped, new TextBody { Wrap = false })
+            .Wrap.Should().BeFalse();
+    }
+
+    [StaFact]
     public void WpfAuthority_RendersAlignmentAndMixedRuns_ButKeepsBulletMetadataNonvisual()
     {
         var body = MakeVisualEvidenceBody();
@@ -752,6 +771,116 @@ public sealed class RichTextEditorTests
         overlay.Children.OfType<System.Windows.Controls.RichTextBox>().Single().Selection.Text = "Discarded";
         canvas.TextEditor.Cancel();
         InCanvasTextEditPlanner.ExtractPlainText(child.TextBody).Should().Be("Hello world");
+    }
+
+    [StaFact]
+    public void InCanvasTextEditor_NestedChild_FormatsCrossParagraphSelectionThroughSharedPlanner()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var child = new SlideShape
+        {
+            Id = 12,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 1828800,
+            ExtentCyEmu = 914400,
+            TextBody = MakeMultiParagraphRichBody(),
+        };
+        var inner = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        inner.Children.Add(child);
+        var outer = new SlideShape { Id = 9, Kind = SlideShapeKind.Group };
+        outer.Children.Add(inner);
+        slide.Shapes.Add(outer);
+
+        var originalBounds = (child.OffsetXEmu, child.OffsetYEmu, child.ExtentCxEmu, child.ExtentCyEmu);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var canvas = new SlideCanvas { Presentation = presentation, Slide = slide };
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+
+        canvas.TextEditor!.Activate(child.Id);
+        canvas.TextEditor.TrySelectTextRange(2, 10).Should().BeTrue();
+        canvas.TextEditor.ApplyBold();
+        canvas.TextEditor.ApplyItalic();
+        canvas.TextEditor.ApplyUnderline();
+        canvas.TextEditor.ApplyFont("Consolas");
+        canvas.TextEditor.ApplyFontSize(20);
+        canvas.TextEditor.ApplyColor(new ThemeAwareColor(new SrgbColor(0x22, 0x66, 0xAA)));
+        canvas.TextEditor.Commit();
+
+        var edited = child.TextBody!;
+        InCanvasTextEditPlanner.ExtractPlainText(edited).Should().Be("Alpha Beta\nGamma Delta");
+        edited.Paragraphs.SelectMany(p => p.Runs).Should().Contain(run =>
+            run.Text.Contains("pha", StringComparison.Ordinal) &&
+            run.Bold && run.Italic && run.Underline &&
+            run.FontFamily == "Consolas" && run.FontSizePt == 20 &&
+            run.Color != null && run.Color.Resolved == new SrgbColor(0x22, 0x66, 0xAA));
+        (child.OffsetXEmu, child.OffsetYEmu, child.ExtentCxEmu, child.ExtentCyEmu)
+            .Should().Be(originalBounds);
+
+        editor.Undo();
+        child.TextBody!.Paragraphs.SelectMany(p => p.Runs).Should().NotContain(run =>
+            run.FontFamily == "Consolas" || run.FontSizePt == 20 || run.Underline);
+        editor.Redo();
+        child.TextBody!.Paragraphs.SelectMany(p => p.Runs).Should().Contain(run =>
+            run.FontFamily == "Consolas" && run.FontSizePt == 20 && run.Underline);
+        (child.OffsetXEmu, child.OffsetYEmu, child.ExtentCxEmu, child.ExtentCyEmu)
+            .Should().Be(originalBounds);
+
+        using var package = new MemoryStream();
+        PptxPackageWriter.Write(presentation, package);
+        package.Position = 0;
+        var reopened = PptxPackageReader.Read(package);
+        var reopenedChild = FreeP.App.Compositor.ShapeHitTester.FindShape(reopened.Slides[0], child.Id);
+        reopenedChild.Should().NotBeNull();
+        reopenedChild!.TextBody!.Paragraphs.SelectMany(p => p.Runs).Should().Contain(run =>
+            run.FontFamily == "Consolas" && run.FontSizePt == 20 && run.Underline);
+    }
+
+    [StaFact]
+    public void InCanvasTextEditor_NestedChild_SelectsLogicalRangeAcrossParagraphBoundary()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var child = new SlideShape
+        {
+            Id = 12,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 1828800,
+            ExtentCyEmu = 914400,
+            RotationDeg = 22,
+            FlipV = true,
+            TextBody = MakeMultiParagraphRichBody(),
+        };
+        var inner = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        inner.Children.Add(child);
+        var outer = new SlideShape { Id = 9, Kind = SlideShapeKind.Group };
+        outer.Children.Add(inner);
+        slide.Shapes.Add(outer);
+
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var canvas = new SlideCanvas { Presentation = presentation, Slide = slide };
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+
+        canvas.TextEditor!.Activate(child.Id);
+        canvas.TextEditor.TrySelectTextRange(3, 13).Should().BeTrue();
+        canvas.TextEditor.SelectedText
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Should().Be("ha Beta\nGa");
+
+        var box = overlay.Children.OfType<System.Windows.Controls.RichTextBox>().Single();
+        box.Selection.Text = "X";
+        canvas.TextEditor.Commit();
+
+        InCanvasTextEditPlanner.ExtractPlainText(child.TextBody)
+            .Should().Be("AlpXmma Delta");
+        child.RotationDeg.Should().BeApproximately(22, 0.001);
+        child.FlipV.Should().BeTrue();
     }
 
     [StaFact]
@@ -1760,6 +1889,20 @@ public sealed class RichTextEditorTests
             FontSizePt = 12,
         });
         body.Paragraphs.Add(para);
+        return body;
+    }
+
+    private static TextBody MakeMultiParagraphRichBody()
+    {
+        var body = new TextBody { Wrap = true };
+        var first = new ModelParagraph { Align = TextAlign.Left };
+        first.Runs.Add(new ModelRun { Text = "Alpha", FontFamily = "Calibri", FontSizePt = 12 });
+        first.Runs.Add(new ModelRun { Text = " Beta", FontFamily = "Calibri", FontSizePt = 14, Italic = true, ItalicSet = true });
+        var second = new ModelParagraph { Align = TextAlign.Left };
+        second.Runs.Add(new ModelRun { Text = "Gamma", FontFamily = "Arial", FontSizePt = 16 });
+        second.Runs.Add(new ModelRun { Text = " Delta", FontFamily = "Arial", FontSizePt = 18, Bold = true, BoldSet = true });
+        body.Paragraphs.Add(first);
+        body.Paragraphs.Add(second);
         return body;
     }
 

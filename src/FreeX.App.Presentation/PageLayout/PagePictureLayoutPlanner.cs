@@ -22,13 +22,22 @@ namespace FreeX.App.Presentation.PageLayout;
 /// </summary>
 public static class PagePictureLayoutPlanner
 {
+    /// <param name="scaleRatio">
+    /// The page's resolved Scale%/Fit-to-pages ratio (see <see cref="PageContentRenderModelBuilder"/>'s
+    /// own scaleRatio doc). <paramref name="gridLeft"/>/<paramref name="gridTop"/>/<paramref name="measurement"/>
+    /// already carry this ratio when called from that builder, so only the picture's own intrinsic
+    /// width/height (unrelated to the grid measurement) needs it applied here too. Defaults to 1.0
+    /// (unscaled) for the source desktop print renderer's direct call, which applies its own scale via
+    /// a drawing-surface transform instead.
+    /// </param>
     public static IReadOnlyList<PagePictureBlock> Build(
         IReadOnlyList<PictureModel> pictures,
         IReadOnlyList<uint> pageRows,
         IReadOnlyList<uint> pageColumns,
         double gridLeft,
         double gridTop,
-        PrintGridMeasurement measurement)
+        PrintGridMeasurement measurement,
+        double scaleRatio = 1.0)
     {
         ArgumentNullException.ThrowIfNull(pictures);
         ArgumentNullException.ThrowIfNull(pageRows);
@@ -56,8 +65,8 @@ public static class PagePictureLayoutPlanner
             var bounds = new LayoutRect(
                 gridLeft + measurement.ColumnOffset(columnIndex),
                 gridTop + measurement.RowOffset(rowIndex),
-                Math.Max(1, picture.Width),
-                Math.Max(1, picture.Height));
+                Math.Max(1, picture.Width * scaleRatio),
+                Math.Max(1, picture.Height * scaleRatio));
 
             blocks.Add(new PagePictureBlock(
                 picture.Id,

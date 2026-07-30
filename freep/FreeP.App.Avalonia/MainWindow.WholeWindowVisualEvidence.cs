@@ -200,7 +200,7 @@ public sealed partial class MainWindow
                 $"Backstage pane is '{_backstage.CurrentPaneLabel ?? "unavailable"}'; expected '{scenario.ActivationId}'."));
         }
 
-        return new WholeWindowVisualEvidenceSemanticState(
+        var semantic = new WholeWindowVisualEvidenceSemanticState(
             scenario.Id,
             "avalonia",
             scenario.ActivationId,
@@ -234,6 +234,19 @@ public sealed partial class MainWindow
             BoundsRelativeTo(root, statusRoot),
             VisibleAuxiliaryPanesForEvidence(),
             assertions);
+        if (scenario.Kind != WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay ||
+            !StringComparer.Ordinal.Equals(scenario.ActivationId, "selection"))
+            return semantic;
+
+        return semantic with
+        {
+            RichEditor = new WholeWindowVisualEvidenceRichEditorState(
+                _textEditor?.IsActive == true,
+                DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectionStart,
+                DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectionEnd,
+                _textEditor?.SelectedText ?? string.Empty,
+                BoundsRelativeTo(root, _textEditor?.ActiveRichTextVisual)),
+        };
     }
 
     private bool PrepareViewStateForVisualEvidence(string activationId)

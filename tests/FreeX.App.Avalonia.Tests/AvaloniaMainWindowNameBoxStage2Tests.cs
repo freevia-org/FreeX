@@ -4,6 +4,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using FluentAssertions;
 
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -36,6 +37,25 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
 {
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+
+    [Fact]
+    public async Task ParityPhysicalFixture_PopulatesTheProductionDropdown()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow(
+                [InteractionValidationOptions.NameBoxDropdownParityPhysicalFixtureArgument]);
+
+            window.CellAddressAutocompleteNamesForTest().Should().Equal(
+                "Sales",
+                "Tour Name Box Chart",
+                "Tour Name Box Picture",
+                "Tour Name Box Shape",
+                "Tour Name Box Text Box");
+
+            window.Close();
+        }, CancellationToken.None);
+    }
 
     // ── Enter-to-navigate: plain cell reference ───────────────────────────────────────────────
 
@@ -228,7 +248,7 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
     // ── Basic autocomplete: the name list merges workbook-global and current-sheet-scoped names ──
 
     [Fact]
-    public async Task AutocompleteNames_MergesGlobalAndActiveSheetScopedNames_DedupedAndSorted()
+    public async Task AutocompleteNames_MergesGlobalAndActiveSheetScopedNamesIntoFullNavigationProjection()
     {
         await Session.Dispatch(() =>
         {
@@ -253,7 +273,11 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
 
             var names = window.CellAddressAutocompleteNamesForTest();
 
-            names.Should().Equal("Apple", "Zebra");
+            names.Should().Contain("Apple");
+            names.Should().Contain("Zebra");
+            names.Should().NotContain("OtherSheetOnly");
+            names.Should().OnlyHaveUniqueItems();
+            names.Should().BeInAscendingOrder(StringComparer.OrdinalIgnoreCase);
 
             window.Close();
         }, CancellationToken.None);
@@ -279,6 +303,170 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
 
             window.Session.ActiveCell.Should().Be(namedRange.Start);
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task DropdownKeyboardSelection_CommitsAHandledEnterOnTheThirdTableEntry()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("KeyboardFixture");
+            window.Session.SelectSheet(sheet.Id);
+            window.Session.Workbook.DefineNamedRange(
+                "FirstName",
+                new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)));
+            sheet.StructuredTables.Add(new StructuredTableModel
+            {
+                Id = 32,
+                Name = "OrdersTable",
+                DisplayName = "OrdersTable",
+                Range = new GridRange(
+                    new CellAddress(sheet.Id, 1, 1),
+                    new CellAddress(sheet.Id, 2, 2)),
+                HeaderRowCount = 1,
+            });
+            var shape = new DrawingShapeModel
+            {
+                Name = "OrdersShape",
+                Anchor = new CellAddress(sheet.Id, 4, 4),
+            };
+            sheet.DrawingShapes.Add(shape);
+
+            window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.A });
+            window.CellAddressBoxHasPendingEditForTest.Should().BeTrue();
+
+            var selected = window.SelectCellAddressAutocompleteKeyboardForTest(
+                Key.Home,
+                Key.Down,
+                Key.Down,
+                Key.Enter);
+
+            selected.Should().NotBeNull();
+            selected!.Name.Should().Be("OrdersTable");
+            selected.Kind.Should().Be(NameBoxNavigationItemKind.Table);
+            window.CellAddressBoxHasPendingEditForTest.Should().BeFalse(
+                "committing a dropdown item ends the Name Box edit just like WPF's ComboBox selection");
+            window.Session.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(sheet.Id, 2, 1),
+                new CellAddress(sheet.Id, 2, 2)));
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData(Key.Down, KeyModifiers.Alt)]
+    [InlineData(Key.F4, KeyModifiers.None)]
+    public async Task DropdownShortcut_FromNameBox_OpensTheProductionAutocompletePopup(
+        Key key,
+        KeyModifiers modifiers)
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow(
+                [InteractionValidationOptions.NameBoxDropdownParityPhysicalFixtureArgument]);
+
+            window.CellAddressBoxTextForTest = "Sales";
+            window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs
+            {
+                Key = key,
+                KeyModifiers = modifiers,
+            });
+
+            window.CellAddressAutocompleteOpenForTest.Should().BeTrue();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task DropdownSelection_NavigatesToTableAndSelectsNamedObjectAcrossSheets()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var first = window.Session.Workbook.AddSheet("First");
+            var second = window.Session.Workbook.AddSheet("Second");
+            window.Session.SelectSheet(first.Id);
+            var table = new StructuredTableModel
+            {
+                Id = 31,
+                Name = "OrdersTable",
+                DisplayName = "OrdersTable",
+                Range = new GridRange(
+                    new CellAddress(second.Id, 1, 1),
+                    new CellAddress(second.Id, 4, 2)),
+            };
+            second.StructuredTables.Add(table);
+            var shape = new DrawingShapeModel
+            {
+                Name = "OrdersShape",
+                Anchor = new CellAddress(second.Id, 8, 3),
+            };
+            second.DrawingShapes.Add(shape);
+            var picture = new PictureModel
+            {
+                Name = "OrdersPicture",
+                Anchor = new CellAddress(second.Id, 9, 3),
+                Kind = PictureKind.Image,
+            };
+            second.Pictures.Add(picture);
+            var textBox = new TextBoxModel
+            {
+                Name = "OrdersTextBox",
+                Anchor = new CellAddress(second.Id, 10, 3),
+            };
+            second.TextBoxes.Add(textBox);
+            var chart = new ChartModel
+            {
+                Name = "OrdersChart",
+                DataRange = new GridRange(
+                    new CellAddress(second.Id, 11, 3),
+                    new CellAddress(second.Id, 12, 4)),
+            };
+            second.Charts.Add(chart);
+
+            var items = NameBoxDropdownPlanner.Build(window.Session.Workbook, first.Id);
+            var tableItem = items.Single(item => item.Name == "OrdersTable");
+            tableItem.Kind.Should().Be(NameBoxNavigationItemKind.Table);
+            window.SelectCellAddressBoxItemForTest(tableItem).Should().BeTrue();
+            window.Session.ActiveSheet.Id.Should().Be(second.Id);
+            window.Session.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(second.Id, 2, 1),
+                new CellAddress(second.Id, 4, 2)));
+
+            var objectItem = NameBoxDropdownPlanner
+                .Build(window.Session.Workbook, second.Id)
+                .Single(item => item.Name == "OrdersShape");
+            objectItem.Kind.Should().Be(NameBoxNavigationItemKind.Object);
+            window.SelectCellAddressBoxItemForTest(objectItem).Should().BeTrue();
+            window.SelectedDrawingObjectKindForTest.Should().Be(SelectionPaneObjectKind.Shape);
+            window.SelectedDrawingObjectIdForTest.Should().Be(shape.Id);
+            window.Session.ActiveSheet.Id.Should().Be(second.Id);
+
+            foreach (var expected in new[]
+            {
+                ("OrdersChart", SelectionPaneObjectKind.Chart, chart.Id),
+                ("OrdersPicture", SelectionPaneObjectKind.Picture, picture.Id),
+                ("OrdersShape", SelectionPaneObjectKind.Shape, shape.Id),
+                ("OrdersTextBox", SelectionPaneObjectKind.TextBox, textBox.Id),
+            })
+            {
+                var item = NameBoxDropdownPlanner
+                    .Build(window.Session.Workbook, second.Id)
+                    .Single(entry => entry.Name == expected.Item1);
+
+                window.Session.SelectCell(new CellAddress(second.Id, 20, 1));
+                window.SelectCellAddressBoxItemForTest(item).Should().BeTrue();
+                window.SelectedDrawingObjectKindForTest.Should().Be(expected.Item2);
+                window.SelectedDrawingObjectIdForTest.Should().Be(expected.Item3);
+                window.Session.ActiveSheet.Id.Should().Be(second.Id);
+                window.CellAddressBoxTextForTest.Should().Be(expected.Item1,
+                    "the WPF Name Box keeps the selected drawing object's name instead of its anchor cell");
+            }
 
             window.Close();
         }, CancellationToken.None);

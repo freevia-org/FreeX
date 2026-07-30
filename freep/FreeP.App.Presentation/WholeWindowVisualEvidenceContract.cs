@@ -120,6 +120,21 @@ public sealed record WholeWindowVisualEvidenceBounds(double X, double Y, double 
     public bool IsVisible => Width > 0 && Height > 0;
 }
 
+public sealed record WholeWindowVisualEvidenceRichEditorState(
+    bool Active,
+    int SelectionStart,
+    int SelectionEnd,
+    string SelectedText,
+    WholeWindowVisualEvidenceBounds Bounds)
+{
+    public static WholeWindowVisualEvidenceRichEditorState Empty { get; } = new(
+        false,
+        0,
+        0,
+        string.Empty,
+        new WholeWindowVisualEvidenceBounds(0, 0, 0, 0));
+}
+
 public sealed record WholeWindowVisualEvidenceSemanticState(
     string ScenarioId,
     string Host,
@@ -153,7 +168,11 @@ public sealed record WholeWindowVisualEvidenceSemanticState(
     WholeWindowVisualEvidenceBounds NotesPaneBounds,
     WholeWindowVisualEvidenceBounds StatusBarBounds,
     IReadOnlyList<string> VisibleAuxiliaryPanes,
-    IReadOnlyList<DialogPaneVisualEvidenceAssertion> Assertions);
+    IReadOnlyList<DialogPaneVisualEvidenceAssertion> Assertions)
+{
+    public WholeWindowVisualEvidenceRichEditorState RichEditor { get; init; } =
+        WholeWindowVisualEvidenceRichEditorState.Empty;
+}
 
 public sealed record WholeWindowVisualEvidenceCapture(
     string ScenarioId,

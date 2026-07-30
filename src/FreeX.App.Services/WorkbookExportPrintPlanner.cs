@@ -510,9 +510,19 @@ public static class WorkbookExportPrintPlanner
     }
 
     /// <summary>
-    /// Builds per-sheet plans where each sheet's row/column page capacity is derived from its own
-    /// page setup (paper, orientation, margins, scale, actual row/column sizes) via
-    /// <see cref="SheetPdfPageSetupResolver.ResolveCapacity"/>.
+    /// Builds per-sheet plans where each sheet's row/column pagination is derived from its own page
+    /// setup (paper, orientation, margins, scale, actual row/column sizes) via
+    /// <see cref="SheetPdfPageSetupResolver.ResolvePagination"/>.
+    ///
+    /// <para>
+    /// R96-services-print-pagination-exact: pages are sliced on the real ACCUMULATED per-row height /
+    /// per-column width (the manual break points <c>ResolvePagination</c> computes), not a fixed count
+    /// derived from the AVERAGE row height / column width across the whole print range -- mirroring
+    /// what <c>WorksheetPrintRenderPlanner</c> already does for the WPF print path via
+    /// <c>PagePaginationPlanner.BuildPlan</c>. A fixed average-based count over/under-shoots the real
+    /// printable area whenever the range has non-uniform row heights or column widths (e.g. a few
+    /// wrapped-text or picture-anchor rows mixed with many short ones).
+    /// </para>
     /// </summary>
     private static IReadOnlyList<WorkbookSheetExportPrintPlanSummary> BuildSheetPlansFromPageSetup(
         IReadOnlyList<SheetRangeRequest> requestedRanges)
@@ -520,19 +530,20 @@ public static class WorkbookExportPrintPlanner
         var sheetPlans = new List<WorkbookSheetExportPrintPlanSummary>(requestedRanges.Count);
         foreach (var request in requestedRanges)
         {
-            var pageCapacity = SheetPdfPageSetupResolver.ResolveCapacity(request.Sheet, request.PrintRange);
+            var (pageCapacity, rowBreaks, columnBreaks) =
+                SheetPdfPageSetupResolver.ResolvePagination(request.Sheet, request.PrintRange);
 
             var rowPlans = PrintLayoutPlanner.BuildRowPlans(
                 request.PrintRange,
                 request.Sheet.PrintTitleRows,
                 pageCapacity.RowsPerPage,
-                request.Sheet.RowPageBreaks,
+                rowBreaks,
                 request.Sheet.IsRowEffectivelyHidden);
             var columnPlans = PrintLayoutPlanner.BuildColumnPlans(
                 request.PrintRange,
                 request.Sheet.PrintTitleColumns,
                 pageCapacity.ColumnsPerPage,
-                request.Sheet.ColumnPageBreaks,
+                columnBreaks,
                 request.Sheet.IsColEffectivelyHidden);
 
             sheetPlans.Add(new WorkbookSheetExportPrintPlanSummary(

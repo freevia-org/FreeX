@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using FreeX.App.Services;
@@ -129,6 +130,7 @@ internal enum ParitySurfaceKind
     Grid,
     Dialog,
     Backstage,
+    Overlay,
 }
 
 /// <summary>One captured (or attempted) surface: id, kind, output PNG name, success flag and a note.</summary>
@@ -137,7 +139,10 @@ internal sealed record ParitySurfaceResult(
     ParitySurfaceKind Kind,
     string PngFileName,
     bool Captured,
-    string Note)
+    string Note,
+    int? Width = null,
+    int? Height = null,
+    string? EvidenceProvenance = null)
 {
     public static string KindToken(ParitySurfaceKind kind) => kind switch
     {
@@ -147,6 +152,7 @@ internal sealed record ParitySurfaceResult(
         ParitySurfaceKind.Grid => "grid",
         ParitySurfaceKind.Dialog => "dialog",
         ParitySurfaceKind.Backstage => "backstage",
+        ParitySurfaceKind.Overlay => "overlay",
         _ => "unknown",
     };
 }
@@ -159,12 +165,17 @@ internal static class ParityCaptureOutputGuard
         string id,
         ParitySurfaceKind kind,
         string outputDirectory,
-        string pngFileName)
+        string pngFileName,
+        int? width = null,
+        int? height = null,
+        long minimumBytes = 0)
     {
         var pngPath = Path.Combine(outputDirectory, pngFileName);
         var note = ValidatePngOutput(pngPath);
+        if (note is null && minimumBytes > 0 && new FileInfo(pngPath).Length < minimumBytes)
+            note = $"PNG output is too small to contain the expected rendered surface: {pngPath}";
         return note is null
-            ? new ParitySurfaceResult(id, kind, pngFileName, Captured: true, "")
+            ? new ParitySurfaceResult(id, kind, pngFileName, Captured: true, "", width, height)
             : new ParitySurfaceResult(id, kind, pngFileName, Captured: false, note);
     }
 
@@ -268,7 +279,8 @@ internal static class ParityCaptureCoordinator
 
     /// <summary>
     /// Serializes the manifest with the EXACT contract the comparison runner depends on:
-    /// <c>{ "platform", "shell": "avalonia", "surfaces": [ { "id", "kind", "png", "captured", "note" } ] }</c>.
+    /// <c>{ "platform", "shell": "avalonia", "surfaces": [ { "id", "kind", "png", "captured", "note",
+    /// "width", "height", "evidenceProvenance" } ] }</c>.
     /// Hand-rolled (no JSON dependency) so the portable services tier stays untouched and the output is stable.
     /// </summary>
     private static void WriteManifest(string outputDirectory, IReadOnlyList<ParitySurfaceResult> results)
@@ -286,7 +298,10 @@ internal static class ParityCaptureCoordinator
             builder.Append("\"kind\": ").Append(JsonString(ParitySurfaceResult.KindToken(r.Kind))).Append(", ");
             builder.Append("\"png\": ").Append(JsonString(r.PngFileName)).Append(", ");
             builder.Append("\"captured\": ").Append(r.Captured ? "true" : "false").Append(", ");
-            builder.Append("\"note\": ").Append(JsonString(r.Note)).Append(" }");
+            builder.Append("\"note\": ").Append(JsonString(r.Note)).Append(", ");
+            builder.Append("\"width\": ").Append(r.Width?.ToString(CultureInfo.InvariantCulture) ?? "null").Append(", ");
+            builder.Append("\"height\": ").Append(r.Height?.ToString(CultureInfo.InvariantCulture) ?? "null").Append(", ");
+            builder.Append("\"evidenceProvenance\": ").Append(JsonString(r.EvidenceProvenance ?? "")).Append(" }");
             builder.Append(i < results.Count - 1 ? ",\n" : "\n");
         }
         builder.Append("  ]\n");

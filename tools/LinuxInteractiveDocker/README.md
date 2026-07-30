@@ -142,6 +142,11 @@ right-click an overflow arrow to open and Escape-close the real `Activate` sheet
 dialog, and drag `Sheet2` across `Sheet3`; the reorder assertion reads distinct
 values from the two visible positions through the real worksheet/formula path.
 
+The focused `formula-3d-native-xlsx` selector starts from a real native XLSX
+fixture and emits `formula-3d-native-xlsx-postcondition.json`. Its source,
+clean-save, physical-reopen, and ZIP formula/cache assertions are validated by
+the committed `freex-native-3d-formula-validation.schema.json` contract.
+
 For focused iteration, copy the probe into a running harness container and set
 `FREEX_X11_PROBE_SELECTOR=sheet-tabs`; this runs calibration plus only the four
 sheet-tab rows. The default selector remains `all`, preserving the complete

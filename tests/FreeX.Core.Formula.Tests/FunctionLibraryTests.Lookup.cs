@@ -42,15 +42,51 @@ public partial class FunctionLibraryTests
 
         AssertTextColumn(_eval.Evaluate("=VLOOKUP(D1:D2,A1:C3,2,FALSE)", sheet), "banana", "cherry");
         AssertColumn(_eval.Evaluate("=VLOOKUP(20,A1:C3,E1:E2,FALSE)", sheet), new TextValue("banana"), new NumberValue(200));
-        _eval.Evaluate("=VLOOKUP(D1:D2,A1:C3,E1:F1,FALSE)", sheet).Should().Be(ErrorValue.Value);
+        // R98-formula-lookup-cross-broadcast: D1:D2 (2x1 column of lookup values, {20;30})
+        // crossed with E1:F1 (1x2 row of col_index_num, {2,0}) must 2-D cross-broadcast into a
+        // 2x2 spilled matrix (row i = lookup value i, col j = col_index_num j), matching Excel
+        // dynamic arrays -- this previously asserted the old (superseded) #VALUE! behavior for
+        // exactly this perpendicular-vector shape combination. col_index_num=0 (from F1) is
+        // itself an out-of-range column index (#VALUE!), independent of the broadcast fix.
+        AssertLookupGrid(_eval.Evaluate("=VLOOKUP(D1:D2,A1:C3,E1:F1,FALSE)", sheet), new ScalarValue[,]
+        {
+            { new TextValue("banana"), ErrorValue.Value },
+            { new TextValue("cherry"), ErrorValue.Value },
+        });
 
         AssertTextColumn(_eval.Evaluate("=HLOOKUP(D1:D2,G1:I3,2,FALSE)", sheet), "banana", "cherry");
         AssertColumn(_eval.Evaluate("=HLOOKUP(20,G1:I3,E1:E2,FALSE)", sheet), new TextValue("banana"), new NumberValue(200));
-        _eval.Evaluate("=HLOOKUP(D1:D2,G1:I3,E1:F1,FALSE)", sheet).Should().Be(ErrorValue.Value);
+        // Same cross-broadcast rule for HLOOKUP's row_index_num (R98-formula-lookup-cross-broadcast);
+        // row_index_num=0 (from F1) is itself out-of-range (#VALUE!), independent of the broadcast fix.
+        AssertLookupGrid(_eval.Evaluate("=HLOOKUP(D1:D2,G1:I3,E1:F1,FALSE)", sheet), new ScalarValue[,]
+        {
+            { new TextValue("banana"), ErrorValue.Value },
+            { new TextValue("cherry"), ErrorValue.Value },
+        });
 
         AssertApproxColumn(_eval.Evaluate("=MATCH(D1:D2,A1:A3,0)", sheet), 2, 3);
         AssertApproxColumn(_eval.Evaluate("=MATCH(20,A1:A3,F1:F2)", sheet), 2, 2);
-        _eval.Evaluate("=MATCH(D1:D2,A1:A3,E1:F1)", sheet).Should().Be(ErrorValue.Value);
+        // Same cross-broadcast rule for MATCH's match_type (R98-formula-lookup-cross-broadcast);
+        // match_type=2 (from E1) is itself an invalid match_type (#N/A), independent of the
+        // broadcast fix -- only F1=0 (exact match) yields a real hit.
+        AssertLookupGrid(_eval.Evaluate("=MATCH(D1:D2,A1:A3,E1:F1)", sheet), new ScalarValue[,]
+        {
+            { ErrorValue.NA, new NumberValue(2) },
+            { ErrorValue.NA, new NumberValue(3) },
+        });
+    }
+
+    // R98-formula-lookup-cross-broadcast: asserts a spilled 2-D result grid (row-major), for
+    // shapes that mix value types (text/number/error) where AssertColumn/AssertApproxColumn
+    // (1-D only) don't apply.
+    private static void AssertLookupGrid(ScalarValue value, ScalarValue[,] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.GetLength(0));
+        range.ColCount.Should().Be(expected.GetLength(1));
+        for (int r = 0; r < expected.GetLength(0); r++)
+            for (int c = 0; c < expected.GetLength(1); c++)
+                range.At(r + 1, c + 1).Should().Be(expected[r, c], $"cell ({r + 1},{c + 1})");
     }
 
     [Fact]
@@ -420,11 +456,23 @@ public partial class FunctionLibraryTests
             (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)), (1, 3, new NumberValue(3)),
             (2, 1, new NumberValue(4)), (2, 2, new NumberValue(5)), (2, 3, new NumberValue(6)),
             (1, 4, new NumberValue(1)), (2, 4, new NumberValue(2)),
-            (1, 5, new NumberValue(3)), (2, 5, new NumberValue(2)));
+            (1, 5, new NumberValue(3)), (2, 5, new NumberValue(2)),
+            // F1 = 2 (so E1:F1 below is a clean {3,2} row vector of column_num, not a blank F1
+            // that would trigger INDEX's unrelated column_num==0 "spill whole row" special case).
+            (1, 6, new NumberValue(2)));
 
         AssertApproxColumn(_eval.Evaluate("=INDEX(A1:C2,D1:D2,E1:E2)", sheet), 3, 5);
         AssertApproxColumn(_eval.Evaluate("=INDEX(A1:C2,D1:D2,2)", sheet), 2, 5);
-        _eval.Evaluate("=INDEX(A1:C2,D1:D2,E1:F1)", sheet).Should().Be(ErrorValue.Value);
+        // R98-formula-lookup-cross-broadcast: D1:D2 (2x1 column of row_num) crossed with E1:F1
+        // (1x2 row of column_num) must 2-D cross-broadcast into a 2x2 spilled matrix (row i =
+        // row_num i, col j = column_num j), matching Excel dynamic arrays -- this previously
+        // asserted the old (superseded) #VALUE! behavior for exactly this perpendicular-vector
+        // shape combination.
+        AssertLookupGrid(_eval.Evaluate("=INDEX(A1:C2,D1:D2,E1:F1)", sheet), new ScalarValue[,]
+        {
+            { new NumberValue(3), new NumberValue(2) },
+            { new NumberValue(6), new NumberValue(5) },
+        });
     }
 
     [Fact]

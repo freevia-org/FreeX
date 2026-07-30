@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Xml.Linq;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -531,6 +533,9 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // dangling deleted-sheet reference remains (mirrors RenameSheetCommand's T6 block, but the
     // sheet has no new name to rewrite onto, so these are nulled instead of renamed).
     private List<(PivotCacheModel Cache, string OldValue)>? _pivotCacheNameDeleteSnapshot;
+    // R96: WorksheetRange/Table pivot caches whose records we captured into RawRecordsXml because
+    // their source sheet is about to disappear -- see TryCapturePivotCacheRecordsXml for why.
+    private List<(PivotCacheModel Cache, string? OldValue)>? _pivotCacheRawRecordsDeleteSnapshot;
     private List<(SlicerModel Slicer, string OldValue)>? _slicerNameDeleteSnapshot;
     // P84: mirrors _slicerNameDeleteSnapshot above for TimelineModel.SourceSheetName — a timeline
     // anchored on the deleted sheet must have its dangling sheet-name ref cleared too, or it can
@@ -541,6 +546,15 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // become #REF! just like ordinary cell/CF/DV formulas do via DeleteSheetOp — otherwise
     // they keep dangling text naming a sheet that no longer exists.
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimDeleteSnapshot;
+    // R95: Sheet.Hyperlinks / Sheet.HyperlinkMetadata.Bookmark carry the same kind of
+    // sheet-qualified string reference as CF/DV/FormControl above (mirrors RenameSheetCommand's
+    // O25/P113 blocks, same two fields) and must be rewritten to #REF! across ALL surviving
+    // sheets whose 'Place in This Document' hyperlink names the deleted sheet — otherwise the
+    // stale target text survives the delete and can silently reattach to an unrelated sheet
+    // later re-created/renamed with the same name (same failure mode the T6/P84 string-ref
+    // clears above guard against for PivotCache/Slicer/Picture/Timeline).
+    private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _hyperlinkBookmarkDeleteSnapshot;
+    private List<(SheetId Sheet, CellAddress Address, string OldTarget)>? _hyperlinkTargetDeleteSnapshot;
 
     public string Label => "Delete Sheet";
 
@@ -553,6 +567,15 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
 
         if (ctx.Workbook.Sheets.Count <= 1)
             return new CommandOutcome(false, "Cannot delete the only sheet.");
+
+        // R98: Real Excel refuses to delete a sheet if doing so would leave the workbook with
+        // zero visible sheets, even when other (hidden/very-hidden) sheets remain -- a workbook
+        // must always retain at least one visible sheet (mirrors SetSheetHiddenCommand's
+        // symmetric "Cannot hide the only visible sheet." guard above, and the same invariant
+        // XlsxWorkbookMetadataWriter.ClampToVisibleSheetIndex assumes on write). Checking here in
+        // Core.Commands guards every caller (WPF ribbon, WPF tab context menu, Avalonia) at once.
+        if (!ctx.Workbook.Sheets.Any(s => s.Id != _sheetId && !s.IsHidden && !s.IsVeryHidden))
+            return new CommandOutcome(false, "Cannot delete the only visible sheet.");
 
         var sheet = ctx.GetSheet(_sheetId);
         _removedSheet = sheet;
@@ -710,12 +733,33 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         // never silently reattach to an unrelated sheet later re-created/renamed with the same name
         // — mirrors RenameSheetCommand's T6 block, which uses the same three fields.
         _pivotCacheNameDeleteSnapshot = [];
+        _pivotCacheRawRecordsDeleteSnapshot = [];
         foreach (var cache in ctx.Workbook.PivotCaches)
         {
             if (cache.SourceSheetName is not null &&
                 string.Equals(cache.SourceSheetName, deletedSheetName, StringComparison.OrdinalIgnoreCase))
             {
                 _pivotCacheNameDeleteSnapshot.Add((cache, cache.SourceSheetName));
+
+                // R96: a WorksheetRange/Table cache's <pivotCacheRecords> are always regenerated
+                // live from its source range on save (XlsxPivotTableWriter.Cache.cs). Once
+                // SourceSheetName is nulled below, that live regeneration can never resolve a range
+                // again, and the writer's only fallback (RawRecordsXml -- previously populated only
+                // for External/Consolidation/Scenario sources) is blank for this cache, so the
+                // pivot table's cached records would silently truncate to
+                // <pivotCacheRecords count="0"/> on the very next save. Snapshot the cache's CURRENT
+                // records now, while `sheet`'s cell data is still live (it has already been unlinked
+                // from ctx.Workbook.Sheets above, but the in-memory Sheet object itself is untouched),
+                // into RawRecordsXml so that fallback has real data to serve -- matching real Excel,
+                // which keeps a pivot table's last-refreshed cache after its source sheet disappears
+                // (only a subsequent manual Refresh against the missing source then fails).
+                if (string.IsNullOrWhiteSpace(cache.RawRecordsXml) &&
+                    TryCapturePivotCacheRecordsXml(cache, sheet, out var capturedRecordsXml))
+                {
+                    _pivotCacheRawRecordsDeleteSnapshot.Add((cache, cache.RawRecordsXml));
+                    cache.RawRecordsXml = capturedRecordsXml;
+                }
+
                 cache.SourceSheetName = null;
             }
         }
@@ -753,6 +797,88 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             {
                 _timelineNameDeleteSnapshot.Add((timeline, timeline.SourceSheetName));
                 timeline.SourceSheetName = null;
+            }
+        }
+
+        // R95: rewrite 'Place in This Document' hyperlink bookmarks/targets across ALL surviving
+        // sheets that reference the deleted sheet, producing #REF! — mirrors RenameSheetCommand's
+        // O25/P113 pass (same two fields, same bookmark-vs-bare-target split), but using deleteOp
+        // so FormulaRewriter converts the sheet-qualified ref to #REF! instead of a new name.
+        _hyperlinkBookmarkDeleteSnapshot = [];
+        _hyperlinkTargetDeleteSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            List<KeyValuePair<CellAddress, HyperlinkMetadata>>? changed = null;
+            List<KeyValuePair<CellAddress, string>>? targetChanged = null;
+            foreach (var pair in s.HyperlinkMetadata)
+            {
+                var meta = pair.Value;
+                if (meta.LinkType != HyperlinkTargetKind.PlaceInThisDocument)
+                    continue;
+
+                var bookmark = meta.Bookmark;
+                if (string.IsNullOrEmpty(bookmark))
+                {
+                    // No bookmark recorded — the sheet-qualified ref lives directly on
+                    // sheet.Hyperlinks[addr] instead (see SetHyperlinkCommand).
+                    if (!s.Hyperlinks.TryGetValue(pair.Key, out var target) || string.IsNullOrEmpty(target))
+                        continue;
+
+                    var tBangIndex = target.IndexOf('!', StringComparison.Ordinal);
+                    if (tBangIndex < 0)
+                        continue;
+
+                    var tRawSheetPart = target[..tBangIndex].Trim('\'');
+                    var tSheetPart = tRawSheetPart.Contains("''", StringComparison.Ordinal)
+                        ? tRawSheetPart.Replace("''", "'", StringComparison.Ordinal)
+                        : tRawSheetPart;
+                    if (!string.Equals(tSheetPart, deletedSheetName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var rewrittenTarget = FormulaRewriter.Rewrite(target, deleteOp, s.Name);
+                    if (rewrittenTarget is null || rewrittenTarget == target)
+                        continue;
+
+                    (targetChanged ??= []).Add(new KeyValuePair<CellAddress, string>(pair.Key, rewrittenTarget));
+                    continue;
+                }
+
+                var bangIndex = bookmark.IndexOf('!', StringComparison.Ordinal);
+                if (bangIndex < 0)
+                    continue;
+
+                // Unescape doubled single-quotes ('' -> ') in a quoted sheet name before comparing
+                // against deletedSheetName, mirroring RenameSheetCommand's O27 handling.
+                var rawSheetPart = bookmark[..bangIndex].Trim('\'');
+                var sheetPart = rawSheetPart.Contains("''", StringComparison.Ordinal)
+                    ? rawSheetPart.Replace("''", "'", StringComparison.Ordinal)
+                    : rawSheetPart;
+                if (!string.Equals(sheetPart, deletedSheetName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var rewritten = FormulaRewriter.Rewrite(bookmark, deleteOp, s.Name);
+                if (rewritten is null || rewritten == bookmark)
+                    continue;
+
+                (changed ??= []).Add(new KeyValuePair<CellAddress, HyperlinkMetadata>(pair.Key, meta with { Bookmark = rewritten }));
+            }
+
+            if (changed is not null)
+            {
+                foreach (var (addr, newMeta) in changed)
+                {
+                    _hyperlinkBookmarkDeleteSnapshot.Add((s.Id, addr, s.HyperlinkMetadata[addr].Bookmark));
+                    s.HyperlinkMetadata[addr] = newMeta;
+                }
+            }
+
+            if (targetChanged is not null)
+            {
+                foreach (var (addr, newTarget) in targetChanged)
+                {
+                    _hyperlinkTargetDeleteSnapshot.Add((s.Id, addr, s.Hyperlinks[addr]));
+                    s.Hyperlinks[addr] = newTarget;
+                }
             }
         }
 
@@ -821,6 +947,13 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
                 foreach (var (cache, oldValue) in _pivotCacheNameDeleteSnapshot)
                     cache.SourceSheetName = oldValue;
 
+            // R96 restore: undo the RawRecordsXml capture from the Apply-side T6 pass above so a
+            // redo/undo cycle doesn't leave a cache carrying preserved records it never had before
+            // the delete (matches the SourceSheetName restore immediately above it).
+            if (_pivotCacheRawRecordsDeleteSnapshot is not null)
+                foreach (var (cache, oldValue) in _pivotCacheRawRecordsDeleteSnapshot)
+                    cache.RawRecordsXml = oldValue;
+
             if (_slicerNameDeleteSnapshot is not null)
                 foreach (var (slicer, oldValue) in _slicerNameDeleteSnapshot)
                     slicer.SourceSheetName = oldValue;
@@ -832,8 +965,124 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             if (_timelineNameDeleteSnapshot is not null)
                 foreach (var (timeline, oldValue) in _timelineNameDeleteSnapshot)
                     timeline.SourceSheetName = oldValue;
+
+            // R95 restore: hyperlink bookmarks/targets rewritten to #REF!
+            if (_hyperlinkBookmarkDeleteSnapshot is not null)
+            {
+                foreach (var (sheetId, addr, oldBookmark) in _hyperlinkBookmarkDeleteSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    if (sh.HyperlinkMetadata.TryGetValue(addr, out var meta))
+                        sh.HyperlinkMetadata[addr] = meta with { Bookmark = oldBookmark };
+                }
+            }
+
+            if (_hyperlinkTargetDeleteSnapshot is not null)
+            {
+                foreach (var (sheetId, addr, oldTarget) in _hyperlinkTargetDeleteSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    if (sh.Hyperlinks.ContainsKey(addr))
+                        sh.Hyperlinks[addr] = oldTarget;
+                }
+            }
         }
     }
+
+    /// <summary>
+    /// R96: attempts to render the CURRENT (pre-delete) records of a WorksheetRange/Table pivot
+    /// cache into the same &lt;pivotCacheRecords&gt; XML shape XlsxPivotTableWriter.Cache.cs's
+    /// ToPivotCacheRecordsXml/ToPivotCacheRecordValueXml produce, so it can be stashed into
+    /// <see cref="PivotCacheModel.RawRecordsXml"/> before the cache's SourceSheetName is nulled out
+    /// below. That writer's preserved-records fallback (TryGetPreservedPivotCacheRecordsXml) already
+    /// exists for External/Consolidation/Scenario cache sources, whose live worksheet range can
+    /// never be resolved in the first place -- this reuses the exact same fallback for a
+    /// WorksheetRange/Table cache that COULD normally resolve a live range, but is about to lose the
+    /// ability to because its source sheet is being deleted here.
+    /// </summary>
+    private static bool TryCapturePivotCacheRecordsXml(PivotCacheModel cache, Sheet sourceSheet, out string? recordsXml)
+    {
+        recordsXml = null;
+
+        // Mirrors TryGetPivotCacheSourceRange's own early-out: these source types never resolve a
+        // live worksheet range, so there's nothing here for RawRecordsXml to gain that the reader
+        // (XlsxPivotCacheReader) wouldn't already have captured at load time.
+        if (cache.SourceType is PivotCacheSourceType.External or PivotCacheSourceType.Consolidation or PivotCacheSourceType.Scenario)
+            return false;
+
+        if (string.IsNullOrWhiteSpace(cache.SourceReference) || cache.Fields.Count == 0)
+            return false;
+
+        GridRange sourceRange;
+        try
+        {
+            sourceRange = GridRange.Parse(NormalizePivotCacheSourceReference(cache.SourceReference), sourceSheet.Id);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+
+        if (sourceRange.RowCount <= 1)
+            return false; // header row only (or empty range) -- no cached records to lose
+
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var fieldCount = Math.Min(cache.Fields.Count, (int)sourceRange.ColCount);
+        var records = new List<XElement>();
+        for (var row = sourceRange.Start.Row + 1; row <= sourceRange.End.Row; row++)
+        {
+            var values = new List<XElement>(fieldCount);
+            for (var index = 0; index < fieldCount; index++)
+            {
+                var col = sourceRange.Start.Col + (uint)index;
+                values.Add(ToPivotCacheRecordValueXml(sourceSheet.GetValue(row, col), ns));
+            }
+
+            records.Add(new XElement(ns + "r", values));
+        }
+
+        if (records.Count == 0)
+            return false;
+
+        recordsXml = new XElement(
+            ns + "pivotCacheRecords",
+            new XAttribute("count", records.Count.ToString(CultureInfo.InvariantCulture)),
+            records).ToString(SaveOptions.DisableFormatting);
+        return true;
+    }
+
+    // Mirrors XlsxPivotTableWriter.Cache.cs's NormalizePivotCacheSourceReference: per
+    // CT_WorksheetSource (ECMA-376 18.10.2.42) the @ref attribute is an unqualified range like
+    // "A1:C10", but defensively strip a sheet-qualifier/$ signs in case one ever creeps in here too.
+    private static string NormalizePivotCacheSourceReference(string reference)
+    {
+        var normalized = reference.Trim();
+        var sheetSeparator = normalized.LastIndexOf('!');
+        if (sheetSeparator >= 0 && sheetSeparator + 1 < normalized.Length)
+            normalized = normalized[(sheetSeparator + 1)..];
+
+        return normalized.Replace("$", "", StringComparison.Ordinal);
+    }
+
+    // Mirrors XlsxPivotTableWriter.Cache.cs's ToPivotCacheRecordValueXml exactly (same element
+    // names/attribute shape) so a records XML captured here round-trips identically through the
+    // writer's TryGetPreservedPivotCacheRecordsXml fallback.
+    private static XElement ToPivotCacheRecordValueXml(ScalarValue value, XNamespace ns) =>
+        value switch
+        {
+            TextValue text => new XElement(ns + "s", new XAttribute("v", text.Value)),
+            NumberValue number => new XElement(ns + "n", new XAttribute("v", number.Value.ToString(CultureInfo.InvariantCulture))),
+            DateTimeValue date => new XElement(ns + "d", new XAttribute("v", date.ToDateTime().ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture))),
+            BoolValue boolean => new XElement(ns + "b", new XAttribute("v", boolean.Value ? "1" : "0")),
+            ErrorValue error => new XElement(ns + "e", new XAttribute("v", error.Code)),
+            _ => new XElement(ns + "m")
+        };
 
     private static Dictionary<string, string> RewriteNamedFormulasForDeletedSheet(
         Workbook workbook, string deletedSheetName, IReadOnlyList<string> deletedTableNames)

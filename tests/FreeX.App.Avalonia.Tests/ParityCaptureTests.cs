@@ -358,6 +358,54 @@ public sealed class ParityCaptureTests
     }
 
     [Fact]
+    public async Task CaptureParitySurfaces_RejectsManagedNameBoxDropdownAsAuthoritativeEvidence()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-parity-capture-namebox-dropdown-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                try
+                {
+                    window.Show();
+                    window.Measure(new global::Avalonia.Size(1120, 720));
+                    window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
+                    window.UpdateLayout();
+
+                    var results = await window.CaptureParitySurfacesAsync(
+                        outputDirectory,
+                        targetSurfaceId: "popup.nameBoxDropdown");
+
+                    results.Should().ContainSingle();
+                    var popup = results.Single();
+                    popup.Id.Should().Be("popup.nameBoxDropdown");
+                    popup.Kind.Should().Be(ParitySurfaceKind.Overlay);
+                    popup.Captured.Should().BeFalse();
+                    popup.Width.Should().BeNull();
+                    popup.Height.Should().BeNull();
+                    popup.EvidenceProvenance.Should().Be("managed-popup-diagnostic");
+                    popup.Note.Should().Contain("live native X11 popup crop");
+                    File.Exists(Path.Combine(outputDirectory, popup.PngFileName)).Should().BeFalse(
+                        "managed/offscreen popup diagnostics must never emit authoritative parity PNGs");
+                }
+                finally
+                {
+                    if (window.IsVisible)
+                        window.Close();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
     public async Task CaptureParitySurfaces_CapturesOnlyRequestedScenarioManagerDialog()
     {
         var outputDirectory = Path.Combine(

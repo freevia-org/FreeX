@@ -5,6 +5,231 @@ namespace FreeP.App.Compositor.Tests;
 
 public sealed class InCanvasRichTextEditBufferTests
 {
+    [Theory]
+    [InlineData(0, 0, 0)]
+    [InlineData(1, 0, 0)]
+    [InlineData(4, 2, 2)]
+    [InlineData(9, 9, 9)]
+    public void LogicalNavigation_CtrlHomeAndEndUseDocumentBoundaries(
+        int textLength,
+        int caret,
+        int expectedHome)
+    {
+        string text = new string('x', textLength);
+
+        InCanvasRichTextNavigationPlanner.MoveCaret(
+            text,
+            caret,
+            InCanvasTextNavigationKey.Home,
+            control: true).Should().Be(0);
+        InCanvasRichTextNavigationPlanner.MoveCaret(
+            text,
+            caret,
+            InCanvasTextNavigationKey.End,
+            control: true).Should().Be(textLength);
+        InCanvasRichTextNavigationPlanner.MoveCaret(
+            text,
+            caret,
+            InCanvasTextNavigationKey.Left).Should().Be(expectedHome == 0 ? Math.Max(0, caret - 1) : caret - 1);
+    }
+
+    [Fact]
+    public void LogicalNavigation_SelectionAnchorSurvivesRepeatedShiftMovement()
+    {
+        InCanvasRichTextNavigationPlanner.ResolveSelectionAnchor(2, 8, 8).Should().Be(2);
+        InCanvasRichTextNavigationPlanner.ResolveSelectionAnchor(2, 6, 2).Should().Be(6);
+        InCanvasRichTextNavigationPlanner.ResolveSelectionAnchor(2, 8, 5).Should().Be(2);
+    }
+
+    [Fact]
+    public void VerticalNavigation_UsesPreferredXAcrossWrappedAndParagraphLines()
+    {
+        var lines = new[]
+        {
+            VisualLine(0, 4, 0, 10, 20, 30, 40),
+            VisualLine(4, 8, 0, 10, 20, 30, 40),
+            VisualLine(9, 13, 0, 10, 20, 30, 40),
+        };
+
+        var firstDown = InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            lines,
+            caret: 2,
+            InCanvasTextVerticalDirection.Down);
+        firstDown.LogicalPosition.Should().Be(6);
+        firstDown.PreferredX.Should().Be(20);
+
+        var secondDown = InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            lines,
+            firstDown.LogicalPosition,
+            InCanvasTextVerticalDirection.Down,
+            firstDown.PreferredX);
+        secondDown.LogicalPosition.Should().Be(11);
+        secondDown.PreferredX.Should().Be(20);
+
+        var backUp = InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            lines,
+            secondDown.LogicalPosition,
+            InCanvasTextVerticalDirection.Up,
+            secondDown.PreferredX);
+        backUp.LogicalPosition.Should().Be(6);
+    }
+
+    [Fact]
+    public void VisualLineBoundaryNavigation_UsesMeasuredLineEndpoints()
+    {
+        var lines = new[]
+        {
+            VisualLine(0, 4, 0, 10, 20, 30, 40),
+            VisualLine(4, 8, 0, 10, 20, 30, 40),
+        };
+
+        InCanvasRichTextNavigationPlanner.MoveCaretToVisualLineBoundary(lines, 6, end: false)
+            .Should().Be(4);
+        InCanvasRichTextNavigationPlanner.MoveCaretToVisualLineBoundary(lines, 6, end: true)
+            .Should().Be(8);
+    }
+
+    [Fact]
+    public void VerticalNavigation_WrappedBoundaryBelongsToLineBeingLeft()
+    {
+        var lines = new[]
+        {
+            VisualLine(0, 4, 0, 10, 20, 30, 40),
+            VisualLine(4, 8, 0, 10, 20, 30, 40),
+        };
+
+        InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+                lines,
+                caret: 4,
+                InCanvasTextVerticalDirection.Down)
+            .LogicalPosition.Should().Be(8);
+        InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+                lines,
+                caret: 4,
+                InCanvasTextVerticalDirection.Up)
+            .LogicalPosition.Should().Be(0);
+    }
+
+    [Fact]
+    public void VerticalNavigation_RepeatedMovesPreservePreferredXAcrossUnequalLines()
+    {
+        var lines = new[]
+        {
+            VisualLine(0, 4, 0, 10, 20, 30, 40),
+            VisualLine(4, 6, 0, 14, 28),
+            VisualLine(6, 10, 0, 10, 20, 30, 40),
+        };
+
+        var down = InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            lines,
+            caret: 3,
+            InCanvasTextVerticalDirection.Down);
+        var downAgain = InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            lines,
+            down.LogicalPosition,
+            InCanvasTextVerticalDirection.Down,
+            down.PreferredX,
+            down.VisualLineIndex);
+        var up = InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            lines,
+            downAgain.LogicalPosition,
+            InCanvasTextVerticalDirection.Up,
+            downAgain.PreferredX,
+            downAgain.VisualLineIndex);
+        var upAgain = InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            lines,
+            up.LogicalPosition,
+            InCanvasTextVerticalDirection.Up,
+            up.PreferredX,
+            up.VisualLineIndex);
+
+        down.LogicalPosition.Should().Be(6);
+        downAgain.LogicalPosition.Should().Be(9);
+        up.LogicalPosition.Should().Be(6);
+        upAgain.LogicalPosition.Should().Be(3);
+        upAgain.PreferredX.Should().Be(30);
+    }
+
+    [Fact]
+    public void VerticalNavigation_CrossesNewlineOffsetAndClampsAtDocumentEdges()
+    {
+        var lines = new[]
+        {
+            VisualLine(0, 5, 0, 10, 20, 30, 40, 50),
+            VisualLine(6, 8, 0, 10, 20),
+        };
+
+        var down = InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            lines,
+            caret: 4,
+            InCanvasTextVerticalDirection.Down);
+        down.LogicalPosition.Should().Be(8);
+
+        var up = InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            lines,
+            down.LogicalPosition,
+            InCanvasTextVerticalDirection.Up,
+            down.PreferredX,
+            down.VisualLineIndex);
+        up.LogicalPosition.Should().Be(4);
+
+        var top = InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            lines,
+            caret: 0,
+            InCanvasTextVerticalDirection.Up);
+        top.LogicalPosition.Should().Be(0);
+        top.Moved.Should().BeFalse();
+
+        var topInterior = InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            lines,
+            caret: 2,
+            InCanvasTextVerticalDirection.Up);
+        topInterior.LogicalPosition.Should().Be(2);
+        topInterior.Moved.Should().BeFalse();
+
+        var bottom = InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            lines,
+            caret: 8,
+            InCanvasTextVerticalDirection.Down);
+        bottom.LogicalPosition.Should().Be(8);
+        bottom.Moved.Should().BeFalse();
+
+        var bottomInterior = InCanvasRichTextNavigationPlanner.MoveCaretVertically(
+            lines,
+            caret: 7,
+            InCanvasTextVerticalDirection.Down);
+        bottomInterior.LogicalPosition.Should().Be(7);
+        bottomInterior.Moved.Should().BeFalse();
+    }
+
+    [Fact]
+    public void CrossParagraphReplacement_DeletesSeparatorAndRetainsRunLineage()
+    {
+        var source = new TextBody();
+        source.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = "Alpha", Bold = true } },
+        });
+        source.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = "Beta", Italic = true } },
+        });
+        var buffer = new InCanvasRichTextEditBuffer(source);
+
+        buffer.ReplaceSelectionWithPlainText(
+            new InCanvasEditorTextSelection(3, 8),
+            "X",
+            out int caret).Should().BeTrue();
+
+        caret.Should().Be(4);
+        buffer.PlainText.Should().Be("AlpXta");
+        buffer.Body.Paragraphs.Should().ContainSingle();
+        buffer.Body.Paragraphs[0].Runs.Select(run => run.Text)
+            .Should().Equal("AlpX", "ta");
+        buffer.Body.Paragraphs[0].Runs[0].Bold.Should().BeTrue();
+        buffer.Body.Paragraphs[0].Runs[1].Italic.Should().BeTrue();
+    }
+
     [Fact]
     public void MultiCharacterReplacement_PreservesMixedRunsAndUsesSelectedRunFormat()
     {
@@ -430,6 +655,17 @@ public sealed class InCanvasRichTextEditBufferTests
         });
         return body;
     }
+
+    private static InCanvasTextVisualLineGeometry VisualLine(
+        int start,
+        int end,
+        params double[] xPositions) =>
+        new(
+            start,
+            end,
+            xPositions
+                .Select((x, index) => new InCanvasTextVisualCaret(start + index, x))
+                .ToArray());
 
     private static TextBody DistinctParagraphBody()
     {

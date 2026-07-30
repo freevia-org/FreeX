@@ -5,13 +5,18 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Inserts <paramref name="count"/> blank rows before <paramref name="beforeRow"/>.</summary>
-public sealed class InsertRowsCommand : IWorkbookCommand
+public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
 {
     private const uint FullSnapshotCapacityThreshold = 32;
     private readonly SheetId _sheetId;
     private readonly uint _beforeRow;
     private readonly uint _count;
     private List<CellStateSnapshot>? _movedSnapshot;
+    // R96-commands-undo-affected-cells-1: mutated by both Apply (post-shift addresses) and Revert
+    // (original, pre-shift addresses) so CommandBus.Undo can report the CURRENT set of relocated
+    // formula cells instead of the frozen forward payload -- see
+    // RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress.
+    private IReadOnlyList<CellAddress> _affectedCells = [];
     private List<GridRange>? _mergeSnapshot;
     private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
@@ -45,6 +50,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
 
     public string Label => $"Insert {_count} Row(s)";
+
+    public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
 
     public InsertRowsCommand(SheetId sheetId, uint beforeRow, uint count = 1)
     {
@@ -201,12 +208,41 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         // post-insert row) would be incorrectly re-shifted again if written any earlier.
         _tableCalculatedColumnFillSnapshot = FillGrownCalculatedColumnsForInsertedRows(ctx.Workbook, sheet);
 
-        return new CommandOutcome(
-            true,
-            AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-                RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _formulaSnapshot)
-                    .Concat(_tableCalculatedColumnFillSnapshot.Select(f => f.Address)),
-                _formulaSnapshot));
+        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+            RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _formulaSnapshot)
+                .Concat(_tableCalculatedColumnFillSnapshot.Select(f => f.Address))
+                .Concat(VacatedAddressesForRelocatedFormulaCells(_sheetId, movedSnapshot)),
+            _formulaSnapshot);
+        return new CommandOutcome(true, AffectedCells: _affectedCells);
+    }
+
+    // R98-commands-dependency-vacated-1: every snapshot in movedSnapshot with a formula physically
+    // relocates from its captured (Row, Col) to (Row + count, Col) by MoveCellsForInsert above --
+    // regardless of whether RewriteAllFormulas needed to touch its formula TEXT. The OLD address is
+    // therefore always left blank afterward (Insert only ever shifts rows DOWN, so nothing below the
+    // insert point can move up into it), yet neither RelocatedFormulaCellsPendingDependencyRefresh
+    // (new-address only) nor _formulaSnapshot (also new-address only, since RewriteAllFormulas runs
+    // AFTER the physical move) ever surfaced it in AffectedCells. WorkbookCellEditService's
+    // UpdateFormulaDependencies (and MainWindow.Editing's mirror) drives RecalcEngine purely off
+    // AffectedCells: for each affected address it either re-registers dependencies or, if the cell
+    // there is blank, calls ClearFormulaDependencies -- so the OLD address's dependency-graph entry
+    // was never purged, leaving a phantom precedent/dependent edge keyed at an address that no
+    // longer holds any formula. Surfacing it here lets UpdateFormulaDependencies's existing
+    // `cell?.FormulaText is null -> ClearFormulaDependencies` branch reclaim it with no other
+    // pipeline changes. (If some other relocated cell or a calculated-column fill happens to have
+    // repopulated this same address by the time AffectedCells is consumed, BuildAffectedCellsForFormulaRewrite's
+    // de-dup plus UpdateFormulaDependencies reading LIVE cell state means this is still handled
+    // correctly -- it just re-registers whatever formula actually ended up there instead of clearing.)
+    private static IEnumerable<CellAddress> VacatedAddressesForRelocatedFormulaCells(
+        SheetId sheetId, IEnumerable<CellStateSnapshot> movedSnapshot)
+    {
+        foreach (var snapshot in movedSnapshot)
+        {
+            if (snapshot.FormulaText is null)
+                continue;
+
+            yield return new CellAddress(sheetId, snapshot.Row, snapshot.Col);
+        }
     }
 
     // R26-table-structured-ref-deep-2: fills each structured table's calculated-column formula into
@@ -272,20 +308,28 @@ public sealed class InsertRowsCommand : IWorkbookCommand
                 }
             }
 
-            // R90-io-table-style-banding-5-3: capture the pre-reband state of every OTHER
-            // (non-calculated-column) cell in the newly-inserted row window before RebandTable
-            // below paints its stripe fill onto them -- these cells have no other undo coverage
-            // (they didn't exist pre-insert, so _movedSnapshot never captured them, and the
-            // calculated-column snapshot just above only covers calculated-column addresses).
-            // Calculated-column cells are deliberately excluded here since their pre-fill state
+            // R94-commands-undo-structural-format-reband-1: capture the pre-reband state of the
+            // table's FULL data body (every row GetDataBodyRowBounds returns, not just the
+            // newly-inserted window) before RebandTable below paints its stripe fill -- mirroring
+            // DeleteRowsCommand.RebandTablesAfterRowDelete and
+            // InsertDeleteColumnsCommand.RebandTablesAfterColumnInsert, which both already snapshot
+            // the whole body for the exact same reason. RebandTable/ApplyTableStyle always repaints
+            // every data-body cell with forceFill:true (MergeStyleOntoCell's keepExistingFill is
+            // unconditionally false under forceFill), so it can overwrite an explicit FillColor on a
+            // table row far from the insertion point (e.g. a user-highlighted cell above _beforeRow,
+            // which _movedSnapshot never captures since that only covers rows >= _beforeRow). Without
+            // this wider capture, such a row's formatting loss had no undo coverage at all -- Ctrl+Z
+            // never restored it. Calculated-column cells strictly inside the inserted window
+            // ([fillStartRow, fillEndRow]) are still excluded there since their pre-fill state
             // (always null, captured above) already fully covers whatever reband does to the same
             // address -- capturing them twice would let this second, later entry's stale "after
-            // fill, before reband" cell state win on Revert instead of the true original null.
-            for (var row = fillStartRow; row <= fillEndRow; row++)
+            // fill, before reband" cell state win on Revert instead of the true original null. Rows
+            // outside that window (including calculated-column cells there) are captured normally.
+            for (var row = firstDataRow; row <= lastDataRow; row++)
             {
                 for (var col = resizedTable.Range.Start.Col; col <= resizedTable.Range.End.Col; col++)
                 {
-                    if (calculatedColumns.Contains(col))
+                    if (row >= fillStartRow && row <= fillEndRow && calculatedColumns.Contains(col))
                         continue;
                     var address = new CellAddress(sheet.Id, row, col);
                     filled.Add((address, sheet.GetCell(address)?.Clone()));
@@ -330,12 +374,18 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         if (_movedSnapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
 
-        // R26-table-structured-ref-deep-2: undo the calculated-column auto-fill FIRST -- it was the
-        // very last effect Apply performed (after the physical row move below), so it must be the
-        // first one undone. Every address here falls strictly inside [_beforeRow, _beforeRow +
-        // _count - 1], which the moved-cell restore below is about to repopulate with the original
-        // pre-insert content (moved cells always restore back to their pre-shift address, i.e. this
-        // same window) -- undoing the fill afterward would instead clobber that just-restored data.
+        // R26-table-structured-ref-deep-2 / R94-commands-undo-structural-format-reband-1: undo the
+        // calculated-column auto-fill and the (now table-body-wide) pre-reband snapshot FIRST -- they
+        // were the very last effects Apply performed (after the physical row move below), so they
+        // must be the first undone. Addresses inside [_beforeRow, _beforeRow + _count - 1] are about
+        // to be repopulated by the moved-cell restore below (moved cells always restore back to their
+        // pre-shift address, which for the lowest shifted rows lands exactly in this window) --
+        // undoing the fill afterward would instead clobber that just-restored data. Addresses outside
+        // that window (both above _beforeRow, which the moved-cell restore never touches at all, and
+        // below the window, which the moved-cell clear/restore pair below still fully re-derives at
+        // the same address) are unaffected by running this restore first: the moved-cell step below
+        // either doesn't touch that address (leaving this restore's correct value standing) or is the
+        // last write to it regardless of ordering (its own clear-then-restore pair is self-contained).
         if (_tableCalculatedColumnFillSnapshot is not null)
         {
             foreach (var (address, oldCell) in _tableCalculatedColumnFillSnapshot)
@@ -346,6 +396,12 @@ public sealed class InsertRowsCommand : IWorkbookCommand
                     sheet.SetCell(address, oldCell);
             }
         }
+
+        // R96-commands-undo-affected-cells-1: RestoreFormulas below clears _formulaSnapshot as its
+        // last step, so capture its keys (the post-shift addresses of every stationary-or-moved
+        // formula cell whose text was rewritten by Apply) now, before that happens -- needed to
+        // recompute _affectedCells at the end of this method.
+        var formulaSnapshotAddressesBeforeRestore = _formulaSnapshot.Keys.ToList();
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
@@ -400,6 +456,37 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
+
+        // R96-commands-undo-affected-cells-1: recompute AffectedCells to reflect where every
+        // relocated formula cell ACTUALLY ended up after this Revert -- its original, pre-shift
+        // address (mirroring Apply's own AffectedCells, which reports the post-shift address for
+        // the forward direction). CommandBus.Undo reads this live property instead of the frozen
+        // forward payload.
+        // R98-commands-dependency-vacated-1: symmetric to the Apply-side fix above -- Revert
+        // physically moves each formula cell in _movedSnapshot back from its current (post-shift)
+        // address (Row + _count, Col) to its restored, pre-shift address (Row, Col), always leaving
+        // the post-shift address blank afterward (undo of an Insert only ever shifts rows UP, so
+        // nothing above the insert point can move down into it). That vacated post-shift address was
+        // never included in AffectedCells either, leaving the identical stale dependency-graph entry
+        // behind after an Undo.
+        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+            RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_movedSnapshot, _sheetId)
+                .Concat(_tableCalculatedColumnFillSnapshot?.Select(f => f.Address) ?? [])
+                .Concat(formulaSnapshotAddressesBeforeRestore)
+                .Concat(VacatedAddressesAfterRevert(_sheetId, _movedSnapshot, _count)),
+            []);
+    }
+
+    private static IEnumerable<CellAddress> VacatedAddressesAfterRevert(
+        SheetId sheetId, IEnumerable<CellStateSnapshot> movedSnapshot, uint count)
+    {
+        foreach (var snapshot in movedSnapshot)
+        {
+            if (snapshot.FormulaText is null)
+                continue;
+
+            yield return new CellAddress(sheetId, snapshot.Row + count, snapshot.Col);
+        }
     }
 
     private (uint MaxOccupied, List<CellStateSnapshot> Moved) CaptureMovedCells(Sheet sheet)

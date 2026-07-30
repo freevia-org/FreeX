@@ -8,7 +8,21 @@ public sealed record FormulaReferenceHighlight(
     int PaletteIndex,
     string Text,
     string? SheetName,
-    GridRange? Range);
+    GridRange? Range,
+    string? SheetEndName = null);
+
+/// <summary>
+/// Decoded sheet qualifier metadata shared by formula highlighting and formula reference editing.
+/// The source span remains available through <see cref="TextLength"/> and <see cref="AfterQualifier"/>.
+/// </summary>
+public readonly record struct FormulaReferenceSheetQualifier(
+    string StartSheetName,
+    string? EndSheetName,
+    int AfterQualifier,
+    int TextLength)
+{
+    public bool IsSpan => !string.IsNullOrWhiteSpace(EndSheetName);
+}
 
 public static class FormulaReferenceHighlightPlanner
 {
@@ -25,6 +39,14 @@ public static class FormulaReferenceHighlightPlanner
         SheetId currentSheetId,
         Func<string, SheetId?>? resolveSheetId,
         Func<string, string, GridRange?>? resolveStructuredReference)
+        => GetHighlights(text, currentSheetId, resolveSheetId, resolveStructuredReference, null);
+
+    public static IReadOnlyList<FormulaReferenceHighlight> GetHighlights(
+        string text,
+        SheetId currentSheetId,
+        Func<string, SheetId?>? resolveSheetId,
+        Func<string, string, GridRange?>? resolveStructuredReference,
+        Func<SheetId, int?>? resolveSheetIndex)
     {
         if (!text.StartsWith("=", StringComparison.Ordinal))
             return [];
@@ -52,7 +74,7 @@ public static class FormulaReferenceHighlightPlanner
                 continue;
             }
 
-            if (TryReadReference(text, index, currentSheetId, resolveSheetId, highlights.Count % PaletteSize, out var highlight, out var nextIndex))
+            if (TryReadReference(text, index, currentSheetId, resolveSheetId, highlights.Count % PaletteSize, resolveSheetIndex, out var highlight, out var nextIndex))
             {
                 highlights.Add(highlight);
                 index = nextIndex;
@@ -162,6 +184,7 @@ public static class FormulaReferenceHighlightPlanner
         SheetId currentSheetId,
         Func<string, SheetId?>? resolveSheetId,
         int paletteIndex,
+        Func<SheetId, int?>? resolveSheetIndex,
         out FormulaReferenceHighlight highlight,
         out int nextIndex)
     {
@@ -173,15 +196,31 @@ public static class FormulaReferenceHighlightPlanner
 
         var referenceStart = start;
         string? sheetName = null;
+        string? sheetEndName = null;
         var sheetId = currentSheetId;
+        var canRenderReference = true;
         var cellStart = start;
 
-        if (TryReadSheetQualifier(text, start, out var parsedSheetName, out var afterQualifier))
+        if (TryParseSheetQualifier(text, start, out var qualifier))
         {
-            sheetName = parsedSheetName;
+            sheetName = qualifier.StartSheetName;
+            sheetEndName = qualifier.EndSheetName;
             referenceStart = start;
-            cellStart = afterQualifier;
-            sheetId = resolveSheetId?.Invoke(sheetName) ?? currentSheetId;
+            cellStart = qualifier.AfterQualifier;
+            var resolvedStartSheetId = resolveSheetId?.Invoke(sheetName);
+            sheetId = resolvedStartSheetId ?? currentSheetId;
+            if (sheetEndName is not null)
+            {
+                var endSheetId = resolveSheetId?.Invoke(sheetEndName);
+                canRenderReference = resolvedStartSheetId is not null && endSheetId is not null &&
+                    IsCurrentSheetInSpan(currentSheetId, resolvedStartSheetId.Value, endSheetId.Value, resolveSheetIndex);
+                // Parse the body against a resolved endpoint even when the active worksheet is
+                // outside the span. This keeps an otherwise valid 3-D token atomic in the outer
+                // scanner, preventing its A1:B2 body from being rediscovered as a local reference.
+                sheetId = resolvedStartSheetId ?? currentSheetId;
+                if (canRenderReference)
+                    sheetId = currentSheetId;
+            }
         }
 
         // Whole-column (A:A) / whole-row (3:3) references have no row-in-the-first-token or
@@ -197,13 +236,17 @@ public static class FormulaReferenceHighlightPlanner
             }
 
             nextIndex = wholeEnd;
+            if (!canRenderReference)
+                return false;
+
             highlight = new FormulaReferenceHighlight(
                 referenceStart,
                 wholeEnd - referenceStart,
                 paletteIndex,
                 text[referenceStart..wholeEnd],
                 sheetName,
-                wholeRange);
+                wholeRange,
+                sheetEndName);
             return true;
         }
 
@@ -218,10 +261,13 @@ public static class FormulaReferenceHighlightPlanner
         if (cellEnd < text.Length && text[cellEnd] == ':')
         {
             var rangeCellStart = cellEnd + 1;
-            if (TryReadSheetQualifier(text, rangeCellStart, out var endSheetName, out var afterEndQualifier))
+            if (TryParseSheetQualifier(text, rangeCellStart, out var endQualifier))
             {
-                if (sheetName is null || string.Equals(sheetName, endSheetName, StringComparison.OrdinalIgnoreCase))
-                    rangeCellStart = afterEndQualifier;
+                if (sheetName is null ||
+                    (sheetEndName is null && string.Equals(sheetName, endQualifier.StartSheetName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    rangeCellStart = endQualifier.AfterQualifier;
+                }
             }
 
             if (TryReadCell(text, rangeCellStart, sheetId, out var parsedSecondCell, out var secondEnd, out _))
@@ -238,6 +284,9 @@ public static class FormulaReferenceHighlightPlanner
         }
 
         nextIndex = referenceEnd;
+        if (!canRenderReference)
+            return false;
+
         var range = new GridRange(firstCell, secondCell);
         highlight = new FormulaReferenceHighlight(
             referenceStart,
@@ -245,8 +294,134 @@ public static class FormulaReferenceHighlightPlanner
             paletteIndex,
             text[referenceStart..referenceEnd],
             sheetName,
-            range);
+            range,
+            sheetEndName);
         return true;
+    }
+
+    /// <summary>
+    /// Parses a normal or Excel 3-D sheet qualifier. Both <c>Sheet1:Sheet3!</c> and the
+    /// quoted whole-span form <c>'Sheet 1:Sheet 3'!</c> are accepted, including doubled
+    /// apostrophes inside quoted names.
+    /// </summary>
+    public static bool TryParseSheetQualifier(
+        string text,
+        int start,
+        out FormulaReferenceSheetQualifier qualifier)
+    {
+        qualifier = default;
+        if (!TryReadSheetNamePart(text, start, out var firstName, out var afterFirst, out var firstWasQuoted))
+            return false;
+
+        string? endName = null;
+        var afterName = afterFirst;
+        if (afterFirst < text.Length && text[afterFirst] == ':')
+        {
+            if (!TryReadSheetNamePart(text, afterFirst + 1, out endName, out afterName, out _))
+                return false;
+        }
+
+        if (firstWasQuoted && endName is null)
+        {
+            var separator = firstName.IndexOf(':');
+            if (separator > 0 && separator < firstName.Length - 1)
+            {
+                endName = firstName[(separator + 1)..];
+                firstName = firstName[..separator];
+            }
+        }
+
+        if (afterName >= text.Length || text[afterName] != '!')
+        {
+            // A quoted qualifier can quote the complete span, so split its decoded content.
+            if (!firstWasQuoted || endName is not null)
+                return false;
+
+            var separator = firstName.IndexOf(':');
+            if (separator <= 0 || separator == firstName.Length - 1 || afterFirst >= text.Length || text[afterFirst] != '!')
+                return false;
+
+            endName = firstName[(separator + 1)..];
+            firstName = firstName[..separator];
+            afterName = afterFirst;
+        }
+
+        var afterQualifier = afterName + 1;
+        qualifier = new FormulaReferenceSheetQualifier(
+            firstName,
+            endName,
+            afterQualifier,
+            afterQualifier - start);
+        return true;
+    }
+
+    private static bool TryReadSheetNamePart(
+        string text,
+        int start,
+        out string sheetName,
+        out int afterName,
+        out bool wasQuoted)
+    {
+        sheetName = "";
+        afterName = start;
+        wasQuoted = false;
+        if (start >= text.Length)
+            return false;
+
+        if (text[start] != '\'')
+        {
+            var index = start;
+            while (index < text.Length && IsUnquotedSheetNameChar(text[index]))
+                index++;
+            if (index == start)
+                return false;
+
+            sheetName = text[start..index];
+            afterName = index;
+            return true;
+        }
+
+        var quoteIndex = start + 1;
+        while (quoteIndex < text.Length)
+        {
+            if (text[quoteIndex] != '\'')
+            {
+                quoteIndex++;
+                continue;
+            }
+
+            if (quoteIndex + 1 < text.Length && text[quoteIndex + 1] == '\'')
+            {
+                quoteIndex += 2;
+                continue;
+            }
+
+            var rawSlice = text[(start + 1)..quoteIndex];
+            sheetName = rawSlice.Contains("''", StringComparison.Ordinal)
+                ? rawSlice.Replace("''", "'", StringComparison.Ordinal)
+                : rawSlice;
+            afterName = quoteIndex + 1;
+            wasQuoted = sheetName.Length > 0;
+            return wasQuoted;
+        }
+
+        return false;
+    }
+
+    private static bool IsCurrentSheetInSpan(
+        SheetId currentSheetId,
+        SheetId startSheetId,
+        SheetId endSheetId,
+        Func<SheetId, int?>? resolveSheetIndex)
+    {
+        if (resolveSheetIndex is null)
+            return currentSheetId == startSheetId || currentSheetId == endSheetId;
+
+        var currentIndex = resolveSheetIndex(currentSheetId);
+        var startIndex = resolveSheetIndex(startSheetId);
+        var endIndex = resolveSheetIndex(endSheetId);
+        return currentIndex is { } current && startIndex is { } first && endIndex is { } last &&
+            current >= Math.Min(first, last) && current <= Math.Max(first, last);
     }
 
     private static bool TryReadSheetQualifier(string text, int start, out string sheetName, out int afterQualifier)

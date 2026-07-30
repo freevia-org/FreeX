@@ -180,7 +180,9 @@ public static class DialogPaneVisualEvidenceFixtureFactory
 
     public static TextBody CreateRichEditorBody()
     {
-        var body = new TextBody { Wrap = true };
+        // Keep this deterministic mixed-font raster on one logical line. Wrapped
+        // pointer behavior is covered by the physical Linux grouped-child fixture.
+        var body = new TextBody { Wrap = false };
         var paragraph = new Paragraph();
         paragraph.Runs.Add(new Run
         {

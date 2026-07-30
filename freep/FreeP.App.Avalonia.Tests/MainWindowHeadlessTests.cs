@@ -114,17 +114,21 @@ public sealed class MainWindowHeadlessTests
 
                 var adorner = window.GetVisualDescendants()
                     .OfType<SelectionAdornerLayer>()
-                    .Single(candidate =>
-                        candidate.Parent is Grid parent &&
-                        parent.Children.OfType<SlideCanvas>().Any() &&
-                        parent.Children.OfType<Canvas>().Any());
+                    .Single();
                 var stack = adorner.Parent.Should().BeOfType<Grid>().Subject;
-                var canvas = stack.Children.OfType<SlideCanvas>().Single();
+                var canvasContent = stack.Children
+                    .OfType<Grid>()
+                    .Single(candidate => candidate.Children.OfType<SlideCanvas>().Any());
+                var canvas = canvasContent.Children.OfType<SlideCanvas>().Single();
                 var textOverlay = stack.Children.OfType<Canvas>().Single();
                 textOverlay.IsVisible = true;
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
 
-                stack.Margin.Should().Be(new Thickness(FreePShellVisualMetrics.CanvasMargin));
+                canvasContent.Margin.Should().Be(new Thickness(FreePShellVisualMetrics.CanvasMargin));
+                adorner.Margin.Should().Be(new Thickness(FreePShellVisualMetrics.CanvasMargin));
+                stack.Children.IndexOf(textOverlay).Should().BeLessThan(
+                    stack.Children.IndexOf(adorner),
+                    "WPF paints selection chrome above the active text editor");
                 canvas.Margin.Should().Be(default(Thickness));
 
                 var canvasOrigin = canvas.TranslatePoint(default, window);
@@ -132,12 +136,17 @@ public sealed class MainWindowHeadlessTests
                 var textOverlayOrigin = textOverlay.TranslatePoint(default, window);
                 canvasOrigin.Should().NotBeNull();
                 adornerOrigin.Should().Be(canvasOrigin);
-                textOverlayOrigin.Should().Be(canvasOrigin);
-                canvasOrigin!.Value.X.Should().BeGreaterThanOrEqualTo(FreePShellVisualMetrics.CanvasMargin);
+                textOverlayOrigin.Should().NotBeNull();
+                (canvasOrigin!.Value.X - textOverlayOrigin!.Value.X).Should()
+                    .BeApproximately(FreePShellVisualMetrics.CanvasMargin, 0.001);
+                (canvasOrigin.Value.Y - textOverlayOrigin.Value.Y).Should()
+                    .BeApproximately(FreePShellVisualMetrics.CanvasMargin, 0.001);
+                canvasOrigin.Value.X.Should().BeGreaterThanOrEqualTo(FreePShellVisualMetrics.CanvasMargin);
                 canvasOrigin.Value.Y.Should().BeGreaterThanOrEqualTo(FreePShellVisualMetrics.CanvasMargin);
 
                 var shape = window.Editor.InsertDefaultRectangle();
                 window.Editor.Select(shape.Id);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 var expected = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(
                     shape,
                     window.Editor.Presentation,

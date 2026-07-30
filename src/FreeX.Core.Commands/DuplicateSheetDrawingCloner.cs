@@ -164,6 +164,11 @@ internal static class DuplicateSheetDrawingCloner
             TextThemeColor = textBox.TextThemeColor,
             TextHAlign = textBox.TextHAlign,
             TextVAnchor = textBox.TextVAnchor,
+            // R97-model-drawing-hyperlink-2-2: carry the object-level hyperlink forward -- without
+            // this, a text box's hyperlink was only ever preserved by re-reading it from the SOURCE
+            // package keyed by cNvPr@name (XlsxWorksheetDrawingObjectWriter's R95 mechanism), which a
+            // duplicate (never present in the source package under its own sheet name) can't reach.
+            Hyperlink = textBox.Hyperlink,
             // A source-loaded text box's on-disk part is preserved by keying source drawing parts
             // by sheet NAME (XlsxFileAdapter.SavePostProcessing.GetSourceDrawingPathsBySheet); the
             // duplicate always gets a brand-new sheet name (e.g. "Sheet1 (2)") that is absent from
@@ -207,6 +212,8 @@ internal static class DuplicateSheetDrawingCloner
             HasShadowEffect = shape.HasShadowEffect,
             EffectPreset = shape.EffectPreset,
             UsesThemeEffects = shape.UsesThemeEffects,
+            // R97-model-drawing-hyperlink-2-2: see the matching comment on CloneTextBox's Hyperlink copy.
+            Hyperlink = shape.Hyperlink,
             // A source-loaded shape's on-disk part is preserved by keying source drawing parts by
             // sheet NAME (XlsxFileAdapter.SavePostProcessing.GetSourceDrawingPathsBySheet); the
             // duplicate always gets a brand-new sheet name (e.g. "Sheet1 (2)") that is absent from
@@ -311,6 +318,8 @@ internal static class DuplicateSheetDrawingCloner
             CropTop = picture.CropTop,
             CropRight = picture.CropRight,
             CropBottom = picture.CropBottom,
+            // R97-model-drawing-hyperlink-2-2: see the matching comment on CloneTextBox's Hyperlink copy.
+            Hyperlink = picture.Hyperlink,
             // A source-loaded picture's on-disk part is preserved by keying source drawing parts by
             // sheet NAME (XlsxFileAdapter.SavePostProcessing.GetSourceDrawingPathsBySheet); the
             // duplicate always gets a brand-new name (e.g. "Sheet1 (2)") that is absent from the
@@ -336,12 +345,29 @@ internal static class DuplicateSheetDrawingCloner
     /// R92-cmd-paste-floating-objects. Bumped from private to internal for that reuse rather than
     /// duplicating this ~250-property clone list a second time.
     /// </summary>
-    internal static ChartModel CloneChart(ChartModel chart, SheetId sourceSheetId, SheetId copyId) =>
+    /// <param name="remapSameSheetDataRange">
+    /// True only for the whole-sheet "Duplicate Sheet" caller, where the copy is a parallel sheet
+    /// containing its own copy of the data -- a same-sheet DataRange must follow the duplicate onto
+    /// the copy sheet (Excel's Duplicate Sheet behavior). Every other caller (plain Ctrl+V of a
+    /// chart-carrying range, or Ctrl+C/Ctrl+V of a selected chart object) duplicates only the chart
+    /// itself, not the data it plots, so the DataRange -- and any verbatim series/error-bar formula
+    /// text -- must keep pointing at the exact original source sheet/cells unchanged, regardless of
+    /// where the duplicate lands (R94-cmd-paste-charts-cross-sheet-dataRange). Defaults to true so
+    /// existing Duplicate Sheet call sites are unaffected.
+    /// </param>
+    internal static ChartModel CloneChart(
+        ChartModel chart, SheetId sourceSheetId, SheetId copyId, bool remapSameSheetDataRange = true) =>
         new()
         {
             Name = chart.Name,
             AltTextTitle = chart.AltTextTitle,
             AltTextDescription = chart.AltTextDescription,
+            // R98-io-chart-hyperlink-model-field: carry the object-level hyperlink onto the clone --
+            // without this, a copy-pasted/duplicated chart's hyperlink could only ever be found by
+            // falling back to the fragile sheet-name-keyed source-package lookup, which (per the same
+            // name both charts now share) either drops it or misattributes it. Mirrors ClonePicture/
+            // CloneTextBox/CloneDrawingShape's identical Hyperlink = ... copy (R97-model-drawing-hyperlink-2-2).
+            Hyperlink = chart.Hyperlink,
             Type = chart.Type,
             Uses1904DateSystem = chart.Uses1904DateSystem,
             Language = chart.Language,
@@ -351,8 +377,9 @@ internal static class DuplicateSheetDrawingCloner
             // Only remap the DataRange onto the copy when it actually points at the sheet being
             // duplicated — a cross-sheet DataRange (e.g. a Dashboard chart plotting Data!A1:B10)
             // must keep pointing at the original source sheet, matching Excel's Duplicate Sheet
-            // behavior (only same-sheet references travel with the copy).
-            DataRange = chart.DataRange.Start.Sheet == sourceSheetId
+            // behavior (only same-sheet references travel with the copy). Non-Duplicate-Sheet
+            // callers pass remapSameSheetDataRange:false so the DataRange is always left verbatim.
+            DataRange = remapSameSheetDataRange && chart.DataRange.Start.Sheet == sourceSheetId
                 ? RemapRange(chart.DataRange, copyId)
                 : chart.DataRange,
             IsVisible = chart.IsVisible,

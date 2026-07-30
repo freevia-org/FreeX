@@ -71,6 +71,20 @@ internal static class XlsxDrawingAnchorApplier
             picture.Width = width;
         if (height > 0)
             picture.Height = height;
+        // R94-hidden-span fix: capture the baseline as whatever Width/Height actually ended up being
+        // after load -- including the retained class-default when the anchor's own span fell entirely
+        // within hidden rows/columns (GetAnchorSize returns 0 for that axis, so the `> 0` guard above
+        // left the model at its default rather than a fabricated small size). Gating this capture on
+        // `width > 0`/`height > 0` too (as it originally was) left SourceLoadedWidthPixels/HeightPixels
+        // null for such a picture, which defeats XlsxSourceDrawingGeometryRewriter.RewriteAnchorGeometry's
+        // save-time skip-gate (it compares this baseline against the CURRENT live Width/Height, and null
+        // never compares equal) -- forcing a bogus recompute that walks the sheet using the retained
+        // default 240x140 size and relocates the object's `to` marker to an unrelated, distant cell even
+        // though the picture itself was never touched. Recording the POST-guard value here instead means
+        // the baseline trivially matches the live value for an untouched picture (hidden-span or not),
+        // so the save-time skip-gate fires correctly and the original `to` marker is preserved verbatim.
+        picture.SourceLoadedWidthPixels = picture.Width;
+        picture.SourceLoadedHeightPixels = picture.Height;
         // For an absoluteAnchor the caller resolves Anchor to the sheet's origin cell (row 1/col
         // 1, pixel (0,0)), so applying the anchor's absolute pixel position as the sub-cell offset
         // reproduces the intended on-sheet position, mirroring how ApplyToChart applies
@@ -89,6 +103,13 @@ internal static class XlsxDrawingAnchorApplier
             textBox.Width = width;
         if (height > 0)
             textBox.Height = height;
+        // R94-hidden-span fix: see the matching comment in ApplyToPicture -- always capture the baseline
+        // as the POST-guard Width/Height (including the retained default when the span is entirely
+        // hidden) rather than only when GetAnchorSize produced a positive value, so the save-time
+        // skip-gate in XlsxSourceDrawingGeometryRewriter.RewriteAnchorGeometry can tell "never touched"
+        // apart from "genuinely resized" for a hidden-span text box too.
+        textBox.SourceLoadedWidthPixels = textBox.Width;
+        textBox.SourceLoadedHeightPixels = textBox.Height;
         // See the comment in ApplyToPicture: an absoluteAnchor's Anchor cell is the sheet origin
         // (pixel (0,0)), so the absolute pixel position doubles as the correct sub-cell offset.
         textBox.AnchorOffsetX = anchor.AbsoluteLeft ?? anchor.FromColumnOffset;
@@ -128,9 +149,23 @@ internal static class XlsxDrawingAnchorApplier
         if (width > 0)
             shape.Width = width;
         if (isLineLike)
+        {
             shape.Height = Math.Max(0, height);   // allow flat (zero-height) lines
+        }
         else if (height > 0)
+        {
             shape.Height = height;
+        }
+        // R94-hidden-span fix: see the matching comment in ApplyToPicture -- always capture the baseline
+        // as the POST-guard Width/Height (including the retained default when the anchor-derived span is
+        // entirely hidden) rather than only when the computed value was positive, so the save-time
+        // skip-gate in XlsxSourceDrawingGeometryRewriter.RewriteAnchorGeometry can tell "never touched"
+        // apart from "genuinely resized" for a hidden-span shape too. This also covers the xfrm-preferred
+        // branch above (xfrmWidthPixels/xfrmHeightPixels), which is unaffected since that width/height is
+        // never zero-due-to-hidden-span in the first place -- the baseline still just mirrors whatever
+        // Width/Height the shape ended up with.
+        shape.SourceLoadedWidthPixels = shape.Width;
+        shape.SourceLoadedHeightPixels = shape.Height;
         // See the comment in ApplyToPicture: an absoluteAnchor's Anchor cell is the sheet origin
         // (pixel (0,0)), so the absolute pixel position doubles as the correct sub-cell offset.
         shape.AnchorOffsetX = anchor.AbsoluteLeft ?? anchor.FromColumnOffset;

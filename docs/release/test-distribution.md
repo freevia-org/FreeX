@@ -82,6 +82,8 @@ Before dispatching a candidate, run `tools/Test-TesterReleaseReadiness.ps1` from
 
 Use [release/tester-release-checklist.md](tester-release-checklist.md) as the operator checklist for release-gate evidence and public-preview accessibility notes. The `Tester Release` workflow exposes `public_preview_candidate` plus four accessibility evidence inputs; public-preview promotion fails unless keyboard-only, screen-reader, UI Automation catalog, and known-issues review inputs are all completed.
 
+For the full suite release map across FreeX, FreeW, and FreeP, see [app-platform-publish-lanes.md](app-platform-publish-lanes.md). Each app/platform lane is independent so Windows, Linux, and macOS packages can be built or rerun separately.
+
 ## Default Agent Build Verification
 
 Run these commands from the repository root when validating routine agent work or a non-UI build-lane slice. The default path intentionally allows the .NET SDK to perform restore as needed and keeps build servers, shared compilation, node reuse, and MSBuild parallelism enabled:

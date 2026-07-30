@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "sheet-tabs", "pivot-field-list", "autofilter-recalculation", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "grid-drag")]
+    [ValidateSet("all", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "autofilter-recalculation", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -52,6 +52,9 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $harness = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $containerName = "freex-linux-interactive-freex-$Port"
 $x11ProbeScript = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freex-input-probes.sh"
+$native3dFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave66Native3DFixture.ps1"
+$native3dSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-native-3d-formula-validation.schema.json"
+$nameBoxObjectsSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-name-box-dropdown-objects-validation.schema.json"
 $runnerSchemaVersion = 2
 $resumeRequested = -not [string]::IsNullOrWhiteSpace($ResumeReportDirectory)
 $reportStamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
@@ -170,6 +173,319 @@ function Ensure-ReportProvenance {
         return
     }
     Assert-ProvenanceMatchesCurrent -Expected $script:reportProvenance
+}
+
+function Assert-Native3DPostcondition {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    if (-not (Test-Path -LiteralPath $native3dSchemaPath -PathType Leaf)) {
+        throw "Native 3-D validation schema is missing: $native3dSchemaPath"
+    }
+    $schema = Get-Content -LiteralPath $native3dSchemaPath -Raw | ConvertFrom-Json
+    if ([int]$schema.properties.schemaVersion.const -ne 1 -or
+        [string]$schema.properties.format.const -ne "xlsx" -or
+        @($schema.required) -join "," -ne "schemaVersion,format,source,save,reopen,package") {
+        throw "Native 3-D validation schema is not the expected version 1 XLSX contract."
+    }
+
+    $postconditionPath = Join-Path $EvidenceDirectory "formula-3d-native-xlsx-postcondition.json"
+    if (-not (Test-Path -LiteralPath $postconditionPath -PathType Leaf)) {
+        throw "Native 3-D probe did not emit its required postcondition JSON: $postconditionPath"
+    }
+    try {
+        $postcondition = Get-Content -LiteralPath $postconditionPath -Raw | ConvertFrom-Json
+    } catch {
+        throw "Native 3-D postcondition is not valid JSON: $postconditionPath"
+    }
+
+    $expectedRoot = @("schemaVersion", "format", "source", "save", "reopen", "package")
+    $actualRoot = @($postcondition.PSObject.Properties.Name)
+    if ((@($actualRoot | Sort-Object) -join ",") -ne (@($expectedRoot | Sort-Object) -join ",")) {
+        throw "Native 3-D postcondition root fields do not match the committed schema."
+    }
+    $expectedPoint = "=SUM('O''Brien Data:Revenue Data'!B2:C3)"
+    $expectedResized = "=SUM('O''Brien Data:Revenue Data'!B2:D4)"
+    $expectedPackageFormula = "SUM('O''Brien Data:Revenue Data'!B2:D4)"
+    $expectedNestedFields = @{
+        source = @("path", "pointFormula", "pointResult")
+        save = @("clean", "resizedFormula", "resizedResult")
+        reopen = @("physical", "formula", "result")
+        package = @("zip", "workbook", "formula", "cachedResult")
+    }
+    foreach ($section in $expectedNestedFields.Keys) {
+        $actualFields = @($postcondition.$section.PSObject.Properties.Name)
+        $expectedFields = @($expectedNestedFields[$section])
+        if ((@($actualFields | Sort-Object) -join ",") -ne (@($expectedFields | Sort-Object) -join ",")) {
+            throw "Native 3-D postcondition '$section' fields do not match the committed schema."
+        }
+    }
+    if ([int]$postcondition.schemaVersion -ne 1 -or
+        [string]$postcondition.format -ne "xlsx" -or
+        [string]::IsNullOrWhiteSpace([string]$postcondition.source.path) -or
+        [string]$postcondition.source.pointFormula -ne $expectedPoint -or
+        [string]$postcondition.source.pointResult -notmatch '^88(?:\.0+)?$' -or
+        $postcondition.save.clean -ne $true -or
+        [string]$postcondition.save.resizedFormula -ne $expectedResized -or
+        [string]$postcondition.save.resizedResult -notmatch '^234(?:\.0+)?$' -or
+        $postcondition.reopen.physical -ne $true -or
+        [string]$postcondition.reopen.formula -ne $expectedResized -or
+        [string]$postcondition.reopen.result -notmatch '^234(?:\.0+)?$' -or
+        $postcondition.package.zip -ne $true -or
+        $postcondition.package.workbook -ne $true -or
+        [string]$postcondition.package.formula -ne $expectedPackageFormula -or
+        [string]$postcondition.package.cachedResult -notmatch '^234(?:\.0+)?$') {
+        throw "Native 3-D postcondition failed exact formula/result/save/reopen/package validation."
+    }
+}
+
+function Assert-NameBoxDropdownObjectPostcondition {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    if (-not (Test-Path -LiteralPath $nameBoxObjectsSchemaPath -PathType Leaf)) {
+        throw "Name Box object validation schema is missing: $nameBoxObjectsSchemaPath"
+    }
+    $postconditionPath = Join-Path $EvidenceDirectory "name-box-dropdown-object-postcondition.json"
+    if (-not (Test-Path -LiteralPath $postconditionPath -PathType Leaf)) {
+        throw "Name Box object probe did not emit its required postcondition JSON: $postconditionPath"
+    }
+    try {
+        $postcondition = Get-Content -LiteralPath $postconditionPath -Raw | ConvertFrom-Json
+    } catch {
+        throw "Name Box object postcondition is not valid JSON: $postconditionPath"
+    }
+    $schema = Get-Content -LiteralPath $nameBoxObjectsSchemaPath -Raw | ConvertFrom-Json
+    if ([int]$schema.properties.schemaVersion.const -ne 1 -or
+        [string]$schema.properties.suite.const -ne "freex-name-box-dropdown-objects-physical") {
+        throw "Name Box object validation schema is not the expected version 1 contract."
+    }
+    $expectedOrder = @(
+        "PhysicalChart",
+        "PhysicalName",
+        "PhysicalPicture",
+        "PhysicalShape",
+        "PhysicalTable",
+        "PhysicalTextBox"
+    )
+    $actualOrder = @($postcondition.expectedOrder | ForEach-Object { [string]$_ })
+    $expectedContracts = [ordered]@{
+        "name-box-dropdown-chart-physical" = @{
+            expectedName = "PhysicalChart"
+            expectedKind = "Chart"
+            expectedId = "67000000-0000-0000-0000-000000000004"
+            expectedActiveCell = "D5"
+        }
+        "name-box-dropdown-picture-physical" = @{
+            expectedName = "PhysicalPicture"
+            expectedKind = "Picture"
+            expectedId = "67000000-0000-0000-0000-000000000002"
+            expectedActiveCell = "D3"
+        }
+        "name-box-dropdown-shape-physical" = @{
+            expectedName = "PhysicalShape"
+            expectedKind = "Shape"
+            expectedId = "67000000-0000-0000-0000-000000000001"
+            expectedActiveCell = "D2"
+        }
+        "name-box-dropdown-textbox-physical" = @{
+            expectedName = "PhysicalTextBox"
+            expectedKind = "TextBox"
+            expectedId = "67000000-0000-0000-0000-000000000003"
+            expectedActiveCell = "D4"
+        }
+    }
+    $expectedIds = @($expectedContracts.Keys)
+    $results = @($postcondition.results)
+    $actualIds = @($results | ForEach-Object { [string]$_.id })
+    $missing = @($expectedIds | Where-Object { $_ -notin $actualIds })
+    $duplicates = @($actualIds | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name)
+    $failed = @($results | Where-Object { [string]$_.status -ne "passed" })
+    $violations = [System.Collections.Generic.List[string]]::new()
+    if ((@($actualOrder) -join "|") -ne (@($expectedOrder) -join "|")) {
+        $violations.Add("expectedOrder='$(@($actualOrder) -join ',')'")
+    }
+    foreach ($expectedId in $expectedIds) {
+        $rows = @($results | Where-Object { [string]$_.id -eq $expectedId })
+        if ($rows.Count -ne 1) {
+            $violations.Add("$expectedId rowCount=$($rows.Count)")
+            continue
+        }
+
+        $row = $rows[0]
+        $contract = $expectedContracts[$expectedId]
+        foreach ($field in @("expectedName", "expectedKind", "expectedId")) {
+            if ([string]$row.$field -ne [string]$contract[$field]) {
+                $violations.Add("$expectedId $field='$([string]$row.$field)'")
+            }
+        }
+        foreach ($field in @("observedName", "observedObjectKind", "observedSelectedObjectKind", "observedId", "observedNameBox", "observedActiveCell")) {
+            $expectedValue = switch ($field) {
+                "observedName" { $contract.expectedName }
+                "observedObjectKind" { $contract.expectedKind }
+                "observedSelectedObjectKind" { $contract.expectedKind }
+                "observedId" { $contract.expectedId }
+                "observedNameBox" { $contract.expectedName }
+                "observedActiveCell" { $contract.expectedActiveCell }
+            }
+            if ([string]$row.$field -ne [string]$expectedValue) {
+                $violations.Add("$expectedId $field='$([string]$row.$field)'")
+            }
+        }
+        if ([string]$row.baselineStage -ne "neutral-cell-selected" -or
+            -not [string]::IsNullOrEmpty([string]$row.baselineSelectedObjectKind) -or
+            -not [string]::IsNullOrEmpty([string]$row.baselineSelectedObjectId) -or
+            [string]$row.baselineNameBox -ne "J20" -or
+            [string]$row.baselineActiveCell -ne "J20" -or
+            [string]$row.observedStage -ne "object-selected" -or
+            [string]$row.observedItemKind -ne "Object" -or
+            [string]$row.status -ne "passed") {
+            $violations.Add("$expectedId observed stage/item-kind/active-cell/status is invalid")
+        }
+        if ([string]$row.baselineSequence -notmatch '^\d+$' -or
+            [string]$row.observedSequence -notmatch '^\d+$' -or
+            [int]$row.observedSequence -le [int]$row.baselineSequence) {
+            $violations.Add("$expectedId sequence is not fresh")
+        }
+    }
+    if ([int]$postcondition.schemaVersion -ne 1 -or
+        [string]$postcondition.suite -ne "freex-name-box-dropdown-objects-physical" -or
+        [string]$postcondition.platform -ne "linux" -or
+        [string]$postcondition.shell -ne "avalonia" -or
+        [string]$postcondition.app -ne "FreeX" -or
+        $results.Count -ne $expectedIds.Count -or
+        $missing.Count -ne 0 -or
+        $duplicates.Count -ne 0 -or
+        $failed.Count -ne 0 -or
+        [int]$postcondition.summary.passed -ne $expectedIds.Count -or
+        [int]$postcondition.summary.failed -ne 0 -or
+        [int]$postcondition.summary.total -ne $expectedIds.Count) {
+        $violations.Add("root/count/status contract is invalid")
+    }
+    if ($violations.Count -gt 0) {
+        throw "Name Box object postcondition failed exact four-kind validation: $($violations -join '; ')."
+    }
+}
+
+function Assert-NameBoxDropdownParityNativeContract {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    $manifestPath = Join-Path $EvidenceDirectory "name-box-dropdown-parity-manifest.json"
+    $geometryPath = Join-Path $EvidenceDirectory "name-box-dropdown-parity-native.json"
+    $cropPath = Join-Path $EvidenceDirectory "popup.nameBoxDropdown.png"
+    $sourcePath = Join-Path $EvidenceDirectory "name-box-dropdown-parity-open-root.png"
+    $beforeInventoryPath = Join-Path $EvidenceDirectory "name-box-dropdown-parity-before-x11.txt"
+    $openInventoryPath = Join-Path $EvidenceDirectory "name-box-dropdown-parity-open-x11.txt"
+    foreach ($requiredPath in @(
+            $manifestPath,
+            $geometryPath,
+            $cropPath,
+            $sourcePath,
+            $beforeInventoryPath,
+            $openInventoryPath)) {
+        if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+            throw "Name Box parity native evidence is missing: $requiredPath"
+        }
+        if ((Get-Item -LiteralPath $requiredPath).Length -le 0) {
+            throw "Name Box parity native evidence is empty: $requiredPath"
+        }
+    }
+
+    try {
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+        $geometry = Get-Content -LiteralPath $geometryPath -Raw | ConvertFrom-Json
+    } catch {
+        throw "Name Box parity native manifest or geometry evidence is not valid JSON."
+    }
+
+    $surfaces = @($manifest.surfaces)
+    if ([string]$manifest.platform -ne "linux" -or
+        [string]$manifest.shell -ne "avalonia" -or
+        $surfaces.Count -ne 1) {
+        throw "Name Box parity native manifest root contract is invalid."
+    }
+    $surface = $surfaces[0]
+    if ([string]$surface.id -ne "popup.nameBoxDropdown" -or
+        [string]$surface.kind -ne "overlay" -or
+        $surface.captured -ne $true -or
+        [int]$surface.width -ne 208 -or
+        [int]$surface.height -ne 136 -or
+        [string]$surface.evidenceProvenance -ne "native-x11-root-crop" -or
+        [string]$surface.png -ne "popup.nameBoxDropdown.png" -or
+        [string]$surface.sourcePng -ne "name-box-dropdown-parity-open-root.png" -or
+        [string]$surface.geometryEvidence -ne "name-box-dropdown-parity-native.json" -or
+        [int]$surface.sourceX -lt 0 -or
+        [int]$surface.sourceY -lt 0 -or
+        [int]$surface.sourceWidth -lt 208 -or
+        [int]$surface.sourceHeight -lt 136) {
+        throw "Name Box parity surface is not an authoritative 208x136 native X11 root crop."
+    }
+    if ([int]$geometry.schemaVersion -ne 1 -or
+        [string]$geometry.platform -ne "linux" -or
+        [string]$geometry.shell -ne "avalonia" -or
+        [string]$geometry.surfaceId -ne "popup.nameBoxDropdown" -or
+        [string]$geometry.evidenceProvenance -ne "native-x11-root-crop" -or
+        $geometry.captured -ne $true -or
+        [string]$geometry.sourcePng -ne [string]$surface.sourcePng -or
+        [string]$geometry.windowInventoryBefore -ne "name-box-dropdown-parity-before-x11.txt" -or
+        [string]$geometry.windowInventoryOpen -ne "name-box-dropdown-parity-open-x11.txt" -or
+        [string]::IsNullOrWhiteSpace([string]$geometry.sourceWindow.id) -or
+        [int]$geometry.sourceWindow.x -ne [int]$surface.sourceX -or
+        [int]$geometry.sourceWindow.y -ne [int]$surface.sourceY -or
+        [int]$geometry.sourceWindow.width -ne [int]$surface.sourceWidth -or
+        [int]$geometry.sourceWindow.height -ne [int]$surface.sourceHeight -or
+        [int]$geometry.crop.x -ne [int]$surface.sourceX -or
+        [int]$geometry.crop.y -ne [int]$surface.sourceY -or
+        [int]$geometry.crop.width -ne 208 -or
+        [int]$geometry.crop.height -ne 136 -or
+        $geometry.crop.resized -ne $false) {
+        throw "Name Box parity native geometry does not match the surface manifest."
+    }
+    $popupWindowPrefix = "$([string]$geometry.sourceWindow.id)|"
+    $beforeInventory = @(Get-Content -LiteralPath $beforeInventoryPath)
+    $openInventory = @(Get-Content -LiteralPath $openInventoryPath)
+    if (@($beforeInventory | Where-Object { $_.StartsWith($popupWindowPrefix, [StringComparison]::Ordinal) }).Count -ne 0 -or
+        @($openInventory | Where-Object {
+            $_.StartsWith($popupWindowPrefix, [StringComparison]::Ordinal) -and
+            $_.IndexOf("X=$([int]$surface.sourceX) ", [StringComparison]::Ordinal) -ge 0 -and
+            $_.IndexOf("Y=$([int]$surface.sourceY) ", [StringComparison]::Ordinal) -ge 0 -and
+            $_.IndexOf("WIDTH=$([int]$surface.sourceWidth) ", [StringComparison]::Ordinal) -ge 0 -and
+            $_.IndexOf("HEIGHT=$([int]$surface.sourceHeight) ", [StringComparison]::Ordinal) -ge 0
+        }).Count -ne 1) {
+        throw "Name Box parity popup is not a newly visible X11 window with the declared geometry."
+    }
+
+    $png = [IO.File]::ReadAllBytes($cropPath)
+    if ($png.Length -lt 24 -or
+        $png[0] -ne 0x89 -or $png[1] -ne 0x50 -or $png[2] -ne 0x4e -or $png[3] -ne 0x47) {
+        throw "Name Box parity native crop is not a valid PNG."
+    }
+    $pngWidth = ($png[16] -shl 24) -bor ($png[17] -shl 16) -bor ($png[18] -shl 8) -bor $png[19]
+    $pngHeight = ($png[20] -shl 24) -bor ($png[21] -shl 16) -bor ($png[22] -shl 8) -bor $png[23]
+    if ($pngWidth -ne 208 -or $pngHeight -ne 136) {
+        throw "Name Box parity native crop pixels must be 208x136, were ${pngWidth}x${pngHeight}."
+    }
+}
+
+function Assert-NameBoxDropdownInteractionPostcondition {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    $postconditionPath = Join-Path $EvidenceDirectory "name-box-dropdown-interaction-postcondition.txt"
+    if (-not (Test-Path -LiteralPath $postconditionPath -PathType Leaf)) {
+        throw "Name Box interaction probe did not emit its required postcondition: $postconditionPath"
+    }
+
+    $lines = @(Get-Content -LiteralPath $postconditionPath)
+    $expected = @(
+        "keyboard-opened=true",
+        "keyboard-gesture=Alt+Down,Home,Down,Down,Down,Down,Enter",
+        "keyboard-clipboard=North`t120",
+        "mouse-opened=true",
+        "mouse-gesture=NameBoxChevron,PhysicalTableRow",
+        "mouse-clipboard=North`t120"
+    )
+    $missing = @($expected | Where-Object { $_ -notin $lines })
+    if ($missing.Count -ne 0) {
+        throw "Name Box interaction postcondition failed native keyboard/mouse contract: $($missing -join '; ')."
+    }
 }
 
 function Start-ValidationSession {
@@ -715,6 +1031,15 @@ function Merge-ContextMenuAggregateResults {
 }
 
 try {
+    if ($PhysicalProbeSelector -eq "formula-3d-native-xlsx") {
+        if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
+            $PhysicalDocumentPath = Join-Path $reportDirectory "fixtures/freex-wave66-native-3d.xlsx"
+            & $native3dFixtureGenerator -OutputPath $PhysicalDocumentPath
+        }
+        if ([IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx") {
+            throw "formula-3d-native-xlsx requires an .xlsx PhysicalDocumentPath."
+        }
+    }
     if ($SkipX11) {
         if ([string]::IsNullOrWhiteSpace($ExistingX11Manifest) -or
             -not (Test-Path -LiteralPath $ExistingX11Manifest -PathType Leaf)) {
@@ -738,10 +1063,20 @@ try {
         } else {
             Split-Path -Leaf ([IO.Path]::GetFullPath($PhysicalDocumentPath))
         }
-        $x11Session = Start-ValidationSession -AppArgument @(
+        $x11AppArguments = @(
             "--freex-pivot-runtime-evidence",
             "/work/x11-validation/pivot-runtime-evidence.jsonl"
-        ) -DocumentPath $PhysicalDocumentPath
+        )
+        if ($PhysicalProbeSelector -eq "name-box-dropdown") {
+            $x11AppArguments += @(
+                "--freex-name-box-dropdown-physical",
+                "--freex-name-box-dropdown-physical-evidence",
+                "/work/x11-validation/name-box-dropdown-object-state.jsonl"
+            )
+        } elseif ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
+            $x11AppArguments += "--freex-name-box-dropdown-parity-physical"
+        }
+        $x11Session = Start-ValidationSession -AppArgument $x11AppArguments -DocumentPath $PhysicalDocumentPath
         Ensure-ReportProvenance
 
         & docker cp $x11ProbeScript "${containerName}:/tmp/run-freex-input-probes.sh"
@@ -764,7 +1099,20 @@ try {
         & $harness -Action Stop -App FreeX -Port $Port
     }
 
-    $requiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "pivot-field-list") {
+    $requiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
+        @("name-box-dropdown-parity-native-crop")
+    } elseif ($PhysicalProbeSelector -eq "name-box-dropdown") {
+        @(
+            "name-box-dropdown-keyboard-physical",
+            "name-box-dropdown-mouse-physical",
+            "name-box-dropdown-defined-name-physical",
+            "name-box-dropdown-table-physical",
+            "name-box-dropdown-chart-physical",
+            "name-box-dropdown-picture-physical",
+            "name-box-dropdown-shape-physical",
+            "name-box-dropdown-textbox-physical"
+        )
+    } elseif ($PhysicalProbeSelector -eq "pivot-field-list") {
         @(
             "pivot-field-drag-cross-bucket-physical",
             "pivot-field-drag-same-bucket-reorder-physical"
@@ -772,6 +1120,14 @@ try {
     } elseif ($PhysicalProbeSelector -eq "autofilter-recalculation") {
         @(
             "autofilter-recalculation-apply-change-clear-physical"
+        )
+    } elseif ($PhysicalProbeSelector -eq "formula-3d-grip") {
+        @(
+            "formula-bar-point-mode-3d-sheet-range-grip"
+        )
+    } elseif ($PhysicalProbeSelector -eq "formula-3d-native-xlsx") {
+        @(
+            "formula-bar-point-mode-3d-native-xlsx"
         )
     } elseif ($PhysicalProbeSelector -eq "formula-multi-area-point") {
         @(
@@ -831,7 +1187,20 @@ try {
         [string]$_.status -notin @("passed", "failed") -or
         [string]::IsNullOrWhiteSpace([string]$_.evidence)
     })
-    $artifactRequiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "pivot-field-list") {
+    $artifactRequiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
+        @("name-box-dropdown-parity-native-crop")
+    } elseif ($PhysicalProbeSelector -eq "name-box-dropdown") {
+        @(
+            "name-box-dropdown-keyboard-physical",
+            "name-box-dropdown-mouse-physical",
+            "name-box-dropdown-defined-name-physical",
+            "name-box-dropdown-table-physical",
+            "name-box-dropdown-chart-physical",
+            "name-box-dropdown-picture-physical",
+            "name-box-dropdown-shape-physical",
+            "name-box-dropdown-textbox-physical"
+        )
+    } elseif ($PhysicalProbeSelector -eq "pivot-field-list") {
         @(
             "pivot-field-drag-cross-bucket-physical",
             "pivot-field-drag-same-bucket-reorder-physical"
@@ -839,6 +1208,14 @@ try {
     } elseif ($PhysicalProbeSelector -eq "autofilter-recalculation") {
         @(
             "autofilter-recalculation-apply-change-clear-physical"
+        )
+    } elseif ($PhysicalProbeSelector -eq "formula-3d-grip") {
+        @(
+            "formula-bar-point-mode-3d-sheet-range-grip"
+        )
+    } elseif ($PhysicalProbeSelector -eq "formula-3d-native-xlsx") {
+        @(
+            "formula-bar-point-mode-3d-native-xlsx"
         )
     } elseif ($PhysicalProbeSelector -eq "formula-multi-area-point") {
         @(
@@ -933,6 +1310,16 @@ try {
         $reason = [string]$x11Manifest.calibration.reason
         throw "Physical X11 evidence is not authoritative because geometry calibration did not pass: $reason"
     }
+    if ($PhysicalProbeSelector -eq "formula-3d-native-xlsx") {
+        Assert-Native3DPostcondition -EvidenceDirectory $x11EvidenceDirectory
+    }
+    if ($PhysicalProbeSelector -eq "name-box-dropdown") {
+        Assert-NameBoxDropdownObjectPostcondition -EvidenceDirectory $x11EvidenceDirectory
+        Assert-NameBoxDropdownInteractionPostcondition -EvidenceDirectory $x11EvidenceDirectory
+    }
+    if ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
+        Assert-NameBoxDropdownParityNativeContract -EvidenceDirectory $x11EvidenceDirectory
+    }
     $x11ReportDirectory = Join-Path $reportDirectory "x11-validation"
     New-Item -ItemType Directory -Path $x11ReportDirectory -Force | Out-Null
     foreach ($evidenceFile in Get-ChildItem -LiteralPath $x11EvidenceDirectory -File) {
@@ -942,6 +1329,21 @@ try {
             [IO.Path]::GetFullPath($evidenceDestination),
             [StringComparison]::OrdinalIgnoreCase)) {
             Copy-Item -LiteralPath $evidenceFile.FullName -Destination $evidenceDestination -Force
+        }
+    }
+    if ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
+        $nativePairSource = Join-Path $x11EvidenceDirectory "name-box-dropdown-parity-native"
+        $nativePairDestination = Join-Path $x11ReportDirectory "name-box-dropdown-parity-native"
+        if (-not (Test-Path -LiteralPath $nativePairSource -PathType Container)) {
+            throw "Name Box parity native comparison directory is missing: $nativePairSource"
+        }
+        New-Item -ItemType Directory -Path $nativePairDestination -Force | Out-Null
+        foreach ($nativePairFile in Get-ChildItem -LiteralPath $nativePairSource -File) {
+            $nativePairFileDestination = Join-Path $nativePairDestination $nativePairFile.Name
+            [IO.File]::Copy(
+                "\\?\$([IO.Path]::GetFullPath($nativePairFile.FullName))",
+                "\\?\$([IO.Path]::GetFullPath($nativePairFileDestination))",
+                $true)
         }
     }
 

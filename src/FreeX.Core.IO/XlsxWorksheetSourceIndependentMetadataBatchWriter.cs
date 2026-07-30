@@ -23,7 +23,15 @@ internal static class XlsxWorksheetSourceIndependentMetadataBatchWriter
         var hasAutoFilter = false;
         var hasDataValidationNativeMetadata = false;
         var hasWorksheetPageBreaks = false;
-        var hasWorksheetNativeMetadata = false;
+        // Excel keeps sheetView/@tabSelected in lockstep with bookViews/@activeTab on every save,
+        // regardless of what other worksheet features are in use. XlsxWorkbookMetadataWriter already
+        // writes activeTab unconditionally whenever workbook.ActiveSheetIndex is set (see
+        // XlsxWorkbookMetadataWriter.HasPostProcessingMetadata); the per-sheet tabSelected sync in
+        // XlsxWorksheetPrimaryViewMetadataWriter must run under that exact same condition, or a
+        // workbook with no other native worksheet metadata (e.g. any brand-new/never-loaded-from-xlsx
+        // workbook, or a loaded one where the user merely switched sheets) never gets its tabSelected
+        // repointed and can permanently disagree with activeTab.
+        var hasWorksheetNativeMetadata = workbook.ActiveSheetIndex is not null;
         foreach (var sheet in workbook.Sheets)
         {
             hasAutoFilter |= sheet.AutoFilter is not null;

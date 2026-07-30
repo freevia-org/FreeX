@@ -100,7 +100,7 @@ internal static class XlsxStructuredTableWriter
                     claimedTablePaths.Add(tablePath);
                 }
 
-                XlsxPackageXmlEditor.ReplaceXml(archive, tablePath, ToXml(table, tablePath));
+                XlsxPackageXmlEditor.ReplaceXml(archive, tablePath, ToXml(table, tablePath, sheet));
                 XlsxPackageXmlEditor.EnsureSpecificContentType(
                     archive,
                     $"/{tablePath}",
@@ -142,7 +142,7 @@ internal static class XlsxStructuredTableWriter
             extLst.AddBeforeSelf(tableParts);
     }
 
-    private static XDocument ToXml(StructuredTableModel table, string tablePath)
+    private static XDocument ToXml(StructuredTableModel table, string tablePath, Sheet sheet)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var columns = table.Columns.Count > 0
@@ -179,7 +179,7 @@ internal static class XlsxStructuredTableWriter
         root.Add(new XElement(
             workbookNs + "tableColumns",
             new XAttribute("count", columns.Count.ToString(CultureInfo.InvariantCulture)),
-            columns.Select(column => ToColumnXml(column, workbookNs))));
+            columns.Select((column, index) => ToColumnXml(column, workbookNs, sheet, table, index))));
         if (ShouldWriteStyleInfo(table))
             root.Add(ToStyleInfoXml(table, workbookNs));
         foreach (var nativeChildXml in table.NativeChildXmls ?? [])
@@ -212,12 +212,17 @@ internal static class XlsxStructuredTableWriter
         }
     }
 
-    private static XElement ToColumnXml(StructuredTableColumnModel column, XNamespace workbookNs)
+    private static XElement ToColumnXml(
+        StructuredTableColumnModel column,
+        XNamespace workbookNs,
+        Sheet sheet,
+        StructuredTableModel table,
+        int columnIndex)
     {
         var element = new XElement(
             workbookNs + "tableColumn",
             new XAttribute("id", column.Id),
-            new XAttribute("name", column.Name),
+            new XAttribute("name", ColumnHeaderText(sheet, table, columnIndex, column.Name)),
             string.IsNullOrWhiteSpace(column.TotalsRowLabel) ? null : new XAttribute("totalsRowLabel", column.TotalsRowLabel),
             string.IsNullOrWhiteSpace(column.TotalsRowFunction) ? null : new XAttribute("totalsRowFunction", column.TotalsRowFunction),
             string.IsNullOrWhiteSpace(column.CalculatedColumnFormula)
@@ -241,6 +246,29 @@ internal static class XlsxStructuredTableWriter
         }
 
         return element;
+    }
+
+    // R94: an ordinary header-cell edit renames a table column in Excel semantics but only ever
+    // updates the sheet cell text -- nothing syncs StructuredTableColumnModel.Name back to match
+    // (see StructuredReferenceResolver.ColumnHeaderText / StructuredTableTotalsCommand's own
+    // mirror of the same gap). Writing tableColumn/@name from the stale stored Name here would
+    // save a table1.xml whose declared column name disagrees with the header row actually
+    // written into the sheet, which Excel treats as a repair-worthy inconsistency (ECMA-376
+    // 18.3.1.4/18.3.1.24 read tableColumn/@name as authoritative and expect it to match the
+    // header cell). Mirror the resolver's live-header-first lookup so the SAVED FILE is always
+    // internally self-consistent. Falls back to the stored/synthesized name for a headerless
+    // table (HeaderRowCount == 0), a blank header cell, or a header cell holding a non-text value
+    // (number, formula, error, boolean) -- exactly like the resolver and totals-refresh siblings,
+    // which also only special-case plain TextValue header cells.
+    private static string ColumnHeaderText(Sheet sheet, StructuredTableModel table, int columnIndex, string storedName)
+    {
+        if (table.HeaderRowCount is 0)
+            return storedName;
+
+        var headerCol = table.Range.Start.Col + (uint)columnIndex;
+        return sheet.GetCell(table.Range.Start.Row, headerCol)?.Value is TextValue { Value.Length: > 0 } text
+            ? text.Value
+            : storedName;
     }
 
     private static XElement ToStyleInfoXml(StructuredTableModel table, XNamespace workbookNs)

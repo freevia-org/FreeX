@@ -76,6 +76,22 @@ public sealed class RecalcEngine
     // leaking them for the lifetime of the engine.
     private readonly Dictionary<CellAddress, List<CellAddress>> _anchorArraySpillDependentAnchors = [];
 
+    // R95-calc-deleted-sheet-leak: the sheet ids each workbook had as of its OWN most recent
+    // RebuildFormulaDependencies/RetireWorkbook call. RebuildFormulaDependencies necessarily scopes
+    // its ClearForSheets/_volatileCells/_spillBlockedAnchors purge to workbook.Sheets AS IT
+    // CURRENTLY STANDS (see that method's remarks on why a blanket clear would wipe every other
+    // open workbook's edges out of this shared graph) -- but a sheet removed since the last call
+    // (Delete Sheet, or Undo of Add Sheet) is by definition no longer in that current list, so
+    // without this tracked baseline its graph edges, volatile-cell registrations, spill-blocked
+    // anchors, cyclic-cell markers, and cached dependency plans would never be purged and would
+    // leak for the life of the process (this engine is an app-lifetime singleton -- see the class
+    // remarks). Keyed by Workbook reference (not WorkbookId) via a weak table so a since-discarded
+    // workbook's own baseline entry does not itself outlive it. Diffing "previous vs. current" on
+    // every RebuildFormulaDependencies call turns sheet removal into something this shared choke
+    // point detects and cleans up on its own, instead of requiring every command/service call site
+    // that can remove a sheet to separately remember to report it.
+    private readonly ConditionalWeakTable<Workbook, HashSet<SheetId>> _lastKnownSheetIdsByWorkbook = new();
+
     /// <summary>
     /// Cells currently classified as part of a non-iterative circular reference by the most
     /// recent recalculation(s). See <see cref="_cyclicCells"/> for lifecycle details.
@@ -178,7 +194,7 @@ public sealed class RecalcEngine
             if (workbook.IterativeCalculation)
             {
                 seenIterativeCells = [.. plan.CyclicCells];
-                RunIterativeCalc(workbook, plan.CyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors, restrictWritesToSheet);
+                RunIterativeCalc(workbook, plan.CyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors, ref spillTargetsMayHaveChanged, ref vacatedSpillCells, restrictWritesToSheet);
                 foreach (var cyclic in plan.CyclicCells)
                     _activeIterativeCyclicCells.Add(cyclic);
             }
@@ -266,7 +282,7 @@ public sealed class RecalcEngine
                         }
                         if (newCyclicCells is not null)
                         {
-                            RunIterativeCalc(workbook, newCyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors, restrictWritesToSheet);
+                            RunIterativeCalc(workbook, newCyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors, ref spillTargetsMayHaveChanged, ref vacatedSpillCells, restrictWritesToSheet);
                             foreach (var cyclic in newCyclicCells)
                                 _activeIterativeCyclicCells.Add(cyclic);
                         }
@@ -965,6 +981,8 @@ public sealed class RecalcEngine
         ref CellAddress singleRecalculated,
         ref List<CellAddress>? recalculated,
         ref List<(CellAddress Cell, string Error)>? errors,
+        ref bool spillTargetsMayHaveChanged,
+        ref List<CellAddress>? vacatedSpillCells,
         SheetId? restrictWritesToSheet = null)
     {
         const int DefaultMaxIterations = 100;
@@ -1020,6 +1038,14 @@ public sealed class RecalcEngine
                 // Boolean/Text/Error/Blank cell (R92-calc-iterative-convergence-5-2).
                 var prevValue = cell.Value;
 
+                // Did this dynamic-array formula own a spill before re-evaluation? Mirrors the
+                // "hadSpill" tracking in the ordinary (non-cyclic) evaluation loop above
+                // (RecalcEngine.cs:326-330) so a pass that stops spilling (or respills a smaller
+                // extent) still vacates its old target cells instead of leaving them stale forever.
+                uint priorSpillRows = 0, priorSpillCols = 0;
+                var hadSpill = cell.ArrayMode == FormulaArrayMode.Dynamic && sheet.HasSpillValues &&
+                    sheet.TryGetSpillExtent(addr, out priorSpillRows, out priorSpillCols);
+
                 try
                 {
                     if (cell.CachedAst is not FormulaNode cachedAst)
@@ -1033,9 +1059,47 @@ public sealed class RecalcEngine
                         ? _evaluator.EvaluateSpilling(cachedAst, sheet, workbook, addr)
                         : _evaluator.Evaluate(cachedAst, sheet, workbook, addr);
 
-                    // Iterative calc does not support spilling out of cyclic cells — use the
-                    // scalar value at [0,0] to stay safe.
-                    cell.Value = result is RangeValue rv ? rv.Cells[0, 0] : result;
+                    if (cell.ArrayMode == FormulaArrayMode.Dynamic && result is RangeValue rv)
+                    {
+                        // Reconcile the spill table on every pass, mirroring the ordinary
+                        // evaluation loop above (RecalcEngine.cs:363-424). Without this, a
+                        // dynamic-array formula that becomes part of an active iterative
+                        // circular-reference group never calls SetSpillRange/ClearSpillRange, so
+                        // its non-anchor spill cells (and anything downstream that reads them)
+                        // freeze at whatever they last held instead of converging along with the
+                        // anchor. See R94-iterative-dynamic-array-spill.
+                        sheet.ClearSpillRange(addr);
+                        if (sheet.IsSpillBlocked(addr, rv.RowCount, rv.ColCount))
+                        {
+                            cell.Value = ErrorValue.Spill;
+                            if (hadSpill)
+                            {
+                                spillTargetsMayHaveChanged = true;
+                                CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
+                            }
+                            _spillBlockedAnchors.Add(addr);
+                        }
+                        else
+                        {
+                            cell.Value = rv.Cells[0, 0];
+                            sheet.SetSpillRange(addr, rv);
+                            spillTargetsMayHaveChanged = true;
+                            if (hadSpill)
+                                CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, rv.RowCount, rv.ColCount, ref vacatedSpillCells);
+                            _spillBlockedAnchors.Remove(addr);
+                        }
+                    }
+                    else
+                    {
+                        if (hadSpill)
+                        {
+                            sheet.ClearSpillRange(addr);
+                            spillTargetsMayHaveChanged = true;
+                            CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
+                        }
+
+                        cell.Value = result is RangeValue rvNonDynamic ? rvNonDynamic.Cells[0, 0] : result;
+                    }
                 }
                 catch (FormulaParseException)
                 {
@@ -1547,6 +1611,33 @@ public sealed class RecalcEngine
         foreach (var sheet in workbook.Sheets)
             sheetIds.Add(sheet.Id);
 
+        // R95-calc-deleted-sheet-leak: fold in any sheet this workbook had as of its own last
+        // RebuildFormulaDependencies call that has since dropped out of workbook.Sheets (Delete
+        // Sheet, or Undo of Add Sheet) -- see _lastKnownSheetIdsByWorkbook's remarks. Purge those
+        // fully (graph edges, volatile/spill-blocked tracking, cyclic markers, cached dependency
+        // plans) before the below scopes its own clear-and-rebuild strictly to CURRENTLY existing
+        // sheets, so a deleted sheet's dependency subgraph does not linger in this shared,
+        // app-lifetime graph forever.
+        if (_lastKnownSheetIdsByWorkbook.TryGetValue(workbook, out var previousSheetIds))
+        {
+            HashSet<SheetId>? removedSheetIds = null;
+            foreach (var id in previousSheetIds)
+            {
+                if (!sheetIds.Contains(id))
+                    (removedSheetIds ??= []).Add(id);
+            }
+
+            if (removedSheetIds is not null)
+                PurgeSheetsFromSharedState(removedSheetIds);
+
+            previousSheetIds.Clear();
+            previousSheetIds.UnionWith(sheetIds);
+        }
+        else
+        {
+            _lastKnownSheetIdsByWorkbook.Add(workbook, new HashSet<SheetId>(sheetIds));
+        }
+
         _graph.ClearForSheets(sheetIds);
         _volatileCells.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
         _spillBlockedAnchors.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
@@ -1609,6 +1700,31 @@ public sealed class RecalcEngine
         foreach (var sheet in workbook.Sheets)
             sheetIds.Add(sheet.Id);
 
+        // R95-calc-deleted-sheet-leak: also fold in any sheet this workbook once had (tracked by
+        // RebuildFormulaDependencies -- see _lastKnownSheetIdsByWorkbook's remarks) that had
+        // already dropped out of workbook.Sheets by the time this runs. Without this, a sheet
+        // deleted earlier in the session with no RebuildFormulaDependencies call in between (e.g.
+        // the workbook closed immediately after) would be excluded here for the exact same reason
+        // it would have been excluded from a same-shaped scan below -- this is the terminal cleanup
+        // path, so it must not leave anything for a workbook about to disappear.
+        if (_lastKnownSheetIdsByWorkbook.TryGetValue(workbook, out var everKnownSheetIds))
+            sheetIds.UnionWith(everKnownSheetIds);
+
+        _lastKnownSheetIdsByWorkbook.Remove(workbook);
+
+        PurgeSheetsFromSharedState(sheetIds);
+    }
+
+    /// <summary>
+    /// Shared purge of every SheetId-keyed piece of this engine's shared state for the given
+    /// sheets: dependency graph edges, volatile-cell registrations, spill-blocked anchors,
+    /// non-iterative/active-iterative cyclic-cell markers, and cached dependency plans (plus their
+    /// FIFO eviction-order companion queue). Used both by <see cref="RetireWorkbook"/> (a whole
+    /// workbook's sheets, at close) and by <see cref="RebuildFormulaDependencies"/> (just the
+    /// sheets that dropped out of a still-open workbook since its last call).
+    /// </summary>
+    private void PurgeSheetsFromSharedState(HashSet<SheetId> sheetIds)
+    {
         if (sheetIds.Count == 0)
             return;
 
@@ -1636,8 +1752,8 @@ public sealed class RecalcEngine
 
         // The FIFO order queue is a companion structure that mirrors the dictionary's keys so
         // AddDependencyPlanToCache's eviction stays bounded; rebuild it here (preserving the
-        // surviving keys' relative order) so it doesn't keep phantom entries for this retired
-        // workbook's sheets indefinitely.
+        // surviving keys' relative order) so it doesn't keep phantom entries for these purged
+        // sheets indefinitely.
         var staleKeySet = new HashSet<DependencyPlanCacheKey>(staleKeys);
         var orderCount = _dependencyPlanCacheOrder.Count;
         for (var i = 0; i < orderCount; i++)

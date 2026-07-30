@@ -414,7 +414,11 @@ public partial class MainWindow
 
     private bool TryHandleFormulaSheetTabClick(SheetId sheetId, ModifierKeys modifiers)
     {
-        var formulaEditor = GetFormulaRangeEntryEditor();
+        // Existing formulas are opened in Edit mode, not Point mode. Keep that formula edit
+        // alive while the user switches to a qualified reference's sheet so its grid overlay and
+        // resize grip can move with the active worksheet (matching the WPF formula editor's
+        // cross-sheet reference workflow).
+        var formulaEditor = GetFormulaReferenceHighlightEditor();
         if (formulaEditor is null ||
             _workbook.GetSheet(sheetId) is not { } clickedSheet ||
             _workbook.GetSheet(_currentSheetId) is not { } activeSheet)
@@ -436,6 +440,7 @@ public partial class MainWindow
         UpdateViewport();
         RefreshSheetTabs();
         RestoreFormulaRangeEntryEditor(formulaEditor, formulaText, selectionStart, selectionLength);
+        RefreshFormulaReferenceHighlights();
         UpdateTitleBar();
         return true;
     }

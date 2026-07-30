@@ -93,8 +93,8 @@ public static class PageContentRenderModelBuilder
             return null;
 
         var (rowSegment, colSegment) = ResolvePageSegments(sheet.PageOrder, pagePlan, pageIndex);
-        var pageRows = BuildAxisIndexes(sheet.PrintTitleRows, rowSegment);
-        var pageColumns = BuildAxisIndexes(sheet.PrintTitleColumns, colSegment);
+        var pageRows = BuildAxisIndexes(sheet.PrintTitleRows, rowSegment, sheet.IsRowEffectivelyHidden);
+        var pageColumns = BuildAxisIndexes(sheet.PrintTitleColumns, colSegment, sheet.IsColEffectivelyHidden);
         if (pageRows.Count == 0 || pageColumns.Count == 0)
             return null;
 
@@ -118,6 +118,24 @@ public static class PageContentRenderModelBuilder
             sheet.RowHeights,
             columnWidthsPixels,
             sheet.PrintHeadings);
+
+        // Excel's Page Setup > Scaling ('Adjust to N% normal size' or 'Fit to W pages wide by H
+        // tall') shrinks/grows every printed element -- gridlines, cell text, headings, charts, text
+        // boxes, pictures -- in direct proportion to the resolved scale; Print Preview always shows
+        // exactly what will print. pagePlan.EffectiveScalePercent is PagePaginationPlanner's single
+        // source of truth (the same value that decided this page's row/column capacity), so resolve
+        // it into a scaleRatio here and bake it into the grid measurement BEFORE any geometry is
+        // derived from it -- every cell/gridline/heading position and size below reads only from
+        // `measurement`, so scaling it once is the single choke point every renderer that consumes
+        // this portable model (interactive print preview, and any future renderer) automatically
+        // inherits, instead of requiring each call site to remember to apply a ratio. Mirrors the
+        // source desktop print renderer's own scaleRatio and the page-setup-aware PDF export path's
+        // ResolveScaleRatio/ComputeActualGridSizes.
+        var unscaledPrintedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
+        var unscaledPrintedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);
+        var scaleRatio = ResolveScaleRatio(
+            pagePlan.EffectiveScalePercent, unscaledPrintedWidth, unscaledPrintedHeight, printableW, printableH);
+        measurement = ScaleMeasurement(measurement, scaleRatio);
 
         var printedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
         var printedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);
@@ -144,6 +162,7 @@ public static class PageContentRenderModelBuilder
             gridLeft,
             gridTop,
             measurement,
+            scaleRatio,
             textMeasurer);
 
         var gridLines = sheet.PrintGridlines
@@ -161,7 +180,8 @@ public static class PageContentRenderModelBuilder
             pageColumns,
             gridLeft,
             gridTop,
-            measurement);
+            measurement,
+            scaleRatio);
 
         var charts = BuildCharts(
             workbook,
@@ -173,6 +193,7 @@ public static class PageContentRenderModelBuilder
             gridLeft,
             gridTop,
             measurement,
+            scaleRatio,
             textMeasurer);
 
         var pictures = PagePictureLayoutPlanner.Build(
@@ -181,7 +202,8 @@ public static class PageContentRenderModelBuilder
             pageColumns,
             gridLeft,
             gridTop,
-            measurement);
+            measurement,
+            scaleRatio);
 
         var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
         var resolvedNow = now ?? DateTime.Now;
@@ -219,6 +241,63 @@ public static class PageContentRenderModelBuilder
             pictures);
     }
 
+    /// <summary>
+    /// Resolves the sheet's Scale%/Fit-to-pages setting to a single geometry shrink/grow ratio for
+    /// this page. <paramref name="effectiveScalePercent"/> is applied unconditionally first (matching
+    /// PrintRenderer.HeaderFooter.cs's <c>scaleRatio</c> and WorkbookPdfContentBuilder.ResolveScaleRatio
+    /// -- Scale% is a direct multiplier on every printed element, never merely a repagination hint that
+    /// only matters once content overflows). A defensive residual-overflow shrink is then applied on
+    /// top, using a SINGLE uniform ratio (the smaller of the width/height overflow ratios) so the
+    /// aspect ratio never distorts, mirroring WorkbookPdfContentBuilder.ComputeActualGridSizes'
+    /// R18-print-pagination-exact-2 fix. Never scales up for overflow, only shrinks further.
+    /// </summary>
+    private static double ResolveScaleRatio(
+        double effectiveScalePercent,
+        double printedWidth,
+        double printedHeight,
+        double printableWidth,
+        double printableHeight)
+    {
+        var scaleRatio = double.IsFinite(effectiveScalePercent) && effectiveScalePercent > 0
+            ? Math.Max(0.001, effectiveScalePercent / 100.0)
+            : 1.0;
+
+        var scaledWidth = printedWidth * scaleRatio;
+        var scaledHeight = printedHeight * scaleRatio;
+        var widthFitScale = scaledWidth > printableWidth && scaledWidth > 0 ? printableWidth / scaledWidth : 1.0;
+        var heightFitScale = scaledHeight > printableHeight && scaledHeight > 0 ? printableHeight / scaledHeight : 1.0;
+        scaleRatio *= Math.Min(widthFitScale, heightFitScale);
+
+        return double.IsFinite(scaleRatio) && scaleRatio > 0 ? scaleRatio : 1.0;
+    }
+
+    /// <summary>
+    /// Applies <paramref name="scaleRatio"/> to a grid measurement's header/column/row sizes and
+    /// cumulative offsets, so every consumer that only ever reads through <see
+    /// cref="PrintGridMeasurement"/> (cells, gridlines, headings, the chart/text-box/picture body
+    /// rect) automatically renders at the resolved Scale%/Fit-to-pages size without each call site
+    /// needing to separately remember to multiply by the ratio.
+    /// </summary>
+    private static PrintGridMeasurement ScaleMeasurement(PrintGridMeasurement measurement, double scaleRatio)
+    {
+        if (scaleRatio == 1.0)
+            return measurement;
+
+        return measurement with
+        {
+            HeaderWidth = measurement.HeaderWidth * scaleRatio,
+            HeaderHeight = measurement.HeaderHeight * scaleRatio,
+            ColumnWidth = measurement.ColumnWidth * scaleRatio,
+            RowHeight = measurement.RowHeight * scaleRatio,
+            ColumnOffsets = measurement.ColumnOffsets?.Select(o => o * scaleRatio).ToArray(),
+            RowOffsets = measurement.RowOffsets?.Select(o => o * scaleRatio).ToArray(),
+        };
+    }
+
+    /// <summary>Scales a resolved cell font's size by the page's Scale%/Fit-to-pages ratio.</summary>
+    private static PageTextFont ScaleFont(PageTextFont font, double scaleRatio) =>
+        scaleRatio == 1.0 ? font : font with { FontSize = font.FontSize * scaleRatio };
+
     private static (PageAxisSegment Row, PageAxisSegment Column) ResolvePageSegments(
         WorksheetPageOrder pageOrder,
         PagePaginationResult pagePlan,
@@ -231,23 +310,32 @@ public static class PageContentRenderModelBuilder
         return (pagePlan.RowSegments[page.RowPageIndex], pagePlan.ColumnSegments[page.ColumnPageIndex]);
     }
 
-    private static IReadOnlyList<uint> BuildAxisIndexes(WorksheetRepeatRange? repeat, PageAxisSegment segment)
+    private static IReadOnlyList<uint> BuildAxisIndexes(
+        WorksheetRepeatRange? repeat,
+        PageAxisSegment segment,
+        Func<uint, bool> isHidden)
     {
         // Title (repeat) rows/columns are reprinted ahead of the page body. The pagination segment
         // already spans the page's whole printed extent; reprint only the repeat indexes that fall
-        // before the segment so they are not duplicated when the segment itself includes them.
+        // before the segment so they are not duplicated when the segment itself includes them. A
+        // hidden/filtered/group-collapsed row or column inside the repeat range is excluded, matching
+        // PrintLayoutPlanner.BuildTitleIndexes (the source of truth the WPF print path reads from).
         var indexes = new List<uint>();
         if (repeat is { } range && range.Start >= 1 && range.End >= range.Start)
         {
             for (var index = range.Start; index <= range.End; index++)
             {
-                if (index < segment.Start)
+                if (index < segment.Start && !isHidden(index))
                     indexes.Add(index);
             }
         }
 
-        for (var index = segment.Start; index <= segment.End; index++)
-            indexes.Add(index);
+        // segment.Indexes is the page's explicit, gap-aware body index list -- already hidden/
+        // filtered/group-collapsed-excluded by PrintLayoutPlanner.BuildRowPlans/BuildColumnPlans.
+        // Do NOT reconstruct this by iterating segment.Start..segment.End: that range assumes
+        // contiguity and would silently reinstate any hidden row/column sitting in the interior of
+        // the page (see PageAxisSegment's doc comment).
+        indexes.AddRange(segment.Indexes);
 
         return indexes;
     }
@@ -260,6 +348,7 @@ public static class PageContentRenderModelBuilder
         double gridLeft,
         double gridTop,
         PrintGridMeasurement measurement,
+        double scaleRatio,
         ITextMeasurer textMeasurer)
     {
         var rowIndexes = BuildPositionLookup(pageRows);
@@ -317,12 +406,18 @@ public static class PageContentRenderModelBuilder
                 var fill = cfResult.Style?.FillColor is { } cfFillColor
                     ? PresentationRgb.FromCellColor(cfFillColor)
                     : ResolveFill(style, theme);
-                var font = ApplyConditionalFontDelta(ResolveFont(style, theme), cfResult.Style);
+                var font = ApplyConditionalFontDelta(ScaleFont(ResolveFont(style, theme), scaleRatio), cfResult.Style);
 
                 // Match the target-width overflow indicator ('####') the interactive grid and WPF
                 // print path apply for numbers/dates too narrow for their printed column -- otherwise
-                // an over-wide value renders unclipped, overlapping the neighbor cell.
-                var targetWidthCharacters = EstimateCharacterWidth(width);
+                // an over-wide value renders unclipped, overlapping the neighbor cell. `width` is
+                // already scaled (it comes from the scaled `measurement`), but the character-width
+                // estimate below is calibrated against the unscaled print font's fixed pixels/char
+                // ratio, so divide the scale back out first -- otherwise a shrunk page (e.g. Scale%
+                // 50, whose font is shrunk by the same ratio) would falsely show MORE '####' overflow
+                // than an unscaled page, when Excel's proportional scaling never changes how much text
+                // visually fits.
+                var targetWidthCharacters = EstimateCharacterWidth(scaleRatio > 0 ? width / scaleRatio : width);
                 var text = cell is not null ? FormatCellText(workbook, sheet, cell, style, targetWidthCharacters) : "";
                 var borders = ResolveBorders(style);
                 if (string.IsNullOrEmpty(text) && fill is null && !borders.HasAny &&
@@ -446,6 +541,7 @@ public static class PageContentRenderModelBuilder
         double gridLeft,
         double gridTop,
         PrintGridMeasurement measurement,
+        double scaleRatio,
         ITextMeasurer textMeasurer)
     {
         if (sheet.Charts.Count == 0 || rowSegment.End < rowSegment.Start || colSegment.End < colSegment.Start)
@@ -500,11 +596,19 @@ public static class PageContentRenderModelBuilder
             var chartGridTop = ChartAnchorGeometry.ConvertRowOffsetToGridSpace(sheet, chart.Top);
             var chartGridWidth = ChartAnchorGeometry.ConvertColumnExtentToGridSpace(sheet, chart.Left, chart.Width);
             var chartGridHeight = ChartAnchorGeometry.ConvertRowExtentToGridSpace(sheet, chart.Top, chart.Height);
+
+            // chartGridLeft/Top/Width/Height above are resolved in the grid's real, UNSCALED pixel
+            // convention (ChartAnchorGeometry converts from the sheet's actual anchor geometry, not
+            // from `measurement`), while bodyGridLeft/bodyGridTop already carry the page's scaleRatio
+            // (they are derived from the pre-scaled `measurement`). Scale only the chart's own offset
+            // from the body origin and its own extent -- not bodyGridLeft/bodyGridTop themselves,
+            // which are already in the scaled coordinate space -- so a chart's position and size shrink
+            // or grow in the same proportion as the surrounding grid under Scale%/Fit-to-pages.
             var bounds = new LayoutRect(
-                bodyGridLeft + chartGridLeft - pageGridLeftInGridSpace,
-                bodyGridTop + chartGridTop - pageGridTopInGridSpace,
-                chartGridWidth,
-                chartGridHeight);
+                bodyGridLeft + (chartGridLeft - pageGridLeftInGridSpace) * scaleRatio,
+                bodyGridTop + (chartGridTop - pageGridTopInGridSpace) * scaleRatio,
+                chartGridWidth * scaleRatio,
+                chartGridHeight * scaleRatio);
             var overlays = Contains(bodyGridRect, bounds)
                 ? PrintChartTextOverlayPlanner.Build(
                     chart,
@@ -527,13 +631,10 @@ public static class PageContentRenderModelBuilder
         return blocks;
     }
 
-    private static IReadOnlyList<uint> BuildSegmentIndexes(PageAxisSegment segment)
-    {
-        var indexes = new List<uint>((int)Math.Min(segment.End - segment.Start + 1, int.MaxValue));
-        for (var index = segment.Start; index <= segment.End; index++)
-            indexes.Add(index);
-        return indexes;
-    }
+    // segment.Indexes is already the page's explicit, gap-aware body index list (hidden/filtered/
+    // group-collapsed rows or columns already excluded) -- see BuildAxisIndexes above for why this
+    // must never be reconstructed by iterating segment.Start..segment.End.
+    private static IReadOnlyList<uint> BuildSegmentIndexes(PageAxisSegment segment) => segment.Indexes;
 
     private static bool ShouldPrintChart(ChartModel chart, LayoutRect pageGridRect)
     {

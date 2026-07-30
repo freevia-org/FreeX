@@ -162,8 +162,21 @@ internal static class XlsxDataValidationClosedXmlMapper
                 // For x14 rules the real formula lives in the worksheet extLst x14 block;
                 // the legacy <dataValidation> intentionally carries an empty formula1 so
                 // that older readers gracefully ignore it. Pass empty strings here.
-                var f1 = dv.IsX14 ? "" : (NormalizeNumericFormulaForSave(dv.Type, dv.Formula1) ?? "");
-                var f2 = dv.IsX14 ? "" : (NormalizeNumericFormulaForSave(dv.Type, dv.Formula2) ?? "");
+                //
+                // NormalizeNumericFormulaForSave exists ONLY to canonicalize Date/Time/Decimal/
+                // WholeNumber bounds (see its own doc comment) -- it must never run for List or
+                // Custom. Its number-parse attempt falls back to CultureInfo.CurrentCulture, and on
+                // any comma-decimal-separator locale (de-DE, fr-FR, es-ES, it-IT, ru-RU, pt-BR,
+                // nl-NL, ...) a List rule's literal Formula1 text that looks like "digits,digits"
+                // (e.g. a two-item literal list "1000,2000") gets silently reparsed as the single
+                // decimal number 1000.2000 and reformatted to invariant dot notation BEFORE
+                // NormalizeListFormulaForSave (below) ever sees the original text -- corrupting a
+                // two-item dropdown into a single mangled literal on save. Custom formulas are
+                // arbitrary boolean expressions, not numeric bounds, so they must be left untouched
+                // too. Only WholeNumber/Decimal/Date/Time bounds ever need this canonicalization.
+                var appliesNumericNormalization = dv.Type is DvType.WholeNumber or DvType.Decimal or DvType.Date or DvType.Time;
+                var f1 = dv.IsX14 ? "" : ((appliesNumericNormalization ? NormalizeNumericFormulaForSave(dv.Type, dv.Formula1) : dv.Formula1) ?? "");
+                var f2 = dv.IsX14 ? "" : ((appliesNumericNormalization ? NormalizeNumericFormulaForSave(dv.Type, dv.Formula2) : dv.Formula2) ?? "");
 
                 switch (dv.Type)
                 {
@@ -211,22 +224,31 @@ internal static class XlsxDataValidationClosedXmlMapper
         // test documents the un-prefixed on-disk convention) -- strip it back off here before
         // serializing. A quoted inline literal (e.g. "Red,Green,Blue") never carries the marker,
         // so only unmark when the second character isn't the opening quote of a literal.
-        var unmarked = formula.Length > 1 && formula[0] == '=' && formula[1] != '"'
-            ? formula.Substring(1)
-            : formula;
+        //
+        // That same leading-'=' marker is also the ONLY authority this function trusts for deciding
+        // literal-vs-reference (mirroring DataValidationCopySupport.RewriteValidationFormula's
+        // identical "the leading '=' is the actual runtime authority" convention). It must NOT be
+        // re-derived by sniffing the text for ':', '$', or '!' -- a literal list item can legitimately
+        // contain any of those (e.g. "9:00,10:00,11:00", "$100,$200,$300", "Yes!,No!"), and treating
+        // their mere presence as "already a reference" leaves a genuine literal unquoted on save,
+        // producing an invalid <formula1> that Excel cannot parse (R95_ regression coverage).
+        var isReferenceMarked = formula.Length > 1 && formula[0] == '=' && formula[1] != '"';
+        var unmarked = isReferenceMarked ? formula.Substring(1) : formula;
+
+        if (isReferenceMarked)
+            return unmarked;
 
         var trimmed = unmarked.Trim();
-        if (trimmed.Length < 2 || !trimmed.Contains(',', StringComparison.Ordinal))
+        if (trimmed.Length == 0)
             return unmarked;
 
-        if (trimmed.StartsWith('"') && trimmed.EndsWith('"') ||
-            trimmed.StartsWith('=') ||
-            trimmed.Contains('!', StringComparison.Ordinal) ||
-            trimmed.Contains(':', StringComparison.Ordinal) ||
-            trimmed.Contains('$', StringComparison.Ordinal))
-        {
+        // A single-item literal (no comma at all, e.g. "Approved") is just as much a literal as a
+        // comma-separated one -- the '=' marker above is the ONLY authority this function trusts for
+        // literal-vs-reference, so gating the quoting step on the presence of a comma left every
+        // ordinary one-choice dropdown (and any x14 List source that happens to be exactly one item)
+        // unquoted on disk, which Excel cannot parse back as a literal (R96 regression coverage).
+        if ((trimmed.Length > 1 && trimmed.StartsWith('"') && trimmed.EndsWith('"')) || trimmed.StartsWith('='))
             return unmarked;
-        }
 
         return $"\"{trimmed.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
     }

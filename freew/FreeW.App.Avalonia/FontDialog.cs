@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
@@ -20,8 +21,19 @@ public sealed class FontDialog : FreeWDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
+            FontFamily = new FontFamily("Segoe UI"),
             ControlHeight = 20,
-            ButtonHeight = 21,
+            TextBoxHeight = 18,
+            ComboBoxHeight = 22,
+            TabHeight = 20,
+            ButtonHeight = 20,
+            ForegroundBrush = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
+            FocusedInputBorderBrush = new SolidColorBrush(Color.FromRgb(0x56, 0x9D, 0xE5)),
+            ButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
+            DialogTabPaneBorderBrush = new SolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC)),
+            DialogInactiveTabBorderBrush = new SolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC)),
+            DialogInactiveTabBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)),
+            RemoveFocusAdorner = true,
         };
 
     private readonly RunFormatting _original;
@@ -73,6 +85,7 @@ public sealed class FontDialog : FreeWDialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
 
         var state = FontDialogPlanner.BuildInitialState(_original, CultureInfo.CurrentCulture);
 
@@ -127,11 +140,11 @@ public sealed class FontDialog : FreeWDialogWindow
             state.NumberSpacingIndex,
             minWidth: 160);
 
-        var fontPanel = new StackPanel { Margin = new Thickness(10) };
+        var fontPanel = new StackPanel { Margin = new Thickness(12, 12, 11, 6) };
         AddField(fontPanel, "Font family:", _familyBox);
         AddField(fontPanel, "Size (pt):", _sizeBox);
         AddField(fontPanel, "Color:", _colorBox);
-        fontPanel.Children.Add(new TextBlock { Text = "Style:", Margin = new Thickness(0, 4, 0, 2) });
+        fontPanel.Children.Add(new TextBlock { Text = "Style:", Margin = new Thickness(0, 3, 0, 2) });
         var effects = new WrapPanel();
         foreach (var check in new[]
                  {
@@ -143,7 +156,7 @@ public sealed class FontDialog : FreeWDialogWindow
         }
         fontPanel.Children.Add(effects);
 
-        var advancedPanel = new StackPanel { Margin = new Thickness(10) };
+        var advancedPanel = new StackPanel { Margin = new Thickness(10, 12, 10, 10) };
         AddField(advancedPanel, "Character spacing (pt):", _spacingBox);
         AddField(advancedPanel, "Kerning min size (pt):", _kerningBox);
         AddField(advancedPanel, "Position (pt):", _positionBox);
@@ -174,7 +187,7 @@ public sealed class FontDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             tabs,
             DialogChromeStyle,
-            contentPaneMargin: new Thickness(-12, 0, -12, 0));
+            contentPaneMargin: new Thickness(-12, -1, -12, 0));
 
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(0, 6, 0, 0));
         var buttons = AvaloniaCompactDialogChrome.CreateOkCancelRow(
@@ -184,7 +197,7 @@ public sealed class FontDialog : FreeWDialogWindow
             margin: new Thickness(0, 10, 0, 0),
             style: DialogChromeStyle);
 
-        var root = new StackPanel { Margin = new Thickness(12) };
+        var root = new StackPanel { Margin = new Thickness(12, 12, 11, 12) };
         root.Children.Add(tabs);
         root.Children.Add(_status);
         root.Children.Add(buttons);
@@ -193,6 +206,14 @@ public sealed class FontDialog : FreeWDialogWindow
         Opened += (_, _) =>
         {
             AvaloniaCompactDialogChrome.ApplyDescendantChrome(this, DialogChromeStyle);
+            foreach (var combo in this.GetVisualDescendants().OfType<ComboBox>())
+                FontParagraphDialogChrome.ApplyComboBox(combo, DialogChromeStyle, combo.IsEditable);
+            foreach (var box in new[]
+                     {
+                         _familyBox, _spacingBox, _kerningBox, _positionBox, _stylisticBox,
+                     })
+                FontParagraphDialogChrome.ApplyTextBox(box, DialogChromeStyle);
+            ApplyFontCheckBoxChrome();
             _familyBox.Focus();
         };
         KeyDown += (_, args) =>
@@ -412,8 +433,18 @@ public sealed class FontDialog : FreeWDialogWindow
                      _smallCapsChk, _allCapsChk, _superChk, _subChk,
                  })
         {
-            AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, DialogChromeStyle);
+            FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
         }
+    }
+
+    private void ApplyFontCheckBoxChrome()
+    {
+        foreach (var checkBox in new[]
+                 {
+                     _boldChk, _italicChk, _underlineChk, _strikeChk,
+                     _smallCapsChk, _allCapsChk, _superChk, _subChk,
+                 })
+            FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
     }
 
     private static string FormatOptional(double? value) =>

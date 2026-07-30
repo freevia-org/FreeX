@@ -137,6 +137,14 @@ send_key() {
     sleep "$settle_seconds"
 }
 
+send_flyout_key() {
+    # Keep the popup's focus owner. Calling send_key here would reactivate the
+    # workbook top-level window and can dismiss an Avalonia MenuFlyout before
+    # the key reaches its MenuItem selection model.
+    xdotool key --clearmodifiers --delay "$input_delay_ms" "$@"
+    sleep "$settle_seconds"
+}
+
 type_text() {
     local value="$1"
     focus_app
@@ -257,6 +265,516 @@ copy_cell_formula() {
     printf '%s' "$value"
 }
 
+probe_name_box_dropdown() {
+    local dropdown_x dropdown_y defined_clipboard table_clipboard
+    local before_root after_root window_count_before window_count_open
+    local popup_open=false defined_popup_open=false table_popup_open=false defined_passed=false table_passed=false
+    local artifacts="name-box-dropdown-defined-before.png;name-box-dropdown-defined-before-root.png;name-box-dropdown-defined-before-x11.txt;name-box-dropdown-open-root.png;name-box-dropdown-defined-open-x11.txt;name-box-dropdown-defined-windows.txt;name-box-dropdown-defined-name.png;name-box-dropdown-table-before.png;name-box-dropdown-table-before-root.png;name-box-dropdown-table-before-x11.txt;name-box-dropdown-table-open-root.png;name-box-dropdown-table-open-x11.txt;name-box-dropdown-table-windows.txt;name-box-dropdown-table.png;name-box-dropdown-postcondition.txt"
+    local keyboard_open=false keyboard_passed=false keyboard_clipboard=""
+    local mouse_open=false mouse_passed=false mouse_clipboard=""
+    local interaction_artifacts="name-box-dropdown-keyboard-open.png;name-box-dropdown-mouse-before.png;name-box-dropdown-mouse-open.png;name-box-dropdown-mouse-selected.png;name-box-dropdown-interaction-postcondition.txt"
+
+    # The name-box button is immediately above the grid's A column. Deriving both
+    # coordinates from the calibrated A1 cell keeps this lane valid across the
+    # supported Docker resolutions without relying on child-window discovery.
+    dropdown_x="$((a1_x + cell_width * 78 / 100))"
+    dropdown_y="$((a1_y - cell_height / 2 - 29))"
+
+    # Wave70 interaction evidence: WPF's editable ComboBox opens from Alt+Down and commits the
+    # highlighted item with Enter. The Linux route must do the same on the production popup.
+    select_cell 9 19 J20 || true
+    focus_app
+    xdotool_mousemove_sync "$((a1_x + cell_width * 35 / 100))" "$dropdown_y" click 1
+    sleep "$settle_seconds"
+    window_count_before="$(x11_visible_window_count)"
+    send_key alt+Down
+    sleep "$settle_seconds"
+    capture "name-box-dropdown-keyboard-open.png"
+    window_count_open="$(x11_visible_window_count)"
+    if (( window_count_open > window_count_before )); then
+        keyboard_open=true
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Home Down Down Down Down Return
+        sleep "$settle_seconds"
+        send_key ctrl+c
+        keyboard_clipboard="$(clipboard_text || true)"
+    else
+        keyboard_clipboard="popup-not-open"
+    fi
+    if $keyboard_open && [[ "$keyboard_clipboard" == $'North\t120' ]]; then
+        keyboard_passed=true
+    fi
+
+    # The pointer path must select the row under the pointer and commit it, rather than only
+    # moving the list cursor. The fifth fixture row is PhysicalTable (zero-based row 4).
+    select_cell 9 19 J20 || true
+    capture "name-box-dropdown-mouse-before.png"
+    window_count_before="$(x11_visible_window_count)"
+    focus_app
+    xdotool_mousemove_sync "$dropdown_x" "$dropdown_y" click 1
+    sleep "$settle_seconds"
+    capture "name-box-dropdown-mouse-open.png"
+    window_count_open="$(x11_visible_window_count)"
+    if (( window_count_open > window_count_before )); then
+        mouse_open=true
+    fi
+    # The popup is immediately below the 16px Name Box button; row centers are 27px apart.
+    xdotool_mousemove_sync "$dropdown_x" "$((dropdown_y + 130))" click 1
+    sleep "$settle_seconds"
+    capture "name-box-dropdown-mouse-selected.png"
+    send_key ctrl+c
+    mouse_clipboard="$(clipboard_text || true)"
+    if $mouse_open && [[ "$mouse_clipboard" == $'North\t120' ]]; then
+        mouse_passed=true
+    fi
+
+    write_artifact "name-box-dropdown-interaction-postcondition.txt" \
+        "keyboard-opened=$keyboard_open\nkeyboard-gesture=Alt+Down,Home,Down,Down,Down,Down,Enter\nkeyboard-clipboard=$keyboard_clipboard\nmouse-opened=$mouse_open\nmouse-gesture=NameBoxChevron,PhysicalTableRow\nmouse-clipboard=$mouse_clipboard\n"
+    if $keyboard_passed; then
+        record "name-box-dropdown-keyboard-physical" "passed" \
+            "$interaction_artifacts; keyboard-clipboard=$keyboard_clipboard" \
+            "Native X11 Alt+Down opened the production Name Box popup and Home/Down/Enter committed PhysicalTable as North/120." \
+            "$interaction_artifacts"
+    else
+        record "name-box-dropdown-keyboard-physical" "failed" "$interaction_artifacts" \
+            "Native X11 Name Box keyboard interaction expected a popup and North/120, observed open=$keyboard_open clipboard='$keyboard_clipboard'." \
+            "$interaction_artifacts"
+    fi
+    if $mouse_passed; then
+        record "name-box-dropdown-mouse-physical" "passed" \
+            "$interaction_artifacts; mouse-clipboard=$mouse_clipboard" \
+            "Native X11 pointer selection committed the PhysicalTable row as North/120." \
+            "$interaction_artifacts"
+    else
+        record "name-box-dropdown-mouse-physical" "failed" "$interaction_artifacts" \
+            "Native X11 Name Box pointer interaction expected PhysicalTable/North/120, observed open=$mouse_open clipboard='$mouse_clipboard'." \
+            "$interaction_artifacts"
+    fi
+
+    # Start from a neutral blank cell so clipboard data cannot be inherited from
+    # a prior selection or mistaken for dropdown navigation.
+    select_cell 9 19 J20 || true
+    capture "name-box-dropdown-defined-before.png"
+    before_root="$output/name-box-dropdown-defined-before-root.png"
+    scrot "$before_root"
+    x11_window_snapshot "$output/name-box-dropdown-defined-before-x11.txt"
+    window_count_before="$(x11_visible_window_count)"
+    focus_app
+    xdotool_mousemove_sync "$dropdown_x" "$dropdown_y" click 1
+    sleep "$settle_seconds"
+    after_root="$output/name-box-dropdown-open-root.png"
+    scrot "$after_root"
+    x11_window_snapshot "$output/name-box-dropdown-defined-open-x11.txt"
+    wmctrl -lG > "$output/name-box-dropdown-defined-windows.txt"
+    window_count_open="$(x11_visible_window_count)"
+    if (( window_count_open > window_count_before )); then
+        popup_open=true
+    fi
+    defined_popup_open="$popup_open"
+
+    # The fixture is sorted by the shared planner as PhysicalChart, PhysicalName,
+    # PhysicalPicture, PhysicalShape, PhysicalTable, PhysicalTextBox.
+    # MenuFlyout receives focus when opened; Home/Down/Enter selects the entry.
+    if $popup_open; then
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Home Down Return
+        sleep "$settle_seconds"
+        capture "name-box-dropdown-defined-name.png"
+        send_key ctrl+c
+        defined_clipboard="$(clipboard_text || true)"
+        [[ "$defined_clipboard" == "Region" ]] && defined_passed=true
+    else
+        defined_clipboard="popup-not-open"
+        capture "name-box-dropdown-defined-name.png"
+    fi
+
+    # Repeat from neutral J20, outside every fixture object, and require a fresh popup before selecting the
+    # third entry, PhysicalTable. Its one-row body must copy exactly North/120.
+    select_cell 9 19 J20 || true
+    capture "name-box-dropdown-table-before.png"
+    before_root="$output/name-box-dropdown-table-before-root.png"
+    scrot "$before_root"
+    x11_window_snapshot "$output/name-box-dropdown-table-before-x11.txt"
+    window_count_before="$(x11_visible_window_count)"
+    focus_app
+    xdotool_mousemove_sync "$dropdown_x" "$dropdown_y" click 1
+    sleep "$settle_seconds"
+    after_root="$output/name-box-dropdown-table-open-root.png"
+    scrot "$after_root"
+    x11_window_snapshot "$output/name-box-dropdown-table-open-x11.txt"
+    wmctrl -lG > "$output/name-box-dropdown-table-windows.txt"
+    window_count_open="$(x11_visible_window_count)"
+    popup_open=false
+    if (( window_count_open > window_count_before )); then
+        popup_open=true
+    fi
+    table_popup_open="$popup_open"
+    if $popup_open; then
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Home Down Down Down Down Return
+        sleep "$settle_seconds"
+        capture "name-box-dropdown-table.png"
+        send_key ctrl+c
+        table_clipboard="$(clipboard_text || true)"
+        [[ "$table_clipboard" == $'North\t120' ]] && table_passed=true
+    else
+        table_clipboard="popup-not-open"
+        capture "name-box-dropdown-table.png"
+    fi
+
+    write_artifact "name-box-dropdown-postcondition.txt" \
+        "dropdown-x=$dropdown_x\ndropdown-y=$dropdown_y\nexpected-order=PhysicalChart,PhysicalName,PhysicalPicture,PhysicalShape,PhysicalTable,PhysicalTextBox\ndefined-popup-open=$defined_popup_open\ntable-popup-open=$table_popup_open\ndefined-clipboard=$defined_clipboard\ntable-clipboard=$table_clipboard\ndefined-name-passed=$defined_passed\ntable-passed=$table_passed\n"
+    if $defined_passed; then
+        record "name-box-dropdown-defined-name-physical" "passed" \
+            "name-box-dropdown-defined-before.png; name-box-dropdown-open-root.png; name-box-dropdown-defined-before-x11.txt; name-box-dropdown-defined-open-x11.txt; name-box-dropdown-defined-windows.txt; name-box-dropdown-defined-name.png; defined-clipboard=$defined_clipboard" \
+            "The production Avalonia Name Box flyout created an additional visible X11 popup window and its focused defined-name entry produced the exact Region clipboard value from neutral J20." \
+            "$artifacts"
+    else
+        record "name-box-dropdown-defined-name-physical" "failed" "$artifacts" \
+            "The defined-name flyout selection did not produce the expected Region clipboard value (observed '$defined_clipboard')." "$artifacts"
+    fi
+    if $table_passed; then
+        record "name-box-dropdown-table-physical" "passed" \
+            "name-box-dropdown-table-before.png; name-box-dropdown-table-open-root.png; name-box-dropdown-table-before-x11.txt; name-box-dropdown-table-open-x11.txt; name-box-dropdown-table-windows.txt; name-box-dropdown-table.png; table-clipboard=$table_clipboard" \
+            "The non-defined-name table entry was selected through the focused production flyout with an additional visible X11 popup window, from neutral J20, and copied the exact one-row table body North/120." \
+            "$artifacts"
+    else
+        record "name-box-dropdown-table-physical" "failed" "$artifacts" \
+            "The non-defined-name table flyout selection did not produce the expected North/East table-body clipboard values (observed '$table_clipboard')." "$artifacts"
+    fi
+
+    : > "$output/name-box-dropdown-object-results.jsonl"
+    probe_name_box_object "$output" "$dropdown_x" "$dropdown_y" "chart" 0 "Chart" "67000000-0000-0000-0000-000000000004" "PhysicalChart"
+    probe_name_box_object "$output" "$dropdown_x" "$dropdown_y" "picture" 2 "Picture" "67000000-0000-0000-0000-000000000002" "PhysicalPicture"
+    probe_name_box_object "$output" "$dropdown_x" "$dropdown_y" "shape" 3 "Shape" "67000000-0000-0000-0000-000000000001" "PhysicalShape"
+    probe_name_box_object "$output" "$dropdown_x" "$dropdown_y" "textbox" 5 "TextBox" "67000000-0000-0000-0000-000000000003" "PhysicalTextBox"
+    python3 - "$output/name-box-dropdown-object-postcondition.json" "$output/name-box-dropdown-object-results.jsonl" <<'PY'
+import json
+import sys
+
+destination, source = sys.argv[1:]
+with open(source, encoding="utf-8") as stream:
+    results = [json.loads(line) for line in stream if line.strip()]
+passed = sum(result["status"] == "passed" for result in results)
+with open(destination, "w", encoding="utf-8") as stream:
+    json.dump({
+        "schemaVersion": 1,
+        "suite": "freex-name-box-dropdown-objects-physical",
+        "platform": "linux",
+        "shell": "avalonia",
+        "app": "FreeX",
+        "expectedOrder": [
+            "PhysicalChart", "PhysicalName", "PhysicalPicture",
+            "PhysicalShape", "PhysicalTable", "PhysicalTextBox",
+        ],
+        "summary": {"passed": passed, "failed": len(results) - passed, "total": len(results)},
+        "results": results,
+    }, stream, indent=2)
+    stream.write("\n")
+PY
+}
+
+read_name_box_event() {
+    python3 - "$1" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as stream:
+    lines = [line.strip() for line in stream if line.strip()]
+if not lines:
+    raise SystemExit(1)
+payload = json.loads(lines[-1])
+def value(key):
+    item = payload.get(key)
+    return "" if item is None else str(item)
+print("\x1f".join(value(key) for key in (
+    "sequence", "stage", "itemName", "itemKind", "itemObjectKind",
+    "selectedObjectKind", "selectedObjectId", "nameBoxText", "activeCell")))
+PY
+}
+
+probe_name_box_dropdown_parity() {
+    local dropdown_x dropdown_y popup_count=0 popup_id="" popup_x=0 popup_y=0 popup_width=0 popup_height=0
+    local before_root="name-box-dropdown-parity-before-root.png"
+    local before_x11="name-box-dropdown-parity-before-x11.txt"
+    local open_root="name-box-dropdown-parity-open-root.png"
+    local open_x11="name-box-dropdown-parity-open-x11.txt"
+    local crop_png="popup.nameBoxDropdown.png"
+    local geometry_json="name-box-dropdown-parity-native.json"
+    local parity_manifest="name-box-dropdown-parity-manifest.json"
+    local parity_directory="$output/name-box-dropdown-parity-native"
+    local captured=false reason="" color_count=0 content_color_count=0
+    local artifacts="$before_root;$before_x11;$open_root;$open_x11;$crop_png;$geometry_json;$parity_manifest"
+    local failure_artifacts="$before_root;$before_x11;$open_root;$open_x11;$geometry_json;$parity_manifest"
+
+    dropdown_x="$((a1_x + cell_width * 78 / 100))"
+    dropdown_y="$((a1_y - cell_height / 2 - 29))"
+
+    select_cell 9 19 J20 || true
+    scrot "$output/$before_root"
+    x11_window_snapshot "$output/$before_x11"
+    focus_app
+    xdotool_mousemove_sync "$dropdown_x" "$dropdown_y" click 1
+    sleep "$settle_seconds"
+    scrot "$output/$open_root"
+    x11_window_snapshot "$output/$open_x11"
+
+    IFS='|' read -r popup_count popup_id popup_x popup_y popup_width popup_height < <(
+        python3 - "$output/$before_x11" "$output/$open_x11" <<'PY'
+import re
+import sys
+
+def windows(path):
+    result = {}
+    with open(path, encoding="utf-8") as stream:
+        for raw in stream:
+            parts = raw.rstrip("\n").split("|", 2)
+            if len(parts) != 3:
+                continue
+            geometry = dict(re.findall(r"([A-Z]+)=(-?\d+)", parts[2]))
+            required = ("X", "Y", "WIDTH", "HEIGHT")
+            if all(key in geometry for key in required):
+                result[parts[0]] = tuple(int(geometry[key]) for key in required)
+    return result
+
+before = windows(sys.argv[1])
+after = windows(sys.argv[2])
+candidates = [(window_id, *bounds) for window_id, bounds in after.items() if window_id not in before]
+if len(candidates) == 1:
+    print("|".join(str(value) for value in (1, *candidates[0])))
+else:
+    print(f"{len(candidates)}|||||")
+PY
+    )
+
+    if [[ "$popup_count" == "1" &&
+          "$popup_x" =~ ^[0-9]+$ && "$popup_y" =~ ^[0-9]+$ &&
+          "$popup_width" =~ ^[0-9]+$ && "$popup_height" =~ ^[0-9]+$ &&
+          "$popup_width" -ge 208 && "$popup_height" -ge 136 ]]; then
+        convert "$output/$open_root" \
+            -crop "208x136+${popup_x}+${popup_y}" +repage \
+            "$output/$crop_png"
+        color_count="$(identify -format '%k' "$output/$crop_png" 2>/dev/null || true)"
+        content_color_count="$(convert "$output/$crop_png" -shave 2x2 -format '%k' info: 2>/dev/null || true)"
+        if [[ "$(identify -format '%wx%h' "$output/$crop_png" 2>/dev/null || true)" == "208x136" &&
+              "$color_count" =~ ^[0-9]+$ && "$color_count" -gt 1 &&
+              "$content_color_count" =~ ^[0-9]+$ && "$content_color_count" -gt 1 ]]; then
+            captured=true
+            reason="The 208x136 frame was cropped without scaling from the newly visible native X11 popup window."
+        else
+            reason="The native popup crop was missing, blank inside its border, or not exactly 208x136."
+        fi
+    elif [[ "$popup_count" != "1" ]]; then
+        reason="Expected exactly one newly visible X11 popup window, found $popup_count."
+    else
+        reason="The native popup window geometry ${popup_width}x${popup_height} cannot contain the required 208x136 frame."
+    fi
+
+    python3 - \
+        "$output/$geometry_json" "$output/$parity_manifest" "$captured" "$reason" \
+        "$popup_id" "$popup_x" "$popup_y" "$popup_width" "$popup_height" \
+        "$open_root" "$crop_png" "$geometry_json" "$before_x11" "$open_x11" <<'PY'
+import json
+import sys
+
+(
+    geometry_path, manifest_path, captured_text, reason,
+    window_id, source_x, source_y, source_width, source_height,
+    source_png, crop_png, geometry_name, before_inventory, open_inventory,
+) = sys.argv[1:]
+captured = captured_text == "true"
+
+def number(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+source_window = {
+    "id": window_id,
+    "x": number(source_x),
+    "y": number(source_y),
+    "width": number(source_width),
+    "height": number(source_height),
+}
+geometry = {
+    "schemaVersion": 1,
+    "platform": "linux",
+    "shell": "avalonia",
+    "surfaceId": "popup.nameBoxDropdown",
+    "evidenceProvenance": "native-x11-root-crop",
+    "captured": captured,
+    "sourcePng": source_png,
+    "windowInventoryBefore": before_inventory,
+    "windowInventoryOpen": open_inventory,
+    "sourceWindow": source_window,
+    "crop": {
+        "x": source_window["x"],
+        "y": source_window["y"],
+        "width": 208,
+        "height": 136,
+        "resized": False,
+    },
+    "expectedItems": [
+        "Sales",
+        "Tour Name Box Chart",
+        "Tour Name Box Picture",
+        "Tour Name Box Shape",
+        "Tour Name Box Text Box",
+    ],
+    "note": reason,
+}
+surface = {
+    "id": "popup.nameBoxDropdown",
+    "kind": "overlay",
+    "png": crop_png,
+    "captured": captured,
+    "note": reason,
+    "width": 208,
+    "height": 136,
+    "evidenceProvenance": "native-x11-root-crop",
+    "sourcePng": source_png,
+    "geometryEvidence": geometry_name,
+    "sourceX": source_window["x"],
+    "sourceY": source_window["y"],
+    "sourceWidth": source_window["width"],
+    "sourceHeight": source_window["height"],
+}
+with open(geometry_path, "w", encoding="utf-8") as stream:
+    json.dump(geometry, stream, indent=2)
+    stream.write("\n")
+with open(manifest_path, "w", encoding="utf-8") as stream:
+    json.dump({"platform": "linux", "shell": "avalonia", "surfaces": [surface]}, stream, indent=2)
+    stream.write("\n")
+PY
+
+    mkdir -p "$parity_directory"
+    cp "$output/$open_root" "$parity_directory/$open_root"
+    cp "$output/$before_x11" "$parity_directory/$before_x11"
+    cp "$output/$open_x11" "$parity_directory/$open_x11"
+    cp "$output/$geometry_json" "$parity_directory/$geometry_json"
+    cp "$output/$parity_manifest" "$parity_directory/manifest.json"
+    if $captured; then
+        cp "$output/$crop_png" "$parity_directory/$crop_png"
+        record "name-box-dropdown-parity-native-crop" "passed" \
+            "$open_root; $open_x11; popup-window=$popup_id; popup-geometry=${popup_width}x${popup_height}+${popup_x}+${popup_y}; crop=208x136; provenance=native-x11-root-crop" \
+            "$reason" "$artifacts"
+    else
+        record "name-box-dropdown-parity-native-crop" "failed" \
+            "$open_root; $open_x11; $geometry_json; $parity_manifest" \
+            "$reason" "$failure_artifacts"
+    fi
+
+    send_key Escape || true
+}
+
+record_name_box_object_result() {
+    local suffix="$1" expected_kind="$2" expected_id="$3" expected_name="$4" status="$5"
+    local baseline_sequence="$6" baseline_stage="$7" baseline_selected_kind="$8" baseline_selected_id="$9"
+    local baseline_name_box="${10}" baseline_cell="${11}" observed_sequence="${12}" observed_stage="${13}"
+    local observed_name="${14}" observed_item_kind="${15}" observed_object_kind="${16}" observed_selected_kind="${17}"
+    local observed_id="${18}" observed_name_box="${19}" observed_cell="${20}"
+    local result_path="$output/name-box-dropdown-object-results.jsonl"
+    printf '{"id":"name-box-dropdown-%s-physical","expectedName":"%s","expectedKind":"%s","expectedId":"%s","baselineSequence":%s,"baselineStage":"%s","baselineSelectedObjectKind":"%s","baselineSelectedObjectId":"%s","baselineNameBox":"%s","baselineActiveCell":"%s","observedSequence":%s,"observedStage":"%s","observedName":"%s","observedItemKind":"%s","observedObjectKind":"%s","observedSelectedObjectKind":"%s","observedId":"%s","observedNameBox":"%s","observedActiveCell":"%s","status":"%s"}\n' \
+        "$(json_escape "$suffix")" "$(json_escape "$expected_name")" "$(json_escape "$expected_kind")" "$(json_escape "$expected_id")" \
+        "${baseline_sequence:-0}" "$(json_escape "$baseline_stage")" "$(json_escape "$baseline_selected_kind")" "$(json_escape "$baseline_selected_id")" \
+        "$(json_escape "$baseline_name_box")" "$(json_escape "$baseline_cell")" "${observed_sequence:-0}" "$(json_escape "$observed_stage")" "$(json_escape "$observed_name")" \
+        "$(json_escape "$observed_item_kind")" "$(json_escape "$observed_object_kind")" "$(json_escape "$observed_selected_kind")" "$(json_escape "$observed_id")" \
+        "$(json_escape "$observed_name_box")" "$(json_escape "$observed_cell")" "$status" >> "$result_path"
+}
+
+probe_name_box_object() {
+    local probe_output="$1" dropdown_x="$2" dropdown_y="$3" suffix="$4" down_count="$5"
+    local expected_kind="$6" expected_id="$7" expected_name="$8"
+    local before_file="name-box-dropdown-$suffix-before.png"
+    local open_root="name-box-dropdown-$suffix-open-root.png"
+    local open_x11="name-box-dropdown-$suffix-open-x11.txt"
+    local windows_file="name-box-dropdown-$suffix-windows.txt"
+    local selected_file="name-box-dropdown-$suffix-selected.png"
+    local artifact_list="$before_file;$open_root;$open_x11;$windows_file;$selected_file;name-box-dropdown-object-state.jsonl;name-box-dropdown-object-postcondition.json"
+    local neutral_ok=true popup_open=false baseline_event="" event="" baseline_sequence=0
+    local baseline_stage="" baseline_selected_kind="" baseline_selected_id="" baseline_name_box="" baseline_cell=""
+    local observed_sequence=0 observed_stage="" observed_name="" observed_item_kind="" observed_object_kind="" observed_selected_kind="" observed_id="" observed_name_box="" observed_cell=""
+    local passed=false note=""
+
+    if ! select_cell 9 19 J20; then
+        neutral_ok=false
+    fi
+    capture "$before_file"
+    baseline_event="$(read_name_box_event "$probe_output/name-box-dropdown-object-state.jsonl" || true)"
+    IFS=$'\x1f' read -r baseline_sequence baseline_stage _ _ _ baseline_selected_kind baseline_selected_id baseline_name_box baseline_cell <<< "$baseline_event"
+    [[ "$baseline_sequence" =~ ^[0-9]+$ ]] || baseline_sequence=0
+    if [[ "$baseline_stage" != "neutral-cell-selected" ||
+          -n "$baseline_selected_kind" ||
+          -n "$baseline_selected_id" ||
+          "$baseline_name_box" != "J20" ||
+          "$baseline_cell" != "J20" ]]; then
+        neutral_ok=false
+    fi
+
+    window_count_before="$(x11_visible_window_count)"
+    focus_app
+    xdotool_mousemove_sync "$dropdown_x" "$dropdown_y" click 1
+    sleep "$settle_seconds"
+    scrot "$probe_output/$open_root"
+    x11_window_snapshot "$probe_output/$open_x11"
+    wmctrl -lG > "$probe_output/$windows_file"
+    window_count_open="$(x11_visible_window_count)"
+    if (( window_count_open > window_count_before )); then
+        popup_open=true
+    fi
+
+    if $neutral_ok && $popup_open; then
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Home
+        for ((index = 0; index < down_count; index++)); do
+            xdotool key --clearmodifiers --delay "$input_delay_ms" Down
+        done
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Return
+        sleep "$settle_seconds"
+        capture "$selected_file"
+
+        for _ in $(seq 1 12); do
+            event="$(read_name_box_event "$probe_output/name-box-dropdown-object-state.jsonl" || true)"
+            IFS=$'\x1f' read -r observed_sequence observed_stage observed_name observed_item_kind observed_object_kind observed_selected_kind observed_id observed_name_box observed_cell <<< "$event"
+            [[ "$observed_sequence" =~ ^[0-9]+$ ]] || observed_sequence=0
+            if (( observed_sequence > baseline_sequence )); then
+                break
+            fi
+            sleep 0.12
+        done
+        if [[ "$observed_sequence" =~ ^[0-9]+$ ]] &&
+           (( observed_sequence > baseline_sequence )) &&
+           [[ "$observed_stage" == "object-selected" ]] &&
+           [[ "$observed_name" == "$expected_name" ]] &&
+           [[ "$observed_item_kind" == "Object" ]] &&
+           [[ "$observed_object_kind" == "$expected_kind" ]] &&
+           [[ "$observed_selected_kind" == "$expected_kind" ]] &&
+           [[ "$observed_id" == "$expected_id" ]] &&
+           [[ "$observed_name_box" == "$expected_name" ]] &&
+           [[ -n "$observed_cell" ]]; then
+            passed=true
+            note="Physical Name Box selection from neutral J20 produced fresh sequence $observed_sequence with exact $expected_kind identity $expected_id and Name Box text $expected_name."
+        else
+            note="Expected fresh $expected_kind selection '$expected_name'/$expected_id from neutral J20, observed sequence=$observed_sequence stage=$observed_stage item=$observed_name/$observed_item_kind/$observed_object_kind selected=$observed_selected_kind id=$observed_id nameBox=$observed_name_box activeCell=$observed_cell baseline=$baseline_sequence."
+        fi
+    else
+        capture "$selected_file"
+        note="The physical probe could not establish neutral selection or a fresh visible Name Box popup before selecting $expected_kind '$expected_name'."
+    fi
+
+    local status="failed"
+    if $passed; then status="passed"; fi
+    record_name_box_object_result \
+        "$suffix" "$expected_kind" "$expected_id" "$expected_name" "$status" \
+        "$baseline_sequence" "$baseline_stage" "$baseline_selected_kind" "$baseline_selected_id" "$baseline_name_box" "$baseline_cell" \
+        "$observed_sequence" "$observed_stage" "$observed_name" "$observed_item_kind" "$observed_object_kind" "$observed_selected_kind" "$observed_id" "$observed_name_box" "$observed_cell"
+    if $passed; then
+        record "name-box-dropdown-$suffix-physical" "passed" \
+            "$before_file; $open_root; $open_x11; $windows_file; $selected_file; name-box-dropdown-object-state.jsonl; object-kind=$observed_object_kind; object-id=$observed_id; name-box=$observed_name_box" \
+            "$note" "$artifact_list"
+    else
+        record "name-box-dropdown-$suffix-physical" "failed" "$artifact_list" "$note" "$artifact_list"
+    fi
+}
+
 capture() {
     scrot -o "$output/$1"
 }
@@ -374,8 +892,22 @@ calibrate_geometry() {
     window_width="$WIDTH"
     window_height="$HEIGHT"
 
+    # Startup fixtures can leave focus on the formula bar or another shell control. Establish
+    # worksheet focus with real pointer input before relying on grid navigation shortcuts.
+    xdotool mousemove --window "$window_id" \
+        "$((window_width - 160))" "$((window_height - 160))" click 1
+    sleep "$settle_seconds"
     send_key ctrl+Home
-    if ! capture_selection "calibration-a1.png"; then
+    local home_ready=false
+    for _ in $(seq 1 20); do
+        if capture_selection "calibration-a1.png" &&
+           (( observed_x < window_x + 60 && observed_y < window_y + 300 )); then
+            home_ready=true
+            break
+        fi
+        sleep 0.15
+    done
+    if ! $home_ready; then
         calibration_reason="Could not isolate the active-cell selection outline after Ctrl+Home."
         return 1
     fi
@@ -384,17 +916,15 @@ calibrate_geometry() {
     local a1_width="$observed_width" a1_height="$observed_height"
 
     local moved=false
-    for _ in $(seq 1 2); do
-        send_key Right
-        for _ in $(seq 1 8); do
-            if capture_selection "calibration-b1.png" &&
-               (( observed_x > a1_x + 20 && observed_x < a1_x + 240 )) &&
-               (( observed_y >= a1_y - 3 && observed_y <= a1_y + 3 )); then
-                moved=true
-                break 2
-            fi
-            sleep 0.12
-        done
+    send_key Right
+    for _ in $(seq 1 20); do
+        if capture_selection "calibration-b1.png" &&
+           (( observed_x > a1_x + 20 && observed_x < a1_x + 240 )) &&
+           (( observed_y >= a1_y - 3 && observed_y <= a1_y + 3 )); then
+            moved=true
+            break
+        fi
+        sleep 0.15
     done
     if ! $moved; then
         calibration_reason="The paced Right key did not produce a measurable A1-to-B1 selection transition."
@@ -409,17 +939,15 @@ calibrate_geometry() {
     fi
 
     moved=false
-    for _ in $(seq 1 2); do
-        send_key Down
-        for _ in $(seq 1 8); do
-            if capture_selection "calibration-a2.png" &&
-               (( observed_y > a1_y + 10 && observed_y < a1_y + 120 )) &&
-               (( observed_x >= a1_x - 3 && observed_x <= a1_x + 3 )); then
-                moved=true
-                break 2
-            fi
-            sleep 0.12
-        done
+    send_key Down
+    for _ in $(seq 1 20); do
+        if capture_selection "calibration-a2.png" &&
+           (( observed_y > a1_y + 10 && observed_y < a1_y + 120 )) &&
+           (( observed_x >= a1_x - 3 && observed_x <= a1_x + 3 )); then
+            moved=true
+            break
+        fi
+        sleep 0.15
     done
     if ! $moved; then
         calibration_reason="The paced Down key did not produce a measurable A1-to-A2 selection transition."
@@ -931,6 +1459,284 @@ probe_formula_bar_point_mode_3d() {
     dismiss_overlays
 }
 
+probe_formula_bar_point_mode_3d_range_grip() {
+    local committed_formula="" committed_result="" resized_formula="" resized_result=""
+    local point_passed=false point_result_passed=false grip_passed=false result_passed=false save_passed=false
+    local expected_point="=SUM(Sheet2:Sheet3!B2:C3)"
+    local expected_resized="=SUM(Sheet2:Sheet3!B2:D4)"
+    local artifacts="formula-3d-grip-create.png;formula-3d-grip-point.png;formula-3d-grip-middle.png;formula-3d-grip-dragging.png;formula-3d-grip-committed.png;formula-3d-grip-postcondition.txt"
+
+    # Create two real worksheets so Sheet1, Sheet2, and Sheet3 form the complete physical span.
+    local tab_y="$(sheet_tab_y)" plus_x created_count
+    for created_count in 0 1; do
+        plus_x="$(sheet_plus_center_x "$created_count")"
+        focus_app
+        xdotool_mousemove_sync "$plus_x" "$tab_y" click 1
+        sleep "$settle_seconds"
+    done
+    capture_sheet_tab_strip "formula-3d-grip-create.png"
+
+    # Seed B2:D4 on both referenced sheets through the normal cell-edit route. The values make
+    # both the original B2:C3 aggregate and the resized B2:D4 aggregate independently observable.
+    local sheet_index row_offset column_offset value
+    for sheet_index in 1 2; do
+        select_sheet_tab "$sheet_index"
+        for row_offset in 1 2 3; do
+            for column_offset in 1 2 3; do
+                if (( sheet_index == 1 )); then
+                    value=$(( (row_offset - 1) * 3 + column_offset ))
+                else
+                    value=$(( 9 + (row_offset - 1) * 3 + column_offset ))
+                fi
+                set_cell_text_without_save "$column_offset" "$row_offset" "3d-${sheet_index}-${row_offset}-${column_offset}" "$value" || {
+                    write_artifact "formula-3d-grip-postcondition.txt" "seeded=false\nsheet=$sheet_index\n"
+                    record "formula-bar-point-mode-3d-sheet-range-grip" "failed" "formula-3d-grip-create.png; formula-3d-grip-postcondition.txt" "Could not seed the physical 3-D range sources." "$artifacts"
+                    return
+                }
+            done
+        done
+    done
+
+    # Point-select a multi-cell range while the sheet tabs define Sheet2:Sheet3. The drag is
+    # deliberate X11 input; a literal colon would produce the invalid Sheet2!B2:Sheet3!C3 form.
+    select_sheet_tab 0
+    if select_cell 6 9 G10; then
+        send_key ctrl+F2
+        send_key ctrl+a
+        type_text "=SUM("
+        send_key F2
+        send_key F2
+        select_sheet_tab 1
+        xdotool keydown --window "$window_id" Shift_L
+        focus_app
+        xdotool_mousemove_sync "$(sheet_tab_center_x 2)" "$tab_y" click 1
+        xdotool keyup --window "$window_id" Shift_L
+        sleep "$settle_seconds"
+        focus_app
+        xdotool_mousemove_sync "$(cell_center_x 1)" "$(cell_center_y 1)"
+        xdotool mousedown 1
+        sleep 0.18
+        xdotool_mousemove_sync "$(cell_center_x 2)" "$(cell_center_y 2)"
+        sleep 0.18
+        xdotool mouseup 1
+        sleep "$settle_seconds"
+        capture "formula-3d-grip-point.png"
+        type_text ")"
+        send_key Return
+    fi
+
+    select_sheet_tab 0
+    committed_formula="$(copy_cell_formula 6 9 G10 || true)"
+    committed_result="$(copy_cell_display 6 9 G10 || true)"
+    [[ "$(normalize_formula "$committed_formula")" == "$(normalize_formula "$expected_point")" ]] && point_passed=true
+
+    # Reopen the committed formula, activate the middle sheet, then drag its visible C3 grip to
+    # D4. This proves the shared planner projects the span onto a middle sheet and preserves the
+    # complete qualifier while changing only the cell range.
+    if select_cell 6 9 G10 && send_key F2; then
+        select_sheet_tab 1
+        capture "formula-3d-grip-middle.png"
+        focus_app
+        xdotool_mousemove_sync "$((a1_x + 3 * cell_width - 22))" "$((a1_y + 3 * cell_height - 6))"
+        xdotool mousedown 1
+        sleep 0.22
+        xdotool_mousemove_sync "$(cell_center_x 3)" "$(cell_center_y 3)"
+        sleep 0.22
+        capture "formula-3d-grip-dragging.png"
+        xdotool mouseup 1
+        sleep "$settle_seconds"
+        focus_app
+        xdotool_mousemove_sync 500 198 click 1
+        sleep "$settle_seconds"
+        send_key Return
+        capture "formula-3d-grip-committed.png"
+    fi
+
+    select_sheet_tab 0
+    resized_formula="$(copy_cell_formula 6 9 G10 || true)"
+    resized_result="$(copy_cell_display 6 9 G10 || true)"
+    send_key ctrl+s
+    wait_for_document_clean && save_passed=true
+    [[ "$(normalize_formula "$resized_formula")" == "$(normalize_formula "$expected_resized")" ]] && grip_passed=true
+    [[ "$resized_result" =~ ^171([.]0+)?$ ]] && result_passed=true
+
+    write_artifact "formula-3d-grip-postcondition.txt" \
+        "expected-point=$expected_point\ncommitted-point-formula=$committed_formula\ncommitted-point-result=$committed_result\npoint-passed=$point_passed\nexpected-resized=$expected_resized\nresized-formula=$resized_formula\nresized-result=$resized_result\ngrip-passed=$grip_passed\nresult-passed=$result_passed\nsave-clean=$save_passed\n"
+    if $point_passed && $grip_passed && $result_passed && $save_passed; then
+        record "formula-bar-point-mode-3d-sheet-range-grip" "passed" \
+            "formula-3d-grip-point.png; formula-3d-grip-middle.png; formula-3d-grip-dragging.png; formula-3d-grip-committed.png; formula=$resized_formula; result=$resized_result; save-clean=$save_passed" \
+            "Physical X11 point mode selected B2:C3 across Sheet2:Sheet3, then the middle-sheet grip resized it to B2:D4 while preserving the complete 3-D qualifier and calculating 171." "$artifacts"
+    else
+        record "formula-bar-point-mode-3d-sheet-range-grip" "failed" "$artifacts" "Expected point formula '$expected_point', resized formula '$expected_resized', result 171, and a clean save; observed point='$committed_formula', resized='$resized_formula', result='$resized_result', save-clean=$save_passed." "$artifacts"
+    fi
+    send_key Escape || true
+}
+
+probe_formula_bar_point_mode_3d_native_xlsx() {
+    local committed_formula="" committed_result="" resized_formula="" resized_result=""
+    local reopened_formula="" reopened_result="" package_probe="" package_formula="" package_cached=""
+    local point_passed=false grip_passed=false result_passed=false save_passed=false
+    local reopen_passed=false dialog_closed=false package_passed=false dialog_open=false
+    local expected_point="=SUM('O''Brien Data:Revenue Data'!B2:C3)"
+    local expected_resized="=SUM('O''Brien Data:Revenue Data'!B2:D4)"
+    local expected_package_formula="SUM('O''Brien Data:Revenue Data'!B2:D4)"
+    local artifacts="formula-3d-native-xlsx-point.png;formula-3d-native-xlsx-middle.png;formula-3d-native-xlsx-dragging.png;formula-3d-native-xlsx-saved.png;formula-3d-native-xlsx-reopened.png;formula-3d-native-xlsx-postcondition.json"
+
+    # The fixture is a real OOXML package copied into /documents by the host runner. Its authored
+    # reverse 3-D formula is the point-mode starting state; this probe must preserve that qualifier
+    # while the middle-sheet grip changes only the cell suffix.
+    select_sheet_tab 0
+    if select_cell 6 9 G10; then
+        committed_formula="$(copy_cell_formula 6 9 G10 || true)"
+        committed_result="$(copy_cell_display 6 9 G10 || true)"
+        capture "formula-3d-native-xlsx-point.png"
+        [[ "$(normalize_formula "$committed_formula")" == "$(normalize_formula "$expected_point")" ]] && point_passed=true
+        [[ "$committed_result" =~ ^88([.]0+)?$ ]] && point_result_passed=true
+    fi
+
+    # Reopen the point formula on the first endpoint sheet. The reverse span still projects onto
+    # Revenue Data, proving that the active sheet need not be the textual start endpoint.
+    if select_cell 6 9 G10 && send_key F2; then
+        select_sheet_tab 1
+        capture "formula-3d-native-xlsx-middle.png"
+        focus_app
+        xdotool_mousemove_sync "$((a1_x + 3 * cell_width - 22))" "$((a1_y + 3 * cell_height - 6))"
+        xdotool mousedown 1
+        sleep 0.22
+        xdotool_mousemove_sync "$(cell_center_x 3)" "$(cell_center_y 3)"
+        sleep 0.22
+        capture "formula-3d-native-xlsx-dragging.png"
+        xdotool mouseup 1
+        sleep "$settle_seconds"
+        focus_app
+        xdotool_mousemove_sync 500 198 click 1
+        sleep "$settle_seconds"
+        send_key Return
+        capture "formula-3d-native-xlsx-saved.png"
+    fi
+
+    select_sheet_tab 0
+    resized_formula="$(copy_cell_formula 6 9 G10 || true)"
+    resized_result="$(copy_cell_display 6 9 G10 || true)"
+    send_key ctrl+s
+    wait_for_document_clean && save_passed=true
+    [[ "$(normalize_formula "$resized_formula")" == "$(normalize_formula "$expected_resized")" ]] && grip_passed=true
+    [[ "$resized_result" =~ ^234([.]0+)?$ ]] && result_passed=true
+
+    # Inspect the saved ZIP package before reopening it. This records the native package state
+    # separately from the UI clipboard values, including the worksheet formula cache.
+    package_probe="$(python3 - "$document_path" <<'PY'
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+
+main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+try:
+    with zipfile.ZipFile(sys.argv[1]) as package:
+        workbook = ET.fromstring(package.read("xl/workbook.xml"))
+        worksheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+        cell = next(node for node in worksheet.findall(".//" + main + "c") if node.attrib.get("r") == "G10")
+        formula = cell.findtext(main + "f", default="")
+        cached = cell.findtext(main + "v", default="")
+        names = [node.attrib.get("name", "") for node in workbook.findall(".//" + main + "sheet")]
+        if names != ["Summary", "Revenue Data", "O'Brien Data", "Tail"]:
+            raise ValueError("unexpected worksheet order")
+        print(f"{formula}|{cached}")
+except (OSError, KeyError, ET.ParseError, StopIteration, ValueError):
+    raise SystemExit(1)
+PY
+    )" || package_probe=""
+    if [[ "$package_probe" == *"|"* ]]; then
+        package_formula="${package_probe%%|*}"
+        package_cached="${package_probe#*|}"
+        if [[ "$(normalize_formula "$package_formula")" == "$(normalize_formula "$expected_package_formula")" && "$package_cached" =~ ^234([.]0+)?$ ]]; then
+            package_passed=true
+        fi
+    fi
+
+    # Reopen the saved native package through the production Open command. Linux presents a GTK
+    # picker here; Ctrl+L enters the mounted absolute path without inventing a host-specific UI.
+    local before_windows after_windows
+    before_windows="$(visible_window_count)"
+    send_key ctrl+F12
+    for _ in $(seq 1 12); do
+        after_windows="$(visible_window_count)"
+        if (( after_windows > before_windows )); then
+            dialog_open=true
+            break
+        fi
+        sleep 0.2
+    done
+    if $dialog_open; then
+        xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+        xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+        xdotool key --clearmodifiers Return
+        sleep "$settle_seconds"
+        xdotool key --clearmodifiers Return
+        for _ in $(seq 1 16); do
+            after_windows="$(visible_window_count)"
+            if (( after_windows <= before_windows )); then
+                dialog_closed=true
+                break
+            fi
+            sleep 0.25
+        done
+    fi
+    if $dialog_closed; then
+        sleep "$dialog_settle_seconds"
+        capture "formula-3d-native-xlsx-reopened.png"
+        select_sheet_tab 0
+        reopened_formula="$(copy_cell_formula 6 9 G10 || true)"
+        reopened_result="$(copy_cell_display 6 9 G10 || true)"
+        if [[ "$(normalize_formula "$reopened_formula")" == "$(normalize_formula "$expected_resized")" && "$reopened_result" =~ ^234([.]0+)?$ ]]; then
+            reopen_passed=true
+        fi
+    fi
+
+    local postcondition_path="$output/formula-3d-native-xlsx-postcondition.json"
+    python3 - "$document_path" "$committed_formula" "$committed_result" "$resized_formula" "$resized_result" "$save_passed" "$reopen_passed" "$reopened_formula" "$reopened_result" "$package_probe" > "$postcondition_path" <<'PY'
+import json
+import os
+import sys
+
+package_probe = sys.argv[10]
+package_formula, package_cached = package_probe.split("|", 1) if "|" in package_probe else ("", "")
+payload = {
+    "schemaVersion": 1,
+    "format": "xlsx",
+    "source": {
+        "path": os.path.basename(sys.argv[1]),
+        "pointFormula": sys.argv[2],
+        "pointResult": sys.argv[3],
+    },
+    "save": {
+        "clean": sys.argv[6] == "true",
+        "resizedFormula": sys.argv[4],
+        "resizedResult": sys.argv[5],
+    },
+    "reopen": {
+        "physical": sys.argv[7] == "true",
+        "formula": sys.argv[8],
+        "result": sys.argv[9],
+    },
+    "package": {
+        "zip": bool(package_probe),
+        "workbook": bool(package_probe),
+        "formula": package_formula,
+        "cachedResult": package_cached,
+    },
+}
+print(json.dumps(payload, separators=(",", ":")))
+PY
+
+    if $point_passed && $point_result_passed && $grip_passed && $result_passed && $save_passed && $package_passed && $reopen_passed; then
+        record "formula-bar-point-mode-3d-native-xlsx" "passed" "$artifacts; formula=$reopened_formula; result=$reopened_result; package-formula=$package_formula; package-cached-result=$package_cached" "Physical X11 pointing and middle-sheet grip resizing used a native XLSX package, preserved the escaped reverse 3-D qualifier, saved cleanly, reopened through the production Open route, and retained result 234." "$artifacts"
+    else
+        record "formula-bar-point-mode-3d-native-xlsx" "failed" "$artifacts; formula=$reopened_formula; result=$reopened_result; package-formula=$package_formula; package-cached-result=$package_cached" "Native XLSX 3-D point/grip workflow did not satisfy point=$point_passed point-result=$point_result_passed grip=$grip_passed result=$result_passed save=$save_passed package=$package_passed reopen=$reopen_passed." "$artifacts"
+    fi
+    send_key Escape || true
+}
+
 probe_formula_bar_point_mode_multi_area() {
     local keyboard_formula="" keyboard_display="" pointer_formula="" pointer_display=""
     local keyboard_normalized="" pointer_normalized=""
@@ -1325,54 +2131,63 @@ probe_formula_bar_point_mode_multi_area_edit() {
 }
 
 probe_formula_reference_grip_multi_area() {
-    local committed_formula="" committed_result="" expected_formula="=SUM('Revenue Data'!B2:C3,'Revenue Data'!D4:F6)"
-    local formula_passed=false result_passed=false save_passed=false rename_passed=false
-    local artifacts="formula-reference-grip-rename.png;formula-reference-grip-before.png;formula-reference-grip-dragging.png;formula-reference-grip-committed.png;formula-reference-grip-postcondition.txt"
+    local committed_formula="" committed_result="" expected_formula="=SUM('Sheet2'!B2:C3,'Sheet2'!D4:F6)"
+    local formula_passed=false result_passed=false save_passed=false setup_passed=false
+    local artifacts="formula-reference-grip-setup.png;formula-reference-grip-source.png;formula-reference-grip-target.png;formula-reference-grip-before.png;formula-reference-grip-dragging.png;formula-reference-grip-committed.png;formula-reference-grip-postcondition.txt"
 
-    # Keep the worksheet name quoted even though it is the active sheet. The second reference is
-    # then resized through its visible bottom-right grip; both qualifiers must survive verbatim.
+    # Keep the formula source on the first worksheet and create a real second worksheet. The
+    # reference is explicitly quoted and qualified, so the production tab switch must preserve
+    # Edit mode instead of committing before the referenced sheet becomes active.
     select_sheet_tab 0
     rename_sheet_tab 0
-    capture_sheet_tab_strip "formula-reference-grip-rename.png"
+    capture_sheet_tab_strip "formula-reference-grip-setup.png"
     if ! calibrate_geometry; then
-        write_artifact "formula-reference-grip-postcondition.txt" "renamed=true\nrecalibration=false\n"
-        record "formula-reference-grip-multi-area-physical" "failed" "formula-reference-grip-rename.png; formula-reference-grip-postcondition.txt" "Could not recalibrate after renaming the active worksheet to Revenue Data." "$artifacts"
+        write_artifact "formula-reference-grip-postcondition.txt" "setup=true\nrecalibration=false\n"
+        record "formula-reference-grip-multi-area-physical" "failed" "formula-reference-grip-setup.png; formula-reference-grip-postcondition.txt" "Could not recalibrate after renaming the source worksheet." "$artifacts"
         return
     fi
-    rename_passed=true
 
-    # Seed an authored two-area same-sheet formula through the real edit path. The second
-    # reference is then resized through its visible bottom-right grip; the first area and both
-    # quoted qualifiers must survive byte-for-byte in the committed formula.
-    if ! set_cell_text_without_save 1 1 B2 0 ||
-       ! set_cell_text_without_save 1 2 C2 0 ||
-       ! set_cell_text_without_save 2 1 B3 0 ||
-       ! set_cell_text_without_save 2 2 C3 0 ||
-       ! set_cell_text_without_save 3 3 D4 0 ||
-       ! set_cell_text_without_save 3 4 E4 0 ||
-       ! set_cell_text_without_save 3 5 F4 0 ||
-       ! set_cell_text_without_save 4 3 D5 0 ||
-       ! set_cell_text_without_save 4 4 E5 0 ||
-       ! set_cell_text_without_save 4 5 F5 0 ||
-       ! set_cell_text_without_save 5 3 D6 0 ||
-       ! set_cell_text_without_save 5 4 E6 0 ||
-       ! set_cell_text_without_save 5 5 F6 0 ||
-       ! set_cell_text_without_save 1 1 B2 1 ||
+    # After the source rename, the real + button is adjacent to its shorter tab. A new Sheet2 is
+    # active immediately after the click; its tab center is derived by the calibrated geometry
+    # used by the other physical formula lanes.
+    local target_tab_x=$((a1_x + 123)) target_tab_center_x=$((a1_x + 139))
+    focus_app
+    xdotool_mousemove_sync "$target_tab_x" "$(sheet_tab_y)" click 1
+    sleep "$settle_seconds"
+    setup_passed=true
+    capture_sheet_tab_strip "formula-reference-grip-target.png"
+
+    # Seed the referenced worksheet through the production edit path, then return to the source
+    # worksheet and author the formula there.
+    if ! set_cell_text_without_save 1 1 B2 1 ||
        ! set_cell_text_without_save 2 2 C3 2 ||
        ! set_cell_text_without_save 3 3 D4 3 ||
        ! set_cell_text_without_save 4 4 E5 4 ||
-       ! set_cell_text_without_save 5 5 F6 5 ||
-       ! set_cell_text_without_save 6 7 G8 "=SUM('Revenue Data'!B2:C3,'Revenue Data'!D4:E5)"; then
+       ! set_cell_text_without_save 5 5 F6 5; then
         write_artifact "formula-reference-grip-postcondition.txt" "seeded=false\n"
-        record "formula-reference-grip-multi-area-physical" "failed" "formula-reference-grip-rename.png; formula-reference-grip-postcondition.txt" "Could not seed the authored same-sheet multi-area formula." "formula-reference-grip-rename.png;formula-reference-grip-postcondition.txt"
+        record "formula-reference-grip-multi-area-physical" "failed" "$artifacts" "Could not seed the referenced worksheet." "$artifacts"
         return
     fi
 
-    if ! select_cell 6 7 G8 || ! send_key F2; then
-        write_artifact "formula-reference-grip-postcondition.txt" "seeded=true\neditor-open=false\n"
-        record "formula-reference-grip-multi-area-physical" "failed" "formula-reference-grip-rename.png; formula-reference-grip-postcondition.txt" "Could not open the existing formula in the production inline editor." "formula-reference-grip-rename.png;formula-reference-grip-postcondition.txt"
+    select_sheet_tab 0
+    if ! set_cell_text_without_save 6 7 G8 "=SUM('Sheet2'!B2:C3,'Sheet2'!D4:E5)"; then
+        write_artifact "formula-reference-grip-postcondition.txt" "seeded=true\nsource-formula=false\n"
+        record "formula-reference-grip-multi-area-physical" "failed" "$artifacts" "Could not seed the qualified source formula." "$artifacts"
         return
     fi
+    capture_sheet_tab_strip "formula-reference-grip-source.png"
+
+    if ! select_cell 6 7 G8 || ! send_key F2; then
+        write_artifact "formula-reference-grip-postcondition.txt" "seeded=true\neditor-open=false\n"
+        record "formula-reference-grip-multi-area-physical" "failed" "$artifacts" "Could not open the existing qualified formula in the production inline editor." "$artifacts"
+        return
+    fi
+
+    # This is the key cross-sheet transition: Edit mode must remain open while the target tab is
+    # clicked, and the second reference's overlay/grip must move to that worksheet.
+    focus_app
+    xdotool_mousemove_sync "$target_tab_center_x" "$(sheet_tab_y)" click 1
+    sleep "$settle_seconds"
     capture "formula-reference-grip-before.png"
 
     # D4:E5's visible grip is rendered just inside the lower-right edge. Keep the probe point
@@ -1387,9 +2202,19 @@ probe_formula_reference_grip_multi_area() {
     capture "formula-reference-grip-dragging.png"
     xdotool mouseup 1
     sleep "$settle_seconds"
+    # Pointer capture can leave the inline editor visually active while the grid owns focus.
+    # Click the real Formula Bar before Enter so this physical lane proves the production
+    # formula-commit route, not a grid navigation keystroke.
+    focus_app
+    xdotool_mousemove_sync 500 198 click 1
+    sleep "$settle_seconds"
     send_key Return
     capture "formula-reference-grip-committed.png"
 
+    # The edit commits to the source worksheet while the referenced worksheet remains visible.
+    # Return to the source before reading the formula/result through the normal physical copy path.
+    select_sheet_tab 0
+    sleep "$settle_seconds"
     committed_formula="$(copy_cell_formula 6 7 G8 || true)"
     committed_result="$(copy_cell_display 6 7 G8 || true)"
     send_key ctrl+s
@@ -1398,11 +2223,11 @@ probe_formula_reference_grip_multi_area() {
     [[ "$committed_result" =~ ^15([.]0+)?$ ]] && result_passed=true
 
     write_artifact "formula-reference-grip-postcondition.txt" \
-        "renamed=$rename_passed\nexpected-formula=$expected_formula\ncommitted-formula=$committed_formula\ncommitted-result=$committed_result\nsave-clean=$save_passed\nformula-passed=$formula_passed\nresult-passed=$result_passed\n"
-    if $formula_passed && $result_passed && $save_passed && $rename_passed; then
+        "setup=$setup_passed\nexpected-formula=$expected_formula\ncommitted-formula=$committed_formula\ncommitted-result=$committed_result\nsave-clean=$save_passed\nformula-passed=$formula_passed\nresult-passed=$result_passed\n"
+    if $formula_passed && $result_passed && $save_passed && $setup_passed; then
         record "formula-reference-grip-multi-area-physical" "passed" \
-            "formula-reference-grip-rename.png; formula-reference-grip-before.png; formula-reference-grip-dragging.png; formula-reference-grip-committed.png; formula=$committed_formula; result=$committed_result; save-clean=$save_passed" \
-            "Physical X11 input renamed the active worksheet to Revenue Data, opened an existing quoted same-sheet two-area formula, dragged only the second reference grip from D4:E5 to D4:F6, preserved both qualifiers and B2:C3, committed the exact formula, calculated 15, and reached a clean saved document." "$artifacts"
+            "formula-reference-grip-setup.png; formula-reference-grip-source.png; formula-reference-grip-target.png; formula-reference-grip-before.png; formula-reference-grip-dragging.png; formula-reference-grip-committed.png; formula=$committed_formula; result=$committed_result; save-clean=$save_passed" \
+            "Physical X11 input kept an existing quoted cross-sheet formula open while switching from Revenue Data to Sheet2, moved the reference overlay to Sheet2, dragged only the second reference grip from D4:E5 to D4:F6, preserved both qualifiers and B2:C3, committed the exact formula, calculated 15, and reached a clean saved document." "$artifacts"
     else
         record "formula-reference-grip-multi-area-physical" "failed" "$artifacts" "Expected formula '$expected_formula', result 15, and a clean save; observed formula '$committed_formula', result '$committed_result', save-clean=$save_passed." "$artifacts"
     fi
@@ -1637,6 +2462,21 @@ dismiss_overlays() {
 
 visible_window_count() {
     wmctrl -l 2>/dev/null | wc -l
+}
+
+x11_visible_window_count() {
+    xdotool search --onlyvisible --name '.*' 2>/dev/null | awk 'NF { count += 1 } END { print count + 0 }'
+}
+
+x11_window_snapshot() {
+    local path="$1" id name geometry
+    : > "$path"
+    while read -r id; do
+        [[ -z "$id" ]] && continue
+        name="$(xdotool getwindowname "$id" 2>/dev/null || true)"
+        geometry="$(xdotool getwindowgeometry --shell "$id" 2>/dev/null | tr '\n' ' ' || true)"
+        printf '%s|%s|%s\n' "$id" "${name//$'\n'/ }" "$geometry" >> "$path"
+    done < <(xdotool search --onlyvisible --name '.*' 2>/dev/null | sort -n)
 }
 
 freex_window_ids() {
@@ -1996,6 +2836,32 @@ if [[ "$probe_selector" == "sheet-tabs" ]]; then
     exit 0
 fi
 
+if [[ "$probe_selector" == "name-box-dropdown" ]]; then
+    # Focused bounded lane for defined-name plus non-defined-name Name Box navigation.
+    probe_name_box_dropdown
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused Name Box dropdown probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "name-box-dropdown-parity" ]]; then
+    # Authoritative Wave69 visual evidence: live production popup, native X11 root crop, no resize.
+    probe_name_box_dropdown_parity
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused Name Box parity probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
 if [[ "$probe_selector" == "pivot-field-list" ]]; then
     # Focused iteration mode for the deterministic PivotTable workbook supplied by
     # the host runner. This lane intentionally does not mutate the CSV/default probes.
@@ -2028,6 +2894,33 @@ if [[ "$probe_selector" == "formula-3d-point" ]]; then
     probe_formula_bar_point_mode_3d
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused 3-D formula point probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "formula-3d-grip" ]]; then
+    # Focused iteration mode for physical multi-cell 3-D point selection followed by a
+    # middle-sheet reference-highlight grip resize.
+    probe_formula_bar_point_mode_3d_range_grip
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused 3-D range/grip probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "formula-3d-native-xlsx" ]]; then
+    # Focused iteration mode for the native OOXML point/grip/save/reopen workflow.
+    probe_formula_bar_point_mode_3d_native_xlsx
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused native XLSX 3-D formula probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then

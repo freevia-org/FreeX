@@ -22,16 +22,24 @@ public sealed class ParagraphDialog : FreeWDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
+            FontFamily = new FontFamily("Segoe UI"),
             ControlHeight = 20,
-            ButtonHeight = 21,
+            TextBoxHeight = 18,
+            ComboBoxHeight = 22,
+            TabHeight = 20,
+            ButtonHeight = 20,
             ButtonPadding = new Thickness(10, 1),
+            ForegroundBrush = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
+            ButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
+            DialogTabPaneBorderBrush = new SolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC)),
             InputBorderBrush = new SolidColorBrush(Color.FromRgb(0xAB, 0xAD, 0xB3)),
             ComboBoxBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)),
             TextBoxBackgroundBrush = Brushes.White,
             DisabledTextBoxBackgroundBrush = Brushes.White,
             TextSelectionBrush = new SolidColorBrush(Color.FromRgb(0x56, 0x9D, 0xE5)),
             DialogInactiveTabBorderBrush = new SolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC)),
-            DialogInactiveTabBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)),
+            DialogInactiveTabBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)),
+            RemoveFocusAdorner = true,
         };
     private readonly TabControl _tabs;
     private readonly TextBox _left;
@@ -58,6 +66,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         // must consume the same two client-area heights as WPF rather than growing from Avalonia's
         // default control templates.
         PageLayoutDialogChrome.Configure(this, "Paragraph", 380);
+        TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
         var state = ParagraphBreaksDialogPlanner.BuildInitialState(current, DialogCulture);
         _left = NumberBox(state.LeftText);
         _right = NumberBox(state.RightText);
@@ -69,6 +78,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         _special.HorizontalAlignment = HorizontalAlignment.Stretch;
         _specialAmount = NumberBox(state.SpecialAmountText);
         _specialAmount.IsEnabled = state.SpecialAmountEnabled;
+        FontParagraphDialogChrome.ApplyTextBox(_specialAmount, DialogChromeStyle);
         _special.SelectionChanged += (_, _) =>
             _specialAmount.IsEnabled = ParagraphBreaksDialogPlanner.IsSpecialAmountEnabled(_special.SelectedIndex);
         _before = NumberBox(state.SpaceBeforeText);
@@ -90,7 +100,10 @@ public sealed class ParagraphDialog : FreeWDialogWindow
             Padding = new Thickness(0),
             Height = 253,
         };
-        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(_tabs, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
+            _tabs,
+            DialogChromeStyle,
+            contentPaneMargin: new Thickness(0, -1, 0, 0));
         _tabs.Items.Add(new TabItem { Header = "Indents and Spacing", Width = 123, Content = BuildIndentsTab() });
         _tabs.Items.Add(new TabItem { Header = "Line and Page Breaks", Width = 122, Content = BuildBreaksTab() });
         _tabs.SelectionChanged += (_, _) => _tabs.Height = _tabs.SelectedIndex == 1 ? 235 : 253;
@@ -114,7 +127,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
 
     private Control BuildIndentsTab()
     {
-        var grid = new Grid { Margin = new Thickness(10, 10, 13, 10) };
+        var grid = new Grid { Margin = new Thickness(9, 12, 12, 10) };
         grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(104)));
         grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
         for (var row = 0; row < 8; row++)
@@ -128,13 +141,14 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         AddGridRow(grid, 6, "Line spacing (\u00d7):", _lineSpacing);
         Grid.SetRow(_contextualSpacing, 7);
         Grid.SetColumnSpan(_contextualSpacing, 2);
+        _contextualSpacing.Margin = new Thickness(3, 4, 0, 0);
         grid.Children.Add(_contextualSpacing);
         return grid;
     }
 
     private Control BuildBreaksTab()
     {
-        var panel = new StackPanel { Margin = new Thickness(13, 10, 10, 10) };
+        var panel = new StackPanel { Margin = new Thickness(10) };
         panel.Children.Add(new TextBlock { Text = "Pagination", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 5) });
         panel.Children.Add(_keepWithNext);
         panel.Children.Add(_keepLinesTogether);
@@ -233,10 +247,10 @@ public sealed class ParagraphDialog : FreeWDialogWindow
     private void ApplyParagraphChrome()
     {
         foreach (var box in new[] { _left, _right, _specialAmount, _before, _after, _lineSpacing })
-            AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyComboBox(_special, DialogChromeStyle);
+            FontParagraphDialogChrome.ApplyTextBox(box, DialogChromeStyle);
+        FontParagraphDialogChrome.ApplyComboBox(_special, DialogChromeStyle, editable: false);
         foreach (var checkBox in new[] { _keepWithNext, _keepLinesTogether, _widowControl, _pageBreakBefore, _suppressHyphens, _suppressLineNumbers, _contextualSpacing })
-            AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, DialogChromeStyle);
+            FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
         foreach (var button in this.GetVisualDescendants().OfType<Button>())
             AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, 72, button.IsDefault);
     }

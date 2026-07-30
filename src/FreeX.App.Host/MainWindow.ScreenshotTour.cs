@@ -4367,7 +4367,9 @@ public partial class MainWindow
                 nameBoxPopup.ActualHeight,
                 "Name Box dropdown lists workbook defined names including Sales."));
 
-            CellAddressBox.SelectedItem = "Sales";
+            CellAddressBox.SelectedItem = NameBoxDropdownPlanner
+                .Build(_workbook, _currentSheetId)
+                .First(item => item.Name == "Sales");
             CellAddressBox.IsDropDownOpen = false;
             await Task.Delay(250);
             UpdateLayout();
@@ -4523,6 +4525,50 @@ public partial class MainWindow
 
         var namedRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 3, 3));
         _workbook.DefineNamedRange("Sales", namedRange);
+        const string nameBoxShape = "Tour Name Box Shape";
+        const string nameBoxPicture = "Tour Name Box Picture";
+        const string nameBoxTextBox = "Tour Name Box Text Box";
+        const string nameBoxChart = "Tour Name Box Chart";
+        sheet.DrawingShapes.RemoveAll(item => string.Equals(item.Name, nameBoxShape, StringComparison.Ordinal));
+        sheet.Pictures.RemoveAll(item => string.Equals(item.Name, nameBoxPicture, StringComparison.Ordinal));
+        sheet.TextBoxes.RemoveAll(item => string.Equals(item.Name, nameBoxTextBox, StringComparison.Ordinal));
+        sheet.Charts.RemoveAll(item => string.Equals(item.Name, nameBoxChart, StringComparison.Ordinal));
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Id = Guid.Parse("68000000-0000-0000-0000-000000000001"),
+            Name = nameBoxShape,
+            Anchor = new CellAddress(sheet.Id, 22, 8),
+            Width = 96,
+            Height = 48,
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Id = Guid.Parse("68000000-0000-0000-0000-000000000002"),
+            Name = nameBoxPicture,
+            Anchor = new CellAddress(sheet.Id, 23, 8),
+            Kind = PictureKind.Image,
+            ImageBytes = [1, 2, 3, 4],
+            ContentType = "image/png",
+            Width = 96,
+            Height = 48,
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Id = Guid.Parse("68000000-0000-0000-0000-000000000003"),
+            Name = nameBoxTextBox,
+            Anchor = new CellAddress(sheet.Id, 24, 8),
+            Text = "Name Box tour text box",
+            Width = 120,
+            Height = 48,
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Id = Guid.Parse("68000000-0000-0000-0000-000000000004"),
+            Name = nameBoxChart,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 25, 8),
+                new CellAddress(sheet.Id, 26, 9)),
+        });
         SetSelectionRange(namedRange, namedRange.Start);
         EnsureCellVisible(namedRange.Start);
         UpdateViewport();
@@ -4534,7 +4580,8 @@ public partial class MainWindow
             SheetName: sheet.Name,
             NamedRangeName: "Sales",
             NamedRangeAddress: namedRange.ToString(),
-            StartCell: namedRange.Start.ToA1());
+            StartCell: namedRange.Start.ToA1(),
+            ObjectNames: [nameBoxChart, nameBoxPicture, nameBoxShape, nameBoxTextBox]);
     }
 
     private async Task<FormulaBarNameBoxTourManifestCapture> CaptureFormulaBarNameBoxWindowStateAsync(
@@ -10474,6 +10521,7 @@ public partial class MainWindow
             NamedRangeName: context.NamedRangeName,
             NamedRangeAddress: context.NamedRangeAddress,
             StartCell: context.StartCell,
+            ObjectNames: context.ObjectNames,
             CaptureStatus: "complete",
             CaptureMethod: "RenderTargetBitmap-window-full-top-band-dropdown-and-dialog",
             FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
@@ -10490,7 +10538,7 @@ public partial class MainWindow
             CoveredStates:
             [
                 "Name Box displays exact selected defined name",
-                "Name Box dropdown opens and lists workbook defined names",
+                "Name Box dropdown opens and lists a named shape, picture, text box, and chart",
                 "Name Box dropdown selection navigates to the named range",
                 "Formula bar edit mode with Cancel and Enter controls",
                 "Cancel restores formula bar text and worksheet focus",
@@ -10503,7 +10551,7 @@ public partial class MainWindow
             Limitations:
             [
                 "This tour drives FreeX in process and captures WPF output with RenderTargetBitmap rather than OS CopyFromScreen.",
-                "The Name Box dropdown is opened through the production ComboBox state, and the Sales dropdown navigation uses the production SelectionChanged path without global mouse input.",
+                "The Name Box dropdown is opened through the production ComboBox state, and the Sales dropdown navigation uses the production SelectionChanged path without global mouse input; the open capture includes all four named drawing-object kinds.",
                 "The formula-bar Enter and Cancel evidence uses the production button handlers, but button activation is invoked in process rather than by physical mouse input.",
                 "The Insert Function dialog capture uses the production InsertFunctionDialog shown by the tour because invoking the fx button's modal handler would block deterministic screenshot capture.",
                 "The keytip capture enters the production top-level keytip mode while focus starts in the Name Box; it is not a physical Alt-key foreground input capture.",
@@ -12535,7 +12583,8 @@ public partial class MainWindow
         string SheetName,
         string NamedRangeName,
         string NamedRangeAddress,
-        string StartCell);
+        string StartCell,
+        IReadOnlyList<string> ObjectNames);
 
     private sealed record GridSelectionEditingTourContext(
         Sheet Sheet,
@@ -12598,6 +12647,7 @@ public partial class MainWindow
         string NamedRangeName,
         string NamedRangeAddress,
         string StartCell,
+        IReadOnlyList<string> ObjectNames,
         string CaptureStatus,
         string CaptureMethod,
         RibbonScreenshotTourManifestFocusGuard FocusGuard,

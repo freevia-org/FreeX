@@ -137,7 +137,9 @@ internal static class XlsxSourceDrawingGeometryRewriter
             {
                 var anchor = FindNearestAnchorElement(pictureElement);
                 if (anchor is not null &&
-                    RewriteAnchorGeometry(anchor, sheet, picture.Width, picture.Height, picture.AnchorOffsetX, picture.AnchorOffsetY))
+                    RewriteAnchorGeometry(
+                        anchor, sheet, picture.Width, picture.Height, picture.AnchorOffsetX, picture.AnchorOffsetY,
+                        picture.SourceLoadedWidthPixels, picture.SourceLoadedHeightPixels))
                 {
                     changed = true;
                 }
@@ -217,7 +219,9 @@ internal static class XlsxSourceDrawingGeometryRewriter
             {
                 var anchor = FindNearestAnchorElement(textBoxElement);
                 if (anchor is not null &&
-                    RewriteAnchorGeometry(anchor, sheet, textBox.Width, textBox.Height, textBox.AnchorOffsetX, textBox.AnchorOffsetY))
+                    RewriteAnchorGeometry(
+                        anchor, sheet, textBox.Width, textBox.Height, textBox.AnchorOffsetX, textBox.AnchorOffsetY,
+                        textBox.SourceLoadedWidthPixels, textBox.SourceLoadedHeightPixels))
                 {
                     changed = true;
                 }
@@ -239,7 +243,9 @@ internal static class XlsxSourceDrawingGeometryRewriter
             {
                 var anchor = FindNearestAnchorElement(shapeElement);
                 if (anchor is not null &&
-                    RewriteAnchorGeometry(anchor, sheet, shape.Width, shape.Height, shape.AnchorOffsetX, shape.AnchorOffsetY))
+                    RewriteAnchorGeometry(
+                        anchor, sheet, shape.Width, shape.Height, shape.AnchorOffsetX, shape.AnchorOffsetY,
+                        shape.SourceLoadedWidthPixels, shape.SourceLoadedHeightPixels))
                 {
                     changed = true;
                 }
@@ -716,13 +722,27 @@ internal static class XlsxSourceDrawingGeometryRewriter
     /// and is out of scope here; only the sub-cell offset and size are rewritten. Returns true when the XML
     /// was modified.
     /// </summary>
+    /// <param name="sourceLoadedWidthPixels">
+    /// R94 fix: the object's <c>Width</c> as it was at LOAD time (<c>PictureModel.SourceLoadedWidthPixels</c>
+    /// and its TextBoxModel/DrawingShapeModel equivalents) -- <see langword="null"/> when unknown/degenerate.
+    /// The twoCellAnchor <c>to</c>-marker walk below is evaluated against the CURRENT sheet's column pixel
+    /// sizes (it must be, to place the marker correctly under whatever the sheet looks like now), but that
+    /// walk only needs to run at all when the object's OWN geometry genuinely changed since load. Without
+    /// this baseline, hiding/resizing some unrelated row/column between load and save -- with this object
+    /// never touched -- silently shifts its `to` marker to a different cell than the source file had,
+    /// because the walk would skip that now-hidden/resized cell's pixel contribution that the ORIGINAL
+    /// marker (implicitly) accounted for. See XlsxSourceDrawingGeometryRewriterTests' R94_* tests.
+    /// </param>
+    /// <param name="sourceLoadedHeightPixels">The same baseline for <paramref name="heightPixels"/>.</param>
     private static bool RewriteAnchorGeometry(
         XElement anchor,
         Sheet sheet,
         double widthPixels,
         double heightPixels,
         double offsetXPixels,
-        double offsetYPixels)
+        double offsetYPixels,
+        double? sourceLoadedWidthPixels = null,
+        double? sourceLoadedHeightPixels = null)
     {
         // R72-io-drawing-anchors-4-2: an absoluteAnchor has xdr:pos/xdr:ext, never xdr:from/xdr:to, so it
         // must be handled independently of (and before) the from-null guard below -- that guard is only
@@ -758,6 +778,20 @@ internal static class XlsxSourceDrawingGeometryRewriter
 
             if (!uint.TryParse(from.Element(SpreadsheetDrawingNs + "col")?.Value, out var fromCol) ||
                 !uint.TryParse(from.Element(SpreadsheetDrawingNs + "row")?.Value, out var fromRow))
+            {
+                return changed;
+            }
+
+            // R94 fix: only recompute the to-marker when the object's OWN Width/Height genuinely diverges
+            // from what was true at load time. The walk below is intentionally evaluated against the
+            // CURRENT sheet layout (a real resize must land on the right cell under today's column/row
+            // sizes), but running it unconditionally -- as before this fix -- means an untouched object's
+            // marker gets silently rewritten to a DIFFERENT cell whenever some unrelated row/column was
+            // hidden or resized between load and save, because the walk then skips that cell's pixel
+            // contribution while the original file's marker (authored under the old layout) did not.
+            // Real Excel never rewrites `to` for a twoCellAnchor absent an explicit user move/resize.
+            if (sourceLoadedWidthPixels is { } baselineWidth && ApproximatelyEqualsPixels(baselineWidth, widthPixels) &&
+                sourceLoadedHeightPixels is { } baselineHeight && ApproximatelyEqualsPixels(baselineHeight, heightPixels))
             {
                 return changed;
             }
@@ -962,6 +996,12 @@ internal static class XlsxSourceDrawingGeometryRewriter
         element.SetAttributeValue(attributeName, value);
         return true;
     }
+
+    // R94 fix: tolerance for comparing a live Width/Height pixel value against the load-time baseline
+    // captured in *.SourceLoadedWidthPixels/HeightPixels -- generous enough to absorb harmless
+    // floating-point drift from a save/reload round trip, but far tighter than a single pixel so any
+    // genuine (even sub-pixel-visible) user resize is still detected as a change.
+    private static bool ApproximatelyEqualsPixels(double a, double b) => Math.Abs(a - b) < 0.01;
 
     private static bool SetOffsetElement(XElement marker, string elementName, double pixels)
     {

@@ -2040,7 +2040,11 @@ public sealed class SetShapeAltTextCommand(int paragraphIndex, int runIndex, str
 /// Set the text direction on the inline text-box shape at the given paragraph/run indices,
 /// snapshotting the prior value for undo. No-op for non-text-box shapes.
 /// </summary>
-public sealed class SetShapeTextDirectionCommand(int paragraphIndex, int runIndex, ShapeTextDirection direction) : IDocumentCommand
+public sealed class SetShapeTextDirectionCommand(
+    int paragraphIndex,
+    int runIndex,
+    ShapeTextDirection direction,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private ShapeTextDirection _previous;
     private bool _applied;
@@ -2049,7 +2053,9 @@ public sealed class SetShapeTextDirectionCommand(int paragraphIndex, int runInde
 
     public void Apply(IDocumentCommandContext context)
     {
-        if (ShapeAt(context) is not { } shape) return;
+        if (!ShapeTextTargetResolver.TryGetShape(
+                context, paragraphIndex, runIndex, childPath, out var shape))
+            return;
         _previous = shape.TextDirection;
         shape.TextDirection = direction;
         _applied = true;
@@ -2057,14 +2063,26 @@ public sealed class SetShapeTextDirectionCommand(int paragraphIndex, int runInde
 
     public void Revert(IDocumentCommandContext context)
     {
-        if (!_applied || ShapeAt(context) is not { } shape) return;
+        if (!_applied
+            || !ShapeTextTargetResolver.TryGetShape(
+                context, paragraphIndex, runIndex, childPath, out var shape))
+            return;
         shape.TextDirection = _previous;
         _applied = false;
     }
+}
 
-    private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
+/// <summary>Resolves direct and nested grouped text-box targets for shared text commands.</summary>
+internal static class ShapeTextTargetResolver
+{
+    public static bool TryGetShape(
+        IDocumentCommandContext context,
+        int paragraphIndex,
+        int runIndex,
+        IReadOnlyList<int>? childPath,
+        out Shape shape)
+        => ShapeTextFormattingPlanner.TryGetShape(
+            context.Document, paragraphIndex, runIndex, childPath, out shape);
 }
 
 /// <summary>
@@ -2076,7 +2094,8 @@ public sealed class SetShapeTextRunCommand(
     int runIndex,
     int textParagraphIndex,
     int textRunIndex,
-    string text) : IDocumentCommand
+    string text,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private string? _previous;
     private bool _applied;
@@ -2104,9 +2123,8 @@ public sealed class SetShapeTextRunCommand(
     {
         shape = null!;
         textRun = null!;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
-            || runIndex < 0 || runIndex >= paragraph.Runs.Count
-            || paragraph.Runs[runIndex].Shape is not { } foundShape
+        if (!ShapeTextTargetResolver.TryGetShape(
+                context, paragraphIndex, runIndex, childPath, out var foundShape)
             || textParagraphIndex < 0 || textParagraphIndex >= foundShape.TextParagraphs.Count)
             return false;
 
@@ -2121,7 +2139,8 @@ public sealed class SetShapeTextRunCommand(
 
     private void SyncShapeRunText(IDocumentCommandContext context, Shape shape)
     {
-        if (context.Document.Blocks[paragraphIndex] is Paragraph paragraph
+        if (childPath is null
+            && context.Document.Blocks[paragraphIndex] is Paragraph paragraph
             && runIndex >= 0 && runIndex < paragraph.Runs.Count
             && ReferenceEquals(paragraph.Runs[runIndex].Shape, shape))
             paragraph.Runs[runIndex].Text = shape.PlainText;
@@ -2137,7 +2156,8 @@ public sealed class SetShapeTextRunCommand(
 public sealed class ReplaceShapeTextParagraphsCommand(
     int paragraphIndex,
     int runIndex,
-    IReadOnlyList<Paragraph> replacement) : IDocumentCommand
+    IReadOnlyList<Paragraph> replacement,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private List<Paragraph>? _previous;
     private List<Paragraph>? _next;
@@ -2157,7 +2177,8 @@ public sealed class ReplaceShapeTextParagraphsCommand(
 
         shape.TextParagraphs.Clear();
         shape.TextParagraphs.AddRange(_next!);
-        owner.Text = shape.PlainText;
+        if (childPath is null)
+            owner.Text = shape.PlainText;
     }
 
     public void Revert(IDocumentCommandContext context)
@@ -2167,19 +2188,22 @@ public sealed class ReplaceShapeTextParagraphsCommand(
 
         shape.TextParagraphs.Clear();
         shape.TextParagraphs.AddRange(_previous);
-        owner.Text = shape.PlainText;
+        if (childPath is null)
+            owner.Text = shape.PlainText;
     }
 
     private bool TryGetShape(IDocumentCommandContext context, out Run owner, out Shape shape)
     {
         owner = null!;
         shape = null!;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
-            || runIndex < 0 || runIndex >= paragraph.Runs.Count
-            || paragraph.Runs[runIndex].Shape is not { } found)
+        if (!ShapeTextTargetResolver.TryGetShape(
+                context, paragraphIndex, runIndex, childPath, out var found))
             return false;
 
-        owner = paragraph.Runs[runIndex];
+        owner = context.Document.Blocks[paragraphIndex] is Paragraph paragraph
+            && runIndex >= 0 && runIndex < paragraph.Runs.Count
+            ? paragraph.Runs[runIndex]
+            : null!;
         shape = found;
         return true;
     }
@@ -2195,7 +2219,8 @@ public sealed class InsertShapeTextParagraphBreakCommand(
     int runIndex,
     int textParagraphIndex,
     int textRunIndex,
-    int textRunOffset) : IDocumentCommand
+    int textRunOffset,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private List<Paragraph>? _previous;
     private List<Paragraph>? _next;
@@ -2217,7 +2242,8 @@ public sealed class InsertShapeTextParagraphBreakCommand(
 
         shape.TextParagraphs.Clear();
         shape.TextParagraphs.AddRange(_next!);
-        owner.Text = shape.PlainText;
+        if (childPath is null)
+            owner.Text = shape.PlainText;
     }
 
     public void Revert(IDocumentCommandContext context)
@@ -2227,19 +2253,22 @@ public sealed class InsertShapeTextParagraphBreakCommand(
 
         shape.TextParagraphs.Clear();
         shape.TextParagraphs.AddRange(_previous);
-        owner.Text = shape.PlainText;
+        if (childPath is null)
+            owner.Text = shape.PlainText;
     }
 
     private bool TryGetShape(IDocumentCommandContext context, out Run owner, out Shape shape)
     {
         owner = null!;
         shape = null!;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
-            || runIndex < 0 || runIndex >= paragraph.Runs.Count
-            || paragraph.Runs[runIndex].Shape is not { } found)
+        if (!ShapeTextTargetResolver.TryGetShape(
+                context, paragraphIndex, runIndex, childPath, out var found))
             return false;
 
-        owner = paragraph.Runs[runIndex];
+        owner = context.Document.Blocks[paragraphIndex] is Paragraph paragraph
+            && runIndex >= 0 && runIndex < paragraph.Runs.Count
+            ? paragraph.Runs[runIndex]
+            : null!;
         shape = found;
         return true;
     }
@@ -2299,7 +2328,8 @@ public sealed class InsertShapeTextParagraphBreakCommand(
 public sealed class MergeShapeTextParagraphWithPreviousCommand(
     int ownerParagraphIndex,
     int ownerRunIndex,
-    int textParagraphIndex) : IDocumentCommand
+    int textParagraphIndex,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private List<Paragraph>? _previous;
     private List<Paragraph>? _next;
@@ -2320,7 +2350,8 @@ public sealed class MergeShapeTextParagraphWithPreviousCommand(
 
         shape.TextParagraphs.Clear();
         shape.TextParagraphs.AddRange(_next!);
-        owner.Text = shape.PlainText;
+        if (childPath is null)
+            owner.Text = shape.PlainText;
     }
 
     public void Revert(IDocumentCommandContext context)
@@ -2330,19 +2361,22 @@ public sealed class MergeShapeTextParagraphWithPreviousCommand(
 
         shape.TextParagraphs.Clear();
         shape.TextParagraphs.AddRange(_previous);
-        owner.Text = shape.PlainText;
+        if (childPath is null)
+            owner.Text = shape.PlainText;
     }
 
     private bool TryGetShape(IDocumentCommandContext context, out Run owner, out Shape shape)
     {
         owner = null!;
         shape = null!;
-        if (context.Document.Blocks[ownerParagraphIndex] is not Paragraph paragraph
-            || ownerRunIndex < 0 || ownerRunIndex >= paragraph.Runs.Count
-            || paragraph.Runs[ownerRunIndex].Shape is not { } found)
+        if (!ShapeTextTargetResolver.TryGetShape(
+                context, ownerParagraphIndex, ownerRunIndex, childPath, out var found))
             return false;
 
-        owner = paragraph.Runs[ownerRunIndex];
+        owner = context.Document.Blocks[ownerParagraphIndex] is Paragraph paragraph
+            && ownerRunIndex >= 0 && ownerRunIndex < paragraph.Runs.Count
+            ? paragraph.Runs[ownerRunIndex]
+            : null!;
         shape = found;
         return true;
     }

@@ -89,6 +89,102 @@ public class ShapesTests
         owner.Text.Should().Be("First line");
     }
 
+    [Fact]
+    public void ShapeTextCommands_edit_a_nested_group_leaf_without_flattening_the_group()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var leaf = Shape.TextBoxWith("hello", 120, 50);
+        var inner = new DrawingGroup { WidthPt = 160, HeightPt = 80 };
+        inner.Children.Add(new Shape(ShapeKind.Rectangle, 20, 20));
+        inner.ChildOffsets.Add((0, 0));
+        inner.Children.Add(leaf);
+        inner.ChildOffsets.Add((30, 10));
+        var outer = new DrawingGroup { WidthPt = 240, HeightPt = 120 };
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((12, 8));
+        outer.Children.Add(new Shape(ShapeKind.Ellipse, 30, 20));
+        outer.ChildOffsets.Add((180, 70));
+        var paragraph = new Paragraph();
+        var owner = Run.FromDrawingGroup(outer);
+        paragraph.Runs.Add(owner);
+        doc.Blocks.Add(paragraph);
+        var context = new ShapeTestContext(doc);
+        var path = new[] { 0, 1 };
+
+        var set = new SetShapeTextRunCommand(0, 0, 0, 0, "hello!", path);
+        set.Apply(context);
+        leaf.PlainText.Should().Be("hello!");
+        owner.Text.Should().BeEmpty("a grouped drawing run has no flattened text mirror");
+        outer.Children.Should().ContainSingle(child => ReferenceEquals(child, inner));
+        set.Revert(context);
+        leaf.PlainText.Should().Be("hello");
+
+        var split = new InsertShapeTextParagraphBreakCommand(0, 0, 0, 0, 2, path);
+        split.Apply(context);
+        leaf.PlainText.Should().Be("he\nllo");
+        leaf.TextParagraphs.Should().HaveCount(2);
+        var merge = new MergeShapeTextParagraphWithPreviousCommand(0, 0, 1, path);
+        merge.Apply(context);
+        leaf.PlainText.Should().Be("hello");
+        merge.Revert(context);
+        leaf.PlainText.Should().Be("he\nllo");
+        split.Revert(context);
+        leaf.PlainText.Should().Be("hello");
+
+        var replacement = new Paragraph();
+        replacement.Runs.Add(new Run("reopened"));
+        var replace = new ReplaceShapeTextParagraphsCommand(0, 0, [replacement], path);
+        replace.Apply(context);
+        leaf.PlainText.Should().Be("reopened");
+        replace.Revert(context);
+        leaf.PlainText.Should().Be("hello");
+    }
+
+    [Fact]
+    public void SetShapeTextDirectionCommand_targets_nested_leaf_and_restores_group_state()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var leaf = Shape.TextBoxWith("rotated leaf", 120, 50);
+        leaf.RotationAngle = 17;
+        leaf.FlipH = true;
+        leaf.FlipV = true;
+        var sibling = Shape.TextBoxWith("sibling", 90, 40);
+        var inner = new DrawingGroup { WidthPt = 160, HeightPt = 80, RotationAngle = 23 };
+        inner.Children.Add(new Shape(ShapeKind.Rectangle, 20, 20));
+        inner.ChildOffsets.Add((0, 0));
+        inner.Children.Add(leaf);
+        inner.ChildOffsets.Add((30, 10));
+        var outer = new DrawingGroup { WidthPt = 240, HeightPt = 120, RotationAngle = 31, FlipV = true };
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((12, 8));
+        outer.Children.Add(sibling);
+        outer.ChildOffsets.Add((180, 70));
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+        document.Blocks.Add(paragraph);
+        var context = new ShapeTestContext(document);
+        var path = new[] { 0, 1 };
+        var transforms = (outer.RotationAngle, outer.FlipH, outer.FlipV,
+            inner.RotationAngle, inner.FlipH, inner.FlipV,
+            leaf.RotationAngle, leaf.FlipH, leaf.FlipV);
+
+        foreach (var direction in new[]
+                 { ShapeTextDirection.Horizontal, ShapeTextDirection.Rotate90, ShapeTextDirection.Rotate270 })
+        {
+            var command = new SetShapeTextDirectionCommand(0, 0, direction, path);
+            command.Apply(context);
+            leaf.TextDirection.Should().Be(direction);
+            sibling.TextDirection.Should().Be(ShapeTextDirection.Horizontal);
+            (outer.RotationAngle, outer.FlipH, outer.FlipV,
+                inner.RotationAngle, inner.FlipH, inner.FlipV,
+                leaf.RotationAngle, leaf.FlipH, leaf.FlipV).Should().Be(transforms);
+            command.Revert(context);
+            leaf.TextDirection.Should().Be(ShapeTextDirection.Horizontal);
+        }
+    }
+
     // ── W26: Body rotation / flip properties ─────────────────────────────────────────────────────
 
     [Fact]

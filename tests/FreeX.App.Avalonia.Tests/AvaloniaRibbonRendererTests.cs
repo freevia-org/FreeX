@@ -611,6 +611,47 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
+    public Task BuildRibbon_SameContextRefresh_RebuildsContextualCommandState() => RunOnUiThread(() =>
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("home", "Home", "H", t => t.Group("g", "G", "G", 1, g => g.Button("home", "Home")))
+            .ContextualTab(
+                "drawing",
+                "Drawing Format",
+                new RibbonTabContext("drawing.selected", "Drawing Format", RibbonContextColor.Purple),
+                t => t.Group("format", "Format", "F", 1, g => g.Button("direction", "Text Direction")))
+            .Build();
+        var command = new MutableStatefulCommand(new RibbonCommandState(IsEnabled: false));
+        var registry = new RibbonCommandRegistry();
+        registry.Register("direction", command);
+        registry.Register("home", new NoOpCommand());
+        var source = new FakeContextSource();
+        source.Raise(RibbonContextState.None.With("drawing.selected"));
+        var tabControl = Assert.IsType<TabControl>(
+            AvaloniaRibbonRenderer.BuildRibbon(definition, registry, source));
+        tabControl.SelectedItem = tabControl.Items
+            .OfType<TabItem>()
+            .Single(item => Equals(item.Tag, "drawing"));
+
+        static Button DirectionButton(TabControl tabs) =>
+            ((Control)tabs.Items
+                .OfType<TabItem>()
+                .Single(item => Equals(item.Tag, "drawing"))
+                .Content!)
+            .GetLogicalDescendants()
+            .OfType<Button>()
+            .Single(button => Equals(button.Tag, "direction"));
+
+        Assert.False(DirectionButton(tabControl).IsEnabled);
+        command.State = new RibbonCommandState(IsEnabled: true);
+
+        source.Raise(RibbonContextState.None.With("drawing.selected"));
+
+        Assert.True(DirectionButton(tabControl).IsEnabled);
+        Assert.Equal("drawing", ((TabItem)tabControl.SelectedItem!).Tag);
+    });
+
+    [Fact]
     public Task BuildRibbon_ContextualTabsAppearBeforeHelpInWindowsOrder() => RunOnUiThread(() =>
     {
         var definition = new RibbonDefinitionBuilder()

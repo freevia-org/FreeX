@@ -1266,6 +1266,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     chart.Name = chartPart.Name;
                     chart.AltTextTitle = chartPart.Title;
                     chart.AltTextDescription = chartPart.AltText;
+                    // R98-io-chart-hyperlink-model-field: see the matching comment in
+                    // XlsxFileAdapter.LoadSheetXmlLayoutApplication.cs -- a chartsheet's single chart
+                    // needs its object-level hyperlink on the model too.
+                    chart.Hyperlink = chartPart.Hyperlink;
                     XlsxDrawingAnchorApplier.ApplyToChart(chart, chartPart.Anchor, sheet);
                     ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
                     ApplyChartUserShapesRelationshipMetadata(chart, chartPart);
@@ -1874,10 +1878,19 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         return result;
     }
 
+    // R98-io-hyperlink-oversized-ref: mirrors XlsxWorksheetHyperlinkNormalizer's
+    // MaxBoundedHyperlinkRangeCellCount cap. A bounded (non whole-column/row) "ref" such as
+    // "A1:XFD1048576" parses fine via CellAddress.TryParse and would otherwise drive the
+    // expansion loop below through ~17 billion iterations -- a crafted worksheet XML of only a
+    // few hundred bytes can trigger this OOM/hang. Any range above this cap is treated the same
+    // way the normalizer treats it (dropped) instead of materialized cell-by-cell.
+    private const long MaxExpandableHyperlinkRangeCellCount = 100_000;
+
     /// <summary>
     /// Expands a hyperlink "ref" attribute -- either a single cell ("A1") or a rectangular range
     /// ("A1:B1") -- into its individual A1-notation cell keys. Falls back to yielding the raw
-    /// reference unchanged if it cannot be parsed as either form.
+    /// reference unchanged if it cannot be parsed as either form. Bounded ranges larger than
+    /// <see cref="MaxExpandableHyperlinkRangeCellCount"/> yield nothing (see remarks above).
     /// </summary>
     private static IEnumerable<string> ExpandHyperlinkReferenceToCellKeys(string reference)
     {
@@ -1899,6 +1912,12 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var maxRow = Math.Max(start.Row, end.Row);
         var minCol = Math.Min(start.Col, end.Col);
         var maxCol = Math.Max(start.Col, end.Col);
+
+        var cellCount = (long)(maxRow - minRow + 1) * (maxCol - minCol + 1);
+        if (cellCount > MaxExpandableHyperlinkRangeCellCount)
+        {
+            yield break;
+        }
 
         for (var row = minRow; row <= maxRow; row++)
         {

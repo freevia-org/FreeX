@@ -183,6 +183,82 @@ public static partial class BuiltInFunctions
         return new RangeValue(cells);
     }
 
+    /// <summary>
+    /// Lookup-family variant of <see cref="MapScalarArgs"/> that grows to the bounding 2-D
+    /// broadcast shape (via <see cref="TryGrowBroadcastShape"/>) instead of requiring an EXACT
+    /// shape match or a 1x1 scalar. VLOOKUP/HLOOKUP/MATCH/INDEX route their non-table array
+    /// arguments (lookup_value/col_index_num/row_index_num/match_type/area_num) through this so
+    /// a column-vector lookup_value crossed with a row-vector match_type (etc.) 2-D
+    /// cross-broadcasts into a spilled matrix, matching Excel dynamic arrays -- the same rule
+    /// MapBinaryMathArgs already applies for two-argument math/bit/engineering functions
+    /// (R62-formula-array-broadcast-6-1) -- rather than wrongly returning #VALUE!
+    /// (R98-formula-lookup-cross-broadcast). Deliberately a SEPARATE helper from the shared
+    /// MapScalarArgs (used by ~30 unrelated financial/statistical/text functions whose own
+    /// cross-broadcast behavior has not been verified here) rather than changing that shared
+    /// choke point's semantics for every caller.
+    /// </summary>
+    private static ScalarValue MapScalarArgsGrowBroadcast(
+        IReadOnlyList<ScalarValue> args,
+        Func<IReadOnlyList<ScalarValue>, ScalarValue> map)
+    {
+        var ranges = new RangeValue?[args.Count];
+        bool anyRange = false;
+        for (int i = 0; i < args.Count; i++)
+        {
+            ranges[i] = args[i] as RangeValue;
+            anyRange |= ranges[i] is not null;
+        }
+
+        if (!anyRange) return map(args);
+        if (!TryGrowBroadcastShape(ranges, out int rows, out int cols))
+            return ErrorValue.Value;
+
+        var cells = new ScalarValue[rows, cols];
+        var scalarArgs = new ScalarValue[args.Count];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+            {
+                for (int i = 0; i < args.Count; i++)
+                    scalarArgs[i] = args[i] is RangeValue range ? ValueAtBroadcastCell(range, r, c) : args[i];
+                cells[r, c] = map(scalarArgs);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    /// <summary>
+    /// Lookup-family variant of <see cref="MapTernaryTextArgs"/> that grows to the bounding 2-D
+    /// broadcast shape instead of requiring an exact shape match or a 1x1 scalar -- see
+    /// <see cref="MapScalarArgsGrowBroadcast"/> above for rationale. XLOOKUP/XMATCH route their
+    /// lookup_value/match_mode/search_mode arguments through this (R98-formula-lookup-cross-broadcast).
+    /// </summary>
+    private static ScalarValue MapTernaryTextArgsGrowBroadcast(
+        ScalarValue first,
+        ScalarValue second,
+        ScalarValue third,
+        Func<ScalarValue, ScalarValue, ScalarValue, ScalarValue> map)
+    {
+        var firstRange = first as RangeValue;
+        var secondRange = second as RangeValue;
+        var thirdRange = third as RangeValue;
+        if (firstRange is null && secondRange is null && thirdRange is null)
+            return map(first, second, third);
+        if (!TryGrowBroadcastShape([firstRange, secondRange, thirdRange], out int rows, out int cols))
+            return ErrorValue.Value;
+
+        var cells = new ScalarValue[rows, cols];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+            {
+                var firstValue = firstRange is null ? first : ValueAtBroadcastCell(firstRange, r, c);
+                var secondValue = secondRange is null ? second : ValueAtBroadcastCell(secondRange, r, c);
+                var thirdValue = thirdRange is null ? third : ValueAtBroadcastCell(thirdRange, r, c);
+                cells[r, c] = map(firstValue, secondValue, thirdValue);
+            }
+
+        return new RangeValue(cells);
+    }
+
     private static bool ContainsSurrogatePair(string text)
     {
         for (int i = 0; i + 1 < text.Length; i++)

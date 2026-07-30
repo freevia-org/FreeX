@@ -29,7 +29,14 @@ public sealed record PortablePdfPageCell(
     StyleId StyleId,
     bool IsTitleRow,
     bool IsTitleColumn,
-    CellColor? ConditionalFillColor = null)
+    CellColor? ConditionalFillColor = null,
+    // R96-render-cf-databar-iconset-1: the resolved data-bar/icon-set conditional format for this
+    // cell (first matching rule of each kind, by priority), carried the same way ConditionalFillColor
+    // already is, so WorkbookPdfContentBuilder can paint the bar/glyph instead of silently dropping it
+    // (see PageContentRenderModelBuilder's identical PageCellBlock.DataBar/IconSet fields, which this
+    // mirrors for the PDF export path).
+    DataBarLayout? DataBar = null,
+    IconSetResult? IconSet = null)
 {
     public bool IsTitle => IsTitleRow || IsTitleColumn;
     public bool IsBody => !IsTitle;
@@ -150,10 +157,10 @@ public static class PortablePdfPageContentPlanner
                     sheet.GetStyleOnly(row.Row, column.Column) ??
                     StyleId.Default;
 
-                var conditionalFillColor = cfRulesByPriority.Count > 0
-                    ? EvaluateConditionalFormatFill(
+                var cfResult = cfRulesByPriority.Count > 0
+                    ? EvaluateConditionalFormat(
                         cfRulesByPriority, sheet, address, cell?.Value ?? BlankValue.Instance, cfStatsCache)
-                    : null;
+                    : default;
 
                 cells.Add(new PortablePdfPageCell(
                     row.Row,
@@ -162,7 +169,9 @@ public static class PortablePdfPageContentPlanner
                     styleId,
                     row.Role == PortablePdfPageAxisRole.Title,
                     column.Role == PortablePdfPageAxisRole.Title,
-                    conditionalFillColor));
+                    cfResult.Fill,
+                    cfResult.DataBar,
+                    cfResult.IconSet));
             }
         }
 
@@ -170,15 +179,16 @@ public static class PortablePdfPageContentPlanner
     }
 
     // -----------------------------------------------------------------------
-    // Conditional formatting (fill only) — R72-render-cf-visual-4-1
+    // Conditional formatting (fill, data bar, icon set) — R72-render-cf-visual-4-1 / R96-render-cf-databar-iconset-1
     // -----------------------------------------------------------------------
     //
-    // This is deliberately scoped to the fill color a matched rule contributes (color-scale
-    // interpolated fill, or a CellValue/AboveAverage highlight rule's FillColor) -- the HIGH-severity
-    // data loss the portable PDF export previously had versus the on-screen grid/print-preview. Font
-    // deltas, data-bar bars, and icon-set glyphs are NOT reproduced here; that remains a known,
-    // deliberately scoped residual gap (see PageContentRenderModelBuilder's own header comment for the
-    // equivalent scope note on the print-preview path this mirrors).
+    // R72 originally scoped this to the fill color a matched rule contributes (color-scale
+    // interpolated fill, or a CellValue/AboveAverage highlight rule's FillColor). R96 extends it to
+    // also resolve DataBar/IconSet rule results (mirroring PageContentRenderModelBuilder's
+    // EvaluateConditionalFormat) so WorkbookPdfContentBuilder can paint the bar/glyph instead of
+    // silently dropping it. Font deltas from CellValue/AboveAverage rules are still not reproduced
+    // (a raw-style-only residual gap versus the interactive grid); formula-driven rule types (Top10,
+    // Duplicate/Unique, text-match, DateOccurring, Blanks/NoBlanks/Errors/NoErrors) remain unevaluated.
 
     /// <summary>
     /// Sorts the sheet's conditional-format rules by Excel priority order (lower
@@ -208,13 +218,18 @@ public static class PortablePdfPageContentPlanner
         return rules;
     }
 
+    /// <summary>The accumulated conditional-format result for one cell: fill, data bar, icon set.</summary>
+    private readonly record struct CfCellResult(CellColor? Fill, DataBarLayout? DataBar, IconSetResult? IconSet);
+
     /// <summary>
-    /// Evaluates every applicable rule for <paramref name="address"/> in priority order and returns
-    /// the fill color of the first style-producing match (first rule to set a fill wins, matching
-    /// <c>StackDifferentialStyle</c>'s "first property wins" semantics), or <c>null</c> when no rule
-    /// matches. Stops early once a matched rule marks <see cref="ConditionalFormat.StopIfTrue"/>.
+    /// Evaluates every applicable rule for <paramref name="address"/> in priority order, taking the
+    /// fill color of the first style-producing match (first rule to set a fill wins, matching
+    /// <c>StackDifferentialStyle</c>'s "first property wins" semantics) and the first matching
+    /// DataBar/IconSet rule of each kind (Excel shows at most one bar and one icon set per cell),
+    /// mirroring <c>PageContentRenderModelBuilder.EvaluateConditionalFormat</c>. Stops early once a
+    /// matched rule marks <see cref="ConditionalFormat.StopIfTrue"/>.
     /// </summary>
-    private static CellColor? EvaluateConditionalFormatFill(
+    private static CfCellResult EvaluateConditionalFormat(
         IReadOnlyList<ConditionalFormat> rulesByPriority,
         Sheet sheet,
         CellAddress address,
@@ -222,6 +237,8 @@ public static class PortablePdfPageContentPlanner
         Dictionary<ConditionalFormat, ConditionalFormatStatistics> statsCache)
     {
         CellColor? fill = null;
+        DataBarLayout? dataBar = null;
+        IconSetResult? iconSet = null;
 
         for (var i = 0; i < rulesByPriority.Count; i++)
         {
@@ -229,26 +246,35 @@ public static class PortablePdfPageContentPlanner
             if (!rule.AllRanges.Any(r => r.Contains(address)))
                 continue;
 
-            var conditionMet = EvaluateConditionalFormatRuleFill(rule, sheet, value, statsCache, out var ruleFill);
+            var conditionMet = EvaluateConditionalFormatRule(
+                rule, sheet, value, statsCache, out var ruleFill, out var ruleDataBar, out var ruleIconSet);
 
             if (fill is null && ruleFill is { } matchedFill)
                 fill = matchedFill;
+            if (dataBar is null && ruleDataBar is { } matchedDataBar)
+                dataBar = matchedDataBar;
+            if (iconSet is null && ruleIconSet is { } matchedIconSet)
+                iconSet = matchedIconSet;
 
             if (conditionMet && rule.StopIfTrue)
                 break;
         }
 
-        return fill;
+        return new CfCellResult(fill, dataBar, iconSet);
     }
 
-    private static bool EvaluateConditionalFormatRuleFill(
+    private static bool EvaluateConditionalFormatRule(
         ConditionalFormat rule,
         Sheet sheet,
         ScalarValue value,
         Dictionary<ConditionalFormat, ConditionalFormatStatistics> statsCache,
-        out CellColor? fill)
+        out CellColor? fill,
+        out DataBarLayout? dataBar,
+        out IconSetResult? iconSet)
     {
         fill = null;
+        dataBar = null;
+        iconSet = null;
 
         switch (rule.RuleType)
         {
@@ -284,10 +310,31 @@ public static class PortablePdfPageContentPlanner
                 fill = rule.FormatIfTrue?.FillColor;
                 return true;
             }
+            case CfRuleType.DataBar:
+            {
+                // A data bar always renders for every finite numeric cell in its range, matching
+                // PageContentRenderModelBuilder's identical DataBar case -- the condition is
+                // independent of whether a bar could actually be computed, so a Stop-If-True
+                // data-bar rule still suppresses lower-priority rules even when its own bar does not
+                // render.
+                if (!TryGetConditionalFormatNumeric(value, out var numeric))
+                    return false;
+                dataBar = ConditionalFormatEvaluator.EvaluateDataBar(
+                    rule, numeric, GetConditionalFormatStatistics(rule, sheet, statsCache));
+                return true;
+            }
+            case CfRuleType.IconSet:
+            {
+                if (!TryGetConditionalFormatNumeric(value, out var numeric))
+                    return false;
+                iconSet = ConditionalFormatEvaluator.EvaluateIconSet(
+                    rule, numeric, GetConditionalFormatStatistics(rule, sheet, statsCache));
+                return true;
+            }
             default:
                 // Formula / Top10 / Duplicate-Unique / text-match / DateOccurring / Blanks / NoBlanks
-                // / Errors / NoErrors / DataBar / IconSet -- fill-color reproduction for these rule
-                // types is a known, deliberately scoped gap (see the section header above).
+                // / Errors / NoErrors -- fill-color reproduction for these rule types is a known,
+                // deliberately scoped gap (see the section header above).
                 return false;
         }
     }

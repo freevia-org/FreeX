@@ -48,6 +48,12 @@ internal static class XlsxExternalLinkMetadataReader
                     !seenRelationshipIds.Add(relId) ||
                     !workbookRels.TryGetValue(relId, out var externalLinkPath))
                 {
+                    // Excel's '[n]' formula syntax addresses external references by their fixed
+                    // ordinal position in workbook.xml's <externalReference> list, not by how many
+                    // of them resolved. A blank/duplicated/unresolvable r:id still reserves its slot
+                    // -- an empty placeholder -- so every later externalReference keeps the same
+                    // '[n]' index the source file encoded, instead of silently shifting down.
+                    result.Add(new ExternalLinkModel());
                     continue;
                 }
 

@@ -1,3 +1,4 @@
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
@@ -28,6 +29,19 @@ public enum PrintPreviewPaintKind
 
     /// <summary>A positioned single-line text run: cell text, a heading label, or a header/footer band.</summary>
     Text,
+
+    /// <summary>
+    /// R96-render-cf-databar-iconset-preview-1: a filled (and optionally outlined) ellipse -- the
+    /// traffic-light / sign / symbol dot glyph of an icon-set conditional format, and the full-disc
+    /// fallback WorkbookPdfContentBuilder's PDF path also uses for the Quarter style's pie wedge.
+    /// </summary>
+    Ellipse,
+
+    /// <summary>
+    /// R96-render-cf-databar-iconset-preview-1: a closed, filled (and optionally outlined) polygon --
+    /// the arrow / flag / rating-bar / star icon-set glyph shapes.
+    /// </summary>
+    Polygon,
 }
 
 /// <summary>
@@ -46,7 +60,8 @@ public readonly record struct PrintPreviewPaintInstruction(
     double StrokeThickness,
     string Text,
     PageTextFont Font,
-    PageTextAlignment Alignment)
+    PageTextAlignment Alignment,
+    IReadOnlyList<LayoutPoint>? Points = null)
 {
     /// <summary>A filled/outlined rectangle from a top-left corner plus size.</summary>
     public static PrintPreviewPaintInstruction Rectangle(
@@ -66,6 +81,45 @@ public readonly record struct PrintPreviewPaintInstruction(
             "",
             default,
             PageTextAlignment.Left);
+
+    /// <summary>A filled/outlined ellipse from a top-left corner plus size.</summary>
+    public static PrintPreviewPaintInstruction Ellipse(
+        LayoutRect bounds,
+        PresentationRgb? fill,
+        PresentationRgb? stroke = null,
+        double strokeThickness = 0) =>
+        new(
+            PrintPreviewPaintKind.Ellipse,
+            bounds.Left,
+            bounds.Top,
+            bounds.Width,
+            bounds.Height,
+            fill,
+            stroke,
+            strokeThickness,
+            "",
+            default,
+            PageTextAlignment.Left);
+
+    /// <summary>A closed, filled/outlined polygon through <paramref name="points"/>.</summary>
+    public static PrintPreviewPaintInstruction Polygon(
+        IReadOnlyList<LayoutPoint> points,
+        PresentationRgb? fill,
+        PresentationRgb? stroke = null,
+        double strokeThickness = 0) =>
+        new(
+            PrintPreviewPaintKind.Polygon,
+            0,
+            0,
+            0,
+            0,
+            fill,
+            stroke,
+            strokeThickness,
+            "",
+            default,
+            PageTextAlignment.Left,
+            points);
 
     /// <summary>A stroked line segment between two points.</summary>
     public static PrintPreviewPaintInstruction Line(
@@ -182,6 +236,20 @@ public static class PrintPreviewInstructionBuilder
                 instructions.Add(PrintPreviewPaintInstruction.Rectangle(cell.Bounds, fill));
         }
 
+        // 3b. Data-bar / icon-set conditional-format overlays, painted over the cell fill and under
+        // gridlines/text -- matching WorkbookPdfContentBuilder.BuildPageWithPageSetup's PDF paint order
+        // (R96-render-cf-databar-iconset-1). Before this step no print-preview renderer painted
+        // PageCellBlock.DataBar/IconSet at all (see that record's doc comment); the shared
+        // PageContentRenderModelBuilder already computed both, so the state was silently dropped only
+        // here (R96-render-cf-databar-iconset-preview-1).
+        foreach (var cell in layout.Cells)
+        {
+            if (cell.DataBar is { } dataBar)
+                AddDataBar(instructions, dataBar, cell.Bounds);
+            if (cell.IconSet is { } iconSet)
+                AddIconSet(instructions, iconSet, cell.Bounds);
+        }
+
         // 4. Gridlines.
         foreach (var line in layout.GridLines)
             instructions.Add(PrintPreviewPaintInstruction.Line(line.Start, line.End, GridLineColor, 1));
@@ -278,6 +346,168 @@ public static class PrintPreviewInstructionBuilder
                 run.TextOrigin, run.Bounds.Width, run.Text, BandFont, run.Alignment));
 
         return new PrintPreviewPagePainting(layout.PageNumber, layout.PageBounds, instructions);
+    }
+
+    /// <summary>Gray (96,96,96) icon-set outline stroke, matching WorkbookPdfContentBuilder's CfIconOutlineColor.</summary>
+    private static readonly PresentationRgb CfIconOutlineColor = new(96, 96, 96);
+
+    /// <summary>Opaque white, used for the icon glyphs' white overlay strokes/fills.</summary>
+    private static readonly PresentationRgb CfIconWhite = new(255, 255, 255);
+
+    /// <summary>
+    /// Draws one cell's data bar into its cell rect, reusing the same portable
+    /// <see cref="ConditionalDataBarLayoutPlanner"/> geometry WorkbookPdfContentBuilder's PDF path draws
+    /// with (R96-render-cf-databar-iconset-1) so the preview bar matches the PDF bar exactly. Does
+    /// nothing if the bar would be empty.
+    /// </summary>
+    private static void AddDataBar(List<PrintPreviewPaintInstruction> instructions, DataBarLayout dataBar, LayoutRect bounds)
+    {
+        if (ConditionalDataBarLayoutPlanner.Plan(dataBar.StartFraction, dataBar.EndFraction) is not { } bar)
+            return;
+
+        var innerWidth = Math.Max(0.0, bounds.Width - (2 * bar.HorizontalInset));
+        var innerHeight = Math.Max(0.0, bounds.Height - (2 * bar.VerticalInset));
+        var barWidth = bar.FractionWidth * innerWidth;
+        if (innerWidth <= 0 || innerHeight <= 0 || barWidth <= 0)
+            return;
+
+        var barLeft = bounds.Left + bar.HorizontalInset + (bar.Start * innerWidth);
+        var barTop = bounds.Top + bar.VerticalInset;
+        instructions.Add(PrintPreviewPaintInstruction.Rectangle(
+            new LayoutRect(barLeft, barTop, barWidth, innerHeight), dataBar.FillColor));
+    }
+
+    /// <summary>
+    /// Draws one cell's icon-set glyph into its cell rect, reusing the same portable
+    /// <see cref="ConditionalIconCellLayoutPlanner"/>/<see cref="ConditionalIconGlyphGeometry"/> geometry
+    /// WorkbookPdfContentBuilder's PDF path draws with (R96-render-cf-databar-iconset-1), so the preview
+    /// glyph matches the PDF glyph. Two glyph primitives (Quarter's pie wedge, Star's partial-fill clip)
+    /// fall back to a full-icon-color fill rather than reproducing the exact arc/clip geometry, mirroring
+    /// the same sanctioned PDF fallback (this canvas-only preview has no arc/clip paint primitive, only
+    /// rectangle/line/ellipse/polygon/text).
+    /// </summary>
+    private static void AddIconSet(List<PrintPreviewPaintInstruction> instructions, IconSetResult iconSet, LayoutRect bounds)
+    {
+        var cellLayout = ConditionalIconCellLayoutPlanner.CalculateCellLayout(
+            bounds.Left, bounds.Top, bounds.Width, bounds.Height, iconSet.ShowValue);
+        if (cellLayout.IconSize <= 0)
+            return;
+
+        var iconColor = ResolveIconColor(iconSet.Style, iconSet.BucketIndex, iconSet.IconCount);
+        var glyphKind = ConditionalIconGlyphResolver.ResolveGlyphKind(iconSet.Style);
+        var isAlternateVariant = ConditionalIconGlyphResolver.IsAlternateGlyphVariant(iconSet.Style);
+        var glyphOps = ConditionalIconGlyphGeometry.Build(
+            glyphKind, iconSet.BucketIndex, iconSet.IconCount,
+            cellLayout.IconLeft, cellLayout.IconTop, cellLayout.IconSize, cellLayout.IconSize, isAlternateVariant);
+
+        AddIconGlyphOps(instructions, glyphOps, iconColor);
+    }
+
+    private static PresentationRgb ResolveIconColor(string style, int bucketIndex, int iconCount)
+    {
+        var hex = ConditionalIconGlyphResolver.ResolveIconColor(style, bucketIndex, iconCount);
+        return ColorInputParser.TryParseHexColor(hex, out var parsed) && parsed is { } color
+            ? new PresentationRgb(color.R, color.G, color.B)
+            : CfIconOutlineColor;
+    }
+
+    /// <summary>
+    /// Converts one glyph's neutral <see cref="CfGlyphOp"/> primitives (already emitted in the layout's
+    /// own absolute page coordinate space, since <see cref="ConditionalIconGlyphGeometry.Build"/> was
+    /// called with the glyph's real page-space origin) into preview paint instructions. Unlike
+    /// WorkbookPdfContentBuilder's PDF equivalent, no y-flip is needed here -- both this layout space and
+    /// <see cref="CfGlyphOp"/>'s space are top-left-origin/y-down.
+    /// </summary>
+    private static void AddIconGlyphOps(
+        List<PrintPreviewPaintInstruction> instructions, IReadOnlyList<CfGlyphOp> glyphOps, PresentationRgb iconColor)
+    {
+        const double outlineWidth = 0.5;
+        const double whiteThinWidth = 0.75;
+        const double whiteMediumWidth = 0.9;
+
+        PresentationRgb? ResolveFill(CfGlyphFill fill) => fill switch
+        {
+            CfGlyphFill.Icon => iconColor,
+            CfGlyphFill.White => CfIconWhite,
+            _ => null,
+        };
+
+        (PresentationRgb? Color, double Width) ResolveStroke(CfGlyphStroke stroke) => stroke switch
+        {
+            CfGlyphStroke.Outline => (CfIconOutlineColor, outlineWidth),
+            CfGlyphStroke.WhiteThin => (CfIconWhite, whiteThinWidth),
+            CfGlyphStroke.WhiteMedium => (CfIconWhite, whiteMediumWidth),
+            _ => (null, 0.0),
+        };
+
+        foreach (var op in glyphOps)
+        {
+            switch (op.Kind)
+            {
+                case CfGlyphPrimitiveKind.Ellipse:
+                {
+                    var fillColor = ResolveFill(op.Fill);
+                    var (strokeColor, strokeWidth) = ResolveStroke(op.Stroke);
+                    var bounds = new LayoutRect(
+                        op.Center.X - op.RadiusX, op.Center.Y - op.RadiusY, op.RadiusX * 2, op.RadiusY * 2);
+                    instructions.Add(PrintPreviewPaintInstruction.Ellipse(bounds, fillColor, strokeColor, strokeWidth));
+                    break;
+                }
+                case CfGlyphPrimitiveKind.Line:
+                {
+                    var (strokeColor, strokeWidth) = ResolveStroke(op.Stroke);
+                    if (strokeColor is { } sc && op.Points.Count >= 2)
+                        instructions.Add(PrintPreviewPaintInstruction.Line(op.Points[0], op.Points[1], sc, strokeWidth));
+                    break;
+                }
+                case CfGlyphPrimitiveKind.Box:
+                {
+                    var fillColor = ResolveFill(op.Fill);
+                    var (strokeColor, strokeWidth) = ResolveStroke(op.Stroke);
+                    instructions.Add(PrintPreviewPaintInstruction.Rectangle(op.Rect, fillColor, strokeColor, strokeWidth));
+                    break;
+                }
+                case CfGlyphPrimitiveKind.Polygon:
+                case CfGlyphPrimitiveKind.Polyline:
+                {
+                    if (op.Points.Count < 2)
+                        break;
+
+                    if (op.Kind == CfGlyphPrimitiveKind.Polyline)
+                    {
+                        // Open, unfilled stroke: decompose into individual line segments -- this preview
+                        // has no dedicated open-polyline paint kind (only closed/filled Polygon).
+                        var (strokeColor, strokeWidth) = ResolveStroke(op.Stroke);
+                        if (strokeColor is { } sc)
+                            for (var i = 0; i < op.Points.Count - 1; i++)
+                                instructions.Add(PrintPreviewPaintInstruction.Line(op.Points[i], op.Points[i + 1], sc, strokeWidth));
+                        break;
+                    }
+
+                    var fillColor = ResolveFill(op.Fill);
+                    var (polyStrokeColor, polyStrokeWidth) = ResolveStroke(op.Stroke);
+                    instructions.Add(PrintPreviewPaintInstruction.Polygon(op.Points, fillColor, polyStrokeColor, polyStrokeWidth));
+                    break;
+                }
+                case CfGlyphPrimitiveKind.Pie:
+                {
+                    // R96 fallback (matching WorkbookPdfContentBuilder's PDF fallback): draw the pie
+                    // wedge as a full filled circle rather than reproducing its exact arc geometry.
+                    var bounds = new LayoutRect(
+                        op.Center.X - op.RadiusX, op.Center.Y - op.RadiusY, op.RadiusX * 2, op.RadiusY * 2);
+                    instructions.Add(PrintPreviewPaintInstruction.Ellipse(bounds, iconColor));
+                    break;
+                }
+                case CfGlyphPrimitiveKind.StarFillFraction:
+                {
+                    // R96 fallback (matching WorkbookPdfContentBuilder's PDF fallback, explicitly
+                    // sanctioned by ConditionalIconGlyphGeometry.Build's own doc comment): fill the whole
+                    // star with the icon color instead of clipping to the fill fraction.
+                    instructions.Add(PrintPreviewPaintInstruction.Polygon(op.Points, iconColor, CfIconOutlineColor, outlineWidth));
+                    break;
+                }
+            }
+        }
     }
 
     private static void AddCellBorders(ICollection<PrintPreviewPaintInstruction> instructions, PageCellBlock cell)

@@ -5,19 +5,23 @@ if (args.Length < 2
     || !string.Equals(args[0], "generate", StringComparison.OrdinalIgnoreCase)
         && !string.Equals(args[0], "inspect", StringComparison.OrdinalIgnoreCase)
         && !string.Equals(args[0], "generate-nested", StringComparison.OrdinalIgnoreCase)
-        && !string.Equals(args[0], "inspect-nested", StringComparison.OrdinalIgnoreCase))
+        && !string.Equals(args[0], "inspect-nested", StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(args[0], "generate-nested-text", StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(args[0], "inspect-nested-text", StringComparison.OrdinalIgnoreCase))
 {
-    Console.Error.WriteLine("usage: FreeW.GroupChildPhysicalFixture generate <path> | inspect <path> | generate-nested <path> | inspect-nested <path>");
+    Console.Error.WriteLine("usage: FreeW.GroupChildPhysicalFixture generate <path> | inspect <path> | generate-nested <path> | inspect-nested <path> | generate-nested-text <path> | inspect-nested-text <path>");
     return 2;
 }
 
 var path = Path.GetFullPath(args[1]);
 if (string.Equals(args[0], "generate", StringComparison.OrdinalIgnoreCase)
-    || string.Equals(args[0], "generate-nested", StringComparison.OrdinalIgnoreCase))
+    || string.Equals(args[0], "generate-nested", StringComparison.OrdinalIgnoreCase)
+    || string.Equals(args[0], "generate-nested-text", StringComparison.OrdinalIgnoreCase))
 {
     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-    var nested = string.Equals(args[0], "generate-nested", StringComparison.OrdinalIgnoreCase);
-    var document = nested ? BuildNestedFixture() : BuildFixture();
+    var nestedText = string.Equals(args[0], "generate-nested-text", StringComparison.OrdinalIgnoreCase);
+    var nested = string.Equals(args[0], "generate-nested", StringComparison.OrdinalIgnoreCase) || nestedText;
+    var document = nestedText ? BuildNestedTextFixture() : nested ? BuildNestedFixture() : BuildFixture();
     DocxWriter.Write(document, path);
     Console.WriteLine($"generated={path}");
     if (nested)
@@ -31,6 +35,8 @@ if (string.Equals(args[0], "generate", StringComparison.OrdinalIgnoreCase)
         Console.WriteLine("child-path=0,1");
         Console.WriteLine("child-offset-pt=34,21");
         Console.WriteLine("child-size-pt=64,32");
+        if (nestedText)
+            Console.WriteLine("child-text=Nested leaf");
         return 0;
     }
     Console.WriteLine("group-offset-pt=180,150");
@@ -54,7 +60,8 @@ if (group is null || group.Children.Count < 2)
     return 1;
 }
 
-if (string.Equals(args[0], "inspect-nested", StringComparison.OrdinalIgnoreCase))
+if (string.Equals(args[0], "inspect-nested", StringComparison.OrdinalIgnoreCase)
+    || string.Equals(args[0], "inspect-nested-text", StringComparison.OrdinalIgnoreCase))
 {
     if (group.Children[0] is not DrawingGroup inner || inner.Children.Count < 2)
     {
@@ -75,21 +82,30 @@ if (string.Equals(args[0], "inspect-nested", StringComparison.OrdinalIgnoreCase)
     Console.WriteLine($"child-offset-pt={leafOffset.X:R},{leafOffset.Y:R}");
     Console.WriteLine($"child-size-pt={inner.ChildWidthPt(1):R},{inner.ChildHeightPt(1):R}");
     Console.WriteLine($"child-kind={leaf.GetType().Name}");
-    if (leaf is Shape leafShape)
+        if (leaf is Shape leafShape)
     {
         Console.WriteLine($"child-transform={leafShape.RotationAngle:R}deg,flipH={leafShape.FlipH},flipV={leafShape.FlipV}");
         if (leafShape.CustomGeometry?.Segments.FirstOrDefault(segment => segment.Point is not null)
             is { Point: { } point })
             Console.WriteLine($"child-point-0={point.X:R},{point.Y:R}");
-        if (leafShape.CustomGeometry is { } geometry)
+            if (leafShape.CustomGeometry is { } geometry)
         {
             var points = geometry.Segments
                 .Where(segment => segment.Point is not null)
                 .Select(segment => $"{segment.Point!.X:R},{segment.Point.Y:R}");
             Console.WriteLine($"child-points={string.Join(';', points)}");
         }
-    }
-    return 0;
+        }
+        if (string.Equals(args[0], "inspect-nested-text", StringComparison.OrdinalIgnoreCase)
+            && leaf is Shape textShape)
+        {
+            Console.WriteLine($"child-text={textShape.PlainText}");
+            Console.WriteLine($"child-text-paragraphs={textShape.TextParagraphs.Count}");
+            Console.WriteLine($"child-text-runs={textShape.TextParagraphs.Sum(paragraph => paragraph.Runs.Count)}");
+            Console.WriteLine($"child-text-direction={textShape.TextDirection}");
+            Console.WriteLine($"child-text-alignment={textShape.TextParagraphs.FirstOrDefault()?.Formatting.Alignment ?? TextAlignment.Left}");
+        }
+        return 0;
 }
 
 var child = group.Children[1];
@@ -213,5 +229,22 @@ static TextDocument BuildNestedFixture()
     var paragraph = new Paragraph();
     paragraph.Runs.Add(Run.FromDrawingGroup(outer));
     document.Blocks.Add(paragraph);
+    return document;
+}
+
+static TextDocument BuildNestedTextFixture()
+{
+    var document = BuildNestedFixture();
+    var outer = document.Blocks.OfType<Paragraph>()
+        .SelectMany(paragraph => paragraph.Runs)
+        .Select(run => run.DrawingGroup)
+        .First(group => group is not null)!;
+    var inner = (DrawingGroup)outer.Children[0];
+    var leaf = Shape.TextBoxWith("Nested leaf", 64, 32);
+    leaf.FillColorHex = "#FCE4D6";
+    leaf.OutlineColorHex = "#C65911";
+    leaf.RotationAngle = 10;
+    leaf.FlipH = true;
+    inner.Children[1] = leaf;
     return document;
 }
