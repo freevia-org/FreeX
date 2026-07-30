@@ -1636,6 +1636,24 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void InvertedPyramid_ReturnsLiveDescendingBandsWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.List, "Market", "Product", "Team", "Task");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid";
+
+        var shapes = SmartArtLayoutEngine.Layout(
+            data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("invertedPyramid remains live for editable list nodes");
+        shapes!.Should().HaveCount(4);
+        shapes.Should().OnlyContain(shape => shape.Kind == SlideShapeKind.AutoShape);
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Market", "Product", "Team", "Task");
+        shapes.Select(shape => shape.ExtentCxEmu).Should().BeInDescendingOrder();
+        shapes[^1].AutoShapeKind.Should().Be(DrawingShapeKind.Triangle);
+    }
+
+    [Fact]
     public void BasicMatrix_ReturnsLiveQuadrantBoxesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.Matrix, "People", "Process", "Platform", "Proof");
