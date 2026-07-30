@@ -224,8 +224,45 @@ public static class DocumentNoteRegionPlanner
     }
 
     /// <summary>
-    /// Inserts continuation-only pages directly after the body page that owns each long footnote.
-    /// Invalid or one-page plans are ignored so normal body pagination remains an identity map.
+    /// Converts one physical continuation fragment into the ordinary renderer-neutral note-region
+    /// shape. Hosts must render this plan instead of rebuilding the full source footnote, otherwise
+    /// every continuation page repeats text that belongs to another physical page.
+    /// </summary>
+    public static DocumentNoteRegionPlan BuildFootnoteContinuationRegion(
+        DocumentFootnoteContinuationPagePlan page,
+        double contentWidthDip)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+
+        var rows = page.Fragments
+            .Select(fragment => new DocumentNoteRegionRow(
+                fragment.NoteId,
+                fragment.SequenceIndex,
+                fragment.Label ?? string.Empty,
+                fragment.Text,
+                fragment.EstimatedHeightDip))
+            .ToList();
+        var hasSeparator = page.SeparatorKind is not DocumentFootnoteSeparatorKind.None;
+        return new DocumentNoteRegionPlan(
+            DocumentNoteRegionKind.Footnotes,
+            Math.Max(1, page.PageNumber),
+            IsSyntheticPage: false,
+            Heading: null,
+            SeparatorXOffsetDip: 0,
+            SeparatorWidthDip: Math.Min(FootnoteSeparatorWidthDip, Math.Max(0, contentWidthDip)),
+            TextFontSizePt: NoteTextFontSizePt,
+            LabelFontSizePt: NoteTextFontSizePt * LabelScale,
+            EstimatedHeightDip: hasSeparator
+                ? Math.Max(page.EstimatedHeightDip, EstimateRegionHeight(rows, hasHeading: false, hasSeparator: true))
+                : Math.Max(page.EstimatedHeightDip, EstimateRegionHeight(rows, hasHeading: false, hasSeparator: false)),
+            Rows: rows);
+    }
+
+    /// <summary>
+    /// Inserts only intermediate continuation pages after the body page that owns each long footnote.
+    /// When a following body page has no competing overflowing footnote, the final fragment shares that
+    /// page's footnote band, matching Word's resume-body-before-final-footnote ownership. Invalid or
+    /// one-page plans are ignored so normal body pagination remains an identity map.
     /// </summary>
     public static DocumentFootnotePhysicalPagePlan BuildFootnotePhysicalPagePlan(
         int bodyPageCount,
@@ -235,10 +272,12 @@ public static class DocumentNoteRegionPlanner
 
         var safeBodyPageCount = Math.Max(0, bodyPageCount);
         var pages = new List<DocumentFootnotePhysicalPage>();
+        var finalFragmentByBodyPage = new Dictionary<int, DocumentFootnoteContinuationPagePlan>();
         for (var bodyPageIndex = 0; bodyPageIndex < safeBodyPageCount; bodyPageIndex++)
         {
             continuationByBodyPage.TryGetValue(bodyPageIndex, out var continuation);
-            var firstFootnotePage = continuation?.Pages.FirstOrDefault();
+            finalFragmentByBodyPage.TryGetValue(bodyPageIndex, out var resumedFootnotePage);
+            var firstFootnotePage = resumedFootnotePage ?? continuation?.Pages.FirstOrDefault();
             pages.Add(new DocumentFootnotePhysicalPage(
                 pages.Count,
                 bodyPageIndex,
@@ -247,13 +286,23 @@ public static class DocumentNoteRegionPlanner
             if (continuation is not { HasContinuation: true })
                 continue;
 
-            foreach (var continuationPage in continuation.Pages.Skip(1))
+            var continuationPages = continuation.Pages.Skip(1).ToList();
+            var nextBodyPageIndex = bodyPageIndex + 1;
+            var canResumeOnNextBodyPage = nextBodyPageIndex < safeBodyPageCount
+                && !continuationByBodyPage.ContainsKey(nextBodyPageIndex);
+            var continuationOnlyCount = canResumeOnNextBodyPage
+                ? Math.Max(0, continuationPages.Count - 1)
+                : continuationPages.Count;
+            foreach (var continuationPage in continuationPages.Take(continuationOnlyCount))
             {
                 pages.Add(new DocumentFootnotePhysicalPage(
                     pages.Count,
                     LogicalBodyPageIndex: null,
                     continuationPage));
             }
+
+            if (canResumeOnNextBodyPage)
+                finalFragmentByBodyPage[nextBodyPageIndex] = continuationPages[^1];
         }
 
         return new DocumentFootnotePhysicalPagePlan(safeBodyPageCount, pages);

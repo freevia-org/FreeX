@@ -64,13 +64,17 @@ public static class ExternalXamlClipboardPlanner
         try
         {
             var document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
-            var image = document
+            var images = document
                 .Descendants()
                 .Where(element => element.Name.LocalName.Equals("Image", StringComparison.OrdinalIgnoreCase))
                 .Select(element => AttributeValue(element, "Source"))
                 .Where(static source => !string.IsNullOrWhiteSpace(source))
                 .Select(source => resolveImage?.Invoke(source!) ?? (null, null))
-                .FirstOrDefault(static result => result.Bytes is { Length: > 0 });
+                .Where(static result => result.Bytes is { Length: > 0 })
+                .Select(static result => new InCanvasRichClipboardImage(
+                    result.Bytes!,
+                    result.ContentType ?? "application/octet-stream"))
+                .ToArray();
             var blockElements = document
                 .Descendants()
                 .Where(element => element.Name.LocalName == "Table"
@@ -78,7 +82,7 @@ public static class ExternalXamlClipboardPlanner
                     : element.Name.LocalName == "Paragraph"
                         && !element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "Table"))
                 .ToArray();
-            if (blockElements.Length == 0 && image.Bytes is not { Length: > 0 })
+            if (blockElements.Length == 0 && images.Length == 0)
                 return null;
 
             var body = new TextBody();
@@ -96,15 +100,17 @@ public static class ExternalXamlClipboardPlanner
             }
 
             if (body.Paragraphs.All(static paragraph => paragraph.Runs.Count == 0)
-                && image.Bytes is not { Length: > 0 })
+                && images.Length == 0)
                 return null;
 
+            var firstImage = images.FirstOrDefault();
             return new InCanvasRichClipboardPayload(
                 body,
                 InCanvasTextEditPlanner.ExtractPlainText(body),
-                ImageBytes: image.Bytes,
-                ImageContentType: image.ContentType,
-                ContainsTable: containsTable);
+                ImageBytes: firstImage?.Bytes,
+                ImageContentType: firstImage?.ContentType,
+                ContainsTable: containsTable,
+                ImagePayloads: images);
         }
         catch
         {

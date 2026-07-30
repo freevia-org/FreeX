@@ -461,6 +461,30 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task External_Rtf_object_is_pasted_as_editable_ole_shape_with_result_text()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                RtfBytes: Encoding.ASCII.GetBytes(
+                    @"{\rtf1\ansi Before {\object{\*\objclass Word.Document.12}{\*\objdata 010203}{\objresult Embedded result}} After}")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.RichText);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        var objectShape = editor.CurrentSlide.Shapes[0];
+        objectShape.Kind.Should().Be(SlideShapeKind.Ole);
+        objectShape.OleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
+        objectShape.OleObject.EmbeddedExtension.Should().Be("docx");
+        editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
+            .Select(run => run.Text)
+            .Should().ContainSingle()
+            .Which.Should().Be("Before Embedded result After");
+    }
+
+    [Fact]
     public async Task XamlPackage_table_is_pasted_as_native_editable_table()
     {
         var clipboard = new FakeSystemClipboard
@@ -544,6 +568,36 @@ Header\cell Value\cell\row}")),
         picture.Kind.Should().Be(SlideShapeKind.Picture);
         picture.Picture!.ContentType.Should().Be("image/png");
         picture.Picture.Bytes.Should().Equal(imageBytes);
+    }
+
+    [Fact]
+    public async Task XamlPackage_images_are_pasted_in_document_order()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <BlockUIContainer><Image Source="Images/first.png" /></BlockUIContainer>
+              <BlockUIContainer><Image Source="Images/second.jpg" /></BlockUIContainer>
+            </FlowDocument>
+            """;
+        var first = new byte[] { 0x01, 0x02 };
+        var second = new byte[] { 0x03, 0x04, 0x05 };
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage(
+                    xaml,
+                    ("Images/first.png", first),
+                    ("Images/second.jpg", second))),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        editor.CurrentSlide.Shapes[0].Picture!.Bytes.Should().Equal(first);
+        editor.CurrentSlide.Shapes[0].Picture!.ContentType.Should().Be("image/png");
+        editor.CurrentSlide.Shapes[1].Picture!.Bytes.Should().Equal(second);
+        editor.CurrentSlide.Shapes[1].Picture!.ContentType.Should().Be("image/jpeg");
     }
 
     [Fact]

@@ -4445,11 +4445,12 @@ public sealed class DocumentView : Control
 
         foreach (var (pg, ids) in byPage)
         {
-            // A reference page gives a note a substantial, bounded portion of its text area. Word then
-            // carries the remainder into continuation pages before it resumes later body content.
+            // Word gives an overflowing note most of its reference page after the reference itself,
+            // then carries only the remainder to later pages. A smaller band leaves later body
+            // paragraphs below the reference, which reverses that ownership.
             var firstBand = Math.Max(
                 Build("Ag", RunFormatting.Default with { FontSizePt = NoteFontSizePt }).Height,
-                _layoutTextAreaHeight * 0.35);
+                _layoutTextAreaHeight * 0.75);
             var continuationBand = Math.Max(firstBand, _layoutTextAreaHeight - FootnoteTopPadding);
             var plan = DocumentNoteRegionPlanner.BuildFootnoteContinuation(
                 _doc,
@@ -4466,7 +4467,16 @@ public sealed class DocumentView : Control
             // the entire logical note. Normal one-page notes retain the existing rendering path below.
             _footnoteBandHeightByPage[pg] = Math.Min(firstBand, plan.Pages[0].EstimatedHeightDip + FootnoteTopPadding);
             if (plan.HasContinuation)
+            {
                 _footnoteContinuationByBodyPage[pg] = plan;
+                var nextBodyPage = pg + 1;
+                if (!byPage.ContainsKey(nextBodyPage))
+                {
+                    _footnoteBandHeightByPage[nextBodyPage] = Math.Min(
+                        continuationBand,
+                        plan.Pages[^1].EstimatedHeightDip + FootnoteTopPadding);
+                }
+            }
         }
     }
 
@@ -4792,8 +4802,21 @@ public sealed class DocumentView : Control
         return _footnotePhysicalPagePlan.PhysicalPageForBodyPage(logicalBodyPage);
     }
 
-    private int PhysicalPageForFootnoteFragment(int logicalBodyPage, int fragmentPageIndex) =>
-        PhysicalPageForBodyPage(logicalBodyPage) + Math.Max(0, fragmentPageIndex);
+    private int PhysicalPageForFootnoteFragment(int logicalBodyPage, int fragmentPageIndex)
+    {
+        if (!_footnoteContinuationByBodyPage.TryGetValue(logicalBodyPage, out var continuation))
+            return PhysicalPageForBodyPage(logicalBodyPage);
+
+        var isFinalFragment = fragmentPageIndex == continuation.Pages.Count - 1;
+        var nextBodyPage = logicalBodyPage + 1;
+        var canResumeOnNextBodyPage = isFinalFragment
+            && fragmentPageIndex > 0
+            && nextBodyPage < _bodyPageCount
+            && !_footnoteContinuationByBodyPage.ContainsKey(nextBodyPage);
+        return canResumeOnNextBodyPage
+            ? PhysicalPageForBodyPage(nextBodyPage)
+            : PhysicalPageForBodyPage(logicalBodyPage) + Math.Max(0, fragmentPageIndex);
+    }
 
     private int LogicalBodyPageForPhysicalPage(int physicalPage)
     {

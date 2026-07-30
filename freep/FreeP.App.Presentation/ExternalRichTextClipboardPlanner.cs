@@ -8,7 +8,7 @@ namespace FreeP.App.Compositor;
 /// Converts a bounded subset of external RTF into the renderer-neutral in-canvas clipboard
 /// payload. The parser deliberately ignores unsupported destinations and controls while keeping
 /// plain text, paragraph boundaries, common character formatting, bounded list metadata,
-/// paragraph layout, and external hyperlink fields usable.
+/// paragraph layout, external hyperlink fields, and bounded embedded-object payloads usable.
 /// </summary>
 public static class ExternalRichTextClipboardPlanner
 {
@@ -45,6 +45,9 @@ public static class ExternalRichTextClipboardPlanner
             ListLevelText,
             FieldInstruction,
             Object,
+            ObjectClass,
+            ObjectName,
+            ObjectData,
             Picture,
             Skip,
         }
@@ -264,6 +267,12 @@ public static class ExternalRichTextClipboardPlanner
         private readonly List<InCanvasRichClipboardImage> _picturePayloads = new();
         private int _picturePendingNibble = -1;
         private bool _pictureCaptureStarted;
+        private readonly StringBuilder _objectClass = new();
+        private readonly StringBuilder _objectName = new();
+        private readonly List<byte> _objectBytes = new();
+        private readonly List<InCanvasRichClipboardObject> _objectPayloads = new();
+        private int _objectPendingNibble = -1;
+        private bool _objectCaptureStarted;
 
         public RtfReader(byte[] bytes) => _bytes = bytes;
 
@@ -293,6 +302,7 @@ public static class ExternalRichTextClipboardPlanner
 
             EnsureParagraph();
             FinalizePictureCapture();
+            FinalizeObjectCapture();
             var firstPicture = _picturePayloads.FirstOrDefault();
             return new InCanvasRichClipboardPayload(
                 _body,
@@ -302,7 +312,8 @@ public static class ExternalRichTextClipboardPlanner
                 ContainsTable: _containsTable,
                 TableColumnWidthsEmu: _tableColumnWidthsEmu,
                 TableCellStyles: _tableCellStyles.Count == 0 ? null : _tableCellStyles,
-                ImagePayloads: _picturePayloads.Count == 0 ? null : _picturePayloads.ToArray());
+                ImagePayloads: _picturePayloads.Count == 0 ? null : _picturePayloads.ToArray(),
+                ObjectPayloads: _objectPayloads.Count == 0 ? null : _objectPayloads.ToArray());
         }
 
         private bool ReadNext()
@@ -342,6 +353,8 @@ public static class ExternalRichTextClipboardPlanner
                         _position = _bytes.Length;
                         return true;
                     }
+                    if (_state.Destination == Destination.ObjectData)
+                        FinalizeObjectCapture();
                     State restoredState = _states.Pop();
                     if (_hasActiveStyle && !SameStyle(_activeStyle, CurrentStyle(restoredState)))
                         FlushActiveRun();
@@ -557,14 +570,31 @@ public static class ExternalRichTextClipboardPlanner
                     _state.SkipOutput = true;
                     break;
                 case "object":
+                    FinalizeObjectCapture();
+                    _objectClass.Clear();
+                    _objectName.Clear();
+                    _objectBytes.Clear();
+                    _objectPendingNibble = -1;
                     _state.Destination = Destination.Object;
+                    _state.SkipOutput = true;
+                    break;
+                case "objclass":
+                    _state.Destination = Destination.ObjectClass;
+                    _state.SkipOutput = true;
+                    break;
+                case "objname":
+                    _state.Destination = Destination.ObjectName;
+                    _state.SkipOutput = true;
+                    break;
+                case "objdata":
+                    _objectCaptureStarted = true;
+                    _objectPendingNibble = -1;
+                    _state.Destination = Destination.ObjectData;
                     _state.SkipOutput = true;
                     break;
                 case "result":
                 case "objresult":
-                    // OLE payloads are not editable here, but Word/Office RTF commonly
-                    // carries a visible fallback result. Preserve that projection while
-                    // continuing to ignore the binary object data and class metadata.
+                    // Keep the visible fallback result while separately retaining objdata.
                     if (_state.Destination == Destination.Object)
                     {
                         _state.Destination = Destination.Body;
@@ -628,6 +658,8 @@ public static class ExternalRichTextClipboardPlanner
                     {
                         if (_state.Destination == Destination.Picture)
                             ReadPictureBinary(count);
+                        else if (_state.Destination == Destination.ObjectData)
+                            ReadObjectBinary(count);
                         else
                             _position = Math.Min(_bytes.Length, _position + count);
                     }
@@ -760,6 +792,26 @@ public static class ExternalRichTextClipboardPlanner
                 return;
             }
 
+            if (_state.Destination == Destination.ObjectData)
+            {
+                AppendObjectHex(value);
+                return;
+            }
+
+            if (_state.Destination == Destination.ObjectClass)
+            {
+                if (value != 0)
+                    _objectClass.Append(DecodeByte(value));
+                return;
+            }
+
+            if (_state.Destination == Destination.ObjectName)
+            {
+                if (value != 0)
+                    _objectName.Append(DecodeByte(value));
+                return;
+            }
+
             if (_state.Destination == Destination.FontTable)
             {
                 if (value == (byte)';')
@@ -831,6 +883,38 @@ public static class ExternalRichTextClipboardPlanner
                 _pictureBytes.Add(_bytes[_position]);
         }
 
+        private void AppendObjectHex(byte value)
+        {
+            if (value is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
+                return;
+
+            int nibble = HexValue(value);
+            if (nibble < 0)
+                return;
+
+            if (_objectPendingNibble < 0)
+            {
+                _objectPendingNibble = nibble;
+                return;
+            }
+
+            if (_objectBytes.Count >= MaxRtfBytes)
+                throw new InvalidDataException("RTF embedded-object limit exceeded.");
+
+            _objectBytes.Add((byte)((_objectPendingNibble << 4) | nibble));
+            _objectPendingNibble = -1;
+        }
+
+        private void ReadObjectBinary(int count)
+        {
+            int end = Math.Min(_bytes.Length, _position + count);
+            if (end - _position > MaxRtfBytes - _objectBytes.Count)
+                throw new InvalidDataException("RTF embedded-object limit exceeded.");
+
+            for (; _position < end; _position++)
+                _objectBytes.Add(_bytes[_position]);
+        }
+
         private void FinalizePictureCapture()
         {
             if (!_pictureCaptureStarted)
@@ -845,6 +929,39 @@ public static class ExternalRichTextClipboardPlanner
             _pictureBytes.Clear();
             _picturePendingNibble = -1;
             _pictureCaptureStarted = false;
+        }
+
+        private void FinalizeObjectCapture()
+        {
+            if (!_objectCaptureStarted)
+                return;
+
+            if (_objectBytes.Count > 0)
+            {
+                _objectPayloads.Add(new InCanvasRichClipboardObject(
+                    _objectBytes.ToArray(),
+                    ResolveObjectFileName()));
+            }
+
+            _objectBytes.Clear();
+            _objectPendingNibble = -1;
+            _objectCaptureStarted = false;
+        }
+
+        private string ResolveObjectFileName()
+        {
+            string name = Path.GetFileName(_objectName.ToString().Trim());
+            if (Path.GetExtension(name).Length > 0)
+                return name;
+
+            string objectClass = _objectClass.ToString().Trim();
+            if (objectClass.Contains("excel.sheet", StringComparison.OrdinalIgnoreCase))
+                return "Embedded.xlsx";
+            if (objectClass.Contains("word.document", StringComparison.OrdinalIgnoreCase))
+                return "Embedded.docx";
+            if (objectClass.Contains("powerpoint", StringComparison.OrdinalIgnoreCase))
+                return "Embedded.pptx";
+            return "Embedded.bin";
         }
 
         private static bool HasPrefix(byte[] value, byte[] prefix)

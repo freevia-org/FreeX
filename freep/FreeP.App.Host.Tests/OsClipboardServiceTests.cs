@@ -611,7 +611,7 @@ public sealed class OsClipboardServiceTests
     }
 
     [StaFact]
-    public void Paste_ExternalRtfObject_UsesVisibleResultText()
+    public void Paste_ExternalRtfObject_InsertsEditableObjectAndVisibleResultText()
     {
         var rtf = Encoding.ASCII.GetBytes(
             @"{\rtf1\ansi Before {\object{\*\objclass Word.Document.12}{\*\objdata 010203}{\objresult Embedded result}} After}");
@@ -624,8 +624,12 @@ public sealed class OsClipboardServiceTests
         var result = service.PasteWithResult(editor);
 
         result.Should().Be(PresentationClipboardPasteSource.RichText);
-        editor.CurrentSlide!.Shapes.Should().ContainSingle();
-        editor.CurrentSlide.Shapes.Single().TextBody!.Paragraphs.Single().Runs
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        var objectShape = editor.CurrentSlide.Shapes[0];
+        objectShape.Kind.Should().Be(SlideShapeKind.Ole);
+        objectShape.OleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
+        objectShape.OleObject.EmbeddedExtension.Should().Be("docx");
+        editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
             .Select(run => run.Text)
             .Should().ContainSingle()
             .Which.Should().Be("Before Embedded result After");
@@ -746,6 +750,37 @@ Header\cell Value\cell\row}"),
         picture.Kind.Should().Be(SlideShapeKind.Picture);
         picture.Picture!.ContentType.Should().Be("image/png");
         picture.Picture.Bytes.Should().Equal(_minPng);
+    }
+
+    [StaFact]
+    public void Paste_XamlPackageImages_InsertsAllPackageResourcesInOrder()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <BlockUIContainer><Image Source="Images/first.png" /></BlockUIContainer>
+              <BlockUIContainer><Image Source="Images/second.jpg" /></BlockUIContainer>
+            </FlowDocument>
+            """;
+        var first = new byte[] { 0x01, 0x02 };
+        var second = new byte[] { 0x03, 0x04, 0x05 };
+        var fake = new FakeOsClipboard
+        {
+            XamlPackageBytes = CreateXamlPackage(
+                xaml,
+                ("Images/first.png", first),
+                ("Images/second.jpg", second)),
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        service.PasteWithResult(editor).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        editor.CurrentSlide.Shapes[0].Picture!.Bytes.Should().Equal(first);
+        editor.CurrentSlide.Shapes[0].Picture!.ContentType.Should().Be("image/png");
+        editor.CurrentSlide.Shapes[1].Picture!.Bytes.Should().Equal(second);
+        editor.CurrentSlide.Shapes[1].Picture!.ContentType.Should().Be("image/jpeg");
     }
 
     [StaFact]

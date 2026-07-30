@@ -529,6 +529,31 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedNoteRegionPlanner_ConvertsContinuationFragmentToRendererPlan()
+    {
+        var page = new DocumentFootnoteContinuationPagePlan(
+            PageNumber: 3,
+            SeparatorKind: DocumentFootnoteSeparatorKind.Continuation,
+            AvailableHeightDip: 120,
+            EstimatedHeightDip: 84,
+            Fragments: [
+                new DocumentFootnoteContinuationFragment(1, 1, null, "continued words", false, false, 42),
+                new DocumentFootnoteContinuationFragment(1, 1, null, "final words", false, true, 42)
+            ]);
+
+        var region = DocumentNoteRegionPlanner.BuildFootnoteContinuationRegion(page, contentWidthDip: 480);
+
+        region.Kind.Should().Be(DocumentNoteRegionKind.Footnotes);
+        region.PageNumber.Should().Be(3);
+        region.IsSyntheticPage.Should().BeFalse();
+        region.Heading.Should().BeNull();
+        region.SeparatorWidthDip.Should().Be(DocumentNoteRegionPlanner.FootnoteSeparatorWidthDip);
+        region.Rows.Select(row => row.Label).Should().Equal(string.Empty, string.Empty);
+        region.Rows.Select(row => row.Text).Should().Equal("continued words", "final words");
+        region.EstimatedHeightDip.Should().BeGreaterThanOrEqualTo(84);
+    }
+
+    [Fact]
     public void SharedNoteRegionPlanner_UsesDocumentWideFootnoteSequenceForLaterPageFragments()
     {
         var document = new TextDocument();
@@ -549,7 +574,7 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
-    public void SharedNoteRegionPlanner_InsertsContinuationPagesAfterTheirOwningBodyPage()
+    public void SharedNoteRegionPlanner_ResumesBodyBeforeFinalContinuationFragment()
     {
         var first = new DocumentFootnoteContinuationPlan([
             new DocumentFootnoteContinuationPagePlan(1, DocumentFootnoteSeparatorKind.Initial, 80, 80, []),
@@ -567,17 +592,18 @@ public sealed class VisualEvidencePlannerTests
             [2] = last
         });
 
-        physical.PhysicalPageCount.Should().Be(7);
+        physical.PhysicalPageCount.Should().Be(5);
         physical.PhysicalPageForBodyPage(0).Should().Be(0);
-        physical.PhysicalPageForBodyPage(1).Should().Be(3);
-        physical.PhysicalPageForBodyPage(2).Should().Be(4);
-        physical.PhysicalPageForBodyPage(3).Should().Be(6);
+        physical.PhysicalPageForBodyPage(1).Should().Be(2);
+        physical.PhysicalPageForBodyPage(2).Should().Be(3);
+        physical.PhysicalPageForBodyPage(3).Should().Be(4);
+        physical.Pages.Single(page => page.LogicalBodyPageIndex == 1)
+            .FootnotePage!.SeparatorKind.Should().Be(DocumentFootnoteSeparatorKind.Continuation);
+        physical.Pages.Single(page => page.LogicalBodyPageIndex == 3)
+            .FootnotePage!.SeparatorKind.Should().Be(DocumentFootnoteSeparatorKind.Continuation);
         physical.Pages.Where(page => page.IsContinuationOnly)
             .Select(page => page.FootnotePage!.SeparatorKind)
-            .Should().Equal(
-                DocumentFootnoteSeparatorKind.Continuation,
-                DocumentFootnoteSeparatorKind.Continuation,
-                DocumentFootnoteSeparatorKind.Continuation);
+            .Should().Equal(DocumentFootnoteSeparatorKind.Continuation);
     }
 
     [Fact]
