@@ -14,6 +14,37 @@ namespace FreeW.App.Host.Editing;
 internal static class PaginationEngine
 {
     /// <summary>
+    /// Returns the canonical FlowDocument offsets at which WPF starts each realized paginator page.
+    /// Consumers that need page-specific body regions must carry these positions forward instead of
+    /// rebuilding model-block fragments, which loses WPF's line-level continuation ownership.
+    /// </summary>
+    internal static IReadOnlyList<int> ComputeCanonicalPageStartOffsets(
+        FlowDocument flow,
+        DocumentPaginator paginator)
+    {
+        ArgumentNullException.ThrowIfNull(flow);
+        ArgumentNullException.ThrowIfNull(paginator);
+
+        paginator.ComputePageCount();
+        if (paginator is not DynamicDocumentPaginator dynamicPaginator)
+            return [0];
+
+        var pageCount = Math.Max(1, paginator.PageCount);
+        var starts = new List<int>(pageCount);
+        for (var pageIndex = 0; pageIndex < pageCount; pageIndex++)
+        {
+            var position = dynamicPaginator.GetPagePosition(paginator.GetPage(pageIndex));
+            if (position is not TextPointer pointer)
+                return [0];
+
+            starts.Add(Math.Max(0, flow.ContentStart.GetOffsetToPosition(pointer)));
+        }
+
+        var origin = starts[0];
+        return starts.Select(offset => Math.Max(0, offset - origin)).ToList();
+    }
+
+    /// <summary>
     /// Paginates <paramref name="editor"/>'s current content at the model's page geometry and returns
     /// the page count and inter-page Y offsets in the editor's DIP coordinate space.
     ///

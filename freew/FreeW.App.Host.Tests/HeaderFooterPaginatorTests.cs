@@ -128,6 +128,24 @@ public sealed class HeaderFooterPaginatorTests
     }
 
     [StaFact]
+    public void CanonicalPageStartOffsets_FollowWpfPaginatorPagePositions()
+    {
+        var flow = new FlowDocument { PagePadding = new Thickness(48) };
+        for (var i = 0; i < 180; i++)
+            flow.Blocks.Add(new System.Windows.Documents.Paragraph(
+                new System.Windows.Documents.Run($"canonical paragraph {i} with enough text to wrap across the printable frame.")));
+
+        var paginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
+        paginator.PageSize = new Size(360, 480);
+
+        var starts = PaginationEngine.ComputeCanonicalPageStartOffsets(flow, paginator);
+
+        Assert.True(starts.Count >= 2);
+        Assert.Equal(0, starts[0]);
+        Assert.All(starts.Zip(starts.Skip(1)), pair => Assert.True(pair.First < pair.Second));
+    }
+
+    [StaFact]
     public void MultiPageEndnotes_DrawOnTheFinalPage()
     {
         var model = TextDocument.CreateEmpty();
