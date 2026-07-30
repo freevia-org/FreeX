@@ -183,7 +183,13 @@ internal enum TablePropertiesDialogTab
 internal sealed class TablePropertiesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
-        AvaloniaCompactDialogChrome.WindowsStyle;
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            // WPF's standard action row keeps the two buttons 14px apart and does not
+            // paint the default-button border until that button receives focus.
+            ActionSpacing = 14,
+            DefaultButtonBorderBrush = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
+        };
 
     private readonly CheckBox _preferredWidthOn;
     private readonly TextBox _preferredWidth;
@@ -295,7 +301,8 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         cancel.Click += (_, _) => Close();
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
             [ok, cancel],
-            new Thickness(14, 12, 14, 12));
+            new Thickness(14, 12, 14, 12),
+            DialogChromeStyle);
 
         var bottom = new StackPanel();
         bottom.Children.Add(_validation);
@@ -481,7 +488,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
             Content = text,
             IsChecked = isChecked,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 4, 8, 4),
+            Margin = new Thickness(4, 4, 8, 4),
         };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
         AutomationProperties.SetAutomationId(box, automationId);
