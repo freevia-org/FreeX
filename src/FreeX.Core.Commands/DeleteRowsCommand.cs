@@ -225,9 +225,31 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         _tableRebandSnapshot = RebandTablesAfterRowDelete(ctx.Workbook, sheet);
 
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-            RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _formulaSnapshot),
+            RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _formulaSnapshot)
+                .Concat(VacatedAddressesForShiftedFormulaCells(_sheetId, shiftedSnapshot)),
             _formulaSnapshot);
         return new CommandOutcome(true, AffectedCells: _affectedCells);
+    }
+
+    // R98-commands-dependency-vacated-1: mirror InsertRowsCommand's
+    // VacatedAddressesForRelocatedFormulaCells fix (InsertDeleteRowsCommand.cs) on the delete-rows
+    // side. MoveCellsForDelete above physically relocates every shiftedSnapshot formula cell from its
+    // captured (Row, Col) to (Row - count, Col), always leaving the OLD (pre-delete) address blank
+    // afterward -- Delete only ever shifts rows UP, so nothing below endRow can move down into the
+    // vacated slot. Neither RelocatedFormulaCellsPendingDependencyRefresh (new-address only) nor
+    // _formulaSnapshot (also new-address only) ever surfaced this OLD address in AffectedCells, so
+    // WorkbookCellEditService.UpdateFormulaDependencies (driven purely off AffectedCells) never
+    // purged the stale dependency-graph entry left behind there.
+    private static IEnumerable<CellAddress> VacatedAddressesForShiftedFormulaCells(
+        SheetId sheetId, IEnumerable<CellStateSnapshot> shiftedSnapshot)
+    {
+        foreach (var snapshot in shiftedSnapshot)
+        {
+            if (snapshot.FormulaText is null)
+                continue;
+
+            yield return new CellAddress(sheetId, snapshot.Row, snapshot.Col);
+        }
     }
 
     // R69-calc-dependency-insert-6-1: mirror InsertRowsCommand's
@@ -391,12 +413,31 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         // appeared in Apply's own AffectedCells at all, since forward Apply only needs to report
         // the shifted set -- the deleted cells didn't exist yet). CommandBus.Undo reads this live
         // property instead of the frozen forward payload.
+        // R98-commands-dependency-vacated-1: symmetric to the Apply-side fix above -- Revert
+        // physically moves each shiftedSnapshot formula cell back from its current (post-delete,
+        // shifted-up) address (Row - _count, Col) to its restored, pre-delete address (Row, Col),
+        // always leaving (Row - _count, Col) blank afterward (undo of a Delete only ever shifts rows
+        // DOWN, so nothing above can move up into it). That vacated address was never included in
+        // AffectedCells either, leaving the identical stale dependency-graph entry behind after Undo.
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
             RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_shiftedSnapshot, _sheetId)
                 .Concat(RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_deletedSnapshot, _sheetId))
                 .Concat(_tableRebandSnapshot?.Select(f => f.Address) ?? [])
-                .Concat(formulaSnapshotAddressesBeforeRestore),
+                .Concat(formulaSnapshotAddressesBeforeRestore)
+                .Concat(VacatedAddressesAfterRevertForShiftedCells(_sheetId, _shiftedSnapshot, _count)),
             []);
+    }
+
+    private static IEnumerable<CellAddress> VacatedAddressesAfterRevertForShiftedCells(
+        SheetId sheetId, IEnumerable<CellStateSnapshot> shiftedSnapshot, uint count)
+    {
+        foreach (var snapshot in shiftedSnapshot)
+        {
+            if (snapshot.FormulaText is null)
+                continue;
+
+            yield return new CellAddress(sheetId, snapshot.Row - count, snapshot.Col);
+        }
     }
 
     private (List<CellStateSnapshot> Deleted, List<CellStateSnapshot> Shifted)

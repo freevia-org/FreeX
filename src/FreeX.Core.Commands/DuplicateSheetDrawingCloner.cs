@@ -362,6 +362,12 @@ internal static class DuplicateSheetDrawingCloner
             Name = chart.Name,
             AltTextTitle = chart.AltTextTitle,
             AltTextDescription = chart.AltTextDescription,
+            // R98-io-chart-hyperlink-model-field: carry the object-level hyperlink onto the clone --
+            // without this, a copy-pasted/duplicated chart's hyperlink could only ever be found by
+            // falling back to the fragile sheet-name-keyed source-package lookup, which (per the same
+            // name both charts now share) either drops it or misattributes it. Mirrors ClonePicture/
+            // CloneTextBox/CloneDrawingShape's identical Hyperlink = ... copy (R97-model-drawing-hyperlink-2-2).
+            Hyperlink = chart.Hyperlink,
             Type = chart.Type,
             Uses1904DateSystem = chart.Uses1904DateSystem,
             Language = chart.Language,

@@ -322,10 +322,41 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, insertDownOp);
         }
 
+        // R98-commands-dependency-vacated-2: mirror InsertRowsCommand's
+        // VacatedAddressesForRelocatedFormulaCells fix (InsertDeleteRowsCommand.cs) on this
+        // band-scoped, shift-direction sibling. Every entry in capture.Cells physically relocates
+        // from its captured Address to a new address (Col + width / Row + height) via
+        // InsertShiftRight/Down above, always leaving the OLD address blank afterward -- Insert only
+        // ever shifts cells further from the origin, so nothing can move back into a vacated slot.
+        // _range.AllCells() below only happens to cover the OLD address for cells that originated
+        // INSIDE the target range itself (that range's own footprint IS the newly-vacated band) --
+        // a formula cell further along the same shiftRegion (e.g. beyond _range.End.Col for
+        // Shift-Right, since the region extends all the way to CellAddress.MaxCol) relocates too,
+        // but its old address was never surfaced. VacatedAddressesForRelocatedFormulaCells below
+        // yields EVERY captured formula cell's original address unconditionally -- the ones already
+        // covered by _range.AllCells() are harmless duplicates, de-duped by
+        // BuildAffectedCellsForFormulaRewrite.
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-            _range.AllCells().Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>()),
+            _range.AllCells()
+                .Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>())
+                .Concat(VacatedAddressesForRelocatedFormulaCells(_capturedCells ?? [])),
             _formulaSnapshot);
         return new CommandOutcome(true, AffectedCells: _affectedCells);
+    }
+
+    // R98-commands-dependency-vacated-2: shared by InsertCellsCommand and DeleteCellsCommand's Apply
+    // (see call sites) -- yields the pre-shift Address of every captured formula cell, which is left
+    // blank once the cell physically relocates (Insert) or is deleted/relocated (Delete).
+    internal static IEnumerable<CellAddress> VacatedAddressesForRelocatedFormulaCells(
+        IReadOnlyList<(CellAddress Address, Cell Cell)> capturedCells)
+    {
+        foreach (var (address, cell) in capturedCells)
+        {
+            if (cell.FormulaText is null)
+                continue;
+
+            yield return address;
+        }
     }
 
     public void Revert(ICommandContext ctx)
@@ -338,6 +369,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         // whose text was rewritten by Apply) now, before that happens -- needed to recompute
         // _affectedCells at the end of this method.
         var formulaSnapshotAddressesBeforeRestore = _formulaSnapshot.Keys.ToList();
+
+        // R98-commands-dependency-vacated-2: capture the CURRENT (post-Apply, pre-Revert) address of
+        // every relocated formula cell now, before _capturedCells is nulled at the end of this
+        // method -- see VacatedAddressesAfterRevert below for why it must be surfaced.
+        var vacatedAfterRevert = VacatedAddressesAfterRevert(_capturedCells ?? [], _movedDestinationCells).ToList();
 
         // ORDER IS REQUIRED: restore formulas before restoring cell positions.
         //
@@ -380,11 +416,36 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         // relocated formula cell ACTUALLY ended up after this Revert -- its original, pre-shift
         // address (mirroring InsertRowsCommand/InsertColumnsCommand's own Revert-time recompute).
         // CommandBus.Undo reads this live property instead of the frozen forward payload.
+        // R98-commands-dependency-vacated-2: also surface the address the Revert's own move-back
+        // just vacated (vacatedAfterRevert, captured above) -- symmetric to the Apply-side fix.
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
             RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_capturedCells ?? [])
-                .Concat(formulaSnapshotAddressesBeforeRestore),
+                .Concat(formulaSnapshotAddressesBeforeRestore)
+                .Concat(vacatedAfterRevert),
             []);
         _capturedCells = null;
+    }
+
+    // R98-commands-dependency-vacated-2: capturedCells and movedDestinationCells are built from the
+    // SAME capture.Cells list in the SAME order by Apply (movedDestinationCells is an unfiltered
+    // projection of every entry), so they are index-aligned here. For each captured formula cell,
+    // movedDestinationCells[i] is the CURRENT (post-Apply) address Revert's move-back is about to
+    // vacate.
+    private static IEnumerable<CellAddress> VacatedAddressesAfterRevert(
+        IReadOnlyList<(CellAddress Address, Cell Cell)> capturedCells,
+        IReadOnlyList<CellAddress>? movedDestinationCells)
+    {
+        if (movedDestinationCells is null)
+            yield break;
+
+        var count = Math.Min(capturedCells.Count, movedDestinationCells.Count);
+        for (var i = 0; i < count; i++)
+        {
+            if (capturedCells[i].Cell.FormulaText is null)
+                continue;
+
+            yield return movedDestinationCells[i];
+        }
     }
 
     private void InsertShiftRight(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
@@ -1931,8 +1992,18 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, deleteUpOp);
         }
 
+        // R98-commands-dependency-vacated-2: mirror InsertCellsCommand's Apply-side fix (above).
+        // capture.Cells' entries inside _range are permanently deleted (already covered, harmlessly
+        // duplicated, by _range.AllCells() below); entries beyond _range (shifted survivors) instead
+        // relocate to a new address via DeleteShiftLeft/Up, always leaving their OLD address blank --
+        // and that OLD address was never surfaced anywhere (not in _range.AllCells(), not in
+        // _movedDestinationCells, which only holds the NEW address). InsertCellsCommand's
+        // VacatedAddressesForRelocatedFormulaCells yields every captured formula cell's original
+        // Address unconditionally, which covers both cases (duplicates de-duped downstream).
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-            _range.AllCells().Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>()),
+            _range.AllCells()
+                .Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>())
+                .Concat(InsertCellsCommand.VacatedAddressesForRelocatedFormulaCells(_capturedCells ?? [])),
             _formulaSnapshot);
         return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
@@ -1944,6 +2015,14 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
         // R96-commands-undo-affected-cells-2: see InsertCellsCommand.Revert above.
         var formulaSnapshotAddressesBeforeRestore = _formulaSnapshot.Keys.ToList();
+
+        // R98-commands-dependency-vacated-2: capture the CURRENT (post-Apply, pre-Revert) address of
+        // every shifted-survivor formula cell now, before _capturedCells is nulled at the end of this
+        // method. Unlike InsertCellsCommand, _movedDestinationCells here is a FILTERED subset of
+        // _capturedCells (only entries beyond _range, i.e. the surviving shifted cells -- the
+        // permanently-deleted ones inside _range never had a "current" address to vacate), so it is
+        // recomputed directly from _range/_direction rather than reused index-aligned.
+        var vacatedAfterRevert = VacatedAddressesAfterRevert(_capturedCells ?? []).ToList();
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
@@ -1978,11 +2057,42 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         // survivors AND the restored-deleted cells (both are in the single unified _capturedCells
         // list, unlike DeleteRowsCommand's separate _shiftedSnapshot/_deletedSnapshot).
         // CommandBus.Undo reads this live property instead of the frozen forward payload.
+        // R98-commands-dependency-vacated-2: also surface the address the Revert's own move-back
+        // just vacated for each shifted survivor (vacatedAfterRevert, captured above).
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
             RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_capturedCells ?? [])
-                .Concat(formulaSnapshotAddressesBeforeRestore),
+                .Concat(formulaSnapshotAddressesBeforeRestore)
+                .Concat(vacatedAfterRevert),
             []);
         _capturedCells = null;
+    }
+
+    // R98-commands-dependency-vacated-2: recomputes, for each shifted-survivor entry in
+    // capturedCells (address outside _range), the CURRENT (post-Apply) address it lives at just
+    // before this Revert moves it back -- exactly the same mapping CaptureCellsForDelete's
+    // currentAddressOf delegate used during Apply (orig.Col > _range.End.Col ? Col - width : null /
+    // orig.Row > _range.End.Row ? Row - height : null), reproduced here since that delegate is not
+    // retained on the command. Entries inside _range were permanently deleted, not shifted, so they
+    // have no "current" address to vacate.
+    private IEnumerable<CellAddress> VacatedAddressesAfterRevert(
+        IReadOnlyList<(CellAddress Address, Cell Cell)> capturedCells)
+    {
+        foreach (var (address, cell) in capturedCells)
+        {
+            if (cell.FormulaText is null)
+                continue;
+
+            CellAddress? current = _direction == DeleteCellsShiftDirection.Left
+                ? (address.Col > _range.End.Col
+                    ? new CellAddress(address.Sheet, address.Row, address.Col - _range.ColCount)
+                    : (CellAddress?)null)
+                : (address.Row > _range.End.Row
+                    ? new CellAddress(address.Sheet, address.Row - _range.RowCount, address.Col)
+                    : (CellAddress?)null);
+
+            if (current is { } vacated)
+                yield return vacated;
+        }
     }
 
     private void DeleteShiftLeft(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)

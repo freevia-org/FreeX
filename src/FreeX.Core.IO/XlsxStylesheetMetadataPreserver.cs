@@ -539,6 +539,21 @@ internal static class XlsxStylesheetMetadataPreserver
         style.NativeDifferentialAttributes = null;
         style.NativeDifferentialChildXmls = null;
         style.NativeDifferentialElementXmls = null;
+
+        // Dxf*/tri-state fields record "was this toggle explicitly authored vs never mentioned" for
+        // in-memory CF-stacking logic (see CellStyle.cs), not how the style renders: Bold=false with
+        // DxfBold=null (never mentioned) and Bold=false with DxfBold=false (explicit <b val="0"/>) are
+        // visually identical. None of FreeX's dxf writers ever re-emit an explicit off-toggle (they only
+        // check e.g. `style.Bold != def.Bold`, which is only true when Bold==true), so a rebuilt dxf for
+        // an explicit-off source always reads back with the tri-state field null even when the source had
+        // it set to false. Leaving these fields in the comparison would make an otherwise render-identical
+        // pair compare unequal and silently drop the source's native XML from the merge. Clear them here so
+        // the comparison stays scoped to modeled font/fill/border/number-format, as documented above.
+        style.DxfBold = null;
+        style.DxfItalic = null;
+        style.DxfUnderline = null;
+        style.DxfStrikethrough = null;
+        style.DxfFontColor = null;
     }
 
     private static bool MergeDifferentialStyleContainerAttributes(XElement sourceDifferentialStyles, XElement targetDifferentialStyles)

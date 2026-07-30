@@ -24,7 +24,14 @@ internal sealed record XlsxChartPackagePart(
     // Both default to null so the same out-of-scope positional caller referenced above (which never
     // supplies them either) keeps compiling unchanged.
     string? Title = null,
-    string? AltText = null);
+    string? AltText = null,
+    // R98-io-chart-hyperlink-model-field: the chart graphicFrame's OWN object-level hyperlink (an
+    // <a:hlinkClick> on its <xdr:nvGraphicFramePr><xdr:cNvPr>), resolved via the drawing part's own
+    // relationships at load time -- see ReadObjectHyperlink/ReadRelationshipsWithTargetModeById, the
+    // same mechanism XlsxPicturePackagePart/XlsxTextBoxPackagePart/XlsxShapePackagePart already use
+    // (R97-model-drawing-hyperlink-2-2). Defaults to null so the out-of-scope positional caller
+    // referenced above keeps compiling unchanged.
+    DrawingObjectHyperlink? Hyperlink = null);
 
 internal sealed record XlsxPicturePackagePart(
     byte[] ImageBytes,
@@ -300,6 +307,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
         var relationshipTargets = ReadRelationshipTargetsById(drawingRelsXml.Root, packageRelNs);
+        // R98-io-chart-hyperlink-model-field: TargetMode-carrying sibling of relationshipTargets above,
+        // used only to resolve a chart graphicFrame's a:hlinkClick/@r:id -- mirrors ReadPictureParts'/
+        // ReadShapeParts' identical hyperlinkRelsById (R97-model-drawing-hyperlink-2-2).
+        var hyperlinkRelsById = ReadRelationshipsWithTargetModeById(drawingRelsXml.Root, packageRelNs);
 
         // A single chart part referenced by more than one anchor in the same worksheet drawing is one
         // chart, not several: count each resolved chart-part path at most once so a drawing that ends up
@@ -370,7 +381,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 chartAnchor,
                 chartDrawingOrderIndex,
                 chartAltTextTitle,
-                chartAltTextDescription));
+                chartAltTextDescription,
+                // R98-io-chart-hyperlink-model-field: resolve the chart graphicFrame's OWN object-level
+                // hyperlink from the drawing part's own relationships -- reads from graphicFrameElement
+                // (same source as the name/Alt-Text reads above) since that is where the cNvPr carrying
+                // hlinkClick actually lives, not inside <c:chart>/<cx:chart>.
+                ReadObjectHyperlink(graphicFrameElement ?? chartElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById)));
         }
 
         return charts;

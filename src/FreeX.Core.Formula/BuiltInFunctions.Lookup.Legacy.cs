@@ -44,7 +44,7 @@ public static partial class BuiltInFunctions
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         var rangeLookupArg = args.Count > 3 ? args[3] : BlankValue.Instance;
-        return MapScalarArgs([args[0], args[2], rangeLookupArg],
+        return MapScalarArgsGrowBroadcast([args[0], args[2], rangeLookupArg],
             values => VlookupScalar(values[0], table, values[1], values[2]));
     }
 
@@ -113,7 +113,7 @@ public static partial class BuiltInFunctions
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         var rangeLookupArg = args.Count > 3 ? args[3] : BlankValue.Instance;
-        return MapScalarArgs([args[0], args[2], rangeLookupArg],
+        return MapScalarArgsGrowBroadcast([args[0], args[2], rangeLookupArg],
             values => HlookupScalar(values[0], table, values[1], values[2]));
     }
 
@@ -180,7 +180,7 @@ public static partial class BuiltInFunctions
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         var columnArg = args.Count > 2 ? args[2] : BlankValue.Instance;
         var areaArg = args.Count > 3 ? args[3] : BlankValue.Instance;
-        return MapScalarArgs([args[1], columnArg, areaArg],
+        return MapScalarArgsGrowBroadcast([args[1], columnArg, areaArg],
             values => IndexScalar(table, values[0], values[1], values[2], args.Count == 2));
     }
 
@@ -272,7 +272,7 @@ public static partial class BuiltInFunctions
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (table.RowCount > 1 && table.ColCount > 1) return ErrorValue.NA;
         var matchTypeArg = args.Count > 2 ? args[2] : BlankValue.Instance;
-        return MapScalarArgs([args[0], matchTypeArg],
+        return MapScalarArgsGrowBroadcast([args[0], matchTypeArg],
             values => MatchScalar(values[0], table, values[1]));
     }
 

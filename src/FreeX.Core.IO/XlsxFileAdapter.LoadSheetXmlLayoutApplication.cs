@@ -108,6 +108,13 @@ public sealed partial class XlsxFileAdapter
                 chart.Name = chartPart.Name;
                 chart.AltTextTitle = chartPart.Title;
                 chart.AltTextDescription = chartPart.AltText;
+                // R98-io-chart-hyperlink-model-field: populate the model's own hyperlink field (resolved
+                // per-chart from THIS chart's own graphicFrame at load time, not a sheet-name-keyed
+                // guess) so a later move (MoveChartCommand/MoveChartToNewSheetCommand, which relocate
+                // this SAME ChartModel instance) or clone/paste (DuplicateSheetDrawingCloner.CloneChart)
+                // still has a hyperlink to carry forward -- mirrors PictureModel/DrawingShapeModel/
+                // TextBoxModel.Hyperlink (R97-model-drawing-hyperlink-2-2).
+                chart.Hyperlink = chartPart.Hyperlink;
                 XlsxDrawingAnchorApplier.ApplyToChart(chart, chartPart.Anchor, sheet);
                 ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
                 ApplyChartUserShapesRelationshipMetadata(chart, chartPart);

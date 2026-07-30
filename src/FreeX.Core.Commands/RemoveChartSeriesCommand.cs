@@ -37,6 +37,7 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
 
     private bool _applied;
     private List<ChartSeriesColumnMapping>? _previousSeriesColumnMappings;
+    private List<ChartSeriesVerbatimFormulas>? _previousVerbatimSeriesFormulas;
     private List<ChartSeriesOrderOverride>? _previousSeriesOrderOverrides;
     private List<ChartPointMarkerFormat>? _previousPointMarkerFormats;
     private List<ChartSeriesRawXmlEntry>? _previousMultiLevelCategoryXml;
@@ -94,6 +95,7 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         var removedSeriesIndex = columns[_seriesIndex].SeriesIndex;
 
         _previousSeriesColumnMappings = chart.SeriesColumnMappings;
+        _previousVerbatimSeriesFormulas = chart.VerbatimSeriesFormulas;
         _previousSeriesOrderOverrides = chart.SeriesOrderOverrides;
         _previousPointMarkerFormats = chart.PointMarkerFormats;
         _previousMultiLevelCategoryXml = chart.MultiLevelCategoryXml;
@@ -126,6 +128,13 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
             .Select((entry, newIndex) => new ChartSeriesColumnMapping(newIndex, entry.Column))
             .ToList();
 
+        if (chart.VerbatimSeriesFormulas is { } verbatimFormulas)
+        {
+            chart.VerbatimSeriesFormulas = verbatimFormulas
+                .Where(v => v.SeriesIndex != removedSeriesIndex)
+                .Select(v => v.SeriesIndex > removedSeriesIndex ? v with { SeriesIndex = v.SeriesIndex - 1 } : v)
+                .ToList();
+        }
         chart.SeriesOrderOverrides = chart.SeriesOrderOverrides
             .Where(o => o.SeriesIndex != removedSeriesIndex)
             .Select(o => o.SeriesIndex > removedSeriesIndex ? o with { SeriesIndex = o.SeriesIndex - 1 } : o)
@@ -200,6 +209,7 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
             return;
 
         chart.SeriesColumnMappings = _previousSeriesColumnMappings ?? [];
+        chart.VerbatimSeriesFormulas = _previousVerbatimSeriesFormulas;
         chart.SeriesOrderOverrides = _previousSeriesOrderOverrides ?? [];
         chart.PointMarkerFormats = _previousPointMarkerFormats ?? [];
         chart.MultiLevelCategoryXml = _previousMultiLevelCategoryXml ?? [];
@@ -222,6 +232,7 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
 
         _applied = false;
         _previousSeriesColumnMappings = null;
+        _previousVerbatimSeriesFormulas = null;
         _previousSeriesOrderOverrides = null;
         _previousPointMarkerFormats = null;
         _previousMultiLevelCategoryXml = null;
