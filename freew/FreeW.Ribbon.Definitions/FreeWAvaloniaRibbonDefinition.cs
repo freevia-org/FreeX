@@ -1563,9 +1563,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                 new RibbonTabContext(capabilities.ChartContextKey, "Chart Tools", RibbonContextColor.Green),
                 tab =>
                 {
-                    tab.Group("chart-arrange", "Arrange", null, 100, g =>
-                    {
-                        g.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
+                     tab.Group("chart-arrange", "Arrange", null, 100, g =>
+                     {
+                         g.Dropdown("freew.shape-rotate", "Rotate", BuildRotateMenu("shape"));
+                         g.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
                         g.Button("freew.image-bring-to-front", "Bring to Front");
                         g.Button("freew.image-send-to-back",   "Send to Back");
                         g.Button("freew.image-bring-forward",  "Bring Forward");
@@ -1614,9 +1615,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                             Width = 116,
                         });
                     });
-                    tab.Group("smartart-arrange", "Arrange", null, 80, g =>
-                    {
-                        g.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
+                     tab.Group("smartart-arrange", "Arrange", null, 80, g =>
+                     {
+                         g.Dropdown("freew.shape-rotate", "Rotate", BuildRotateMenu("shape"));
+                         g.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
                         g.Button("freew.image-bring-to-front", "Bring to Front");
                         g.Button("freew.image-send-to-back",   "Send to Back");
                     });

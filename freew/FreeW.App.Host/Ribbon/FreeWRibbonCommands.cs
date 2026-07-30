@@ -30,25 +30,34 @@ internal static class FreeWRibbonCommands
 {
     private static IRibbonCommand BuildImageTransformCommand(
         DocumentView editor,
-        ObjectFormatTransformCommand command) =>
-        command.Kind switch
-        {
-            ObjectFormatTransformKind.Rotate => new ImageRotateStepCommand(editor, command.RotationDeltaDegrees),
-            ObjectFormatTransformKind.FlipHorizontal => new ImageFlipCommand(editor, vertical: false),
-            ObjectFormatTransformKind.FlipVertical => new ImageFlipCommand(editor, vertical: true),
-            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null)
-        };
+        ObjectFormatTransformCommand command) => new FloatingTransformCommand(editor, command);
 
     private static IRibbonCommand BuildShapeTransformCommand(
         DocumentView editor,
-        ObjectFormatTransformCommand command) =>
-        command.Kind switch
+        ObjectFormatTransformCommand command) => new FloatingTransformCommand(editor, command);
+
+    private sealed class FloatingTransformCommand(
+        DocumentView editor,
+        ObjectFormatTransformCommand command) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
         {
-            ObjectFormatTransformKind.Rotate => new ShapeRotateStepCommand(editor, command.RotationDeltaDegrees),
-            ObjectFormatTransformKind.FlipHorizontal => new ShapeFlipCommand(editor, vertical: false),
-            ObjectFormatTransformKind.FlipVertical => new ShapeFlipCommand(editor, vertical: true),
-            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null)
-        };
+            editor.Focus();
+            var applied = command.Kind switch
+            {
+                ObjectFormatTransformKind.Rotate =>
+                    editor.RotateSelectedFloating(command.RotationDeltaDegrees),
+                ObjectFormatTransformKind.FlipHorizontal =>
+                    editor.FlipSelectedFloating(horizontal: true),
+                ObjectFormatTransformKind.FlipVertical =>
+                    editor.FlipSelectedFloating(horizontal: false),
+                _ => throw new ArgumentOutOfRangeException(nameof(command), command, null)
+            };
+
+            if (!applied)
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a floating object first.", "Rotate / Flip");
+        }
+    }
 
     private static MasterSourceStore CreateMasterStore(IReadOnlyList<Source> sources) =>
         new()
