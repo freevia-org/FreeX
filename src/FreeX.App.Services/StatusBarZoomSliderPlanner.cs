@@ -77,9 +77,16 @@ public static class StatusBarZoomSliderPlanner
         double hostWidth = SliderWidth,
         double thumbWidth = ThumbWidth)
     {
+        if (!double.IsFinite(hostWidth) || hostWidth <= 0d)
+            hostWidth = SliderWidth;
+        if (!double.IsFinite(thumbWidth) || thumbWidth <= 0d)
+            thumbWidth = ThumbWidth;
+
         var min = ZoomLevelMapper.ZoomPercentToSlider(ZoomLevelMapper.MinZoomPercent);
         var max = ZoomLevelMapper.ZoomPercentToSlider(ZoomLevelMapper.MaxZoomPercent);
-        var clamped = Math.Clamp(sliderValue, min, max);
+        var clamped = double.IsFinite(sliderValue)
+            ? Math.Clamp(sliderValue, min, max)
+            : ZoomLevelMapper.ZoomPercentToSlider(ZoomLevelMapper.DefaultZoomPercent);
         var normalized = max <= min ? 0d : (clamped - min) / (max - min);
         var trackWidth = Math.Max(1d, hostWidth - (TrackHorizontalInset * 2d));
         var left = TrackHorizontalInset + (normalized * trackWidth) - (thumbWidth / 2d);

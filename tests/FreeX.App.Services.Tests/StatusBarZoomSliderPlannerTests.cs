@@ -55,6 +55,18 @@ public sealed class StatusBarZoomSliderPlannerTests
         end.Normalized.Should().Be(1d);
     }
 
+    [Fact]
+    public void BuildThumbPlan_FallsBackToSharedGeometryBeforeLayout()
+    {
+        var plan = StatusBarZoomSliderPlanner.BuildThumbPlan(
+            double.NaN,
+            double.NaN,
+            double.NaN);
+
+        plan.Left.Should().Be(55.5);
+        plan.Normalized.Should().Be(0.5d);
+    }
+
     [Theory]
     [InlineData(1, 10, "10%")]
     [InlineData(100, 100, "100%")]
