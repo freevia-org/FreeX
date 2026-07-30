@@ -108,10 +108,7 @@ public sealed class ReplaceSmartArtCommand : IPresentationCommand
         if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
             return;
 
-        var shape = presentation.Slides[_slideIndex].Shapes.FirstOrDefault(candidate =>
-            candidate.Id == _shapeId &&
-            candidate.Kind == SlideShapeKind.SmartArt &&
-            candidate.SmartArt is not null);
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
         if (shape?.SmartArt is not null)
             SlideCloner.CopySmartArt(shape.SmartArt, state);
     }
@@ -852,7 +849,7 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
 
     public void Apply(Presentation presentation)
     {
-        var shapes = ShapeHelper.Shapes(presentation, _slideIndex);
+        var shapes = ShapeHelper.FindContainingList(presentation, _slideIndex, _smartArtId);
         if (shapes is null || _converted.Count == 0)
             return;
 
@@ -866,18 +863,21 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
 
     public void Revert(Presentation presentation)
     {
-        var shapes = ShapeHelper.Shapes(presentation, _slideIndex);
-        if (shapes is null || _index < 0)
+        if (_converted.Count == 0 || _index < 0)
             return;
 
         var firstConverted = _converted[0].Id;
-        var currentIndex = shapes.FindIndex(shape => shape.Id == firstConverted);
+        var currentShapes = ShapeHelper.FindContainingList(presentation, _slideIndex, firstConverted);
+        if (currentShapes is null)
+            return;
+
+        var currentIndex = currentShapes.FindIndex(shape => shape.Id == firstConverted);
         if (currentIndex < 0)
             return;
 
-        var count = Math.Min(_converted.Count, shapes.Count - currentIndex);
-        shapes.RemoveRange(currentIndex, count);
-        shapes.Insert(Math.Clamp(currentIndex, 0, shapes.Count), _original);
+        var count = Math.Min(_converted.Count, currentShapes.Count - currentIndex);
+        currentShapes.RemoveRange(currentIndex, count);
+        currentShapes.Insert(Math.Clamp(currentIndex, 0, currentShapes.Count), _original);
     }
 }
 

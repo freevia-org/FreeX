@@ -119,10 +119,7 @@ public sealed class EditingSession
         if (CurrentSlide is null || edit is null)
             return false;
 
-        var shape = CurrentSlide.Shapes.FirstOrDefault(candidate =>
-            candidate.Id == shapeId &&
-            candidate.Kind == SlideShapeKind.SmartArt &&
-            candidate.SmartArt is not null);
+        var shape = FindShape(CurrentSlide.Shapes, shapeId);
         if (shape?.SmartArt is null)
             return false;
 
@@ -184,10 +181,9 @@ public sealed class EditingSession
     {
         SmartArtNodeEditResult? result = null;
         string? failureMessage = null;
-        var shape = CurrentSlide?.Shapes.FirstOrDefault(candidate =>
-            candidate.Id == shapeId &&
-            candidate.Kind == SlideShapeKind.SmartArt &&
-            candidate.SmartArt is not null);
+        var shape = CurrentSlide is { } currentSlide
+            ? FindShape(currentSlide.Shapes, shapeId)
+            : null;
         var applied = shape?.SmartArt is not null && EditSmartArt(shapeId, smartArt =>
         {
             result = SmartArtEditingPlanner.Apply(
@@ -241,10 +237,9 @@ public sealed class EditingSession
     {
         SmartArtNodeEditResult? result = null;
         string? failureMessage = null;
-        var shape = CurrentSlide?.Shapes.FirstOrDefault(candidate =>
-            candidate.Id == shapeId &&
-            candidate.Kind == SlideShapeKind.SmartArt &&
-            candidate.SmartArt is not null);
+        var shape = CurrentSlide is { } currentSlide
+            ? FindShape(currentSlide.Shapes, shapeId)
+            : null;
         var applied = shape?.SmartArt is not null && EditSmartArt(shapeId, smartArt =>
         {
             result = SmartArtEditingPlanner.Apply(
@@ -292,10 +287,9 @@ public sealed class EditingSession
     public bool ConvertSmartArtToShapes(uint shapeId)
     {
         var slide = CurrentSlide;
-        var smartArtShape = slide?.Shapes.FirstOrDefault(candidate =>
-            candidate.Id == shapeId &&
-            candidate.Kind == SlideShapeKind.SmartArt &&
-            candidate.SmartArt is not null);
+        var smartArtShape = slide is not null
+            ? FindShape(slide.Shapes, shapeId)
+            : null;
         if (slide is null || smartArtShape?.SmartArt is null)
             return false;
 
@@ -435,10 +429,9 @@ public sealed class EditingSession
         Func<SmartArtShape, bool> edit,
         bool allowCachedPackageEdit = false)
     {
-        var shape = CurrentSlide?.Shapes.FirstOrDefault(candidate =>
-            candidate.Id == shapeId &&
-            candidate.Kind == SlideShapeKind.SmartArt &&
-            candidate.SmartArt is not null);
+        var shape = CurrentSlide is { } currentSlide
+            ? FindShape(currentSlide.Shapes, shapeId)
+            : null;
         if (shape?.SmartArt is null)
             return false;
 
