@@ -5,6 +5,28 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class WholeWindowVisualEvidenceContractTests
 {
     [Fact]
+    public void RichTextSelectionVisualContract_ExposesNativeAndRealizedSharedPalette()
+    {
+        InCanvasRichTextSelectionVisualContract.SelectionOpacity.Should().Be(0.4);
+        (
+            InCanvasRichTextSelectionVisualContract.BackgroundRed,
+            InCanvasRichTextSelectionVisualContract.BackgroundGreen,
+            InCanvasRichTextSelectionVisualContract.BackgroundBlue,
+            InCanvasRichTextSelectionVisualContract.ForegroundRed,
+            InCanvasRichTextSelectionVisualContract.ForegroundGreen,
+            InCanvasRichTextSelectionVisualContract.ForegroundBlue)
+            .Should().Be((0x00, 0x78, 0xD7, 0xFF, 0xFF, 0xFF));
+        (
+            InCanvasRichTextSelectionVisualContract.RealizedBackgroundRed,
+            InCanvasRichTextSelectionVisualContract.RealizedBackgroundGreen,
+            InCanvasRichTextSelectionVisualContract.RealizedBackgroundBlue,
+            InCanvasRichTextSelectionVisualContract.RealizedForegroundRed,
+            InCanvasRichTextSelectionVisualContract.RealizedForegroundGreen,
+            InCanvasRichTextSelectionVisualContract.RealizedForegroundBlue)
+            .Should().Be((0x99, 0xC9, 0xEF, 0x1C, 0x63, 0xB1));
+    }
+
+    [Fact]
     public void Catalog_defines_unique_complete_96_dpi_whole_window_matrix()
     {
         WholeWindowVisualEvidenceCatalog.All.Should().HaveCount(33);

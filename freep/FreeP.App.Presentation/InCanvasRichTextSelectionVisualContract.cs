@@ -7,6 +7,8 @@ namespace FreeP.App.Compositor;
 /// </summary>
 public static class InCanvasRichTextSelectionVisualContract
 {
+    public const double SelectionOpacity = 0.4;
+
     public const byte BackgroundRed = 0x00;
     public const byte BackgroundGreen = 0x78;
     public const byte BackgroundBlue = 0xD7;
@@ -16,6 +18,19 @@ public static class InCanvasRichTextSelectionVisualContract
     public const byte ForegroundGreen = 0xFF;
     public const byte ForegroundBlue = 0xFF;
     public const byte ForegroundAlpha = 0xFF;
+
+    // WPF composites the nominal selection brushes through SelectionOpacity.
+    // Avalonia paints these shared 96-DPI realized colors directly because its
+    // custom rich-text surface does not have an equivalent native selection layer.
+    public const byte RealizedBackgroundRed = 0x99;
+    public const byte RealizedBackgroundGreen = 0xC9;
+    public const byte RealizedBackgroundBlue = 0xEF;
+    public const byte RealizedBackgroundAlpha = 0xFF;
+
+    public const byte RealizedForegroundRed = 0x1C;
+    public const byte RealizedForegroundGreen = 0x63;
+    public const byte RealizedForegroundBlue = 0xB1;
+    public const byte RealizedForegroundAlpha = 0xFF;
 
     public static InCanvasRichTextSelectionRange NormalizeRange(
         int start,

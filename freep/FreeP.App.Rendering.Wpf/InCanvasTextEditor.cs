@@ -138,6 +138,7 @@ public sealed class InCanvasTextEditor : IDisposable
             IsUndoEnabled = false,
             VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            SelectionOpacity = InCanvasRichTextSelectionVisualContract.SelectionOpacity,
             SelectionBrush = new SolidColorBrush(Color.FromArgb(
                 InCanvasRichTextSelectionVisualContract.BackgroundAlpha,
                 InCanvasRichTextSelectionVisualContract.BackgroundRed,

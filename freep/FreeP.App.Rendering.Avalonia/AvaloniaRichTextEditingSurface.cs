@@ -22,14 +22,16 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     // Keep the horizontal inset, but do not add a vertical offset to the custom surface.
     private static readonly Thickness ContentPadding = new(4, 0, 4, 3);
     private static readonly IBrush DefaultForeground = Brushes.Black;
-    // WPF's native RichTextBox applies the system selection theme over its opaque
-    // selection properties. These are the realized WPF raster colors at the shared
-    // 96-DPI capture baseline; Avalonia must paint the realized result, not the
-    // nominal brush inputs, for the two editors to remain pixel-compatible.
-    private static readonly IBrush SelectionBrush = new SolidColorBrush(
-        Color.FromRgb(0x99, 0xC9, 0xEF));
-    private static readonly IBrush SelectionForeground = new SolidColorBrush(
-        Color.FromRgb(0x1C, 0x63, 0xB1));
+    private static readonly IBrush SelectionBrush = new SolidColorBrush(Color.FromArgb(
+        InCanvasRichTextSelectionVisualContract.RealizedBackgroundAlpha,
+        InCanvasRichTextSelectionVisualContract.RealizedBackgroundRed,
+        InCanvasRichTextSelectionVisualContract.RealizedBackgroundGreen,
+        InCanvasRichTextSelectionVisualContract.RealizedBackgroundBlue));
+    private static readonly IBrush SelectionForeground = new SolidColorBrush(Color.FromArgb(
+        InCanvasRichTextSelectionVisualContract.RealizedForegroundAlpha,
+        InCanvasRichTextSelectionVisualContract.RealizedForegroundRed,
+        InCanvasRichTextSelectionVisualContract.RealizedForegroundGreen,
+        InCanvasRichTextSelectionVisualContract.RealizedForegroundBlue));
     private static readonly IPen CaretPen = new Pen(Brushes.Black, CaretWidth);
 
     private readonly List<ParagraphLayout> _layouts = [];
