@@ -17,6 +17,18 @@ internal static class ChartHelper
         return shape?.Chart;
     }
 
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId) return shape;
+            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
+    }
+
     internal static ChartShape? FindDataEditable(Presentation p, int slideIndex, uint shapeId)
     {
         var chart = Find(p, slideIndex, shapeId);
