@@ -1618,7 +1618,7 @@ function Test-SourceWiring {
                 "CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme)",
                 "CreateDrawingImageSourceRect(crop)",
                 "TryCreateDrawingBitmap(imageBytes, out var bitmap)",
-                "AddStyledCellBorderOverlay(content, style, borderNeighbors);",
+                "AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor);",
                 "private static bool HasVisibleCellBorder(CellStyle? style)",
                 "private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();",
                 "_newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);",
