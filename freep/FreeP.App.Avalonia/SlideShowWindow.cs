@@ -405,7 +405,8 @@ public sealed class SlideShowWindow : Window
             timing => SetPresenterTimingIntent(timing),
             media => SetPresenterMediaIntent(media),
             () => RecordingReviewPlan,
-            () => ApplyRecordingReview());
+            () => ApplyRecordingReview(),
+            slideNumber => ExecuteSlideNumberJump(slideNumber));
         _presenterViewWindow = window;
         window.Closed += (_, _) =>
         {
