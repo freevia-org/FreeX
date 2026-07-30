@@ -7401,6 +7401,9 @@ public static class DocxWriter
         if (border is null)
             return null;
 
+        var offsetFrom = border.OffsetFrom == PageBorderOffsetFrom.Text ? "text" : "page";
+        var space = Math.Max(0, (int)Math.Round(border.SpacePt, MidpointRounding.AwayFromZero));
+
         if (border.ArtId > 0)
         {
             // Art border: @w:val must be a valid border-style token so conformant readers don't reject the
@@ -7408,11 +7411,11 @@ public static class DocxWriter
             XElement ArtEdge(string name) => new(W + name,
                 new XAttribute(W + "val", "single"),
                 new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
-                new XAttribute(W + "space", 24),
+                new XAttribute(W + "space", space),
                 new XAttribute(W + "color", border.ColorHex.TrimStart('#')),
                 new XAttribute(W + "art", border.ArtId.ToString(System.Globalization.CultureInfo.InvariantCulture)));
             return new XElement(W + "pgBorders",
-                new XAttribute(W + "offsetFrom", "page"),
+                new XAttribute(W + "offsetFrom", offsetFrom),
                 ArtEdge("top"), ArtEdge("left"), ArtEdge("bottom"), ArtEdge("right"));
         }
 
@@ -7420,11 +7423,11 @@ public static class DocxWriter
         XElement Edge(string name) => new(W + name,
             new XAttribute(W + "val", styleToken),
             new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
-            new XAttribute(W + "space", 24),
+            new XAttribute(W + "space", space),
             new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
 
         return new XElement(W + "pgBorders",
-            new XAttribute(W + "offsetFrom", "page"),
+            new XAttribute(W + "offsetFrom", offsetFrom),
             Edge("top"), Edge("left"), Edge("bottom"), Edge("right"));
     }
 

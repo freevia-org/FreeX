@@ -6808,10 +6808,27 @@ public sealed class DocumentView : Control
             },
         };
 
-        var inset = Math.Min(PageBorderInsetDip, Math.Min(pageRect.Width, pageRect.Height) / 4);
-        // Avalonia centers the stroke on this rectangle. Move the paint geometry 1.5 DIPs inward
-        // so both rails of an imported double border register with Word's opaque raster bands.
-        var rect = pageRect.Deflate(new Thickness(inset + 1.5));
+        Rect rect;
+        if (pb.OffsetFrom == PageBorderOffsetFrom.Text)
+        {
+            var space = Math.Max(0, pb.SpacePt * PxPerPoint);
+            var headerDistance = _doc.Page.HeaderDistancePt > 0
+                ? _doc.Page.HeaderDistancePt * PxPerPoint
+                : 36 * PxPerPoint;
+            var outerFrame = new Rect(
+                pageRect.X + _doc.Page.MarginLeftPt * PxPerPoint - space - widthDip,
+                pageRect.Y + headerDistance - space - widthDip,
+                Math.Max(0, pageRect.Width - (_doc.Page.MarginLeftPt + _doc.Page.MarginRightPt) * PxPerPoint + 2 * (space + widthDip)),
+                Math.Max(0, pageRect.Height - (headerDistance / PxPerPoint + _doc.Page.MarginBottomPt) * PxPerPoint + 2 * (space + widthDip)));
+            rect = outerFrame.Deflate(new Thickness(widthDip / 2));
+        }
+        else
+        {
+            var inset = Math.Min(Math.Max(0, pb.SpacePt * PxPerPoint), Math.Min(pageRect.Width, pageRect.Height) / 4);
+            // Avalonia centers the stroke on this rectangle. Move the paint geometry 1.5 DIPs inward
+            // so both rails of an imported double border register with Word's opaque raster bands.
+            rect = pageRect.Deflate(new Thickness(inset + 1.5));
+        }
         context.DrawRectangle(null, pen, rect);
         // BorderLineStyle.Double: draw a second, inner stroke a couple of DIP inside the first.
         if (pb.LineStyle == BorderLineStyle.Double)

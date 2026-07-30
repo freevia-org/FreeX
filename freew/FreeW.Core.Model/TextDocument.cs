@@ -2568,6 +2568,18 @@ public sealed record WatermarkOptions(string Text)
 public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.0)
 {
     /// <summary>
+    /// Controls whether <c>w:pgBorders/@w:offsetFrom</c> measures the frame from the page edge or the
+    /// document text area. Page is Word's default and preserves legacy FreeW output.
+    /// </summary>
+    public PageBorderOffsetFrom OffsetFrom { get; init; } = PageBorderOffsetFrom.Page;
+
+    /// <summary>
+    /// The <c>w:space</c> distance in points between the selected reference edge and the page frame.
+    /// Word's default is 24 points.
+    /// </summary>
+    public double SpacePt { get; init; } = 24.0;
+
+    /// <summary>
     /// The line style of every page-border edge (w:val). Defaults to <see cref="BorderLineStyle.Single"/>,
     /// matching what the writer previously emitted, so existing documents round-trip byte-unchanged.
     /// When <see cref="ArtId"/> is non-zero this field is ignored (art borders use a fixed @w:val="apples"
@@ -2583,6 +2595,13 @@ public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.
     /// a repeating pattern or a distinct styled stroke; unrecognised ids fall back to a dashed stroke.
     /// </summary>
     public int ArtId { get; init; }
+}
+
+/// <summary>Reference edge used by <c>w:pgBorders/@w:offsetFrom</c>.</summary>
+public enum PageBorderOffsetFrom
+{
+    Page,
+    Text
 }
 
 /// <summary>

@@ -5811,7 +5811,6 @@ public static class DocxReader
         var color = edge.Attribute(W + "color")?.Value;
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
         var lineStyle = BorderLineStyles.FromToken(edge.Attribute(W + "val")?.Value);
-
         bool Drawn(string name) =>
             (pBdr.Element(W + name)?.Attribute(W + "val")?.Value ?? "none") is not ("none" or "nil");
         var top = Drawn("top");
@@ -5850,6 +5849,15 @@ public static class DocxReader
         var color = edge.Attribute(W + "color")?.Value;
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
         var lineStyle = BorderLineStyles.FromToken(edge.Attribute(W + "val")?.Value);
+        var space = double.TryParse(edge.Attribute(W + "space")?.Value,
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsedSpace)
+            ? parsedSpace
+            : 24.0;
+        var offsetFrom = string.Equals(pgBorders.Attribute(W + "offsetFrom")?.Value, "text",
+            StringComparison.OrdinalIgnoreCase)
+            ? PageBorderOffsetFrom.Text
+            : PageBorderOffsetFrom.Page;
 
         // Read the optional @w:art attribute (Word's decorative art border id 1-166).
         var artStr = edge.Attribute(W + "art")?.Value;
@@ -5860,6 +5868,8 @@ public static class DocxReader
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
             width > 0 ? width : 1.0)
         {
+            OffsetFrom = offsetFrom,
+            SpacePt = Math.Max(0, space),
             LineStyle = lineStyle,
             ArtId = artId,
         };

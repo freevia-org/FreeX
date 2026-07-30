@@ -181,8 +181,10 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("[\"wpfRenderTargetBitmapReason\"] = wpfRenderTargetFailure");
         source.Should().Contain("const double FootnoteTrailingReserveDip = 15.0;");
         source.Should().Contain("thisPixH - thisMarginBottom - fnH - FootnoteTrailingReserveDip");
-        source.Should().Contain("PageLayout.PointsToDip(24)");
+        source.Should().Contain("PageLayout.PointsToDip(pb.SpacePt)");
         source.Should().Contain("DrawPageBorderFrame(dc, pen, edgeInset, thisPixW, thisPixH);");
+        source.Should().Contain("DrawTextRelativePageBorderFrame(dc, pen, outerFrame);");
+        source.Should().Contain("PageLayout.PointsToDip(36)");
         source.Should().Contain("edgeInset + borderWidth * 2.0");
         source.Should().Contain("width - 2 * inset");
         source.Should().Contain("if (panel is not null && i < panel.PageBoxes.Count)");

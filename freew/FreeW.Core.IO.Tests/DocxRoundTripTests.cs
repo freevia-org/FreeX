@@ -500,6 +500,59 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void PageBorder_RoundTrips_TextOffsetAndNonDefaultSpace()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("page border offset"));
+        doc.Page.PageBorder = new PageBorder("#1F4E79", 2.25)
+        {
+            OffsetFrom = PageBorderOffsetFrom.Text,
+            SpacePt = 11,
+        };
+
+        var page = RoundTrip(doc).Page;
+
+        page.PageBorder.Should().NotBeNull();
+        page.PageBorder!.OffsetFrom.Should().Be(PageBorderOffsetFrom.Text);
+        page.PageBorder.SpacePt.Should().BeApproximately(11, 0.001);
+
+        var word = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var serialized = WriteDocumentXml(doc).Descendants(word + "pgBorders").Single();
+        serialized.Attribute(word + "offsetFrom")!.Value.Should().Be("text");
+        serialized.Elements().Should().OnlyContain(edge => edge.Attribute(word + "space")!.Value == "11");
+    }
+
+    [Fact]
+    public void PageBorder_Reader_PreservesHandAuthoredTextOffsetAndSpace()
+    {
+        var doc = ReadHandAuthoredDocx(
+            """
+            <w:p><w:r><w:t>page border</w:t></w:r></w:p>
+            <w:sectPr><w:pgBorders w:offsetFrom="text"><w:top w:val="single" w:sz="18" w:space="11" w:color="1F4E79" /><w:left w:val="single" w:sz="18" w:space="11" w:color="1F4E79" /><w:bottom w:val="single" w:sz="18" w:space="11" w:color="1F4E79" /><w:right w:val="single" w:sz="18" w:space="11" w:color="1F4E79" /></w:pgBorders></w:sectPr>
+            """);
+
+        doc.Page.PageBorder.Should().BeEquivalentTo(new PageBorder("#1F4E79", 2.25)
+        {
+            OffsetFrom = PageBorderOffsetFrom.Text,
+            SpacePt = 11,
+        });
+    }
+
+    [Fact]
+    public void PageBorder_DefaultOffsetMetadata_RemainsWordDefault()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("default page border"));
+        doc.Page.PageBorder = new PageBorder("#0000FF", 2.0);
+
+        var word = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var serialized = WriteDocumentXml(doc).Descendants(word + "pgBorders").Single();
+
+        serialized.Attribute(word + "offsetFrom")!.Value.Should().Be("page");
+        serialized.Elements().Should().OnlyContain(edge => edge.Attribute(word + "space")!.Value == "24");
+    }
+
+    [Fact]
     public void ParagraphBorder_PerEdgeStyleColourAndWidth_RoundTrip()
     {
         var doc = new TextDocument();

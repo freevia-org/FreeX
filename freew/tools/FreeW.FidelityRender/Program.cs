@@ -647,13 +647,36 @@ static void RenderDocumentComposite(
             using (var dc = borderVisual.RenderOpen())
             {
                 var borderColor = ParseHexColor(pb.ColorHex, Colors.Black);
-                // w:pgBorders defaults to Measure from: Page with w:space="24" points. Keep
-                // the WPF evidence surface aligned with the Avalonia and Print Preview paths.
+                // Word measures page-relative frames from the page edge using w:space. Imported
+                // text-relative frames use the text/header references instead (see below).
                 double edgeInset = Math.Min(
-                    PageLayout.PointsToDip(24),
+                    PageLayout.PointsToDip(pb.SpacePt),
                     Math.Min(thisPixW, thisPixH) / 4.0);
                 var borderWidth = Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint);
-                if (pb.LineStyle == BorderLineStyle.Double)
+                if (pb.OffsetFrom == PageBorderOffsetFrom.Text)
+                {
+                    var headerDistance = thisPageSettings.HeaderDistancePt > 0
+                        ? PageLayout.PointsToDip(thisPageSettings.HeaderDistancePt)
+                        : PageLayout.PointsToDip(36);
+                    var space = PageLayout.PointsToDip(pb.SpacePt);
+                    var outerFrame = new Rect(
+                        Math.Max(0, thisMarginLeft - space - borderWidth),
+                        Math.Max(0, headerDistance - space - borderWidth),
+                        Math.Max(0, thisPixW - thisMarginLeft - thisMarginRight + 2 * (space + borderWidth)),
+                        Math.Max(0, thisPixH - headerDistance - thisMarginBottom + 2 * (space + borderWidth)));
+
+                    if (pb.LineStyle == BorderLineStyle.Double)
+                    {
+                        var pen = new Pen(new SolidColorBrush(borderColor), borderWidth * 0.75);
+                        DrawTextRelativePageBorderFrame(dc, pen, outerFrame);
+                        DrawTextRelativePageBorderFrame(dc, pen, DeflatePageBorderFrame(outerFrame, borderWidth * 2.0));
+                    }
+                    else
+                    {
+                        DrawTextRelativePageBorderFrame(dc, new Pen(new SolidColorBrush(borderColor), borderWidth), outerFrame);
+                    }
+                }
+                else if (pb.LineStyle == BorderLineStyle.Double)
                 {
                     // Word's double page frame uses two narrower strokes separated by one full
                     // authored-width gap; a single thick WPF pen loses that visible geometry.
@@ -1785,6 +1808,22 @@ static void DrawPageBorderFrame(DrawingContext drawingContext, Pen pen, double e
             Math.Max(0, width - 2 * inset),
             Math.Max(0, height - 2 * inset)));
 }
+
+static void DrawTextRelativePageBorderFrame(DrawingContext drawingContext, Pen pen, Rect outerFrame)
+{
+    var halfStroke = pen.Thickness / 2;
+    drawingContext.DrawRectangle(null, pen,
+        new Rect(
+            outerFrame.X + halfStroke,
+            outerFrame.Y + halfStroke,
+            Math.Max(0, outerFrame.Width - pen.Thickness),
+            Math.Max(0, outerFrame.Height - pen.Thickness)));
+}
+
+static Rect DeflatePageBorderFrame(Rect frame, double amount) =>
+    new(frame.X + amount, frame.Y + amount,
+        Math.Max(0, frame.Width - 2 * amount),
+        Math.Max(0, frame.Height - 2 * amount));
 
 /// <summary>
 /// Renders the footnote or endnote region for a page as a bitmap, using the same visual layout as
