@@ -20,6 +20,7 @@ public sealed class FontDialog : FreeWDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
+            FontFamily = new FontFamily("Segoe UI"),
             ControlHeight = 20,
             TextBoxHeight = 18,
             ComboBoxHeight = 22,
@@ -83,6 +84,7 @@ public sealed class FontDialog : FreeWDialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
 
         var state = FontDialogPlanner.BuildInitialState(_original, CultureInfo.CurrentCulture);
 
@@ -194,7 +196,7 @@ public sealed class FontDialog : FreeWDialogWindow
             margin: new Thickness(0, 10, 0, 0),
             style: DialogChromeStyle);
 
-        var root = new StackPanel { Margin = new Thickness(12) };
+        var root = new StackPanel { Margin = new Thickness(12, 12, 11, 12) };
         root.Children.Add(tabs);
         root.Children.Add(_status);
         root.Children.Add(buttons);
@@ -203,6 +205,12 @@ public sealed class FontDialog : FreeWDialogWindow
         Opened += (_, _) =>
         {
             AvaloniaCompactDialogChrome.ApplyDescendantChrome(this, DialogChromeStyle);
+            foreach (var box in new[]
+                     {
+                         _familyBox, _spacingBox, _kerningBox, _positionBox, _stylisticBox,
+                     })
+                FontParagraphDialogChrome.ApplyTextBox(box, DialogChromeStyle);
+            ApplyFontCheckBoxChrome();
             _familyBox.Focus();
         };
         KeyDown += (_, args) =>
@@ -422,8 +430,18 @@ public sealed class FontDialog : FreeWDialogWindow
                      _smallCapsChk, _allCapsChk, _superChk, _subChk,
                  })
         {
-            AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, DialogChromeStyle);
+            FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
         }
+    }
+
+    private void ApplyFontCheckBoxChrome()
+    {
+        foreach (var checkBox in new[]
+                 {
+                     _boldChk, _italicChk, _underlineChk, _strikeChk,
+                     _smallCapsChk, _allCapsChk, _superChk, _subChk,
+                 })
+            FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
     }
 
     private static string FormatOptional(double? value) =>
