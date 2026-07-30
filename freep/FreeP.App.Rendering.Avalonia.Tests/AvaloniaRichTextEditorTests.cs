@@ -691,6 +691,124 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task PointerDragBeyondVisibleEditor_AutoScrollsAndClampsAtDocumentEnd()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = TextBodyWithParagraphs(
+                string.Join(' ', Enumerable.Repeat(
+                    "first paragraph contains enough words to exceed the editor viewport", 8)),
+                string.Join(' ', Enumerable.Repeat(
+                    "last paragraph remains selectable when the pointer leaves the editor", 8)));
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xFF)
+            {
+                Width = 160,
+                Height = 90,
+            };
+            var window = Show(editor, 160, 90);
+            try
+            {
+                editor.FocusEditor().Should().BeTrue();
+                await DrainInputAsync();
+
+                editor.RichTextView.ContentExtentHeight.Should().BeGreaterThan(editor.Bounds.Height);
+                Point anchorPoint = new(70, 38);
+                int anchor = editor.RichTextView.HitTestLogicalPosition(anchorPoint);
+
+                window.MouseMove(anchorPoint, RawInputModifiers.None);
+                window.MouseDown(anchorPoint, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                for (int i = 0; i < 8; i++)
+                    window.MouseMove(new Point(8, 88), RawInputModifiers.LeftMouseButton);
+                await DrainInputAsync();
+
+                editor.RichTextView.ScrollOffsetY.Should().BeGreaterThan(0,
+                    "a captured drag held in the bottom edge band should auto-scroll the document");
+                editor.Selection.End.Should().BeGreaterThan(anchor,
+                    "the captured pointer endpoint should advance with the scrolled content");
+
+                window.MouseMove(new Point(8, 500), RawInputModifiers.LeftMouseButton);
+                for (int i = 0; i < 40; i++)
+                    window.MouseMove(new Point(8, 88), RawInputModifiers.LeftMouseButton);
+                await DrainInputAsync();
+
+                editor.RichTextView.ScrollOffsetY.Should().BeApproximately(
+                    editor.RichTextView.ContentExtentHeight - editor.Bounds.Height,
+                    0.1);
+                editor.Selection.End.Should().Be(editor.Text.Length,
+                    "the bottom edge must clamp the endpoint to the document end");
+                window.MouseUp(new Point(8, 500), MouseButton.Left, RawInputModifiers.None);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ShiftClickAndMultiClickSelectionModesRemainStable()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var editor = new AvaloniaRichTextEditor(
+                TextBodyWithParagraphs("Alpha beta gamma", "Delta epsilon zeta"),
+                backgroundAlpha: 0xFF)
+            {
+                Width = 220,
+                Height = 120,
+            };
+            var window = Show(editor, 220, 120);
+            try
+            {
+                editor.FocusEditor().Should().BeTrue();
+                await DrainInputAsync();
+
+                var firstPoint = new Point(8, 8);
+                var secondPoint = new Point(65, 8);
+                int first = editor.RichTextView.HitTestLogicalPosition(firstPoint);
+                int second = editor.RichTextView.HitTestLogicalPosition(secondPoint);
+                first.Should().Be(0);
+                second.Should().BeGreaterThan(first);
+
+                window.MouseMove(firstPoint, RawInputModifiers.None);
+                window.MouseDown(firstPoint, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(firstPoint, MouseButton.Left, RawInputModifiers.None);
+                window.MouseMove(secondPoint, RawInputModifiers.Shift);
+                window.MouseDown(secondPoint, MouseButton.Left, RawInputModifiers.Shift);
+                window.MouseUp(secondPoint, MouseButton.Left, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                editor.Selection.Should().Be(
+                    InCanvasRichTextPointerSelectionPlanner.Plan(first, second, editor.Text.Length),
+                    "Shift-click must extend from the original caret");
+
+                var wordPoint = new Point(32, 8);
+                window.MouseMove(wordPoint, RawInputModifiers.None);
+                window.MouseDown(wordPoint, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(wordPoint, MouseButton.Left, RawInputModifiers.None);
+                window.MouseDown(wordPoint, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(wordPoint, MouseButton.Left, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                editor.Text[editor.SelectionStart..editor.SelectionEnd].Should().Be("beta",
+                    "double-click must select the containing word");
+
+                window.MouseDown(wordPoint, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(wordPoint, MouseButton.Left, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                editor.Text[editor.SelectionStart..editor.SelectionEnd]
+                    .Should().Be("Alpha beta gamma",
+                        "triple-click must select the containing paragraph");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ImeLikeReplacementClipboardAndLocalUndoRedo_KeepRichBufferSynchronized()
     {
         await Session.Dispatch(async () =>

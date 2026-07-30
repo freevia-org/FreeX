@@ -882,13 +882,16 @@ fi
         pointer_anchor_y=$((pointer_shape_top_y + 8))
         pointer_caret_x=$((pointer_shape_right_x - 8))
         pointer_caret_y=$((pointer_shape_bottom_y - 8))
-        printf 'drag-contract=first visual line to final wrapped line across paragraph boundary\n'
+        pointer_edge_x=$((pointer_shape_right_x - 8))
+        pointer_edge_y=$((pointer_shape_bottom_y + 64))
+        printf 'drag-contract=first visual line to captured pointer beyond editor bottom across paragraph boundary\n'
         printf 'pointer-shape-rect=%s,%s,%s,%s\n' \
             "$pointer_shape_left_x" "$pointer_shape_top_y" \
             "$((pointer_shape_right_x - pointer_shape_left_x))" \
             "$((pointer_shape_bottom_y - pointer_shape_top_y))"
         printf 'pointer-anchor=%s,%s\n' "$pointer_anchor_x" "$pointer_anchor_y"
         printf 'pointer-caret=%s,%s\n' "$pointer_caret_x" "$pointer_caret_y"
+        printf 'pointer-edge=%s,%s\n' "$pointer_edge_x" "$pointer_edge_y"
     fi
 } > "$output/$calibration_artifact"
 
@@ -911,7 +914,7 @@ if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
     pointer_forward_capture=false
     pointer_reverse_capture=false
     pointer_expected=$'Wide words make this first paragraph wrap at unequal visual line widths\ntail paragraph crosses the boundary'
-    if pointer_drag "$pointer_anchor_x" "$pointer_anchor_y" "$pointer_caret_x" "$pointer_caret_y"; then
+    if pointer_drag "$pointer_anchor_x" "$pointer_anchor_y" "$pointer_edge_x" "$pointer_edge_y"; then
         if copy_selection_and_assert_clipboard "pointer-selection-forward" "$pointer_expected"; then
             pointer_forward_readback=true
         else

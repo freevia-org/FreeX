@@ -126,6 +126,53 @@ public sealed class WpfRichTextVerticalNavigationParityTests
         }
     }
 
+    [StaFact]
+    public void WpfRichTextBox_NativePointerSelectionClampsToDocumentEdges()
+    {
+        const string firstText = "A long first paragraph that wraps across several visual lines";
+        const string secondText = "A final paragraph at the bottom of the editor";
+        var body = new TextBody();
+        body.Paragraphs.Add(new ModelParagraph { Runs = { new ModelRun { Text = firstText } } });
+        body.Paragraphs.Add(new ModelParagraph { Runs = { new ModelRun { Text = secondText } } });
+
+        var box = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(body, 12))
+        {
+            AcceptsReturn = true,
+            Width = 96,
+            Height = 90,
+            IsUndoEnabled = false,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
+        };
+        box.Document.PageWidth = 80;
+        box.Document.ColumnWidth = 80;
+        var window = new Window { Content = box, Width = 96, Height = 90 };
+        window.Show();
+        window.UpdateLayout();
+        try
+        {
+            box.Focus().Should().BeTrue();
+            int documentEnd = LogicalOffsetAt(box.Document, box.Document.ContentEnd);
+            var start = PointerAtLogicalOffset(box.Document, -20);
+            var end = PointerAtLogicalOffset(box.Document, int.MaxValue);
+            box.Selection.Select(start, end);
+
+            LogicalOffsetAt(box.Document, box.Selection.Start).Should().Be(0);
+            LogicalOffsetAt(box.Document, box.Selection.End)
+                .Should().Be(documentEnd);
+            box.Selection.Text.Should().Contain("final paragraph");
+
+            box.Selection.Select(end, start);
+            LogicalOffsetAt(box.Document, box.Selection.Start).Should().Be(0);
+            LogicalOffsetAt(box.Document, box.Selection.End)
+                .Should().Be(documentEnd);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     [Fact]
     public void WpfRichTextEditor_LeavesVisualLineNavigationToNativeRichTextBox()
     {

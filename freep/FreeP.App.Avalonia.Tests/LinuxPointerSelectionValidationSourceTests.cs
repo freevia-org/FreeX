@@ -16,6 +16,9 @@ public sealed class LinuxPointerSelectionValidationSourceTests
         var pointerDrag = probe[pointerDragStart..pointerDragEnd];
         pointerDrag.Should().Contain("xdotool mousemove \"$start_x\" \"$start_y\"");
         pointerDrag.Should().NotContain("xdotool mousemove --sync \"$start_x\" \"$start_y\"");
+        probe.Should().Contain("pointer_edge_y=$((pointer_shape_bottom_y + 64))");
+        probe.Should().Contain("pointer_drag \"$pointer_anchor_x\" \"$pointer_anchor_y\" \"$pointer_edge_x\" \"$pointer_edge_y\"");
+        probe.Should().Contain("drag-contract=first visual line to captured pointer beyond editor bottom across paragraph boundary");
 
         var readOnlyStart = probe.IndexOf(
             "if [[ \"$app_surface\" == \"in-canvas-grouped-child-pointer-selection\" ]]; then\n" +

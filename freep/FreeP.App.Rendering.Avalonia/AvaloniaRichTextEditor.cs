@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Threading;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -39,6 +40,9 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private int? _keyboardSelectionCaret;
     private double? _preferredVerticalX;
     private int? _preferredVerticalLineIndex;
+    private readonly DispatcherTimer _pointerAutoScrollTimer;
+    private Point _lastPointerPosition;
+    private bool _pointerDragActive;
 
     internal AvaloniaRichTextEditor(
         TextBody? body,
@@ -53,6 +57,12 @@ internal sealed class AvaloniaRichTextEditor : Grid
         _fallbackFontFamily = fallbackFontFamily;
         _fallbackFontSizePt = fallbackFontSizePt;
         _richTextView = new AvaloniaRichTextEditingSurface();
+        _pointerAutoScrollTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(30),
+            IsEnabled = false,
+        };
+        _pointerAutoScrollTimer.Tick += (_, _) => ApplyPointerSelectionAtLastPosition();
         ClipToBounds = true;
         Background = new SolidColorBrush(Color.FromArgb(backgroundAlpha, 0xFF, 0xFF, 0xFF));
 
@@ -89,6 +99,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         };
         InputBox.GotFocus += (_, _) => UpdateSurfaceSelection();
         InputBox.LostFocus += (_, _) => UpdateSurfaceSelection();
+        InputBox.PointerCaptureLost += OnInputPointerCaptureLost;
         InputBox.AddHandler(
             InputElement.PointerPressedEvent,
             OnInputPointerPressed,
@@ -428,6 +439,9 @@ internal sealed class AvaloniaRichTextEditor : Grid
             ApplyPointerSelection(logicalPosition, logicalPosition);
         }
 
+        _lastPointerPosition = e.GetPosition(_richTextView);
+        _pointerDragActive = true;
+        _pointerAutoScrollTimer.Stop();
         e.Pointer.Capture(InputBox);
         e.Handled = true;
         UpdateSurfaceSelection();
@@ -439,11 +453,43 @@ internal sealed class AvaloniaRichTextEditor : Grid
             || !e.GetCurrentPoint(InputBox).Properties.IsLeftButtonPressed)
             return;
 
-        int logicalPosition = _richTextView.HitTestLogicalPosition(e.GetPosition(_richTextView));
+        _lastPointerPosition = e.GetPosition(_richTextView);
+        ApplyPointerSelectionAtLastPosition();
+        e.Handled = true;
+        UpdateSurfaceSelection();
+    }
+
+    private void ApplyPointerSelectionAtLastPosition()
+    {
+        if (!_pointerDragActive)
+            return;
+
+        int direction = InCanvasRichTextPointerSelectionPlanner.ResolveVerticalEdgeDirection(
+            _lastPointerPosition.Y,
+            _richTextView.Bounds.Height);
+        if (direction == 0)
+        {
+            _pointerAutoScrollTimer.Stop();
+        }
+        else
+        {
+            double previousOffset = _richTextView.ScrollOffsetY;
+            double offset = InCanvasRichTextPointerSelectionPlanner.AdvanceVerticalScroll(
+                previousOffset,
+                _richTextView.ContentExtentHeight,
+                _richTextView.Bounds.Height,
+                direction);
+            _richTextView.SetScrollOffset(offset);
+            if (Math.Abs(offset - previousOffset) >= 0.01)
+                _pointerAutoScrollTimer.Start();
+            else
+                _pointerAutoScrollTimer.Stop();
+        }
+
+        int logicalPosition = _richTextView.HitTestLogicalPosition(_lastPointerPosition);
         ApplyPointerSelection(_pointerSelectionAnchor, logicalPosition);
         _keyboardSelectionAnchor = _pointerSelectionAnchor;
         _keyboardSelectionCaret = logicalPosition;
-        e.Handled = true;
         UpdateSurfaceSelection();
     }
 
@@ -461,9 +507,17 @@ internal sealed class AvaloniaRichTextEditor : Grid
     {
         if (e.Pointer.Captured != InputBox)
             return;
+        _pointerDragActive = false;
+        _pointerAutoScrollTimer.Stop();
         e.Pointer.Capture(null);
         e.Handled = true;
         UpdateSurfaceSelection();
+    }
+
+    private void OnInputPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        _pointerDragActive = false;
+        _pointerAutoScrollTimer.Stop();
     }
 
     private async void OnInputNavigationKeyDown(object? sender, KeyEventArgs e)
@@ -658,6 +712,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
             InputBox.SelectionStart = index;
             InputBox.SelectionEnd = Math.Min(text.Length, index + 1);
             _pointerSelectionAnchor = index;
+            _keyboardSelectionAnchor = index;
+            _keyboardSelectionCaret = index + 1;
             return;
         }
 
@@ -670,6 +726,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
         InputBox.SelectionStart = start;
         InputBox.SelectionEnd = end;
         _pointerSelectionAnchor = start;
+        _keyboardSelectionAnchor = start;
+        _keyboardSelectionCaret = end;
     }
 
     private void SelectParagraph(int logicalPosition)
@@ -685,6 +743,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
         InputBox.SelectionStart = start;
         InputBox.SelectionEnd = end;
         _pointerSelectionAnchor = start;
+        _keyboardSelectionAnchor = start;
+        _keyboardSelectionCaret = end;
     }
 
     private void UpdateSurfaceSelection()

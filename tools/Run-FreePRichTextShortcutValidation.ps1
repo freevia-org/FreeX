@@ -182,7 +182,7 @@ function Assert-PointerSelectionSemanticContract {
         }
     }
     $proof = Get-Content -LiteralPath $proofPath -Raw
-    if ($proof -notmatch '(?m)^drag-contract=first visual line to final wrapped line across paragraph boundary$') {
+    if ($proof -notmatch '(?m)^drag-contract=first visual line to captured pointer beyond editor bottom across paragraph boundary$') {
         throw "Pointer-selection calibration proof does not describe the bounded drag contract."
     }
 }

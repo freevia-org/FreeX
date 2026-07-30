@@ -46,4 +46,48 @@ public sealed class InCanvasRichTextPointerSelectionPlannerTests
 
         action.Should().Throw<ArgumentOutOfRangeException>();
     }
+
+    [Theory]
+    [InlineData(-20, 100, -1)]
+    [InlineData(4, 100, -1)]
+    [InlineData(50, 100, 0)]
+    [InlineData(96, 100, 1)]
+    [InlineData(140, 100, 1)]
+    public void ResolveVerticalEdgeDirection_UsesCapturedPointerEdgeBands(
+        double pointerY,
+        double viewportHeight,
+        int expectedDirection)
+    {
+        InCanvasRichTextPointerSelectionPlanner.ResolveVerticalEdgeDirection(
+            pointerY,
+            viewportHeight,
+            edgeThreshold: 6)
+            .Should().Be(expectedDirection);
+    }
+
+    [Fact]
+    public void AdvanceVerticalScroll_ClampsAtBothContentEdges()
+    {
+        InCanvasRichTextPointerSelectionPlanner.AdvanceVerticalScroll(
+                0, contentExtent: 500, viewportExtent: 100, direction: -1, step: 30)
+            .Should().Be(0);
+        InCanvasRichTextPointerSelectionPlanner.AdvanceVerticalScroll(
+                0, contentExtent: 500, viewportExtent: 100, direction: 1, step: 30)
+            .Should().Be(30);
+        InCanvasRichTextPointerSelectionPlanner.AdvanceVerticalScroll(
+                390, contentExtent: 500, viewportExtent: 100, direction: 1, step: 30)
+            .Should().Be(400);
+        InCanvasRichTextPointerSelectionPlanner.AdvanceVerticalScroll(
+                450, contentExtent: 500, viewportExtent: 100, direction: 0)
+            .Should().Be(400);
+    }
+
+    [Fact]
+    public void EdgePolicy_RejectsInvalidGeometry()
+    {
+        var act = () => InCanvasRichTextPointerSelectionPlanner
+            .ResolveVerticalEdgeDirection(0, double.NaN);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
 }

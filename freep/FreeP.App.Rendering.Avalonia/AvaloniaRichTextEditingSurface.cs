@@ -28,6 +28,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     private string _fallbackFontFamily = InCanvasRichTextEditorDefaults.FallbackFontFamily;
     private double _fallbackFontSizePt = InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt;
     private double _layoutWidth = double.NaN;
+    private double _scrollOffsetY;
+    private double _contentExtentHeight;
     private int _selectionStart;
     private int _selectionEnd;
     private bool _showCaret;
@@ -43,6 +45,17 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     internal string FallbackFontFamily => _fallbackFontFamily;
 
     internal double FallbackFontSizePt => _fallbackFontSizePt;
+
+    internal double ScrollOffsetY => _scrollOffsetY;
+
+    internal double ContentExtentHeight
+    {
+        get
+        {
+            EnsureLayouts();
+            return _contentExtentHeight;
+        }
+    }
 
     internal IReadOnlyList<Rect> SelectionRects
     {
@@ -99,18 +112,31 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         if (_layouts.Count == 0)
             return 0;
 
+        double documentY = point.Y + _scrollOffsetY;
         var item = _layouts
-            .OrderBy(candidate => VerticalDistance(point.Y, candidate.Origin.Y, candidate.Bottom))
+            .OrderBy(candidate => VerticalDistance(documentY, candidate.Origin.Y, candidate.Bottom))
             .First();
         var localPoint = new Point(
             Math.Max(0, point.X - item.Origin.X),
-            Math.Max(0, point.Y - item.Origin.Y));
+            Math.Clamp(documentY - item.Origin.Y, 0, item.Layout.Height));
         var hit = item.Layout.HitTestPoint(localPoint);
         int localTextPosition = Math.Clamp(
             hit.TextPosition,
             0,
             item.Paragraph.Text.Length);
         return item.Paragraph.GlobalStart + localTextPosition;
+    }
+
+    internal void SetScrollOffset(double offsetY)
+    {
+        EnsureLayouts();
+        double maximum = Math.Max(0, _contentExtentHeight - Bounds.Height);
+        double clamped = Math.Clamp(offsetY, 0, maximum);
+        if (Math.Abs(_scrollOffsetY - clamped) < 0.01)
+            return;
+
+        _scrollOffsetY = clamped;
+        InvalidateVisual();
     }
 
     private static double VerticalDistance(double value, double top, double bottom)
@@ -169,14 +195,24 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         foreach (var item in _layouts)
         {
             if (item.BulletLayout is not null)
-                item.BulletLayout.Draw(context, item.BulletOrigin);
+                item.BulletLayout.Draw(
+                    context,
+                    new Point(item.BulletOrigin.X, item.BulletOrigin.Y - _scrollOffsetY));
             else if (item.BulletImage is not null)
             {
                 double size = Math.Max(1, ToDip(item.Paragraph.BulletFontSizePt ?? _fallbackFontSizePt));
-                context.DrawImage(item.BulletImage, new Rect(item.BulletOrigin, new Size(size, size)));
+                context.DrawImage(
+                    item.BulletImage,
+                    new Rect(
+                        item.BulletOrigin.X,
+                        item.BulletOrigin.Y - _scrollOffsetY,
+                        size,
+                        size));
             }
 
-            item.Layout.Draw(context, item.Origin);
+            item.Layout.Draw(
+                context,
+                new Point(item.Origin.X, item.Origin.Y - _scrollOffsetY));
         }
 
         var caret = BuildCaretRect();
@@ -235,6 +271,12 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 paragraph.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight));
             y += layout.Height + paragraph.SpaceAfterDip;
         }
+
+        _contentExtentHeight = Math.Max(y + ContentPadding.Bottom, Bounds.Height);
+        _scrollOffsetY = Math.Clamp(
+            _scrollOffsetY,
+            0,
+            Math.Max(0, _contentExtentHeight - Bounds.Height));
     }
 
     private TextLayout CreateLayout(InCanvasRichTextVisualParagraph paragraph, double maxWidth)
@@ -374,7 +416,14 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
 
             int displayStart = overlapStart - item.Paragraph.GlobalStart;
             foreach (var rect in item.Layout.HitTestTextRange(displayStart, overlapEnd - overlapStart))
-                result.Add(rect.Translate(item.Origin));
+            {
+                var translated = rect.Translate(item.Origin);
+                result.Add(new Rect(
+                    translated.X,
+                    translated.Y - _scrollOffsetY,
+                    translated.Width,
+                    translated.Height));
+            }
         }
 
         return result;
@@ -391,7 +440,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         var hit = item.Layout.HitTestTextPosition(displayPosition);
         return new Rect(
             item.Origin.X + hit.X,
-            item.Origin.Y + hit.Y,
+            item.Origin.Y + hit.Y - _scrollOffsetY,
             CaretWidth,
             Math.Max(1, hit.Height));
     }
