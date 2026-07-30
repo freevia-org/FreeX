@@ -563,8 +563,20 @@ public static class ConnectionSiteHelper
     public static (long X, long Y) Resolve(ConnectorAttachment? attachment, Slide slide)
     {
         if (attachment is null) return (0, 0);
-        var target = slide.Shapes.FirstOrDefault(s => s.Id == attachment.ShapeId);
+        var target = FindShape(slide.Shapes, attachment.ShapeId);
         if (target is null) return (0, 0);
         return Resolve(target, attachment.SiteIndex);
+    }
+
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId) return shape;
+            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
     }
 }

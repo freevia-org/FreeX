@@ -830,6 +830,42 @@ public sealed class EditingSessionTests
         second.RotationDeg.Should().Be(30);
     }
 
+    [Fact]
+    public void NestedGroupedSelection_ResolvesConnectorHyperlinkAutoShapeAndUngroupRoutes()
+    {
+        var sess = Make();
+        var left = MakeShape(21);
+        left.Hyperlink = new Hyperlink { Url = "https://example.test/child" };
+        var right = MakeShape(22);
+        right.OffsetXEmu = 500;
+        var inner = new SlideShape { Id = 23, Kind = SlideShapeKind.Group };
+        inner.Children.Add(left);
+        inner.Children.Add(right);
+        var outer = new SlideShape { Id = 24, Kind = SlideShapeKind.Group };
+        outer.Children.Add(inner);
+        sess.CurrentSlide!.Shapes.Add(outer);
+
+        sess.Select(left.Id);
+        sess.SelectedShapeHyperlink!.Url.Should().Be("https://example.test/child");
+        sess.ChangeSelectedAutoShapeKind(DrawingShapeKind.Diamond).Should().BeTrue();
+        left.AutoShapeKind.Should().Be(DrawingShapeKind.Diamond);
+
+        sess.Select(left.Id);
+        sess.Select(right.Id, addToSelection: true);
+        var connector = sess.InsertDefaultConnector();
+        connector.ConnectionStart.Should().NotBeNull();
+        connector.ConnectionEnd.Should().NotBeNull();
+        ConnectionSiteHelper.Resolve(connector.ConnectionStart, sess.CurrentSlide)
+            .Should().NotBe((0L, 0L));
+
+        sess.Select(inner.Id);
+        sess.UngroupSelected();
+        outer.Children.Should().Contain(left).And.Contain(right);
+        outer.Children.Should().NotContain(inner);
+        sess.Undo();
+        outer.Children.Should().ContainSingle(shape => shape.Id == inner.Id);
+    }
+
     [Theory]
     [InlineData(DrawingShapeKind.ElbowConnector)]
     [InlineData(DrawingShapeKind.CurvedConnector)]
