@@ -71,6 +71,7 @@ internal static class PowerPointInterop
 
     internal static PowerPointExportResult ExportSlidesToPngDetailed(string pptxPath, string outDir, int width, int height)
     {
+        outDir = EnsureOutputDirectory(outDir);
         var beforePids = GetPowerPointProcessIds();
         var ownedPids = new HashSet<int>();
 
@@ -138,6 +139,13 @@ internal static class PowerPointInterop
             WaitForPowerPointToExit(ownedPids, timeoutMs: 10_000);
             KillPowerPointProcesses(ownedPids);
         }
+    }
+
+    internal static string EnsureOutputDirectory(string outDir)
+    {
+        var fullPath = Path.GetFullPath(outDir);
+        Directory.CreateDirectory(fullPath);
+        return fullPath;
     }
 
     /// <summary>
