@@ -139,6 +139,21 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void TrapezoidList_UsesLiveListGeometryAndPreservesNodeOrder()
+    {
+        var data = MakeData(SmartArtFamily.List, "One", "Two", "Three");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/trapezoidList";
+        data.IsLiveLayoutSupported = true;
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        var boxes = shapes!.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Should().HaveCount(3);
+        boxes.Select(shape => shape.PlainText).Should().Equal("One", "Two", "Three");
+    }
+
+    [Fact]
     public void Process_BoxesAreLeftToRight_Increasing_X()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C");
