@@ -529,6 +529,31 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedNoteRegionPlanner_ConvertsContinuationFragmentToRendererPlan()
+    {
+        var page = new DocumentFootnoteContinuationPagePlan(
+            PageNumber: 3,
+            SeparatorKind: DocumentFootnoteSeparatorKind.Continuation,
+            AvailableHeightDip: 120,
+            EstimatedHeightDip: 84,
+            Fragments: [
+                new DocumentFootnoteContinuationFragment(1, 1, null, "continued words", false, false, 42),
+                new DocumentFootnoteContinuationFragment(1, 1, null, "final words", false, true, 42)
+            ]);
+
+        var region = DocumentNoteRegionPlanner.BuildFootnoteContinuationRegion(page, contentWidthDip: 480);
+
+        region.Kind.Should().Be(DocumentNoteRegionKind.Footnotes);
+        region.PageNumber.Should().Be(3);
+        region.IsSyntheticPage.Should().BeFalse();
+        region.Heading.Should().BeNull();
+        region.SeparatorWidthDip.Should().Be(DocumentNoteRegionPlanner.FootnoteSeparatorWidthDip);
+        region.Rows.Select(row => row.Label).Should().Equal(string.Empty, string.Empty);
+        region.Rows.Select(row => row.Text).Should().Equal("continued words", "final words");
+        region.EstimatedHeightDip.Should().BeGreaterThanOrEqualTo(84);
+    }
+
+    [Fact]
     public void SharedNoteRegionPlanner_UsesDocumentWideFootnoteSequenceForLaterPageFragments()
     {
         var document = new TextDocument();
