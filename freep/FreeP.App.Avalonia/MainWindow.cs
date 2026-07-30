@@ -2658,6 +2658,18 @@ public sealed partial class MainWindow : Window
         r.Register(
             ShapeEffectAuthoringPlanner.Shape3dStrongCommandId,
             new ActionRibbonCommand(() => Editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dStrong())));
+        r.Register(
+            ShapeFillAuthoringPlanner.OpaqueCommandId,
+            new ActionRibbonCommand(() => Editor.SetSelectedShapeFillTransparency(
+                ShapeFillAuthoringPlanner.OpaqueAlpha)));
+        r.Register(
+            ShapeFillAuthoringPlanner.HalfCommandId,
+            new ActionRibbonCommand(() => Editor.SetSelectedShapeFillTransparency(
+                ShapeFillAuthoringPlanner.HalfTransparentAlpha)));
+        r.Register(
+            ShapeFillAuthoringPlanner.TransparentCommandId,
+            new ActionRibbonCommand(() => Editor.SetSelectedShapeFillTransparency(
+                ShapeFillAuthoringPlanner.TransparentAlpha)));
 
         r.Register(ChartDataDialogPlanner.EditDataCommandId, new ActionRibbonCommand(OpenChartDataDialog));
         r.Register(ChartDataDialogPlanner.ChangeChartTypeCommandId, new ActionRibbonCommand(OpenChartDataDialog));

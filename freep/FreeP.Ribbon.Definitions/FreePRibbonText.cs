@@ -236,6 +236,9 @@ internal static class FreePRibbonText
     public static RibbonText Shape3dNoneCommand { get; } = new("Ribbon_Command_Shape3dNone_Label", "Ribbon_Command_Shape3dNone_KeyTip");
     public static RibbonText Shape3dSubtleCommand { get; } = new("Ribbon_Command_Shape3dSubtle_Label", "Ribbon_Command_Shape3dSubtle_KeyTip");
     public static RibbonText Shape3dStrongCommand { get; } = new("Ribbon_Command_Shape3dStrong_Label", "Ribbon_Command_Shape3dStrong_KeyTip");
+    public static RibbonText ShapeFillOpaqueCommand { get; } = new("Ribbon_Command_ShapeFillOpaque_Label", "Ribbon_Command_ShapeFillOpaque_KeyTip");
+    public static RibbonText ShapeFillHalfTransparentCommand { get; } = new("Ribbon_Command_ShapeFillHalfTransparent_Label", "Ribbon_Command_ShapeFillHalfTransparent_KeyTip");
+    public static RibbonText ShapeFillTransparentCommand { get; } = new("Ribbon_Command_ShapeFillTransparent_Label", "Ribbon_Command_ShapeFillTransparent_KeyTip");
     public static string VideoLabel => Get("Ribbon_Command_Video_Label");
     public static string VideoKeyTip => Get("Ribbon_Command_Video_KeyTip");
     public static string AudioLabel => Get("Ribbon_Command_Audio_Label");

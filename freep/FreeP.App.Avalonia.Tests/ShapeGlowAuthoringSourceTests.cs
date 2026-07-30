@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 
 public sealed class ShapeGlowAuthoringSourceTests
 {
@@ -52,6 +53,20 @@ public sealed class ShapeGlowAuthoringSourceTests
         source.Should().Contain("Editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dNone())");
         source.Should().Contain("Editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dSubtle())");
         source.Should().Contain("Editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dStrong())");
+    }
+
+    [Fact]
+    public void Avalonia_registers_shared_shape_fill_transparency_presets()
+    {
+        var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("ShapeFillAuthoringPlanner.OpaqueCommandId");
+        source.Should().Contain("ShapeFillAuthoringPlanner.HalfCommandId");
+        source.Should().Contain("ShapeFillAuthoringPlanner.TransparentCommandId");
+        var compactSource = string.Concat(source.Where(c => !char.IsWhiteSpace(c)));
+        compactSource.Should().Contain("Editor.SetSelectedShapeFillTransparency(ShapeFillAuthoringPlanner.OpaqueAlpha)");
+        compactSource.Should().Contain("Editor.SetSelectedShapeFillTransparency(ShapeFillAuthoringPlanner.HalfTransparentAlpha)");
+        compactSource.Should().Contain("Editor.SetSelectedShapeFillTransparency(ShapeFillAuthoringPlanner.TransparentAlpha)");
     }
 
     private static string RepoFile(params string[] parts)
