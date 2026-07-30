@@ -13,7 +13,9 @@ fail() {
 [[ -n "$window_id" ]] || fail "No visible FreeW window."
 xdotool windowactivate --sync "$window_id" >/dev/null 2>&1 || true
 xdotool windowfocus "$window_id" >/dev/null 2>&1 || true
-sleep 1
+# The container readiness file is emitted before Avalonia has completed the first floating-group
+# layout pass. Let that pass and input focus settle before the physical selection click.
+sleep 3
 scrot "$output/01-baseline.png"
 
 # Fixed 1280x820/96-DPI fixture coordinates, matching the existing nested-group physical lane.
@@ -21,21 +23,13 @@ center_x=636
 center_y=490
 xdotool mousemove --sync "$center_x" "$center_y"
 xdotool click 1
-sleep 0.75
-xdotool click 1
-sleep 0.75
-# The second click on the already selected nested child is the same in-canvas text-entry route
-# used by the managed Avalonia/WPF parity tests. Keep the caret at the end so the persisted
-# assertion is an exact one-character insertion rather than a paragraph-break exercise.
+sleep 1
+# Select once, then use the explicit Return entry route. With a selected grouped child, DocumentView
+# consumes this first Return to enter text editing; it does not insert a paragraph break.
 xdotool key --clearmodifiers --window "$window_id" Return
-sleep 0.75
-# If Return entered the route, this inserts at the end. If it inserted a paragraph break, the
-# following Home + Backspace merges that paragraph through the shared command path.
+sleep 1
 xdotool type --clearmodifiers --delay 45 --window "$window_id" "!"
-sleep 0.75
-xdotool key --clearmodifiers --window "$window_id" Home
-xdotool key --clearmodifiers --window "$window_id" BackSpace
-sleep 0.45
+sleep 1
 scrot "$output/02-nested-text-editing.png"
 scrot "$output/03-nested-text-edited.png"
 xdotool key --clearmodifiers --window "$window_id" ctrl+s
