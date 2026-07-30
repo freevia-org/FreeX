@@ -89,6 +89,23 @@ public sealed class FreeXWave72PivotTableDoubleClickTests
             .Should().BeGreaterThanOrEqualTo(0);
     }
 
+    [Fact]
+    public void LinuxPhysicalContract_UsesRealDoubleClickAndExactDetailReadback()
+    {
+        var probe = File.ReadAllText(
+            RepoFile("tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+        var runner = File.ReadAllText(
+            RepoFile("tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+
+        runner.Should().Contain("\"pivot-table-details-double-click\"");
+        runner.Should().Contain("\"pivot-table-details-double-click-physical\"");
+        runner.Should().Contain("FreeX_wave50_pivot_fields.xlsx");
+        probe.Should().Contain("probe_pivot_table_details_double_click()");
+        probe.Should().Contain("xdotool click --repeat 2 --delay 180 1");
+        probe.Should().Contain("pivot_detail_package_signature");
+        probe.Should().Contain("clipboard readback Region|Category|Amount and North|Hardware|100");
+    }
+
     private static void SeedPivot(Workbook workbook, Sheet sheet)
     {
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
