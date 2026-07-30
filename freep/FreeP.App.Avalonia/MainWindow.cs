@@ -2768,6 +2768,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TrapezoidList)));
         r.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicCycle)));
+        r.Register(SmartArtAuthoringPlanner.SegmentedCycleLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.SegmentedCycle)));
         r.Register(SmartArtAuthoringPlanner.ContinuousCycleLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ContinuousCycle)));
         r.Register(SmartArtAuthoringPlanner.GearCycleLayoutCommandId,

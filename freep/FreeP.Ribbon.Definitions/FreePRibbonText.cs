@@ -406,6 +406,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtHorizontalBlockListCommand { get; } = new("Ribbon_Command_SmartArtHorizontalBlockList_Label", "Ribbon_Command_SmartArtHorizontalBlockList_KeyTip");
     public static RibbonText SmartArtTrapezoidListCommand { get; } = new("Ribbon_Command_SmartArtTrapezoidList_Label", "Ribbon_Command_SmartArtTrapezoidList_KeyTip");
     public static RibbonText SmartArtBasicCycleCommand { get; } = new("Ribbon_Command_SmartArtBasicCycle_Label", "Ribbon_Command_SmartArtBasicCycle_KeyTip");
+    public static RibbonText SmartArtSegmentedCycleCommand { get; } = new("Ribbon_Command_SmartArtSegmentedCycle_Label", "Ribbon_Command_SmartArtSegmentedCycle_KeyTip");
     public static RibbonText SmartArtContinuousCycleCommand { get; } = new("Ribbon_Command_SmartArtContinuousCycle_Label", "Ribbon_Command_SmartArtContinuousCycle_KeyTip");
     public static RibbonText SmartArtGearCycleCommand { get; } = new("Ribbon_Command_SmartArtGearCycle_Label", "Ribbon_Command_SmartArtGearCycle_KeyTip");
     public static RibbonText SmartArtTextCycleCommand { get; } = new("Ribbon_Command_SmartArtTextCycle_Label", "Ribbon_Command_SmartArtTextCycle_KeyTip");

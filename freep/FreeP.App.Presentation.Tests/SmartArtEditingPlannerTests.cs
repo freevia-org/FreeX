@@ -41,6 +41,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.HorizontalBlockList, "horizontalBlockList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.TrapezoidList, "trapezoidList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, "basicCycle", SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.SegmentedCycle, "segmentedCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.ContinuousCycle, "continuousCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.GearCycle, "gearCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.TextCycle, "textCycle", SmartArtFamily.Cycle)]
