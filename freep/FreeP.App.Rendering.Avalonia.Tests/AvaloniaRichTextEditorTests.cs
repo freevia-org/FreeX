@@ -613,6 +613,84 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task PointerDrag_UsesMeasuredWrappedLinesAndKeepsParagraphBoundary()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = TextBodyWithParagraphs(
+                "Wide words make this first paragraph wrap at unequal visual line widths",
+                "tail paragraph crosses the boundary");
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xFF)
+            {
+                Width = 150,
+                Height = 220,
+            };
+            var window = Show(editor, 150, 220);
+            try
+            {
+                editor.FocusEditor().Should().BeTrue();
+                await DrainInputAsync();
+
+                int secondParagraphStart = editor.RichTextView.VisualPlan.Paragraphs[1].GlobalStart;
+                var anchorPoint = new Point(112, 12);
+                int anchor = editor.RichTextView.HitTestLogicalPosition(anchorPoint);
+                anchor.Should().BeInRange(1, secondParagraphStart - 1,
+                    "the drag must begin on the wrapped first paragraph, not its newline");
+
+                Point caretPoint = default;
+                int caret = -1;
+                for (int y = 20; y < 190; y += 4)
+                {
+                    var candidate = new Point(8, y);
+                    int candidatePosition = editor.RichTextView.HitTestLogicalPosition(candidate);
+                    if (candidatePosition >= secondParagraphStart + 4)
+                    {
+                        caretPoint = candidate;
+                        caret = candidatePosition;
+                        break;
+                    }
+                }
+
+                caret.Should().BeGreaterThanOrEqualTo(secondParagraphStart + 4,
+                    "the deterministic scan must reach the second paragraph");
+                var expected = InCanvasRichTextPointerSelectionPlanner.Plan(
+                    anchor,
+                    caret,
+                    editor.Text.Length);
+
+                window.MouseMove(anchorPoint, RawInputModifiers.None);
+                window.MouseDown(
+                    anchorPoint,
+                    MouseButton.Left,
+                    RawInputModifiers.LeftMouseButton);
+                window.MouseMove(caretPoint, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(caretPoint, MouseButton.Left, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                editor.Selection.Should().Be(expected);
+                editor.Text[expected.Start..expected.End].Should().Contain("\n");
+                editor.RichTextView.SelectionRects.Should().HaveCountGreaterThan(1,
+                    "a cross-paragraph drag must render selection geometry for both paragraphs");
+
+                window.MouseDown(
+                    caretPoint,
+                    MouseButton.Left,
+                    RawInputModifiers.LeftMouseButton);
+                window.MouseMove(anchorPoint, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(anchorPoint, MouseButton.Left, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                editor.Selection.Should().Be(
+                    InCanvasRichTextPointerSelectionPlanner.Plan(caret, anchor, editor.Text.Length));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ImeLikeReplacementClipboardAndLocalUndoRedo_KeepRichBufferSynchronized()
     {
         await Session.Dispatch(async () =>

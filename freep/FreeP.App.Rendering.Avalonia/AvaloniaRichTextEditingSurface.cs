@@ -99,8 +99,9 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         if (_layouts.Count == 0)
             return 0;
 
-        var item = _layouts.FirstOrDefault(candidate => point.Y < candidate.Bottom)
-            ?? _layouts[^1];
+        var item = _layouts
+            .OrderBy(candidate => VerticalDistance(point.Y, candidate.Origin.Y, candidate.Bottom))
+            .First();
         var localPoint = new Point(
             Math.Max(0, point.X - item.Origin.X),
             Math.Max(0, point.Y - item.Origin.Y));
@@ -110,6 +111,15 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             0,
             item.Paragraph.Text.Length);
         return item.Paragraph.GlobalStart + localTextPosition;
+    }
+
+    private static double VerticalDistance(double value, double top, double bottom)
+    {
+        if (value < top)
+            return top - value;
+        if (value > bottom)
+            return value - bottom;
+        return 0;
     }
 
     internal InCanvasTextVerticalNavigationResult MoveCaretVertically(

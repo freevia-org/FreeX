@@ -418,16 +418,14 @@ internal sealed class AvaloniaRichTextEditor : Grid
             _pointerSelectionAnchor = CurrentSelectionAnchor();
             _keyboardSelectionAnchor = _pointerSelectionAnchor;
             _keyboardSelectionCaret = logicalPosition;
-            InputBox.SelectionStart = _pointerSelectionAnchor;
-            InputBox.SelectionEnd = logicalPosition;
+            ApplyPointerSelection(_pointerSelectionAnchor, logicalPosition);
         }
         else
         {
             _pointerSelectionAnchor = logicalPosition;
             _keyboardSelectionAnchor = logicalPosition;
             _keyboardSelectionCaret = logicalPosition;
-            InputBox.SelectionStart = logicalPosition;
-            InputBox.SelectionEnd = logicalPosition;
+            ApplyPointerSelection(logicalPosition, logicalPosition);
         }
 
         e.Pointer.Capture(InputBox);
@@ -442,12 +440,21 @@ internal sealed class AvaloniaRichTextEditor : Grid
             return;
 
         int logicalPosition = _richTextView.HitTestLogicalPosition(e.GetPosition(_richTextView));
-        InputBox.SelectionStart = _pointerSelectionAnchor;
-        InputBox.SelectionEnd = logicalPosition;
+        ApplyPointerSelection(_pointerSelectionAnchor, logicalPosition);
         _keyboardSelectionAnchor = _pointerSelectionAnchor;
         _keyboardSelectionCaret = logicalPosition;
         e.Handled = true;
         UpdateSurfaceSelection();
+    }
+
+    private void ApplyPointerSelection(int anchor, int caret)
+    {
+        var selection = InCanvasRichTextPointerSelectionPlanner.Plan(
+            anchor,
+            caret,
+            Text.Length);
+        InputBox.SelectionStart = selection.Start;
+        InputBox.SelectionEnd = selection.End;
     }
 
     private void OnInputPointerReleased(object? sender, PointerReleasedEventArgs e)

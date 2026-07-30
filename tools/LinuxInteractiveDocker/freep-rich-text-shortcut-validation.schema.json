@@ -13,7 +13,7 @@
     "shell": { "const": "avalonia" },
     "app": { "const": "FreeP" },
     "baseline": { "const": false },
-    "appSurface": { "enum": ["in-canvas-rich-text-soft-break", "in-canvas-grouped-child-rich-text", "in-canvas-grouped-child-caret"] },
+    "appSurface": { "enum": ["in-canvas-rich-text-soft-break", "in-canvas-grouped-child-rich-text", "in-canvas-grouped-child-caret", "in-canvas-grouped-child-pointer-selection"] },
     "window": {
       "type": "object",
       "additionalProperties": true,
@@ -30,7 +30,7 @@
       "additionalProperties": true,
       "required": ["scope", "exhaustive"],
       "properties": {
-        "scope": { "enum": ["physical FreeP rich-editor soft-break evidence lane", "physical FreeP grouped-child rich-editor edit-save-reopen lane", "physical FreeP grouped-child caret navigation selection edit-save-reopen lane"] },
+        "scope": { "enum": ["physical FreeP rich-editor soft-break evidence lane", "physical FreeP grouped-child rich-editor edit-save-reopen lane", "physical FreeP grouped-child caret navigation selection edit-save-reopen lane", "physical FreeP grouped-child pointer drag selection across unequal wrapped visual lines and a paragraph boundary"] },
         "exhaustive": { "const": false }
         }
     },
@@ -41,13 +41,10 @@
         "selection": { "const": "clipboard" },
         "transcripts": {
           "type": "array",
-          "const": [
-            "grouped-caret-selection",
-            "grouped-caret-vertical-down",
-            "grouped-caret-vertical-roundtrip"
-          ]
+          "items": { "type": "string", "minLength": 1 }
         },
-        "reopenProof": { "const": "grouped-caret-reopen-proof.txt" }
+        "reopenProof": { "type": "string" },
+        "geometryProof": { "type": "string" }
       }
     },
     "contractValidation": {
@@ -107,7 +104,34 @@
         "properties": {
           "semanticReadback": {
             "type": "object",
-            "required": ["tool", "selection", "transcripts", "reopenProof"]
+            "required": ["tool", "selection", "transcripts", "reopenProof"],
+            "properties": {
+              "tool": { "const": "xclip" },
+              "selection": { "const": "clipboard" },
+              "transcripts": { "const": ["grouped-caret-selection", "grouped-caret-vertical-down", "grouped-caret-vertical-roundtrip"] },
+              "reopenProof": { "const": "grouped-caret-reopen-proof.txt" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "appSurface": { "const": "in-canvas-grouped-child-pointer-selection" } },
+        "required": ["appSurface"]
+      },
+      "then": {
+        "required": ["semanticReadback"],
+        "properties": {
+          "semanticReadback": {
+            "type": "object",
+            "required": ["tool", "selection", "transcripts", "geometryProof"],
+            "properties": {
+              "tool": { "const": "xclip" },
+              "selection": { "const": "clipboard" },
+              "transcripts": { "const": ["pointer-selection-forward", "pointer-selection-reverse"] },
+              "geometryProof": { "const": "pointer-selection-calibration.txt" }
+            }
           }
         }
       }
