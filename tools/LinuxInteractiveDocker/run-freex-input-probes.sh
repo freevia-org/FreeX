@@ -1287,6 +1287,67 @@ print(f"values={values('dataFields', 'fld')}")
 PY
 }
 
+pivot_detail_package_signature() {
+    python3 - "$document_path" <<'PY'
+import posixpath
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+
+path = sys.argv[1]
+main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+rel = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+package_rel = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+
+with zipfile.ZipFile(path) as package:
+    workbook = ET.fromstring(package.read("xl/workbook.xml"))
+    relationships = ET.fromstring(package.read("xl/_rels/workbook.xml.rels"))
+    targets = {
+        item.attrib["Id"]: item.attrib["Target"]
+        for item in relationships.findall(package_rel + "Relationship")
+    }
+    strings = []
+    try:
+        shared = ET.fromstring(package.read("xl/sharedStrings.xml"))
+        for item in shared.findall(main + "si"):
+            strings.append("".join(node.text or "" for node in item.iter(main + "t")))
+    except KeyError:
+        pass
+
+    detail = None
+    for sheet in workbook.find(main + "sheets"):
+        if sheet.attrib["name"].startswith("Detail"):
+            detail = sheet
+            break
+    if detail is None:
+        raise SystemExit(1)
+
+    target = targets[detail.attrib[rel + "id"]].lstrip("/")
+    if not target.startswith("xl/"):
+        target = posixpath.normpath(posixpath.join("xl", target))
+    worksheet = ET.fromstring(package.read(target))
+
+def cell_value(address):
+    for cell in worksheet.iter(main + "c"):
+        if cell.attrib.get("r") != address:
+            continue
+        value = cell.find(main + "v")
+        if value is None:
+            return ""
+        text = value.text or ""
+        if cell.attrib.get("t") == "s":
+            return strings[int(text)]
+        return text
+    return ""
+
+sheet_count = len(workbook.find(main + "sheets"))
+print(f"detail={detail.attrib['name']}")
+print(f"sheet-count={sheet_count}")
+for address in ("A1", "B1", "C1", "A2", "B2", "C2"):
+    print(f"{address}={cell_value(address)}")
+PY
+}
+
 wait_for_document_hash_change() {
     local before="$1" current=""
     for _ in $(seq 1 20); do
@@ -1387,6 +1448,68 @@ probe_pivot_field_list() {
             "pivot-field-list-cross-bucket.png; pivot-field-list-reorder.png; pivot-field-list-postcondition.txt" \
             "The physical Rows reorder did not produce the expected persisted layout: $after_layout" \
             "pivot-field-list-cross-bucket.png;pivot-field-list-reorder.png;pivot-field-list-postcondition.txt"
+    fi
+}
+
+probe_pivot_table_details_double_click() {
+    local before_hash after_hash package_signature
+    local header_a header_b header_c row_a row_b row_c
+    local passed=false
+    local artifacts="pivot-details-before.png;pivot-details-after-double-click.png;pivot-details-readback.png;pivot-details-postcondition.txt"
+
+    before_hash="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}' || true)"
+    capture "pivot-details-before.png"
+
+    # F2 is the first rendered value cell in the deterministic PivotTable fixture.
+    # Keep both clicks inside the framework double-click interval while allowing the
+    # first click's contextual-pane refresh to complete at the same cell coordinate.
+    focus_app
+    xdotool_mousemove_sync "$(cell_center_x 5)" "$(cell_center_y 1)"
+    xdotool click --repeat 2 --delay 180 1
+    sleep "$dialog_settle_seconds"
+    capture "pivot-details-after-double-click.png"
+
+    header_a="$(copy_cell_display 0 0 A1 || true)"
+    header_b="$(copy_cell_display 1 0 B1 || true)"
+    header_c="$(copy_cell_display 2 0 C1 || true)"
+    row_a="$(copy_cell_display 0 1 A2 || true)"
+    row_b="$(copy_cell_display 1 1 B2 || true)"
+    row_c="$(copy_cell_display 2 1 C2 || true)"
+    capture "pivot-details-readback.png"
+
+    send_key ctrl+s
+    after_hash="$(wait_for_document_hash_change "$before_hash" || true)"
+    package_signature="$(pivot_detail_package_signature || true)"
+    write_artifact "pivot-details-postcondition.txt" \
+        "clipboard=A1:$header_a|B1:$header_b|C1:$header_c|A2:$row_a|B2:$row_b|C2:$row_c\nbefore-hash=$before_hash\nafter-hash=$after_hash\n$package_signature\n"
+
+    if [[ "$header_a" == "Region" &&
+          "$header_b" == "Category" &&
+          "$header_c" == "Amount" &&
+          "$row_a" == "North" &&
+          "$row_b" == "Hardware" &&
+          "$row_c" == "100" &&
+          "$package_signature" == *"detail=Detail"* &&
+          "$package_signature" == *"sheet-count=2"* &&
+          "$package_signature" == *"A1=Region"* &&
+          "$package_signature" == *"B1=Category"* &&
+          "$package_signature" == *"C1=Amount"* &&
+          "$package_signature" == *"A2=North"* &&
+          "$package_signature" == *"B2=Hardware"* &&
+          "$package_signature" == *"C2=100"* ]]; then
+        passed=true
+    fi
+
+    if $passed; then
+        record "pivot-table-details-double-click-physical" "passed" \
+            "pivot-details-after-double-click.png; clipboard readback Region|Category|Amount and North|Hardware|100; $package_signature" \
+            "A physical double-click on PivotTable value cell F2 activated a new Detail sheet before inline editing; X11 clipboard reads and the saved OOXML package agree on the detail rows." \
+            "$artifacts"
+    else
+        record "pivot-table-details-double-click-physical" "failed" \
+            "pivot-details-before.png; pivot-details-after-double-click.png; pivot-details-readback.png; pivot-details-postcondition.txt" \
+            "The physical F2 double-click did not create and persist the expected Detail worksheet (clipboard='$header_a|$header_b|$header_c;$row_a|$row_b|$row_c'; package='$package_signature')." \
+            "$artifacts"
     fi
 }
 
@@ -3058,6 +3181,19 @@ if [[ "$probe_selector" == "pivot-field-list" ]]; then
     probe_pivot_field_list
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused PivotTable field-list probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "pivot-table-details-double-click" ]]; then
+    # Focused physical proof that PivotTable value double-click wins over inline edit.
+    probe_pivot_table_details_double_click
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused PivotTable details probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then

@@ -119,7 +119,7 @@ internal static class AvaloniaDialogRouteFactory
         if (routeId == "table-formula")
             return CreateTableFormula(state);
         if (routeId == "table-properties")
-            return CreateTableProperties(state, tab);
+            return CreateTableProperties(tab);
 
         if (routeId == "style")
             return CreateStyle(state);
@@ -319,7 +319,7 @@ internal static class AvaloniaDialogRouteFactory
         return dialog;
     }
 
-    private static Window CreateTableProperties(string state, string? tab)
+    private static Window CreateTableProperties(string? tab)
     {
         var table = new Table();
         var row = new TableRow();
@@ -332,16 +332,10 @@ internal static class AvaloniaDialogRouteFactory
         var initialTab = Enum.Parse(tabType, tab ?? "Table", true);
         var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Single();
         var dialog = (Window)constructor.Invoke([context, initialTab]);
-        if (state == "populated")
-        {
-            ((TextBox)type.GetField("_preferredWidth", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(dialog)!).Text = "300";
-            ((CheckBox)type.GetField("_preferredWidthOn", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(dialog)!).IsChecked = true;
-        }
-        if (state == "validation-error")
-        {
-            ((TextBox)type.GetField("_indent", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(dialog)!).Text = "-1";
-            type.GetMethod("AcceptForTest", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(dialog, null);
-        }
+
+        // Keep state setup in the shared harness Populate pass, exactly as WPF does.
+        // The Avalonia adapter previously mutated these fields here, which made the
+        // populated and validation captures represent different documents on each host.
         return dialog;
     }
 

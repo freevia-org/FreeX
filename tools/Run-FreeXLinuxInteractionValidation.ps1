@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag")]
+    [ValidateSet("all", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -55,6 +55,7 @@ $x11ProbeScript = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freex-inpu
 $native3dFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave66Native3DFixture.ps1"
 $native3dSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-native-3d-formula-validation.schema.json"
 $nameBoxObjectsSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-name-box-dropdown-objects-validation.schema.json"
+$pivotDetailsFixturePath = Join-Path $repoRoot "tests/FreeX.App.Avalonia.Tests/Fixtures/FreeX_wave50_pivot_fields.xlsx"
 $runnerSchemaVersion = 2
 $resumeRequested = -not [string]::IsNullOrWhiteSpace($ResumeReportDirectory)
 $reportStamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
@@ -1076,6 +1077,15 @@ try {
             throw "formula-3d-native-xlsx requires an .xlsx PhysicalDocumentPath."
         }
     }
+    if ($PhysicalProbeSelector -eq "pivot-table-details-double-click") {
+        if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
+            $PhysicalDocumentPath = $pivotDetailsFixturePath
+        }
+        if (-not (Test-Path -LiteralPath $PhysicalDocumentPath -PathType Leaf) -or
+            [IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx") {
+            throw "pivot-table-details-double-click requires an existing .xlsx PhysicalDocumentPath."
+        }
+    }
     if ($SkipX11) {
         if ([string]::IsNullOrWhiteSpace($ExistingX11Manifest) -or
             -not (Test-Path -LiteralPath $ExistingX11Manifest -PathType Leaf)) {
@@ -1152,6 +1162,10 @@ try {
         @(
             "pivot-field-drag-cross-bucket-physical",
             "pivot-field-drag-same-bucket-reorder-physical"
+        )
+    } elseif ($PhysicalProbeSelector -eq "pivot-table-details-double-click") {
+        @(
+            "pivot-table-details-double-click-physical"
         )
     } elseif ($PhysicalProbeSelector -eq "autofilter-recalculation") {
         @(
@@ -1246,6 +1260,10 @@ try {
         @(
             "pivot-field-drag-cross-bucket-physical",
             "pivot-field-drag-same-bucket-reorder-physical"
+        )
+    } elseif ($PhysicalProbeSelector -eq "pivot-table-details-double-click") {
+        @(
+            "pivot-table-details-double-click-physical"
         )
     } elseif ($PhysicalProbeSelector -eq "autofilter-recalculation") {
         @(

@@ -508,6 +508,8 @@ public sealed partial class MainWindow : Window
     private bool _suppressNextInlineCellValueAutoCompleteSuggestion;
     private CellAddress? _lastCellPointerPressAddress;
     private long _lastCellPointerPressTimestamp;
+    private CellAddress? _pivotDetailsDoubleClickHandledAddress;
+    private long _pivotDetailsDoubleClickHandledTimestamp;
     private CellAddress? _formulaRangeSelectionAnchor;
     private CellAddress? _formulaRangeSelectionCursor;
     private FormulaSheetSpanEntryState _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
@@ -9295,6 +9297,12 @@ public sealed partial class MainWindow : Window
 
             if (point.Properties.IsLeftButtonPressed && IsCellDoubleClick(address, args.ClickCount))
             {
+                if (ConsumePivotDetailsDoubleClickSuppression(address))
+                {
+                    args.Handled = true;
+                    return;
+                }
+
                 var editText = FormatEditText(_session.ActiveSheet.GetCell(address), address);
                 var caretIndex = CalculateInlineCellCaretIndex(
                     editText,
@@ -9306,7 +9314,8 @@ public sealed partial class MainWindow : Window
                     fontFamily ?? FontFamily.Default,
                     (8 + indentPadding) * zoomFactor,
                     textAlignment);
-                BeginInlineCellEdit(address, editText, caretIndex);
+                if (!TryShowPivotTableDetailsFromDoubleClick(address))
+                    BeginInlineCellEdit(address, editText, caretIndex);
                 args.Handled = true;
                 return;
             }
@@ -9320,6 +9329,12 @@ public sealed partial class MainWindow : Window
         // the per-cell Border which gets destroyed the moment SelectRangeFromAnchor triggers RefreshShell.
         border.DoubleTapped += (_, args) =>
         {
+            if (ConsumePivotDetailsDoubleClickSuppression(address))
+            {
+                args.Handled = true;
+                return;
+            }
+
             var editText = FormatEditText(_session.ActiveSheet.GetCell(address), address);
             var caretIndex = CalculateInlineCellCaretIndex(
                 editText,
@@ -9331,7 +9346,8 @@ public sealed partial class MainWindow : Window
                 fontFamily ?? FontFamily.Default,
                 (8 + indentPadding) * zoomFactor,
                 textAlignment);
-            BeginInlineCellEdit(address, editText, caretIndex);
+            if (!TryShowPivotTableDetailsFromDoubleClick(address))
+                BeginInlineCellEdit(address, editText, caretIndex);
             args.Handled = true;
         };
         if (Equals(_inlineCellEditAddress, address))

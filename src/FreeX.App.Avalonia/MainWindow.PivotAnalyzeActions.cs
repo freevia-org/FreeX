@@ -3,6 +3,8 @@ using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
+using System.Diagnostics;
+
 namespace FreeX.App.Avalonia;
 
 /// <summary>
@@ -107,6 +109,54 @@ public sealed partial class MainWindow
             new DrillDownPivotTableCommand(_session.ActiveSheet.Id, pivot.Name, _session.ActiveCell),
             UiText.Format("PivotAnalyze_ShowDetailsDone", pivot.Name));
     }
+
+    /// <summary>
+    /// Mirrors the WPF grid's double-click precedence: a value cell inside a PivotTable drills into a
+    /// new detail worksheet before the ordinary inline-cell editor is opened. Returns false when the
+    /// active selection is not a PivotTable cell so the caller can continue into inline editing.
+    /// </summary>
+    private bool TryShowPivotTableDetailsFromDoubleClick(CellAddress? pointerAddress = null)
+    {
+        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
+            return false;
+
+        var target = PivotUiPlanner.ResolveShowDetailsTarget(_session.ActiveSheet, _session.SelectedRange);
+        if (target is null)
+            return false;
+
+        var result = _session.ExecuteReviewCommand(
+            new DrillDownPivotTableCommand(_session.ActiveSheet.Id, target.PivotTableName, target.PivotCell));
+        if (!result.Success)
+        {
+            RefreshShell(result.ErrorMessage ?? UiText.Get("PivotLoc_UpdateFailed"));
+            return false;
+        }
+
+        if (pointerAddress is { } address)
+        {
+            _pivotDetailsDoubleClickHandledAddress = address;
+            _pivotDetailsDoubleClickHandledTimestamp = Stopwatch.GetTimestamp();
+        }
+
+        _pivotPaneSignature = null;
+        RefreshShell(UiText.Format("PivotAnalyze_ShowDetailsDone", target.PivotTableName));
+        return true;
+    }
+
+    private bool ConsumePivotDetailsDoubleClickSuppression(CellAddress address)
+    {
+        if (_pivotDetailsDoubleClickHandledAddress != address)
+            return false;
+
+        var elapsed = Stopwatch.GetElapsedTime(_pivotDetailsDoubleClickHandledTimestamp);
+        _pivotDetailsDoubleClickHandledAddress = null;
+        _pivotDetailsDoubleClickHandledTimestamp = 0;
+        return elapsed <= TimeSpan.FromMilliseconds(500);
+    }
+
+    /// <summary>Test seam for the real WPF-parity double-click precedence route.</summary>
+    internal bool TryShowPivotTableDetailsFromDoubleClickForTest() =>
+        TryShowPivotTableDetailsFromDoubleClick();
 
     // ── Analyze ▸ Show ▸ +/- Buttons ─────────────────────────────────────────────
 

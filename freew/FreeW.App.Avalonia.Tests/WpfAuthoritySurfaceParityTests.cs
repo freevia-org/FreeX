@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Free.Shared.Ribbon;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
@@ -231,6 +232,53 @@ public sealed class WpfAuthoritySurfaceParityTests
             cell.WidthPt.Should().Be(144);
             cell.Margins.Should().Be(new TableCellMargins(3, 5, 3, 5));
         }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Table_properties_uses_Wpf_action_row_and_checkbox_chrome()
+    {
+        await Session.Dispatch(() =>
+        {
+            var (_, table) = CreateTableEditor();
+            var dialog = new TablePropertiesDialog(
+                new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]));
+
+            var buttons = dialog.GetLogicalDescendants().OfType<Button>()
+                .Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton)
+                .ToArray();
+            var ok = buttons.Single(button => button.IsDefault);
+            var row = ok.Parent.Should().BeOfType<StackPanel>().Subject;
+
+            row.Spacing.Should().Be(14);
+            ok.BorderBrush.Should().BeOfType<SolidColorBrush>();
+            ((SolidColorBrush)ok.BorderBrush!).Color.Should().Be(Color.FromRgb(200, 200, 200));
+            dialog.GetLogicalDescendants().OfType<CheckBox>()
+                .Should().OnlyContain(check => check.Margin.Left == 4);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public void Table_properties_visual_harness_defers_state_population_to_the_common_pass()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "tools",
+            "FreeW.DialogVisualHarness.Avalonia",
+            "AvaloniaDialogRouteFactory.cs"));
+        var start = source.IndexOf(
+            "private static Window CreateTableProperties",
+            StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        var end = source.IndexOf("private static Window CreateStyle", start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start);
+        var method = source[start..end];
+
+        method.Should().Contain("return dialog;");
+        method.Should().NotContain("_preferredWidth");
+        method.Should().NotContain("AcceptForTest");
+        method.Should().NotContain("state ==");
     }
 
     [Fact]
