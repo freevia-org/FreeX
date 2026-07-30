@@ -2753,7 +2753,7 @@ public static class PptxPackageReader
         if (uid.Contains("cycle") || uid.Contains("gear") || uid.Contains("radial"))
             return SmartArtFamily.Cycle;
 
-        if (uid.Contains("horizontalbulletlist") || uid.Contains("horizontalblocklist") || uid.Contains("horizontalpicturelist") || uid.Contains("verticalchevronlist"))
+        if (uid.Contains("horizontalbulletlist") || uid.Contains("horizontalblocklist") || uid.Contains("horizontalpicturelist") || uid.Contains("verticalchevronlist") || uid.Contains("verticalarrowlist"))
             return SmartArtFamily.List;
 
         if (uid.Contains("process") || uid.Contains("timeline") || uid.Contains("arrow") || uid.Contains("chevron")
