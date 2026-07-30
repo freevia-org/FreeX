@@ -15,6 +15,9 @@ public sealed class NameBoxDropdownParityCaptureSourceTests
         capture.Should().Contain("RenderElementOnBackground");
         capture.Should().Contain("NameBoxDropdownParityCaptureWidth");
         capture.Should().Contain("NameBoxDropdownParityCaptureHeight");
+        capture.Should().Contain("wpf-production-popup-render-target");
+        capture.Should().Contain(
+            "string.Equals(targetSurfaceId, \"popup.nameBoxDropdown\", StringComparison.Ordinal)");
 
         helper.Should().Contain("EnsureFormulaBarNameBoxTourContext");
         helper.Should().Contain("CellAddressBox.IsDropDownOpen = true");
@@ -43,5 +46,25 @@ public sealed class NameBoxDropdownParityCaptureSourceTests
         avaloniaSource.Should().Contain("SeedNameBoxDropdownPhysicalFixture");
         avaloniaSource.Should().Contain("67000000-0000-0000-0000-000000000001");
         avaloniaSource.Should().Contain("67000000-0000-0000-0000-000000000004");
+    }
+
+    [Fact]
+    public void AvaloniaParityCapture_RejectsSyntheticPopupEvidenceAndRequiresNativeX11()
+    {
+        var capture = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+        var parityManifest = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Avalonia", "ParityCapture.cs");
+        var probe = WorkspaceFileLocator.ReadAllText(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh");
+
+        capture.Should().NotContain("CreateNameBoxDropdownParitySnapshot");
+        capture.Should().Contain("managed-popup-diagnostic");
+        capture.Should().Contain("Captured: false");
+        parityManifest.Should().Contain("evidenceProvenance");
+        probe.Should().Contain("probe_name_box_dropdown_parity");
+        probe.Should().Contain("\"native-x11-root-crop\"");
+        probe.Should().Contain("-crop \"208x136+${popup_x}+${popup_y}\" +repage");
+        probe.Should().NotContain("-resize 208x136");
     }
 }

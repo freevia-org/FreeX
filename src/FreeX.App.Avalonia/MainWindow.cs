@@ -1323,6 +1323,13 @@ public sealed partial class MainWindow : Window
         {
             SeedNameBoxDropdownPhysicalFixture();
         }
+        if (startupArguments.Any(argument => string.Equals(
+                argument,
+                InteractionValidationOptions.NameBoxDropdownParityPhysicalFixtureArgument,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            SeedNameBoxDropdownParityFixture();
+        }
 
         Title = FormatWindowWorkbookTitle();
         ApplyWindowIcon();
@@ -19010,7 +19017,11 @@ public sealed partial class MainWindow : Window
             var text = new TextBlock
             {
                 Text = item.Name,
-                Padding = new Thickness(8, 4),
+                FontFamily = new FontFamily("Consolas, DejaVu Sans Mono, Liberation Mono, monospace"),
+                FontSize = 15,
+                Height = 26.8,
+                Padding = new Thickness(8, 3),
+                TextWrapping = TextWrapping.NoWrap,
             };
             AutomationProperties.SetName(text, item.AccessibleDescription);
             return text;

@@ -60,7 +60,8 @@ internal static class ParityCapture
         bool Captured,
         string Note,
         int? Width = null,
-        int? Height = null);
+        int? Height = null,
+        string? EvidenceProvenance = null);
 
     /// <summary>
     /// Returns the output directory if <paramref name="args"/> requests parity capture, else null.
@@ -141,7 +142,7 @@ internal static class ParityCapture
         if (string.IsNullOrWhiteSpace(targetSurfaceId) ||
             !targetSurfaceId.StartsWith("dialog.", StringComparison.Ordinal))
         {
-            CaptureRibbonAndShell(outDir, mainWindowFactory, results);
+            CaptureRibbonAndShell(outDir, mainWindowFactory, results, targetSurfaceId);
         }
 
         if (string.IsNullOrWhiteSpace(targetSurfaceId) ||
@@ -160,7 +161,10 @@ internal static class ParityCapture
     // ----- Ribbon tabs + grid + backstage: driven from one live, offscreen MainWindow -----
 
     private static void CaptureRibbonAndShell(
-        string outDir, Func<MainWindow> mainWindowFactory, List<SurfaceResult> results)
+        string outDir,
+        Func<MainWindow> mainWindowFactory,
+        List<SurfaceResult> results,
+        string? targetSurfaceId = null)
     {
         MainWindow? window = null;
         try
@@ -184,6 +188,12 @@ internal static class ParityCapture
             PumpDispatcher();
             window.UpdateLayout();
             PumpDispatcher();
+
+            if (string.Equals(targetSurfaceId, "popup.nameBoxDropdown", StringComparison.Ordinal))
+            {
+                CaptureNameBoxDropdownSurface(outDir, window, results);
+                return;
+            }
 
             // Static ribbon tabs.
             foreach (var (surfaceId, catalogId) in RibbonTabSurfaces)
@@ -1679,7 +1689,8 @@ internal static class ParityCapture
 
     private static void CaptureSurface(
         List<SurfaceResult> results, string surfaceId, string kind, string outDir, Func<BitmapSource> render,
-        string note = "")
+        string note = "",
+        string? evidenceProvenance = null)
     {
         var pngName = surfaceId + ".png";
         try
@@ -1692,7 +1703,15 @@ internal static class ParityCapture
             encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using var stream = File.Create(Path.Combine(outDir, pngName));
             encoder.Save(stream);
-            results.Add(new SurfaceResult(surfaceId, kind, pngName, true, note, bitmap.PixelWidth, bitmap.PixelHeight));
+            results.Add(new SurfaceResult(
+                surfaceId,
+                kind,
+                pngName,
+                true,
+                note,
+                bitmap.PixelWidth,
+                bitmap.PixelHeight,
+                evidenceProvenance));
         }
         catch (Exception ex)
         {
@@ -1719,7 +1738,8 @@ internal static class ParityCapture
                     MainWindow.NameBoxDropdownParityCaptureWidth,
                     MainWindow.NameBoxDropdownParityCaptureHeight,
                     Brushes.White),
-                note: "WPF production Name Box ComboBox popup rendered from the screenshot-tour fixture.");
+                note: "WPF production Name Box ComboBox popup rendered from the screenshot-tour fixture.",
+                evidenceProvenance: "wpf-production-popup-render-target");
         }
         finally
         {
@@ -1849,6 +1869,7 @@ internal static class ParityCapture
                 note = r.Note,
                 width = r.Width,
                 height = r.Height,
+                evidenceProvenance = r.EvidenceProvenance,
             }),
         };
 

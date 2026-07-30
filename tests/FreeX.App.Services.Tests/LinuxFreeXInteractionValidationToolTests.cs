@@ -112,4 +112,29 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         window[selectCellStart..selectCellEnd].Should().NotContain(
             "RecordNameBoxDropdownPhysicalEvidence");
     }
+
+    [Fact]
+    public void NameBoxParityPhysicalLaneRequiresLiveX11CropProvenance()
+    {
+        var runner = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+
+        runner.Should().Contain("\"name-box-dropdown-parity\"");
+        runner.Should().Contain("--freex-name-box-dropdown-parity-physical");
+        runner.Should().Contain("Assert-NameBoxDropdownParityNativeContract");
+        runner.Should().Contain("native-x11-root-crop");
+        runner.Should().Contain("Name Box parity native crop pixels must be 208x136");
+        runner.Should().Contain("name-box-dropdown-parity-native");
+
+        probe.Should().Contain("probe_name_box_dropdown_parity()");
+        probe.Should().Contain("name-box-dropdown-parity-before-x11.txt");
+        probe.Should().Contain("name-box-dropdown-parity-open-x11.txt");
+        probe.Should().Contain("if len(candidates) == 1");
+        probe.Should().Contain("-crop \"208x136+${popup_x}+${popup_y}\" +repage");
+        probe.Should().Contain("\"evidenceProvenance\": \"native-x11-root-crop\"");
+        probe.Should().Contain("\"resized\": False");
+        probe.Should().NotContain("-resize 208x136");
+    }
 }

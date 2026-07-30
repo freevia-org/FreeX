@@ -6,7 +6,8 @@ namespace FreeX.ParityCompare.Core;
 /// <summary>
 /// The manifest each shell's <c>--parity-capture &lt;dir&gt;</c> mode writes to
 /// <c>&lt;dir&gt;/manifest.json</c>. Shape per the capture contract:
-/// <c>{ "platform","shell","surfaces":[{"id","kind","png","captured","note","width","height"}] }</c>.
+/// <c>{ "platform","shell","surfaces":[{"id","kind","png","captured","note","width","height",
+/// "evidenceProvenance"}] }</c>.
 /// </summary>
 public sealed class CaptureManifest
 {
@@ -69,4 +70,28 @@ public sealed class CapturedSurface
     /// <summary>Optional rendered pixel height. Fixed-size contracts use this to fail closed on clipping.</summary>
     [JsonPropertyName("height")]
     public int? Height { get; set; }
+
+    /// <summary>Capture origin used by fail-closed contracts to reject reconstructed evidence.</summary>
+    [JsonPropertyName("evidenceProvenance")]
+    public string? EvidenceProvenance { get; set; }
+
+    /// <summary>Native root screenshot from which a physical popup frame was cropped.</summary>
+    [JsonPropertyName("sourcePng")]
+    public string? SourcePng { get; set; }
+
+    /// <summary>Machine-readable X11 popup-window and crop geometry evidence.</summary>
+    [JsonPropertyName("geometryEvidence")]
+    public string? GeometryEvidence { get; set; }
+
+    [JsonPropertyName("sourceX")]
+    public int? SourceX { get; set; }
+
+    [JsonPropertyName("sourceY")]
+    public int? SourceY { get; set; }
+
+    [JsonPropertyName("sourceWidth")]
+    public int? SourceWidth { get; set; }
+
+    [JsonPropertyName("sourceHeight")]
+    public int? SourceHeight { get; set; }
 }

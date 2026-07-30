@@ -2255,54 +2255,28 @@ public sealed partial class MainWindow
     {
         const string surfaceId = "popup.nameBoxDropdown";
         const string pngName = surfaceId + ".png";
+        const string provenance = "managed-popup-diagnostic";
 
         try
         {
+            var stalePngPath = Path.Combine(outputDirectory, pngName);
+            if (File.Exists(stalePngPath))
+                File.Delete(stalePngPath);
+
             SeedNameBoxDropdownParityFixture();
             ShowCellAddressAutocompletePopup();
             LayoutWindow();
 
-            if (_cellAddressAutocompletePopup?.Child is not Visual popupChild)
-                throw new InvalidOperationException("The Avalonia Name Box popup did not expose a renderable child.");
+            if (_cellAddressAutocompletePopup?.Child is not Visual)
+                throw new InvalidOperationException("The Avalonia Name Box popup did not expose its production child.");
 
-            // Popup children are hosted outside the main window's layout pass. Materialize the production
-            // ListBox template and give the actual popup child the same fixed frame used by WPF before the
-            // offscreen renderer visits it; otherwise Avalonia can return a valid but blank white bitmap.
-            _cellAddressAutocompleteListBox?.ApplyTemplate();
-            if (_cellAddressAutocompleteListBox is { } popupList)
-            {
-                var listSize = new Size(NameBoxDropdownParityCaptureWidth, NameBoxDropdownParityCaptureHeight);
-                popupList.Measure(listSize);
-                popupList.Arrange(new Rect(0, 0, listSize.Width, listSize.Height));
-                popupList.UpdateLayout();
-            }
-            if (popupChild is Layoutable popupLayoutable)
-            {
-                var popupSize = new Size(NameBoxDropdownParityCaptureWidth, NameBoxDropdownParityCaptureHeight);
-                popupLayoutable.Measure(popupSize);
-                popupLayoutable.Arrange(new Rect(0, 0, popupSize.Width, popupSize.Height));
-            }
-            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
-
-            RenderVisualToPng(
-                CreateNameBoxDropdownParitySnapshot(),
-                NameBoxDropdownParityCaptureWidth,
-                NameBoxDropdownParityCaptureHeight,
-                Path.Combine(outputDirectory, pngName));
-            var result = ParityCaptureOutputGuard.ResultForPng(
+            return new ParitySurfaceResult(
                 surfaceId,
                 ParitySurfaceKind.Overlay,
-                outputDirectory,
                 pngName,
-                NameBoxDropdownParityCaptureWidth,
-                NameBoxDropdownParityCaptureHeight,
-                minimumBytes: 2_048);
-            return result with
-            {
-                Note = result.Captured
-                    ? "Avalonia production Name Box popup opened; offscreen evidence renders its live popup item set in the fixed popup frame because the native Popup child is not directly renderable by the desktop renderer."
-                    : result.Note,
-            };
+                Captured: false,
+                "Managed popup opening is diagnostic only. Authoritative Avalonia parity requires the live native X11 popup crop from the name-box-dropdown-parity physical selector.",
+                EvidenceProvenance: provenance);
         }
         catch (Exception ex)
         {
@@ -2311,7 +2285,8 @@ public sealed partial class MainWindow
                 ParitySurfaceKind.Overlay,
                 pngName,
                 Captured: false,
-                $"{ex.GetType().Name}: {ex.Message}");
+                $"{ex.GetType().Name}: {ex.Message}",
+                EvidenceProvenance: provenance);
         }
         finally
         {
@@ -2319,37 +2294,6 @@ public sealed partial class MainWindow
                 popup.IsOpen = false;
             LayoutWindow();
         }
-    }
-
-    private Border CreateNameBoxDropdownParitySnapshot()
-    {
-        var list = new StackPanel
-        {
-            Orientation = Orientation.Vertical,
-        };
-        foreach (var item in BuildCellAddressAutocompleteItems())
-        {
-            list.Children.Add(new TextBlock
-            {
-                Text = item.Name,
-                FontFamily = new FontFamily("Consolas"),
-                FontSize = 15,
-                Foreground = Brushes.Black,
-                Height = 26,
-                Padding = new Thickness(8, 3),
-                TextWrapping = TextWrapping.NoWrap,
-            });
-        }
-
-        return new Border
-        {
-            Width = NameBoxDropdownParityCaptureWidth,
-            Height = NameBoxDropdownParityCaptureHeight,
-            Background = Brushes.White,
-            BorderBrush = FormulaBarControlBorder,
-            BorderThickness = new Thickness(1),
-            Child = list,
-        };
     }
 
     /// <summary>

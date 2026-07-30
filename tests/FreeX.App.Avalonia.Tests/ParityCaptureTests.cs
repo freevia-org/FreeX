@@ -358,7 +358,7 @@ public sealed class ParityCaptureTests
     }
 
     [Fact]
-    public async Task CaptureParitySurfaces_CapturesNameBoxDropdownAtFixedPairSize()
+    public async Task CaptureParitySurfaces_RejectsManagedNameBoxDropdownAsAuthoritativeEvidence()
     {
         var outputDirectory = Path.Combine(
             Path.GetTempPath(),
@@ -384,16 +384,13 @@ public sealed class ParityCaptureTests
                     var popup = results.Single();
                     popup.Id.Should().Be("popup.nameBoxDropdown");
                     popup.Kind.Should().Be(ParitySurfaceKind.Overlay);
-                    popup.Captured.Should().BeTrue(popup.Note);
-                    popup.Width.Should().Be(MainWindow.NameBoxDropdownParityCaptureWidth);
-                    popup.Height.Should().Be(MainWindow.NameBoxDropdownParityCaptureHeight);
-
-                    var pngPath = Path.Combine(outputDirectory, popup.PngFileName);
-                    AssertCapturedPng(outputDirectory, popup);
-                    ReadPngDimensions(pngPath).Should().Be((208, 136),
-                        "the popup pair must be rendered into the fixed same-size frame");
-                    new FileInfo(pngPath).Length.Should().BeGreaterThan(2_048,
-                        "the open popup must contain all five fixture entries, not a blank shell");
+                    popup.Captured.Should().BeFalse();
+                    popup.Width.Should().BeNull();
+                    popup.Height.Should().BeNull();
+                    popup.EvidenceProvenance.Should().Be("managed-popup-diagnostic");
+                    popup.Note.Should().Contain("live native X11 popup crop");
+                    File.Exists(Path.Combine(outputDirectory, popup.PngFileName)).Should().BeFalse(
+                        "managed/offscreen popup diagnostics must never emit authoritative parity PNGs");
                 }
                 finally
                 {

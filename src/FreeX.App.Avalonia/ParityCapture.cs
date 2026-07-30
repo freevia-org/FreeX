@@ -141,7 +141,8 @@ internal sealed record ParitySurfaceResult(
     bool Captured,
     string Note,
     int? Width = null,
-    int? Height = null)
+    int? Height = null,
+    string? EvidenceProvenance = null)
 {
     public static string KindToken(ParitySurfaceKind kind) => kind switch
     {
@@ -278,7 +279,8 @@ internal static class ParityCaptureCoordinator
 
     /// <summary>
     /// Serializes the manifest with the EXACT contract the comparison runner depends on:
-    /// <c>{ "platform", "shell": "avalonia", "surfaces": [ { "id", "kind", "png", "captured", "note" } ] }</c>.
+    /// <c>{ "platform", "shell": "avalonia", "surfaces": [ { "id", "kind", "png", "captured", "note",
+    /// "width", "height", "evidenceProvenance" } ] }</c>.
     /// Hand-rolled (no JSON dependency) so the portable services tier stays untouched and the output is stable.
     /// </summary>
     private static void WriteManifest(string outputDirectory, IReadOnlyList<ParitySurfaceResult> results)
@@ -298,7 +300,8 @@ internal static class ParityCaptureCoordinator
             builder.Append("\"captured\": ").Append(r.Captured ? "true" : "false").Append(", ");
             builder.Append("\"note\": ").Append(JsonString(r.Note)).Append(", ");
             builder.Append("\"width\": ").Append(r.Width?.ToString(CultureInfo.InvariantCulture) ?? "null").Append(", ");
-            builder.Append("\"height\": ").Append(r.Height?.ToString(CultureInfo.InvariantCulture) ?? "null").Append(" }");
+            builder.Append("\"height\": ").Append(r.Height?.ToString(CultureInfo.InvariantCulture) ?? "null").Append(", ");
+            builder.Append("\"evidenceProvenance\": ").Append(JsonString(r.EvidenceProvenance ?? "")).Append(" }");
             builder.Append(i < results.Count - 1 ? ",\n" : "\n");
         }
         builder.Append("  ]\n");

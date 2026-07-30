@@ -418,6 +418,179 @@ print("\x1f".join(value(key) for key in (
 PY
 }
 
+probe_name_box_dropdown_parity() {
+    local dropdown_x dropdown_y popup_count=0 popup_id="" popup_x=0 popup_y=0 popup_width=0 popup_height=0
+    local before_root="name-box-dropdown-parity-before-root.png"
+    local before_x11="name-box-dropdown-parity-before-x11.txt"
+    local open_root="name-box-dropdown-parity-open-root.png"
+    local open_x11="name-box-dropdown-parity-open-x11.txt"
+    local crop_png="popup.nameBoxDropdown.png"
+    local geometry_json="name-box-dropdown-parity-native.json"
+    local parity_manifest="name-box-dropdown-parity-manifest.json"
+    local parity_directory="$output/name-box-dropdown-parity-native"
+    local captured=false reason="" color_count=0
+    local artifacts="$before_root;$before_x11;$open_root;$open_x11;$crop_png;$geometry_json;$parity_manifest"
+    local failure_artifacts="$before_root;$before_x11;$open_root;$open_x11;$geometry_json;$parity_manifest"
+
+    dropdown_x="$((a1_x + cell_width * 78 / 100))"
+    dropdown_y="$((a1_y - cell_height / 2 - 29))"
+
+    select_cell 9 19 J20 || true
+    scrot "$output/$before_root"
+    x11_window_snapshot "$output/$before_x11"
+    focus_app
+    xdotool_mousemove_sync "$dropdown_x" "$dropdown_y" click 1
+    sleep "$settle_seconds"
+    scrot "$output/$open_root"
+    x11_window_snapshot "$output/$open_x11"
+
+    IFS='|' read -r popup_count popup_id popup_x popup_y popup_width popup_height < <(
+        python3 - "$output/$before_x11" "$output/$open_x11" <<'PY'
+import re
+import sys
+
+def windows(path):
+    result = {}
+    with open(path, encoding="utf-8") as stream:
+        for raw in stream:
+            parts = raw.rstrip("\n").split("|", 2)
+            if len(parts) != 3:
+                continue
+            geometry = dict(re.findall(r"([A-Z]+)=(-?\d+)", parts[2]))
+            required = ("X", "Y", "WIDTH", "HEIGHT")
+            if all(key in geometry for key in required):
+                result[parts[0]] = tuple(int(geometry[key]) for key in required)
+    return result
+
+before = windows(sys.argv[1])
+after = windows(sys.argv[2])
+candidates = [(window_id, *bounds) for window_id, bounds in after.items() if window_id not in before]
+if len(candidates) == 1:
+    print("|".join(str(value) for value in (1, *candidates[0])))
+else:
+    print(f"{len(candidates)}|||||")
+PY
+    )
+
+    if [[ "$popup_count" == "1" &&
+          "$popup_x" =~ ^[0-9]+$ && "$popup_y" =~ ^[0-9]+$ &&
+          "$popup_width" =~ ^[0-9]+$ && "$popup_height" =~ ^[0-9]+$ &&
+          "$popup_width" -ge 208 && "$popup_height" -ge 136 ]]; then
+        convert "$output/$open_root" \
+            -crop "208x136+${popup_x}+${popup_y}" +repage \
+            "$output/$crop_png"
+        color_count="$(identify -format '%k' "$output/$crop_png" 2>/dev/null || true)"
+        if [[ "$(identify -format '%wx%h' "$output/$crop_png" 2>/dev/null || true)" == "208x136" &&
+              "$color_count" =~ ^[0-9]+$ && "$color_count" -gt 1 ]]; then
+            captured=true
+            reason="The 208x136 frame was cropped without scaling from the newly visible native X11 popup window."
+        else
+            reason="The native popup crop was missing, blank, or not exactly 208x136."
+        fi
+    elif [[ "$popup_count" != "1" ]]; then
+        reason="Expected exactly one newly visible X11 popup window, found $popup_count."
+    else
+        reason="The native popup window geometry ${popup_width}x${popup_height} cannot contain the required 208x136 frame."
+    fi
+
+    python3 - \
+        "$output/$geometry_json" "$output/$parity_manifest" "$captured" "$reason" \
+        "$popup_id" "$popup_x" "$popup_y" "$popup_width" "$popup_height" \
+        "$open_root" "$crop_png" "$geometry_json" "$before_x11" "$open_x11" <<'PY'
+import json
+import sys
+
+(
+    geometry_path, manifest_path, captured_text, reason,
+    window_id, source_x, source_y, source_width, source_height,
+    source_png, crop_png, geometry_name, before_inventory, open_inventory,
+) = sys.argv[1:]
+captured = captured_text == "true"
+
+def number(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+source_window = {
+    "id": window_id,
+    "x": number(source_x),
+    "y": number(source_y),
+    "width": number(source_width),
+    "height": number(source_height),
+}
+geometry = {
+    "schemaVersion": 1,
+    "platform": "linux",
+    "shell": "avalonia",
+    "surfaceId": "popup.nameBoxDropdown",
+    "evidenceProvenance": "native-x11-root-crop",
+    "captured": captured,
+    "sourcePng": source_png,
+    "windowInventoryBefore": before_inventory,
+    "windowInventoryOpen": open_inventory,
+    "sourceWindow": source_window,
+    "crop": {
+        "x": source_window["x"],
+        "y": source_window["y"],
+        "width": 208,
+        "height": 136,
+        "resized": False,
+    },
+    "expectedItems": [
+        "Sales",
+        "Tour Name Box Chart",
+        "Tour Name Box Picture",
+        "Tour Name Box Shape",
+        "Tour Name Box Text Box",
+    ],
+    "note": reason,
+}
+surface = {
+    "id": "popup.nameBoxDropdown",
+    "kind": "overlay",
+    "png": crop_png,
+    "captured": captured,
+    "note": reason,
+    "width": 208,
+    "height": 136,
+    "evidenceProvenance": "native-x11-root-crop",
+    "sourcePng": source_png,
+    "geometryEvidence": geometry_name,
+    "sourceX": source_window["x"],
+    "sourceY": source_window["y"],
+    "sourceWidth": source_window["width"],
+    "sourceHeight": source_window["height"],
+}
+with open(geometry_path, "w", encoding="utf-8") as stream:
+    json.dump(geometry, stream, indent=2)
+    stream.write("\n")
+with open(manifest_path, "w", encoding="utf-8") as stream:
+    json.dump({"platform": "linux", "shell": "avalonia", "surfaces": [surface]}, stream, indent=2)
+    stream.write("\n")
+PY
+
+    mkdir -p "$parity_directory"
+    cp "$output/$open_root" "$parity_directory/$open_root"
+    cp "$output/$before_x11" "$parity_directory/$before_x11"
+    cp "$output/$open_x11" "$parity_directory/$open_x11"
+    cp "$output/$geometry_json" "$parity_directory/$geometry_json"
+    cp "$output/$parity_manifest" "$parity_directory/manifest.json"
+    if $captured; then
+        cp "$output/$crop_png" "$parity_directory/$crop_png"
+        record "name-box-dropdown-parity-native-crop" "passed" \
+            "$open_root; $open_x11; popup-window=$popup_id; popup-geometry=${popup_width}x${popup_height}+${popup_x}+${popup_y}; crop=208x136; provenance=native-x11-root-crop" \
+            "$reason" "$artifacts"
+    else
+        record "name-box-dropdown-parity-native-crop" "failed" \
+            "$open_root; $open_x11; $geometry_json; $parity_manifest" \
+            "$reason" "$failure_artifacts"
+    fi
+
+    send_key Escape || true
+}
+
 record_name_box_object_result() {
     local suffix="$1" expected_kind="$2" expected_id="$3" expected_name="$4" status="$5"
     local baseline_sequence="$6" baseline_stage="$7" baseline_selected_kind="$8" baseline_selected_id="$9"
@@ -2583,6 +2756,19 @@ if [[ "$probe_selector" == "name-box-dropdown" ]]; then
     probe_name_box_dropdown
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused Name Box dropdown probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "name-box-dropdown-parity" ]]; then
+    # Authoritative Wave69 visual evidence: live production popup, native X11 root crop, no resize.
+    probe_name_box_dropdown_parity
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused Name Box parity probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
