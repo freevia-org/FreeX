@@ -17,18 +17,17 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
 {
     private const double PtToDip = 96.0 / 72.0;
     private const double CaretWidth = 1.25;
+    private const double NativeEditorRightInset = 3;
     private static readonly Thickness ContentPadding = new(4, 3, 4, 3);
     private static readonly IBrush DefaultForeground = Brushes.Black;
-    private static readonly IBrush SelectionBrush = new SolidColorBrush(Color.FromArgb(
-        InCanvasRichTextSelectionVisualContract.BackgroundAlpha,
-        InCanvasRichTextSelectionVisualContract.BackgroundRed,
-        InCanvasRichTextSelectionVisualContract.BackgroundGreen,
-        InCanvasRichTextSelectionVisualContract.BackgroundBlue));
-    private static readonly IBrush SelectionForeground = new SolidColorBrush(Color.FromArgb(
-        InCanvasRichTextSelectionVisualContract.ForegroundAlpha,
-        InCanvasRichTextSelectionVisualContract.ForegroundRed,
-        InCanvasRichTextSelectionVisualContract.ForegroundGreen,
-        InCanvasRichTextSelectionVisualContract.ForegroundBlue));
+    // WPF's native RichTextBox applies the system selection theme over its opaque
+    // selection properties. These are the realized WPF raster colors at the shared
+    // 96-DPI capture baseline; Avalonia must paint the realized result, not the
+    // nominal brush inputs, for the two editors to remain pixel-compatible.
+    private static readonly IBrush SelectionBrush = new SolidColorBrush(
+        Color.FromRgb(0x99, 0xC9, 0xEF));
+    private static readonly IBrush SelectionForeground = new SolidColorBrush(
+        Color.FromRgb(0x1C, 0x63, 0xB1));
     private static readonly IPen CaretPen = new Pen(Brushes.Black, CaretWidth);
 
     private readonly List<ParagraphLayout> _layouts = [];
@@ -36,6 +35,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     private string _fallbackFontFamily = InCanvasRichTextEditorDefaults.FallbackFontFamily;
     private double _fallbackFontSizePt = InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt;
     private double _layoutWidth = double.NaN;
+    private double _scrollOffsetX;
     private double _scrollOffsetY;
     private double _contentExtentHeight;
     private int _selectionStart;
@@ -55,6 +55,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     internal double FallbackFontSizePt => _fallbackFontSizePt;
 
     internal double ScrollOffsetY => _scrollOffsetY;
+
+    internal double ScrollOffsetX => _scrollOffsetX;
 
     internal double ContentExtentHeight
     {
@@ -111,6 +113,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         _selectionStart = Math.Clamp(start, 0, length);
         _selectionEnd = Math.Clamp(end, 0, length);
         _showCaret = showCaret;
+        EnsureLayouts();
+        RevealSelectionHorizontally();
         InvalidateVisual();
     }
 
@@ -125,7 +129,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             .OrderBy(candidate => VerticalDistance(documentY, candidate.Origin.Y, candidate.Bottom))
             .First();
         var localPoint = new Point(
-            Math.Max(0, point.X - item.Origin.X),
+            Math.Max(0, point.X + _scrollOffsetX - item.Origin.X),
             Math.Clamp(documentY - item.Origin.Y, 0, item.Layout.Height));
         var hit = item.Layout.HitTestPoint(localPoint);
         int localTextPosition = Math.Clamp(
@@ -196,6 +200,9 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     {
         base.Render(context);
         EnsureLayouts();
+        // Selection can be assigned before this control receives its final arrange width.
+        // Re-run the native-editor equivalent horizontal reveal once the viewport is real.
+        RevealSelectionHorizontally();
 
         var selectionRects = BuildSelectionRects();
         foreach (var rect in selectionRects)
@@ -213,7 +220,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 context.DrawImage(
                     item.BulletImage,
                     new Rect(
-                        item.BulletOrigin.X,
+                        item.BulletOrigin.X - _scrollOffsetX,
                         item.BulletOrigin.Y - _scrollOffsetY,
                         size,
                         size));
@@ -221,7 +228,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
 
             item.Layout.Draw(
                 context,
-                new Point(item.Origin.X, item.Origin.Y - _scrollOffsetY));
+                new Point(item.Origin.X - _scrollOffsetX, item.Origin.Y - _scrollOffsetY));
 
             DrawSelectedText(context, item, selectionRects);
         }
@@ -259,7 +266,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         {
             var translated = rect.Translate(item.Origin);
             var screenRect = new Rect(
-                translated.X,
+                translated.X - _scrollOffsetX,
                 translated.Y - _scrollOffsetY,
                 translated.Width,
                 translated.Height);
@@ -269,7 +276,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             using (context.PushClip(screenRect))
                 selectedLayout.Draw(
                     context,
-                    new Point(item.Origin.X, item.Origin.Y - _scrollOffsetY));
+                    new Point(item.Origin.X - _scrollOffsetX, item.Origin.Y - _scrollOffsetY));
         }
     }
 
@@ -353,7 +360,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             defaultFontSize,
             foregroundOverride ?? DefaultForeground,
             ToAvaloniaAlignment(paragraph.Alignment),
-            TextWrapping.Wrap,
+            TextWrapping.NoWrap,
             TextTrimming.None,
             textDecorations: null,
             paragraph.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight,
@@ -452,7 +459,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             run?.Bold == true ? FontWeight.Bold : FontWeight.Normal);
     }
 
-    private IReadOnlyList<Rect> BuildSelectionRects()
+    private IReadOnlyList<Rect> BuildSelectionRects(bool includeHorizontalScroll = true)
     {
         int selectionStart = Math.Min(_selectionStart, _selectionEnd);
         int selectionEnd = Math.Max(_selectionStart, _selectionEnd);
@@ -472,7 +479,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             {
                 var translated = rect.Translate(item.Origin);
                 result.Add(new Rect(
-                    translated.X,
+                    translated.X - (includeHorizontalScroll ? _scrollOffsetX : 0),
                     translated.Y - _scrollOffsetY,
                     translated.Width,
                     translated.Height));
@@ -492,7 +499,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         int displayPosition = ToDisplayPosition(item.Paragraph, logicalPosition);
         var hit = item.Layout.HitTestTextPosition(displayPosition);
         return new Rect(
-            item.Origin.X + hit.X,
+            item.Origin.X + hit.X - _scrollOffsetX,
             item.Origin.Y + hit.Y - _scrollOffsetY,
             CaretWidth,
             Math.Max(1, hit.Height));
@@ -519,7 +526,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                         var hit = item.Layout.HitTestTextPosition(localPosition);
                         return new InCanvasTextVisualCaret(
                             item.Paragraph.GlobalStart + localPosition,
-                            item.Origin.X + hit.X);
+                            item.Origin.X + hit.X - _scrollOffsetX);
                     })
                     .ToArray();
                 result.Add(new InCanvasTextVisualLineGeometry(
@@ -567,8 +574,32 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     {
         DisposeLayouts();
         _layoutWidth = double.NaN;
+        _scrollOffsetX = 0;
         InvalidateMeasure();
         InvalidateVisual();
+    }
+
+    private void RevealSelectionHorizontally()
+    {
+        var selectionRects = BuildSelectionRects(includeHorizontalScroll: false);
+        if (selectionRects.Count == 0)
+            return;
+
+        double viewportLeft = ContentPadding.Left;
+        // WPF's RichTextBox keeps its selection inside the native border/padding inset.
+        // The transparent Avalonia input has no painted border, so retain that inset when
+        // revealing the custom surface to keep the two editor viewports aligned.
+        double viewportRight = Math.Max(
+            viewportLeft,
+            Bounds.Width - ContentPadding.Right - NativeEditorRightInset);
+        double left = selectionRects.Min(rect => rect.Left);
+        double right = selectionRects.Max(rect => rect.Right);
+        double offset = _scrollOffsetX;
+        if (right - offset > viewportRight)
+            offset = right - viewportRight;
+        if (left - offset < viewportLeft)
+            offset = left - viewportLeft;
+        _scrollOffsetX = Math.Max(0, offset);
     }
 
     private void DisposeLayouts()

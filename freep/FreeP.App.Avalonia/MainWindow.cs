@@ -1117,15 +1117,26 @@ public sealed partial class MainWindow : Window
             IsHitTestVisible = false,
         };
 
-        // Stack all three in a Panel (Grid with single cell).
-        var canvasStack = new Grid
+        // Match WPF's stage layering: the canvas and selection adorners share the
+        // 40-DIP canvas margin, while the text editor overlay spans the full stage.
+        // Text editor placements are planned in canvas coordinates, so applying the
+        // margin to that overlay would shift the native WPF-equivalent viewport.
+        var canvasContent = new Grid
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment   = VerticalAlignment.Stretch,
             Margin              = new Thickness(FreePShellVisualMetrics.CanvasMargin),
         };
-        canvasStack.Children.Add(_slideCanvas);
-        canvasStack.Children.Add(_adorner);
+
+        canvasContent.Children.Add(_slideCanvas);
+        canvasContent.Children.Add(_adorner);
+
+        var canvasStack = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment   = VerticalAlignment.Stretch,
+        };
+        canvasStack.Children.Add(canvasContent);
         canvasStack.Children.Add(textOverlay);
 
         _canvasHost = new Border
@@ -2116,11 +2127,12 @@ public sealed partial class MainWindow : Window
         _gestureHandler = null;
         UnwireTableContextMenu();
 
-        // Re-find the overlay canvas from the canvasStack structure.
-        if (_slideCanvas.Parent is Grid canvasStack && canvasStack.Children.Count >= 3
-            && canvasStack.Children[2] is Canvas ov)
+        // Re-find the overlay canvas from the full-stage stack. The canvas and
+        // selection adorner now live in its margined child, matching WPF.
+        if (_slideCanvas.Parent is Grid canvasContent &&
+            canvasContent.Parent is Grid canvasStack)
         {
-            textOverlay = ov;
+            textOverlay = canvasStack.Children.OfType<Canvas>().SingleOrDefault();
         }
 
         if (textOverlay is not null)

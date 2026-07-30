@@ -69,7 +69,9 @@ internal sealed class AvaloniaRichTextEditor : Grid
         InputBox = new TextBox
         {
             AcceptsReturn = true,
-            TextWrapping = TextWrapping.Wrap,
+            // WPF's FlowDocument disables pagination with a very large column, so
+            // the editor viewport clips a long line instead of wrapping it.
+            TextWrapping = TextWrapping.NoWrap,
             Text = _buffer.PlainText,
             Padding = new Thickness(2),
             Background = Brushes.Transparent,
