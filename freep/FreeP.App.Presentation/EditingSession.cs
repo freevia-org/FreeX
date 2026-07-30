@@ -1286,26 +1286,20 @@ public sealed class EditingSession
     /// </summary>
     public void SetCurrentSlideNotesText(string? text)
     {
-        if (CurrentSlide is null) return;
+        SetSlideNotesText(_currentSlideIndex, text);
+    }
 
-        TextBody? body = null;
-        if (!string.IsNullOrEmpty(text))
-        {
-            body = new TextBody();
-            var lines = text
-                .Replace("\r\n", "\n", StringComparison.Ordinal)
-                .Replace('\r', '\n')
-                .Split('\n', StringSplitOptions.None);
-            foreach (var line in lines)
-            {
-                var para = new Paragraph();
-                if (line.Length > 0)
-                    para.Runs.Add(new Run { Text = line });
-                body.Paragraphs.Add(para);
-            }
-        }
+    /// <summary>
+    /// Replaces speaker notes on an arbitrary slide with plain text. This is the shared
+    /// mutation entry point for workflows that can navigate independently of the editor's
+    /// selected slide, such as Presenter View. The operation remains undoable.
+    /// </summary>
+    public void SetSlideNotesText(int slideIndex, string? text)
+    {
+        if (slideIndex < 0 || slideIndex >= Presentation.Slides.Count)
+            return;
 
-        Bus.Execute(new SetSlideNotesCommand(_currentSlideIndex, body));
+        Bus.Execute(new SetSlideNotesCommand(slideIndex, BuildNotesTextBody(text)));
     }
 
     /// <summary>
@@ -1316,6 +1310,27 @@ public sealed class EditingSession
     {
         if (CurrentSlide is null) return;
         Bus.Execute(new SetSlideNotesCommand(_currentSlideIndex, notes));
+    }
+
+    private static TextBody? BuildNotesTextBody(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return null;
+
+        var body = new TextBody();
+        var lines = text
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split('\n', StringSplitOptions.None);
+        foreach (var line in lines)
+        {
+            var para = new Paragraph();
+            if (line.Length > 0)
+                para.Runs.Add(new Run { Text = line });
+            body.Paragraphs.Add(para);
+        }
+
+        return body;
     }
 
     // ── Default shape factories (used by ribbon insert commands) ──────────────────

@@ -103,6 +103,27 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void SetSlideNotesText_UsesTargetSlideAndRemainsUndoable()
+    {
+        var sess = Make(2);
+
+        sess.SetSlideNotesText(1, "First line\nSecond line");
+
+        sess.CurrentSlideIndex.Should().Be(0, "Presenter View navigation must not move editor selection");
+        sess.Presentation.Slides[0].Notes.Should().BeNull();
+        sess.Presentation.Slides[1].Notes!.Paragraphs
+            .Select(paragraph => string.Concat(paragraph.Runs.Select(run => run.Text)))
+            .Should().Equal("First line", "Second line");
+
+        sess.Undo();
+        sess.Presentation.Slides[1].Notes.Should().BeNull();
+        sess.Redo();
+        sess.Presentation.Slides[1].Notes!.Paragraphs
+            .Select(paragraph => string.Concat(paragraph.Runs.Select(run => run.Text)))
+            .Should().Equal("First line", "Second line");
+    }
+
+    [Fact]
     public void CustomGeometryVertexInsertAndDelete_RouteThroughUndoableSession()
     {
         var session = Make();

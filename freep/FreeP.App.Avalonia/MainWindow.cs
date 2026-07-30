@@ -9584,7 +9584,7 @@ public sealed partial class MainWindow : Window
         if (animationStartIndex is int selectedAnimationIndex)
             route = route.WithAnimationStartIndex(selectedAnimationIndex);
 
-        var slideShow = new SlideShowWindow(_presentation, route);
+        var slideShow = new SlideShowWindow(_presentation, route, Editor.SetSlideNotesText);
         if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
             slideShow.SetPresenterTimingIntent(timingIntent);
 
@@ -9661,7 +9661,7 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        var slideShow = new SlideShowWindow(_presentation, route);
+        var slideShow = new SlideShowWindow(_presentation, route, Editor.SetSlideNotesText);
         // A named custom show is still a separate playback window. Restore the
         // editor's focus when it closes just like the normal slideshow route.
         slideShow.Closed += (_, _) => RestoreOwnerFocus();

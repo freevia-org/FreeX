@@ -4095,7 +4095,7 @@ public sealed partial class MainWindow : Window
         if (animationStartIndex is int selectedAnimationIndex)
             route = route.WithAnimationStartIndex(selectedAnimationIndex);
 
-        var window = new SlideShowWindow(_presentation, route);
+        var window = new SlideShowWindow(_presentation, route, Editor.SetSlideNotesText);
         if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
             window.SetPresenterTimingIntent(timingIntent);
         // Owner can only be set when the main window is already shown (not during unit tests).
@@ -4169,7 +4169,7 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        var window = new SlideShowWindow(_presentation, route);
+        var window = new SlideShowWindow(_presentation, route, Editor.SetSlideNotesText);
         if (IsVisible)
             window.Owner = this;
         window.Show();

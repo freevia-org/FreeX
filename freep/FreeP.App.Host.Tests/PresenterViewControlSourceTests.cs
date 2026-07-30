@@ -10,11 +10,14 @@ public sealed class PresenterViewControlSourceTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var slideshow = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "SlideShowWindow.cs"));
+        var mainWindow = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
         var presenter = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "PresenterViewWindow.cs"));
 
         slideshow.Should().Contain("() => ExecuteBack()");
         slideshow.Should().Contain("() => ExecuteAdvance()");
         slideshow.Should().Contain("slideNumber => ExecuteSlideNumberJump(slideNumber)");
+        slideshow.Should().Contain("(slideIndex, text) => _setSlideNotesText?.Invoke(slideIndex, text)");
+        mainWindow.Should().Contain("Editor.SetSlideNotesText");
         slideshow.Should().Contain("SetScreenMode,");
         slideshow.Should().Contain("SetPresenterPointerMode(mode)");
         slideshow.Should().Contain("() => ClearPresenterInkStrokes(),");
@@ -26,6 +29,9 @@ public sealed class PresenterViewControlSourceTests
         presenter.Should().Contain("_goNext?.Invoke();");
         presenter.Should().Contain("SlideShowSlideNumberPlanner.TryParseSlideNumber");
         presenter.Should().Contain("SubmitSlideNumber();");
+        presenter.Should().Contain("_notesText.LostKeyboardFocus");
+        presenter.Should().Contain("_setNotesText(index, _notesText.Text)");
+        presenter.Should().Contain("IsReadOnly = _setNotesText is null");
         presenter.Should().Contain("SlideShowScreenMode.Black");
         presenter.Should().Contain("SlideShowScreenMode.White");
         presenter.Should().Contain("_clearInk?.Invoke()");
