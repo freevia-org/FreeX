@@ -84,6 +84,13 @@ public sealed partial class XlsxFileAdapter
         }
         if (sourceParts.HasExternalLinks)
             XlsxExternalLinkReferencePreserver.Preserve(sourceArchive, generatedArchive);
+        // R96-io-external-link-writer-1: runs unconditionally (not gated on HasExternalLinks) since
+        // this is about a freshly TYPED bracketed external-workbook reference the loaded source
+        // package never carried at all -- the exact "workbook that had none" case the preserver
+        // above can't help with. Placed after the preserver so its own idempotency scan (over the
+        // package's own already-written external-link infrastructure) sees whatever the preserver
+        // just carried forward and never double-backs the same book.
+        XlsxExternalLinkAuthoringWriter.Save(generatedArchive, workbook);
         if (sourceParts.HasUnsupportedSheetParts)
             XlsxUnsupportedSheetReferencePreserver.Preserve(sourceArchive, generatedArchive, context, workbook);
         if (sourceParts.HasDrawings)

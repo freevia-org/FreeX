@@ -5,13 +5,18 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Inserts <paramref name="count"/> blank rows before <paramref name="beforeRow"/>.</summary>
-public sealed class InsertRowsCommand : IWorkbookCommand
+public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
 {
     private const uint FullSnapshotCapacityThreshold = 32;
     private readonly SheetId _sheetId;
     private readonly uint _beforeRow;
     private readonly uint _count;
     private List<CellStateSnapshot>? _movedSnapshot;
+    // R96-commands-undo-affected-cells-1: mutated by both Apply (post-shift addresses) and Revert
+    // (original, pre-shift addresses) so CommandBus.Undo can report the CURRENT set of relocated
+    // formula cells instead of the frozen forward payload -- see
+    // RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress.
+    private IReadOnlyList<CellAddress> _affectedCells = [];
     private List<GridRange>? _mergeSnapshot;
     private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
@@ -45,6 +50,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
 
     public string Label => $"Insert {_count} Row(s)";
+
+    public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
 
     public InsertRowsCommand(SheetId sheetId, uint beforeRow, uint count = 1)
     {
@@ -201,12 +208,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         // post-insert row) would be incorrectly re-shifted again if written any earlier.
         _tableCalculatedColumnFillSnapshot = FillGrownCalculatedColumnsForInsertedRows(ctx.Workbook, sheet);
 
-        return new CommandOutcome(
-            true,
-            AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-                RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _formulaSnapshot)
-                    .Concat(_tableCalculatedColumnFillSnapshot.Select(f => f.Address)),
-                _formulaSnapshot));
+        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+            RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _formulaSnapshot)
+                .Concat(_tableCalculatedColumnFillSnapshot.Select(f => f.Address)),
+            _formulaSnapshot);
+        return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
     // R26-table-structured-ref-deep-2: fills each structured table's calculated-column formula into
@@ -361,6 +367,12 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             }
         }
 
+        // R96-commands-undo-affected-cells-1: RestoreFormulas below clears _formulaSnapshot as its
+        // last step, so capture its keys (the post-shift addresses of every stationary-or-moved
+        // formula cell whose text was rewritten by Apply) now, before that happens -- needed to
+        // recompute _affectedCells at the end of this method.
+        var formulaSnapshotAddressesBeforeRestore = _formulaSnapshot.Keys.ToList();
+
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
         RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
@@ -414,6 +426,17 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
+
+        // R96-commands-undo-affected-cells-1: recompute AffectedCells to reflect where every
+        // relocated formula cell ACTUALLY ended up after this Revert -- its original, pre-shift
+        // address (mirroring Apply's own AffectedCells, which reports the post-shift address for
+        // the forward direction). CommandBus.Undo reads this live property instead of the frozen
+        // forward payload.
+        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+            RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_movedSnapshot, _sheetId)
+                .Concat(_tableCalculatedColumnFillSnapshot?.Select(f => f.Address) ?? [])
+                .Concat(formulaSnapshotAddressesBeforeRestore),
+            []);
     }
 
     private (uint MaxOccupied, List<CellStateSnapshot> Moved) CaptureMovedCells(Sheet sheet)

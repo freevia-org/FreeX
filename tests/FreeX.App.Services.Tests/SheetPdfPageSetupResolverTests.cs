@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -369,6 +370,99 @@ public sealed class SheetPdfPageSetupResolverTests
         // &P expands to page number "1"
         allText.Should().Contain(t => t.Contains("Page") || t.Contains("1"),
             "header center should contain page-number text");
+    }
+
+    // -----------------------------------------------------------------------
+    // R96-services-pagesetup-header-band-1: header/footer band model must agree with the WPF
+    // print-preview path (PagePaginationPlanner), which sits the header/footer margin WITHIN the
+    // top/bottom margin (Excel's own model), not additionally on top of it.
+    // -----------------------------------------------------------------------
+
+    [Theory]
+    // Both header/footer margins comfortably within the top/bottom margin -- Excel's own default
+    // page setup (0.75in margins, 0.3in header/footer margins) reserves nothing extra for the band.
+    [InlineData(0.75, 0.75, 0.3, 0.3, "both, within margin (Excel's universal default)")]
+    // Header only (footer margin is 0 -- "neither" for the bottom edge).
+    [InlineData(0.75, 0.75, 0.3, 0.0, "header-only")]
+    // Footer only (header margin is 0 -- "neither" for the top edge).
+    [InlineData(0.75, 0.75, 0.0, 0.3, "footer-only")]
+    // Neither header nor footer margin configured.
+    [InlineData(0.75, 0.75, 0.0, 0.0, "neither")]
+    // Header/footer margin LARGER than the top/bottom margin -- the body must shrink further to
+    // max(margin, headerMargin), not margin + headerMargin.
+    [InlineData(0.3, 0.3, 0.75, 0.75, "both, header/footer margin larger than the margin (reverse)")]
+    // Margin larger than the header/footer margin by a wide gap (the mirror image of the above).
+    [InlineData(1.0, 1.0, 0.1, 0.1, "both, margin much larger than header/footer margin")]
+    public void ResolveCapacity_HeaderFooterBandModel_MatchesWpfPagePaginationPlanner(
+        double topMargin, double bottomMargin, double headerMargin, double footerMargin, string scenario)
+    {
+        var workbook = new Workbook("W");
+        var sheet    = workbook.AddSheet("S");
+        sheet.PaperSize       = WorksheetPaperSize.A4;
+        sheet.PageOrientation = WorksheetPageOrientation.Portrait;
+        sheet.PageMargins     = new WorksheetPageMargins(Left: 0.5, Right: 0.5, Top: topMargin, Bottom: bottomMargin);
+        sheet.HeaderMargin    = headerMargin;
+        sheet.FooterMargin    = footerMargin;
+
+        var range = GridRange.Parse("A1:J50", sheet.Id);
+        AddCells(workbook, sheet, range);
+
+        var pdfCapacity = SheetPdfPageSetupResolver.ResolveCapacity(sheet, range);
+        var wpfCapacity = PagePaginationPlanner.CalculatePageCapacity(
+            range,
+            sheet.ScaleToFit,
+            sheet.PrintTitleRows,
+            sheet.PrintTitleColumns,
+            sheet.PaperSize,
+            sheet.PageOrientation,
+            sheet.PageMargins,
+            sheet.RowHeights,
+            sheet.DefaultRowHeight,
+            sheet.ColumnWidths,
+            sheet.DefaultColumnWidth,
+            sheet.HeaderMargin,
+            sheet.FooterMargin);
+
+        pdfCapacity.RowsPerPage.Should().Be(wpfCapacity.RowsPerPage,
+            $"[{scenario}] the PDF-export page capacity must match the WPF print-preview page capacity for the same page setup");
+        pdfCapacity.ColumnsPerPage.Should().Be(wpfCapacity.ColumnsPerPage,
+            $"[{scenario}] the PDF-export page capacity must match the WPF print-preview page capacity for the same page setup");
+    }
+
+    [Fact]
+    public void ResolveCapacity_HeaderMarginLargerThanTopMargin_BodyShrinksToHeaderMarginNotTheSum()
+    {
+        // top margin 0.3in, header margin 1.0in: Excel's model puts the body top at
+        // max(0.3, 1.0) = 1.0in, NOT 0.3 + 1.0 = 1.3in. Pin the exact expected rows/page by comparing
+        // against a sheet whose top margin is set directly to that same 1.0in with no separate header
+        // band (headerMargin=0, so bodyTop = max(1.0, 0) = 1.0in too) -- the two must produce identical
+        // capacity since Excel's own body-top formula collapses them to the same effective margin.
+        var workbookA = new Workbook("A");
+        var sheetA    = workbookA.AddSheet("S");
+        sheetA.PaperSize       = WorksheetPaperSize.A4;
+        sheetA.PageOrientation = WorksheetPageOrientation.Portrait;
+        sheetA.PageMargins     = new WorksheetPageMargins(Left: 0.5, Right: 0.5, Top: 0.3, Bottom: 0.75);
+        sheetA.HeaderMargin    = 1.0;
+        sheetA.FooterMargin    = 0.0;
+        var rangeA = GridRange.Parse("A1:J50", sheetA.Id);
+        AddCells(workbookA, sheetA, rangeA);
+
+        var workbookB = new Workbook("B");
+        var sheetB    = workbookB.AddSheet("S");
+        sheetB.PaperSize       = WorksheetPaperSize.A4;
+        sheetB.PageOrientation = WorksheetPageOrientation.Portrait;
+        sheetB.PageMargins     = new WorksheetPageMargins(Left: 0.5, Right: 0.5, Top: 1.0, Bottom: 0.75);
+        sheetB.HeaderMargin    = 0.0;
+        sheetB.FooterMargin    = 0.0;
+        var rangeB = GridRange.Parse("A1:J50", sheetB.Id);
+        AddCells(workbookB, sheetB, rangeB);
+
+        var capacityA = SheetPdfPageSetupResolver.ResolveCapacity(sheetA, rangeA);
+        var capacityB = SheetPdfPageSetupResolver.ResolveCapacity(sheetB, rangeB);
+
+        capacityA.RowsPerPage.Should().Be(capacityB.RowsPerPage,
+            "a 1.0in header margin over a 0.3in top margin must shrink the body exactly as much as a plain 1.0in top margin -- " +
+            "not 0.3in (margin) + 1.0in (header) = 1.3in of reservation");
     }
 
     // -----------------------------------------------------------------------

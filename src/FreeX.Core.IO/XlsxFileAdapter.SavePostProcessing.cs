@@ -110,6 +110,18 @@ public sealed partial class XlsxFileAdapter
             FixFabricatedDefinedNameHyperlinkLocations(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        // R96-io-hyperlink-external-bookmark: backfill the "location" sub-address ClosedXML's
+        // XLHyperlink can never write alongside an r:id relationship for the same <hyperlink>
+        // element (its writer branches exclusively on IsExternal -- see CreateXlsxHyperlink and
+        // FixExternalHyperlinkBookmarkLocations for the full explanation). Must run on every FULL
+        // save for the same reason as the fixup above: worksheet XML always comes straight from
+        // ClosedXML's own SaveAs output.
+        if (featurePlan.HasExternalHyperlinkBookmarks)
+        {
+            packageStream.Position = 0;
+            FixExternalHyperlinkBookmarkLocations(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (featurePlan.HasPhoneticProperties)
         {
             packageStream.Position = 0;
@@ -348,6 +360,15 @@ public sealed partial class XlsxFileAdapter
         if (!hasSourcePackage)
         {
             SaveSourcePackageIndependentPostProcessingMetadata();
+            // R96-io-external-link-writer-1: a brand-new (never-loaded-from-.xlsx) workbook has no
+            // source package for XlsxExternalLinkAuthoringWriter's sibling call (inside
+            // PreserveSourcePackageParts) to ever run against, so a freshly typed bracketed
+            // external-workbook reference needs its own call here on this path.
+            if (featurePlan.HasCellFormulas)
+            {
+                packageStream.Position = 0;
+                XlsxExternalLinkAuthoringWriter.Save(packageStream, workbook);
+            }
             NormalizeStylesheetForSchema();
             NormalizeDocumentPropertiesPackageGraph();
             NormalizeWorkbookForSchema();
@@ -1560,10 +1581,11 @@ public sealed partial class XlsxFileAdapter
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// R95-io-chart-hyperlink-real-pipeline: maps each source-package sheet's OWN drawing part's chart
-    /// graphicFrame hyperlinks (object-level AND chart-title) to <see cref="ChartHyperlinkPair"/>
-    /// entries, positionally matching document order -- read directly from the TRUE source .xlsx
-    /// package via <see cref="XlsxWorksheetChartWriter.ReadSourceChartHyperlinks"/>.
+    /// R95-io-chart-hyperlink-real-pipeline / R96-io-chart-hyperlink-name-key: maps each source-package
+    /// sheet's OWN drawing part's chart graphicFrame hyperlinks (object-level AND chart-title) to
+    /// <see cref="ChartHyperlinkPair"/> entries, KEYED by each chart graphicFrame's stable
+    /// <c>cNvPr@name</c> -- read directly from the TRUE source .xlsx package via
+    /// <see cref="XlsxWorksheetChartWriter.ReadSourceChartHyperlinks"/>.
     /// <para>
     /// This is the chart-writer sibling of <see cref="GetSourceDrawingObjectHyperlinksBySheet"/> below,
     /// fixing the identical bug for charts: <see cref="XlsxWorksheetChartWriter"/>'s R41
@@ -1576,8 +1598,17 @@ public sealed partial class XlsxFileAdapter
     /// <c>XlsxWorksheetChartWriter.Save</c> directly with a hand-seeded package standing in for "the
     /// archive", which is exactly the shape the real pipeline does not have.
     /// </para>
+    /// <para>
+    /// R96: R95 initially matched these pairs to the CURRENT save's charts by document-order position
+    /// (mirroring how this file numbers chart parts positionally elsewhere), which desyncs -- silently
+    /// misattributing one chart's hyperlink onto a different chart, not merely dropping it -- the moment
+    /// a sheet's chart set is added to, deleted from, or reordered between load and save. Keying by
+    /// <c>cNvPr@name</c> instead (the same name <see cref="ChartModel.Name"/> round-trips through
+    /// load/save) fixes this exactly as <see cref="GetSourceDrawingObjectHyperlinksBySheet"/> already
+    /// does for pictures/shapes/text boxes.
+    /// </para>
     /// </summary>
-    private static IReadOnlyDictionary<string, IReadOnlyList<ChartHyperlinkPair>> GetSourceChartHyperlinksBySheet(Workbook workbook)
+    private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChartHyperlinkPair>> GetSourceChartHyperlinksBySheet(Workbook workbook)
     {
         var drawingPathsBySheet = GetSourceDrawingPathsBySheet(workbook);
         if (drawingPathsBySheet.Count == 0 || !SourcePackages.TryGetValue(workbook, out var sourcePackage))
@@ -1594,7 +1625,7 @@ public sealed partial class XlsxFileAdapter
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
             XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-            var result = new Dictionary<string, IReadOnlyList<ChartHyperlinkPair>>(StringComparer.OrdinalIgnoreCase);
+            var result = new Dictionary<string, IReadOnlyDictionary<string, ChartHyperlinkPair>>(StringComparer.OrdinalIgnoreCase);
             foreach (var (sheetName, drawingPath) in drawingPathsBySheet)
             {
                 var hyperlinks = XlsxWorksheetChartWriter.ReadSourceChartHyperlinks(
@@ -1611,8 +1642,8 @@ public sealed partial class XlsxFileAdapter
         }
     }
 
-    private static readonly IReadOnlyDictionary<string, IReadOnlyList<ChartHyperlinkPair>> EmptyChartHyperlinksBySheet =
-        new Dictionary<string, IReadOnlyList<ChartHyperlinkPair>>(StringComparer.OrdinalIgnoreCase);
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChartHyperlinkPair>> EmptyChartHyperlinksBySheet =
+        new Dictionary<string, IReadOnlyDictionary<string, ChartHyperlinkPair>>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// R95-io-drawing-hyperlink-2-2: maps each source-package sheet's OWN drawing part's
@@ -1930,6 +1961,15 @@ public sealed partial class XlsxFileAdapter
         /// round-trip-5-1), the FULL-save counterpart of the PATCH-save R38-io-hyperlink-2-1 fix.
         /// </summary>
         public bool HasBareInternalHyperlinkBookmarks;
+        /// <summary>
+        /// True when any sheet has an EXTERNAL hyperlink (Existing File/Web Page, not
+        /// PlaceInThisDocument) whose <see cref="HyperlinkMetadata.Bookmark"/> ("location" sub-
+        /// address) is non-empty -- Excel's "Existing File &gt; Bookmark..." feature. Gates
+        /// <see cref="FixExternalHyperlinkBookmarkLocations"/> (R96-io-hyperlink-external-bookmark),
+        /// which backfills the "location" attribute ClosedXML's XLHyperlink can never emit alongside
+        /// an r:id on the same element (its writer is mutually exclusive on IsExternal).
+        /// </summary>
+        public bool HasExternalHyperlinkBookmarks;
 
         public static XlsxPostProcessingFeaturePlan Create(Workbook workbook)
         {
@@ -1937,6 +1977,12 @@ public sealed partial class XlsxFileAdapter
             plan.HasWorkbookPostProcessingMetadata = XlsxWorkbookMetadataWriter.HasPostProcessingMetadata(workbook);
             plan.HasWorkbookReplayMetadata = XlsxWorkbookMetadataWriter.HasSourcePackageReplayMetadata(workbook);
             plan.HasCustomViews = workbook.CustomViews.Count > 0;
+            // Mirrors XlsxWorksheetSourceIndependentMetadataBatchWriter.Save's own workbook-level gate:
+            // sheetView/@tabSelected must be kept in lockstep with bookViews/@activeTab (written
+            // whenever workbook.ActiveSheetIndex is set) on every save, even for a workbook with no
+            // other native worksheet metadata at all (e.g. any brand-new/never-loaded-from-xlsx
+            // workbook).
+            plan.HasSourceIndependentMetadata |= workbook.ActiveSheetIndex is not null;
             foreach (var sheet in workbook.Sheets)
                 plan.Include(sheet);
 
@@ -1980,6 +2026,7 @@ public sealed partial class XlsxFileAdapter
             if (!HasRichAutoColorRuns)
                 HasRichAutoColorRuns = HasRichTextAutoColorRuns(sheet);
             HasBareInternalHyperlinkBookmarks |= HasBareInternalHyperlinkBookmarks(sheet);
+            HasExternalHyperlinkBookmarks |= HasExternalHyperlinkBookmarks(sheet);
         }
 
         private void IncludeCellFeatures(Sheet sheet)

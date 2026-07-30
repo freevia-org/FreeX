@@ -577,15 +577,22 @@ public sealed class XlsxFileAdapterFormatTests
         var sourcePackageCheck = savePostProcessingSource.IndexOf(
             "var hasSourcePackage = SourcePackages.TryGetValue(workbook, out var sourcePackage);",
             StringComparison.Ordinal);
-        var freshSaveReturn = savePostProcessingSource.IndexOf(
-            "if (!hasSourcePackage)\n        {\n            SaveSourcePackageIndependentPostProcessingMetadata();\n            NormalizeStylesheetForSchema();\n            NormalizeDocumentPropertiesPackageGraph();\n            NormalizeWorkbookForSchema();\n            return;\n        }",
+        // R96-io-external-link-writer-1: the fresh-workbook early-return block now also carries a
+        // conditional XlsxExternalLinkAuthoringWriter.Save call (a freshly typed bracketed
+        // external-workbook reference has no source package for that writer's OTHER call site,
+        // inside PreserveSourcePackageParts, to ever run against) -- anchor on the still-unique
+        // opening/closing fragments of the block instead of its exact full text, so this contract
+        // test keeps checking "fresh saves return before source-package replay work runs" without
+        // re-breaking on every future addition to that block.
+        var freshSaveBlockStart = savePostProcessingSource.IndexOf(
+            "if (!hasSourcePackage)\n        {\n            SaveSourcePackageIndependentPostProcessingMetadata();",
             StringComparison.Ordinal);
-        if (freshSaveReturn < 0)
-        {
-            freshSaveReturn = savePostProcessingSource.IndexOf(
-                "if (!hasSourcePackage)\n        {\n            SaveSourcePackageIndependentPostProcessingMetadata();\n            NormalizeStylesheetForSchema();\n            NormalizeDocumentPropertiesPackageGraph();\n            NormalizeWorkbookForSchema();\n            return;\n        }",
+        var freshSaveReturn = freshSaveBlockStart < 0
+            ? -1
+            : savePostProcessingSource.IndexOf(
+                "NormalizeWorkbookForSchema();\n            return;\n        }",
+                freshSaveBlockStart,
                 StringComparison.Ordinal);
-        }
         var sourceReplay = savePostProcessingSource.IndexOf(
             "var sourceParts = PreserveSourcePackageParts(workbook, packageStream, preserveVbaProject);",
             StringComparison.Ordinal);

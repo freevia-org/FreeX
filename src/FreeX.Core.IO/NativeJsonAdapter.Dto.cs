@@ -945,6 +945,16 @@ public sealed partial class NativeJsonAdapter
         public CellReadingOrder ReadingOrder { get; set; } = CellReadingOrder.Context;
         public bool Locked { get; set; } = true;
         public bool Hidden { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? DxfBold { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? DxfItalic { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? DxfUnderline { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? DxfStrikethrough { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public CellColor? DxfFontColor { get; set; }
         public IReadOnlyDictionary<string, string>? NativeDifferentialAttributes { get; set; }
         public IReadOnlyList<string>? NativeDifferentialChildXmls { get; set; }
         public IReadOnlyDictionary<string, string>? NativeDifferentialElementXmls { get; set; }

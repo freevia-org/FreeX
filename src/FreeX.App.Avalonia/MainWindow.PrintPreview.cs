@@ -16,7 +16,9 @@ using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 
 using AvaloniaControlShapesLine = Avalonia.Controls.Shapes.Line;
+using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaPolygon = Avalonia.Controls.Shapes.Polygon;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 using Free.Shared.Shell.Avalonia;
@@ -979,7 +981,7 @@ public sealed partial class MainWindow
     /// Builds the zoom-to-fit view for one preview page: a <see cref="Viewbox"/> wrapping a Canvas the
     /// size of the page rectangle, onto which the page's flattened paint primitives are rendered.
     /// </summary>
-    private static Control BuildPreviewPageView(PrintPreviewPaginationContext context, int pageIndex)
+    internal static Control BuildPreviewPageView(PrintPreviewPaginationContext context, int pageIndex)
     {
         var layout = context.BuildPage(pageIndex);
         if (layout is null)
@@ -1044,6 +1046,12 @@ public sealed partial class MainWindow
                 case PrintPreviewPaintKind.Text:
                     AddPreviewText(canvas, instruction);
                     break;
+                case PrintPreviewPaintKind.Ellipse:
+                    AddPreviewEllipse(canvas, instruction);
+                    break;
+                case PrintPreviewPaintKind.Polygon:
+                    AddPreviewPolygon(canvas, instruction);
+                    break;
             }
         }
     }
@@ -1066,6 +1074,54 @@ public sealed partial class MainWindow
         Canvas.SetLeft(rect, instruction.Left);
         Canvas.SetTop(rect, instruction.Top);
         canvas.Children.Add(rect);
+    }
+
+    /// <summary>
+    /// R96-render-cf-databar-iconset-preview-1: an icon-set glyph primitive drawn as a filled/outlined
+    /// ellipse (e.g. the traffic-light dot, or the Quarter/Pie style's full-disc fallback).
+    /// </summary>
+    private static void AddPreviewEllipse(Canvas canvas, PrintPreviewPaintInstruction instruction)
+    {
+        var ellipse = new AvaloniaEllipse
+        {
+            Width = Math.Max(0, instruction.Width),
+            Height = Math.Max(0, instruction.Height),
+        };
+        if (instruction.Fill is { } fill)
+            ellipse.Fill = PreviewBrush(fill);
+        if (instruction.Stroke is { } stroke && instruction.StrokeThickness > 0)
+        {
+            ellipse.Stroke = PreviewBrush(stroke);
+            ellipse.StrokeThickness = instruction.StrokeThickness;
+        }
+
+        Canvas.SetLeft(ellipse, instruction.Left);
+        Canvas.SetTop(ellipse, instruction.Top);
+        canvas.Children.Add(ellipse);
+    }
+
+    /// <summary>
+    /// R96-render-cf-databar-iconset-preview-1: an icon-set glyph primitive drawn as a closed,
+    /// filled/outlined polygon (arrow/flag/rating-bar/star glyph shapes).
+    /// </summary>
+    private static void AddPreviewPolygon(Canvas canvas, PrintPreviewPaintInstruction instruction)
+    {
+        if (instruction.Points is not { Count: >= 2 } points)
+            return;
+
+        var polygon = new AvaloniaPolygon
+        {
+            Points = points.Select(p => new Point(p.X, p.Y)).ToList(),
+        };
+        if (instruction.Fill is { } fill)
+            polygon.Fill = PreviewBrush(fill);
+        if (instruction.Stroke is { } stroke && instruction.StrokeThickness > 0)
+        {
+            polygon.Stroke = PreviewBrush(stroke);
+            polygon.StrokeThickness = instruction.StrokeThickness;
+        }
+
+        canvas.Children.Add(polygon);
     }
 
     private static void AddPreviewLine(Canvas canvas, PrintPreviewPaintInstruction instruction)
