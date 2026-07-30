@@ -839,6 +839,27 @@ public sealed class EditingSession
         Bus.Execute(new RotateShapeCommand(_currentSlideIndex, shapeId, newRotationDeg));
     }
 
+    /// <summary>Toggles a single shape's horizontal or vertical mirror state.</summary>
+    public void FlipShape(uint shapeId, bool horizontal)
+    {
+        if (CurrentSlide is null) return;
+        Bus.Execute(new FlipShapeCommand(_currentSlideIndex, shapeId, horizontal));
+    }
+
+    /// <summary>Flips all selected shapes horizontally in one undoable operation.</summary>
+    public void FlipSelectedHorizontal() => FlipSelected(horizontal: true);
+
+    /// <summary>Flips all selected shapes vertically in one undoable operation.</summary>
+    public void FlipSelectedVertical() => FlipSelected(horizontal: false);
+
+    private void FlipSelected(bool horizontal)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        var commands = _selectedShapeIds
+            .Select(id => (IPresentationCommand)new FlipShapeCommand(_currentSlideIndex, id, horizontal));
+        Bus.Execute(new BatchCommand(horizontal ? "Flip Horizontal" : "Flip Vertical", commands));
+    }
+
     /// <summary>Sets the source crop fractions on a picture and records one undoable edit.</summary>
     public bool SetPictureCrop(uint shapeId, PictureCropValues values)
     {
