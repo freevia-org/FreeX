@@ -147,7 +147,7 @@ internal static class SmartArtInsertionFactory
         int nodeCount,
         IReadOnlyList<SlideObjectPicturePayload>? pictures)
     {
-        if (preset is not (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid))
+        if (preset is not (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid or SmartArtLayoutPreset.VerticalPictureList))
             return null;
 
         if (pictures is null || pictures.Count == 0)
@@ -251,6 +251,7 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.VerticalBoxList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalChevronList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalChevronList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalBulletList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.VerticalPictureList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalPictureList", SmartArtFamily.List),
             SmartArtLayoutPreset.HorizontalBulletList => ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBulletList", SmartArtFamily.List),
             SmartArtLayoutPreset.HorizontalBlockList => ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.TrapezoidList => ("urn:microsoft.com/office/officeart/2005/8/layout/trapezoidList", SmartArtFamily.List),
