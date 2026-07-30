@@ -168,11 +168,15 @@ function Assert-PointerSelectionSemanticContract {
         $Manifest.semanticReadback.tool -ne "xclip" -or
         $Manifest.semanticReadback.selection -ne "clipboard" -or
         [string]::Join("|", @($Manifest.semanticReadback.transcripts)) -ne
-        "pointer-selection-forward|pointer-selection-reverse" -or
+        "pointer-selection-forward|pointer-selection-reverse|pointer-paragraph-selection" -or
         $Manifest.semanticReadback.geometryProof -ne "pointer-selection-calibration.txt") {
         throw "Pointer-selection manifest is missing its exact semantic readback declaration."
     }
-    foreach ($name in @("pointer-selection-forward", "pointer-selection-reverse")) {
+    foreach ($name in @(
+        "pointer-selection-forward",
+        "pointer-selection-reverse",
+        "pointer-paragraph-selection"
+    )) {
         Assert-ExactClipboardTranscript -EvidenceDirectory $EvidenceDirectory -Name $name
     }
     $proofPath = Join-Path $EvidenceDirectory "pointer-selection-calibration.txt"

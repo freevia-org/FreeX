@@ -261,6 +261,10 @@ public sealed class Chart
     /// <summary>The rendered height in points (converted to EMU on save). Defaults to a Word-typical 3in.</summary>
     public double HeightPt { get; set; } = 216;
 
+    public double RotationAngle { get; set; }
+    public bool FlipH { get; set; }
+    public bool FlipV { get; set; }
+
     /// <summary>
     /// Floating-position state. Null (the default) means the chart is inline.
     /// Set <see cref="FloatingPlacement.Wrapping"/> to any non-Inline value to make it float.
@@ -331,6 +335,9 @@ public sealed class Chart
             ValueAxisTitle = ValueAxisTitle,
             WidthPt = WidthPt,
             HeightPt = HeightPt,
+            RotationAngle = RotationAngle,
+            FlipH = FlipH,
+            FlipV = FlipV,
             Placement = Placement?.Clone(),
             StyleId = StyleId,
             ColorSchemeId = ColorSchemeId,

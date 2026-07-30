@@ -156,6 +156,32 @@ public sealed class DrawingGroupModelTests
     }
 
     [Fact]
+    public void SetDrawingGroupChildRotationCommand_RotatesNestedChartAndSmartArt_and_round_trips_undo_redo()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var group = new DrawingGroup();
+        var chart = Chart.Create(ChartKind.Column, ["A"], [1]);
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Step"]);
+        group.Children.Add(chart);
+        group.Children.Add(smartArt);
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(group));
+        doc.Blocks.Add(paragraph);
+        var bus = new DocumentCommandBus(new TestCtx(doc));
+
+        bus.Execute(new SetDrawingGroupChildRotationCommand(0, 0, 0, 37, flipH: true, flipV: false));
+        bus.Execute(new SetDrawingGroupChildRotationCommand(0, 0, 1, -19, flipH: false, flipV: true));
+
+        (chart.RotationAngle, chart.FlipH, chart.FlipV).Should().Be((37, true, false));
+        (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV).Should().Be((-19, false, true));
+        bus.Undo().Should().BeTrue();
+        (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV).Should().Be((0, false, false));
+        bus.Redo().Should().BeTrue();
+        (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV).Should().Be((-19, false, true));
+    }
+
+    [Fact]
     public void SetDrawingGroupChildPositionCommand_PersistsLocalOffsetAndUndoes()
     {
         var doc = TextDocument.CreateEmpty();

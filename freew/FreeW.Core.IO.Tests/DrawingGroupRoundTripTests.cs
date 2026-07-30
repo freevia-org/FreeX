@@ -617,6 +617,27 @@ public sealed class DrawingGroupRoundTripTests
     }
 
     [Fact]
+    public void DrawingGroup_ChartAndSmartArtChildTransforms_RoundTripThroughDocx()
+    {
+        var group = ChartAndSmartArtGroup();
+        var chart = group.Children.OfType<Chart>().Single();
+        var smartArt = group.Children.OfType<SmartArt>().Single();
+        chart.RotationAngle = 37;
+        chart.FlipH = true;
+        smartArt.RotationAngle = -19;
+        smartArt.FlipV = true;
+
+        var recovered = RoundTrip(DocumentWith(group));
+        var read = ((Paragraph)recovered.Blocks[0]).Runs.Single().DrawingGroup!;
+        var readChart = read.Children.OfType<Chart>().Single();
+        var readSmartArt = read.Children.OfType<SmartArt>().Single();
+        readChart.RotationAngle.Should().BeApproximately(37, 0.001);
+        readChart.FlipH.Should().BeTrue();
+        readSmartArt.RotationAngle.Should().BeApproximately(-19, 0.001);
+        readSmartArt.FlipV.Should().BeTrue();
+    }
+
+    [Fact]
     public void DrawingGroup_ChildCoordinateSpace_IsMappedIntoRenderedGroupBounds()
     {
         var bytes = RewriteDocumentXml(WriteBytes(DocumentWith(TwoMemberGroup())), document =>

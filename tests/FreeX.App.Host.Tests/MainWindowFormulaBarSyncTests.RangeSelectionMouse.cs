@@ -142,6 +142,25 @@ public sealed partial class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaRangeSelection_SelectAllCorner_InsertsWholeGridReferenceAndKeepsEditing()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            BeginFormulaEdit(harness, "formulaBar");
+            harness.SelectWholeGrid();
+
+            harness.FormulaBarText.Should().Be("=SUM(A1:XFD1048576");
+            harness.FormulaBarFocused.Should().BeTrue();
+            harness.CellFormula(1, 1).Should().BeNull("whole-grid selection must not commit formula editing");
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 1),
+                new CellAddress(harness.CurrentSheetId, CellAddress.MaxRow, CellAddress.MaxCol)));
+        });
+    }
+
+    [Fact]
     public void Issue131FormulaRangeSelection_InlineEditorSeparatorThenSecondRange_InsertsNextArgument()
     {
         StaTestRunner.Run(() =>

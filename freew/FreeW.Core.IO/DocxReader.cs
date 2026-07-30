@@ -6735,6 +6735,22 @@ public static class DocxReader
                     ?? new Shape(ShapeKind.Rectangle, cw, ch);
             }
 
+            if (child is not null && !isNestedGroup)
+            {
+                var angle = long.TryParse(xfrm?.Attribute("rot")?.Value, out var rotEmu)
+                    ? rotEmu / 60000.0 : 0;
+                var flipH = xfrm?.Attribute("flipH")?.Value is "1" or "true";
+                var flipV = xfrm?.Attribute("flipV")?.Value is "1" or "true";
+                switch (child)
+                {
+                    case InlineImage image: image.RotationAngle = angle; image.FlipH = flipH; image.FlipV = flipV; break;
+                    case Shape shape: shape.RotationAngle = angle; shape.FlipH = flipH; shape.FlipV = flipV; break;
+                    case Chart chart: chart.RotationAngle = angle; chart.FlipH = flipH; chart.FlipV = flipV; break;
+                    case SmartArt smartArt: smartArt.RotationAngle = angle; smartArt.FlipH = flipH; smartArt.FlipV = flipV; break;
+                    case WordArt wordArt: wordArt.RotationAngle = angle; wordArt.FlipH = flipH; wordArt.FlipV = flipV; break;
+                }
+            }
+
             if (child is not null)
             {
                 group.Children.Add(child);

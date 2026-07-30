@@ -1165,6 +1165,16 @@ public static class FreeWRibbon
             .ContextualTab("chart-format", "Chart Format",
                 new RibbonTabContext("chart", "Chart Tools", RibbonContextColor.Orange), tab =>
             {
+                tab.Group("chart-arrange", "Arrange", "A", 100, g =>
+                {
+                    g.Medium("freew.shape-rotate", "Rotate", RibbonCommandIconKind.Rotate, menu: m =>
+                    {
+                        m.Item("freew.shape-rotate-right90", "Rotate Right 90°", "R");
+                        m.Item("freew.shape-rotate-left90",  "Rotate Left 90°",  "L");
+                        m.Item("freew.shape-flip-vertical",  "Flip Vertical",    "V");
+                        m.Item("freew.shape-flip-horizontal", "Flip Horizontal",  "H");
+                    });
+                });
                 tab.Group("chart-size", "Size", "S", 90, g =>
                 {
                     g.Medium("freew.chart-size", "Size", RibbonCommandIconKind.Size);
@@ -1195,6 +1205,16 @@ public static class FreeWRibbon
                 {
                     g.Medium("freew.smartart-change-colors", "Change Colors", RibbonCommandIconKind.Fill);
                     g.Medium("freew.smartart-change-style", "Styles", RibbonCommandIconKind.Font);
+                });
+                tab.Group("smartart-arrange", "Arrange", "A", 60, g =>
+                {
+                    g.Medium("freew.shape-rotate", "Rotate", RibbonCommandIconKind.Rotate, menu: m =>
+                    {
+                        m.Item("freew.shape-rotate-right90", "Rotate Right 90°", "R");
+                        m.Item("freew.shape-rotate-left90",  "Rotate Left 90°",  "L");
+                        m.Item("freew.shape-flip-vertical",  "Flip Vertical",    "V");
+                        m.Item("freew.shape-flip-horizontal", "Flip Horizontal",  "H");
+                    });
                 });
             })
             .ContextualTab("table-design", "Table Design",

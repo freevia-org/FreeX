@@ -817,8 +817,8 @@ public sealed class AvaloniaRichTextEditorTests
                 await DrainInputAsync();
 
                 editor.Text[editor.SelectionStart..editor.SelectionEnd]
-                    .Should().Be("Alpha beta gamma",
-                        "triple-click must select the containing paragraph");
+                    .Should().Be("Alpha beta gamma\n",
+                        "triple-click must include the WPF paragraph boundary");
             }
             finally
             {

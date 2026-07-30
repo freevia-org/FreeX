@@ -1538,14 +1538,14 @@ public sealed class FreeWRibbonParityTests
         chartFormat.Should().NotBeNull();
         chartFormat!.Groups.Select(group => group.Id)
             .Should()
-            .Equal("chart-size");
+            .Equal("chart-arrange", "chart-size");
 
         CommandIds(chartFormat)
             .Should()
-            .Equal("freew.chart-size", "freew.chart-size-dialog");
+            .Equal("freew.shape-rotate", "freew.chart-size", "freew.chart-size-dialog");
         Labels(chartFormat)
             .Should()
-            .Equal("Size", "More Size Options...");
+            .Equal("Rotate", "Size", "More Size Options...");
 
         registry.TryGet("freew.chart-size", out _).Should().BeTrue("freew.chart-size must execute from Chart Format");
         registry.TryGet("freew.chart-size-dialog", out _).Should().BeTrue("freew.chart-size-dialog must execute from Chart Format");

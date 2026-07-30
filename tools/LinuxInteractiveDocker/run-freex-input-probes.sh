@@ -265,6 +265,196 @@ copy_cell_formula() {
     printf '%s' "$value"
 }
 
+copy_cell_formula_allow_empty() {
+    local column_offset="$1" row_offset="$2" address="$3"
+    local sentinel="__FREEX_NO_FORMULA__" sentinel_pid="" current="" value=""
+
+    # Empty TextBox copies do not replace the X11 clipboard owner. Seed a bounded
+    # two-request owner so a genuinely empty formula has an exact semantic value
+    # instead of inheriting the prior formula transcript.
+    printf '%s' "$sentinel" | xclip -selection clipboard -in -loops 2 >/dev/null 2>&1 &
+    sentinel_pid=$!
+    for _ in $(seq 1 10); do
+        current="$(clipboard_text || true)"
+        [[ "$current" == "$sentinel" ]] && break
+        sleep 0.05
+    done
+    if [[ "$current" != "$sentinel" ]]; then
+        wait "$sentinel_pid" 2>/dev/null || true
+        return 1
+    fi
+
+    if ! select_cell "$column_offset" "$row_offset" "$address"; then
+        clipboard_text >/dev/null 2>&1 || true
+        wait "$sentinel_pid" 2>/dev/null || true
+        return 1
+    fi
+    send_key F2
+    send_key ctrl+a
+    send_key ctrl+c
+    value="$(clipboard_text || true)"
+    wait "$sentinel_pid" 2>/dev/null || true
+    send_key Escape
+    [[ "$value" == "$sentinel" ]] && value=""
+    printf '%s' "$value"
+}
+
+read_active_formula_bar() {
+    # A point-mode header/corner click leaves the formula editor active. Copy the
+    # editor text before committing so the semantic assertion is independent of pixels.
+    set_clipboard_sentinel
+    send_key ctrl+End
+    send_key ctrl+a
+    send_key ctrl+c
+    clipboard_text
+}
+
+probe_formula_bar_point_mode_whole_range() {
+    local column_formula_bar="" row_formula_bar="" select_all_formula_bar=""
+    local column_cell_formula="" row_cell_formula="" select_all_cell_formula=""
+    local column_active=false row_active=false select_all_active=false
+    local column_passed=false row_passed=false select_all_passed=false
+    local column_header_x column_header_y row_header_x row_header_y corner_x corner_y
+    local formula_cancel_x formula_cancel_y
+    local postcondition="formula-whole-range-point-postcondition.txt"
+    local artifacts="formula-whole-range-column-before.png;formula-whole-range-column-editing.png;formula-whole-range-column-committed.png;formula-whole-range-row-before.png;formula-whole-range-row-editing.png;formula-whole-range-row-committed.png;formula-whole-range-select-all-before.png;formula-whole-range-select-all-editing.png;formula-whole-range-select-all-canceled.png;$postcondition"
+
+    # a1_x/a1_y are the calibrated worksheet origin. The header centers are one
+    # calibrated pitch above/left of that origin, including the select-all corner.
+    column_header_x="$(cell_center_x 1)"
+    column_header_y="$((a1_y - cell_height / 2))"
+    row_header_x="$((window_x + (a1_x - window_x) / 2))"
+    row_header_y="$(cell_center_y 2)"
+    corner_x="$row_header_x"
+    corner_y="$column_header_y"
+    formula_cancel_x="$((a1_x + cell_width + 5))"
+    formula_cancel_y="$((a1_y - cell_height * 2 + 2))"
+
+    # Whole column: physical column-header input in a live formula-bar edit.
+    capture "formula-whole-range-column-before.png"
+    if select_cell 6 9 G10; then
+        send_key ctrl+F2
+        send_key ctrl+a
+        type_text "=SUM()"
+        send_key Left
+        send_key F2
+        send_key F2
+        capture "formula-whole-range-column-editing.png"
+        focus_app
+        xdotool_mousemove_sync "$column_header_x" "$column_header_y" click 1
+        sleep "$settle_seconds"
+        column_formula_bar="$(read_active_formula_bar || true)"
+        capture "formula-whole-range-column-editing.png"
+        if [[ "$column_formula_bar" == "=SUM(B:B)" ]]; then
+            column_active=true
+        fi
+        # Ctrl+A/C can reopen function autocomplete. Close only that popup so
+        # Enter reaches the formula commit path instead of accepting BAHTTEXT.
+        send_key Escape
+        send_key Return
+        column_cell_formula="$(copy_cell_formula 6 9 G10 || true)"
+        capture "formula-whole-range-column-committed.png"
+    fi
+    if $column_active && [[ "$column_cell_formula" == "=SUM(B:B)" ]]; then
+        column_passed=true
+    fi
+
+    # Whole row: use a fresh formula-bar edit so the row-header click is independently proven.
+    capture "formula-whole-range-row-before.png"
+    if select_cell 6 10 G11; then
+        send_key ctrl+F2
+        send_key ctrl+a
+        type_text "=SUM()"
+        send_key Left
+        send_key F2
+        send_key F2
+        capture "formula-whole-range-row-editing.png"
+        focus_app
+        xdotool_mousemove_sync "$row_header_x" "$row_header_y" click 1
+        sleep "$settle_seconds"
+        row_formula_bar="$(read_active_formula_bar || true)"
+        capture "formula-whole-range-row-editing.png"
+        if [[ "$row_formula_bar" == "=SUM(3:3)" ]]; then
+            row_active=true
+        fi
+        send_key Escape
+        send_key Return
+        row_cell_formula="$(copy_cell_formula 6 10 G11 || true)"
+        capture "formula-whole-range-row-committed.png"
+    fi
+    if $row_active && [[ "$row_cell_formula" == "=SUM(3:3)" ]]; then
+        row_passed=true
+    fi
+
+    # Select-all corner: read the active editor before Escape, then prove the formula was
+    # never committed by reading the destination cell after cleanup.
+    capture "formula-whole-range-select-all-before.png"
+    if select_cell 6 11 G12; then
+        send_key ctrl+F2
+        send_key ctrl+a
+        type_text "=SUM()"
+        send_key Left
+        send_key F2
+        send_key F2
+        capture "formula-whole-range-select-all-editing.png"
+        focus_app
+        xdotool_mousemove_sync "$corner_x" "$corner_y" click 1
+        sleep "$settle_seconds"
+        select_all_formula_bar="$(read_active_formula_bar || true)"
+        capture "formula-whole-range-select-all-editing.png"
+        if [[ "$select_all_formula_bar" == "=SUM(A1:XFD1048576)" ]]; then
+            select_all_active=true
+        fi
+        # Escape closes autocomplete; the physical X button owns cancellation.
+        send_key Escape
+        xdotool_mousemove_sync "$formula_cancel_x" "$formula_cancel_y" click 1
+        sleep "$settle_seconds"
+        select_all_cell_formula="$(copy_cell_formula_allow_empty 6 11 G12 || true)"
+        capture "formula-whole-range-select-all-canceled.png"
+    fi
+    if $select_all_active && [[ -z "$select_all_cell_formula" ]]; then
+        select_all_passed=true
+    fi
+
+    write_artifact "$postcondition" \
+        "schema-version=1\nselector=formula-whole-range-point\ncolumn-header-coordinate=$column_header_x,$column_header_y\ncolumn-header-expected=B:B\ncolumn-header-formula-bar-clipboard=$column_formula_bar\ncolumn-header-cell-formula=$column_cell_formula\ncolumn-header-cell-package-formula=$column_cell_formula\ncolumn-header-edit-active-before-commit=$column_active\ncolumn-header-passed=$column_passed\nrow-header-coordinate=$row_header_x,$row_header_y\nrow-header-expected=3:3\nrow-header-formula-bar-clipboard=$row_formula_bar\nrow-header-cell-formula=$row_cell_formula\nrow-header-cell-package-formula=$row_cell_formula\nrow-header-edit-active-before-commit=$row_active\nrow-header-passed=$row_passed\nselect-all-corner-coordinate=$corner_x,$corner_y\nformula-cancel-coordinate=$formula_cancel_x,$formula_cancel_y\nselect-all-expected=A1:XFD1048576\nselect-all-formula-bar-clipboard=$select_all_formula_bar\nselect-all-cell-package-formula-after-cancel=$select_all_cell_formula\nselect-all-edit-active-before-cancel=$select_all_active\nselect-all-passed=$select_all_passed\n"
+
+    if $column_passed; then
+        record "formula-bar-point-mode-whole-column-header" "passed" \
+            "formula-whole-range-column-editing.png; formula-whole-range-column-committed.png; formula-bar-clipboard=$column_formula_bar; cell-package-formula=$column_cell_formula" \
+            "Physical formula-bar point mode accepted a calibrated column-header click as the exact B:B reference and committed it." \
+            "formula-whole-range-column-before.png;formula-whole-range-column-editing.png;formula-whole-range-column-committed.png;$postcondition"
+    else
+        record "formula-bar-point-mode-whole-column-header" "failed" \
+            "formula-whole-range-column-before.png; formula-whole-range-column-editing.png; formula-whole-range-column-committed.png; formula-bar-clipboard=$column_formula_bar; cell-package-formula=$column_cell_formula" \
+            "Physical column-header formula point mode did not prove the exact B:B reference (formula-bar='$column_formula_bar', cell-package='$column_cell_formula')." \
+            "formula-whole-range-column-before.png;formula-whole-range-column-editing.png;formula-whole-range-column-committed.png;$postcondition"
+    fi
+    if $row_passed; then
+        record "formula-bar-point-mode-whole-row-header" "passed" \
+            "formula-whole-range-row-editing.png; formula-whole-range-row-committed.png; formula-bar-clipboard=$row_formula_bar; cell-package-formula=$row_cell_formula" \
+            "Physical formula-bar point mode accepted a calibrated row-header click as the exact 3:3 reference and committed it." \
+            "formula-whole-range-row-before.png;formula-whole-range-row-editing.png;formula-whole-range-row-committed.png;$postcondition"
+    else
+        record "formula-bar-point-mode-whole-row-header" "failed" \
+            "formula-whole-range-row-before.png; formula-whole-range-row-editing.png; formula-whole-range-row-committed.png; formula-bar-clipboard=$row_formula_bar; cell-package-formula=$row_cell_formula" \
+            "Physical row-header formula point mode did not prove the exact 3:3 reference (formula-bar='$row_formula_bar', cell-package='$row_cell_formula')." \
+            "formula-whole-range-row-before.png;formula-whole-range-row-editing.png;formula-whole-range-row-committed.png;$postcondition"
+    fi
+    if $select_all_passed; then
+        record "formula-bar-point-mode-whole-select-all-corner" "passed" \
+            "formula-whole-range-select-all-editing.png; formula-whole-range-select-all-canceled.png; formula-bar-clipboard=$select_all_formula_bar; cell-package-after-cancel='$select_all_cell_formula'" \
+            "Physical formula-bar point mode accepted the calibrated select-all corner as the exact A1:XFD1048576 reference while the edit was active; cleanup confirmed it was not committed." \
+            "formula-whole-range-select-all-before.png;formula-whole-range-select-all-editing.png;formula-whole-range-select-all-canceled.png;$postcondition"
+    else
+        record "formula-bar-point-mode-whole-select-all-corner" "failed" \
+            "formula-whole-range-select-all-before.png; formula-whole-range-select-all-editing.png; formula-whole-range-select-all-canceled.png; formula-bar-clipboard=$select_all_formula_bar; cell-package-after-cancel='$select_all_cell_formula'" \
+            "Physical select-all corner formula point mode did not prove the exact A1:XFD1048576 reference while editing (formula-bar='$select_all_formula_bar', cell-package-after-cancel='$select_all_cell_formula')." \
+            "formula-whole-range-select-all-before.png;formula-whole-range-select-all-editing.png;formula-whole-range-select-all-canceled.png;$postcondition"
+    fi
+    dismiss_overlays
+}
+
 probe_name_box_dropdown() {
     local dropdown_x dropdown_y defined_clipboard table_clipboard
     local before_root after_root window_count_before window_count_open
@@ -2924,6 +3114,19 @@ if [[ "$probe_selector" == "formula-3d-native-xlsx" ]]; then
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "formula-whole-range-point" ]]; then
+    # Focused iteration mode for physical whole-column, whole-row, and select-all formula point input.
+    probe_formula_bar_point_mode_whole_range
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused whole-range formula point probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '\"status\":\"failed\"' || true) > 0 )); then
         exit 1
     fi
     exit 0

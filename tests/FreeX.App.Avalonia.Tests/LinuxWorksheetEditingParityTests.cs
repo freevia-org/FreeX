@@ -117,6 +117,31 @@ public sealed class LinuxWorksheetEditingParityTests
     }
 
     [Fact]
+    public async Task LinuxSelector_SelectAllCornerFailsClosedIntoFormulaPointMode()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = CreateCleanWindow(out var sheet);
+            try
+            {
+                var formulaAddress = new CellAddress(sheet.Id, 2, 2);
+                window.BeginFormulaPointModeEditForTest(formulaAddress, "=SUM(");
+                window.FormulaPointModeForTest.Should().BeTrue();
+                typeof(MainWindow).GetMethod("SelectAllCells", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(window, null);
+
+                window.FormulaBoxTextForTest.Should().Be("=SUM(A1:XFD1048576");
+                sheet.GetCell(formulaAddress)?.HasFormula.Should().BeFalse();
+                window.Session.FormulaEditAddress.Should().Be(formulaAddress);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public void SourceRoutesResizeAndInlineEditingBeforeSelection()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));

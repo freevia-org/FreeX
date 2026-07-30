@@ -696,6 +696,7 @@ manifest = {
             "transcripts": [
                 "pointer-selection-forward",
                 "pointer-selection-reverse",
+                "pointer-paragraph-selection",
             ],
             "geometryProof": "pointer-selection-calibration.txt",
         }
@@ -926,6 +927,7 @@ if [[ "$app_surface" == "in-canvas-grouped-child-pointer-selection" ]]; then
     pointer_reverse_readback=false
     pointer_forward_capture=false
     pointer_reverse_capture=false
+    pointer_paragraph_readback=false
     pointer_visual_state=false
     pointer_expected=$'Wide words make this first paragraph wrap at unequal visual line widths\ntail paragraph crosses the boundary'
     if pointer_drag "$pointer_anchor_x" "$pointer_anchor_y" "$pointer_edge_x" "$pointer_edge_y"; then
@@ -978,8 +980,21 @@ PY
     else
         input_commands_ok=false
     fi
+    # WPF RichTextBox triple-click carries the following paragraph marker. Keep
+    # this readback exact so a visual-only paragraph selection cannot pass.
+    if xdotool click --clearmodifiers --repeat 3 --delay 120 1 >/dev/null 2>&1; then
+        if copy_selection_and_assert_clipboard \
+            "pointer-paragraph-selection" $'Wide words make this first paragraph wrap at unequal visual line widths\n'; then
+            pointer_paragraph_readback=true
+        else
+            input_commands_ok=false
+        fi
+    else
+        input_commands_ok=false
+    fi
     if $pointer_forward_readback && $pointer_reverse_readback &&
-       $pointer_forward_capture && $pointer_reverse_capture && $pointer_visual_state; then
+       $pointer_forward_capture && $pointer_reverse_capture &&
+       $pointer_paragraph_readback && $pointer_visual_state; then
         pointer_selection=true
     fi
 elif [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ||
@@ -1220,6 +1235,9 @@ if $visible_pass && $input_commands_ok && $input_capture && $commit_capture && $
             pointer-selection-reverse-expected.txt
             pointer-selection-reverse-actual.txt
             pointer-selection-reverse-proof.txt
+            pointer-paragraph-selection-expected.txt
+            pointer-paragraph-selection-actual.txt
+            pointer-paragraph-selection-proof.txt
             pointer-selection-final.png
             pointer-selection-state.txt
             pointer-selection-visual-state.json

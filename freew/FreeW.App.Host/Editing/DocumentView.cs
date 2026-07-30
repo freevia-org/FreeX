@@ -2119,7 +2119,19 @@ public sealed class DocumentView : RichTextBox
     // ── Chart selection (mirrors SelectedImage / SelectedImageLocation) ──────────────────────────
 
     /// <summary>The inline chart targeted by the current selection/caret, or null if none is selected.</summary>
-    public Chart? SelectedChart() => SelectedChartLocation().Chart;
+    public Chart? SelectedChart()
+    {
+        if (_selectedFloatingGroupChild is { } selectedChild
+            && DrawingGroupChildPathResolver.TryGetChild(
+                selectedChild.RootGroup,
+                selectedChild.ChildPath,
+                out _,
+                out var nestedChild)
+            && nestedChild is Chart nestedChart)
+            return nestedChart;
+
+        return SelectedChartLocation().Chart;
+    }
 
     // Locate the model paragraph/run index of the inline chart under the selection, plus the chart itself.
     private (int BlockIndex, int RunIndex, Chart? Chart) SelectedChartLocation()
@@ -2820,7 +2832,19 @@ public sealed class DocumentView : RichTextBox
     // ── SmartArt selection (mirrors SelectedChart / SelectedChartLocation) ────────────────────────
 
     /// <summary>The inline SmartArt diagram targeted by the current selection/caret, or null if none is selected.</summary>
-    public SmartArt? SelectedSmartArt() => SelectedSmartArtLocation().SmartArt;
+    public SmartArt? SelectedSmartArt()
+    {
+        if (_selectedFloatingGroupChild is { } selectedChild
+            && DrawingGroupChildPathResolver.TryGetChild(
+                selectedChild.RootGroup,
+                selectedChild.ChildPath,
+                out _,
+                out var nestedChild)
+            && nestedChild is SmartArt nestedSmartArt)
+            return nestedSmartArt;
+
+        return SelectedSmartArtLocation().SmartArt;
+    }
 
     // Locate the model paragraph/run index of the inline SmartArt under the selection, plus the diagram.
     private (int BlockIndex, int RunIndex, SmartArt? SmartArt) SelectedSmartArtLocation()
@@ -7081,6 +7105,201 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Returns true when exactly one FreeW.Core.Model.DrawingGroup is selected.</summary>
     internal bool IsGroupSelected => _selectedFloatingObjects.Count == 1 && _selectedFloatingObjects[0] is FreeW.Core.Model.DrawingGroup;
+
+    /// <summary>
+    /// Rotate the selected floating object through the shared transform command. A selected direct or
+    /// nested group child keeps the owning run active, so its full root-relative path is sent to
+    /// <see cref="SetDrawingGroupChildRotationCommand"/> and the group's transform is left intact.
+    /// </summary>
+    public bool RotateSelectedFloating(double angleDeg)
+    {
+        CommitToModel();
+
+        if (SelectedFloatingGroupChildTransform() is { } child)
+        {
+            _commands.Execute(new SetDrawingGroupChildRotationCommand(
+                child.BlockIndex,
+                child.RunIndex,
+                child.ChildPath,
+                AddRotation(child.Angle, angleDeg),
+                child.FlipH,
+                child.FlipV));
+            Render();
+            return true;
+        }
+
+        if (SelectedImageLocation() is { Image: { } image } imageLocation)
+        {
+            _commands.Execute(new SetImageRotationCommand(
+                imageLocation.BlockIndex,
+                imageLocation.RunIndex,
+                AddRotation(image.RotationAngle, angleDeg),
+                image.FlipH,
+                image.FlipV));
+            Render();
+            return true;
+        }
+
+        if (SelectedShapeLocation() is { Shape: { } shape } shapeLocation)
+        {
+            _commands.Execute(new SetShapeRotationCommand(
+                shapeLocation.BlockIndex,
+                shapeLocation.RunIndex,
+                AddRotation(shape.RotationAngle, angleDeg),
+                shape.FlipH,
+                shape.FlipV));
+            Render();
+            return true;
+        }
+
+        if (SelectedFloatingObjectTransform() is not { } selected)
+            return false;
+
+        return TrySetSelectedFloatingRotation(
+            AddRotation(selected.Angle, angleDeg),
+            flipH: null,
+            flipV: null);
+    }
+
+    /// <summary>Flip the selected floating object through the same shared transform route as rotation.</summary>
+    public bool FlipSelectedFloating(bool horizontal)
+    {
+        CommitToModel();
+
+        if (SelectedFloatingGroupChildTransform() is { } child)
+        {
+            _commands.Execute(new SetDrawingGroupChildRotationCommand(
+                child.BlockIndex,
+                child.RunIndex,
+                child.ChildPath,
+                child.Angle,
+                horizontal ? !child.FlipH : child.FlipH,
+                horizontal ? child.FlipV : !child.FlipV));
+            Render();
+            return true;
+        }
+
+        if (SelectedImageLocation() is { Image: { } image } imageLocation)
+        {
+            _commands.Execute(new SetImageRotationCommand(
+                imageLocation.BlockIndex,
+                imageLocation.RunIndex,
+                image.RotationAngle,
+                horizontal ? !image.FlipH : image.FlipH,
+                horizontal ? image.FlipV : !image.FlipV));
+            Render();
+            return true;
+        }
+
+        if (SelectedShapeLocation() is { Shape: { } shape } shapeLocation)
+        {
+            _commands.Execute(new SetShapeRotationCommand(
+                shapeLocation.BlockIndex,
+                shapeLocation.RunIndex,
+                shape.RotationAngle,
+                horizontal ? !shape.FlipH : shape.FlipH,
+                horizontal ? shape.FlipV : !shape.FlipV));
+            Render();
+            return true;
+        }
+
+        if (SelectedFloatingObjectTransform() is { } selected)
+        {
+            return TrySetSelectedFloatingRotation(
+                selected.Angle,
+                horizontal ? !selected.FlipH : selected.FlipH,
+                horizontal ? selected.FlipV : !selected.FlipV);
+        }
+
+        return false;
+    }
+
+    private bool TrySetSelectedFloatingRotation(double angleDeg, bool? flipH, bool? flipV)
+    {
+        if (SelectedFloatingObjectTransform() is not { } selected)
+            return false;
+
+        _commands.Execute(new SetFloatingRotationCommand(
+            selected.BlockIndex,
+            selected.RunIndex,
+            angleDeg,
+            flipH ?? selected.FlipH,
+            flipV ?? selected.FlipV));
+        Render();
+        return true;
+    }
+
+    private (int BlockIndex, int RunIndex, IReadOnlyList<int> ChildPath,
+        double Angle, bool FlipH, bool FlipV)? SelectedFloatingGroupChildTransform()
+    {
+        if (_selectedFloatingGroupChild is not { } selected)
+            return null;
+
+        var location = FindFloatingObjectLocation(selected.RootGroup);
+        if (location.BlockIndex < 0
+            || !DrawingGroupChildPathResolver.TryGetChild(
+                selected.RootGroup,
+                selected.ChildPath,
+                out _,
+                out var child))
+            return null;
+
+        var transform = GetDrawingGroupChildTransform(child);
+        return (
+            location.BlockIndex,
+            location.RunIndex,
+            selected.ChildPath,
+            transform.Angle,
+            transform.FlipH,
+            transform.FlipV);
+    }
+
+    private (int BlockIndex, int RunIndex, double Angle, bool FlipH, bool FlipV)? SelectedFloatingObjectTransform()
+    {
+        if (_selectedFloatingObject is null)
+            return null;
+
+        var location = FindFloatingObjectLocation(_selectedFloatingObject);
+        if (location.BlockIndex < 0
+            || location.BlockIndex >= _model.Blocks.Count
+            || _model.Blocks[location.BlockIndex] is not ModelParagraph paragraph
+            || location.RunIndex < 0
+            || location.RunIndex >= paragraph.Runs.Count)
+            return null;
+
+        var run = paragraph.Runs[location.RunIndex];
+        var transform = run.Image is { } image && ReferenceEquals(image, _selectedFloatingObject)
+            ? (image.RotationAngle, image.FlipH, image.FlipV)
+            : run.Shape is { } shape && ReferenceEquals(shape, _selectedFloatingObject)
+                ? (shape.RotationAngle, shape.FlipH, shape.FlipV)
+                : run.Chart is { } chart && ReferenceEquals(chart, _selectedFloatingObject)
+                    ? (chart.RotationAngle, chart.FlipH, chart.FlipV)
+                    : run.SmartArt is { } smartArt && ReferenceEquals(smartArt, _selectedFloatingObject)
+                        ? (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV)
+                        : run.WordArt is { } wordArt && ReferenceEquals(wordArt, _selectedFloatingObject)
+                            ? (wordArt.RotationAngle, wordArt.FlipH, wordArt.FlipV)
+                            : run.DrawingGroup is { } group && ReferenceEquals(group, _selectedFloatingObject)
+                                ? (group.RotationAngle, group.FlipH, group.FlipV)
+                                : (double.NaN, false, false);
+
+        return double.IsNaN(transform.Item1)
+            ? null
+            : (location.BlockIndex, location.RunIndex, transform.Item1, transform.Item2, transform.Item3);
+    }
+
+    private static (double Angle, bool FlipH, bool FlipV) GetDrawingGroupChildTransform(object child) => child switch
+    {
+        InlineImage image => (image.RotationAngle, image.FlipH, image.FlipV),
+        Shape shape => (shape.RotationAngle, shape.FlipH, shape.FlipV),
+        Chart chart => (chart.RotationAngle, chart.FlipH, chart.FlipV),
+        SmartArt smartArt => (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV),
+        WordArt wordArt => (wordArt.RotationAngle, wordArt.FlipH, wordArt.FlipV),
+        FreeW.Core.Model.DrawingGroup group => (group.RotationAngle, group.FlipH, group.FlipV),
+        _ => (0, false, false)
+    };
+
+    private static double AddRotation(double currentAngle, double delta) =>
+        (currentAngle + delta + 360) % 360;
 
     /// <summary>
     /// Adds z-order commands to the method set. Called by the host via the ribbon command bus.

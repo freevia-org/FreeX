@@ -1,3 +1,4 @@
+using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 
 namespace FreeW.App.Host.Tests;
@@ -116,6 +117,41 @@ public sealed class DrawingGroupHostTests
         outer.ChildOffsets.Add((28, 22));
         outer.Children.Add(new Shape(ShapeKind.Rectangle, 54, 34));
         outer.ChildOffsets.Add((168, 76));
+
+        var document = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+        document.Blocks.Add(paragraph);
+        return document;
+    }
+
+    private static TextDocument ChartSmartArtGroupDoc(
+        out DrawingGroup outer,
+        out Chart chart,
+        out SmartArt smartArt)
+    {
+        chart = Chart.Create(ChartKind.Column, ["A", "B"], [1, 2]);
+        smartArt = SmartArt.Create(SmartArtKind.Process, ["Step"]);
+        var inner = new DrawingGroup { WidthPt = 120, HeightPt = 72 };
+        inner.Children.Add(smartArt);
+        inner.ChildOffsets.Add((12, 8));
+
+        outer = new DrawingGroup
+        {
+            WidthPt = 300,
+            HeightPt = 180,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 24,
+                ZOrderIndex = 1
+            }
+        };
+        outer.Children.Add(chart);
+        outer.ChildOffsets.Add((18, 14));
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((156, 54));
 
         var document = new TextDocument();
         var paragraph = new Paragraph();
@@ -349,6 +385,60 @@ public sealed class DrawingGroupHostTests
         (leaf.WidthPt, leaf.HeightPt).Should().Be(sizeBefore);
         (outer.WidthPt, outer.HeightPt).Should().Be(outerSize);
         (inner.WidthPt, inner.HeightPt).Should().Be(innerSize);
+    }
+
+    [StaFact]
+    public void WpfRibbon_RotatesAndFlipsDirectGroupedChartChild_AndUndoRedoRestoresIt()
+    {
+        var document = ChartSmartArtGroupDoc(out var group, out var chart, out _);
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.SelectFloatingObject(group);
+        view.SelectFloatingGroupChild(group, [0]);
+        view.SelectedChart().Should().BeSameAs(chart);
+
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet("freew.shape-rotate-right90", out var rotate).Should().BeTrue();
+        registry.TryGet("freew.shape-flip-horizontal", out var flip).Should().BeTrue();
+
+        rotate!.Execute(RibbonCommandContext.Empty);
+        flip!.Execute(RibbonCommandContext.Empty);
+        (chart.RotationAngle, chart.FlipH, chart.FlipV).Should().Be((90, true, false));
+
+        view.Undo();
+        (chart.RotationAngle, chart.FlipH, chart.FlipV).Should().Be((90, false, false));
+        view.Undo();
+        (chart.RotationAngle, chart.FlipH, chart.FlipV).Should().Be((0, false, false));
+        view.Redo();
+        view.Redo();
+        (chart.RotationAngle, chart.FlipH, chart.FlipV).Should().Be((90, true, false));
+    }
+
+    [StaFact]
+    public void WpfRibbon_RotatesAndFlipsNestedGroupedSmartArtChild_AndUndoRedoRestoresIt()
+    {
+        var document = ChartSmartArtGroupDoc(out var group, out _, out var smartArt);
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.SelectFloatingObject(group);
+        view.SelectFloatingGroupChild(group, [1, 0]);
+        view.SelectedSmartArt().Should().BeSameAs(smartArt);
+
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet("freew.shape-rotate-left90", out var rotate).Should().BeTrue();
+        registry.TryGet("freew.shape-flip-vertical", out var flip).Should().BeTrue();
+
+        rotate!.Execute(RibbonCommandContext.Empty);
+        flip!.Execute(RibbonCommandContext.Empty);
+        (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV).Should().Be((270, false, true));
+
+        view.Undo();
+        (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV).Should().Be((270, false, false));
+        view.Undo();
+        (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV).Should().Be((0, false, false));
+        view.Redo();
+        view.Redo();
+        (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV).Should().Be((270, false, true));
     }
 
     // ── IsGroupSelected ──────────────────────────────────────────────────────────────────────────

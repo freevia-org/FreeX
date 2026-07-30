@@ -3233,11 +3233,12 @@ public sealed class SetFloatingWrapCommand(
 }
 
 /// <summary>
-/// Set the rotation + flip on ANY floating object that supports rotation (Image, Shape, WordArt, Group).
+/// Set the rotation + flip on ANY floating object that supports rotation (Image, Shape, Chart, SmartArt,
+/// WordArt, Group).
 /// For Image: updates <see cref="InlineImage.RotationAngle"/>, FlipH, FlipV.
 /// For Shape: updates <see cref="Shape.RotationAngle"/>, FlipH, FlipV.
 /// For Group: updates the group-level DrawingML transform, leaving child-local transforms intact.
-/// Chart and SmartArt do not carry a model transform; this command is a no-op for them.
+/// Chart and SmartArt carry the same local DrawingML transform as other grouped children.
 /// </summary>
 public sealed class SetFloatingRotationCommand(
     int paragraphIndex, int runIndex,
@@ -3278,6 +3279,16 @@ public sealed class SetFloatingRotationCommand(
         {
             pAngle = shape.RotationAngle; pFH = shape.FlipH; pFV = shape.FlipV;
             shape.RotationAngle = a; shape.FlipH = fh; shape.FlipV = fv; return true;
+        }
+        if (run.Chart is { } chart)
+        {
+            pAngle = chart.RotationAngle; pFH = chart.FlipH; pFV = chart.FlipV;
+            chart.RotationAngle = a; chart.FlipH = fh; chart.FlipV = fv; return true;
+        }
+        if (run.SmartArt is { } smartArt)
+        {
+            pAngle = smartArt.RotationAngle; pFH = smartArt.FlipH; pFV = smartArt.FlipV;
+            smartArt.RotationAngle = a; smartArt.FlipH = fh; smartArt.FlipV = fv; return true;
         }
         if (run.WordArt is { } wordArt)
         {
@@ -3410,6 +3421,24 @@ public sealed class SetDrawingGroupChildRotationCommand : IDocumentCommand
                 wordArt.RotationAngle = angle;
                 wordArt.FlipH = flipH;
                 wordArt.FlipV = flipV;
+                return true;
+
+            case Chart chart:
+                previousAngle = chart.RotationAngle;
+                previousFlipH = chart.FlipH;
+                previousFlipV = chart.FlipV;
+                chart.RotationAngle = angle;
+                chart.FlipH = flipH;
+                chart.FlipV = flipV;
+                return true;
+
+            case SmartArt smartArt:
+                previousAngle = smartArt.RotationAngle;
+                previousFlipH = smartArt.FlipH;
+                previousFlipV = smartArt.FlipV;
+                smartArt.RotationAngle = angle;
+                smartArt.FlipH = flipH;
+                smartArt.FlipV = flipV;
                 return true;
 
             case DrawingGroup nestedGroup:
@@ -4062,6 +4091,9 @@ public sealed class ReplaceChartDataCommand(int paragraphIndex, int runIndex, Ch
         target.ValueAxisTitle = source.ValueAxisTitle;
         target.WidthPt = source.WidthPt;
         target.HeightPt = source.HeightPt;
+        target.RotationAngle = source.RotationAngle;
+        target.FlipH = source.FlipH;
+        target.FlipV = source.FlipV;
         target.Placement = source.Placement is null
             ? null
             : new FloatingPlacement
@@ -4337,6 +4369,9 @@ internal static class SmartArtCommandCopy
         target.Kind = source.Kind;
         target.WidthPt = source.WidthPt;
         target.HeightPt = source.HeightPt;
+        target.RotationAngle = source.RotationAngle;
+        target.FlipH = source.FlipH;
+        target.FlipV = source.FlipV;
         target.Placement = source.Placement is null
             ? null
             : new FloatingPlacement

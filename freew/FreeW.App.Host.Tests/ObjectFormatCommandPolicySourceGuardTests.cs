@@ -41,6 +41,23 @@ public sealed class ObjectFormatCommandPolicySourceGuardTests
         source.Should().NotContain("double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt) && pt > 0");
     }
 
+    [Fact]
+    public void WpfAndAvaloniaTransformRoutes_KeepGroupedChildTransformsOnTheSharedCommand()
+    {
+        var wpfEditor = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var wpfRibbon = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        var avaloniaEditor = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+        var avaloniaRibbon = ReadSource("freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs");
+
+        wpfEditor.Should().Contain("public bool RotateSelectedFloating(double angleDeg)");
+        wpfEditor.Should().Contain("new SetDrawingGroupChildRotationCommand(");
+        wpfEditor.Should().Contain("SelectedFloatingGroupChildTransform()");
+        wpfRibbon.Should().Contain("new FloatingTransformCommand(editor, command)");
+        avaloniaEditor.Should().Contain("new SetDrawingGroupChildRotationCommand(");
+        avaloniaRibbon.Should().Contain("editor.RotateSelectedFloating(command.RotationDeltaDegrees)");
+        avaloniaRibbon.Should().Contain("editor.FlipSelectedFloating(horizontal: true)");
+    }
+
     private static string ReadSource(params string[] relativePath)
     {
         var path = relativePath.Aggregate(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), Path.Combine);

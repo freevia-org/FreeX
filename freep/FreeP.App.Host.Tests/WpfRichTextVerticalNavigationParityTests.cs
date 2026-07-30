@@ -173,6 +173,44 @@ public sealed class WpfRichTextVerticalNavigationParityTests
         }
     }
 
+    [StaFact]
+    public void WpfRichTextBox_ParagraphSelectionIncludesFollowingParagraphBoundary()
+    {
+        const string firstText = "Alpha beta gamma";
+        const string secondText = "Delta epsilon";
+        var body = new TextBody();
+        body.Paragraphs.Add(new ModelParagraph { Runs = { new ModelRun { Text = firstText } } });
+        body.Paragraphs.Add(new ModelParagraph { Runs = { new ModelRun { Text = secondText } } });
+
+        var box = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(body, 12))
+        {
+            AcceptsReturn = true,
+            Width = 220,
+            Height = 120,
+            IsUndoEnabled = false,
+        };
+        var window = new Window { Content = box, Width = 220, Height = 120 };
+        window.Show();
+        window.UpdateLayout();
+        try
+        {
+            var expected = InCanvasRichTextPointerSelectionPlanner.PlanParagraph(
+                firstText + "\n" + secondText,
+                logicalPosition: 4);
+            var start = PointerAtLogicalOffset(box.Document, expected.Start);
+            var end = PointerAtLogicalOffset(box.Document, expected.End);
+            box.Selection.Select(start, end);
+
+            LogicalOffsetAt(box.Document, box.Selection.Start).Should().Be(expected.Start);
+            LogicalOffsetAt(box.Document, box.Selection.End).Should().Be(expected.End);
+            box.Selection.Text.Should().Contain("\r\n");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     [Fact]
     public void WpfRichTextEditor_LeavesVisualLineNavigationToNativeRichTextBox()
     {

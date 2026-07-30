@@ -736,18 +736,14 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private void SelectParagraph(int logicalPosition)
     {
         string text = Text;
-        int position = Math.Clamp(logicalPosition, 0, text.Length);
-        int start = position;
-        int end = position;
-        while (start > 0 && text[start - 1] != '\n')
-            start--;
-        while (end < text.Length && text[end] != '\n')
-            end++;
-        InputBox.SelectionStart = start;
-        InputBox.SelectionEnd = end;
-        _pointerSelectionAnchor = start;
-        _keyboardSelectionAnchor = start;
-        _keyboardSelectionCaret = end;
+        var selection = InCanvasRichTextPointerSelectionPlanner.PlanParagraph(
+            text,
+            logicalPosition);
+        InputBox.SelectionStart = selection.Start;
+        InputBox.SelectionEnd = selection.End;
+        _pointerSelectionAnchor = selection.Start;
+        _keyboardSelectionAnchor = selection.Start;
+        _keyboardSelectionCaret = selection.End;
     }
 
     private void UpdateSurfaceSelection()

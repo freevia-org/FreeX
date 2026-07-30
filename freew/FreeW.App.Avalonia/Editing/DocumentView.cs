@@ -9401,7 +9401,9 @@ public sealed class DocumentView : Control
         {
             InlineImage image => (image.RotationAngle, image.FlipH, image.FlipV),
             Shape shape => (shape.RotationAngle, shape.FlipH, shape.FlipV),
+            Chart chart => (chart.RotationAngle, chart.FlipH, chart.FlipV),
             WordArt wordArt => (wordArt.RotationAngle, wordArt.FlipH, wordArt.FlipV),
+            SmartArt smartArt => (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV),
             FreeW.Core.Model.DrawingGroup nestedGroup =>
                 (nestedGroup.RotationAngle, nestedGroup.FlipH, nestedGroup.FlipV),
             _ => (0, false, false)
@@ -20105,7 +20107,9 @@ public sealed class DocumentView : Control
                 {
                     InlineImage image => image.RotationAngle,
                     Shape shape => shape.RotationAngle,
+                    Chart chart => chart.RotationAngle,
                     WordArt wordArt => wordArt.RotationAngle,
+                    SmartArt smartArt => smartArt.RotationAngle,
                     FreeW.Core.Model.DrawingGroup nested => nested.RotationAngle,
                     _ => 0
                 },
@@ -20113,7 +20117,9 @@ public sealed class DocumentView : Control
                 {
                     InlineImage image => image.FlipH,
                     Shape shape => shape.FlipH,
+                    Chart chart => chart.FlipH,
                     WordArt wordArt => wordArt.FlipH,
+                    SmartArt smartArt => smartArt.FlipH,
                     FreeW.Core.Model.DrawingGroup nested => nested.FlipH,
                     _ => false
                 },
@@ -20121,7 +20127,9 @@ public sealed class DocumentView : Control
                 {
                     InlineImage image => image.FlipV,
                     Shape shape => shape.FlipV,
+                    Chart chart => chart.FlipV,
                     WordArt wordArt => wordArt.FlipV,
+                    SmartArt smartArt => smartArt.FlipV,
                     FreeW.Core.Model.DrawingGroup nested => nested.FlipV,
                     _ => false
                 }

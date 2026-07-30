@@ -24,6 +24,23 @@ public sealed class LinuxPointerSelectionValidationSourceTests
         probe.Should().Contain("pointer-editor-rect=%s,%s,%s,%s");
         probe.Should().Contain("pointer_drag \"$pointer_anchor_x\" \"$pointer_anchor_y\" \"$pointer_edge_x\" \"$pointer_edge_y\"");
         probe.Should().Contain("drag-contract=first visual line to captured pointer beyond editor bottom across paragraph boundary");
+        probe.Should().Contain("pointer_paragraph_readback=false");
+        probe.Should().Contain("xdotool click --clearmodifiers --repeat 3 --delay 120 1");
+        probe.Should().Contain("pointer-paragraph-selection");
+        probe.Should().Contain("Wide words make this first paragraph wrap at unequal visual line widths\\n");
+        probe.Should().Contain("$pointer_paragraph_readback");
+
+        var semanticReadbackStart = probe.IndexOf("\"semanticReadback\": (", StringComparison.Ordinal);
+        semanticReadbackStart.Should().BeGreaterThanOrEqualTo(0);
+        var pointerTranscriptStart = probe.IndexOf("\"pointer-selection-forward\"", semanticReadbackStart, StringComparison.Ordinal);
+        var pointerGeometryProofStart = probe.IndexOf("\"geometryProof\": \"pointer-selection-calibration.txt\"", pointerTranscriptStart, StringComparison.Ordinal);
+        pointerTranscriptStart.Should().BeGreaterThan(semanticReadbackStart);
+        pointerGeometryProofStart.Should().BeGreaterThan(pointerTranscriptStart);
+        var pointerManifest = probe[pointerTranscriptStart..pointerGeometryProofStart];
+        pointerManifest.Should().Contain(
+            "\"pointer-selection-forward\",\n" +
+            "                \"pointer-selection-reverse\",\n" +
+            "                \"pointer-paragraph-selection\",");
 
         var runner = File.ReadAllText(RepoFile(
                 "tools/Run-FreePRichTextShortcutValidation.ps1"))
@@ -32,6 +49,12 @@ public sealed class LinuxPointerSelectionValidationSourceTests
         runner.Should().Contain("$sha256.ComputeHash(");
         runner.Should().NotContain("[System.Security.Cryptography.SHA256]::HashData(",
             "the runner is launched by Windows PowerShell 5.1 as well as modern pwsh");
+        runner.Should().Contain(
+            "\"pointer-selection-forward|pointer-selection-reverse|pointer-paragraph-selection\"");
+        runner.Should().Contain(
+            "\"pointer-selection-forward\",\n" +
+            "        \"pointer-selection-reverse\",\n" +
+            "        \"pointer-paragraph-selection\"");
 
         var readOnlyStart = probe.IndexOf(
             "if [[ \"$app_surface\" == \"in-canvas-grouped-child-pointer-selection\" ]]; then\n" +
