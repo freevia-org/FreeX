@@ -134,41 +134,62 @@ jobs:
       - name: Run release test gate
         shell: pwsh
         run: |
+          function Invoke-Dotnet {
+            param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
+            & dotnet @Arguments
+            if ($LASTEXITCODE -ne 0) {
+              throw "dotnet $($Arguments -join ' ') failed with exit code $LASTEXITCODE."
+            }
+          }
+
           switch ("${{ matrix.app }}") {
             "FreeX" {
               powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1
-              dotnet build FreeX.slnx --configuration Release
-              dotnet test tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj `
+              if ($LASTEXITCODE -ne 0) { throw "Repository preflight failed with exit code $LASTEXITCODE." }
+              Invoke-Dotnet build FreeX.slnx --configuration Release
+              Invoke-Dotnet test tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj `
                 --configuration Release `
                 --no-build `
                 --filter "FullyQualifiedName~ReleaseAutomationWorkflowTests|FullyQualifiedName~TesterReleaseSmokeTests|FullyQualifiedName~RibbonNativeRegistryTests|FullyQualifiedName=FreeX.App.Host.Tests.MainWindowRibbonKeyTipTests.DeclarativeHomeMenuChoices_AreEnabledAcrossFormattingFamilies" `
                 --logger "trx;LogFileName=freex-release-focused-tests.trx"
-              dotnet test tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj `
+              Invoke-Dotnet test tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj `
                 --configuration Release `
                 --no-build `
                 --filter "FullyQualifiedName~BorderRenderTests|FullyQualifiedName~R74_SlantDashDotBorderThicknessTests" `
                 --logger "trx;LogFileName=freex-border-tests.trx"
-              dotnet test tests/FreeX.App.Presentation.Tests/FreeX.App.Presentation.Tests.csproj `
+              Invoke-Dotnet test tests/FreeX.App.Presentation.Tests/FreeX.App.Presentation.Tests.csproj `
                 --configuration Release `
                 --no-build `
                 --filter "FullyQualifiedName~BorderStrokePixelSnapperTests" `
                 --logger "trx;LogFileName=freex-border-presentation-tests.trx"
-              dotnet test tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj `
+              Invoke-Dotnet test tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj `
                 --configuration Release `
                 --no-build `
                 --filter "FullyQualifiedName~CellBorderPanelNeighborResolutionTests" `
                 --logger "trx;LogFileName=freex-avalonia-release-focused-tests.trx"
             }
             "FreeW" {
-              dotnet build FreeW.slnx --configuration Release
-              dotnet test FreeW.slnx `
+              Invoke-Dotnet build FreeW.slnx --configuration Release
+              foreach ($project in @(
+                "freew/FreeW.Core.Model.Tests/FreeW.Core.Model.Tests.csproj",
+                "freew/FreeW.Core.IO.Tests/FreeW.Core.IO.Tests.csproj",
+                "freew/FreeW.Ribbon.Definitions.Tests/FreeW.Ribbon.Definitions.Tests.csproj",
+                "freew/FreeW.App.Localization.Tests/FreeW.App.Localization.Tests.csproj"
+              )) {
+                Invoke-Dotnet test $project `
+                  --configuration Release `
+                  --no-build `
+                  --logger "trx;LogFileName=freew-release-tests.trx"
+              }
+              Invoke-Dotnet test freew/FreeW.App.Avalonia.Tests/FreeW.App.Avalonia.Tests.csproj `
                 --configuration Release `
                 --no-build `
-                --logger "trx;LogFileName=freew-tests.trx"
+                --filter "FullyQualifiedName~PackagingSmokeTests|FullyQualifiedName~SharedLaunchSmokeBootstrapTests" `
+                --logger "trx;LogFileName=freew-avalonia-smoke-tests.trx"
             }
             "FreeP" {
-              dotnet build FreeP.slnx --configuration Release
-              dotnet test FreeP.slnx `
+              Invoke-Dotnet build FreeP.slnx --configuration Release
+              Invoke-Dotnet test FreeP.slnx `
                 --configuration Release `
                 --no-build `
                 --logger "trx;LogFileName=freep-tests.trx"

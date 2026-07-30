@@ -290,7 +290,9 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("git fetch origin main:refs/remotes/origin/main --no-tags");
         workflow.Should().Contain("git merge-base --is-ancestor origin/main HEAD");
         workflow.Should().Contain("Full release branches must contain the current origin/main commit.");
-        workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release");
+        workflow.Should().Contain("function Invoke-Dotnet");
+        workflow.Should().Contain("throw \"dotnet $($Arguments -join ' ') failed with exit code $LASTEXITCODE.\"");
+        workflow.Should().Contain("Invoke-Dotnet build FreeX.slnx --configuration Release");
         workflow.Should().Contain("FullyQualifiedName~ReleaseAutomationWorkflowTests");
         workflow.Should().Contain("FullyQualifiedName~TesterReleaseSmokeTests");
         workflow.Should().Contain("FullyQualifiedName~RibbonNativeRegistryTests");
@@ -299,8 +301,14 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("FullyQualifiedName~R74_SlantDashDotBorderThicknessTests");
         workflow.Should().Contain("FullyQualifiedName~BorderStrokePixelSnapperTests");
         workflow.Should().Contain("FullyQualifiedName~CellBorderPanelNeighborResolutionTests");
-        workflow.Should().Contain("dotnet build FreeW.slnx --configuration Release");
-        workflow.Should().Contain("dotnet build FreeP.slnx --configuration Release");
+        workflow.Should().Contain("Invoke-Dotnet build FreeW.slnx --configuration Release");
+        workflow.Should().Contain("freew/FreeW.Core.Model.Tests/FreeW.Core.Model.Tests.csproj");
+        workflow.Should().Contain("freew/FreeW.Core.IO.Tests/FreeW.Core.IO.Tests.csproj");
+        workflow.Should().Contain("freew/FreeW.Ribbon.Definitions.Tests/FreeW.Ribbon.Definitions.Tests.csproj");
+        workflow.Should().Contain("freew/FreeW.App.Localization.Tests/FreeW.App.Localization.Tests.csproj");
+        workflow.Should().Contain("FullyQualifiedName~PackagingSmokeTests|FullyQualifiedName~SharedLaunchSmokeBootstrapTests");
+        workflow.Should().Contain("Invoke-Dotnet build FreeP.slnx --configuration Release");
+        workflow.Should().Contain("Invoke-Dotnet test FreeP.slnx");
         workflow.Should().Contain("-Runtimes \"${{ matrix.runtime }}\"");
         workflow.Should().Contain("-WindowsPackageMode SingleFile");
         workflow.Should().Contain("$tag = \"$($app.ToLowerInvariant())-v$version\"");
