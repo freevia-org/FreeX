@@ -823,6 +823,7 @@ calibrate_geometry() {
         "$((window_width - 160))" "$((window_height - 160))" click 1
     sleep "$settle_seconds"
     send_key ctrl+Home
+    sleep "$settle_seconds"
     if ! capture_selection "calibration-a1.png"; then
         calibration_reason="Could not isolate the active-cell selection outline after Ctrl+Home."
         return 1
