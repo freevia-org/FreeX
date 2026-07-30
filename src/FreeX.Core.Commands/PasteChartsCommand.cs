@@ -83,7 +83,12 @@ public sealed class PasteChartsCommand : IWorkbookCommand
                 var dy = chart.Top - sourceTop;
                 var (mappedDx, mappedDy) = _transpose ? (dy, dx) : (dx, dy);
 
-                var clone = DuplicateSheetDrawingCloner.CloneChart(chart, _sourceSheetId, _sheetId);
+                // Plain-paste carries the chart object itself, not the data it plots -- the
+                // DataRange (and any verbatim series/error-bar formula text) must keep pointing at
+                // the exact original source sheet/cells regardless of the paste destination, unlike
+                // whole-sheet Duplicate Sheet where a same-sheet DataRange follows the copy.
+                var clone = DuplicateSheetDrawingCloner.CloneChart(
+                    chart, _sourceSheetId, _sheetId, remapSameSheetDataRange: false);
                 clone.Left = destLeft + mappedDx;
                 clone.Top = destTop + mappedDy;
                 targetSheet.Charts.Add(clone);

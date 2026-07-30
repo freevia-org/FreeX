@@ -68,6 +68,17 @@ public static partial class PivotTableRefreshService
                 pivotTable.SourceRange = liveTable.Range;
                 cache.SourceReference = liveTable.Range.ToString();
                 cache.SourceSheetName = sourceSheet.Name;
+
+                // R94-app-pivot-cache-5-1: the table's column count may have changed (e.g. a
+                // structured-table resize that narrows it) since the cache's cacheFields were last
+                // built. cache.Fields must track the live header set exactly the same way
+                // ChangePivotTableSourceCommand reconciles it on an explicit "Change Data Source" --
+                // otherwise cache.Fields keeps its old (possibly wider) count forever, and
+                // XlsxPivotTableWriter emits a <cacheFields count="N"> that no longer matches the
+                // narrower field-count it writes into each <pivotCacheRecords><r> (which re-resolves
+                // against the current, live source range), producing a corrupt cache Excel repairs
+                // or misreads on open.
+                ReconcileCacheFields(cache, ReadHeaders(sourceSheet, liveTable.Range));
             }
         }
 
@@ -349,4 +360,47 @@ public static partial class PivotTableRefreshService
         (!string.IsNullOrWhiteSpace(field.CalculatedFieldName) &&
          pivotTable.CalculatedFields.Any(calculated =>
              string.Equals(calculated.Name, field.CalculatedFieldName, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>
+    /// R94-app-pivot-cache-5-1: reconciles <paramref name="cache"/>'s cacheFields list to match the
+    /// live table's current header set, matching ChangePivotTableSourceCommand's explicit
+    /// "Change Data Source" reconciliation. Fields whose name still matches at the same position keep
+    /// their existing metadata (grouping/sharedItems/number-format) rather than being rebuilt from
+    /// scratch, so a table resize that doesn't touch a surviving column's header doesn't discard that
+    /// column's grouping. A no-op fast path (headers already match by name and position) avoids
+    /// churning cache.Fields identity on every ordinary refresh.
+    /// </summary>
+    private static void ReconcileCacheFields(PivotCacheModel cache, IReadOnlyList<string> liveHeaders)
+    {
+        if (cache.Fields.Count == liveHeaders.Count)
+        {
+            var alreadyInSync = true;
+            for (var i = 0; i < liveHeaders.Count; i++)
+            {
+                if (!string.Equals(cache.Fields[i].Name, liveHeaders[i], StringComparison.Ordinal))
+                {
+                    alreadyInSync = false;
+                    break;
+                }
+            }
+
+            if (alreadyInSync)
+                return;
+        }
+
+        var existingByName = new Dictionary<string, PivotCacheFieldModel>(StringComparer.Ordinal);
+        foreach (var field in cache.Fields)
+            existingByName.TryAdd(field.Name, field);
+
+        var reconciled = new List<PivotCacheFieldModel>(liveHeaders.Count);
+        foreach (var header in liveHeaders)
+        {
+            reconciled.Add(existingByName.TryGetValue(header, out var existing)
+                ? existing
+                : new PivotCacheFieldModel(header));
+        }
+
+        cache.Fields.Clear();
+        cache.Fields.AddRange(reconciled);
+    }
 }

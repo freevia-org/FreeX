@@ -272,20 +272,28 @@ public sealed class InsertRowsCommand : IWorkbookCommand
                 }
             }
 
-            // R90-io-table-style-banding-5-3: capture the pre-reband state of every OTHER
-            // (non-calculated-column) cell in the newly-inserted row window before RebandTable
-            // below paints its stripe fill onto them -- these cells have no other undo coverage
-            // (they didn't exist pre-insert, so _movedSnapshot never captured them, and the
-            // calculated-column snapshot just above only covers calculated-column addresses).
-            // Calculated-column cells are deliberately excluded here since their pre-fill state
+            // R94-commands-undo-structural-format-reband-1: capture the pre-reband state of the
+            // table's FULL data body (every row GetDataBodyRowBounds returns, not just the
+            // newly-inserted window) before RebandTable below paints its stripe fill -- mirroring
+            // DeleteRowsCommand.RebandTablesAfterRowDelete and
+            // InsertDeleteColumnsCommand.RebandTablesAfterColumnInsert, which both already snapshot
+            // the whole body for the exact same reason. RebandTable/ApplyTableStyle always repaints
+            // every data-body cell with forceFill:true (MergeStyleOntoCell's keepExistingFill is
+            // unconditionally false under forceFill), so it can overwrite an explicit FillColor on a
+            // table row far from the insertion point (e.g. a user-highlighted cell above _beforeRow,
+            // which _movedSnapshot never captures since that only covers rows >= _beforeRow). Without
+            // this wider capture, such a row's formatting loss had no undo coverage at all -- Ctrl+Z
+            // never restored it. Calculated-column cells strictly inside the inserted window
+            // ([fillStartRow, fillEndRow]) are still excluded there since their pre-fill state
             // (always null, captured above) already fully covers whatever reband does to the same
             // address -- capturing them twice would let this second, later entry's stale "after
-            // fill, before reband" cell state win on Revert instead of the true original null.
-            for (var row = fillStartRow; row <= fillEndRow; row++)
+            // fill, before reband" cell state win on Revert instead of the true original null. Rows
+            // outside that window (including calculated-column cells there) are captured normally.
+            for (var row = firstDataRow; row <= lastDataRow; row++)
             {
                 for (var col = resizedTable.Range.Start.Col; col <= resizedTable.Range.End.Col; col++)
                 {
-                    if (calculatedColumns.Contains(col))
+                    if (row >= fillStartRow && row <= fillEndRow && calculatedColumns.Contains(col))
                         continue;
                     var address = new CellAddress(sheet.Id, row, col);
                     filled.Add((address, sheet.GetCell(address)?.Clone()));
@@ -330,12 +338,18 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         if (_movedSnapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
 
-        // R26-table-structured-ref-deep-2: undo the calculated-column auto-fill FIRST -- it was the
-        // very last effect Apply performed (after the physical row move below), so it must be the
-        // first one undone. Every address here falls strictly inside [_beforeRow, _beforeRow +
-        // _count - 1], which the moved-cell restore below is about to repopulate with the original
-        // pre-insert content (moved cells always restore back to their pre-shift address, i.e. this
-        // same window) -- undoing the fill afterward would instead clobber that just-restored data.
+        // R26-table-structured-ref-deep-2 / R94-commands-undo-structural-format-reband-1: undo the
+        // calculated-column auto-fill and the (now table-body-wide) pre-reband snapshot FIRST -- they
+        // were the very last effects Apply performed (after the physical row move below), so they
+        // must be the first undone. Addresses inside [_beforeRow, _beforeRow + _count - 1] are about
+        // to be repopulated by the moved-cell restore below (moved cells always restore back to their
+        // pre-shift address, which for the lowest shifted rows lands exactly in this window) --
+        // undoing the fill afterward would instead clobber that just-restored data. Addresses outside
+        // that window (both above _beforeRow, which the moved-cell restore never touches at all, and
+        // below the window, which the moved-cell clear/restore pair below still fully re-derives at
+        // the same address) are unaffected by running this restore first: the moved-cell step below
+        // either doesn't touch that address (leaving this restore's correct value standing) or is the
+        // last write to it regardless of ordering (its own clear-then-restore pair is self-contained).
         if (_tableCalculatedColumnFillSnapshot is not null)
         {
             foreach (var (address, oldCell) in _tableCalculatedColumnFillSnapshot)

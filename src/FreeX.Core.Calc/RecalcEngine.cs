@@ -178,7 +178,7 @@ public sealed class RecalcEngine
             if (workbook.IterativeCalculation)
             {
                 seenIterativeCells = [.. plan.CyclicCells];
-                RunIterativeCalc(workbook, plan.CyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors, restrictWritesToSheet);
+                RunIterativeCalc(workbook, plan.CyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors, ref spillTargetsMayHaveChanged, ref vacatedSpillCells, restrictWritesToSheet);
                 foreach (var cyclic in plan.CyclicCells)
                     _activeIterativeCyclicCells.Add(cyclic);
             }
@@ -266,7 +266,7 @@ public sealed class RecalcEngine
                         }
                         if (newCyclicCells is not null)
                         {
-                            RunIterativeCalc(workbook, newCyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors, restrictWritesToSheet);
+                            RunIterativeCalc(workbook, newCyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors, ref spillTargetsMayHaveChanged, ref vacatedSpillCells, restrictWritesToSheet);
                             foreach (var cyclic in newCyclicCells)
                                 _activeIterativeCyclicCells.Add(cyclic);
                         }
@@ -965,6 +965,8 @@ public sealed class RecalcEngine
         ref CellAddress singleRecalculated,
         ref List<CellAddress>? recalculated,
         ref List<(CellAddress Cell, string Error)>? errors,
+        ref bool spillTargetsMayHaveChanged,
+        ref List<CellAddress>? vacatedSpillCells,
         SheetId? restrictWritesToSheet = null)
     {
         const int DefaultMaxIterations = 100;
@@ -1020,6 +1022,14 @@ public sealed class RecalcEngine
                 // Boolean/Text/Error/Blank cell (R92-calc-iterative-convergence-5-2).
                 var prevValue = cell.Value;
 
+                // Did this dynamic-array formula own a spill before re-evaluation? Mirrors the
+                // "hadSpill" tracking in the ordinary (non-cyclic) evaluation loop above
+                // (RecalcEngine.cs:326-330) so a pass that stops spilling (or respills a smaller
+                // extent) still vacates its old target cells instead of leaving them stale forever.
+                uint priorSpillRows = 0, priorSpillCols = 0;
+                var hadSpill = cell.ArrayMode == FormulaArrayMode.Dynamic && sheet.HasSpillValues &&
+                    sheet.TryGetSpillExtent(addr, out priorSpillRows, out priorSpillCols);
+
                 try
                 {
                     if (cell.CachedAst is not FormulaNode cachedAst)
@@ -1033,9 +1043,47 @@ public sealed class RecalcEngine
                         ? _evaluator.EvaluateSpilling(cachedAst, sheet, workbook, addr)
                         : _evaluator.Evaluate(cachedAst, sheet, workbook, addr);
 
-                    // Iterative calc does not support spilling out of cyclic cells — use the
-                    // scalar value at [0,0] to stay safe.
-                    cell.Value = result is RangeValue rv ? rv.Cells[0, 0] : result;
+                    if (cell.ArrayMode == FormulaArrayMode.Dynamic && result is RangeValue rv)
+                    {
+                        // Reconcile the spill table on every pass, mirroring the ordinary
+                        // evaluation loop above (RecalcEngine.cs:363-424). Without this, a
+                        // dynamic-array formula that becomes part of an active iterative
+                        // circular-reference group never calls SetSpillRange/ClearSpillRange, so
+                        // its non-anchor spill cells (and anything downstream that reads them)
+                        // freeze at whatever they last held instead of converging along with the
+                        // anchor. See R94-iterative-dynamic-array-spill.
+                        sheet.ClearSpillRange(addr);
+                        if (sheet.IsSpillBlocked(addr, rv.RowCount, rv.ColCount))
+                        {
+                            cell.Value = ErrorValue.Spill;
+                            if (hadSpill)
+                            {
+                                spillTargetsMayHaveChanged = true;
+                                CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
+                            }
+                            _spillBlockedAnchors.Add(addr);
+                        }
+                        else
+                        {
+                            cell.Value = rv.Cells[0, 0];
+                            sheet.SetSpillRange(addr, rv);
+                            spillTargetsMayHaveChanged = true;
+                            if (hadSpill)
+                                CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, rv.RowCount, rv.ColCount, ref vacatedSpillCells);
+                            _spillBlockedAnchors.Remove(addr);
+                        }
+                    }
+                    else
+                    {
+                        if (hadSpill)
+                        {
+                            sheet.ClearSpillRange(addr);
+                            spillTargetsMayHaveChanged = true;
+                            CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
+                        }
+
+                        cell.Value = result is RangeValue rvNonDynamic ? rvNonDynamic.Cells[0, 0] : result;
+                    }
                 }
                 catch (FormulaParseException)
                 {

@@ -70,7 +70,13 @@ public sealed class DuplicateDrawingObjectCommand : IWorkbookCommand
                 if (ChartCommandGuards.RejectIfEditObjectsBlocked(destinationSheet) is { } protectedOutcome)
                     return protectedOutcome;
 
-                _clonedChart = DuplicateSheetDrawingCloner.CloneChart(sourceChart, _sourceSheetId, _destinationSheetId);
+                // Ctrl+C/Ctrl+V of a selected chart object duplicates the object itself, not the
+                // data it plots -- the DataRange must keep pointing at the exact original
+                // source sheet/cells regardless of the destination sheet (R94-cmd-paste-charts-
+                // cross-sheet-dataRange), unlike whole-sheet Duplicate Sheet's "same-sheet
+                // DataRange follows the copy" semantics.
+                _clonedChart = DuplicateSheetDrawingCloner.CloneChart(
+                    sourceChart, _sourceSheetId, _destinationSheetId, remapSameSheetDataRange: false);
                 _clonedChart.Left = sourceChart.Left + _offsetX;
                 _clonedChart.Top = sourceChart.Top + _offsetY;
                 destinationSheet.Charts.Add(_clonedChart);

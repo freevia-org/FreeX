@@ -77,6 +77,20 @@ internal static class XlsxLegacyCommentPreserver
 
             if (sheet.Comments.Count == 0)
             {
+                // R94-io-comments-threaded-shim-note-free-1: addresses of threads that were
+                // authored fresh THIS save (no entry at all -- shim or otherwise -- in the source
+                // comments part). XlsxFileAdapter.Save's ClosedXML-population phase already minted
+                // each one's FIRST legacy shim via CreateComment() (see the
+                // R93-threaded-comment-extLst comment there); since this sheet has
+                // Sheet.Comments.Count == 0, ClosedXML's rebuild writes a comments part containing
+                // ONLY those fresh shims -- nothing for any OTHER, pre-existing thread that is
+                // untouched this save -- so without merging them back in below, a sheet with both
+                // an old thread and a new one would lose the old thread's shim even though nothing
+                // about it changed (CopyUnknownPackageParts skips re-copying the stale-but-still-
+                // needed source comments part once ClosedXML has written its own entry at that
+                // same path).
+                var newlyAuthoredThreadAddresses = GetNewlyAuthoredThreadShimAddresses(sourceCommentsXml, workbookNs, sheet);
+
                 // GAP 6 fix: every REAL legacy note on this sheet was deleted (the source comments
                 // part has at least one non-shim entry, but Sheet.Comments -- populated from it at
                 // load time by XlsxWorksheetCommentReader -- is now empty). ClosedXML writes
@@ -90,17 +104,23 @@ internal static class XlsxLegacyCommentPreserver
                 // Sheet.Comments even when nothing was deleted (see
                 // XlsxWorksheetCommentReader.IsLegacyThreadedCommentShim), so an empty model here
                 // is normal and the shim must be left in place for older/non-Excel readers.
-                if (!SourceCommentsHaveOnlyUnmodeledEntries(sourceCommentsXml, workbookNs, sheet, sourceArchive, sourceWorksheetPath))
+                var hasOnlyUnmodeledSourceEntries = SourceCommentsHaveOnlyUnmodeledEntries(
+                    sourceCommentsXml, workbookNs, sheet, sourceArchive, sourceWorksheetPath);
+                if (!hasOnlyUnmodeledSourceEntries || newlyAuthoredThreadAddresses.Count > 0)
                 {
                     // R68-io-comment-note-6-1: at least one entry in this comments part is a real,
                     // deleted note -- but the part may ALSO hold a live-threaded-comment shim (see
                     // IsLegacyThreadedCommentShimEntry) whose thread is untouched. An all-or-nothing
                     // purge here would destroy that shim's legacy compatibility entry too, even
                     // though nothing about its own thread changed. Rebuild the part keeping only the
-                    // shim(s) that still need preserving; only fall back to the full purge when none
-                    // exist to protect.
+                    // shim(s) that still need preserving (plus any brand-new thread's shim from
+                    // newlyAuthoredThreadAddresses); only fall back to the full purge when none
+                    // exist to protect and nothing new was authored either.
+                    var targetCommentsPathForNewThreads = GetLegacyCommentPartPath(targetArchive, targetWorksheetPath, packageRelNs);
                     var shimsOnlyCommentsXml = TryBuildShimsOnlyCommentsXml(
-                        sourceCommentsXml, workbookNs, sheet, sourceArchive, sourceWorksheetPath, out var keptShimAddresses);
+                        sourceCommentsXml, workbookNs, sheet, sourceArchive, sourceWorksheetPath,
+                        targetArchive, targetCommentsPathForNewThreads, newlyAuthoredThreadAddresses,
+                        out var keptShimAddresses, out var mergedNewThreadAddresses);
                     if (shimsOnlyCommentsXml is not null)
                     {
                         XlsxLegacyCommentFontNormalizer.SanitizeRunFontNames(shimsOnlyCommentsXml);
@@ -109,7 +129,8 @@ internal static class XlsxLegacyCommentPreserver
                         // The VML note-shape count must stay consistent with the reconciled
                         // comments part (a leftover shape for the deleted note, with no matching
                         // <comment> entry any more, makes the package unreadable by ClosedXML on
-                        // the next load) -- rebuild the VML to keep only the shims' own shapes.
+                        // the next load) -- rebuild the VML to keep only the shims' own shapes
+                        // (plus ClosedXML's freshly-generated shape for each new thread).
                         ReconcileShimsOnlyVmlDrawing(
                             sourceArchive,
                             targetArchive,
@@ -119,9 +140,10 @@ internal static class XlsxLegacyCommentPreserver
                             workbookNs,
                             relNs,
                             packageRelNs,
-                            keptShimAddresses);
+                            keptShimAddresses,
+                            mergedNewThreadAddresses);
                     }
-                    else
+                    else if (!hasOnlyUnmodeledSourceEntries)
                     {
                         PurgeDeletedLegacyComments(
                             sourceArchive,
@@ -724,6 +746,35 @@ internal static class XlsxLegacyCommentPreserver
     }
 
     /// <summary>
+    /// R94-io-comments-threaded-shim-note-free-1: identifies threads on this sheet that have NO
+    /// entry at all -- shim or otherwise -- in the source comments part: a brand-new threaded
+    /// comment added this save (its <see cref="ThreadedComment.Id"/> was <c>null</c> before the
+    /// save) never had a legacy compatibility shim to preserve or reconcile in the first place.
+    /// These are exactly the addresses XlsxFileAdapter.Save's ClosedXML-population phase minted a
+    /// FIRST shim for via <c>xlSheet.Cell(...).CreateComment()</c> (see the
+    /// R93-threaded-comment-extLst comment there); the <see cref="Sheet.Comments"/>-empty branch
+    /// of <see cref="Preserve"/> uses this to know which freshly-written target shim entries must
+    /// be merged back in alongside any pre-existing, untouched thread's own shim (see
+    /// <see cref="TryBuildShimsOnlyCommentsXml"/>).
+    /// </summary>
+    private static List<CellAddress> GetNewlyAuthoredThreadShimAddresses(
+        XDocument sourceCommentsXml,
+        XNamespace workbookNs,
+        Sheet sheet)
+    {
+        if (sheet.ThreadedComments.Count == 0)
+            return [];
+
+        var sourceRefs = new HashSet<string>(
+            ReadLegacyCommentElementsByReference(sourceCommentsXml, workbookNs).Keys,
+            StringComparer.OrdinalIgnoreCase);
+
+        return sheet.ThreadedComments.Keys
+            .Where(address => !sourceRefs.Contains(address.ToA1()))
+            .ToList();
+    }
+
+    /// <summary>
     /// R68-io-comment-note-6-1: when every REAL legacy note on a sheet has been deleted (so
     /// <see cref="Sheet.Comments"/> is empty and <see cref="SourceCommentsHaveOnlyUnmodeledEntries"/>
     /// returned <c>false</c>), builds a comments XML that keeps ONLY the source entries that are a
@@ -731,8 +782,21 @@ internal static class XlsxLegacyCommentPreserver
     /// its thread is still present in <see cref="Sheet.ThreadedComments"/>) -- mirroring the same
     /// shim-preservation rule the <c>Sheet.Comments.Count &gt; 0</c> reconciliation path already
     /// applies (see <see cref="TryBuildReconciledCommentsXml"/> ~line 249). Every other entry
-    /// (a deleted note, a dead shim, or a blank-text entry) is dropped. Returns <c>null</c> when no
-    /// entry needs preserving, signalling the caller to fall back to the all-or-nothing purge.
+    /// (a deleted note, a dead shim, or a blank-text entry) is dropped.
+    /// R94-io-comments-threaded-shim-note-free-1: ALSO merges in a legacy compatibility shim for
+    /// every address in <paramref name="newlyAuthoredThreadAddresses"/> -- a brand-new threaded
+    /// comment (no source entry at all) that XlsxFileAdapter.Save's ClosedXML-population phase
+    /// minted its FIRST shim for via <c>xlSheet.Cell(...).CreateComment()</c> (see the
+    /// R93-threaded-comment-extLst comment there), copied from the freshly-generated TARGET
+    /// comments part at <paramref name="targetCommentsPath"/> the same way
+    /// <see cref="TryBuildReconciledCommentsXml"/>'s "for NEW notes" step does. Without this,
+    /// because this sheet has <c>Sheet.Comments.Count == 0</c>, ClosedXML's rebuild writes a
+    /// comments part containing ONLY that fresh shim (nothing for any OTHER, untouched thread),
+    /// and <c>XlsxPackageMetadataMerger.CopyUnknownPackageParts</c> then skips re-copying the
+    /// stale-but-still-needed source comments part back in (the target already has an entry at
+    /// that same path) -- silently dropping a pre-existing, untouched thread's own shim even
+    /// though nothing about it changed. Returns <c>null</c> when no entry (old or new) needs
+    /// preserving, signalling the caller to fall back to the all-or-nothing purge.
     /// </summary>
     private static XDocument? TryBuildShimsOnlyCommentsXml(
         XDocument sourceCommentsXml,
@@ -740,7 +804,11 @@ internal static class XlsxLegacyCommentPreserver
         Sheet sheet,
         ZipArchive sourceArchive,
         string sourceWorksheetPath,
-        out List<(CellAddress OldAddress, CellAddress NewAddress)> keptShimAddresses)
+        ZipArchive targetArchive,
+        string? targetCommentsPath,
+        IReadOnlyList<CellAddress> newlyAuthoredThreadAddresses,
+        out List<(CellAddress OldAddress, CellAddress NewAddress)> keptShimAddresses,
+        out List<CellAddress> mergedNewThreadAddresses)
     {
         var sourceAuthors = sourceCommentsXml.Root?
             .Element(workbookNs + "authors")?
@@ -752,6 +820,7 @@ internal static class XlsxLegacyCommentPreserver
         var keptEntries = new List<XElement>();
         var keptAuthors = new List<string>();
         keptShimAddresses = [];
+        mergedNewThreadAddresses = [];
 
         foreach (var (sourceRef, sourceElement) in ReadLegacyCommentElementsByReference(sourceCommentsXml, workbookNs))
         {
@@ -788,6 +857,43 @@ internal static class XlsxLegacyCommentPreserver
 
             keptEntries.Add(entryToAdd);
             keptShimAddresses.Add((address, shimAddress));
+        }
+
+        if (newlyAuthoredThreadAddresses.Count > 0 && !string.IsNullOrEmpty(targetCommentsPath) &&
+            targetArchive.GetEntry(targetCommentsPath) is { } targetCommentsEntry)
+        {
+            var targetCommentsXml = XlsxPackageXmlEditor.LoadXml(targetCommentsEntry);
+            var targetAuthors = targetCommentsXml.Root?
+                .Element(workbookNs + "authors")?
+                .Elements(workbookNs + "author")
+                .Select(a => a.Value)
+                .ToList() ?? [];
+            var targetElements = ReadLegacyCommentElementsByReference(targetCommentsXml, workbookNs);
+
+            foreach (var address in newlyAuthoredThreadAddresses)
+            {
+                if (!targetElements.TryGetValue(address.ToA1(), out var targetElement))
+                    continue;
+
+                var clonedEntry = new XElement(targetElement); // deep-clone
+                var targetAuthorIdStr = clonedEntry.Attribute("authorId")?.Value;
+                if (int.TryParse(targetAuthorIdStr, out var targetAuthorIdx) &&
+                    targetAuthorIdx >= 0 && targetAuthorIdx < targetAuthors.Count)
+                {
+                    var targetAuthorName = targetAuthors[targetAuthorIdx];
+                    var newIdx = keptAuthors.FindIndex(a =>
+                        string.Equals(a, targetAuthorName, StringComparison.Ordinal));
+                    if (newIdx < 0)
+                    {
+                        newIdx = keptAuthors.Count;
+                        keptAuthors.Add(targetAuthorName);
+                    }
+                    clonedEntry.SetAttributeValue("authorId", newIdx.ToString());
+                }
+
+                keptEntries.Add(clonedEntry);
+                mergedNewThreadAddresses.Add(address);
+            }
         }
 
         if (keptEntries.Count == 0)
@@ -836,7 +942,8 @@ internal static class XlsxLegacyCommentPreserver
         XNamespace workbookNs,
         XNamespace relNs,
         XNamespace packageRelNs,
-        IReadOnlyList<(CellAddress OldAddress, CellAddress NewAddress)> keptShimAddresses)
+        IReadOnlyList<(CellAddress OldAddress, CellAddress NewAddress)> keptShimAddresses,
+        IReadOnlyList<CellAddress> newlyAuthoredThreadAddresses)
     {
         var sourceLegacyDrawing = sourceWorksheetXml.Root?.Element(workbookNs + "legacyDrawing");
         var sourceVmlRelId = sourceLegacyDrawing?.Attribute(relNs + "id")?.Value;
@@ -882,6 +989,24 @@ internal static class XlsxLegacyCommentPreserver
             if (newAddress != oldAddress)
                 RetargetNoteShapeToCell(clonedShape, newAddress.Row - 1, newAddress.Col - 1);
             keptShapes.Add(clonedShape);
+        }
+
+        // R94-io-comments-threaded-shim-note-free-1: a brand-new thread's shim (see
+        // GetNewlyAuthoredThreadShimAddresses/TryBuildShimsOnlyCommentsXml) has NO shape in the
+        // SOURCE VML at all -- ClosedXML generated its shape fresh, into a target-archive VML part
+        // (found by scanning every VML entry other than the source path, mirroring
+        // PreserveReconciledVmlDrawing's Pass 3 fallback for genuinely new notes). Without this,
+        // the comments-part entry TryBuildShimsOnlyCommentsXml merged in above would have no
+        // matching VML shape at all once this method rebuilds the VML from source-only shapes.
+        if (newlyAuthoredThreadAddresses.Count > 0)
+        {
+            var targetShapesByCell = IndexAllTargetNoteShapes(targetArchive, sourceVmlPath);
+            foreach (var address in newlyAuthoredThreadAddresses)
+            {
+                var key = (Row: address.Row - 1, Col: address.Col - 1);
+                if (targetShapesByCell.TryGetValue(key, out var newShape))
+                    keptShapes.Add(new XElement(newShape)); // deep-clone
+            }
         }
 
         var reconciledVml = BuildReconciledVml(sourceVml, keptShapes);
