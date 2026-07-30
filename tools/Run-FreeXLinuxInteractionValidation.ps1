@@ -445,10 +445,10 @@ function Assert-NameBoxDropdownParityNativeContract {
     if (@($beforeInventory | Where-Object { $_.StartsWith($popupWindowPrefix, [StringComparison]::Ordinal) }).Count -ne 0 -or
         @($openInventory | Where-Object {
             $_.StartsWith($popupWindowPrefix, [StringComparison]::Ordinal) -and
-            $_.Contains("X=$([int]$surface.sourceX) ", [StringComparison]::Ordinal) -and
-            $_.Contains("Y=$([int]$surface.sourceY) ", [StringComparison]::Ordinal) -and
-            $_.Contains("WIDTH=$([int]$surface.sourceWidth) ", [StringComparison]::Ordinal) -and
-            $_.Contains("HEIGHT=$([int]$surface.sourceHeight) ", [StringComparison]::Ordinal)
+            $_.IndexOf("X=$([int]$surface.sourceX) ", [StringComparison]::Ordinal) -ge 0 -and
+            $_.IndexOf("Y=$([int]$surface.sourceY) ", [StringComparison]::Ordinal) -ge 0 -and
+            $_.IndexOf("WIDTH=$([int]$surface.sourceWidth) ", [StringComparison]::Ordinal) -ge 0 -and
+            $_.IndexOf("HEIGHT=$([int]$surface.sourceHeight) ", [StringComparison]::Ordinal) -ge 0
         }).Count -ne 1) {
         throw "Name Box parity popup is not a newly visible X11 window with the declared geometry."
     }
