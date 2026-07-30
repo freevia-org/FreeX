@@ -64,4 +64,15 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         script.Should().Contain("baselineNameBox -ne \"G10\"");
         script.Should().Contain("expectedOrder='$(@($actualOrder) -join ',')'");
     }
+
+    [Fact]
+    public void NameBoxObjectPostconditionClosesItsPythonHeredocBeforeShellHelpers()
+    {
+        var script = File.ReadAllText(RepositoryFileLocator.Find(
+                "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        script.Should().Contain(
+            "    stream.write(\"\\n\")\nPY\n}\n\nread_name_box_event() {");
+    }
 }

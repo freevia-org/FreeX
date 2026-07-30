@@ -395,6 +395,7 @@ with open(destination, "w", encoding="utf-8") as stream:
         "results": results,
     }, stream, indent=2)
     stream.write("\n")
+PY
 }
 
 read_name_box_event() {
