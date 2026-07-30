@@ -1311,8 +1311,11 @@ try {
         }
         New-Item -ItemType Directory -Path $nativePairDestination -Force | Out-Null
         foreach ($nativePairFile in Get-ChildItem -LiteralPath $nativePairSource -File) {
-            Copy-Item -LiteralPath $nativePairFile.FullName -Destination (
-                Join-Path $nativePairDestination $nativePairFile.Name) -Force
+            $nativePairFileDestination = Join-Path $nativePairDestination $nativePairFile.Name
+            [IO.File]::Copy(
+                "\\?\$([IO.Path]::GetFullPath($nativePairFile.FullName))",
+                "\\?\$([IO.Path]::GetFullPath($nativePairFileDestination))",
+                $true)
         }
     }
 
