@@ -4936,6 +4936,8 @@ public static class DocxWriter
         {
             InlineImage image => (image.RotationAngle, image.FlipH, image.FlipV),
             Shape shape => (shape.RotationAngle, shape.FlipH, shape.FlipV),
+            Chart chart => (chart.RotationAngle, chart.FlipH, chart.FlipV),
+            SmartArt smartArt => (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV),
             WordArt wordArt => (wordArt.RotationAngle, wordArt.FlipH, wordArt.FlipV),
             DrawingGroup group => (group.RotationAngle, group.FlipH, group.FlipV),
             _ => (0d, false, false)
@@ -4993,7 +4995,9 @@ public static class DocxWriter
         string childName,
         IdAllocator ids)
     {
-        var groupTransform = new XElement(Wpg + "xfrm", xfrm.Elements().Select(element => new XElement(element)));
+        var groupTransform = new XElement(Wpg + "xfrm",
+            xfrm.Attributes().Select(attribute => new XAttribute(attribute)),
+            xfrm.Elements().Select(element => new XElement(element)));
         return new XElement(Wpg + "graphicFrame",
             new XElement(Wpg + "cNvPr",
                 new XAttribute("id", ids.NextShapeDrawingId()),

@@ -87,6 +87,10 @@ public sealed class SmartArt
     /// <summary>The rendered height in points (converted to EMU on save). Defaults to a Word-typical ~3in.</summary>
     public double HeightPt { get; set; } = 216;
 
+    public double RotationAngle { get; set; }
+    public bool FlipH { get; set; }
+    public bool FlipV { get; set; }
+
     /// <summary>
     /// Floating-position state. Null (the default) means the diagram is inline.
     /// Set <see cref="FloatingPlacement.Wrapping"/> to any non-Inline value to make it float.
