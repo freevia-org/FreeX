@@ -53,6 +53,7 @@ public sealed class SmartArtTests : IDisposable
         bool continuousPictureList = false,
         bool pictureGrid = false,
         bool includeNodeImage = false,
+        IReadOnlySet<int>? pictureNodeIndexes = null,
         bool includeColors = true)
     {
         var path = Path.Combine(_tempDir, $"smartart_{Guid.NewGuid():N}.pptx");
@@ -80,12 +81,16 @@ public sealed class SmartArtTests : IDisposable
         // Build dsp:drawing XML with fallback shapes
         int shapeIdx = 1;
         var fallbackEls = new List<XElement>();
-        foreach (var text in nodeTexts)
+        for (var nodeIndex = 0; nodeIndex < nodeTexts.Length; nodeIndex++)
         {
+            var text = nodeTexts[nodeIndex];
             int idx = shapeIdx++;
-            if ((pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || continuousPictureList || pictureGrid) && includeNodeImage)
+            if ((pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || continuousPictureList || pictureGrid)
+                && includeNodeImage
+                && (pictureNodeIndexes is null || pictureNodeIndexes.Contains(nodeIndex)))
             {
                 fallbackEls.Add(new XElement(dspNs + "pic",
+                    new XAttribute("modelId", $"n{nodeIndex + 1}"),
                     new XElement(dspNs + "nvPicPr",
                         new XElement(dspNs + "cNvPr", new XAttribute("id", idx), new XAttribute("name", $"Picture{idx}")),
                         new XElement(dspNs + "cNvPicPr")),
@@ -584,6 +589,35 @@ public sealed class SmartArtTests : IDisposable
             "PowerPoint exposes an empty picture layout as editable Add picture placeholders");
         smart.Data.Nodes.Should().ContainSingle();
         smart.Data.Nodes[0].Picture.Should().BeNull();
+
+        var liveText = SlideCompositor.Compose(pres, pres.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .SelectMany(shape => shape.Text?.Paragraphs ?? [])
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.Text)
+            .ToArray();
+        liveText.Should().Contain("Add picture");
+    }
+
+    [Fact]
+    public void Reader_SmartArt_PictureCaptionList_PartialTaggedPictures_UsesPlaceholdersForMissingNodes()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["First caption", "Second caption"],
+            pictureCaptionList: true,
+            includeNodeImage: true,
+            pictureNodeIndexes: new HashSet<int> { 1 });
+        var pres = PptxPackageReader.Read(pptxPath);
+
+        var smart = pres.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smart.Data.Should().NotBeNull();
+        smart.Data!.IsLiveLayoutSupported.Should().BeTrue(
+            "modelId tags identify the populated node without making the missing node fall back to cached SmartArt");
+        smart.Data.Nodes[0].Picture.Should().BeNull();
+        smart.Data.Nodes[1].Picture.Should().NotBeNull();
 
         var liveText = SlideCompositor.Compose(pres, pres.Slides[0])
             .OfType<DrawOp.Shape>()
