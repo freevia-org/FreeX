@@ -907,6 +907,8 @@ public sealed partial class MainWindow : Window
 
     internal bool CellAddressAutocompleteOpenForTest => _cellAddressAutocompletePopup?.IsOpen == true;
 
+    internal bool CellAddressBoxHasPendingEditForTest => _cellAddressBoxHasPendingEdit;
+
     internal SelectionPaneObjectKind? SelectedDrawingObjectKindForTest => _selectedDrawingObjectKind;
 
     internal Guid? SelectedDrawingObjectIdForTest => _selectedDrawingObjectId;
@@ -919,14 +921,18 @@ public sealed partial class MainWindow : Window
         ShowCellAddressAutocompletePopup();
         foreach (var key in keys)
         {
-            if (key == Key.Enter)
+            var item = key == Key.Enter
+                ? GetSelectedCellAddressAutocompleteItem()
+                : null;
+            _cellAddressAutocompleteListBox!.RaiseEvent(new KeyEventArgs
             {
-                var item = GetSelectedCellAddressAutocompleteItem();
-                CommitCellAddressAutocompleteSelection();
+                RoutedEvent = InputElement.KeyDownEvent,
+                Key = key,
+                Source = _cellAddressAutocompleteListBox,
+                Handled = key == Key.Enter,
+            });
+            if (key == Key.Enter)
                 return item;
-            }
-
-            MoveCellAddressAutocompleteSelection(key);
         }
 
         return GetSelectedCellAddressAutocompleteItem();
@@ -19026,25 +19032,29 @@ public sealed partial class MainWindow : Window
             Focusable = true,
         };
         AutomationProperties.SetAutomationId(_cellAddressAutocompleteListBox, "CellAddressAutocompleteList");
-        _cellAddressAutocompleteListBox.KeyDown += (_, args) =>
-        {
-            if (args.Key is Key.Home or Key.End or Key.Up or Key.Down)
+        _cellAddressAutocompleteListBox.AddHandler(
+            InputElement.KeyDownEvent,
+            (_, args) =>
             {
-                MoveCellAddressAutocompleteSelection(args.Key);
-                args.Handled = true;
-            }
-            else if (args.Key == Key.Enter)
-            {
-                CommitCellAddressAutocompleteSelection();
-                args.Handled = true;
-            }
-            else if (args.Key == Key.Escape)
-            {
-                _cellAddressAutocompletePopup!.IsOpen = false;
-                FocusShellRegion(ShellFocusTarget.Worksheet);
-                args.Handled = true;
-            }
-        };
+                if (args.Key is Key.Home or Key.End or Key.Up or Key.Down)
+                {
+                    MoveCellAddressAutocompleteSelection(args.Key);
+                    args.Handled = true;
+                }
+                else if (args.Key == Key.Enter)
+                {
+                    CommitCellAddressAutocompleteSelection();
+                    args.Handled = true;
+                }
+                else if (args.Key == Key.Escape)
+                {
+                    _cellAddressAutocompletePopup!.IsOpen = false;
+                    FocusShellRegion(ShellFocusTarget.Worksheet);
+                    args.Handled = true;
+                }
+            },
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
         _cellAddressAutocompleteListBox.PointerReleased += (_, args) =>
         {
             if (args.GetCurrentPoint(_cellAddressAutocompleteListBox).Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonReleased)
@@ -19199,6 +19209,7 @@ public sealed partial class MainWindow : Window
 
     private bool SelectCellAddressBoxItem(NameBoxNavigationItem item)
     {
+        _cellAddressBoxHasPendingEdit = false;
         _cellAddressText.Text = item.Name;
         if (item.Range is { } selectedRange)
         {

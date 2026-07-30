@@ -309,7 +309,7 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
     }
 
     [Fact]
-    public async Task DropdownKeyboardSelection_CommitsTheThirdTableEntry()
+    public async Task DropdownKeyboardSelection_CommitsAHandledEnterOnTheThirdTableEntry()
     {
         await Session.Dispatch(() =>
         {
@@ -336,11 +336,20 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             };
             sheet.DrawingShapes.Add(shape);
 
-            var selected = window.SelectCellAddressAutocompleteKeyboardForTest(Key.Home, Key.Down, Key.Down, Key.Enter);
+            window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.A });
+            window.CellAddressBoxHasPendingEditForTest.Should().BeTrue();
+
+            var selected = window.SelectCellAddressAutocompleteKeyboardForTest(
+                Key.Home,
+                Key.Down,
+                Key.Down,
+                Key.Enter);
 
             selected.Should().NotBeNull();
             selected!.Name.Should().Be("OrdersTable");
             selected.Kind.Should().Be(NameBoxNavigationItemKind.Table);
+            window.CellAddressBoxHasPendingEditForTest.Should().BeFalse(
+                "committing a dropdown item ends the Name Box edit just like WPF's ComboBox selection");
             window.Session.SelectedRange.Should().Be(new GridRange(
                 new CellAddress(sheet.Id, 2, 1),
                 new CellAddress(sheet.Id, 2, 2)));
