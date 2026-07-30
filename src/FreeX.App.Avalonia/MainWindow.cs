@@ -919,7 +919,7 @@ public sealed partial class MainWindow : Window
         {
             if (key == Key.Enter)
             {
-                var item = _cellAddressAutocompleteListBox?.SelectedItem as NameBoxNavigationItem;
+                var item = GetSelectedCellAddressAutocompleteItem();
                 CommitCellAddressAutocompleteSelection();
                 return item;
             }
@@ -927,7 +927,7 @@ public sealed partial class MainWindow : Window
             MoveCellAddressAutocompleteSelection(key);
         }
 
-        return _cellAddressAutocompleteListBox?.SelectedItem as NameBoxNavigationItem;
+        return GetSelectedCellAddressAutocompleteItem();
     }
 
     /// <summary>
@@ -19012,20 +19012,6 @@ public sealed partial class MainWindow : Window
             Focusable = true,
         };
         AutomationProperties.SetAutomationId(_cellAddressAutocompleteListBox, "CellAddressAutocompleteList");
-        _cellAddressAutocompleteListBox.ItemTemplate = new FuncDataTemplate<NameBoxNavigationItem>((item, _) =>
-        {
-            var text = new TextBlock
-            {
-                Text = item.Name,
-                FontFamily = new FontFamily("Consolas, DejaVu Sans Mono, Liberation Mono, monospace"),
-                FontSize = 15,
-                Height = 26.8,
-                Padding = new Thickness(8, 3),
-                TextWrapping = TextWrapping.NoWrap,
-            };
-            AutomationProperties.SetName(text, item.AccessibleDescription);
-            return text;
-        });
         _cellAddressAutocompleteListBox.KeyDown += (_, args) =>
         {
             if (args.Key is Key.Home or Key.End or Key.Up or Key.Down)
@@ -19065,9 +19051,38 @@ public sealed partial class MainWindow : Window
         };
     }
 
+    private static ListBoxItem BuildCellAddressAutocompleteRow(NameBoxNavigationItem item)
+    {
+        var row = new ListBoxItem
+        {
+            Height = 26.8,
+            Padding = new Thickness(0),
+            Tag = item,
+            Content = new TextBlock
+            {
+                Text = item.Name,
+                FontFamily = new FontFamily("Consolas, DejaVu Sans Mono, Liberation Mono, monospace"),
+                FontSize = 15,
+                Foreground = Brush(28, 38, 48),
+                Padding = new Thickness(8, 3),
+                TextWrapping = TextWrapping.NoWrap,
+            },
+        };
+        AutomationProperties.SetName(row, item.AccessibleDescription);
+        return row;
+    }
+
+    private NameBoxNavigationItem? GetSelectedCellAddressAutocompleteItem() =>
+        _cellAddressAutocompleteListBox?.SelectedItem switch
+        {
+            NameBoxNavigationItem item => item,
+            ListBoxItem { Tag: NameBoxNavigationItem item } => item,
+            _ => null,
+        };
+
     private void CommitCellAddressAutocompleteSelection()
     {
-        if (_cellAddressAutocompleteListBox?.SelectedItem is not NameBoxNavigationItem item ||
+        if (GetSelectedCellAddressAutocompleteItem() is not { } item ||
             item.Name.StartsWith("(No ", StringComparison.Ordinal))
         {
             return;
@@ -19097,7 +19112,9 @@ public sealed partial class MainWindow : Window
     {
         var items = BuildCellAddressAutocompleteItems();
         _cellAddressAutocompleteListBox!.IsEnabled = items.Count > 0;
-        _cellAddressAutocompleteListBox.ItemsSource = items;
+        _cellAddressAutocompleteListBox.ItemsSource = items
+            .Select(BuildCellAddressAutocompleteRow)
+            .ToArray();
         _cellAddressAutocompleteListBox.SelectedIndex = -1;
         _cellAddressAutocompletePopup!.PlacementTarget = _cellAddressDropDownButton;
         _cellAddressAutocompletePopup.Placement = PlacementMode.BottomEdgeAlignedLeft;

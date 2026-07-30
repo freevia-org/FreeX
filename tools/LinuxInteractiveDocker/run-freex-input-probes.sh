@@ -428,7 +428,7 @@ probe_name_box_dropdown_parity() {
     local geometry_json="name-box-dropdown-parity-native.json"
     local parity_manifest="name-box-dropdown-parity-manifest.json"
     local parity_directory="$output/name-box-dropdown-parity-native"
-    local captured=false reason="" color_count=0
+    local captured=false reason="" color_count=0 content_color_count=0
     local artifacts="$before_root;$before_x11;$open_root;$open_x11;$crop_png;$geometry_json;$parity_manifest"
     local failure_artifacts="$before_root;$before_x11;$open_root;$open_x11;$geometry_json;$parity_manifest"
 
@@ -480,12 +480,14 @@ PY
             -crop "208x136+${popup_x}+${popup_y}" +repage \
             "$output/$crop_png"
         color_count="$(identify -format '%k' "$output/$crop_png" 2>/dev/null || true)"
+        content_color_count="$(convert "$output/$crop_png" -shave 2x2 -format '%k' info: 2>/dev/null || true)"
         if [[ "$(identify -format '%wx%h' "$output/$crop_png" 2>/dev/null || true)" == "208x136" &&
-              "$color_count" =~ ^[0-9]+$ && "$color_count" -gt 1 ]]; then
+              "$color_count" =~ ^[0-9]+$ && "$color_count" -gt 1 &&
+              "$content_color_count" =~ ^[0-9]+$ && "$content_color_count" -gt 1 ]]; then
             captured=true
             reason="The 208x136 frame was cropped without scaling from the newly visible native X11 popup window."
         else
-            reason="The native popup crop was missing, blank, or not exactly 208x136."
+            reason="The native popup crop was missing, blank inside its border, or not exactly 208x136."
         fi
     elif [[ "$popup_count" != "1" ]]; then
         reason="Expected exactly one newly visible X11 popup window, found $popup_count."
