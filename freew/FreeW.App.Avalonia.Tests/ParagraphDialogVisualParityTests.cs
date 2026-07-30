@@ -1,9 +1,12 @@
 using System.Reflection;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using FreeW.App.Localization;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -105,6 +108,45 @@ public sealed class ParagraphDialogVisualParityTests
                 sharedTextBox,
                 AvaloniaCompactDialogChrome.WindowsStyle);
             ((ISolidColorBrush)sharedTextBox.BorderBrush!).Color.Should().Be(Color.FromRgb(0xAB, 0xAD, 0xB3));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Paragraph_dialog_materializes_Wpf_textbox_and_checkbox_geometry()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new ParagraphDialog(ParagraphFormatting.Default);
+            try
+            {
+                dialog.Width = 380;
+                dialog.Height = 345;
+                dialog.Show();
+                dialog.Measure(new Size(380, 345));
+                dialog.Arrange(new Rect(0, 0, 380, 345));
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var fields = new[] { "_left", "_right", "_specialAmount", "_before", "_after", "_lineSpacing" }
+                    .Select(name => Field<TextBox>(dialog, name))
+                    .ToArray();
+                fields.SelectMany(box => box.GetVisualDescendants().OfType<Border>())
+                    .Where(border => border.Name == "PART_BorderElement")
+                    .Should().HaveCount(6)
+                    .And.OnlyContain(border => border.Bounds.Height == 18);
+
+                var indicators = dialog.GetVisualDescendants()
+                    .OfType<CheckBox>()
+                    .SelectMany(check => check.GetVisualDescendants().OfType<Border>())
+                    .Where(border => border.Bounds.Width == 14 && border.Bounds.Height == 14)
+                    .ToArray();
+                indicators.Should().HaveCount(1);
+            }
+            finally
+            {
+                dialog.Close();
+            }
         }, CancellationToken.None);
     }
 
