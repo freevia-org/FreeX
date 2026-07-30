@@ -2842,7 +2842,7 @@ public sealed class EditingSession
         get
         {
             if (CurrentSlide is null || _selectedShapeIds.Count == 0) return null;
-            var shape = CurrentSlide.Shapes.FirstOrDefault(s => s.Id == _selectedShapeIds[0]);
+            var shape = FindShape(CurrentSlide.Shapes, _selectedShapeIds[0]);
             return shape?.Kind == SlideShapeKind.Chart ? shape.Chart : null;
         }
     }

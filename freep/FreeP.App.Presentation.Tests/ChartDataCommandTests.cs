@@ -53,6 +53,25 @@ public sealed class ChartDataCommandTests
         return session;
     }
 
+    private static EditingSession MakeGroupedSession()
+    {
+        var (p, bus, chartShapeId) = MakeChartPresentation();
+        var slide = p.Slides[0];
+        var chart = slide.Shapes.Single(shape => shape.Id == chartShapeId);
+        slide.Shapes.Remove(chart);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 10,
+            Name = "Group",
+            Kind = SlideShapeKind.Group,
+            Children = { chart },
+        });
+
+        var session = new EditingSession(p, bus);
+        session.Select(chartShapeId);
+        return session;
+    }
+
     // ════════════════════════════════════════════════════════════════════════════════
     // SetChartCellValueCommand
     // ════════════════════════════════════════════════════════════════════════════════
@@ -522,6 +541,29 @@ public sealed class ChartDataCommandTests
     {
         var sess = MakeSession();
         sess.SelectedChart.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void EditingSession_GroupedChart_UsesRecursiveDataAndFormattingCommands()
+    {
+        var sess = MakeGroupedSession();
+
+        sess.SelectedChart.Should().NotBeNull();
+        sess.SetChartValue(0, 1, 999.0);
+        sess.SetChartCategory(0, "H1");
+        sess.ApplyChartTextOptions(new ChartTextOptions("Arial", 18, true, null, null));
+
+        sess.SelectedChart!.Series[0].Values[1].Should().Be(999.0);
+        sess.SelectedChart.Categories[0].Should().Be("H1");
+        sess.SelectedChart.TextStyle.Should().Match<ChartTextStyle>(style =>
+            style.FontFamily == "Arial" && style.FontSizePt == 18 && style.Bold == true);
+
+        sess.Undo();
+        sess.SelectedChart.TextStyle.Should().BeNull();
+        sess.Undo();
+        sess.SelectedChart.Categories[0].Should().Be("Q1");
+        sess.Undo();
+        sess.SelectedChart.Series[0].Values[1].Should().Be(200.0);
     }
 
     [Fact]
