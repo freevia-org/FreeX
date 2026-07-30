@@ -1763,6 +1763,56 @@ public sealed class SetShapeFillTransparencyCommand : IPresentationCommand
     }
 }
 
+/// <summary>Changes the alpha of a color-bearing shape outline while preserving its stroke.</summary>
+public sealed class SetShapeOutlineTransparencyCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly byte _alpha;
+    private ShapeOutline? _oldOutline;
+    private bool _applied;
+
+    public SetShapeOutlineTransparencyCommand(int slideIndex, uint shapeId, byte alpha)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _alpha = alpha;
+    }
+
+    public string Label => "Set Outline Transparency";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        return shape is not null
+            && ShapeOutlineTransparency.TryCreate(shape.Outline, _alpha, out _);
+    }
+
+    public void Apply(Presentation p)
+    {
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (shape is null || !ShapeOutlineTransparency.TryCreate(shape.Outline, _alpha, out var updated))
+            return;
+
+        _oldOutline = shape.Outline;
+        shape.Outline = updated;
+        _applied = true;
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (!_applied)
+            return;
+
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (shape is null)
+            return;
+
+        shape.Outline = _oldOutline;
+        _applied = false;
+    }
+}
+
 /// <summary>Replaces the outline of a shape; captures old outline for undo.</summary>
 public sealed class SetShapeOutlineCommand : IPresentationCommand
 {
