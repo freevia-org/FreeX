@@ -8968,18 +8968,19 @@ internal static class FreeWRibbonCommands
     }
 
     // Drawing Format > Arrange > Align: set paragraph alignment of the containing paragraph.
-    private sealed class ShapeAlignCommand(DocumentView editor, FreeW.Core.Model.TextAlignment alignment) : IRibbonCommand
+    private sealed class ShapeAlignCommand(DocumentView editor, FreeW.Core.Model.TextAlignment alignment) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            if (editor.SelectedShape() is null)
+            if (!GetState().IsEnabled)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Align");
                 return;
             }
             editor.SetSelectedShapeAlignment(alignment);
         }
+
+        public RibbonCommandState GetState() => new(IsEnabled: editor.SelectedShape() is not null);
     }
 
     // Drawing Format > Arrange > Wrap Text: set the wrapping mode on the selected shape.

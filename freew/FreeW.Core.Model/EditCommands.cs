@@ -2081,29 +2081,8 @@ internal static class ShapeTextTargetResolver
         int runIndex,
         IReadOnlyList<int>? childPath,
         out Shape shape)
-    {
-        shape = null!;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
-            || runIndex < 0 || runIndex >= paragraph.Runs.Count)
-            return false;
-
-        var run = paragraph.Runs[runIndex];
-        if (childPath is { Count: > 0 })
-        {
-            if (run.DrawingGroup is not { } group
-                || !DrawingGroupChildPathResolver.TryGetChild(
-                    group, childPath, out _, out var child)
-                || child is not Shape nestedShape)
-                return false;
-            shape = nestedShape;
-            return true;
-        }
-
-        if (run.Shape is not { } directShape)
-            return false;
-        shape = directShape;
-        return true;
-    }
+        => ShapeTextFormattingPlanner.TryGetShape(
+            context.Document, paragraphIndex, runIndex, childPath, out shape);
 }
 
 /// <summary>

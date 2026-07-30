@@ -592,6 +592,66 @@ public sealed class PictureDrawingContextualTabTests
     }
 
     [Fact]
+    public async Task Nested_shape_alignment_commands_are_enabled_for_the_leaf_and_use_its_text_paragraphs()
+    {
+        TextAlignment? applied = null;
+        TextAlignment? siblingAlignment = null;
+        bool? groupEnabled = null;
+        bool? childEnabled = null;
+        bool? centerEnabled = null;
+        bool? undoRestored = null;
+        bool? redoRestored = null;
+        var ran = await OnUi(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var leaf = Shape.TextBoxWith("Nested alignment", 120, 60);
+            var sibling = Shape.TextBoxWith("Sibling", 90, 40);
+            var inner = new DrawingGroup { WidthPt = 160, HeightPt = 80 };
+            inner.Children.Add(new Shape(ShapeKind.Rectangle, 20, 20));
+            inner.ChildOffsets.Add((0, 0));
+            inner.Children.Add(leaf);
+            inner.ChildOffsets.Add((30, 10));
+            var outer = new DrawingGroup { WidthPt = 240, HeightPt = 120 };
+            outer.Children.Add(inner);
+            outer.ChildOffsets.Add((12, 8));
+            outer.Children.Add(sibling);
+            outer.ChildOffsets.Add((180, 70));
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(800, 2000));
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            view.SelectFloating(0, 0);
+            groupEnabled = CommandIsEnabled(registry, "freew.shape-align-center");
+            var leafRect = view.FloatingGroupChildRectForPathForTest(0, 0, [0, 1])!.Value;
+            view.SelectFloatingGroupChildForTest(leafRect.Center).Should().BeTrue();
+            childEnabled = CommandIsEnabled(registry, "freew.shape-align-left");
+            centerEnabled = CommandIsEnabled(registry, "freew.shape-align-center");
+
+            ExecuteCommand(registry, "freew.shape-align-center");
+            applied = leaf.TextParagraphs.Single().Formatting.Alignment;
+            siblingAlignment = sibling.TextParagraphs.Single().Formatting.Alignment;
+            view.Undo();
+            undoRestored = leaf.TextParagraphs.Single().Formatting.Alignment == TextAlignment.Left;
+            view.Redo();
+            redoRestored = leaf.TextParagraphs.Single().Formatting.Alignment == TextAlignment.Center;
+        });
+        if (!ran) return;
+
+        groupEnabled.Should().BeFalse("the owning group is not a text-bearing shape leaf");
+        childEnabled.Should().BeTrue("nested text-bearing leaves expose shape paragraph alignment");
+        centerEnabled.Should().BeTrue("Center is backed on the Drawing Format contextual surface");
+        applied.Should().Be(TextAlignment.Center);
+        siblingAlignment.Should().Be(TextAlignment.Left);
+        undoRestored.Should().BeTrue();
+        redoRestored.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task ObjectGroupCommands_enable_for_multi_select_and_group_selection()
     {
         bool? noneGroup = null, singleGroup = null, multiGroup = null, groupUngroup = null;

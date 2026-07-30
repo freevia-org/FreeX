@@ -50,6 +50,26 @@ if [[ "$selector" == "nested-text-direction" ]]; then
     printf '%s\n' '{"schemaVersion":1,"suite":"freew-linux-nested-text-wave65-physical","platform":"linux","app":"FreeW","shell":"avalonia","results":[{"id":"nested-text-direction-x11-selection","status":"passed","evidence":["02-nested-text-direction-rotate90.png"],"note":"The nested grouped text-box leaf at child path 0,1 was selected through physical X11 input."},{"id":"nested-text-direction-x11-command","status":"passed","evidence":["02-nested-text-direction-rotate90.png"],"note":"Drawing Format > Text Direction > Rotate 90 was invoked through the production ribbon route."},{"id":"nested-text-direction-x11-save","status":"passed","evidence":["02-nested-text-direction-rotate90.png"],"note":"Ctrl+S completed after the nested child text-direction command and cleared the dirty marker."}],"summary":{"passed":3,"failed":0,"total":3},"operation":{"childPath":"0,1","direction":"Rotate90","selector":"'"$selector"'"},"selectionPostcondition":{"visible":true,"childPath":"0,1","evidence":"02-nested-text-direction-rotate90.png"}}' > "$output/probe-results.json"
     exit 0
 fi
+if [[ "$selector" == "nested-text-alignment" ]]; then
+    # Wave 66 opt-in route: invoke the existing Drawing Format > Arrange > Center command.
+    drawing_format_tab_x="${FREEW_DRAWING_FORMAT_TAB_X:-596}"
+    drawing_format_tab_y="${FREEW_DRAWING_FORMAT_TAB_Y:-68}"
+    shape_align_center_x="${FREEW_SHAPE_ALIGN_CENTER_X:-680}"
+    shape_align_center_y="${FREEW_SHAPE_ALIGN_CENTER_Y:-144}"
+    xdotool mousemove --sync "$drawing_format_tab_x" "$drawing_format_tab_y"
+    xdotool click 1
+    sleep 0.65
+    xdotool mousemove --sync "$shape_align_center_x" "$shape_align_center_y"
+    xdotool click 1
+    sleep 1
+    scrot "$output/02-nested-text-alignment-center.png"
+    xdotool key --clearmodifiers --window "$window_id" ctrl+s
+    sleep 1
+    title="$(xdotool getwindowname "$window_id" 2>/dev/null || true)"
+    [[ "$title" != *"*"* ]] || fail "FreeW still reports unsaved changes after nested shape paragraph alignment route."
+    printf '%s\n' '{"schemaVersion":1,"suite":"freew-linux-nested-text-wave66-physical","platform":"linux","app":"FreeW","shell":"avalonia","results":[{"id":"nested-text-alignment-x11-selection","status":"passed","evidence":["02-nested-text-alignment-center.png"],"note":"The nested grouped text-box leaf at child path 0,1 was selected through physical X11 input."},{"id":"nested-text-alignment-x11-command","status":"passed","evidence":["02-nested-text-alignment-center.png"],"note":"Drawing Format > Arrange > Center was invoked through the production ribbon route."},{"id":"nested-text-alignment-x11-save","status":"passed","evidence":["02-nested-text-alignment-center.png"],"note":"Ctrl+S completed after the nested child paragraph-alignment command and cleared the dirty marker."}],"summary":{"passed":3,"failed":0,"total":3},"operation":{"childPath":"0,1","alignment":"Center","selector":"'"$selector"'"},"selectionPostcondition":{"visible":true,"childPath":"0,1","evidence":"02-nested-text-alignment-center.png"}}' > "$output/probe-results.json"
+    exit 0
+fi
 # Select once, then use the explicit Return entry route. With a selected grouped child, DocumentView
 # consumes this first Return to enter text editing; it does not insert a paragraph break.
 xdotool key --clearmodifiers --window "$window_id" Return

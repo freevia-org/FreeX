@@ -2505,10 +2505,33 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedShapeAlignment(ModelTextAlignment alignment)
     {
         CommitToModel();
+
+        if (_selectedFloatingGroupChild is { } selectedChild
+            && DrawingGroupChildPathResolver.TryGetChild(
+                selectedChild.RootGroup,
+                selectedChild.ChildPath,
+                out _,
+                out var nestedChild)
+            && nestedChild is Shape nestedShape
+            && ShapeTextFormattingPlanner.CanApplyParagraphAlignment(nestedShape)
+            && FindFloatingObjectLocation(selectedChild.RootGroup) is var groupLocation
+            && groupLocation.BlockIndex >= 0)
+        {
+            _commands.Execute(new SetShapeTextParagraphAlignmentCommand(
+                groupLocation.BlockIndex,
+                groupLocation.RunIndex,
+                alignment,
+                selectedChild.ChildPath));
+            Render();
+            return;
+        }
+
         var (blockIndex, _, shape) = SelectedShapeLocation();
         if (shape is null || blockIndex < 0 || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
             return;
-        paragraph.Formatting = paragraph.Formatting with { Alignment = alignment };
+        _commands.Execute(new SetParagraphFormattingCommand(
+            blockIndex,
+            paragraph.Formatting with { Alignment = alignment }));
         Render();
     }
 

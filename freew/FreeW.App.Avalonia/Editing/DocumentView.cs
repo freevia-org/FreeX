@@ -10508,6 +10508,31 @@ public sealed class DocumentView : Control
 
     private void SetSelectedFloatingParagraphAlignment(string kind, TextAlignment alignment)
     {
+        if (kind == "Shape"
+            && _selectedFloatingGroupChild is { Kind: "Shape" } selectedChild
+            && TryGetRun(selectedChild.BlockIndex, selectedChild.RunIndex, out var groupRun)
+            && groupRun.DrawingGroup is { } rootGroup
+            && DrawingGroupChildPathResolver.TryGetChild(
+                rootGroup,
+                selectedChild.ChildPath,
+                out _,
+                out var nestedChild)
+            && nestedChild is Shape nestedShape
+            && ShapeTextFormattingPlanner.CanApplyParagraphAlignment(nestedShape))
+        {
+            _bus.Execute(new SetShapeTextParagraphAlignmentCommand(
+                selectedChild.BlockIndex,
+                selectedChild.RunIndex,
+                alignment,
+                selectedChild.ChildPath));
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(
+                selectedChild.BlockIndex,
+                selectedChild.RunIndex,
+                "Group");
+            return;
+        }
+
         if (_selectedFloating is not { } sel || sel.Kind != kind)
             return;
         if (_doc.Blocks[sel.BlockIndex] is not Paragraph para)

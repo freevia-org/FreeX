@@ -3,6 +3,7 @@ using System.Windows.Documents;
 using System.Windows;
 using FreeW.App.Host.Editing;
 using FreeW.Core.IO;
+using ModelTextAlignment = FreeW.Core.Model.TextAlignment;
 
 namespace FreeW.App.Host.Tests;
 
@@ -86,6 +87,89 @@ public sealed class ShapeEditPointsInteractionTests
         reopenedInner.RotationAngle.Should().Be(23);
         reopenedLeaf.RotationAngle.Should().Be(17);
         reopenedLeaf.FlipH.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void SetSelectedShapeAlignment_formats_nested_shape_text_but_direct_shape_keeps_document_paragraph_alignment()
+    {
+        var leaf = Shape.TextBoxWith("Nested alignment", 120, 60);
+        var sibling = Shape.TextBoxWith("Sibling", 90, 40);
+        var inner = new DrawingGroup { WidthPt = 160, HeightPt = 80, RotationAngle = 23 };
+        inner.Children.Add(new Shape(ShapeKind.Rectangle, 20, 20));
+        inner.ChildOffsets.Add((0, 0));
+        inner.Children.Add(leaf);
+        inner.ChildOffsets.Add((30, 10));
+        var outer = new DrawingGroup { WidthPt = 240, HeightPt = 120, RotationAngle = 31, FlipV = true };
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((12, 8));
+        outer.Children.Add(sibling);
+        outer.ChildOffsets.Add((180, 70));
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { Alignment = ModelTextAlignment.Right }
+        };
+        paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.SelectFloatingGroupChild(outer, [0, 1]);
+        view.SetSelectedShapeAlignment(ModelTextAlignment.Justify);
+
+        leaf.TextParagraphs.Should().OnlyContain(item => item.Formatting.Alignment == ModelTextAlignment.Justify);
+        sibling.TextParagraphs.Should().OnlyContain(item => item.Formatting.Alignment == ModelTextAlignment.Left);
+        paragraph.Formatting.Alignment.Should().Be(ModelTextAlignment.Right);
+        outer.RotationAngle.Should().Be(31);
+        outer.FlipV.Should().BeTrue();
+        inner.RotationAngle.Should().Be(23);
+        leaf.RotationAngle.Should().Be(0);
+
+        view.Undo();
+        leaf.TextParagraphs.Should().OnlyContain(item => item.Formatting.Alignment == ModelTextAlignment.Left);
+        view.Redo();
+        leaf.TextParagraphs.Should().OnlyContain(item => item.Formatting.Alignment == ModelTextAlignment.Justify);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+        var reopenedOuter = ((Paragraph)reopened.Blocks[0]).Runs[0].DrawingGroup!;
+        var reopenedInner = (DrawingGroup)reopenedOuter.Children[0];
+        var reopenedLeaf = (Shape)reopenedInner.Children[1];
+        reopenedLeaf.TextParagraphs.Should().OnlyContain(item => item.Formatting.Alignment == ModelTextAlignment.Justify);
+        reopenedOuter.RotationAngle.Should().Be(31);
+        reopenedOuter.FlipV.Should().BeTrue();
+        reopenedInner.RotationAngle.Should().Be(23);
+    }
+
+    [StaFact]
+    public void SetSelectedShapeAlignment_direct_shape_still_aligns_the_containing_document_paragraph()
+    {
+        var shape = Shape.TextBoxWith("Direct shape", 120, 60);
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromShape(shape));
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var container = view.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(item => item.Inlines)
+            .OfType<InlineUIContainer>()
+            .Single();
+        view.Selection.Select(container.ElementStart, container.ElementEnd);
+        view.CaretPosition = container.ElementStart;
+
+        view.SetSelectedShapeAlignment(ModelTextAlignment.Center);
+
+        var modelParagraph = (Paragraph)view.Model.Blocks[0];
+        modelParagraph.Formatting.Alignment.Should().Be(ModelTextAlignment.Center);
+        modelParagraph.Runs.Single().Shape!.TextParagraphs.Single().Formatting.Alignment
+            .Should().Be(ModelTextAlignment.Left);
     }
 
     [StaFact]
