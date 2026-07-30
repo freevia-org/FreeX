@@ -52,6 +52,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.DescendingBlockList, "descendingBlockList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicPyramid, "basicPyramid", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PyramidList, "pyramidList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.InvertedPyramid, "invertedPyramid", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.RadialCycle, "radialCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicRadial, "radial1", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.RadialList, "radialList", SmartArtFamily.Cycle)]

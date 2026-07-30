@@ -153,6 +153,9 @@ public static class SmartArtLayoutEngine
         if (IsPyramidListLayout(data.LayoutUniqueId))
             return LayoutPyramidList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsInvertedPyramidLayout(data.LayoutUniqueId))
+            return LayoutInvertedPyramid(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsTitledMatrixLayout(data.LayoutUniqueId))
             return LayoutTitledMatrix(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -470,6 +473,42 @@ public static class SmartArtLayoutEngine
             }
 
             curX += boxW + gap + connectorW;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Inverted Pyramid geometry keeps the authored layout identity distinct
+    /// from Pyramid List while producing editable descending bands.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutInvertedPyramid(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var shapes = new List<SlideShape>();
+        var outerPadX = (long)(fcx * OuterPaddingFrac);
+        var outerPadY = (long)(fcy * OuterPaddingFrac);
+        var gapY = Math.Max((long)(fcy * 0.01), 1L);
+        var innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        var availableH = Math.Max(fcy - 2 * outerPadY - Math.Max(nodes.Count - 1, 0) * gapY, 1L);
+        var bandH = Math.Max(availableH / Math.Max(nodes.Count, 1), 1L);
+        var minimumWidthFraction = nodes.Count == 1 ? 1.0 : 0.30;
+        var currentY = fy + outerPadY;
+
+        for (var index = 0; index < nodes.Count; index++)
+        {
+            var progress = nodes.Count == 1 ? 1.0 : (double)index / (nodes.Count - 1);
+            var widthFraction = 1.0 - ((1.0 - minimumWidthFraction) * progress);
+            var bandW = Math.Max((long)(innerW * widthFraction), 1L);
+            var x = fx + outerPadX + (innerW - bandW) / 2;
+            var nodeStyle = stylePlan.GetNodeStyle(index, nodes[index].Level, SmartArtFamily.List);
+            var kind = index == nodes.Count - 1 ? DrawingShapeKind.Triangle : DrawingShapeKind.Trapezoid;
+            shapes.Add(MakeBox(
+                (uint)(540 + index), nodes[index].Text, nodeStyle,
+                x, currentY, bandW, bandH, NodeFontSizePt, kind));
+            currentY += bandH + gapY;
         }
 
         return shapes;
@@ -3264,6 +3303,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "pyramidlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsInvertedPyramidLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "invertedpyramid", StringComparison.Ordinal);
     }
 
     private static bool IsTitledMatrixLayout(string uniqueId)

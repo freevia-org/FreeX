@@ -98,6 +98,7 @@ public enum SmartArtLayoutPreset
     DescendingBlockList,
     BasicPyramid,
     PyramidList,
+    InvertedPyramid,
     RadialCycle,
     BasicRadial,
     RadialList,
@@ -236,6 +237,7 @@ public static class SmartArtAuthoringPlanner
     public const string DescendingBlockListLayoutCommandId = "freep.smartart.layout.descending-block-list";
     public const string BasicPyramidLayoutCommandId = "freep.smartart.layout.basic-pyramid";
     public const string PyramidListLayoutCommandId = "freep.smartart.layout.pyramid-list";
+    public const string InvertedPyramidLayoutCommandId = "freep.smartart.layout.inverted-pyramid";
     public const string RadialCycleLayoutCommandId = "freep.smartart.layout.radial-cycle";
     public const string BasicRadialLayoutCommandId = "freep.smartart.layout.basic-radial";
     public const string RadialListLayoutCommandId = "freep.smartart.layout.radial-list";
@@ -561,6 +563,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicPyramid", SmartArtFamily.List),
             SmartArtLayoutPreset.PyramidList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/pyramidList", SmartArtFamily.List),
+            SmartArtLayoutPreset.InvertedPyramid =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid", SmartArtFamily.List),
             SmartArtLayoutPreset.RadialCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/radialCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicRadial =>
