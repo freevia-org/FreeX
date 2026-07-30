@@ -270,6 +270,18 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_UsesCellSpacingForPhysicalCellSurfacesWithoutChangingPaginationMeasurement()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("var cellSpacingInset = table.CellSpacingPt is > 0");
+        source.Should().Contain("Rect SurfaceRectFor(double x, double y, double width, double height, int startCol, int span, int rowIndex)");
+        source.Should().Contain("var rect = SurfaceRectFor(cellX, rowPageSpaceY, cellWidth, rowHeight, startCol, span, r);");
+        source.Should().Contain("var contentTopY = rect.Top + pad + vAlignOffset;");
+        source.Should().Contain("var tx = rect.Left + pad + markerInset;");
+    }
+
+    [Fact]
     public void AvaloniaDocumentView_UsesWordArtFillAsFieldAndContrastingText()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
