@@ -1438,6 +1438,12 @@
   <data name="Ribbon_Command_SmartArtBasicCycle_KeyTip" xml:space="preserve">
     <value>C</value>
   </data>
+  <data name="Ribbon_Command_SmartArtSegmentedCycle_Label" xml:space="preserve">
+    <value>Segmented Cycle</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtSegmentedCycle_KeyTip" xml:space="preserve">
+    <value>SC</value>
+  </data>
   <data name="Ribbon_Command_SmartArtContinuousCycle_Label" xml:space="preserve">
     <value>Continuous Cycle</value>
   </data>
