@@ -970,6 +970,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.FunnelProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.VerticalArrowList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.ContinuousCycle, SmartArtFamily.Cycle)]
@@ -2381,6 +2382,24 @@ public sealed class SmartArtTests : IDisposable
         sa.Data!.Family.Should().Be(SmartArtFamily.List);
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
             "verticalChevronList is admitted to the shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Step 1", "Step 2", "Step 3");
+    }
+
+    [Fact]
+    public void Reader_ParsesVerticalArrowListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList",
+            nodes: [("id1", "Step 1"), ("id2", "Step 2"), ("id3", "Step 3")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "verticalArrowList is admitted to the shared live-layout planner");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Step 1", "Step 2", "Step 3");
     }
 
