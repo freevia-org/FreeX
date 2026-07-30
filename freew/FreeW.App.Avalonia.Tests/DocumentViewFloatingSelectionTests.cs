@@ -670,6 +670,84 @@ public sealed class DocumentViewFloatingSelectionTests
     }
 
     [Fact]
+    public async Task RotateAndFlipSelectedFloating_updates_grouped_chart_and_nested_smartart_with_undo()
+    {
+        double chartAngleAfter = 0, chartAngleReverted = -1;
+        bool chartFlipAfter = false, chartFlipReverted = true;
+        double smartArtAngleAfter = 0, smartArtAngleReverted = -1;
+        bool smartArtFlipAfter = false, smartArtFlipReverted = true;
+
+        var ran = await OnUiThread(() =>
+        {
+            var chart = Chart.Create(ChartKind.Column, ["A", "B"], [1, 2]);
+            var smartArt = SmartArt.Create(SmartArtKind.Process, ["Step"]);
+            var inner = new DrawingGroup { WidthPt = 110, HeightPt = 64 };
+            inner.Children.Add(smartArt);
+            inner.ChildOffsets.Add((8, 6));
+
+            var outer = new DrawingGroup
+            {
+                WidthPt = 280,
+                HeightPt = 170,
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.Square,
+                    HorizontalOffsetPt = 30,
+                    VerticalOffsetPt = 24
+                }
+            };
+            outer.Children.Add(chart);
+            outer.ChildOffsets.Add((16, 12));
+            outer.Children.Add(inner);
+            outer.ChildOffsets.Add((150, 76));
+
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+            var document = new TextDocument();
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(900, 2000));
+            view.SelectFloating(0, 0);
+
+            var chartRect = view.FloatingGroupChildRectForPathForTest(0, 0, [0])!.Value;
+            view.SelectFloatingGroupChildForTest(chartRect.Center).Should().BeTrue();
+            view.SelectedFloatingGroupChildPath.Should().Equal(0);
+            view.RotateSelectedFloating(90);
+            view.FlipSelectedFloating(horizontal: true);
+            chartAngleAfter = chart.RotationAngle;
+            chartFlipAfter = chart.FlipH;
+            view.Undo();
+            view.Undo();
+            chartAngleReverted = chart.RotationAngle;
+            chartFlipReverted = chart.FlipH;
+
+            var smartArtRect = view.FloatingGroupChildRectForPathForTest(0, 0, [1, 0])!.Value;
+            view.SelectFloatingGroupChildForTest(smartArtRect.Center).Should().BeTrue();
+            view.SelectedFloatingGroupChildPath.Should().Equal(1, 0);
+            view.RotateSelectedFloating(-90);
+            view.FlipSelectedFloating(horizontal: false);
+            smartArtAngleAfter = smartArt.RotationAngle;
+            smartArtFlipAfter = smartArt.FlipV;
+            view.Undo();
+            view.Undo();
+            smartArtAngleReverted = smartArt.RotationAngle;
+            smartArtFlipReverted = smartArt.FlipV;
+        });
+        if (!ran) return;
+
+        Assert.Equal(90, chartAngleAfter);
+        Assert.True(chartFlipAfter);
+        Assert.Equal(0, chartAngleReverted);
+        Assert.False(chartFlipReverted);
+        Assert.Equal(270, smartArtAngleAfter);
+        Assert.True(smartArtFlipAfter);
+        Assert.Equal(0, smartArtAngleReverted);
+        Assert.False(smartArtFlipReverted);
+    }
+
+    [Fact]
     public async Task Group_child_hit_test_selects_child_and_rotates_child_with_undo()
     {
         int selectedChildIndex = -1;
