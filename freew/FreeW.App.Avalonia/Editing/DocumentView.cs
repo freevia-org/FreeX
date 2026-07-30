@@ -6524,6 +6524,17 @@ public sealed class DocumentView : Control
 
         foreach (var ch in text)
         {
+            if (ch == '\r')
+                continue;
+            if (ch == '\n')
+            {
+                result.Add((lineHeight, current));
+                current = new List<(char, double)>();
+                currentWidth = 0;
+                lastSpace = -1;
+                continue;
+            }
+
             var w = Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
             if (ch == ' ')
                 lastSpace = current.Count;
