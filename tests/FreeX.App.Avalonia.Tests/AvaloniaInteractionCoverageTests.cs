@@ -261,6 +261,8 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("probe_selector\" == \"formula-whole-range-point\"", probe, StringComparison.Ordinal);
         Assert.Contains("Assert-FormulaWholeRangePointPostcondition", runner, StringComparison.Ordinal);
         Assert.Contains("read_active_formula_bar", probe, StringComparison.Ordinal);
+        Assert.Contains("row_header_x=\"$((window_x + (a1_x - window_x) / 2))\"", probe, StringComparison.Ordinal);
+        Assert.Contains("Enter reaches the formula commit path instead of accepting BAHTTEXT", probe, StringComparison.Ordinal);
         Assert.True(
             probe.Split("type_text \"=SUM()\"", StringSplitOptions.None).Length - 1 >= 3,
             "each whole-range case must preserve a closing parenthesis around the pointed reference");

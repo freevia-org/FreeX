@@ -288,7 +288,7 @@ probe_formula_bar_point_mode_whole_range() {
     # calibrated pitch above/left of that origin, including the select-all corner.
     column_header_x="$(cell_center_x 1)"
     column_header_y="$((a1_y - cell_height / 2))"
-    row_header_x="$((a1_x - cell_width / 2))"
+    row_header_x="$((window_x + (a1_x - window_x) / 2))"
     row_header_y="$(cell_center_y 2)"
     corner_x="$row_header_x"
     corner_y="$column_header_y"
@@ -311,6 +311,9 @@ probe_formula_bar_point_mode_whole_range() {
         if [[ "$column_formula_bar" == "=SUM(B:B)" ]]; then
             column_active=true
         fi
+        # Ctrl+A/C can reopen function autocomplete. Close only that popup so
+        # Enter reaches the formula commit path instead of accepting BAHTTEXT.
+        send_key Escape
         send_key Return
         column_cell_formula="$(copy_cell_formula 6 9 G10 || true)"
         capture "formula-whole-range-column-committed.png"
@@ -337,6 +340,7 @@ probe_formula_bar_point_mode_whole_range() {
         if [[ "$row_formula_bar" == "=SUM(3:3)" ]]; then
             row_active=true
         fi
+        send_key Escape
         send_key Return
         row_cell_formula="$(copy_cell_formula 6 10 G11 || true)"
         capture "formula-whole-range-row-committed.png"
@@ -364,6 +368,8 @@ probe_formula_bar_point_mode_whole_range() {
         if [[ "$select_all_formula_bar" == "=SUM(A1:XFD1048576)" ]]; then
             select_all_active=true
         fi
+        # First Escape closes autocomplete; the second cancels the live edit.
+        send_key Escape
         send_key Escape
         select_all_cell_formula="$(copy_cell_formula 6 11 G12 || true)"
         capture "formula-whole-range-select-all-canceled.png"
