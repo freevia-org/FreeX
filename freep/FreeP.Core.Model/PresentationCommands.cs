@@ -671,12 +671,12 @@ internal static class ShapeHelper
 
     internal static SlideShape? Find(Slide slide, uint shapeId) =>
         Find(slide.Shapes, shapeId);
-
     private static SlideShape? Find(IEnumerable<SlideShape> shapes, uint shapeId)
     {
         foreach (var shape in shapes)
         {
-            if (shape.Id == shapeId) return shape;
+            if (shape.Id == shapeId)
+                return shape;
             if (shape.Children.Count > 0 && Find(shape.Children, shapeId) is { } child)
                 return child;
         }
