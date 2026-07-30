@@ -21,7 +21,17 @@ public sealed class FontDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
             ControlHeight = 20,
-            ButtonHeight = 21,
+            TextBoxHeight = 18,
+            ComboBoxHeight = 22,
+            TabHeight = 20,
+            ButtonHeight = 20,
+            ForegroundBrush = Brushes.Black,
+            FocusedInputBorderBrush = new SolidColorBrush(Color.FromRgb(0x56, 0x9D, 0xE5)),
+            ButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
+            DialogTabPaneBorderBrush = new SolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC)),
+            DialogInactiveTabBorderBrush = new SolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC)),
+            DialogInactiveTabBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)),
+            RemoveFocusAdorner = true,
         };
 
     private readonly RunFormatting _original;
@@ -401,7 +411,7 @@ public sealed class FontDialog : FreeWDialogWindow
     {
         Content = label,
         IsThreeState = threeState,
-        Margin = new Thickness(0, 0, trailingMargin, 4),
+        Margin = new Thickness(0, 0, trailingMargin, 0),
     };
 
     private void ApplyCheckBoxChrome()

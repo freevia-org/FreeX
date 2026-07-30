@@ -96,6 +96,9 @@ public sealed class ParagraphDialogVisualParityTests
             ((ISolidColorBrush)left.BorderBrush!).Color.Should().Be(Color.FromRgb(0xAB, 0xAD, 0xB3));
             ((ISolidColorBrush)left.SelectionBrush!).Color.Should().Be(Color.FromRgb(0x56, 0x9D, 0xE5));
             ((ISolidColorBrush)special.Background!).Color.Should().Be(Color.FromRgb(0xF0, 0xF0, 0xF0));
+            left.Height.Should().Be(18);
+            left.FocusAdorner.Should().BeNull();
+            special.Height.Should().Be(22);
 
             var sharedTextBox = new TextBox();
             AvaloniaCompactDialogChrome.ApplyTextBox(
@@ -151,6 +154,7 @@ public sealed class ParagraphDialogVisualParityTests
             "scenario.RouteId is \"font\" or \"paragraph\" or \"multilevel-list\" or \"paste-special\" or \"style\" or \"manage-styles\"");
         wpfHarness.Should().Contain("scenario.RouteId is \"font\" or \"paragraph\"");
         wpfHarness.Should().Contain("Populate(dialog, scenario);");
+        avaloniaHarness.Should().Contain("button is not ToggleButton and not RepeatButton");
     }
 
     private static T Field<T>(ParagraphDialog dialog, string name) where T : class =>
