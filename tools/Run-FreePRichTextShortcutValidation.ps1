@@ -41,13 +41,13 @@ if ($GroupedChild) {
     if ($LASTEXITCODE -ne 0) { throw "Grouped-child fixture generation failed with exit code $LASTEXITCODE." }
 }
 elseif ($GroupedCaret) {
-    $fixturePath = Join-Path $resolvedOutputRoot "fixtures/21-comments-notes-grouped-child.pptx"
+    $fixturePath = Join-Path $resolvedOutputRoot "fixtures/21-comments-notes-grouped-child-caret.pptx"
     $surface = "in-canvas-grouped-child-caret"
     $scope = "physical FreeP grouped-child caret navigation selection edit-save-reopen lane"
     $generator = Join-Path $repoRoot "tools/FreeP.RenderCompare/Generate-GroupedTextFixture.ps1"
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $generator `
         -Source (Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx") `
-        -Destination $fixturePath
+        -Destination $fixturePath -CaretGeometry
     if ($LASTEXITCODE -ne 0) { throw "Grouped-child fixture generation failed with exit code $LASTEXITCODE." }
 }
 $fixtureFileName = Split-Path -Leaf $fixturePath
@@ -79,6 +79,72 @@ function Add-ResultEvidence {
         if (-not [string]::IsNullOrWhiteSpace([string]$name) -and -not $evidence.Contains([string]$name)) { $evidence.Add([string]$name) }
     }
     $Result.evidence = $evidence.ToArray()
+}
+
+function Assert-ExactClipboardTranscript {
+    param(
+        [Parameter(Mandatory = $true)][string]$EvidenceDirectory,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+    $expectedPath = Join-Path $EvidenceDirectory "$Name-expected.txt"
+    $actualPath = Join-Path $EvidenceDirectory "$Name-actual.txt"
+    $proofPath = Join-Path $EvidenceDirectory "$Name-proof.txt"
+    foreach ($path in @($expectedPath, $actualPath, $proofPath)) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) {
+            throw "Clipboard transcript artifact is missing or empty: $path"
+        }
+    }
+    $expectedBytes = [IO.File]::ReadAllBytes($expectedPath)
+    $actualBytes = [IO.File]::ReadAllBytes($actualPath)
+    if ([Convert]::ToBase64String($expectedBytes) -ne [Convert]::ToBase64String($actualBytes)) {
+        throw "Clipboard transcript '$Name' does not exactly match its expected bytes."
+    }
+    $proof = Get-Content -LiteralPath $proofPath -Raw
+    if ($proof -notmatch '(?m)^tool=xclip$' -or
+        $proof -notmatch '(?m)^selection=clipboard$' -or
+        $proof -notmatch '(?m)^status=true$' -or
+        $proof -notmatch '(?m)^exact-match=true$') {
+        throw "Clipboard transcript '$Name' did not report a bounded exact xclip match."
+    }
+}
+
+function Assert-GroupedCaretSemanticContract {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$EvidenceDirectory
+    )
+    if ($surface -ne "in-canvas-grouped-child-caret") { return }
+    if ($null -eq $Manifest.semanticReadback -or
+        $Manifest.semanticReadback.tool -ne "xclip" -or
+        $Manifest.semanticReadback.selection -ne "clipboard" -or
+        [string]::Join("|", @($Manifest.semanticReadback.transcripts)) -ne
+        "grouped-caret-selection|grouped-caret-vertical-down|grouped-caret-vertical-roundtrip" -or
+        $Manifest.semanticReadback.reopenProof -ne "grouped-caret-reopen-proof.txt") {
+        throw "Grouped-caret manifest is missing its exact Wave67 semantic readback declaration."
+    }
+    foreach ($name in @(
+        "grouped-caret-selection",
+        "grouped-caret-vertical-down",
+        "grouped-caret-vertical-roundtrip"
+    )) {
+        Assert-ExactClipboardTranscript -EvidenceDirectory $EvidenceDirectory -Name $name
+    }
+    $reopenProofPath = Join-Path $EvidenceDirectory "grouped-caret-reopen-proof.txt"
+    $reopenScreenshotPath = Join-Path $EvidenceDirectory "grouped-caret-reopened.png"
+    if (-not (Test-Path -LiteralPath $reopenProofPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $reopenScreenshotPath -PathType Leaf) -or
+        (Get-Item -LiteralPath $reopenScreenshotPath).Length -le 0) {
+        throw "Grouped-caret reopen proof or screenshot is missing."
+    }
+    $reopenProof = Get-Content -LiteralPath $reopenProofPath -Raw
+    if ($reopenProof -notmatch '(?m)^dialog-open=true$' -or
+        $reopenProof -notmatch '(?m)^dialog-closed=true$' -or
+        $reopenProof -notmatch '(?m)^clipboard-readback=true$' -or
+        $reopenProof -notmatch '(?m)^screenshot-captured=true$' -or
+        $reopenProof -notmatch '(?m)^reopen-pass=true$') {
+        throw "Grouped-caret reopen proof did not prove open, close, exact clipboard readback, and screenshot capture."
+    }
+    Assert-ExactClipboardTranscript -EvidenceDirectory $EvidenceDirectory -Name "grouped-caret-reopened"
 }
 
 function Assert-ManifestContract {
@@ -185,6 +251,7 @@ try {
         $manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $manifestPath -Encoding utf8
     }
     Wait-ForManifestEvidence -ManifestPath $manifestPath -EvidenceDirectory $evidenceDirectory
+    Assert-GroupedCaretSemanticContract -Manifest $manifest -EvidenceDirectory $evidenceDirectory
     $manifest = Assert-ManifestContract -ManifestPath $manifestPath -EvidenceDirectory $evidenceDirectory
     Write-Host "Manifest contract validation: $($manifest.contractValidation.status)"; Write-Host "Results: $($manifest.summary.passed) passed, $($manifest.summary.failed) failed, $($manifest.summary.total) total"; Write-Host "Manifest: $manifestPath"; Write-Host "Fixture: $fixturePath"
     if ($probeExitCode -ne 0 -or $manifest.summary.failed -gt 0) { throw "FreeP rich-text shortcut validation failed with probe exit code $probeExitCode and $($manifest.summary.failed) failed result(s). Evidence retained at $manifestPath." }

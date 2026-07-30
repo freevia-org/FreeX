@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Source,
-    [Parameter(Mandatory = $true)][string]$Destination
+    [Parameter(Mandatory = $true)][string]$Destination,
+    [switch]$CaretGeometry
 )
 
 $ErrorActionPreference = "Stop"
@@ -64,8 +65,15 @@ try {
 
     # Keep the grouped-child fixture deliberately rich: two paragraphs and
     # multiple native runs are needed to exercise range formatting across the
-    # paragraph boundary in both renderers.
+    # paragraph boundary in both renderers. The caret variant uses longer,
+    # unequal-width paragraphs so physical visual-line movement has a stable
+    # native document to exercise.
     $groupedShape = $shape.CloneNode($true)
+    if ($CaretGeometry) {
+        $shapeExt = $groupedShape.SelectSingleNode("./p:spPr/a:xfrm/a:ext", $ns)
+        if ($null -eq $shapeExt) { throw "Grouped caret fixture shape extent is missing." }
+        $shapeExt.SetAttribute("cy", "2743200")
+    }
     $txBody = $groupedShape.SelectSingleNode("./p:txBody", $ns)
     $paragraph = $txBody.SelectSingleNode("./a:p", $ns)
     $runs = @($paragraph.SelectNodes("./a:r", $ns))
@@ -80,11 +88,23 @@ try {
         return $run
     }
 
-    $paragraph.AppendChild((New-TextRun "Slide 1")) | Out-Null
-    $paragraph.AppendChild((New-TextRun " has")) | Out-Null
+    if ($CaretGeometry) {
+        $paragraph.AppendChild((New-TextRun "Alpha bravo charlie ")) | Out-Null
+        $paragraph.AppendChild((New-TextRun "delta echo foxtrot golf hotel")) | Out-Null
+    }
+    else {
+        $paragraph.AppendChild((New-TextRun "Slide 1")) | Out-Null
+        $paragraph.AppendChild((New-TextRun " has")) | Out-Null
+    }
     $secondParagraph = $document.CreateElement("a", "p", $aNs)
-    $secondParagraph.AppendChild((New-TextRun " speaker")) | Out-Null
-    $secondParagraph.AppendChild((New-TextRun " notes")) | Out-Null
+    if ($CaretGeometry) {
+        $secondParagraph.AppendChild((New-TextRun "tiny middle wide lower ")) | Out-Null
+        $secondParagraph.AppendChild((New-TextRun "line with many words for contrast")) | Out-Null
+    }
+    else {
+        $secondParagraph.AppendChild((New-TextRun " speaker")) | Out-Null
+        $secondParagraph.AppendChild((New-TextRun " notes")) | Out-Null
+    }
     $txBody.AppendChild($secondParagraph) | Out-Null
 
     $group.AppendChild($groupedShape) | Out-Null

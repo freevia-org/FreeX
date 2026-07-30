@@ -32,6 +32,22 @@
       "properties": {
         "scope": { "enum": ["physical FreeP rich-editor soft-break evidence lane", "physical FreeP grouped-child rich-editor edit-save-reopen lane", "physical FreeP grouped-child caret navigation selection edit-save-reopen lane"] },
         "exhaustive": { "const": false }
+        }
+    },
+    "semanticReadback": {
+      "type": ["object", "null"],
+      "properties": {
+        "tool": { "const": "xclip" },
+        "selection": { "const": "clipboard" },
+        "transcripts": {
+          "type": "array",
+          "const": [
+            "grouped-caret-selection",
+            "grouped-caret-vertical-down",
+            "grouped-caret-vertical-roundtrip"
+          ]
+        },
+        "reopenProof": { "const": "grouped-caret-reopen-proof.txt" }
       }
     },
     "contractValidation": {
@@ -80,6 +96,23 @@
       "items": false
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "appSurface": { "const": "in-canvas-grouped-child-caret" } },
+        "required": ["appSurface"]
+      },
+      "then": {
+        "required": ["semanticReadback"],
+        "properties": {
+          "semanticReadback": {
+            "type": "object",
+            "required": ["tool", "selection", "transcripts", "reopenProof"]
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "result": {
       "type": "object",

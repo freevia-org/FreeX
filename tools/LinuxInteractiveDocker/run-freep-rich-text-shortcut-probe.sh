@@ -135,17 +135,33 @@ grouped = os.environ.get("FREEP_APP_SURFACE") in (
     "in-canvas-grouped-child-rich-text",
     "in-canvas-grouped-child-caret",
 )
+caret_geometry = os.environ.get("FREEP_APP_SURFACE") == "in-canvas-grouped-child-caret"
+expected_bounds = {
+    "x": 914400,
+    "y": 914400,
+    "cx": 2743200,
+    "cy": 2743200 if caret_geometry else 914400,
+}
+expected_first = (
+    "Alpha bravo charlie delta echo foxtrot golf hotel"
+    if caret_geometry else "Slide 1 has"
+)
+expected_second = (
+    "tiny middle wide lower line with many words for contrast"
+    if caret_geometry else " speaker notes"
+)
+expected_first_paragraph = expected_first if grouped else expected_first + expected_second
 valid = (
     data["shapeId2Count"] == 1
     and shape is not None
     and shape["id"] == 2
     and shape["name"] == "Notes marker"
-    and shape["bounds"] == {"x": 914400, "y": 914400, "cx": 2743200, "cy": 914400}
+    and shape["bounds"] == expected_bounds
     and shape["paragraphCount"] == (2 if grouped else 1)
-    and shape["text"] == "Slide 1 has speaker notes"
-    and shape["paragraphs"][0]["text"] == ("Slide 1 has" if grouped else "Slide 1 has speaker notes")
+    and shape["text"] == (expected_first + expected_second)
+    and shape["paragraphs"][0]["text"] == expected_first_paragraph
     and shape["paragraphs"][0]["breakCount"] == 0
-    and (not grouped or shape["paragraphs"][1]["text"] == " speaker notes")
+    and (not grouped or shape["paragraphs"][1]["text"] == expected_second)
     and (not grouped or len(shape["paragraphs"][0]["runs"]) == 2)
     and (not grouped or len(shape["paragraphs"][1]["runs"]) == 2)
     and data["pPicCount"] == 0
@@ -209,7 +225,7 @@ valid = (
     and shape is not None
     and shape["id"] == 2
     and shape["name"] == "Notes marker"
-    and shape["bounds"] == {"x": 914400, "y": 914400, "cx": 2743200, "cy": 914400}
+    and shape["bounds"] == {"x": 914400, "y": 914400, "cx": 2743200, "cy": 2743200}
     and shape["paragraphCount"] == 2
     and shape["text"] == "Child 1 has speaker notes"
     and shape["paragraphs"][0]["text"] == "Child 1 has"
@@ -277,6 +293,8 @@ coverage_scope="${FREEP_COVERAGE_SCOPE:-physical FreeP rich-editor soft-break ev
 input_delay_ms="${FREEP_X11_INPUT_DELAY_MS:-160}"
 settle_seconds="${FREEP_X11_SETTLE_SECONDS:-0.45}"
 pointer_timeout_seconds="${FREEP_X11_POINTER_TIMEOUT_SECONDS:-3}"
+clipboard_timeout_seconds="${FREEP_X11_CLIPBOARD_TIMEOUT_SECONDS:-4}"
+clipboard_attempts="${FREEP_X11_CLIPBOARD_ATTEMPTS:-12}"
 save_attempts="${FREEP_SAVE_ATTEMPTS:-50}"
 screen_width="${FREEP_SCREEN_WIDTH:-1280}"
 screen_height="${FREEP_SCREEN_HEIGHT:-820}"
@@ -333,6 +351,60 @@ capture() {
     scrot -o "$output/$name" >/dev/null 2>&1 || return 1
     [[ -s "$output/$name" ]] || return 1
     track_screenshot "$name"
+}
+
+copy_selection_and_assert_clipboard() {
+    local name="$1" expected="$2"
+    local expected_path="$output/$name-expected.txt"
+    local actual_path="$output/$name-actual.txt"
+    local raw_path="$output/.$name-raw.txt"
+    local proof_path="$output/$name-proof.txt"
+    local status=false attempt=0
+
+    printf '%s' "$expected" > "$expected_path"
+    : > "$actual_path"
+    : > "$raw_path"
+    {
+        printf 'tool=xclip\n'
+        printf 'selection=clipboard\n'
+        printf 'timeout-seconds=%s\n' "$clipboard_timeout_seconds"
+        printf 'attempt-limit=%s\n' "$clipboard_attempts"
+        printf 'expected-file=%s\n' "$(basename "$expected_path")"
+        printf 'actual-file=%s\n' "$(basename "$actual_path")"
+    } > "$proof_path"
+
+    if ! command -v xclip >/dev/null 2>&1; then
+        printf 'status=failed\nreason=xclip-is-missing\n' >> "$proof_path"
+        return 1
+    fi
+
+    # Do not install a persistent xclip owner before Ctrl+C. The application
+    # must become the real clipboard owner, and every read remains bounded.
+    send_owner_key ctrl+c || {
+        printf 'status=failed\nreason=ctrl-c-input-failed\n' >> "$proof_path"
+        return 1
+    }
+
+    while (( attempt < clipboard_attempts )); do
+        attempt=$((attempt + 1))
+        rm -f "$raw_path"
+        if timeout --foreground --kill-after=1s "$clipboard_timeout_seconds" \
+            xclip -selection clipboard -out > "$raw_path" 2>/dev/null; then
+            tr -d '\r' < "$raw_path" > "$actual_path"
+            if cmp -s "$expected_path" "$actual_path"; then
+                status=true
+                break
+            fi
+        fi
+        sleep 0.15
+    done
+    rm -f "$raw_path"
+    {
+        printf 'status=%s\n' "$status"
+        printf 'attempts=%s\n' "$attempt"
+        printf 'exact-match=%s\n' "$status"
+    } >> "$proof_path"
+    $status
 }
 
 window_ids() {
@@ -552,6 +624,19 @@ manifest = {
         "scope": coverage_scope,
         "exhaustive": False,
     },
+    "semanticReadback": (
+        {
+            "tool": "xclip",
+            "selection": "clipboard",
+            "transcripts": [
+                "grouped-caret-selection",
+                "grouped-caret-vertical-down",
+                "grouped-caret-vertical-roundtrip",
+            ],
+            "reopenProof": "grouped-caret-reopen-proof.txt",
+        }
+        if app_surface == "in-canvas-grouped-child-caret" else None
+    ),
     "contractValidation": {
         "status": "pending",
         "validator": "tools/Run-FreePRichTextShortcutValidation.ps1",
@@ -662,6 +747,11 @@ slide_width_emu=12192000
 slide_height_emu=6858000
 shape_center_x_emu=2286000
 shape_center_y_emu=1371600
+shape_height_emu=914400
+if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+    shape_center_y_emu=2286000
+    shape_height_emu=2743200
+fi
 
 if (( fit_box_width * 9 <= fit_box_height * 16 )); then
     slide_width_px=$fit_box_width
@@ -702,7 +792,7 @@ fi
     printf 'fixture-slide-size-emu=%s,%s\n' "$slide_width_emu" "$slide_height_emu"
     printf 'derived-slide-rect=%s,%s,%s,%s\n' \
         "$slide_x" "$slide_y" "$slide_width_px" "$slide_height_px"
-    printf 'shape-bounds-emu=914400,914400,2743200,914400\n'
+    printf 'shape-bounds-emu=914400,914400,2743200,%s\n' "$shape_height_emu"
     printf 'shape-center-emu=%s,%s\n' "$shape_center_x_emu" "$shape_center_y_emu"
     printf 'shape-center-point=%s,%s\n' "$shape_center_x" "$shape_center_y"
     printf 'natural-commit-point=%s,%s\n' "$commit_point_x" "$commit_point_y"
@@ -712,6 +802,8 @@ input_commands_ok=true
 grouped_formatting=false
 grouped_caret=false
 grouped_vertical=false
+grouped_semantic_readback=false
+grouped_reopen=false
 focus_owner
 xdotool mousemove --sync "$shape_center_x" "$shape_center_y" >/dev/null 2>&1 ||
     input_commands_ok=false
@@ -720,21 +812,55 @@ xdotool click --clearmodifiers --repeat 2 --delay 120 1 >/dev/null 2>&1 ||
 sleep "$settle_seconds"
 if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ||
       "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
-    # Select fourteen characters from the start of the grouped child. The fixture
-    # places the selection across its two native paragraphs and four runs.
+    # Establish a deterministic keyboard editing position in the grouped child.
     send_owner_document_boundary Home || input_commands_ok=false
     send_owner_shift_rights 14 || input_commands_ok=false
     if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
-        # Keep the first proof selection across both native paragraphs, then
-        # exercise Delete and Backspace at the paragraph separator. Undo each
-        # boundary edit before the final in-paragraph type-to-replace edit.
+        # Use the first transcript as a real Shift+vertical selection proof,
+        # then exercise Delete and Backspace. Undo each boundary edit before
+        # the final in-paragraph type-to-replace edit.
+        grouped_selection_readback=false
+        grouped_vertical_down_readback=false
+        grouped_vertical_roundtrip_readback=false
+        send_owner_document_boundary Home || input_commands_ok=false
+        send_owner_rights 12 || input_commands_ok=false
+        send_owner_shift_verticals Down 2 || input_commands_ok=false
+        if copy_selection_and_assert_clipboard \
+            "grouped-caret-selection" "oxtrot golf hot"; then
+            grouped_selection_readback=true
+        else
+            input_commands_ok=false
+        fi
         if capture "grouped-caret-selection.png"; then :; else input_commands_ok=false; fi
         send_owner_document_boundary Home || input_commands_ok=false
-        send_owner_verticals Down 2 || input_commands_ok=false
+        send_owner_rights 12 || input_commands_ok=false
+        send_owner_shift_verticals Down 2 || input_commands_ok=false
+        if copy_selection_and_assert_clipboard \
+            "grouped-caret-vertical-down" \
+            "oxtrot golf hot"; then
+            grouped_vertical_down_readback=true
+        else
+            input_commands_ok=false
+        fi
         if capture "grouped-caret-vertical-down.png"; then :; else input_commands_ok=false; fi
-        send_owner_shift_verticals Up 2 || input_commands_ok=false
+        send_owner_document_boundary Home || input_commands_ok=false
+        send_owner_rights 12 || input_commands_ok=false
+        send_owner_shift_verticals Down 2 || input_commands_ok=false
+        send_owner_shift_verticals Up 1 || input_commands_ok=false
+        if copy_selection_and_assert_clipboard \
+            "grouped-caret-vertical-roundtrip" \
+            "charlie delta echo foxtrot golf hot"; then
+            grouped_vertical_roundtrip_readback=true
+        else
+            input_commands_ok=false
+        fi
+        send_owner_shift_verticals Up 1 || input_commands_ok=false
         if capture "grouped-caret-vertical-shift-up.png"; then :; else input_commands_ok=false; fi
-        grouped_vertical=true
+        if $grouped_selection_readback && $grouped_vertical_down_readback &&
+           $grouped_vertical_roundtrip_readback; then
+            grouped_semantic_readback=true
+            grouped_vertical=true
+        fi
         send_owner_document_boundary End || input_commands_ok=false
         send_owner_document_boundary Home || input_commands_ok=false
         send_owner_document_boundary Home || input_commands_ok=false
@@ -835,11 +961,12 @@ capture_window_state "soft-break-committed-state.txt"
     printf 'editor-entry=physical double click at shape ID2 center\n'
     if [[ "$app_surface" == "in-canvas-grouped-child-rich-text" ||
           "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
-        printf 'selection=physical Ctrl+Home then fourteen Shift+Right keys across the paragraph boundary\n'
+        printf 'selection=physical Ctrl+Home, horizontal placement, and Shift+Down across unequal wrapped visual lines\n'
         if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
-            printf 'navigation=physical Ctrl+Home/Ctrl+End, Up/Down, Shift+Up/Shift+Down, Shift selection, Delete and Backspace across paragraph boundary\n'
+            printf 'navigation=physical Ctrl+Home, unequal-width wrapped visual lines, Shift+Down/Shift+Up, selection anchor, Delete and Backspace\n'
             printf 'vertical-input-route=%s\n' "$grouped_vertical"
-            printf 'vertical-semantic-postcondition=managed tests; this probe has no reliable clipboard/state readback for caret offsets\n'
+            printf 'vertical-semantic-postcondition=exact xclip clipboard transcripts\n'
+            printf 'semantic-readback=%s\n' "$grouped_semantic_readback"
             printf 'type-replace=physical selection replacement with Child\n'
             printf 'grouped-caret=%s\n' "$grouped_caret"
         else
@@ -868,7 +995,20 @@ input_evidence=(
     shape-pointer-calibration.txt
 )
 if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
-    input_evidence+=(grouped-caret-vertical-down.png grouped-caret-vertical-shift-up.png)
+    input_evidence+=(
+        grouped-caret-selection.png
+        grouped-caret-selection-expected.txt
+        grouped-caret-selection-actual.txt
+        grouped-caret-selection-proof.txt
+        grouped-caret-vertical-down.png
+        grouped-caret-vertical-down-expected.txt
+        grouped-caret-vertical-down-actual.txt
+        grouped-caret-vertical-down-proof.txt
+        grouped-caret-vertical-roundtrip-expected.txt
+        grouped-caret-vertical-roundtrip-actual.txt
+        grouped-caret-vertical-roundtrip-proof.txt
+        grouped-caret-vertical-shift-up.png
+    )
 fi
 input_evidence+=(
     soft-break-input.png
@@ -876,7 +1016,8 @@ input_evidence+=(
     soft-break-committed.png
     soft-break-committed-state.txt
 )
-if $visible_pass && $input_commands_ok && $input_capture && $commit_capture && $vertical_pass; then
+if $visible_pass && $input_commands_ok && $input_capture && $commit_capture && $vertical_pass &&
+   { [[ "$app_surface" != "in-canvas-grouped-child-caret" ]] || $grouped_semantic_readback; }; then
     input_pass=true
     record "rich-editor-physical-soft-break-input" "passed" \
         "Physical X11 input entered shape ID2, replaced its text, sent Shift+Enter between the ASCII tokens, and committed naturally outside the shape." \
@@ -1008,6 +1149,80 @@ redo_checkpoint=false
 if save_checkpoint "after-redo" "$redo_predicate"; then
     redo_checkpoint=true
 fi
+reopen_dialog_open=false
+reopen_dialog_closed=false
+reopen_clipboard_readback=false
+reopen_capture=false
+if [[ "$app_surface" == "in-canvas-grouped-child-caret" && "$redo_checkpoint" == true ]]; then
+    before_active_window="$(xdotool getactivewindow 2>/dev/null || true)"
+    send_owner_key ctrl+o || input_commands_ok=false
+    for _ in $(seq 1 12); do
+        active_window="$(xdotool getactivewindow 2>/dev/null || true)"
+        if [[ -n "$active_window" && "$active_window" != "$owner_id" &&
+              "$active_window" != "$before_active_window" ]]; then
+            reopen_dialog_open=true
+            break
+        fi
+        sleep 0.2
+    done
+    if $reopen_dialog_open; then
+        timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+            xdotool key --clearmodifiers ctrl+l || input_commands_ok=false
+        timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+            xdotool type --clearmodifiers --delay "$input_delay_ms" "$document_path" || input_commands_ok=false
+        timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+            xdotool key --clearmodifiers Return || input_commands_ok=false
+        sleep "$settle_seconds"
+        timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+            xdotool key --clearmodifiers Return || input_commands_ok=false
+        for _ in $(seq 1 16); do
+            active_window="$(xdotool getactivewindow 2>/dev/null || true)"
+            if [[ "$active_window" == "$owner_id" ]]; then
+                reopen_dialog_closed=true
+                break
+            fi
+            sleep 0.25
+        done
+    fi
+    if $reopen_dialog_closed; then
+        sleep "$settle_seconds"
+        focus_owner
+        xdotool mousemove --sync "$shape_center_x" "$shape_center_y" >/dev/null 2>&1 || input_commands_ok=false
+        xdotool click --clearmodifiers --repeat 2 --delay 120 1 >/dev/null 2>&1 || input_commands_ok=false
+        sleep "$settle_seconds"
+        send_owner_key ctrl+a || input_commands_ok=false
+        sleep 0.35
+        focus_owner
+        send_owner_key ctrl+c || input_commands_ok=false
+        if copy_selection_and_assert_clipboard \
+            "grouped-caret-reopened" $'Child 1 has\n speaker notes'; then
+            reopen_clipboard_readback=true
+        else
+            input_commands_ok=false
+        fi
+        if capture "grouped-caret-reopened.png"; then
+            reopen_capture=true
+        else
+            input_commands_ok=false
+        fi
+    fi
+    grouped_reopen=false
+    if $reopen_dialog_open && $reopen_dialog_closed && $reopen_clipboard_readback && $reopen_capture; then
+        grouped_reopen=true
+    fi
+    {
+        printf 'open-shortcut=Ctrl+O\n'
+        printf 'document-path=%s\n' "$document_path"
+        printf 'dialog-open=%s\n' "$reopen_dialog_open"
+        printf 'dialog-closed=%s\n' "$reopen_dialog_closed"
+        printf 'clipboard-readback=%s\n' "$reopen_clipboard_readback"
+        printf 'screenshot-captured=%s\n' "$reopen_capture"
+        printf 'exact-reopened-text=Child 1 has\\n speaker notes\n'
+        printf 'reopen-pass=%s\n' "$grouped_reopen"
+    } > "$output/grouped-caret-reopen-proof.txt"
+    printf 'reopen-semantic-readback=%s\n' "$grouped_reopen" \
+        >> "$output/rich-editor-physical-input-proof.txt"
+fi
 {
     printf 'shortcut=Ctrl+Shift+Z\n'
     printf 'key-sent=%s\n' "$redo_key_sent"
@@ -1020,16 +1235,37 @@ fi
     fi
     printf 'exact-soft-break-checkpoint=%s\n' "$redo_checkpoint"
     printf 'screenshot-captured=%s\n' "$redo_capture"
+    if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+        printf 'physical-reopen=%s\n' "$grouped_reopen"
+    fi
 } > "$output/redo-restores-soft-break-proof.txt"
 
 redo_pass=false
-if $undo_pass && $redo_key_sent && $redo_checkpoint && $redo_capture; then
+if $undo_pass && $redo_key_sent && $redo_checkpoint && $redo_capture &&
+   { [[ "$app_surface" != "in-canvas-grouped-child-caret" ]] || $grouped_reopen; }; then
     redo_pass=true
+    redo_evidence=(
+        redo-restores-soft-break-proof.txt
+        redo-soft-break.png
+        redo-soft-break-state.txt
+        after-undo.pptx
+        after-undo.json
+        after-redo.pptx
+        after-redo.json
+        after-redo.sha256.txt
+    )
+    if [[ "$app_surface" == "in-canvas-grouped-child-caret" ]]; then
+        redo_evidence+=(
+            grouped-caret-reopen-proof.txt
+            grouped-caret-reopened.png
+            grouped-caret-reopened-expected.txt
+            grouped-caret-reopened-actual.txt
+            grouped-caret-reopened-proof.txt
+        )
+    fi
     record "redo-restores-soft-break" "passed" \
         "Ctrl+Shift+Z and Ctrl+S restored the exact native shape ID2 soft-break structure and zero fallback objects." \
-        redo-restores-soft-break-proof.txt redo-soft-break.png \
-        redo-soft-break-state.txt after-undo.pptx after-undo.json \
-        after-redo.pptx after-redo.json after-redo.sha256.txt
+        "${redo_evidence[@]}"
 else
     lane_failed=true
     record "redo-restores-soft-break" "failed" \
