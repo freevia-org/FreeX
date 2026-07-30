@@ -73,6 +73,53 @@ public sealed class FontDialogVisualParityTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task Font_dialog_materializes_Wpf_textbox_and_checkbox_geometry()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new FontDialog(new RunFormatting { FontSizePt = 12 });
+            try
+            {
+                dialog.Width = 460;
+                dialog.Height = 340;
+                dialog.Show();
+                dialog.Measure(new Size(460, 340));
+                dialog.Arrange(new Rect(0, 0, 460, 340));
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var textBoxes = dialog.GetVisualDescendants()
+                    .OfType<TextBox>()
+                    .Where(box => box.Name != "PART_EditableTextBox")
+                    .ToArray();
+                textBoxes.Should().NotBeEmpty();
+                textBoxes.Should().OnlyContain(box => box.Bounds.Height == 18);
+
+                var wideBorders = dialog.GetVisualDescendants()
+                    .OfType<Border>()
+                    .Where(border => border.Name == "PART_BorderElement" && border.Bounds.Width > 300)
+                    .ToArray();
+                wideBorders.Should().NotBeEmpty();
+                wideBorders.Should().OnlyContain(border => border.Bounds.Height == 18);
+                ((ISolidColorBrush)wideBorders.First().BorderBrush!).Color
+                    .Should().Be(Color.FromRgb(0x56, 0x9D, 0xE5));
+
+                var indicators = dialog.GetVisualDescendants()
+                    .OfType<CheckBox>()
+                    .SelectMany(check => check.GetVisualDescendants().OfType<Border>())
+                    .Where(border => border.Bounds.Width == 14 && border.Bounds.Height == 14)
+                    .ToArray();
+                indicators.Should().HaveCount(8);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static T Field<T>(FontDialog dialog, string name) where T : class =>
         (T)(typeof(FontDialog)
             .GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
