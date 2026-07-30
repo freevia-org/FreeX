@@ -57,6 +57,8 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
     private List<ChartPointDataLabelFormat>? _previousPointDataLabelFormats;
     private List<ChartSeriesRawXmlEntry>? _previousAdditionalSeriesErrorBarsXml;
     private List<ChartSeriesRawXmlEntry>? _previousAdditionalSeriesTrendlinesXml;
+    private List<int>? _previousSeriesPlotOrder;
+    private List<ChartLegendEntryModel>? _previousLegendEntries;
 
     public string Label => "Remove Chart Series";
 
@@ -115,6 +117,8 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         _previousPointDataLabelFormats = chart.PointDataLabelFormats;
         _previousAdditionalSeriesErrorBarsXml = chart.AdditionalSeriesErrorBarsXml;
         _previousAdditionalSeriesTrendlinesXml = chart.AdditionalSeriesTrendlinesXml;
+        _previousSeriesPlotOrder = chart.SeriesPlotOrder;
+        _previousLegendEntries = chart.LegendEntries;
         _applied = true;
 
         var remainingColumns = new List<(int SeriesIndex, uint Column)>(columns.Count - 1);
@@ -197,6 +201,8 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         else if (chart.ErrorBarSeriesIndex > removedSeriesIndex)
             chart.ErrorBarSeriesIndex--;
 
+        RemapPlotOrderAndLegendEntries(chart, removedSeriesIndex);
+
         return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
     }
 
@@ -229,6 +235,8 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         chart.PointDataLabelFormats = _previousPointDataLabelFormats ?? [];
         chart.AdditionalSeriesErrorBarsXml = _previousAdditionalSeriesErrorBarsXml ?? [];
         chart.AdditionalSeriesTrendlinesXml = _previousAdditionalSeriesTrendlinesXml ?? [];
+        chart.SeriesPlotOrder = _previousSeriesPlotOrder ?? [];
+        chart.LegendEntries = _previousLegendEntries ?? [];
 
         _applied = false;
         _previousSeriesColumnMappings = null;
@@ -248,6 +256,8 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         _previousPointDataLabelFormats = null;
         _previousAdditionalSeriesErrorBarsXml = null;
         _previousAdditionalSeriesTrendlinesXml = null;
+        _previousSeriesPlotOrder = null;
+        _previousLegendEntries = null;
     }
 
     private static List<int> RemapIndexList(List<int> indexes, int removedSeriesIndex) =>
@@ -255,6 +265,52 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
             .Where(i => i != removedSeriesIndex)
             .Select(i => i > removedSeriesIndex ? i - 1 : i)
             .ToList();
+
+    /// <summary>
+    /// Remaps <see cref="ChartModel.SeriesPlotOrder"/> (declaration-order idx list) and
+    /// <see cref="ChartModel.LegendEntries"/> (legend-POSITION-keyed overrides, resolved through
+    /// plot order by <c>ChartRenderer.SeriesFormatting.cs</c>'s <c>IsLegendEntryDeleted</c>) so a
+    /// removed series doesn't leave stale position/idx references that silently un-hide or
+    /// mis-hide an unrelated legend key. See remarks on the class for the full scenario.
+    /// </summary>
+    private static void RemapPlotOrderAndLegendEntries(ChartModel chart, int removedSeriesIndex)
+    {
+        var oldPlotOrder = chart.SeriesPlotOrder;
+        if (oldPlotOrder.Count == 0)
+        {
+            // Legacy case: declaration order equals idx order, so a LegendEntry's Index IS the
+            // series idx directly (see IsLegendEntryDeleted's fallback) -- remap exactly like
+            // every other SeriesIndex-keyed list above.
+            chart.LegendEntries = chart.LegendEntries
+                .Where(e => e.Index != removedSeriesIndex)
+                .Select(e => e.Index > removedSeriesIndex ? e with { Index = e.Index - 1 } : e)
+                .ToList();
+            return;
+        }
+
+        var removedPosition = oldPlotOrder.IndexOf(removedSeriesIndex);
+        if (removedPosition < 0)
+        {
+            // Defensive: the removed series idx wasn't declared in the plot order (shouldn't
+            // happen for a well-formed chart). Keep the list length stable and just shift down
+            // idx values above the removed one; leave LegendEntries untouched since we cannot
+            // safely resolve which position, if any, referred to the removed series.
+            chart.SeriesPlotOrder = oldPlotOrder
+                .Select(idx => idx > removedSeriesIndex ? idx - 1 : idx)
+                .ToList();
+            return;
+        }
+
+        chart.SeriesPlotOrder = oldPlotOrder
+            .Where((_, position) => position != removedPosition)
+            .Select(idx => idx > removedSeriesIndex ? idx - 1 : idx)
+            .ToList();
+
+        chart.LegendEntries = chart.LegendEntries
+            .Where(e => e.Index != removedPosition)
+            .Select(e => e.Index > removedPosition ? e with { Index = e.Index - 1 } : e)
+            .ToList();
+    }
 
     /// <summary>
     /// Ordered (SeriesIndex, worksheet Column) pairs for the series currently rendered, mirroring

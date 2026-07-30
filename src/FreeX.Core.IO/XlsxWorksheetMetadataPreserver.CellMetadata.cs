@@ -15,7 +15,12 @@ internal static partial class XlsxWorksheetMetadataPreserver
         XElement targetRoot,
         XNamespace workbookNs,
         XNamespace relNs,
-        Sheet? sheet)
+        Sheet? sheet,
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string sourceWorksheetPath,
+        string targetWorksheetPath,
+        XNamespace packageRelNs)
     {
         if (sourceHyperlinks is null)
             return false;
@@ -49,16 +54,26 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 // else with no target match is a genuine edit (the cells were cleared or the hyperlink was
                 // removed) and must NOT be resurrected, so only re-emit refs that match the same load-time
                 // strip criteria the loader used to drop them in the first place. The relationship itself
-                // (for an external target) is already carried over into the target worksheet's own .rels by
+                // (for an external target) is carried over into the target worksheet's own .rels by
                 // XlsxPackageMetadataMerger.MergeRelationshipParts, which always preserves external
-                // relationships regardless of whether the regenerated worksheet body references them, so no
-                // package-graph rebinding is needed here -- and none of this requires reading anything
-                // beyond the per-part source worksheet XML already parsed into sourceHyperlinks.
+                // relationships -- but that merge dedups by Type+Target+TargetMode and, on an id collision
+                // with one of ClosedXML's own regenerated relationships, renumbers the copied relationship
+                // to a fresh id without rebinding this reemitted element (hyperlink is not among the
+                // relationship types MergeRelationshipParts tracks for reference rebinding). Rebind the
+                // reemitted r:id here the same way <picture>/<legacyDrawing> retained blocks are rebound.
                 if (!IsStrippedRangeHyperlinkRef(reference))
                     continue;
 
                 targetHyperlinks ??= CreateAndInsertWorksheetHyperlinksElement(targetRoot, workbookNs);
                 var reemitted = new XElement(sourceHyperlink);
+                RebindWorksheetElementRelationshipId(
+                    reemitted,
+                    sourceArchive,
+                    targetArchive,
+                    sourceWorksheetPath,
+                    targetWorksheetPath,
+                    relNs,
+                    packageRelNs);
                 targetHyperlinks.Add(reemitted);
                 targetByReference[reference] = reemitted;
                 changed = true;

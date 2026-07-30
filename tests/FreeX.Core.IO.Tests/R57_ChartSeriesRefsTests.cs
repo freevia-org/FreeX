@@ -127,8 +127,14 @@ public sealed class R57_ChartSeriesRefsTests
         var verbatim = XlsxChartSeriesRangeReader.TryCollectVerbatimFormulas([series], sheetId);
         verbatim.Should().NotBeNull();
         var entry = verbatim!.Single();
-        entry.CatFormula.Should().Be("Sheet1!$A$2:$A$6", "xVal is repurposed into CatFormula for a scatter series (matches the writer's own reuse)");
-        entry.ValFormula.Should().Be("[1]Sheet1!$B$2:$B$6", "yVal is repurposed into ValFormula for a scatter series");
+        // R99-io-chart-series-verbatim-container-scope: xVal (repurposed into CatFormula for a
+        // scatter series) is a perfectly ordinary, resolvable same-workbook range on its own —
+        // only yVal is genuinely unparsable (the external-link formula) — so CatFormula must stay
+        // null and fall through to the normal positional recompute+cache path, instead of being
+        // swept into the verbatim record just because its sibling yVal needed the bypass.
+        entry.CatFormula.Should().BeNull(
+            "xVal's own formula (Sheet1!$A$2:$A$6) is parseable and must not be captured verbatim just because the sibling yVal needed the bypass");
+        entry.ValFormula.Should().Be("[1]Sheet1!$B$2:$B$6", "yVal is repurposed into ValFormula for a scatter series, and its own formula is genuinely unparsable (external link)");
     }
 
     // Sibling no-regression: a scatter series whose xVal/yVal are both ordinary, fully-parseable

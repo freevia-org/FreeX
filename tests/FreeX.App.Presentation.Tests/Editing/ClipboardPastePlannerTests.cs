@@ -141,10 +141,15 @@ public sealed class ClipboardPastePlannerTests
                 new PasteSpecialOptions(Operation: PasteSpecialOperation.Add))
             .Should()
             .BeTrue();
+        // "All merging conditional formats" must also tile/fill the selected destination range
+        // exactly like every other Paste Special content kind — Core.Commands' PasteCommandFactory
+        // already tiles correctly given a larger destination range (R25-clipboard-paste-remaining-2);
+        // the caller must not collapse the destination to a single cell for this content kind, or
+        // that tiling path is unreachable from the real paste flow (R99-clipboard-paste-merge-cf-tile).
         ClipboardPastePlanner.ShouldFillSelectedDestinationRange(
                 isCut: false,
                 new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.AllMergingConditionalFormats))
             .Should()
-            .BeFalse();
+            .BeTrue();
     }
 }

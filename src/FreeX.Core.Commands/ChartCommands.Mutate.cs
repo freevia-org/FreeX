@@ -219,6 +219,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
     private List<ChartPointDataLabelFormat>? _previousPointDataLabelFormats;
     private List<ChartSeriesRawXmlEntry>? _previousAdditionalSeriesErrorBarsXml;
     private List<ChartSeriesRawXmlEntry>? _previousAdditionalSeriesTrendlinesXml;
+    private List<int>? _previousSeriesPlotOrder;
+    private List<ChartLegendEntryModel>? _previousLegendEntries;
     private bool _clearedMappingsForSourceChange;
 
     public string Label => "Select Chart Data";
@@ -304,6 +306,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             _previousPointDataLabelFormats = chart.PointDataLabelFormats;
             _previousAdditionalSeriesErrorBarsXml = chart.AdditionalSeriesErrorBarsXml;
             _previousAdditionalSeriesTrendlinesXml = chart.AdditionalSeriesTrendlinesXml;
+            _previousSeriesPlotOrder = chart.SeriesPlotOrder;
+            _previousLegendEntries = chart.LegendEntries;
             _clearedMappingsForSourceChange = true;
             chart.SeriesColumnMappings = [];
             chart.VerbatimSeriesFormulas = null;
@@ -326,6 +330,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             chart.PointDataLabelFormats = [];
             chart.AdditionalSeriesErrorBarsXml = [];
             chart.AdditionalSeriesTrendlinesXml = [];
+            chart.SeriesPlotOrder = [];
+            chart.LegendEntries = [];
         }
 
         chart.DataRange = _dataRange;
@@ -370,6 +376,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             chart.PointDataLabelFormats = _previousPointDataLabelFormats ?? [];
             chart.AdditionalSeriesErrorBarsXml = _previousAdditionalSeriesErrorBarsXml ?? [];
             chart.AdditionalSeriesTrendlinesXml = _previousAdditionalSeriesTrendlinesXml ?? [];
+            chart.SeriesPlotOrder = _previousSeriesPlotOrder ?? [];
+            chart.LegendEntries = _previousLegendEntries ?? [];
         }
 
         _previousDataRange = null;
@@ -397,6 +405,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         _previousPointDataLabelFormats = null;
         _previousAdditionalSeriesErrorBarsXml = null;
         _previousAdditionalSeriesTrendlinesXml = null;
+        _previousSeriesPlotOrder = null;
+        _previousLegendEntries = null;
         _clearedMappingsForSourceChange = false;
     }
 }

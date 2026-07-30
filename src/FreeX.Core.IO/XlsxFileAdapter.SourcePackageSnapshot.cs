@@ -1650,6 +1650,7 @@ public sealed partial class XlsxFileAdapter
         private static void NormalizePatchWorkbookExternalReferences(ZipArchive archive)
         {
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
             var workbookEntry = archive.GetEntry("xl/workbook.xml");
             if (workbookEntry is null)
                 return;
@@ -1659,7 +1660,25 @@ public sealed partial class XlsxFileAdapter
             if (root is null)
                 return;
 
-            if (XlsxWorkbookExternalReferencesNormalizer.NormalizeWorkbookRoot(root, workbookNs))
+            // R99-io-external-references-patch-normalizer-1: this normalizer runs on every cell-PATCH
+            // save, regardless of whether the edit touches external links, on the copied ORIGINAL
+            // source bytes -- so a blank/missing/duplicate r:id here reflects a slot the source file
+            // already encoded (possibly a dangling reference Excel itself left behind), not something
+            // this save introduced. Preserve that ordinal slot (see the parameter doc on
+            // NormalizeWorkbookRoot) instead of dropping it. Seed the reserved-id pool with every id
+            // already used in xl/_rels/workbook.xml.rels so a minted placeholder id can never collide
+            // with -- and thereby accidentally resolve against -- an unrelated real relationship (e.g.
+            // a worksheet/styles/theme rId), matching XlsxExternalLinkReferencePreserver's guard.
+            var reservedRelationshipIds = XlsxRelationshipReader.LoadTargets(
+                archive,
+                "xl/_rels/workbook.xml.rels",
+                "xl/workbook.xml",
+                packageRelNs).Keys;
+
+            if (XlsxWorkbookExternalReferencesNormalizer.NormalizeWorkbookRoot(
+                    root,
+                    workbookNs,
+                    reservedRelationshipIds))
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
         }
 

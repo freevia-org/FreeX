@@ -137,7 +137,7 @@ internal static class XlsxX14DataValidationReader
             if (ranges.Count == 0)
                 continue;
 
-            var existing = FindExisting(sheet, ranges[0]);
+            var existing = FindExisting(sheet, ranges[0], ParseDvType(metadata.TypeStr));
             if (existing is not null)
             {
                 // Merge: populate Formula1 from the x14 block (legacy had empty formula1).
@@ -268,23 +268,43 @@ internal static class XlsxX14DataValidationReader
     }
 
     /// <summary>
-    /// Finds a DataValidation in the sheet whose primary range (row/col) matches the given range.
-    /// Sheet IDs may differ (temp SheetId used during parsing), so only rows/cols are compared.
+    /// Finds the legacy DataValidation that a given x14 metadata entry belongs to. Sheet IDs may
+    /// differ (temp SheetId used during parsing), so only rows/cols are compared.
+    ///
+    /// Two independent rules can share the same primary range -- e.g. an unrelated Custom rule on
+    /// "A1:A10" and a separate cross-sheet List rule that also starts at "A1:A10" but spans
+    /// "A1:A10 C1:C10" via the x14 extension. Matching on the primary range alone picks whichever
+    /// rule happens to appear first in <see cref="Sheet.DataValidations"/> (i.e. earliest in the
+    /// worksheet XML document order), which can wire the x14 formula onto the wrong rule and leave
+    /// the real List rule permanently inert (R99).
+    ///
+    /// Excel's own on-disk convention gives the correct candidate two identifying traits: its
+    /// <see cref="DataValidation.Type"/> matches the x14 block's own type attribute, and its
+    /// <see cref="DataValidation.Formula1"/> is empty/inert (the legacy element intentionally
+    /// carries no formula for an x14-backed rule -- the real formula lives only in the extLst).
+    /// Prefer a candidate satisfying both; fall back to a range-only match only when no such
+    /// candidate exists, preserving prior behavior for the common single-rule-per-range case.
     /// </summary>
-    private static DataValidation? FindExisting(Sheet sheet, GridRange range)
+    private static DataValidation? FindExisting(Sheet sheet, GridRange range, DvType expectedType)
     {
+        DataValidation? rangeOnlyFallback = null;
         foreach (var dv in sheet.DataValidations)
         {
-            if (dv.AppliesTo.Start.Row == range.Start.Row &&
-                dv.AppliesTo.Start.Col == range.Start.Col &&
-                dv.AppliesTo.End.Row == range.End.Row &&
-                dv.AppliesTo.End.Col == range.End.Col)
+            if (dv.AppliesTo.Start.Row != range.Start.Row ||
+                dv.AppliesTo.Start.Col != range.Start.Col ||
+                dv.AppliesTo.End.Row != range.End.Row ||
+                dv.AppliesTo.End.Col != range.End.Col)
             {
-                return dv;
+                continue;
             }
+
+            rangeOnlyFallback ??= dv;
+
+            if (dv.Type == expectedType && string.IsNullOrEmpty(dv.Formula1))
+                return dv;
         }
 
-        return null;
+        return rangeOnlyFallback;
     }
 
     private static List<GridRange> ParseSqrefRanges(string sqref, SheetId sheetId)

@@ -525,6 +525,17 @@ internal static class NamedDefinitionRecalcHelper
     /// over-inclusion — it is simply recomputed to the same value it already had, since actual name
     /// resolution (elsewhere) is unaffected by this scan.
     /// </summary>
+    /// <remarks>
+    /// A candidate cell's AST is also expanded through any OTHER named FORMULA it references (any
+    /// depth, cycle-guarded), because <paramref name="name"/> may be reached only transitively — e.g.
+    /// named formula "DoubleRate" is defined as "=Rate*2" and a cell contains "=DoubleRate": redefining
+    /// "Rate" must still recalc that cell even though its own formula text never mentions "Rate"
+    /// directly. This mirrors RecalcEngine.CollectReferences' own recursive named-formula expansion
+    /// (the <c>namedFormulaStack</c> parameter there), which is why the dependency graph itself
+    /// already resolves this transitively for ordinary cell edits — this scan just needs to match
+    /// that same reach for the name-redefinition case, since it can't call into RecalcEngine
+    /// directly (FreeX.Core.Commands doesn't reference FreeX.Core.Calc).
+    /// </remarks>
     internal static List<CellAddress> FindCellsReferencingName(Workbook workbook, string name, SheetId? scopeSheetId)
     {
         var result = new List<CellAddress>();
@@ -540,7 +551,7 @@ internal static class NamedDefinitionRecalcHelper
                 if (cell?.FormulaText is not { } formulaText)
                     continue;
 
-                if (ReferencesName(formulaText, name, scopeSheetId, isScopeSheet, scopeSheetName))
+                if (ReferencesName(formulaText, name, workbook, sheet.Id, scopeSheetId, isScopeSheet, scopeSheetName))
                     result.Add(address);
             }
         }
@@ -548,12 +559,19 @@ internal static class NamedDefinitionRecalcHelper
     }
 
     private static bool ReferencesName(
-        string formulaText, string name, SheetId? scopeSheetId, bool isScopeSheet, string? scopeSheetName)
+        string formulaText,
+        string name,
+        Workbook workbook,
+        SheetId scanSheetId,
+        SheetId? scopeSheetId,
+        bool isScopeSheet,
+        string? scopeSheetName)
     {
         try
         {
             var ast = new Parser(new Lexer(formulaText).Tokenize()).Parse();
-            return ReferencesName(ast, name, scopeSheetId, isScopeSheet, scopeSheetName);
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            return ReferencesName(ast, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited);
         }
         catch (FormulaParseException)
         {
@@ -562,17 +580,86 @@ internal static class NamedDefinitionRecalcHelper
     }
 
     private static bool ReferencesName(
-        FormulaNode node, string name, SheetId? scopeSheetId, bool isScopeSheet, string? scopeSheetName) => node switch
+        FormulaNode node,
+        string name,
+        Workbook workbook,
+        SheetId scanSheetId,
+        SheetId? scopeSheetId,
+        bool isScopeSheet,
+        string? scopeSheetName,
+        HashSet<string> visited) => node switch
     {
-        NamedRangeNode named => string.Equals(named.Name, name, StringComparison.OrdinalIgnoreCase)
-            && MatchesScope(named, scopeSheetId, isScopeSheet, scopeSheetName),
-        BinaryOpNode binary => ReferencesName(binary.Left, name, scopeSheetId, isScopeSheet, scopeSheetName)
-            || ReferencesName(binary.Right, name, scopeSheetId, isScopeSheet, scopeSheetName),
-        UnaryOpNode unary => ReferencesName(unary.Operand, name, scopeSheetId, isScopeSheet, scopeSheetName),
+        NamedRangeNode named =>
+            (string.Equals(named.Name, name, StringComparison.OrdinalIgnoreCase)
+                && MatchesScope(named, scopeSheetId, isScopeSheet, scopeSheetName))
+            || ReferencesNameTransitively(named, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited),
+        BinaryOpNode binary => ReferencesName(binary.Left, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited)
+            || ReferencesName(binary.Right, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited),
+        UnaryOpNode unary => ReferencesName(unary.Operand, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited),
         FunctionCallNode function => function.Arguments.Any(arg =>
-            ReferencesName(arg, name, scopeSheetId, isScopeSheet, scopeSheetName)),
+            ReferencesName(arg, name, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited)),
         _ => false
     };
+
+    /// <summary>
+    /// When <paramref name="named"/> is itself a reference to a DIFFERENT named FORMULA (not the
+    /// redefined <paramref name="targetName"/> directly, and not a plain named range — a range can't
+    /// itself reference another name), resolves that formula's text the same way
+    /// RecalcEngine.CollectReferences' NamedRangeNode case does — sheet-scoped-formula-first, then
+    /// workbook-global, with an explicit <see cref="NamedRangeNode.SheetQualifier"/> resolving
+    /// against ITS OWN sheet's scope rather than <paramref name="scanSheetId"/> — and recurses into
+    /// its parsed AST to see if IT (transitively) references <paramref name="targetName"/>.
+    /// <paramref name="scanSheetId"/> is held constant through the recursion (mirroring
+    /// RecalcEngine's invariant <c>defaultSheetId</c>): a named formula's body resolves relative to
+    /// the USING cell's sheet, not the sheet the name happens to be scoped to.
+    /// <paramref name="visited"/> is a cycle guard (by name text, matching RecalcEngine's
+    /// <c>namedFormulaStack</c>) so a formula that (illegally, but possibly present in a malformed
+    /// file) refers to itself directly or indirectly can't recurse forever.
+    /// </summary>
+    private static bool ReferencesNameTransitively(
+        NamedRangeNode named,
+        string targetName,
+        Workbook workbook,
+        SheetId scanSheetId,
+        SheetId? scopeSheetId,
+        bool isScopeSheet,
+        string? scopeSheetName,
+        HashSet<string> visited)
+    {
+        var resolveSheetId = scanSheetId;
+        if (named.SheetQualifier is { } sheetQualifier)
+        {
+            var qualifiedSheet = workbook.GetSheet(sheetQualifier);
+            if (qualifiedSheet is null)
+                return false;
+            resolveSheetId = qualifiedSheet.Id;
+        }
+
+        var sheetScopedIsFormula = workbook.ScopedNamedFormulas.ContainsKey((named.Name, resolveSheetId));
+        if (!sheetScopedIsFormula && workbook.TryGetNamedRange(named.Name, resolveSheetId, out _))
+            return false;
+
+        var formulaText = workbook.TryGetNamedFormulaText(named.Name, resolveSheetId);
+        if (string.IsNullOrWhiteSpace(formulaText))
+            return false;
+
+        if (!visited.Add(named.Name))
+            return false;
+
+        try
+        {
+            var nestedAst = new Parser(new Lexer(formulaText).Tokenize()).Parse();
+            return ReferencesName(nestedAst, targetName, workbook, scanSheetId, scopeSheetId, isScopeSheet, scopeSheetName, visited);
+        }
+        catch (FormulaParseException)
+        {
+            return false;
+        }
+        finally
+        {
+            visited.Remove(named.Name);
+        }
+    }
 
     /// <summary>
     /// A workbook-global name (<paramref name="scopeSheetId"/> is null) matches any reference to

@@ -289,6 +289,16 @@ internal static class XlsxChartSeriesRangeReader
     /// series get no entry, so <c>GetVerbatimFormulas</c> returns null for them and the ordinary
     /// positional/cached path in <c>XlsxChartXmlWriter</c> applies unchanged.
     /// </para>
+    /// <para>
+    /// R99-io-chart-series-verbatim-container-scope: within a flagged series, each of the four
+    /// fields (Tx/Cat(or xVal)/Val(or yVal)/BubbleSize) is populated independently — only when
+    /// THAT container's own formula fails to parse. A series can be flagged because e.g. its
+    /// bubbleSize formula is an external-workbook link while its xVal/yVal formulas are ordinary
+    /// resolvable ranges; without this, the writer's `is null` checks (which key the numCache/
+    /// strCache/numRef-vs-strRef decision per container) would see every field populated once the
+    /// series is flagged at all, and would drop the cache / downgrade the ref type for containers
+    /// that were never actually unparsable.
+    /// </para>
     /// </summary>
     public static List<ChartSeriesVerbatimFormulas>? TryCollectVerbatimFormulas(
         IEnumerable<XElement> allSeriesElements,
@@ -312,13 +322,28 @@ internal static class XlsxChartSeriesRangeReader
             // to repurpose.
             (result ??= []).Add(new ChartSeriesVerbatimFormulas(
                 SeriesIndex: seriesIndex,
-                ValFormula: ReadFirstFormula(series, isScatterOrBubble ? "yVal" : "val"),
-                CatFormula: ReadFirstFormula(series, isScatterOrBubble ? "xVal" : "cat"),
-                TxFormula: ReadFirstFormula(series, "tx"),
-                BubbleSizeFormula: ReadFirstFormula(series, "bubbleSize")));
+                ValFormula: CaptureFormulaIfUnparsable(series, isScatterOrBubble ? "yVal" : "val", sheetId),
+                CatFormula: CaptureFormulaIfUnparsable(series, isScatterOrBubble ? "xVal" : "cat", sheetId),
+                TxFormula: CaptureFormulaIfUnparsable(series, "tx", sheetId),
+                BubbleSizeFormula: CaptureFormulaIfUnparsable(series, "bubbleSize", sheetId)));
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Returns the container's own formula text only when THAT formula itself fails to parse as a
+    /// rectangular <see cref="GridRange"/>; returns null when the container is absent, empty, or
+    /// its formula parses fine — even if a sibling container in the same series needed the
+    /// verbatim bypass. See R99-io-chart-series-verbatim-container-scope above.
+    /// </summary>
+    private static string? CaptureFormulaIfUnparsable(XElement series, string containerName, SheetId sheetId)
+    {
+        var formula = ReadFirstFormula(series, containerName);
+        if (formula is null)
+            return null;
+
+        return TryParseFormulaRange(formula, sheetId, out _) ? null : formula;
     }
 
     /// <summary>
