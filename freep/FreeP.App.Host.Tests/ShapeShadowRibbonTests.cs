@@ -75,6 +75,84 @@ public sealed class ShapeShadowRibbonTests
     }
 
     [Fact]
+    public void ShapeFillTransparencyPresets_AreDefinedAndUndoable()
+    {
+        var definition = FreePRibbon.Build();
+        var illustrations = definition.Tabs
+            .SelectMany(tab => tab.Groups)
+            .Single(group => group.Id == "illustrations");
+
+        foreach (var commandId in new[]
+        {
+            ShapeFillAuthoringPlanner.OpaqueCommandId,
+            ShapeFillAuthoringPlanner.HalfCommandId,
+            ShapeFillAuthoringPlanner.TransparentCommandId,
+        })
+        {
+            illustrations.Controls.Should().Contain(control => control.CommandId.Value == commandId);
+        }
+
+        var presentation = Presentation.CreateEmpty();
+        var shape = new SlideShape
+        {
+            Id = 505,
+            Kind = SlideShapeKind.AutoShape,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00))),
+        };
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        var editor = new EditingSession(presentation, bus);
+        editor.Select(shape.Id);
+
+        var registry = FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+        registry.TryGet(ShapeFillAuthoringPlanner.HalfCommandId, out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.Empty);
+
+        ((ShapeFill.Solid)shape.Fill!).Color.Alpha.Should().Be(128);
+        editor.Undo();
+        ((ShapeFill.Solid)shape.Fill!).Color.Alpha.Should().Be(255);
+    }
+
+    [Fact]
+    public void ShapeOutlineTransparencyPresets_AreDefinedAndUndoable()
+    {
+        var definition = FreePRibbon.Build();
+        var illustrations = definition.Tabs
+            .SelectMany(tab => tab.Groups)
+            .Single(group => group.Id == "illustrations");
+
+        foreach (var commandId in new[]
+        {
+            ShapeOutlineAuthoringPlanner.OpaqueCommandId,
+            ShapeOutlineAuthoringPlanner.HalfCommandId,
+            ShapeOutlineAuthoringPlanner.TransparentCommandId,
+        })
+        {
+            illustrations.Controls.Should().Contain(control => control.CommandId.Value == commandId);
+        }
+
+        var presentation = Presentation.CreateEmpty();
+        var shape = new SlideShape
+        {
+            Id = 506,
+            Kind = SlideShapeKind.AutoShape,
+            Outline = new ShapeOutline.Visible(new SrgbColor(0x00, 0x70, 0xC0)),
+        };
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        var editor = new EditingSession(presentation, bus);
+        editor.Select(shape.Id);
+
+        var registry = FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+        registry.TryGet(ShapeOutlineAuthoringPlanner.HalfCommandId, out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.Empty);
+
+        ((ShapeOutline.Visible)shape.Outline!).Color.Alpha.Should().Be(128);
+        editor.Undo();
+        ((ShapeOutline.Visible)shape.Outline!).Color.Alpha.Should().Be(255);
+    }
+
+    [Fact]
     public void ShapeSoftEdgePresets_AreDefinedAndRoutedByHost()
     {
         var definition = FreePRibbon.Build();

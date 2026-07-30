@@ -50,6 +50,9 @@ public sealed class SmartArtTests : IDisposable
         bool pictureAccentList = false,
         bool pictureStack = false,
         bool pictureLineup = false,
+        bool pictureStrips = false,
+        bool horizontalPictureList = false,
+        bool verticalPictureList = false,
         bool continuousPictureList = false,
         bool pictureGrid = false,
         bool includeNodeImage = false,
@@ -85,7 +88,7 @@ public sealed class SmartArtTests : IDisposable
         {
             var text = nodeTexts[nodeIndex];
             int idx = shapeIdx++;
-            if ((pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || continuousPictureList || pictureGrid)
+            if ((pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || horizontalPictureList || verticalPictureList || continuousPictureList || pictureGrid)
                 && includeNodeImage
                 && (pictureNodeIndexes is null || pictureNodeIndexes.Contains(nodeIndex)))
             {
@@ -137,7 +140,7 @@ public sealed class SmartArtTests : IDisposable
                 new XElement(dspNs + "spTree", fallbackEls)));
 
         // Build minimal diagram data XML (just a root element)
-        var dataXml = pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || continuousPictureList || pictureGrid
+        var dataXml = pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || horizontalPictureList || verticalPictureList || continuousPictureList || pictureGrid
             ? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
                 new XElement(dgmNs + "dataModel",
                     new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
@@ -158,11 +161,17 @@ public sealed class SmartArtTests : IDisposable
         var layoutXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(dgmNs + "layoutDef",
                 new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
-                pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || continuousPictureList || pictureGrid
+                pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || horizontalPictureList || verticalPictureList || continuousPictureList || pictureGrid
                     ? new XAttribute("uniqueId", pictureGrid
                         ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid"
                         : continuousPictureList
                             ? "urn:microsoft.com/office/officeart/2005/8/layout/continuousPictureList"
+                        : pictureStrips
+                            ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureStrips"
+                        : horizontalPictureList
+                            ? "urn:microsoft.com/office/officeart/2005/8/layout/horizontalPictureList"
+                        : verticalPictureList
+                            ? "urn:microsoft.com/office/officeart/2005/8/layout/verticalPictureList"
                         : pictureLineup
                             ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureLineup"
                         : pictureStack
@@ -967,11 +976,16 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.AlternatingProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.ArrowRibbon, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.CircleProcess, SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.CircleArrowProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.FunnelProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.TrapezoidList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.VerticalArrowList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.MultidirectionalCycle, SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.SegmentedCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.ContinuousCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.GearCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.TextCycle, SmartArtFamily.Cycle)]
@@ -983,14 +997,17 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.DescendingBlockList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicPyramid, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PyramidList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.InvertedPyramid, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.RadialCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicRadial, SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.RadialCluster, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.RadialList, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicMatrix, SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.TitledMatrix, SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.BasicRelationship, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.OpposingIdeas, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.ConvergingRadial, SmartArtFamily.Relationship)]
+    [InlineData(SmartArtLayoutPreset.DivergingRadial, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.BasicVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.RadialVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.TargetList, SmartArtFamily.Relationship)]
@@ -1005,6 +1022,9 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.PictureAccentList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureStack, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureLineup, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.PictureStrips, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.HorizontalPictureList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.VerticalPictureList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.ContinuousPictureList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PictureGrid, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.LabeledHierarchy, SmartArtFamily.Hierarchy)]
@@ -1019,9 +1039,12 @@ public sealed class SmartArtTests : IDisposable
             pictureAccentList: preset == SmartArtLayoutPreset.PictureAccentList,
             pictureStack: preset == SmartArtLayoutPreset.PictureStack,
             pictureLineup: preset == SmartArtLayoutPreset.PictureLineup,
+            pictureStrips: preset == SmartArtLayoutPreset.PictureStrips,
+            horizontalPictureList: preset == SmartArtLayoutPreset.HorizontalPictureList,
+            verticalPictureList: preset == SmartArtLayoutPreset.VerticalPictureList,
             continuousPictureList: preset == SmartArtLayoutPreset.ContinuousPictureList,
             pictureGrid: preset == SmartArtLayoutPreset.PictureGrid,
-            includeNodeImage: preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid));
+            includeNodeImage: preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.HorizontalPictureList or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid or SmartArtLayoutPreset.VerticalPictureList));
         var savedPath = Path.Combine(_tempDir, $"smartart-layout-{preset}.pptx");
         var presentation = PptxPackageReader.Read(sourcePath);
         var smartArt = presentation.Slides[0].Shapes
@@ -2385,6 +2408,24 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesVerticalArrowListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList",
+            nodes: [("id1", "Step 1"), ("id2", "Step 2"), ("id3", "Step 3")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "verticalArrowList is admitted to the shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Step 1", "Step 2", "Step 3");
+    }
+
+    [Fact]
     public void Compositor_VerticalChevronListSmartArt_RendersAllNodesBeyondOriginalTwelveItemCutoff()
     {
         var nodes = Enumerable.Range(1, 13)
@@ -2468,6 +2509,24 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesInvertedPyramidAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid",
+            nodes: [("id1", "Market"), ("id2", "Product"), ("id3", "Team"), ("id4", "Task")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "invertedPyramid is admitted through the shared list-family live planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Market", "Product", "Team", "Task");
+    }
+
+    [Fact]
     public void Reader_ParsesBasicVennAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -2506,6 +2565,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesDivergingRadialAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/divergingRadial",
+            nodes: [("id1", "Central"), ("id2", "North"), ("id3", "East"), ("id4", "South")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship,
+            "divergingRadial is a relationship-family layout");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "divergingRadial must use the editable shared relationship planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Central", "North", "East", "South");
+    }
+
+    [Fact]
     public void Reader_ParsesTargetListAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -2540,6 +2618,44 @@ public sealed class SmartArtTests : IDisposable
             "basicCycle is a cycle-family layout and should stay renderer-neutral");
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
             "basicCycle is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Discover", "Plan", "Build", "Review");
+    }
+
+    [Fact]
+    public void Reader_ParsesSegmentedCycleAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/segmentedCycle",
+            nodes: [("id1", "Discover"), ("id2", "Plan"), ("id3", "Build"), ("id4", "Review")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "segmentedCycle is a cycle-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "segmentedCycle is admitted through the shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Discover", "Plan", "Build", "Review");
+    }
+
+    [Fact]
+    public void Reader_ParsesMultidirectionalCycleAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/multidirectionalCycle",
+            nodes: [("id1", "Discover"), ("id2", "Plan"), ("id3", "Build"), ("id4", "Review")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "multidirectionalCycle is a cycle-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "multidirectionalCycle is admitted through the shared live-layout planner");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Discover", "Plan", "Build", "Review");
     }
 
@@ -2598,6 +2714,25 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
             "radial1 is in the bounded shared live-layout planner");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Core", "Branch A", "Branch B");
+    }
+
+    [Fact]
+    public void Reader_ParsesRadialClusterAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2008/layout/RadialCluster",
+            nodes: [("id1", "Theme"), ("id2", "North"), ("id3", "East"), ("id4", "South")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "RadialCluster is a cycle-family central-idea layout");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "RadialCluster is admitted through the shared hub-and-spoke planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Theme", "North", "East", "South");
     }
 
     [Fact]
@@ -3784,6 +3919,29 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_InvertedPyramidSmartArt_RendersSharedLiveSegments()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid",
+            nodes: [("n1", "Market"), ("n2", "Product"), ("n3", "Team"), ("n4", "Task")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(4, "four inverted-pyramid bands should render from shared live data");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Market", "Product", "Team", "Task");
+        liveShapes.Select(op => op.BoundsDip.Y).Should().BeInAscendingOrder();
+        liveShapes.Select(op => op.BoundsDip.Width).Should().BeInDescendingOrder();
+    }
+
+    [Fact]
     public void Compositor_BasicVennSmartArt_RendersSharedLiveEllipses()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -3972,6 +4130,58 @@ public sealed class SmartArtTests : IDisposable
         var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
 
         liveShapes.Should().HaveCount(8, "four basic-cycle boxes plus four connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Discover");
+        renderedText.Should().Contain("Review");
+    }
+
+    [Fact]
+    public void Compositor_SegmentedCycleSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/segmentedCycle",
+            nodes: [("n1", "Discover"), ("n2", "Plan"), ("n3", "Build"), ("n4", "Review")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(8, "four segmented-cycle boxes plus four connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Discover");
+        renderedText.Should().Contain("Review");
+    }
+
+    [Fact]
+    public void Compositor_MultidirectionalCycleSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/multidirectionalCycle",
+            nodes: [("n1", "Discover"), ("n2", "Plan"), ("n3", "Build"), ("n4", "Review")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(8, "four multidirectional-cycle boxes plus four connectors should render from shared live data");
         var renderedText = liveShapes
             .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .ToList();

@@ -81,6 +81,9 @@ public static class SmartArtLayoutEngine
         if (IsVerticalBulletListLayout(data.LayoutUniqueId))
             return LayoutVerticalBulletList(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsVerticalPictureListLayout(data.LayoutUniqueId))
+            return LayoutPictureCaptionList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsPictureCaptionListLayout(data.LayoutUniqueId))
             return LayoutPictureCaptionList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -111,6 +114,9 @@ public static class SmartArtLayoutEngine
         if (IsBasicRadialLayout(data.LayoutUniqueId))
             return LayoutBasicRadial(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsRadialClusterLayout(data.LayoutUniqueId))
+            return LayoutRadialCluster(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsRadialListLayout(data.LayoutUniqueId))
             return LayoutRadialList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -123,6 +129,9 @@ public static class SmartArtLayoutEngine
         if (IsCircleProcessLayout(data.LayoutUniqueId))
             return LayoutCircleProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsCircleArrowProcessLayout(data.LayoutUniqueId))
+            return LayoutCircleArrowProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsFunnelProcessLayout(data.LayoutUniqueId))
             return LayoutFunnelProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -131,6 +140,9 @@ public static class SmartArtLayoutEngine
 
         if (IsVerticalChevronListLayout(data.LayoutUniqueId))
             return LayoutVerticalChevronList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
+        if (IsVerticalArrowListLayout(data.LayoutUniqueId))
+            return LayoutVerticalArrowList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
         if (IsHorizontalBulletListLayout(data.LayoutUniqueId))
             return LayoutHorizontalBulletList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
@@ -149,6 +161,9 @@ public static class SmartArtLayoutEngine
 
         if (IsPyramidListLayout(data.LayoutUniqueId))
             return LayoutPyramidList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
+        if (IsInvertedPyramidLayout(data.LayoutUniqueId))
+            return LayoutInvertedPyramid(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
         if (IsTitledMatrixLayout(data.LayoutUniqueId))
             return LayoutTitledMatrix(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
@@ -183,6 +198,8 @@ public static class SmartArtLayoutEngine
                     ? LayoutOpposingIdeas(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                 : IsConvergingRadialLayout(data.LayoutUniqueId)
                     ? LayoutConvergingRadial(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
+                : IsDivergingRadialLayout(data.LayoutUniqueId)
+                    ? LayoutDivergingRadial(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                 : IsRadialVennLayout(data.LayoutUniqueId)
                     ? LayoutRadialVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                     : IsTargetListLayout(data.LayoutUniqueId)
@@ -931,6 +948,18 @@ public static class SmartArtLayoutEngine
     }
 
     /// <summary>
+    /// Circle Arrow Process keeps its native layout identity for authoring,
+    /// save/reopen, and cache regeneration. The current line-shape model cannot
+    /// express PowerPoint's curved arrowheads, so it reuses live circular stage
+    /// geometry until that connector primitive exists.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutCircleArrowProcess(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan) =>
+        LayoutCircleProcess(nodes, fx, fy, fcx, fcy, stylePlan);
+
+    /// <summary>
     /// Funnel process geometry: ordered stages stack vertically and narrow toward
     /// the bottom while connectors keep WPF/Avalonia on the same shared DrawOp path.
     /// </summary>
@@ -1062,6 +1091,42 @@ public static class SmartArtLayoutEngine
         {
             var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
             shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, leftX, curY, boxW, boxH));
+            curY += boxH + gapY;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Vertical Arrow List geometry: editable down-arrow stages stack from top
+    /// to bottom and use the shared list style plan. The arrow bodies carry the
+    /// progression cue, so no separate connector shapes are emitted.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutVerticalArrowList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>(n);
+        if (n == 0)
+            return shapes;
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapY = Math.Max((long)(fcy * GapFrac * 0.65), 1L);
+        long boxW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long availableH = Math.Max(fcy - 2 * outerPadY - (n - 1) * gapY, 1L);
+        long boxH = Math.Max(availableH / n, 1L);
+        long curY = fy + outerPadY;
+
+        for (int i = 0; i < n; i++)
+        {
+            var style = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
+            shapes.Add(MakeBox(
+                (uint)(760 + i), nodes[i].Text, style,
+                fx + outerPadX, curY, boxW, boxH,
+                NodeFontSizePt, DrawingShapeKind.DownArrow));
             curY += boxH + gapY;
         }
 
@@ -1726,6 +1791,55 @@ public static class SmartArtLayoutEngine
     }
 
     /// <summary>
+    /// Inverted Pyramid geometry keeps the authored hierarchy as descending
+    /// centered bands and terminates in a downward point. The native layout
+    /// identity remains distinct so Change Layout and package round-trip do not
+    /// collapse this route into Pyramid List.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutInvertedPyramid(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>();
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapY = Math.Max((long)(fcy * 0.01), 1L);
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long availH = Math.Max(fcy - 2 * outerPadY - (n - 1) * gapY, 1L);
+        long bandH = Math.Max(availH / Math.Max(n, 1), 1L);
+        double minWidthFrac = n == 1 ? 1.0 : 0.30;
+        uint idCounter = 540;
+        long curY = fy + outerPadY;
+
+        for (int i = 0; i < n; i++)
+        {
+            double t = n == 1 ? 1.0 : (double)i / (n - 1);
+            double widthFrac = 1.0 - ((1.0 - minWidthFrac) * t);
+            long bandW = Math.Max((long)(innerW * widthFrac), 1L);
+            long x = fx + outerPadX + (innerW - bandW) / 2;
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
+            var kind = i == n - 1 ? DrawingShapeKind.Triangle : DrawingShapeKind.Trapezoid;
+
+            shapes.Add(MakeBox(
+                idCounter++,
+                nodes[i].Text,
+                nodeStyle,
+                x,
+                curY,
+                bandW,
+                bandH,
+                NodeFontSizePt,
+                kind));
+
+            curY += bandH + gapY;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
     /// Basic Venn geometry: overlapping translucent ellipses centered in the
     /// frame. This models bounded relationship-family placement with shared
     /// shape ops, not exact PowerPoint blend math or text offsets.
@@ -1851,6 +1965,86 @@ public static class SmartArtLayoutEngine
                 idCounter++, nodes[i].Text, nodeStyle,
                 x, y, arrowW, arrowH,
                 NodeFontSizePt, shapeKind));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Diverging Radial geometry: the first logical node is the central idea and
+    /// the remaining nodes radiate outward as equal circles. This keeps the
+    /// native relationship layout live and editable in both hosts instead of
+    /// falling back to the cached SmartArt drawing.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutDivergingRadial(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Count < 2)
+            return null;
+
+        long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long padY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);
+        long innerCx = Math.Max(fcx - 2 * padX, 1L);
+        long innerCy = Math.Max(fcy - 2 * padY, 1L);
+        double centerX = fx + padX + innerCx / 2.0;
+        double centerY = fy + padY + innerCy / 2.0;
+
+        long centerDiameter = Math.Max((long)(Math.Min(innerCx, innerCy) * 0.27), 1L);
+        uint idCounter = 548;
+        var shapes = new List<SlideShape>(1 + (nodes.Count - 1) * 2);
+        var centerStyle = stylePlan.GetNodeStyle(0, nodes[0].Level, SmartArtFamily.Relationship);
+        shapes.Add(MakeBox(
+            idCounter++, nodes[0].Text, centerStyle,
+            (long)(centerX - centerDiameter / 2.0),
+            (long)(centerY - centerDiameter / 2.0),
+            centerDiameter,
+            centerDiameter,
+            NodeFontSizeLargePt,
+            DrawingShapeKind.Ellipse));
+
+        int outerCount = nodes.Count - 1;
+        double angleStep = 360.0 / outerCount;
+        double radiusX = innerCx / 2.0 * 0.70;
+        double radiusY = innerCy / 2.0 * 0.70;
+        double halfChord = Math.Sin(Math.PI / outerCount);
+        double outerDiameterFrac = outerCount == 1
+            ? 0.20
+            : Math.Min(0.20, halfChord * 0.62);
+        long outerDiameter = Math.Max(
+            (long)(Math.Min(innerCx, innerCy) * outerDiameterFrac),
+            1L);
+        var outerCenters = new (double x, double y)[outerCount];
+
+        for (int i = 0; i < outerCount; i++)
+        {
+            double angle = (-90 + i * angleStep) * Math.PI / 180.0;
+            outerCenters[i] = (
+                centerX + radiusX * Math.Cos(angle),
+                centerY + radiusY * Math.Sin(angle));
+            shapes.Add(MakeConnector(
+                idCounter++,
+                (long)centerX,
+                (long)centerY,
+                (long)outerCenters[i].x,
+                (long)outerCenters[i].y,
+                stylePlan.Connector));
+        }
+
+        for (int i = 0; i < outerCount; i++)
+        {
+            var node = nodes[i + 1];
+            var nodeStyle = stylePlan.GetNodeStyle(i + 1, node.Level, SmartArtFamily.Relationship);
+            shapes.Add(MakeBox(
+                idCounter++, node.Text,
+                nodeStyle,
+                (long)(outerCenters[i].x - outerDiameter / 2.0),
+                (long)(outerCenters[i].y - outerDiameter / 2.0),
+                outerDiameter,
+                outerDiameter,
+                NodeFontSizePt,
+                DrawingShapeKind.Ellipse));
         }
 
         return shapes;
@@ -2239,6 +2433,17 @@ public static class SmartArtLayoutEngine
 
         return shapes;
     }
+
+    /// <summary>
+    /// Radial Cluster shares the authored central-idea/outer-node contract with
+    /// Diverging Radial, while keeping its native layout identity distinct for
+    /// Change Layout and package round-trip operations.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutRadialCluster(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+        => LayoutDivergingRadial(nodes, fx, fy, fcx, fcy, stylePlan);
 
     /// <summary>
     /// Radial List geometry: every list item radiates from the shared center while
@@ -3053,7 +3258,7 @@ public static class SmartArtLayoutEngine
             return false;
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
-        return id.Split('/').Last() is "picturelineup" or "continuouspicturelist";
+        return id.Split('/').Last() is "picturelineup" or "picturestrips" or "horizontalpicturelist" or "continuouspicturelist";
     }
 
     private static bool IsPictureGridLayout(string uniqueId)
@@ -3063,6 +3268,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "picturegrid", StringComparison.Ordinal);
+    }
+
+    private static bool IsVerticalPictureListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "verticalpicturelist", StringComparison.Ordinal);
     }
 
     private static bool IsAlternatingProcessLayout(string uniqueId)
@@ -3110,6 +3324,15 @@ public static class SmartArtLayoutEngine
         return string.Equals(id.Split('/').Last(), "radial1", StringComparison.Ordinal);
     }
 
+    private static bool IsRadialClusterLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "radialcluster", StringComparison.Ordinal);
+    }
+
     private static bool IsRadialListLayout(string uniqueId)
     {
         if (string.IsNullOrWhiteSpace(uniqueId))
@@ -3146,6 +3369,15 @@ public static class SmartArtLayoutEngine
         return string.Equals(id.Split('/').Last(), "circleprocess", StringComparison.Ordinal);
     }
 
+    private static bool IsCircleArrowProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "circlearrowprocess", StringComparison.Ordinal);
+    }
+
     private static bool IsFunnelProcessLayout(string uniqueId)
     {
         if (string.IsNullOrWhiteSpace(uniqueId))
@@ -3171,6 +3403,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "verticalchevronlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsVerticalArrowListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "verticalarrowlist", StringComparison.Ordinal);
     }
 
     private static bool IsVerticalBulletListLayout(string uniqueId)
@@ -3216,6 +3457,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "pyramidlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsInvertedPyramidLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "invertedpyramid", StringComparison.Ordinal);
     }
 
     private static bool IsTitledMatrixLayout(string uniqueId)
@@ -3276,6 +3526,14 @@ public static class SmartArtLayoutEngine
             return false;
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "convergingradial", StringComparison.Ordinal);
+    }
+
+    private static bool IsDivergingRadialLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "divergingradial", StringComparison.Ordinal);
     }
 
     private static bool IsRadialVennLayout(string uniqueId)

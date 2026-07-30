@@ -78,14 +78,20 @@ public enum SmartArtLayoutPreset
     AlternatingProcess,
     ArrowRibbon,
     CircleProcess,
+    CircleArrowProcess,
     FunnelProcess,
     VerticalProcess,
     VerticalBoxList,
     VerticalChevronList,
+    VerticalArrowList,
     VerticalBulletList,
+    VerticalPictureList,
     HorizontalBulletList,
     HorizontalBlockList,
+    TrapezoidList,
     BasicCycle,
+    MultidirectionalCycle,
+    SegmentedCycle,
     ContinuousCycle,
     GearCycle,
     TextCycle,
@@ -97,8 +103,10 @@ public enum SmartArtLayoutPreset
     DescendingBlockList,
     BasicPyramid,
     PyramidList,
+    InvertedPyramid,
     RadialCycle,
     BasicRadial,
+    RadialCluster,
     RadialList,
     BasicMatrix,
     TitledMatrix,
@@ -106,6 +114,7 @@ public enum SmartArtLayoutPreset
     BasicRelationship,
     OpposingIdeas,
     ConvergingRadial,
+    DivergingRadial,
     BasicVenn,
     RadialVenn,
     TargetList,
@@ -120,6 +129,8 @@ public enum SmartArtLayoutPreset
     PictureAccentList,
     PictureStack,
     PictureLineup,
+    PictureStrips,
+    HorizontalPictureList,
     ContinuousPictureList,
     LabeledHierarchy,
     TableHierarchy,
@@ -215,14 +226,20 @@ public static class SmartArtAuthoringPlanner
     public const string AlternatingProcessLayoutCommandId = "freep.smartart.layout.alternating-process";
     public const string ArrowRibbonLayoutCommandId = "freep.smartart.layout.arrow-ribbon";
     public const string CircleProcessLayoutCommandId = "freep.smartart.layout.circle-process";
+    public const string CircleArrowProcessLayoutCommandId = "freep.smartart.layout.circle-arrow-process";
     public const string FunnelProcessLayoutCommandId = "freep.smartart.layout.funnel-process";
     public const string VerticalProcessLayoutCommandId = "freep.smartart.layout.vertical-process";
     public const string VerticalBoxListLayoutCommandId = "freep.smartart.layout.vertical-box-list";
     public const string VerticalChevronListLayoutCommandId = "freep.smartart.layout.vertical-chevron-list";
+    public const string VerticalArrowListLayoutCommandId = "freep.smartart.layout.vertical-arrow-list";
     public const string VerticalBulletListLayoutCommandId = "freep.smartart.layout.vertical-bullet-list";
+    public const string VerticalPictureListLayoutCommandId = "freep.smartart.layout.vertical-picture-list";
     public const string HorizontalBulletListLayoutCommandId = "freep.smartart.layout.horizontal-bullet-list";
     public const string HorizontalBlockListLayoutCommandId = "freep.smartart.layout.horizontal-block-list";
+    public const string TrapezoidListLayoutCommandId = "freep.smartart.layout.trapezoid-list";
     public const string BasicCycleLayoutCommandId = "freep.smartart.layout.basic-cycle";
+    public const string MultidirectionalCycleLayoutCommandId = "freep.smartart.layout.multidirectional-cycle";
+    public const string SegmentedCycleLayoutCommandId = "freep.smartart.layout.segmented-cycle";
     public const string ContinuousCycleLayoutCommandId = "freep.smartart.layout.continuous-cycle";
     public const string GearCycleLayoutCommandId = "freep.smartart.layout.gear-cycle";
     public const string TextCycleLayoutCommandId = "freep.smartart.layout.text-cycle";
@@ -234,8 +251,10 @@ public static class SmartArtAuthoringPlanner
     public const string DescendingBlockListLayoutCommandId = "freep.smartart.layout.descending-block-list";
     public const string BasicPyramidLayoutCommandId = "freep.smartart.layout.basic-pyramid";
     public const string PyramidListLayoutCommandId = "freep.smartart.layout.pyramid-list";
+    public const string InvertedPyramidLayoutCommandId = "freep.smartart.layout.inverted-pyramid";
     public const string RadialCycleLayoutCommandId = "freep.smartart.layout.radial-cycle";
     public const string BasicRadialLayoutCommandId = "freep.smartart.layout.basic-radial";
+    public const string RadialClusterLayoutCommandId = "freep.smartart.layout.radial-cluster";
     public const string RadialListLayoutCommandId = "freep.smartart.layout.radial-list";
     public const string BasicMatrixLayoutCommandId = "freep.smartart.layout.basic-matrix";
     public const string TitledMatrixLayoutCommandId = "freep.smartart.layout.titled-matrix";
@@ -243,6 +262,7 @@ public static class SmartArtAuthoringPlanner
     public const string BasicRelationshipLayoutCommandId = "freep.smartart.layout.basic-relationship";
     public const string OpposingIdeasLayoutCommandId = "freep.smartart.layout.opposing-ideas";
     public const string ConvergingRadialLayoutCommandId = "freep.smartart.layout.converging-radial";
+    public const string DivergingRadialLayoutCommandId = "freep.smartart.layout.diverging-radial";
     public const string BasicVennLayoutCommandId = "freep.smartart.layout.basic-venn";
     public const string RadialVennLayoutCommandId = "freep.smartart.layout.radial-venn";
     public const string TargetListLayoutCommandId = "freep.smartart.layout.target-list";
@@ -257,6 +277,8 @@ public static class SmartArtAuthoringPlanner
     public const string PictureAccentListLayoutCommandId = "freep.smartart.layout.picture-accent-list";
     public const string PictureStackLayoutCommandId = "freep.smartart.layout.picture-stack";
     public const string PictureLineupLayoutCommandId = "freep.smartart.layout.picture-lineup";
+    public const string PictureStripsLayoutCommandId = "freep.smartart.layout.picture-strips";
+    public const string HorizontalPictureListLayoutCommandId = "freep.smartart.layout.horizontal-picture-list";
     public const string ContinuousPictureListLayoutCommandId = "freep.smartart.layout.continuous-picture-list";
     public const string LabeledHierarchyLayoutCommandId = "freep.smartart.layout.labeled-hierarchy";
     public const string TableHierarchyLayoutCommandId = "freep.smartart.layout.table-hierarchy";
@@ -458,8 +480,11 @@ public static class SmartArtAuthoringPlanner
             SmartArtLayoutPreset.PictureAccentList or
             SmartArtLayoutPreset.PictureStack or
             SmartArtLayoutPreset.PictureLineup or
+            SmartArtLayoutPreset.PictureStrips or
+            SmartArtLayoutPreset.HorizontalPictureList or
             SmartArtLayoutPreset.ContinuousPictureList or
-            SmartArtLayoutPreset.PictureGrid);
+            SmartArtLayoutPreset.PictureGrid or
+            SmartArtLayoutPreset.VerticalPictureList);
         if (pictureLayout && (smartArt.Data is null || smartArt.Data.Nodes.Count == 0))
         {
             return NotAppliedLayout("Picture-based SmartArt layouts require a SmartArt data model with at least one node.");
@@ -519,6 +544,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/arrowRibbon", SmartArtFamily.Process),
             SmartArtLayoutPreset.CircleProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/circleProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.CircleArrowProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/circleArrowProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.FunnelProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.VerticalProcess =>
@@ -527,14 +554,24 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalChevronList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalChevronList", SmartArtFamily.List),
+            SmartArtLayoutPreset.VerticalArrowList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalBulletList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.VerticalPictureList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/verticalPictureList", SmartArtFamily.List),
             SmartArtLayoutPreset.HorizontalBulletList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBulletList", SmartArtFamily.List),
             SmartArtLayoutPreset.HorizontalBlockList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBlockList", SmartArtFamily.List),
+            SmartArtLayoutPreset.TrapezoidList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/trapezoidList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.MultidirectionalCycle =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/multidirectionalCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.SegmentedCycle =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/segmentedCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.ContinuousCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/continuousCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.GearCycle =>
@@ -557,10 +594,14 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicPyramid", SmartArtFamily.List),
             SmartArtLayoutPreset.PyramidList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/pyramidList", SmartArtFamily.List),
+            SmartArtLayoutPreset.InvertedPyramid =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid", SmartArtFamily.List),
             SmartArtLayoutPreset.RadialCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/radialCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicRadial =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/radial1", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.RadialCluster =>
+                ("urn:microsoft.com/office/officeart/2008/layout/RadialCluster", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.RadialList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/radialList", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicMatrix =>
@@ -575,6 +616,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/opposingIdeas", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.ConvergingRadial =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/convergingRadial", SmartArtFamily.Relationship),
+            SmartArtLayoutPreset.DivergingRadial =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/divergingRadial", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.BasicVenn =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.RadialVenn =>
@@ -603,6 +646,10 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/pictureStack", SmartArtFamily.List),
             SmartArtLayoutPreset.PictureLineup =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/pictureLineup", SmartArtFamily.List),
+            SmartArtLayoutPreset.PictureStrips =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/pictureStrips", SmartArtFamily.List),
+            SmartArtLayoutPreset.HorizontalPictureList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalPictureList", SmartArtFamily.List),
             SmartArtLayoutPreset.ContinuousPictureList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/continuousPictureList", SmartArtFamily.List),
             SmartArtLayoutPreset.LabeledHierarchy =>

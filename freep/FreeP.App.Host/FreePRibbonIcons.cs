@@ -36,6 +36,12 @@ internal static class FreePRibbonIcons
             // Font
             ["freep.font-family"] = RibbonCommandIconKind.Font,
             ["freep.table-cell-fill"] = RibbonCommandIconKind.Fill,
+            ["freep.shape.fill.opaque"] = RibbonCommandIconKind.Fill,
+            ["freep.shape.fill.half-transparent"] = RibbonCommandIconKind.Fill,
+            ["freep.shape.fill.transparent"] = RibbonCommandIconKind.Fill,
+            ["freep.shape.outline.opaque"] = RibbonCommandIconKind.Border,
+            ["freep.shape.outline.half-transparent"] = RibbonCommandIconKind.Border,
+            ["freep.shape.outline.transparent"] = RibbonCommandIconKind.Border,
             ["freep.table-cell-anchor"] = RibbonCommandIconKind.Align,
             ["freep.table-cell-border"] = RibbonCommandIconKind.Border,
             ["freep.bold"] = RibbonCommandIconKind.Bold,
