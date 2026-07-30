@@ -265,6 +265,40 @@ copy_cell_formula() {
     printf '%s' "$value"
 }
 
+copy_cell_formula_allow_empty() {
+    local column_offset="$1" row_offset="$2" address="$3"
+    local sentinel="__FREEX_NO_FORMULA__" sentinel_pid="" current="" value=""
+
+    # Empty TextBox copies do not replace the X11 clipboard owner. Seed a bounded
+    # two-request owner so a genuinely empty formula has an exact semantic value
+    # instead of inheriting the prior formula transcript.
+    printf '%s' "$sentinel" | xclip -selection clipboard -in -loops 2 >/dev/null 2>&1 &
+    sentinel_pid=$!
+    for _ in $(seq 1 10); do
+        current="$(clipboard_text || true)"
+        [[ "$current" == "$sentinel" ]] && break
+        sleep 0.05
+    done
+    if [[ "$current" != "$sentinel" ]]; then
+        wait "$sentinel_pid" 2>/dev/null || true
+        return 1
+    fi
+
+    if ! select_cell "$column_offset" "$row_offset" "$address"; then
+        clipboard_text >/dev/null 2>&1 || true
+        wait "$sentinel_pid" 2>/dev/null || true
+        return 1
+    fi
+    send_key F2
+    send_key ctrl+a
+    send_key ctrl+c
+    value="$(clipboard_text || true)"
+    wait "$sentinel_pid" 2>/dev/null || true
+    send_key Escape
+    [[ "$value" == "$sentinel" ]] && value=""
+    printf '%s' "$value"
+}
+
 read_active_formula_bar() {
     # A point-mode header/corner click leaves the formula editor active. Copy the
     # editor text before committing so the semantic assertion is independent of pixels.
@@ -281,6 +315,7 @@ probe_formula_bar_point_mode_whole_range() {
     local column_active=false row_active=false select_all_active=false
     local column_passed=false row_passed=false select_all_passed=false
     local column_header_x column_header_y row_header_x row_header_y corner_x corner_y
+    local formula_cancel_x formula_cancel_y
     local postcondition="formula-whole-range-point-postcondition.txt"
     local artifacts="formula-whole-range-column-before.png;formula-whole-range-column-editing.png;formula-whole-range-column-committed.png;formula-whole-range-row-before.png;formula-whole-range-row-editing.png;formula-whole-range-row-committed.png;formula-whole-range-select-all-before.png;formula-whole-range-select-all-editing.png;formula-whole-range-select-all-canceled.png;$postcondition"
 
@@ -292,6 +327,8 @@ probe_formula_bar_point_mode_whole_range() {
     row_header_y="$(cell_center_y 2)"
     corner_x="$row_header_x"
     corner_y="$column_header_y"
+    formula_cancel_x="$((a1_x + cell_width + 5))"
+    formula_cancel_y="$((a1_y - cell_height * 2 + 2))"
 
     # Whole column: physical column-header input in a live formula-bar edit.
     capture "formula-whole-range-column-before.png"
@@ -368,10 +405,11 @@ probe_formula_bar_point_mode_whole_range() {
         if [[ "$select_all_formula_bar" == "=SUM(A1:XFD1048576)" ]]; then
             select_all_active=true
         fi
-        # First Escape closes autocomplete; the second cancels the live edit.
+        # Escape closes autocomplete; the physical X button owns cancellation.
         send_key Escape
-        send_key Escape
-        select_all_cell_formula="$(copy_cell_formula 6 11 G12 || true)"
+        xdotool_mousemove_sync "$formula_cancel_x" "$formula_cancel_y" click 1
+        sleep "$settle_seconds"
+        select_all_cell_formula="$(copy_cell_formula_allow_empty 6 11 G12 || true)"
         capture "formula-whole-range-select-all-canceled.png"
     fi
     if $select_all_active && [[ -z "$select_all_cell_formula" ]]; then
@@ -379,7 +417,7 @@ probe_formula_bar_point_mode_whole_range() {
     fi
 
     write_artifact "$postcondition" \
-        "schema-version=1\nselector=formula-whole-range-point\ncolumn-header-coordinate=$column_header_x,$column_header_y\ncolumn-header-expected=B:B\ncolumn-header-formula-bar-clipboard=$column_formula_bar\ncolumn-header-cell-formula=$column_cell_formula\ncolumn-header-cell-package-formula=$column_cell_formula\ncolumn-header-edit-active-before-commit=$column_active\ncolumn-header-passed=$column_passed\nrow-header-coordinate=$row_header_x,$row_header_y\nrow-header-expected=3:3\nrow-header-formula-bar-clipboard=$row_formula_bar\nrow-header-cell-formula=$row_cell_formula\nrow-header-cell-package-formula=$row_cell_formula\nrow-header-edit-active-before-commit=$row_active\nrow-header-passed=$row_passed\nselect-all-corner-coordinate=$corner_x,$corner_y\nselect-all-expected=A1:XFD1048576\nselect-all-formula-bar-clipboard=$select_all_formula_bar\nselect-all-cell-package-formula-after-cancel=$select_all_cell_formula\nselect-all-edit-active-before-cancel=$select_all_active\nselect-all-passed=$select_all_passed\n"
+        "schema-version=1\nselector=formula-whole-range-point\ncolumn-header-coordinate=$column_header_x,$column_header_y\ncolumn-header-expected=B:B\ncolumn-header-formula-bar-clipboard=$column_formula_bar\ncolumn-header-cell-formula=$column_cell_formula\ncolumn-header-cell-package-formula=$column_cell_formula\ncolumn-header-edit-active-before-commit=$column_active\ncolumn-header-passed=$column_passed\nrow-header-coordinate=$row_header_x,$row_header_y\nrow-header-expected=3:3\nrow-header-formula-bar-clipboard=$row_formula_bar\nrow-header-cell-formula=$row_cell_formula\nrow-header-cell-package-formula=$row_cell_formula\nrow-header-edit-active-before-commit=$row_active\nrow-header-passed=$row_passed\nselect-all-corner-coordinate=$corner_x,$corner_y\nformula-cancel-coordinate=$formula_cancel_x,$formula_cancel_y\nselect-all-expected=A1:XFD1048576\nselect-all-formula-bar-clipboard=$select_all_formula_bar\nselect-all-cell-package-formula-after-cancel=$select_all_cell_formula\nselect-all-edit-active-before-cancel=$select_all_active\nselect-all-passed=$select_all_passed\n"
 
     if $column_passed; then
         record "formula-bar-point-mode-whole-column-header" "passed" \

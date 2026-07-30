@@ -261,6 +261,8 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("probe_selector\" == \"formula-whole-range-point\"", probe, StringComparison.Ordinal);
         Assert.Contains("Assert-FormulaWholeRangePointPostcondition", runner, StringComparison.Ordinal);
         Assert.Contains("read_active_formula_bar", probe, StringComparison.Ordinal);
+        Assert.Contains("copy_cell_formula_allow_empty", probe, StringComparison.Ordinal);
+        Assert.Contains("__FREEX_NO_FORMULA__", probe, StringComparison.Ordinal);
         Assert.Contains("row_header_x=\"$((window_x + (a1_x - window_x) / 2))\"", probe, StringComparison.Ordinal);
         Assert.Contains("Enter reaches the formula commit path instead of accepting BAHTTEXT", probe, StringComparison.Ordinal);
         Assert.True(
@@ -272,6 +274,7 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("xdotool_mousemove_sync \"$column_header_x\" \"$column_header_y\" click 1", probe, StringComparison.Ordinal);
         Assert.Contains("xdotool_mousemove_sync \"$row_header_x\" \"$row_header_y\" click 1", probe, StringComparison.Ordinal);
         Assert.Contains("xdotool_mousemove_sync \"$corner_x\" \"$corner_y\" click 1", probe, StringComparison.Ordinal);
+        Assert.Contains("xdotool_mousemove_sync \"$formula_cancel_x\" \"$formula_cancel_y\" click 1", probe, StringComparison.Ordinal);
         Assert.Contains("column-header-formula-bar-clipboard=$column_formula_bar", probe, StringComparison.Ordinal);
         Assert.Contains("row-header-formula-bar-clipboard=$row_formula_bar", probe, StringComparison.Ordinal);
         Assert.Contains("select-all-formula-bar-clipboard=$select_all_formula_bar", probe, StringComparison.Ordinal);
