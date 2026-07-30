@@ -108,10 +108,7 @@ public sealed class ReplaceSmartArtCommand : IPresentationCommand
         if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
             return;
 
-        var shape = presentation.Slides[_slideIndex].Shapes.FirstOrDefault(candidate =>
-            candidate.Id == _shapeId &&
-            candidate.Kind == SlideShapeKind.SmartArt &&
-            candidate.SmartArt is not null);
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
         if (shape?.SmartArt is not null)
             SlideCloner.CopySmartArt(shape.SmartArt, state);
     }

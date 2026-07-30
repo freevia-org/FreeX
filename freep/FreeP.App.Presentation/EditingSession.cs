@@ -119,11 +119,10 @@ public sealed class EditingSession
         if (CurrentSlide is null || edit is null)
             return false;
 
-        var shape = CurrentSlide.Shapes.FirstOrDefault(candidate =>
-            candidate.Id == shapeId &&
-            candidate.Kind == SlideShapeKind.SmartArt &&
-            candidate.SmartArt is not null);
-        if (shape?.SmartArt is null)
+        var shape = FindShape(CurrentSlide.Shapes, shapeId);
+        if (shape is null ||
+            shape.Kind != SlideShapeKind.SmartArt ||
+            shape.SmartArt is null)
             return false;
 
         var before = SlideCloner.CloneSmartArt(shape.SmartArt);
@@ -184,10 +183,9 @@ public sealed class EditingSession
     {
         SmartArtNodeEditResult? result = null;
         string? failureMessage = null;
-        var shape = CurrentSlide?.Shapes.FirstOrDefault(candidate =>
-            candidate.Id == shapeId &&
-            candidate.Kind == SlideShapeKind.SmartArt &&
-            candidate.SmartArt is not null);
+        var shape = CurrentSlide is { } slide
+            ? FindShape(slide.Shapes, shapeId)
+            : null;
         var applied = shape?.SmartArt is not null && EditSmartArt(shapeId, smartArt =>
         {
             result = SmartArtEditingPlanner.Apply(
@@ -241,10 +239,9 @@ public sealed class EditingSession
     {
         SmartArtNodeEditResult? result = null;
         string? failureMessage = null;
-        var shape = CurrentSlide?.Shapes.FirstOrDefault(candidate =>
-            candidate.Id == shapeId &&
-            candidate.Kind == SlideShapeKind.SmartArt &&
-            candidate.SmartArt is not null);
+        var shape = CurrentSlide is { } slide
+            ? FindShape(slide.Shapes, shapeId)
+            : null;
         var applied = shape?.SmartArt is not null && EditSmartArt(shapeId, smartArt =>
         {
             result = SmartArtEditingPlanner.Apply(
@@ -292,10 +289,7 @@ public sealed class EditingSession
     public bool ConvertSmartArtToShapes(uint shapeId)
     {
         var slide = CurrentSlide;
-        var smartArtShape = slide?.Shapes.FirstOrDefault(candidate =>
-            candidate.Id == shapeId &&
-            candidate.Kind == SlideShapeKind.SmartArt &&
-            candidate.SmartArt is not null);
+        var smartArtShape = slide is null ? null : FindShape(slide.Shapes, shapeId);
         if (slide is null || smartArtShape?.SmartArt is null)
             return false;
 
@@ -435,11 +429,12 @@ public sealed class EditingSession
         Func<SmartArtShape, bool> edit,
         bool allowCachedPackageEdit = false)
     {
-        var shape = CurrentSlide?.Shapes.FirstOrDefault(candidate =>
-            candidate.Id == shapeId &&
-            candidate.Kind == SlideShapeKind.SmartArt &&
-            candidate.SmartArt is not null);
-        if (shape?.SmartArt is null)
+        var shape = CurrentSlide is { } slide
+            ? FindShape(slide.Shapes, shapeId)
+            : null;
+        if (shape is null ||
+            shape.Kind != SlideShapeKind.SmartArt ||
+            shape.SmartArt is null)
             return false;
 
         return EditSmartArt(shapeId, smartArt =>
@@ -854,7 +849,7 @@ public sealed class EditingSession
 
         var normalized = RotationOptionsPlanner.Normalize(newRotationDeg);
         var commands = _selectedShapeIds
-            .Select(id => CurrentSlide.Shapes.FirstOrDefault(shape => shape.Id == id))
+            .Select(id => FindShape(CurrentSlide.Shapes, id))
             .Where(shape => shape is not null)
             .Where(shape => Math.Abs(shape!.RotationDeg - normalized) > 0.0001)
             .Select(shape => (IPresentationCommand)new RotateShapeCommand(
@@ -1056,8 +1051,9 @@ public sealed class EditingSession
     public void BringForward()
     {
         if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
-        var shapes = CurrentSlide.Shapes;
-        var id     = _selectedShapeIds[0];
+        var id = _selectedShapeIds[0];
+        var shapes = FindContainingShapeList(CurrentSlide.Shapes, id);
+        if (shapes is null) return;
         var idx    = shapes.FindIndex(s => s.Id == id);
         if (idx < 0 || idx >= shapes.Count - 1) return;
         Bus.Execute(new ReorderShapeCommand(_currentSlideIndex, id, idx + 1));
@@ -1069,8 +1065,9 @@ public sealed class EditingSession
     public void SendBackward()
     {
         if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
-        var shapes = CurrentSlide.Shapes;
-        var id     = _selectedShapeIds[0];
+        var id = _selectedShapeIds[0];
+        var shapes = FindContainingShapeList(CurrentSlide.Shapes, id);
+        if (shapes is null) return;
         var idx    = shapes.FindIndex(s => s.Id == id);
         if (idx <= 0) return;
         Bus.Execute(new ReorderShapeCommand(_currentSlideIndex, id, idx - 1));
@@ -1240,7 +1237,7 @@ public sealed class EditingSession
         if (CurrentSlide is null) return;
         foreach (var id in _selectedShapeIds)
         {
-            var s = CurrentSlide.Shapes.FirstOrDefault(sh => sh.Id == id);
+            var s = FindShape(CurrentSlide.Shapes, id);
             if (s?.TextBody is null) continue;
             for (int pi = 0; pi < s.TextBody.Paragraphs.Count; pi++)
             for (int ri = 0; ri < s.TextBody.Paragraphs[pi].Runs.Count; ri++)
@@ -1254,7 +1251,7 @@ public sealed class EditingSession
         if (CurrentSlide is null) return;
         foreach (var id in _selectedShapeIds)
         {
-            var s = CurrentSlide.Shapes.FirstOrDefault(sh => sh.Id == id);
+            var s = FindShape(CurrentSlide.Shapes, id);
             if (s?.TextBody is null) continue;
             for (int pi = 0; pi < s.TextBody.Paragraphs.Count; pi++)
             for (int ri = 0; ri < s.TextBody.Paragraphs[pi].Runs.Count; ri++)
@@ -1268,7 +1265,7 @@ public sealed class EditingSession
         if (CurrentSlide is null) return;
         foreach (var id in _selectedShapeIds)
         {
-            var s = CurrentSlide.Shapes.FirstOrDefault(sh => sh.Id == id);
+            var s = FindShape(CurrentSlide.Shapes, id);
             if (s?.TextBody is null) continue;
             for (int pi = 0; pi < s.TextBody.Paragraphs.Count; pi++)
             for (int ri = 0; ri < s.TextBody.Paragraphs[pi].Runs.Count; ri++)
@@ -1283,7 +1280,7 @@ public sealed class EditingSession
             return 0;
 
         var commands = _selectedShapeIds
-            .Where(id => CurrentSlide.Shapes.FirstOrDefault(shape => shape.Id == id)?.TextBody is not null)
+            .Where(id => FindShape(CurrentSlide.Shapes, id)?.TextBody is not null)
             .Select(id => (IPresentationCommand)new SetShapeTextAutoFitCommand(_currentSlideIndex, id, kind))
             .ToArray();
 
@@ -1301,7 +1298,7 @@ public sealed class EditingSession
             return 0;
 
         var commands = _selectedShapeIds
-            .Where(id => CurrentSlide.Shapes.FirstOrDefault(shape => shape.Id == id)?.TextBody is not null)
+            .Where(id => FindShape(CurrentSlide.Shapes, id)?.TextBody is not null)
             .Select(id => (IPresentationCommand)new SetShapeTextVerticalTypeCommand(
                 _currentSlideIndex,
                 id,
@@ -1322,7 +1319,7 @@ public sealed class EditingSession
             return 0;
 
         var commands = _selectedShapeIds
-            .Where(id => CurrentSlide.Shapes.FirstOrDefault(shape => shape.Id == id)?.TextBody is not null)
+            .Where(id => FindShape(CurrentSlide.Shapes, id)?.TextBody is not null)
             .Select(id => (IPresentationCommand)new SetShapeTextColumnCountCommand(
                 _currentSlideIndex,
                 id,
@@ -2899,7 +2896,7 @@ public sealed class EditingSession
         get
         {
             if (CurrentSlide is null || _selectedShapeIds.Count == 0) return null;
-            var shape = CurrentSlide.Shapes.FirstOrDefault(s => s.Id == _selectedShapeIds[0]);
+            var shape = FindShape(CurrentSlide.Shapes, _selectedShapeIds[0]);
             return shape?.Kind == SlideShapeKind.Chart ? shape.Chart : null;
         }
     }
@@ -3543,7 +3540,7 @@ public sealed class EditingSession
         var allRuns = new List<(int si, uint shapeId, int pi, int ri, Run run)>();
         foreach (var id in _selectedShapeIds)
         {
-            var s = CurrentSlide.Shapes.FirstOrDefault(sh => sh.Id == id);
+            var s = FindShape(CurrentSlide.Shapes, id);
             if (s?.TextBody is null) continue;
             for (int pi = 0; pi < s.TextBody.Paragraphs.Count; pi++)
             for (int ri = 0; ri < s.TextBody.Paragraphs[pi].Runs.Count; ri++)

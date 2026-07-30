@@ -351,6 +351,25 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void ApplySmartArtLayout_ResolvesNestedGroupChild()
+    {
+        var (session, smartArt) = MakeSmartArtSession();
+        var smartArtShape = session.CurrentSlide!.Shapes.Single();
+        session.CurrentSlide.Shapes.Remove(smartArtShape);
+
+        var group = new SlideShape { Id = 20, Kind = SlideShapeKind.Group };
+        group.Children.Add(smartArtShape);
+        session.CurrentSlide.Shapes.Add(group);
+
+        session.ApplySmartArtLayout(7, SmartArtLayoutPreset.BasicCycle).Should().BeTrue();
+
+        var savedSmartArt = group.Children.Single(shape => shape.Id == 7).SmartArt;
+        savedSmartArt.Should().NotBeNull();
+        savedSmartArt!.Data!.LayoutUniqueId.Should().EndWith("/layout/basicCycle");
+        session.CanUndo.Should().BeTrue();
+    }
+
+    [Fact]
     public void ConvertSmartArtToShapes_ReplacesAtSameSlotAndUndoRestoresGraphic()
     {
         var (session, _) = MakeSmartArtSession();
@@ -940,6 +959,58 @@ public sealed class EditingSessionTests
         sess.Select(1u);
         sess.ToggleBoldOnSelection();
         run.Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void NestedGroupChild_TextFormattingAndTextFrameEdits_RouteThroughSession()
+    {
+        var sess = Make();
+        var child = MakeShape(3);
+        var run = new Run { Text = "Grouped text" };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(run);
+        child.TextBody = new TextBody { Paragraphs = { paragraph } };
+
+        var inner = new SlideShape { Id = 2, Kind = SlideShapeKind.Group };
+        inner.Children.Add(child);
+        var outer = new SlideShape { Id = 1, Kind = SlideShapeKind.Group };
+        outer.Children.Add(inner);
+        sess.CurrentSlide!.Shapes.Add(outer);
+        sess.Select(child.Id);
+
+        sess.ToggleBoldOnSelection();
+        sess.SetFontFamilyOnSelection("Verdana");
+        sess.SetFontSizeOnSelection(18);
+        sess.SetColorOnSelection(new ThemeAwareColor(new SrgbColor(0x12, 0x34, 0x56)));
+        sess.SetTextAutoFitOnSelection(TextAutoFitKind.Normal).Should().Be(1);
+        sess.SetTextVerticalTypeOnSelection(TextVerticalType.Vertical270).Should().Be(1);
+        sess.SetTextColumnCountOnSelection(2).Should().Be(1);
+
+        run.Bold.Should().BeTrue();
+        run.FontFamily.Should().Be("Verdana");
+        run.FontSizePt.Should().Be(18);
+        run.Color!.Resolved.Should().Be(new SrgbColor(0x12, 0x34, 0x56));
+        child.TextBody.AutoFitKind.Should().Be(TextAutoFitKind.Normal);
+        child.TextBody.VerticalType.Should().Be(TextVerticalType.Vertical270);
+        child.TextBody.ColumnCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void NestedGroupChild_ZOrderCommandsUseContainingSiblingList()
+    {
+        var sess = Make();
+        var first = MakeShape(3);
+        var second = MakeShape(4);
+        var group = new SlideShape { Id = 1, Kind = SlideShapeKind.Group };
+        group.Children.Add(first);
+        group.Children.Add(second);
+        sess.CurrentSlide!.Shapes.Add(group);
+        sess.Select(first.Id);
+
+        sess.BringForward();
+        group.Children.Select(shape => shape.Id).Should().Equal(second.Id, first.Id);
+        sess.SendBackward();
+        group.Children.Select(shape => shape.Id).Should().Equal(first.Id, second.Id);
     }
 
     [Fact]
