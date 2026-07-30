@@ -160,6 +160,56 @@ public sealed class WholeWindowVisualEvidenceTests
         range.End.Should().Be(expectedEnd);
     }
 
+    [Fact]
+    public void Markdown_detail_rows_match_the_nine_column_report_header()
+    {
+        var comparison = new WholeWindowVisualEvidenceComparison(
+            "editor.rich-text-selection",
+            FreeP.App.Compositor.WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay,
+            FreeP.App.Compositor.DialogPaneVisualEvidenceClassification.Pass,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            [],
+            ["detail row"],
+            null);
+        var host = new FreeP.App.Compositor.WholeWindowVisualEvidenceHostManifest(
+            1,
+            "wpf",
+            "test",
+            96,
+            1280,
+            760,
+            "test",
+            [],
+            []);
+        var summary = new WholeWindowVisualEvidenceSummary(
+            1,
+            "test",
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            new Dictionary<string, int>(),
+            new Dictionary<string, int>(),
+            host,
+            host with { Host = "avalonia" },
+            [comparison],
+            [],
+            []);
+
+        var markdown = WholeWindowVisualEvidence.BuildMarkdown(summary);
+        var header = markdown.Split('\n').Single(line => line.StartsWith("| Scenario |", StringComparison.Ordinal));
+        var detail = markdown.Split('\n').Single(line => line.Contains("detail row", StringComparison.Ordinal));
+
+        header.Split('|').Length.Should().Be(11);
+        detail.Split('|').Length.Should().Be(11);
+    }
+
     private static void WriteSolidPng(string path, int width, int height, byte red, byte green, byte blue, byte alpha)
     {
         var pixels = new byte[width * height * 4];

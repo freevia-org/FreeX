@@ -758,7 +758,7 @@ internal static class WholeWindowVisualEvidence
                 .Append(" | ").Append(EvidenceLinks(comparison))
                 .AppendLine(" |");
             foreach (var detail in comparison.Details)
-                builder.AppendLine($"|  | Detail |  |  |  |  |  | {detail.Replace("|", "\\|")} |");
+                builder.AppendLine($"|  | Detail |  |  |  |  |  |  | {detail.Replace("|", "\\|")} |");
         }
         if (summary.Limitations.Count > 0)
         {
