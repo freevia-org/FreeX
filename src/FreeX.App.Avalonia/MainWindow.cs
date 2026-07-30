@@ -3653,6 +3653,7 @@ public sealed partial class MainWindow : Window
         _cellAddressDropDownButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Center;
         _cellAddressDropDownButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         CreateCellAddressAutocompletePopup();
+        cellAddressChrome.Children.Add(_cellAddressAutocompletePopup!);
         // Use an explicit Popup rather than relying on the DropDownButton template's
         // MenuFlyout hookup, which is not reliable on the Linux X11 backend.
         _cellAddressDropDownButton.AddHandler(

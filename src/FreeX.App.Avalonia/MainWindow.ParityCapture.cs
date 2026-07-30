@@ -2305,21 +2305,22 @@ public sealed partial class MainWindow
     {
         var sheet = _session.ActiveSheet;
         const string salesName = "Sales";
-        var objectNames = new[]
+        foreach (var name in _session.Workbook.NamedRanges.Keys.ToArray())
+            _session.Workbook.RemoveNamedRange(name);
+        foreach (var scopedName in _session.Workbook.ScopedNamedRanges.Keys.ToArray())
+            _session.Workbook.RemoveScopedNamedRange(scopedName.Name, scopedName.Sheet);
+        foreach (var workbookSheet in _session.Workbook.Sheets)
         {
-            "Tour Name Box Shape",
-            "Tour Name Box Picture",
-            "Tour Name Box Text Box",
-            "Tour Name Box Chart",
-        };
+            workbookSheet.StructuredTables.Clear();
+            workbookSheet.DrawingShapes.Clear();
+            workbookSheet.Pictures.Clear();
+            workbookSheet.TextBoxes.Clear();
+            workbookSheet.Charts.Clear();
+        }
 
         _session.Workbook.NamedRanges[salesName] = new GridRange(
             new CellAddress(sheet.Id, 2, 2),
             new CellAddress(sheet.Id, 3, 3));
-        sheet.DrawingShapes.RemoveAll(shape => objectNames.Contains(shape.Name, StringComparer.Ordinal));
-        sheet.Pictures.RemoveAll(picture => objectNames.Contains(picture.Name, StringComparer.Ordinal));
-        sheet.TextBoxes.RemoveAll(textBox => objectNames.Contains(textBox.Name, StringComparer.Ordinal));
-        sheet.Charts.RemoveAll(chart => objectNames.Contains(chart.Name, StringComparer.Ordinal));
 
         sheet.DrawingShapes.Add(new DrawingShapeModel
         {

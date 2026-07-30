@@ -38,6 +38,25 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
+    [Fact]
+    public async Task ParityPhysicalFixture_PopulatesTheProductionDropdown()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow(
+                [InteractionValidationOptions.NameBoxDropdownParityPhysicalFixtureArgument]);
+
+            window.CellAddressAutocompleteNamesForTest().Should().Equal(
+                "Sales",
+                "Tour Name Box Chart",
+                "Tour Name Box Picture",
+                "Tour Name Box Shape",
+                "Tour Name Box Text Box");
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
     // ── Enter-to-navigate: plain cell reference ───────────────────────────────────────────────
 
     [Fact]
