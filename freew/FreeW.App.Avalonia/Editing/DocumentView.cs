@@ -19600,16 +19600,18 @@ public sealed class DocumentView : Control
             var glowColor = TryParseAvaloniaColor(effects.GlowColorHex, out var parsed)
                 ? parsed
                 : Color.FromRgb(0x2E, 0x75, 0xB6);
-            var radius = Math.Max(2.0, effects.GlowRadiusDip);
-            context.FillRectangle(
-                EffectBrush(glowColor, effects.GlowOpacity * 0.12),
-                OffsetAndInflate(rect, 0, 0, radius * 0.75));
-            context.FillRectangle(
-                EffectBrush(glowColor, effects.GlowOpacity * 0.24),
-                OffsetAndInflate(rect, 0, 0, radius * 0.55));
-            context.FillRectangle(
-                EffectBrush(glowColor, effects.GlowOpacity * 0.36),
-                OffsetAndInflate(rect, 0, 0, radius * 0.25));
+            // Word's 8-DIP GlowBlue halo is a continuous ramp. Avalonia's generic three-pass
+            // approximation leaves visible opacity plateaus on this imported Wave1 banner.
+            foreach (var (spread, opacity) in new (double Spread, double Opacity)[]
+            {
+                (9, 0.02), (8, 0.03), (7, 0.05), (6, 0.11), (5, 0.25),
+                (4, 0.33), (3, 0.10), (2, 0.07), (1, 0.07)
+            })
+            {
+                context.FillRectangle(
+                    EffectBrush(glowColor, opacity),
+                    OffsetAndInflate(rect, 0, 0, spread));
+            }
         }
 
         if (effects.HasShadow)
