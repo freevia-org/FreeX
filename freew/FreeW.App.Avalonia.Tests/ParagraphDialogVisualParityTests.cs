@@ -95,6 +95,7 @@ public sealed class ParagraphDialogVisualParityTests
             var dialog = new ParagraphDialog(ParagraphFormatting.Default);
             var left = Field<TextBox>(dialog, "_left");
             var special = Field<ComboBox>(dialog, "_special");
+            var specialAmount = Field<TextBox>(dialog, "_specialAmount");
 
             ((ISolidColorBrush)left.BorderBrush!).Color.Should().Be(Color.FromRgb(0xAB, 0xAD, 0xB3));
             ((ISolidColorBrush)left.SelectionBrush!).Color.Should().Be(Color.FromRgb(0x56, 0x9D, 0xE5));
@@ -102,6 +103,8 @@ public sealed class ParagraphDialogVisualParityTests
             left.Height.Should().Be(18);
             left.FocusAdorner.Should().BeNull();
             special.Height.Should().Be(22);
+            ((ISolidColorBrush)specialAmount.BorderBrush!).Color
+                .Should().Be(Color.FromRgb(0xD0, 0xD1, 0xD4));
 
             var sharedTextBox = new TextBox();
             AvaloniaCompactDialogChrome.ApplyTextBox(
@@ -139,7 +142,7 @@ public sealed class ParagraphDialogVisualParityTests
                 var indicators = dialog.GetVisualDescendants()
                     .OfType<CheckBox>()
                     .SelectMany(check => check.GetVisualDescendants().OfType<Border>())
-                    .Where(border => border.Bounds.Width == 14 && border.Bounds.Height == 14)
+                    .Where(border => border.Bounds.Width == 14 && border.Bounds.Height == 13)
                     .ToArray();
                 indicators.Should().HaveCount(1);
             }

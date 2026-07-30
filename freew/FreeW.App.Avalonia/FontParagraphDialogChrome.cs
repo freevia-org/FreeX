@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
@@ -24,6 +25,11 @@ internal static class FontParagraphDialogChrome
 {
     private const string TextBoxClass = "freew-font-paragraph-textbox";
     private const string CheckBoxClass = "freew-font-paragraph-checkbox";
+    private const string ComboBoxClass = "freew-font-paragraph-combo";
+    private static readonly IBrush WpfComboBorderBrush =
+        new ImmutableSolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC));
+    private static readonly IBrush WpfDisabledInputBorderBrush =
+        new ImmutableSolidColorBrush(Color.FromRgb(0xD0, 0xD1, 0xD4));
 
     public static void ApplyTextBox(TextBox textBox, AvaloniaCompactDialogChromeStyle style)
     {
@@ -38,7 +44,9 @@ internal static class FontParagraphDialogChrome
         textBox.Classes.Add(TextBoxClass);
         var height = style.TextBoxHeight ?? style.ControlHeight;
         var borderBrush = style.InputBorderBrush ?? new ImmutableSolidColorBrush(Color.FromRgb(0xAB, 0xAD, 0xB3));
+        var disabledBorderBrush = WpfDisabledInputBorderBrush;
         var background = style.TextBoxBackgroundBrush ?? Brushes.White;
+        textBox.BorderBrush = textBox.IsEnabled ? borderBrush : disabledBorderBrush;
         textBox.Styles.Add(new Style(selector => selector.OfType<Border>().Name("PART_BorderElement"))
         {
             Setters =
@@ -63,13 +71,29 @@ internal static class FontParagraphDialogChrome
                 new Setter(Border.BorderThicknessProperty, new Thickness(1)),
             },
         });
+        textBox.Styles.Add(new Style(selector => selector
+            .OfType<TextBox>()
+            .Class(":disabled")
+            .Template()
+            .OfType<Border>()
+            .Name("PART_BorderElement"))
+        {
+            Setters =
+            {
+                new Setter(Border.BorderBrushProperty, disabledBorderBrush),
+                new Setter(Border.BorderThicknessProperty, new Thickness(1)),
+            },
+        });
 
         void RefreshRenderedChrome()
         {
             textBox.ApplyTemplate();
-            var brush = textBox.IsFocused
+            var brush = !textBox.IsEnabled
+                ? disabledBorderBrush
+                : textBox.IsFocused
                 ? style.FocusedInputBorderBrush ?? borderBrush
                 : borderBrush;
+            textBox.BorderBrush = brush;
             foreach (var border in textBox.GetVisualDescendants().OfType<Border>().Where(border => border.Name == "PART_BorderElement"))
             {
                 border.MinHeight = 0;
@@ -86,6 +110,11 @@ internal static class FontParagraphDialogChrome
         textBox.AttachedToVisualTree += (_, _) => QueueRenderedChrome();
         textBox.GotFocus += (_, _) => QueueRenderedChrome();
         textBox.LostFocus += (_, _) => QueueRenderedChrome();
+        textBox.PropertyChanged += (_, args) =>
+        {
+            if (args.Property == InputElement.IsEnabledProperty)
+                QueueRenderedChrome();
+        };
         QueueRenderedChrome();
     }
 
@@ -126,7 +155,9 @@ internal static class FontParagraphDialogChrome
             var indicator = new Border
             {
                 Width = 14,
-                Height = 14,
+                // WPF's default checkbox paints a 14px wide, 13px high device-pixel frame.
+                // Keep the control's 18px hit row while matching the authority's painted glyph.
+                Height = 13,
                 Background = Brushes.White,
                 BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
                 BorderThickness = new Thickness(1),
@@ -150,5 +181,47 @@ internal static class FontParagraphDialogChrome
                 Children = { indicator, content },
             };
         });
+    }
+
+    public static void ApplyComboBox(
+        ComboBox comboBox,
+        AvaloniaCompactDialogChromeStyle style,
+        bool editable)
+    {
+        ArgumentNullException.ThrowIfNull(comboBox);
+        ArgumentNullException.ThrowIfNull(style);
+
+        AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, style);
+        if (editable || comboBox.Classes.Contains(ComboBoxClass))
+            return;
+
+        comboBox.Classes.Add(ComboBoxClass);
+        comboBox.BorderBrush = WpfComboBorderBrush;
+        comboBox.Styles.Add(new Style(selector => selector
+            .OfType<Border>()
+            .Name("PART_LayoutRoot"))
+        {
+            Setters =
+            {
+                new Setter(Border.BorderBrushProperty, WpfComboBorderBrush),
+                new Setter(Border.BorderThicknessProperty, new Thickness(1)),
+            },
+        });
+
+        void RefreshRenderedChrome()
+        {
+            comboBox.ApplyTemplate();
+            comboBox.BorderBrush = WpfComboBorderBrush;
+            foreach (var border in comboBox.GetVisualDescendants().OfType<Border>()
+                         .Where(border => border.Name == "PART_LayoutRoot"))
+            {
+                border.BorderBrush = WpfComboBorderBrush;
+                border.BorderThickness = new Thickness(1);
+            }
+        }
+
+        comboBox.AttachedToVisualTree += (_, _) =>
+            Dispatcher.UIThread.Post(RefreshRenderedChrome, DispatcherPriority.Render);
+        Dispatcher.UIThread.Post(RefreshRenderedChrome, DispatcherPriority.Render);
     }
 }

@@ -29,7 +29,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
             TabHeight = 20,
             ButtonHeight = 20,
             ButtonPadding = new Thickness(10, 1),
-            ForegroundBrush = Brushes.Black,
+            ForegroundBrush = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
             ButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
             DialogTabPaneBorderBrush = new SolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC)),
             InputBorderBrush = new SolidColorBrush(Color.FromRgb(0xAB, 0xAD, 0xB3)),
@@ -78,6 +78,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         _special.HorizontalAlignment = HorizontalAlignment.Stretch;
         _specialAmount = NumberBox(state.SpecialAmountText);
         _specialAmount.IsEnabled = state.SpecialAmountEnabled;
+        FontParagraphDialogChrome.ApplyTextBox(_specialAmount, DialogChromeStyle);
         _special.SelectionChanged += (_, _) =>
             _specialAmount.IsEnabled = ParagraphBreaksDialogPlanner.IsSpecialAmountEnabled(_special.SelectedIndex);
         _before = NumberBox(state.SpaceBeforeText);
@@ -247,7 +248,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
     {
         foreach (var box in new[] { _left, _right, _specialAmount, _before, _after, _lineSpacing })
             FontParagraphDialogChrome.ApplyTextBox(box, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyComboBox(_special, DialogChromeStyle);
+        FontParagraphDialogChrome.ApplyComboBox(_special, DialogChromeStyle, editable: false);
         foreach (var checkBox in new[] { _keepWithNext, _keepLinesTogether, _widowControl, _pageBreakBefore, _suppressHyphens, _suppressLineNumbers, _contextualSpacing })
             FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
         foreach (var button in this.GetVisualDescendants().OfType<Button>())

@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
@@ -26,7 +27,7 @@ public sealed class FontDialog : FreeWDialogWindow
             ComboBoxHeight = 22,
             TabHeight = 20,
             ButtonHeight = 20,
-            ForegroundBrush = Brushes.Black,
+            ForegroundBrush = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
             FocusedInputBorderBrush = new SolidColorBrush(Color.FromRgb(0x56, 0x9D, 0xE5)),
             ButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
             DialogTabPaneBorderBrush = new SolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC)),
@@ -139,11 +140,11 @@ public sealed class FontDialog : FreeWDialogWindow
             state.NumberSpacingIndex,
             minWidth: 160);
 
-        var fontPanel = new StackPanel { Margin = new Thickness(12, 10, 11, 10) };
+        var fontPanel = new StackPanel { Margin = new Thickness(12, 12, 11, 6) };
         AddField(fontPanel, "Font family:", _familyBox);
         AddField(fontPanel, "Size (pt):", _sizeBox);
         AddField(fontPanel, "Color:", _colorBox);
-        fontPanel.Children.Add(new TextBlock { Text = "Style:", Margin = new Thickness(0, 4, 0, 2) });
+        fontPanel.Children.Add(new TextBlock { Text = "Style:", Margin = new Thickness(0, 3, 0, 2) });
         var effects = new WrapPanel();
         foreach (var check in new[]
                  {
@@ -155,7 +156,7 @@ public sealed class FontDialog : FreeWDialogWindow
         }
         fontPanel.Children.Add(effects);
 
-        var advancedPanel = new StackPanel { Margin = new Thickness(10) };
+        var advancedPanel = new StackPanel { Margin = new Thickness(10, 12, 10, 10) };
         AddField(advancedPanel, "Character spacing (pt):", _spacingBox);
         AddField(advancedPanel, "Kerning min size (pt):", _kerningBox);
         AddField(advancedPanel, "Position (pt):", _positionBox);
@@ -205,6 +206,8 @@ public sealed class FontDialog : FreeWDialogWindow
         Opened += (_, _) =>
         {
             AvaloniaCompactDialogChrome.ApplyDescendantChrome(this, DialogChromeStyle);
+            foreach (var combo in this.GetVisualDescendants().OfType<ComboBox>())
+                FontParagraphDialogChrome.ApplyComboBox(combo, DialogChromeStyle, combo.IsEditable);
             foreach (var box in new[]
                      {
                          _familyBox, _spacingBox, _kerningBox, _positionBox, _stylisticBox,
@@ -419,7 +422,7 @@ public sealed class FontDialog : FreeWDialogWindow
     {
         Content = label,
         IsThreeState = threeState,
-        Margin = new Thickness(0, 0, trailingMargin, 0),
+        Margin = new Thickness(0, 0, trailingMargin, 4),
     };
 
     private void ApplyCheckBoxChrome()

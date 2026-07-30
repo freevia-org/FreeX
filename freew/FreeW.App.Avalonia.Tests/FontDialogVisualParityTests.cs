@@ -109,7 +109,7 @@ public sealed class FontDialogVisualParityTests
                 var indicators = dialog.GetVisualDescendants()
                     .OfType<CheckBox>()
                     .SelectMany(check => check.GetVisualDescendants().OfType<Border>())
-                    .Where(border => border.Bounds.Width == 14 && border.Bounds.Height == 14)
+                    .Where(border => border.Bounds.Width == 14 && border.Bounds.Height == 13)
                     .ToArray();
                 indicators.Should().HaveCount(8);
             }
