@@ -260,6 +260,16 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_ReservesWordLikeFootnoteBodyClearanceWithoutChangingNotePaint()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("private const double FootnoteBodyReserveSafetyDip = 24.0;");
+        source.Should().Contain("plan.Pages[0].EstimatedHeightDip + FootnoteTopPadding + FootnoteBodyReserveSafetyDip");
+        source.Should().Contain("plan.Pages[^1].EstimatedHeightDip + FootnoteTopPadding + FootnoteBodyReserveSafetyDip");
+    }
+
+    [Fact]
     public void AvaloniaDocumentView_AppliesExplicitParagraphSpacingInsideTableCells()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));

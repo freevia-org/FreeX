@@ -4213,6 +4213,9 @@ public sealed class DocumentView : Control
     private const double FootnoteTopPadding = 7.0;
     private const double FootnoteInterNoteSpacing = 15.0;
     private const double FootnoteTrailingPadding = 6.0;
+    // Word reserves a small additional body-frame clearance above a footnote band.
+    // Keep that reserve out of the painted note geometry; it only controls reflow.
+    private const double FootnoteBodyReserveSafetyDip = 24.0;
     private const double EndnoteAfterBodyGap = 20.0;
     private const double EndnoteSeparatorToTextGap = 7.0;
     private const double EndnoteInterNoteSpacing = 15.0;
@@ -4465,7 +4468,9 @@ public sealed class DocumentView : Control
 
             // Keep the first body page's reservation equal to the actual planned fragment, rather than
             // the entire logical note. Normal one-page notes retain the existing rendering path below.
-            _footnoteBandHeightByPage[pg] = Math.Min(firstBand, plan.Pages[0].EstimatedHeightDip + FootnoteTopPadding);
+            _footnoteBandHeightByPage[pg] = Math.Min(
+                firstBand,
+                plan.Pages[0].EstimatedHeightDip + FootnoteTopPadding + FootnoteBodyReserveSafetyDip);
             if (plan.HasContinuation)
             {
                 _footnoteContinuationByBodyPage[pg] = plan;
@@ -4474,7 +4479,7 @@ public sealed class DocumentView : Control
                 {
                     _footnoteBandHeightByPage[nextBodyPage] = Math.Min(
                         continuationBand,
-                        plan.Pages[^1].EstimatedHeightDip + FootnoteTopPadding);
+                        plan.Pages[^1].EstimatedHeightDip + FootnoteTopPadding + FootnoteBodyReserveSafetyDip);
                 }
             }
         }
