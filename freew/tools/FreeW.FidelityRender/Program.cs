@@ -1858,7 +1858,7 @@ static RenderTargetBitmap? RenderNoteRegionPlan(
     double marginRight)
 {
     ArgumentNullException.ThrowIfNull(notePlan);
-    double textSizePx = 9.0 * (96.0 / 72.0);   // 9 pt footnote text
+    double textSizePx = notePlan.TextFontSizePt * (96.0 / 72.0);
 
     // Build a StackPanel mirroring PageBox.BuildNoteRegion and measure it.
     var panel = new System.Windows.Controls.StackPanel
@@ -1892,7 +1892,7 @@ static RenderTargetBitmap? RenderNoteRegionPlan(
             tb.Inlines.Add(new System.Windows.Documents.Run(row.Label)
             {
                 BaselineAlignment = System.Windows.BaselineAlignment.Superscript,
-                FontSize          = textSizePx * 0.75
+                FontSize          = notePlan.LabelFontSizePt * (96.0 / 72.0)
             });
             tb.Inlines.Add(new System.Windows.Documents.Run(" " + row.Text));
             panel.Children.Add(tb);
@@ -1935,7 +1935,7 @@ static RenderTargetBitmap? RenderNoteRegionPlan(
             tb.Inlines.Add(new System.Windows.Documents.Run(row.Label)
             {
                 BaselineAlignment = System.Windows.BaselineAlignment.Superscript,
-                FontSize          = textSizePx * 0.75
+                FontSize          = notePlan.LabelFontSizePt * (96.0 / 72.0)
             });
             tb.Inlines.Add(new System.Windows.Documents.Run(" " + row.Text));
             panel.Children.Add(tb);
