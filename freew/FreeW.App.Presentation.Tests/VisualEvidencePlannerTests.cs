@@ -529,6 +529,58 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedNoteRegionPlanner_UsesDocumentWideFootnoteSequenceForLaterPageFragments()
+    {
+        var document = new TextDocument();
+        document.Footnotes[1] = new Footnote(1, "First page footnote.");
+        document.Footnotes[2] = new Footnote(2, "Later page footnote.");
+
+        var plan = DocumentNoteRegionPlanner.BuildFootnoteContinuation(
+            document,
+            [2],
+            firstPageNumber: 3,
+            contentWidthDip: 240,
+            firstAvailableHeightDip: 48,
+            continuationAvailableHeightDip: 48);
+
+        plan.Pages.SelectMany(page => page.Fragments)
+            .Single(fragment => fragment.StartsNote)
+            .Label.Should().Be("2");
+    }
+
+    [Fact]
+    public void SharedNoteRegionPlanner_InsertsContinuationPagesAfterTheirOwningBodyPage()
+    {
+        var first = new DocumentFootnoteContinuationPlan([
+            new DocumentFootnoteContinuationPagePlan(1, DocumentFootnoteSeparatorKind.Initial, 80, 80, []),
+            new DocumentFootnoteContinuationPagePlan(2, DocumentFootnoteSeparatorKind.Continuation, 240, 240, []),
+            new DocumentFootnoteContinuationPagePlan(3, DocumentFootnoteSeparatorKind.Continuation, 240, 240, [])
+        ]);
+        var last = new DocumentFootnoteContinuationPlan([
+            new DocumentFootnoteContinuationPagePlan(4, DocumentFootnoteSeparatorKind.Initial, 80, 80, []),
+            new DocumentFootnoteContinuationPagePlan(5, DocumentFootnoteSeparatorKind.Continuation, 240, 240, [])
+        ]);
+
+        var physical = DocumentNoteRegionPlanner.BuildFootnotePhysicalPagePlan(4, new Dictionary<int, DocumentFootnoteContinuationPlan>
+        {
+            [0] = first,
+            [2] = last
+        });
+
+        physical.PhysicalPageCount.Should().Be(7);
+        physical.PhysicalPageForBodyPage(0).Should().Be(0);
+        physical.PhysicalPageForBodyPage(1).Should().Be(3);
+        physical.PhysicalPageForBodyPage(2).Should().Be(4);
+        physical.PhysicalPageForBodyPage(3).Should().Be(6);
+        physical.Pages.Where(page => page.IsContinuationOnly)
+            .Select(page => page.FootnotePage!.SeparatorKind)
+            .Should().Equal(
+                DocumentFootnoteSeparatorKind.Continuation,
+                DocumentFootnoteSeparatorKind.Continuation,
+                DocumentFootnoteSeparatorKind.Continuation);
+    }
+
+    [Fact]
     public void SharedReviewFactories_BuildF2ReviewContracts()
     {
         var tracked = FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument();

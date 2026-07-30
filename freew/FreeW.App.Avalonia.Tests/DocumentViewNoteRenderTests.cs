@@ -513,6 +513,68 @@ public sealed class DocumentViewNoteRenderTests
             "a long footnote with 60 words must wrap to multiple render items");
     }
 
+    [Fact]
+    public async Task LongFootnote_ContinuesOnInsertedPagesWithoutDroppingWords()
+    {
+        IReadOnlyList<(string Text, double X, double Y, bool IsNumberMarker)>? items = null;
+        IReadOnlyList<(double X1, double X2, double Y)>? separators = null;
+        var pageCount = 0;
+        var expectedWords = Enumerable.Range(1, 700).Select(index => $"word{index}").ToArray();
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFootnote(1, string.Join(" ", expectedWords));
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 8000));
+            pageCount = view.PageCount;
+            items = view.NoteRenderItems;
+            separators = view.NoteSeparators;
+        });
+
+        if (!ran) return;
+
+        pageCount.Should().BeGreaterThan(1,
+            "a note larger than its reference-page band must create physical continuation pages");
+        separators.Should().NotBeNull();
+        separators!.Select(separator => Math.Floor((separator.Y - 24) / (1056 + 20)))
+            .Distinct().Should().HaveCountGreaterThan(1,
+                "initial and continuation footnote rules must land on separate physical pages");
+
+        var renderedWords = string.Concat(items!
+                .Where(item => !item.IsNumberMarker)
+                .Select(item => item.Text))
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        renderedWords.Should().ContainInOrder(expectedWords,
+            "continuation rendering must retain every word in source order");
+    }
+
+    [Fact]
+    public async Task LongFootnote_ContinuationDoesNotHideLaterShortFootnotes()
+    {
+        IReadOnlyList<(string Text, double X, double Y, bool IsNumberMarker)>? items = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFootnote(1, string.Join(" ", Enumerable.Range(1, 700).Select(index => $"long{index}")));
+            for (var index = 0; index < 60; index++)
+                doc.Blocks.Add(new Paragraph($"Body filler {index}."));
+            var laterReference = new Paragraph("Later body reference");
+            laterReference.Runs.Add(Run.FootnoteReference(2));
+            doc.Blocks.Add(laterReference);
+            doc.Footnotes[2] = new Footnote(2, "later short footnote");
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 10000));
+            items = view.NoteRenderItems;
+        });
+
+        if (!ran) return;
+
+        items!.Should().Contain(item => item.IsNumberMarker && item.Text.Trim() == "2");
+        string.Concat(items.Where(item => !item.IsNumberMarker).Select(item => item.Text))
+            .Should().Contain("later short footnote");
+    }
+
     // ── Test 11 (DB3): footnote numbers respect StartAt ───────────────────────────────────────────────
 
     [Fact]

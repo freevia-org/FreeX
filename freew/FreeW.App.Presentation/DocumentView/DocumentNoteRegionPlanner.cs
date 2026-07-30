@@ -70,6 +70,34 @@ public sealed record DocumentFootnoteContinuationPlan(
     public bool HasContinuation => Pages.Count > 1;
 }
 
+/// <summary>
+/// One physical page after long-footnote continuation pages are inserted into the body-page sequence.
+/// A body page can carry the initial footnote fragment; continuation-only pages have no body-page index.
+/// </summary>
+public sealed record DocumentFootnotePhysicalPage(
+    int PhysicalPageIndex,
+    int? LogicalBodyPageIndex,
+    DocumentFootnoteContinuationPagePlan? FootnotePage)
+{
+    public bool IsContinuationOnly => LogicalBodyPageIndex is null;
+}
+
+/// <summary>Maps logical body pages to the physical sequence displayed and exported by a host.</summary>
+public sealed record DocumentFootnotePhysicalPagePlan(
+    int BodyPageCount,
+    IReadOnlyList<DocumentFootnotePhysicalPage> Pages)
+{
+    public static DocumentFootnotePhysicalPagePlan Empty { get; } = new(0, []);
+
+    public int PhysicalPageCount => Pages.Count;
+
+    public int PhysicalPageForBodyPage(int logicalBodyPageIndex)
+    {
+        var page = Pages.FirstOrDefault(candidate => candidate.LogicalBodyPageIndex == logicalBodyPageIndex);
+        return page?.PhysicalPageIndex ?? Math.Clamp(logicalBodyPageIndex, 0, Math.Max(0, PhysicalPageCount - 1));
+    }
+}
+
 public static class DocumentNoteRegionPlanner
 {
     public const double NoteTextFontSizePt = 9.0;
@@ -195,6 +223,42 @@ public static class DocumentNoteRegionPlanner
         return new DocumentFootnoteContinuationPlan(pages);
     }
 
+    /// <summary>
+    /// Inserts continuation-only pages directly after the body page that owns each long footnote.
+    /// Invalid or one-page plans are ignored so normal body pagination remains an identity map.
+    /// </summary>
+    public static DocumentFootnotePhysicalPagePlan BuildFootnotePhysicalPagePlan(
+        int bodyPageCount,
+        IReadOnlyDictionary<int, DocumentFootnoteContinuationPlan> continuationByBodyPage)
+    {
+        ArgumentNullException.ThrowIfNull(continuationByBodyPage);
+
+        var safeBodyPageCount = Math.Max(0, bodyPageCount);
+        var pages = new List<DocumentFootnotePhysicalPage>();
+        for (var bodyPageIndex = 0; bodyPageIndex < safeBodyPageCount; bodyPageIndex++)
+        {
+            continuationByBodyPage.TryGetValue(bodyPageIndex, out var continuation);
+            var firstFootnotePage = continuation?.Pages.FirstOrDefault();
+            pages.Add(new DocumentFootnotePhysicalPage(
+                pages.Count,
+                bodyPageIndex,
+                firstFootnotePage));
+
+            if (continuation is not { HasContinuation: true })
+                continue;
+
+            foreach (var continuationPage in continuation.Pages.Skip(1))
+            {
+                pages.Add(new DocumentFootnotePhysicalPage(
+                    pages.Count,
+                    LogicalBodyPageIndex: null,
+                    continuationPage));
+            }
+        }
+
+        return new DocumentFootnotePhysicalPagePlan(safeBodyPageCount, pages);
+    }
+
     public static DocumentNoteRegionPlan BuildEndnoteRegion(
         TextDocument document,
         IReadOnlyList<int> endnoteIds,
@@ -262,17 +326,25 @@ public static class DocumentNoteRegionPlanner
     {
         var rows = new List<DocumentNoteRegionRow>();
         var options = isFootnote ? document.FootnoteNumbering : document.EndnoteNumbering;
-        var sequence = Math.Max(1, options.StartAt);
+        IEnumerable<int> documentIds = isFootnote ? document.Footnotes.Keys : document.Endnotes.Keys;
+        var orderedDocumentIds = documentIds
+            .OrderBy(id => id)
+            .ToList();
+        var sequenceById = orderedDocumentIds
+            .Select((id, index) => (id, sequence: Math.Max(1, options.StartAt) + index))
+            .ToDictionary(pair => pair.id, pair => pair.sequence);
 
         foreach (var id in ids)
         {
             var text = ResolvePlainText(document, id, isFootnote);
             if (string.IsNullOrWhiteSpace(text))
             {
-                sequence++;
                 continue;
             }
 
+            var sequence = sequenceById.TryGetValue(id, out var resolvedSequence)
+                ? resolvedSequence
+                : Math.Max(1, options.StartAt);
             var label = ComputeDisplayNumber(sequence, options);
             rows.Add(new DocumentNoteRegionRow(
                 id,
@@ -280,7 +352,6 @@ public static class DocumentNoteRegionPlanner
                 label,
                 text,
                 EstimateRowHeight(text, contentWidthDip)));
-            sequence++;
         }
 
         return rows;

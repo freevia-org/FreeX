@@ -471,9 +471,18 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("$Application.BackgroundSavingStatus");
         source.Should().Contain("$Application.BackgroundPrintingStatus");
         source.Should().Contain("Wait-WordReady $word $ReadyTimeoutSeconds");
-        source.Should().Contain("[WordPdf] opening:");
-        source.Should().Contain("[WordPdf] exporting:");
+        source.Should().Contain("function Write-WordPdfTrace");
+        source.Should().Contain("Write-WordPdfTrace \"opening:");
+        source.Should().Contain("Write-WordPdfTrace \"opened read-only; exporting:");
+        source.Should().Contain("inputLength=$($InputPath.Length); outputLength=$($OutputPath.Length)");
+        source.Should().Contain("Word returned from ExportAsFixedFormat without creating");
         source.Should().Contain("Word did not become ready within $TimeoutSeconds seconds.");
+
+        var baselineSource = File.ReadAllText(RepositoryFile(
+            "freew-fidelity-corpus",
+            "tools",
+            "Render-WordBaseline.ps1"));
+        baselineSource.Should().Contain("@('-TracePath', $TracePath)");
     }
 
     private static string RepositoryFile(params string[] parts)

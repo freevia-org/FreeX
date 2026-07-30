@@ -43,4 +43,22 @@ public sealed class PowerPointCorpusProcessExporterTests
         startInfo.ArgumentList[0].Should().Be("--powerpoint-export-one");
         PowerPointCorpusProcessExporter.IsDotnetHost(startInfo.FileName).Should().BeFalse();
     }
+
+    [Fact]
+    public void EnsureOutputDirectory_creates_missing_directory_for_direct_exports()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "FreeP.RenderCompare.Tests", Guid.NewGuid().ToString("N"));
+        var expected = Path.GetFullPath(Path.Combine(root, "slides"));
+
+        try
+        {
+            PowerPointInterop.EnsureOutputDirectory(expected).Should().Be(expected);
+            Directory.Exists(expected).Should().BeTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
 }
