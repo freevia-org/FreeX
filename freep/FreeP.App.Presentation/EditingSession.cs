@@ -812,7 +812,7 @@ public sealed class EditingSession
         if (CurrentSlide is null)
             return false;
 
-        var shape = CurrentSlide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        var shape = FindShape(CurrentSlide.Shapes, shapeId);
         if (shape is null || !ShapeGeometryAdjustmentPlanner.TryBuildCustomVertexInsertion(
                 shape, handleName, out var pathIndex, out var segmentIndex, out var x, out var y))
             return false;
@@ -828,7 +828,7 @@ public sealed class EditingSession
         if (CurrentSlide is null)
             return false;
 
-        var shape = CurrentSlide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        var shape = FindShape(CurrentSlide.Shapes, shapeId);
         if (shape is null || !ShapeGeometryAdjustmentPlanner.CanDeleteCustomVertex(shape, handleName) ||
             !ShapeGeometryAdjustmentPlanner.TryGetCustomVertexTarget(
                 shape, handleName, out var pathIndex, out var segmentIndex))
@@ -917,7 +917,7 @@ public sealed class EditingSession
                 values.Left, values.Top, values.Right, values.Bottom, out var plan))
             return false;
 
-        var shape = CurrentSlide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        var shape = FindShape(CurrentSlide.Shapes, shapeId);
         if (shape?.Kind != SlideShapeKind.Picture)
             return false;
 
@@ -949,7 +949,7 @@ public sealed class EditingSession
         if (CurrentSlide is null)
             return false;
 
-        var shape = CurrentSlide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        var shape = FindShape(CurrentSlide.Shapes, shapeId);
         if (shape?.Kind != SlideShapeKind.Picture)
             return false;
 
