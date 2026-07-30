@@ -224,6 +224,41 @@ public static class DocumentNoteRegionPlanner
     }
 
     /// <summary>
+    /// Converts one physical continuation fragment into the ordinary renderer-neutral note-region
+    /// shape. Hosts must render this plan instead of rebuilding the full source footnote, otherwise
+    /// every continuation page repeats text that belongs to another physical page.
+    /// </summary>
+    public static DocumentNoteRegionPlan BuildFootnoteContinuationRegion(
+        DocumentFootnoteContinuationPagePlan page,
+        double contentWidthDip)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+
+        var rows = page.Fragments
+            .Select(fragment => new DocumentNoteRegionRow(
+                fragment.NoteId,
+                fragment.SequenceIndex,
+                fragment.Label ?? string.Empty,
+                fragment.Text,
+                fragment.EstimatedHeightDip))
+            .ToList();
+        var hasSeparator = page.SeparatorKind is not DocumentFootnoteSeparatorKind.None;
+        return new DocumentNoteRegionPlan(
+            DocumentNoteRegionKind.Footnotes,
+            Math.Max(1, page.PageNumber),
+            IsSyntheticPage: false,
+            Heading: null,
+            SeparatorXOffsetDip: 0,
+            SeparatorWidthDip: Math.Min(FootnoteSeparatorWidthDip, Math.Max(0, contentWidthDip)),
+            TextFontSizePt: NoteTextFontSizePt,
+            LabelFontSizePt: NoteTextFontSizePt * LabelScale,
+            EstimatedHeightDip: hasSeparator
+                ? Math.Max(page.EstimatedHeightDip, EstimateRegionHeight(rows, hasHeading: false, hasSeparator: true))
+                : Math.Max(page.EstimatedHeightDip, EstimateRegionHeight(rows, hasHeading: false, hasSeparator: false)),
+            Rows: rows);
+    }
+
+    /// <summary>
     /// Inserts only intermediate continuation pages after the body page that owns each long footnote.
     /// When a following body page has no competing overflowing footnote, the final fragment shares that
     /// page's footnote band, matching Word's resume-body-before-final-footnote ownership. Invalid or
