@@ -357,7 +357,9 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(30)); // C3
 
                 var columnFormulaAddress = new CellAddress(sheet.Id, 10, 7); // G10
-                window.BeginFormulaEditForTest(columnFormulaAddress, "=SUM(");
+                window.BeginFormulaPointModeEditForTest(columnFormulaAddress, "=SUM()");
+                window.FormulaPointModeForTest.Should().BeTrue();
+                GetField<TextBox>(window, "_formulaBox").CaretIndex = "=SUM(".Length;
                 InvokeHeaderSelection(window, "SelectEntireColumn", 2u, false);
 
                 window.FormulaBoxTextForTest.Should().Be("=SUM(B:B)");
@@ -369,7 +371,9 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 sheet.GetValue(columnFormulaAddress).Should().Be(new NumberValue(30));
 
                 var rowFormulaAddress = new CellAddress(sheet.Id, 11, 7); // G11
-                window.BeginFormulaEditForTest(rowFormulaAddress, "=SUM(");
+                window.BeginFormulaPointModeEditForTest(rowFormulaAddress, "=SUM()");
+                window.FormulaPointModeForTest.Should().BeTrue();
+                GetField<TextBox>(window, "_formulaBox").CaretIndex = "=SUM(".Length;
                 InvokeHeaderSelection(window, "SelectEntireRow", 3u, false);
 
                 window.FormulaBoxTextForTest.Should().Be("=SUM(3:3)");
@@ -404,7 +408,8 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             try
             {
                 var formulaAddress = new CellAddress(sheet.Id, 2, 2);
-                window.BeginFormulaEditForTest(formulaAddress, "=SUM(");
+                window.BeginFormulaPointModeEditForTest(formulaAddress, "=SUM(");
+                window.FormulaPointModeForTest.Should().BeTrue();
                 typeof(MainWindow).GetMethod("SelectAllCells", BindingFlags.Instance | BindingFlags.NonPublic)!
                     .Invoke(window, null);
 

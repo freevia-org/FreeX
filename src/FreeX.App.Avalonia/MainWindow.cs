@@ -960,6 +960,21 @@ public sealed partial class MainWindow : Window
     internal void BeginFormulaEditForTest(CellAddress address, string? initialText = null) =>
         BeginFormulaEdit(address, initialText);
 
+    /// <summary>
+    /// Test-only seam that starts a Formula Bar edit through the same first-character path as a
+    /// user typing <c>=</c>, then replaces the still-live formula text with the requested suffix.
+    /// This keeps point mode active for tests that need to exercise worksheet reference selection.
+    /// </summary>
+    internal void BeginFormulaPointModeEditForTest(CellAddress address, string formulaText)
+    {
+        if (!FormulaEditInteractionPlanner.IsFormulaText(formulaText))
+            throw new ArgumentException("Formula point-mode text must start with '='.", nameof(formulaText));
+
+        BeginFormulaEdit(address, "=");
+        _formulaBox.Text = formulaText;
+        MoveFormulaBoxCaretToEnd();
+    }
+
     internal int FormulaReferenceGripCountForTest => _formulaReferenceGripVisuals.Count;
 
     internal bool RaiseFormulaReferenceGripDragForTest(int highlightIndex, CellAddress target)

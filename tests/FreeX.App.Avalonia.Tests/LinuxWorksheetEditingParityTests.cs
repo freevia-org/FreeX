@@ -125,7 +125,8 @@ public sealed class LinuxWorksheetEditingParityTests
             try
             {
                 var formulaAddress = new CellAddress(sheet.Id, 2, 2);
-                window.BeginFormulaEditForTest(formulaAddress, "=SUM(");
+                window.BeginFormulaPointModeEditForTest(formulaAddress, "=SUM(");
+                window.FormulaPointModeForTest.Should().BeTrue();
                 typeof(MainWindow).GetMethod("SelectAllCells", BindingFlags.Instance | BindingFlags.NonPublic)!
                     .Invoke(window, null);
 
