@@ -349,8 +349,12 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
         }, CancellationToken.None);
     }
 
-    [Fact]
-    public async Task AltDown_FromNameBox_OpensTheProductionAutocompletePopup()
+    [Theory]
+    [InlineData(Key.Down, KeyModifiers.Alt)]
+    [InlineData(Key.F4, KeyModifiers.None)]
+    public async Task DropdownShortcut_FromNameBox_OpensTheProductionAutocompletePopup(
+        Key key,
+        KeyModifiers modifiers)
     {
         await Session.Dispatch(() =>
         {
@@ -360,8 +364,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             window.CellAddressBoxTextForTest = "Sales";
             window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs
             {
-                Key = Key.Down,
-                KeyModifiers = KeyModifiers.Alt,
+                Key = key,
+                KeyModifiers = modifiers,
             });
 
             window.CellAddressAutocompleteOpenForTest.Should().BeTrue();
