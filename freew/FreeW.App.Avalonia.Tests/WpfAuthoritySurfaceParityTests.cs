@@ -258,6 +258,24 @@ public sealed class WpfAuthoritySurfaceParityTests
     }
 
     [Fact]
+    public async Task Page_setup_preserves_Wpf_action_semantics_and_child_order()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new PageSetupDialog(new PageSettings());
+            var buttons = dialog.GetLogicalDescendants().OfType<Button>()
+                .Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton)
+                .Select(button => button.Content?.ToString()?.TrimStart('_'))
+                .ToArray();
+
+            buttons.Should().Equal("OK", "Cancel", "Line Numbers\u2026", "Borders\u2026");
+            dialog.GetLogicalDescendants().OfType<Button>()
+                .Should().ContainSingle(button => button.IsDefault && button.Content != null && button.Content!.ToString()!.TrimStart('_') == "OK")
+                .And.ContainSingle(button => button.IsCancel && button.Content != null && button.Content!.ToString()!.TrimStart('_') == "Cancel");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public void Table_properties_visual_harness_defers_state_population_to_the_common_pass()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
