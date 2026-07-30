@@ -54,6 +54,7 @@ $containerName = "freex-linux-interactive-freex-$Port"
 $x11ProbeScript = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freex-input-probes.sh"
 $native3dFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave66Native3DFixture.ps1"
 $native3dSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-native-3d-formula-validation.schema.json"
+$nameBoxObjectsSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-name-box-dropdown-objects-validation.schema.json"
 $runnerSchemaVersion = 2
 $resumeRequested = -not [string]::IsNullOrWhiteSpace($ResumeReportDirectory)
 $reportStamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
@@ -234,6 +235,133 @@ function Assert-Native3DPostcondition {
         [string]$postcondition.package.formula -ne $expectedPackageFormula -or
         [string]$postcondition.package.cachedResult -notmatch '^234(?:\.0+)?$') {
         throw "Native 3-D postcondition failed exact formula/result/save/reopen/package validation."
+    }
+}
+
+function Assert-NameBoxDropdownObjectPostcondition {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    if (-not (Test-Path -LiteralPath $nameBoxObjectsSchemaPath -PathType Leaf)) {
+        throw "Name Box object validation schema is missing: $nameBoxObjectsSchemaPath"
+    }
+    $postconditionPath = Join-Path $EvidenceDirectory "name-box-dropdown-object-postcondition.json"
+    if (-not (Test-Path -LiteralPath $postconditionPath -PathType Leaf)) {
+        throw "Name Box object probe did not emit its required postcondition JSON: $postconditionPath"
+    }
+    try {
+        $postcondition = Get-Content -LiteralPath $postconditionPath -Raw | ConvertFrom-Json
+    } catch {
+        throw "Name Box object postcondition is not valid JSON: $postconditionPath"
+    }
+    $schema = Get-Content -LiteralPath $nameBoxObjectsSchemaPath -Raw | ConvertFrom-Json
+    if ([int]$schema.properties.schemaVersion.const -ne 1 -or
+        [string]$schema.properties.suite.const -ne "freex-name-box-dropdown-objects-physical") {
+        throw "Name Box object validation schema is not the expected version 1 contract."
+    }
+    $expectedOrder = @(
+        "PhysicalChart",
+        "PhysicalName",
+        "PhysicalPicture",
+        "PhysicalShape",
+        "PhysicalTable",
+        "PhysicalTextBox"
+    )
+    $actualOrder = @($postcondition.expectedOrder | ForEach-Object { [string]$_ })
+    $expectedContracts = [ordered]@{
+        "name-box-dropdown-chart-physical" = @{
+            expectedName = "PhysicalChart"
+            expectedKind = "Chart"
+            expectedId = "67000000-0000-0000-0000-000000000004"
+            expectedActiveCell = "D5"
+        }
+        "name-box-dropdown-picture-physical" = @{
+            expectedName = "PhysicalPicture"
+            expectedKind = "Picture"
+            expectedId = "67000000-0000-0000-0000-000000000002"
+            expectedActiveCell = "D3"
+        }
+        "name-box-dropdown-shape-physical" = @{
+            expectedName = "PhysicalShape"
+            expectedKind = "Shape"
+            expectedId = "67000000-0000-0000-0000-000000000001"
+            expectedActiveCell = "D2"
+        }
+        "name-box-dropdown-textbox-physical" = @{
+            expectedName = "PhysicalTextBox"
+            expectedKind = "TextBox"
+            expectedId = "67000000-0000-0000-0000-000000000003"
+            expectedActiveCell = "D4"
+        }
+    }
+    $expectedIds = @($expectedContracts.Keys)
+    $results = @($postcondition.results)
+    $actualIds = @($results | ForEach-Object { [string]$_.id })
+    $missing = @($expectedIds | Where-Object { $_ -notin $actualIds })
+    $duplicates = @($actualIds | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name)
+    $failed = @($results | Where-Object { [string]$_.status -ne "passed" })
+    $violations = [System.Collections.Generic.List[string]]::new()
+    if ((@($actualOrder) -join "|") -ne (@($expectedOrder) -join "|")) {
+        $violations.Add("expectedOrder='$(@($actualOrder) -join ',')'")
+    }
+    foreach ($expectedId in $expectedIds) {
+        $rows = @($results | Where-Object { [string]$_.id -eq $expectedId })
+        if ($rows.Count -ne 1) {
+            $violations.Add("$expectedId rowCount=$($rows.Count)")
+            continue
+        }
+
+        $row = $rows[0]
+        $contract = $expectedContracts[$expectedId]
+        foreach ($field in @("expectedName", "expectedKind", "expectedId")) {
+            if ([string]$row.$field -ne [string]$contract[$field]) {
+                $violations.Add("$expectedId $field='$([string]$row.$field)'")
+            }
+        }
+        foreach ($field in @("observedName", "observedObjectKind", "observedSelectedObjectKind", "observedId", "observedNameBox", "observedActiveCell")) {
+            $expectedValue = switch ($field) {
+                "observedName" { $contract.expectedName }
+                "observedObjectKind" { $contract.expectedKind }
+                "observedSelectedObjectKind" { $contract.expectedKind }
+                "observedId" { $contract.expectedId }
+                "observedNameBox" { $contract.expectedName }
+                "observedActiveCell" { $contract.expectedActiveCell }
+            }
+            if ([string]$row.$field -ne [string]$expectedValue) {
+                $violations.Add("$expectedId $field='$([string]$row.$field)'")
+            }
+        }
+        if ([string]$row.baselineStage -ne "neutral-cell-selected" -or
+            -not [string]::IsNullOrEmpty([string]$row.baselineSelectedObjectKind) -or
+            -not [string]::IsNullOrEmpty([string]$row.baselineSelectedObjectId) -or
+            [string]$row.baselineNameBox -ne "G10" -or
+            [string]$row.baselineActiveCell -ne "G10" -or
+            [string]$row.observedStage -ne "object-selected" -or
+            [string]$row.observedItemKind -ne "Object" -or
+            [string]$row.status -ne "passed") {
+            $violations.Add("$expectedId observed stage/item-kind/active-cell/status is invalid")
+        }
+        if ([string]$row.baselineSequence -notmatch '^\d+$' -or
+            [string]$row.observedSequence -notmatch '^\d+$' -or
+            [int]$row.observedSequence -le [int]$row.baselineSequence) {
+            $violations.Add("$expectedId sequence is not fresh")
+        }
+    }
+    if ([int]$postcondition.schemaVersion -ne 1 -or
+        [string]$postcondition.suite -ne "freex-name-box-dropdown-objects-physical" -or
+        [string]$postcondition.platform -ne "linux" -or
+        [string]$postcondition.shell -ne "avalonia" -or
+        [string]$postcondition.app -ne "FreeX" -or
+        $results.Count -ne $expectedIds.Count -or
+        $missing.Count -ne 0 -or
+        $duplicates.Count -ne 0 -or
+        $failed.Count -ne 0 -or
+        [int]$postcondition.summary.passed -ne $expectedIds.Count -or
+        [int]$postcondition.summary.failed -ne 0 -or
+        [int]$postcondition.summary.total -ne $expectedIds.Count) {
+        $violations.Add("root/count/status contract is invalid")
+    }
+    if ($violations.Count -gt 0) {
+        throw "Name Box object postcondition failed exact four-kind validation: $($violations -join '; ')."
     }
 }
 
@@ -817,7 +945,11 @@ try {
             "/work/x11-validation/pivot-runtime-evidence.jsonl"
         )
         if ($PhysicalProbeSelector -eq "name-box-dropdown") {
-            $x11AppArguments += "--freex-name-box-dropdown-physical"
+            $x11AppArguments += @(
+                "--freex-name-box-dropdown-physical",
+                "--freex-name-box-dropdown-physical-evidence",
+                "/work/x11-validation/name-box-dropdown-object-state.jsonl"
+            )
         }
         $x11Session = Start-ValidationSession -AppArgument $x11AppArguments -DocumentPath $PhysicalDocumentPath
         Ensure-ReportProvenance
@@ -845,7 +977,11 @@ try {
     $requiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "name-box-dropdown") {
         @(
             "name-box-dropdown-defined-name-physical",
-            "name-box-dropdown-table-physical"
+            "name-box-dropdown-table-physical",
+            "name-box-dropdown-chart-physical",
+            "name-box-dropdown-picture-physical",
+            "name-box-dropdown-shape-physical",
+            "name-box-dropdown-textbox-physical"
         )
     } elseif ($PhysicalProbeSelector -eq "pivot-field-list") {
         @(
@@ -925,7 +1061,11 @@ try {
     $artifactRequiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "name-box-dropdown") {
         @(
             "name-box-dropdown-defined-name-physical",
-            "name-box-dropdown-table-physical"
+            "name-box-dropdown-table-physical",
+            "name-box-dropdown-chart-physical",
+            "name-box-dropdown-picture-physical",
+            "name-box-dropdown-shape-physical",
+            "name-box-dropdown-textbox-physical"
         )
     } elseif ($PhysicalProbeSelector -eq "pivot-field-list") {
         @(
@@ -1039,6 +1179,9 @@ try {
     }
     if ($PhysicalProbeSelector -eq "formula-3d-native-xlsx") {
         Assert-Native3DPostcondition -EvidenceDirectory $x11EvidenceDirectory
+    }
+    if ($PhysicalProbeSelector -eq "name-box-dropdown") {
+        Assert-NameBoxDropdownObjectPostcondition -EvidenceDirectory $x11EvidenceDirectory
     }
     $x11ReportDirectory = Join-Path $reportDirectory "x11-validation"
     New-Item -ItemType Directory -Path $x11ReportDirectory -Force | Out-Null

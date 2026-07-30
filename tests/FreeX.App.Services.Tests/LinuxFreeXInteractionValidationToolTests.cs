@@ -46,4 +46,22 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         script.Should().Contain("Physical X11 manifest does not satisfy schema v2");
         script.Should().Contain("x11-validation/x11-input-results.json");
     }
+
+    [Fact]
+    public void NameBoxObjectValidationUsesFixedIdentityContractsAndNeutralBaselines()
+    {
+        var script = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+
+        script.Should().Contain("$expectedOrder = @(");
+        script.Should().Contain("$expectedContracts = [ordered]@{");
+        script.Should().Contain("expectedName = \"PhysicalChart\"");
+        script.Should().Contain("expectedName = \"PhysicalPicture\"");
+        script.Should().Contain("expectedName = \"PhysicalShape\"");
+        script.Should().Contain("expectedName = \"PhysicalTextBox\"");
+        script.Should().Contain("observedSelectedObjectKind");
+        script.Should().Contain("baselineStage -ne \"neutral-cell-selected\"");
+        script.Should().Contain("baselineNameBox -ne \"G10\"");
+        script.Should().Contain("expectedOrder='$(@($actualOrder) -join ',')'");
+    }
 }

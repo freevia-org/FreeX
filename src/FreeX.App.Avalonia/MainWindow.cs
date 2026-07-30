@@ -1332,6 +1332,13 @@ public sealed partial class MainWindow : Window
         MinHeight = 520;
         Background = WindowBackground;
         Content = BuildContent();
+        if (startupArguments.Any(argument => string.Equals(
+                argument,
+                InteractionValidationOptions.NameBoxDropdownPhysicalFixtureArgument,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            InitializeNameBoxDropdownPhysicalEvidence();
+        }
         ConfigureNativeMenu();
         if (source is not null)
             RecordStartupRecentWorkbook(source);
@@ -12771,6 +12778,7 @@ public sealed partial class MainWindow : Window
         ClearSelectionExtensionState();
         ClearSelectedDrawingObject();
         _session.SelectCell(address);
+        RecordNameBoxDropdownPhysicalEvidence(item: null, stage: "neutral-cell-selected");
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
         ApplyFormatPainterAfterTargetSelection();
@@ -19093,6 +19101,37 @@ public sealed partial class MainWindow : Window
             Height = 48,
             IsVisible = true,
         });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Id = Guid.Parse("67000000-0000-0000-0000-000000000002"),
+            Name = "PhysicalPicture",
+            Anchor = new CellAddress(sheet.Id, 3, 4),
+            Kind = PictureKind.Image,
+            ImageBytes = [1, 2, 3, 4],
+            ContentType = "image/png",
+            Width = 96,
+            Height = 48,
+            IsVisible = true,
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Id = Guid.Parse("67000000-0000-0000-0000-000000000003"),
+            Name = "PhysicalTextBox",
+            Anchor = new CellAddress(sheet.Id, 4, 4),
+            Text = "Physical Name Box text box",
+            Width = 120,
+            Height = 48,
+            IsVisible = true,
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Id = Guid.Parse("67000000-0000-0000-0000-000000000004"),
+            Name = "PhysicalChart",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 5, 4),
+                new CellAddress(sheet.Id, 6, 5)),
+            IsVisible = true,
+        });
     }
 
     private bool SelectCellAddressBoxItem(NameBoxNavigationItem item)
@@ -19130,6 +19169,7 @@ public sealed partial class MainWindow : Window
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
         RefreshShell($"Selected {FormatDrawingObjectKind(objectKind)}: {item.Name}");
+        RecordNameBoxDropdownPhysicalEvidence(item, "object-selected");
         return true;
     }
 

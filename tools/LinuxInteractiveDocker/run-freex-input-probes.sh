@@ -298,10 +298,11 @@ probe_name_box_dropdown() {
     fi
     defined_popup_open="$popup_open"
 
-    # The fixture orders entries as PhysicalName, PhysicalShape, PhysicalTable.
-    # MenuFlyout receives focus when opened; Home/Enter selects PhysicalName.
+    # The fixture is sorted by the shared planner as PhysicalChart, PhysicalName,
+    # PhysicalPicture, PhysicalShape, PhysicalTable, PhysicalTextBox.
+    # MenuFlyout receives focus when opened; Home/Down/Enter selects the entry.
     if $popup_open; then
-        xdotool key --clearmodifiers --delay "$input_delay_ms" Home Return
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Home Down Return
         sleep "$settle_seconds"
         capture "name-box-dropdown-defined-name.png"
         send_key ctrl+c
@@ -334,7 +335,7 @@ probe_name_box_dropdown() {
     fi
     table_popup_open="$popup_open"
     if $popup_open; then
-        xdotool key --clearmodifiers --delay "$input_delay_ms" Home Down Down Return
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Home Down Down Down Down Return
         sleep "$settle_seconds"
         capture "name-box-dropdown-table.png"
         send_key ctrl+c
@@ -346,7 +347,7 @@ probe_name_box_dropdown() {
     fi
 
     write_artifact "name-box-dropdown-postcondition.txt" \
-        "dropdown-x=$dropdown_x\ndropdown-y=$dropdown_y\nexpected-order=PhysicalName,PhysicalShape,PhysicalTable\ndefined-popup-open=$defined_popup_open\ntable-popup-open=$table_popup_open\ndefined-clipboard=$defined_clipboard\ntable-clipboard=$table_clipboard\ndefined-name-passed=$defined_passed\ntable-passed=$table_passed\n"
+        "dropdown-x=$dropdown_x\ndropdown-y=$dropdown_y\nexpected-order=PhysicalChart,PhysicalName,PhysicalPicture,PhysicalShape,PhysicalTable,PhysicalTextBox\ndefined-popup-open=$defined_popup_open\ntable-popup-open=$table_popup_open\ndefined-clipboard=$defined_clipboard\ntable-clipboard=$table_clipboard\ndefined-name-passed=$defined_passed\ntable-passed=$table_passed\n"
     if $defined_passed; then
         record "name-box-dropdown-defined-name-physical" "passed" \
             "name-box-dropdown-defined-before.png; name-box-dropdown-open-root.png; name-box-dropdown-defined-before-x11.txt; name-box-dropdown-defined-open-x11.txt; name-box-dropdown-defined-windows.txt; name-box-dropdown-defined-name.png; defined-clipboard=$defined_clipboard" \
@@ -364,6 +365,164 @@ probe_name_box_dropdown() {
     else
         record "name-box-dropdown-table-physical" "failed" "$artifacts" \
             "The non-defined-name table flyout selection did not produce the expected North/East table-body clipboard values (observed '$table_clipboard')." "$artifacts"
+    fi
+
+    : > "$output/name-box-dropdown-object-results.jsonl"
+    probe_name_box_object "$output" "$dropdown_x" "$dropdown_y" "chart" 0 "Chart" "67000000-0000-0000-0000-000000000004" "PhysicalChart"
+    probe_name_box_object "$output" "$dropdown_x" "$dropdown_y" "picture" 2 "Picture" "67000000-0000-0000-0000-000000000002" "PhysicalPicture"
+    probe_name_box_object "$output" "$dropdown_x" "$dropdown_y" "shape" 3 "Shape" "67000000-0000-0000-0000-000000000001" "PhysicalShape"
+    probe_name_box_object "$output" "$dropdown_x" "$dropdown_y" "textbox" 5 "TextBox" "67000000-0000-0000-0000-000000000003" "PhysicalTextBox"
+    python3 - "$output/name-box-dropdown-object-postcondition.json" "$output/name-box-dropdown-object-results.jsonl" <<'PY'
+import json
+import sys
+
+destination, source = sys.argv[1:]
+with open(source, encoding="utf-8") as stream:
+    results = [json.loads(line) for line in stream if line.strip()]
+passed = sum(result["status"] == "passed" for result in results)
+with open(destination, "w", encoding="utf-8") as stream:
+    json.dump({
+        "schemaVersion": 1,
+        "suite": "freex-name-box-dropdown-objects-physical",
+        "platform": "linux",
+        "shell": "avalonia",
+        "app": "FreeX",
+        "expectedOrder": [
+            "PhysicalChart", "PhysicalName", "PhysicalPicture",
+            "PhysicalShape", "PhysicalTable", "PhysicalTextBox",
+        ],
+        "summary": {"passed": passed, "failed": len(results) - passed, "total": len(results)},
+        "results": results,
+    }, stream, indent=2)
+    stream.write("\n")
+}
+
+read_name_box_event() {
+    python3 - "$1" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as stream:
+    lines = [line.strip() for line in stream if line.strip()]
+if not lines:
+    raise SystemExit(1)
+payload = json.loads(lines[-1])
+def value(key):
+    item = payload.get(key)
+    return "" if item is None else str(item)
+print("\t".join(value(key) for key in (
+    "sequence", "stage", "itemName", "itemKind", "itemObjectKind",
+    "selectedObjectKind", "selectedObjectId", "nameBoxText", "activeCell")))
+PY
+}
+
+record_name_box_object_result() {
+    local suffix="$1" expected_kind="$2" expected_id="$3" expected_name="$4" status="$5"
+    local baseline_sequence="$6" baseline_stage="$7" baseline_selected_kind="$8" baseline_selected_id="$9"
+    local baseline_name_box="${10}" baseline_cell="${11}" observed_sequence="${12}" observed_stage="${13}"
+    local observed_name="${14}" observed_item_kind="${15}" observed_object_kind="${16}" observed_selected_kind="${17}"
+    local observed_id="${18}" observed_name_box="${19}" observed_cell="${20}"
+    local result_path="$output/name-box-dropdown-object-results.jsonl"
+    printf '{"id":"name-box-dropdown-%s-physical","expectedName":"%s","expectedKind":"%s","expectedId":"%s","baselineSequence":%s,"baselineStage":"%s","baselineSelectedObjectKind":"%s","baselineSelectedObjectId":"%s","baselineNameBox":"%s","baselineActiveCell":"%s","observedSequence":%s,"observedStage":"%s","observedName":"%s","observedItemKind":"%s","observedObjectKind":"%s","observedSelectedObjectKind":"%s","observedId":"%s","observedNameBox":"%s","observedActiveCell":"%s","status":"%s"}\n' \
+        "$(json_escape "$suffix")" "$(json_escape "$expected_name")" "$(json_escape "$expected_kind")" "$(json_escape "$expected_id")" \
+        "${baseline_sequence:-0}" "$(json_escape "$baseline_stage")" "$(json_escape "$baseline_selected_kind")" "$(json_escape "$baseline_selected_id")" \
+        "$(json_escape "$baseline_name_box")" "$(json_escape "$baseline_cell")" "${observed_sequence:-0}" "$(json_escape "$observed_stage")" "$(json_escape "$observed_name")" \
+        "$(json_escape "$observed_item_kind")" "$(json_escape "$observed_object_kind")" "$(json_escape "$observed_selected_kind")" "$(json_escape "$observed_id")" \
+        "$(json_escape "$observed_name_box")" "$(json_escape "$observed_cell")" "$status" >> "$result_path"
+}
+
+probe_name_box_object() {
+    local probe_output="$1" dropdown_x="$2" dropdown_y="$3" suffix="$4" down_count="$5"
+    local expected_kind="$6" expected_id="$7" expected_name="$8"
+    local before_file="name-box-dropdown-$suffix-before.png"
+    local open_root="name-box-dropdown-$suffix-open-root.png"
+    local open_x11="name-box-dropdown-$suffix-open-x11.txt"
+    local windows_file="name-box-dropdown-$suffix-windows.txt"
+    local selected_file="name-box-dropdown-$suffix-selected.png"
+    local artifact_list="$before_file;$open_root;$open_x11;$windows_file;$selected_file;name-box-dropdown-object-state.jsonl;name-box-dropdown-object-postcondition.json"
+    local neutral_ok=true popup_open=false baseline_event="" event="" baseline_sequence=0
+    local baseline_stage="" baseline_selected_kind="" baseline_selected_id="" baseline_name_box="" baseline_cell=""
+    local observed_sequence=0 observed_stage="" observed_name="" observed_item_kind="" observed_object_kind="" observed_selected_kind="" observed_id="" observed_name_box="" observed_cell=""
+    local passed=false note=""
+
+    if ! select_cell 6 9 G10; then
+        neutral_ok=false
+    fi
+    capture "$before_file"
+    baseline_event="$(read_name_box_event "$probe_output/name-box-dropdown-object-state.jsonl" || true)"
+    IFS=$'\t' read -r baseline_sequence baseline_stage _ _ _ baseline_selected_kind baseline_selected_id baseline_name_box baseline_cell <<< "$baseline_event"
+    [[ "$baseline_sequence" =~ ^[0-9]+$ ]] || baseline_sequence=0
+    if [[ "$baseline_stage" != "neutral-cell-selected" ||
+          -n "$baseline_selected_kind" ||
+          -n "$baseline_selected_id" ||
+          "$baseline_name_box" != "G10" ||
+          "$baseline_cell" != "G10" ]]; then
+        neutral_ok=false
+    fi
+
+    window_count_before="$(x11_visible_window_count)"
+    focus_app
+    xdotool_mousemove_sync "$dropdown_x" "$dropdown_y" click 1
+    sleep "$settle_seconds"
+    scrot "$probe_output/$open_root"
+    x11_window_snapshot "$probe_output/$open_x11"
+    wmctrl -lG > "$probe_output/$windows_file"
+    window_count_open="$(x11_visible_window_count)"
+    if (( window_count_open > window_count_before )); then
+        popup_open=true
+    fi
+
+    if $neutral_ok && $popup_open; then
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Home
+        for ((index = 0; index < down_count; index++)); do
+            xdotool key --clearmodifiers --delay "$input_delay_ms" Down
+        done
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Return
+        sleep "$settle_seconds"
+        capture "$selected_file"
+
+        for _ in $(seq 1 12); do
+            event="$(read_name_box_event "$probe_output/name-box-dropdown-object-state.jsonl" || true)"
+            IFS=$'\t' read -r observed_sequence observed_stage observed_name observed_item_kind observed_object_kind observed_selected_kind observed_id observed_name_box observed_cell <<< "$event"
+            [[ "$observed_sequence" =~ ^[0-9]+$ ]] || observed_sequence=0
+            if (( observed_sequence > baseline_sequence )); then
+                break
+            fi
+            sleep 0.12
+        done
+        if [[ "$observed_sequence" =~ ^[0-9]+$ ]] &&
+           (( observed_sequence > baseline_sequence )) &&
+           [[ "$observed_stage" == "object-selected" ]] &&
+           [[ "$observed_name" == "$expected_name" ]] &&
+           [[ "$observed_item_kind" == "Object" ]] &&
+           [[ "$observed_object_kind" == "$expected_kind" ]] &&
+           [[ "$observed_selected_kind" == "$expected_kind" ]] &&
+           [[ "$observed_id" == "$expected_id" ]] &&
+           [[ "$observed_name_box" == "$expected_name" ]] &&
+           [[ -n "$observed_cell" ]]; then
+            passed=true
+            note="Physical Name Box selection from neutral G10 produced fresh sequence $observed_sequence with exact $expected_kind identity $expected_id and Name Box text $expected_name."
+        else
+            note="Expected fresh $expected_kind selection '$expected_name'/$expected_id from neutral G10, observed sequence=$observed_sequence stage=$observed_stage item=$observed_name/$observed_item_kind/$observed_object_kind selected=$observed_selected_kind id=$observed_id nameBox=$observed_name_box activeCell=$observed_cell baseline=$baseline_sequence."
+        fi
+    else
+        capture "$selected_file"
+        note="The physical probe could not establish neutral selection or a fresh visible Name Box popup before selecting $expected_kind '$expected_name'."
+    fi
+
+    local status="failed"
+    if $passed; then status="passed"; fi
+    record_name_box_object_result \
+        "$suffix" "$expected_kind" "$expected_id" "$expected_name" "$status" \
+        "$baseline_sequence" "$baseline_stage" "$baseline_selected_kind" "$baseline_selected_id" "$baseline_name_box" "$baseline_cell" \
+        "$observed_sequence" "$observed_stage" "$observed_name" "$observed_item_kind" "$observed_object_kind" "$observed_selected_kind" "$observed_id" "$observed_name_box" "$observed_cell"
+    if $passed; then
+        record "name-box-dropdown-$suffix-physical" "passed" \
+            "$before_file; $open_root; $open_x11; $windows_file; $selected_file; name-box-dropdown-object-state.jsonl; object-kind=$observed_object_kind; object-id=$observed_id; name-box=$observed_name_box" \
+            "$note" "$artifact_list"
+    else
+        record "name-box-dropdown-$suffix-physical" "failed" "$artifact_list" "$note" "$artifact_list"
     fi
 }
 

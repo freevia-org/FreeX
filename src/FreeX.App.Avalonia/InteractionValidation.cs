@@ -31,6 +31,7 @@ internal sealed record InteractionValidationOptions(
     public const string ContextStartArgument = "--interaction-validation-context-start";
     public const string ContextCountArgument = "--interaction-validation-context-count";
     public const string NameBoxDropdownPhysicalFixtureArgument = "--freex-name-box-dropdown-physical";
+    public const string NameBoxDropdownPhysicalEvidenceArgument = "--freex-name-box-dropdown-physical-evidence";
 
     public static bool TryParse(
         IReadOnlyList<string> args,
