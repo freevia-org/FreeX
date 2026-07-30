@@ -529,6 +529,26 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedNoteRegionPlanner_UsesDocumentWideFootnoteSequenceForLaterPageFragments()
+    {
+        var document = new TextDocument();
+        document.Footnotes[1] = new Footnote(1, "First page footnote.");
+        document.Footnotes[2] = new Footnote(2, "Later page footnote.");
+
+        var plan = DocumentNoteRegionPlanner.BuildFootnoteContinuation(
+            document,
+            [2],
+            firstPageNumber: 3,
+            contentWidthDip: 240,
+            firstAvailableHeightDip: 48,
+            continuationAvailableHeightDip: 48);
+
+        plan.Pages.SelectMany(page => page.Fragments)
+            .Single(fragment => fragment.StartsNote)
+            .Label.Should().Be("2");
+    }
+
+    [Fact]
     public void SharedReviewFactories_BuildF2ReviewContracts()
     {
         var tracked = FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument();
