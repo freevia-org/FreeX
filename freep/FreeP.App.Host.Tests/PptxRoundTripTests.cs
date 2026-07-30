@@ -2577,6 +2577,34 @@ public sealed class Shape3dAndMotionRegressionTests
             "AfterPrevious trigger must survive round-trip");
     }
 
+    [Fact]
+    public void ParagraphBuildList_PreservesThroughReadWriteRoundTrip()
+    {
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].AnimationBuildListXml = new XElement(p + "bldLst",
+            new XElement(p + "bldP",
+                new XAttribute("spid", "2"),
+                new XAttribute("grpId", "0"),
+                new XAttribute("build", "p"),
+                new XAttribute("advAuto", "1"))).ToString(SaveOptions.DisableFormatting);
+
+        using var source = new MemoryStream();
+        PptxPackageWriter.Write(pres, source);
+        source.Position = 0;
+        var loaded = PptxPackageReader.Read(source);
+        loaded.Slides[0].AnimationBuildListXml.Should().Contain("bldP");
+        loaded.Slides[0].AnimationBuildListXml.Should().Contain("build=\"p\"");
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        saved.Position = 0;
+        var reloaded = PptxPackageReader.Read(saved);
+
+        reloaded.Slides[0].AnimationBuildListXml.Should().Contain("spid=\"2\"");
+        reloaded.Slides[0].AnimationBuildListXml.Should().Contain("advAuto=\"1\"");
+    }
+
     // Wheel spoke metadata writes and reads through the PPTX timing tree.
 
     [Fact]
