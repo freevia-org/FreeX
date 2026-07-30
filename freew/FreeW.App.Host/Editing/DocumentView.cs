@@ -2328,6 +2328,40 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void BeginShapeEditPoints()
     {
+        if (_selectedFloatingGroupChild is { } selectedChild
+            && FindFloatingObjectLocation(selectedChild.RootGroup) is var groupLocation
+            && groupLocation.BlockIndex >= 0
+            && DrawingGroupChildPathResolver.TryGetChild(
+                selectedChild.RootGroup,
+                selectedChild.ChildPath,
+                out _,
+                out var nestedChild)
+            && nestedChild is Shape nestedShape)
+        {
+            if (!nestedShape.HasCustomGeometry)
+            {
+                CustomGeometry poly = nestedShape.Kind switch
+                {
+                    ShapeKind.Ellipse => CustomGeometry.EllipsePoly(),
+                    ShapeKind.RoundedRectangle => CustomGeometry.RoundedRectPoly(),
+                    _ => CustomGeometry.RectanglePoly(),
+                };
+                _commands.Execute(new SetShapeCustomGeometryCommand(
+                    groupLocation.BlockIndex,
+                    groupLocation.RunIndex,
+                    poly,
+                    selectedChild.ChildPath));
+            }
+
+            _shapeEditPointsTarget = new ShapeEditPointsTarget(
+                groupLocation.BlockIndex,
+                groupLocation.RunIndex,
+                nestedShape,
+                selectedChild.ChildPath.ToArray());
+            SyncShapeEditPointsAdorner();
+            return;
+        }
+
         CommitToModel();
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
@@ -2368,7 +2402,8 @@ public sealed class DocumentView : RichTextBox
             target.RunIndex,
             segmentIndex,
             x,
-            y));
+            y,
+            target.ChildPath));
     }
 
     /// <summary>
@@ -5172,7 +5207,12 @@ public sealed class DocumentView : RichTextBox
         && _model.Blocks[target.BlockIndex] is ModelParagraph paragraph
         && target.RunIndex >= 0
         && target.RunIndex < paragraph.Runs.Count
-        && ReferenceEquals(paragraph.Runs[target.RunIndex].Shape, target.Shape)
+        && (target.ChildPath is null
+            ? ReferenceEquals(paragraph.Runs[target.RunIndex].Shape, target.Shape)
+            : paragraph.Runs[target.RunIndex].DrawingGroup is { } root
+                && DrawingGroupChildPathResolver.TryGetChild(
+                    root, target.ChildPath, out _, out var child)
+                && ReferenceEquals(child, target.Shape))
         && target.Shape.HasCustomGeometry;
 
     // Add, remove, or refresh the line-number overlay to match the model's LineNumberMode. Mirrors
@@ -16019,7 +16059,11 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
-    private sealed record ShapeEditPointsTarget(int BlockIndex, int RunIndex, Shape Shape);
+    private sealed record ShapeEditPointsTarget(
+        int BlockIndex,
+        int RunIndex,
+        Shape Shape,
+        IReadOnlyList<int>? ChildPath = null);
 
     /// <summary>
     /// Interactive freeform vertex handles. The handles only preview their position while dragging;
@@ -16069,15 +16113,20 @@ public sealed class DocumentView : RichTextBox
             }
 
             var geometry = _target.Shape.CustomGeometry!;
+            var rendered = FindRenderedShapeVisual(_view, _target.Shape);
+            if (rendered is null)
+                return finalSize;
+
             _lastShapeBounds = new Rect(origin, new Size(width, height));
             foreach (var (segmentIndex, handle) in _handles)
             {
                 var point = geometry.Segments[segmentIndex].Point!;
-                var x = origin.X + point.X / (double)geometry.Width * width;
-                var y = origin.Y + point.Y / (double)geometry.Height * height;
+                var pagePoint = rendered.TransformToAncestor(_view).Transform(new Point(
+                    point.X / (double)geometry.Width * rendered.ActualWidth,
+                    point.Y / (double)geometry.Height * rendered.ActualHeight));
                 handle.Arrange(new Rect(
-                    x - HandleSize / 2,
-                    y - HandleSize / 2,
+                    pagePoint.X - HandleSize / 2,
+                    pagePoint.Y - HandleSize / 2,
                     HandleSize,
                     HandleSize));
             }
@@ -16109,11 +16158,19 @@ public sealed class DocumentView : RichTextBox
                 CustomPoint? dragStart = null;
                 var dragX = 0.0;
                 var dragY = 0.0;
+                var dragStartPage = default(Point);
                 handle.DragStarted += (_, _) =>
                 {
                     dragStart = _target.Shape.CustomGeometry?.Segments[index].Point;
                     dragX = 0;
                     dragY = 0;
+                    if (FindRenderedShapeVisual(_view, _target.Shape) is { } rendered
+                        && dragStart is { } start)
+                    {
+                        dragStartPage = rendered.TransformToAncestor(_view).Transform(new Point(
+                            start.X / (double)_target.Shape.CustomGeometry!.Width * rendered.ActualWidth,
+                            start.Y / (double)_target.Shape.CustomGeometry.Height * rendered.ActualHeight));
+                    }
                     handle.RenderTransform = new TranslateTransform();
                 };
                 handle.DragDelta += (_, e) =>
@@ -16129,17 +16186,30 @@ public sealed class DocumentView : RichTextBox
                 handle.DragCompleted += (_, _) =>
                 {
                     handle.RenderTransform = null;
-                    if (dragStart is null || !TryGetShapeBounds(out var origin, out var width, out var height))
+                    if (dragStart is null
+                        || FindRenderedShapeVisual(_view, _target.Shape) is not { } rendered
+                        || rendered.ActualWidth <= 0
+                        || rendered.ActualHeight <= 0)
                         return;
 
                     var geometry = _target.Shape.CustomGeometry;
                     if (geometry is null)
                         return;
 
-                    var startX = origin.X + dragStart.X / (double)geometry.Width * width;
-                    var startY = origin.Y + dragStart.Y / (double)geometry.Height * height;
-                    var x = Math.Clamp((long)Math.Round((startX + dragX - origin.X) * geometry.Width / width), 0, geometry.Width);
-                    var y = Math.Clamp((long)Math.Round((startY + dragY - origin.Y) * geometry.Height / height), 0, geometry.Height);
+                    var inverse = rendered.TransformToAncestor(_view).Inverse;
+                    if (inverse is null)
+                        return;
+                    var localPoint = inverse.Transform(new Point(
+                        dragStartPage.X + dragX,
+                        dragStartPage.Y + dragY));
+                    var x = Math.Clamp(
+                        (long)Math.Round(localPoint.X / rendered.ActualWidth * geometry.Width),
+                        0,
+                        geometry.Width);
+                    var y = Math.Clamp(
+                        (long)Math.Round(localPoint.Y / rendered.ActualHeight * geometry.Height),
+                        0,
+                        geometry.Height);
                     _view.MoveShapeEditPoint(_target, index, x, y);
                 };
 

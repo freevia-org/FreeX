@@ -167,4 +167,36 @@ public sealed class ShapeEditPointsInteractionTests
 
         figure.Segments.Should().ContainSingle().Which.Should().BeOfType<System.Windows.Media.BezierSegment>();
     }
+
+    [StaFact]
+    public void BeginShapeEditPoints_UsesPathAwareCommandForNestedGroupLeaf()
+    {
+        var inner = new DrawingGroup { WidthPt = 128, HeightPt = 76 };
+        inner.Children.Add(new Shape(ShapeKind.Rectangle, 52, 28));
+        var leaf = new Shape(ShapeKind.Rectangle, 64, 32) { RotationAngle = 10, FlipH = true };
+        inner.Children.Add(leaf);
+        inner.ChildOffsets.Add((8, 8));
+        inner.ChildOffsets.Add((34, 21));
+
+        var outer = new DrawingGroup { WidthPt = 240, HeightPt = 150 };
+        outer.Children.Add(inner);
+        outer.Children.Add(new Shape(ShapeKind.Rectangle, 58, 28));
+        outer.ChildOffsets.Add((58, 38));
+        outer.ChildOffsets.Add((166, 92));
+        var document = TextDocument.CreateEmpty();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.SelectFloatingGroupChild(outer, [0, 1]);
+        view.BeginShapeEditPoints();
+
+        leaf.HasCustomGeometry.Should().BeTrue();
+        view.MoveActiveShapeEditPoint(0, 3_600, 7_200).Should().BeTrue();
+        leaf.CustomGeometry!.Segments[0].Point.Should().Be(new CustomPoint(3_600, 7_200));
+        view.Undo();
+        leaf.CustomGeometry.Segments[0].Point.Should().Be(new CustomPoint(0, 0));
+    }
 }

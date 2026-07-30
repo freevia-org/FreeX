@@ -2946,7 +2946,8 @@ public sealed class SetImageArtisticEffectCommand(
 /// snapshotting the prior geometry (and kind) for undo. Used by "Convert to Freeform" and drag-point edits.
 /// </summary>
 public sealed class SetShapeCustomGeometryCommand(
-    int paragraphIndex, int runIndex, CustomGeometry? geometry) : IDocumentCommand
+    int paragraphIndex, int runIndex, CustomGeometry? geometry,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private CustomGeometry? _previousGeometry;
     private ShapeKind _previousKind;
@@ -2972,9 +2973,20 @@ public sealed class SetShapeCustomGeometryCommand(
         _applied = false;
     }
 
-    private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
+    private Shape? ShapeAt(IDocumentCommandContext context)
+    {
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph p
+            || runIndex < 0 || runIndex >= p.Runs.Count)
+            return null;
+
+        if (childPath is null)
+            return p.Runs[runIndex].Shape;
+
+        return p.Runs[runIndex].DrawingGroup is { } root
+            && DrawingGroupChildPathResolver.TryGetChild(root, childPath, out _, out var child)
+            ? child as Shape
+            : null;
+    }
 }
 
 /// <summary>
@@ -2982,7 +2994,8 @@ public sealed class SetShapeCustomGeometryCommand(
 /// for undo. No-op if the shape has no <see cref="CustomGeometry"/> or the index is out of range.
 /// </summary>
 public sealed class MoveShapeEditPointCommand(
-    int paragraphIndex, int runIndex, int segmentIndex, long newX, long newY) : IDocumentCommand
+    int paragraphIndex, int runIndex, int segmentIndex, long newX, long newY,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private long _prevX, _prevY;
     private bool _applied;
@@ -3010,9 +3023,20 @@ public sealed class MoveShapeEditPointCommand(
         _applied = false;
     }
 
-    private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
+    private Shape? ShapeAt(IDocumentCommandContext context)
+    {
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph p
+            || runIndex < 0 || runIndex >= p.Runs.Count)
+            return null;
+
+        if (childPath is null)
+            return p.Runs[runIndex].Shape;
+
+        return p.Runs[runIndex].DrawingGroup is { } root
+            && DrawingGroupChildPathResolver.TryGetChild(root, childPath, out _, out var child)
+            ? child as Shape
+            : null;
+    }
 }
 
 // ── AV-FLSEL: generic floating-object placement/size/rotation/wrapping commands ───────────────────

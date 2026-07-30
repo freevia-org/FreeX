@@ -76,7 +76,19 @@ if (string.Equals(args[0], "inspect-nested", StringComparison.OrdinalIgnoreCase)
     Console.WriteLine($"child-size-pt={inner.ChildWidthPt(1):R},{inner.ChildHeightPt(1):R}");
     Console.WriteLine($"child-kind={leaf.GetType().Name}");
     if (leaf is Shape leafShape)
+    {
         Console.WriteLine($"child-transform={leafShape.RotationAngle:R}deg,flipH={leafShape.FlipH},flipV={leafShape.FlipV}");
+        if (leafShape.CustomGeometry?.Segments.FirstOrDefault(segment => segment.Point is not null)
+            is { Point: { } point })
+            Console.WriteLine($"child-point-0={point.X:R},{point.Y:R}");
+        if (leafShape.CustomGeometry is { } geometry)
+        {
+            var points = geometry.Segments
+                .Where(segment => segment.Point is not null)
+                .Select(segment => $"{segment.Point!.X:R},{segment.Point.Y:R}");
+            Console.WriteLine($"child-points={string.Join(';', points)}");
+        }
+    }
     return 0;
 }
 
@@ -174,7 +186,18 @@ static TextDocument BuildNestedFixture()
         FillColorHex = "#FCE4D6",
         OutlineColorHex = "#C65911",
         RotationAngle = 10,
-        FlipH = true
+        FlipH = true,
+        CustomGeometry = new CustomGeometry()
+        {
+            Segments =
+            {
+                new CustomSegment(CustomSegmentKind.MoveTo, new CustomPoint(3_600, 1_800)),
+                new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(18_000, 1_800)),
+                new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(18_000, 19_800)),
+                new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(3_600, 19_800)),
+                new CustomSegment(CustomSegmentKind.Close)
+            }
+        }
     });
     inner.ChildOffsets.Add((8, 8));
     inner.ChildOffsets.Add((34, 21));

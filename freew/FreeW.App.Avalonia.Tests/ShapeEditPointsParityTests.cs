@@ -223,4 +223,55 @@ public sealed class ShapeEditPointsParityTests
 
         canUndoAfterEscape.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task EditPoints_NestedGroupLeaf_UsesPathAwareGeometryAndUndo()
+    {
+        Shape? leaf = null;
+        var handleCount = 0;
+        var moved = false;
+
+        await OnUiThread(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var inner = new DrawingGroup { WidthPt = 128, HeightPt = 76 };
+            inner.Children.Add(new Shape(ShapeKind.Rectangle, 52, 28));
+            leaf = new Shape(ShapeKind.Rectangle, 64, 32)
+            {
+                RotationAngle = 10,
+                FlipH = true
+            };
+            inner.Children.Add(leaf);
+            inner.ChildOffsets.Add((8, 8));
+            inner.ChildOffsets.Add((34, 21));
+
+            var outer = new DrawingGroup { WidthPt = 240, HeightPt = 150 };
+            outer.Children.Add(inner);
+            outer.Children.Add(new Shape(ShapeKind.Rectangle, 58, 28));
+            outer.ChildOffsets.Add((58, 38));
+            outer.ChildOffsets.Add((166, 92));
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(816, 2000));
+            var rect = view.FloatingGroupChildRectForPathForTest(0, 0, [0, 1]);
+            rect.Should().NotBeNull();
+            view.SelectFloatingGroupChildForTest(rect!.Value.Center).Should().BeTrue();
+            view.BeginShapeEditPoints();
+
+            handleCount = view.ActiveShapeEditPointHandleCount;
+            moved = view.MoveActiveShapeEditPoint(0, 3_600, 7_200);
+            view.Undo();
+        });
+
+        leaf.Should().NotBeNull();
+        handleCount.Should().Be(4);
+        moved.Should().BeTrue();
+        leaf!.HasCustomGeometry.Should().BeTrue();
+        leaf.CustomGeometry!.Segments[0].Point.Should().Be(new CustomPoint(0, 0));
+    }
 }

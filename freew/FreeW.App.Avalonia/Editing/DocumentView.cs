@@ -235,7 +235,7 @@ public sealed class DocumentView : Control
     // Handle      : which manipulation is active (Body = move; any edge/corner = resize from that handle).
     private (Point PointerDown, Rect FloatRect, FloatHandle Handle)? _floatDragState;
     // AV-SHAPEPOINTS: transient edit-points mode for a selected freeform shape.
-    private (int BlockIndex, int RunIndex)? _shapeEditPointsTarget;
+    private (int BlockIndex, int RunIndex, IReadOnlyList<int>? ChildPath)? _shapeEditPointsTarget;
     private (int SegmentIndex, IPointer? Pointer)? _shapeEditPointDragState;
     private bool _shapeEditPointDragChanged;
     private bool _shapeEditPointDragOwnsUndoGroup;
@@ -7299,6 +7299,13 @@ public sealed class DocumentView : Control
                     geometry.Child.FlipH,
                     geometry.Child.FlipV,
                     geometry.ParentTransforms);
+                if (geometry.Child.Kind == FloatingGroupChildData.ChildKind.Shape)
+                    DrawShapeEditPointHandles(
+                        context,
+                        geometry.Child.Rect,
+                        selChild.BlockIndex,
+                        selChild.RunIndex,
+                        selChild.ChildPath);
             }
         }
         else if (_selectedFloating is { } selFl)
@@ -8093,54 +8100,149 @@ public sealed class DocumentView : Control
         new Pen(new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)), 1.0);
     private const double ShapeEditPointSize = 9;
 
-    private bool IsCurrentShapeEditPointsTarget(int blockIndex, int runIndex) =>
+    private bool IsCurrentShapeEditPointsTarget(
+        int blockIndex,
+        int runIndex,
+        IReadOnlyList<int>? childPath = null) =>
         _shapeEditPointsTarget is { } target
         && target.BlockIndex == blockIndex
         && target.RunIndex == runIndex
-        && TryGetRun(blockIndex, runIndex, out var run)
-        && run.Shape is { HasCustomGeometry: true };
+        && (childPath is null
+            ? target.ChildPath is null
+            : target.ChildPath is not null && target.ChildPath.SequenceEqual(childPath))
+        && TryGetShapeEditPointModel(blockIndex, runIndex, childPath, out var shape)
+        && shape.HasCustomGeometry;
 
-    private static Point ShapePointToPage(Rect rect, CustomGeometry geometry, CustomPoint point,
-        double rotationAngle, bool flipH, bool flipV)
+    private bool TryGetShapeEditPointModel(
+        int blockIndex,
+        int runIndex,
+        IReadOnlyList<int>? childPath,
+        out Shape shape)
     {
-        var x = rect.X + point.X / (double)geometry.Width * rect.Width;
-        var y = rect.Y + point.Y / (double)geometry.Height * rect.Height;
-        var cx = rect.X + rect.Width / 2;
-        var cy = rect.Y + rect.Height / 2;
-        var dx = x - cx;
-        var dy = y - cy;
-        if (flipH) dx = -dx;
-        if (flipV) dy = -dy;
-        var radians = rotationAngle * Math.PI / 180.0;
-        var cos = Math.Cos(radians);
-        var sin = Math.Sin(radians);
-        return new Point(cx + dx * cos - dy * sin, cy + dx * sin + dy * cos);
+        shape = null!;
+        if (!TryGetRun(blockIndex, runIndex, out var run))
+            return false;
+
+        if (childPath is null)
+        {
+            shape = run.Shape!;
+            return run.Shape is not null;
+        }
+
+        if (run.DrawingGroup is { } root
+            && DrawingGroupChildPathResolver.TryGetChild(root, childPath, out _, out var child)
+            && child is Shape candidate)
+        {
+            shape = candidate;
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryGetShapeEditPointSurface(
+        int blockIndex,
+        int runIndex,
+        IReadOnlyList<int>? childPath,
+        out Shape shape,
+        out Rect rect,
+        out double rotationAngle,
+        out bool flipH,
+        out bool flipV,
+        out IReadOnlyList<DocumentFloatTransform> parentTransforms)
+    {
+        shape = null!;
+        rect = default;
+        rotationAngle = 0;
+        flipH = flipV = false;
+        parentTransforms = [];
+        if (!TryGetShapeEditPointModel(blockIndex, runIndex, childPath, out shape))
+            return false;
+
+        if (childPath is null)
+        {
+            if (_selectedFloating is not { Kind: "Shape" } selected
+                || selected.BlockIndex != blockIndex || selected.RunIndex != runIndex)
+                return false;
+            rect = selected.Rect;
+            rotationAngle = shape.RotationAngle;
+            flipH = shape.FlipH;
+            flipV = shape.FlipV;
+            return true;
+        }
+
+        if (_selectedFloatingGroupChild is not { } selectedChild
+            || selectedChild.BlockIndex != blockIndex
+            || selectedChild.RunIndex != runIndex
+            || !selectedChild.ChildPath.SequenceEqual(childPath)
+            || !TryGetFloatingGroupChildGeometry(blockIndex, runIndex, childPath, out var geometry))
+            return false;
+
+        rect = geometry.Child.Rect;
+        rotationAngle = geometry.Child.RotationAngle;
+        flipH = geometry.Child.FlipH;
+        flipV = geometry.Child.FlipV;
+        parentTransforms = geometry.ParentTransforms;
+        return true;
+    }
+
+    private static Point ShapePointToPage(
+        Rect rect,
+        CustomGeometry geometry,
+        CustomPoint point,
+        double rotationAngle,
+        bool flipH,
+        bool flipV,
+        IReadOnlyList<DocumentFloatTransform> parentTransforms)
+    {
+        var local = new DocumentFloatPoint(
+            rect.X + point.X / (double)geometry.Width * rect.Width,
+            rect.Y + point.Y / (double)geometry.Height * rect.Height);
+        var transformed = DocumentViewLayoutPlanner.TransformPointThroughGroupChain(
+            local,
+            ToPlannerRect(rect),
+            rotationAngle,
+            flipH,
+            flipV,
+            parentTransforms);
+        return new Point(transformed.XDip, transformed.YDip);
     }
 
     private IEnumerable<(int SegmentIndex, Rect Rect)> ShapeEditPointRects(
-        int blockIndex, int runIndex, Rect rect)
+        int blockIndex,
+        int runIndex,
+        IReadOnlyList<int>? childPath)
     {
-        if (!IsCurrentShapeEditPointsTarget(blockIndex, runIndex)
-            || !TryGetRun(blockIndex, runIndex, out var run)
-            || run.Shape?.CustomGeometry is not { } geometry)
+        if (!IsCurrentShapeEditPointsTarget(blockIndex, runIndex, childPath)
+            || !TryGetShapeEditPointSurface(
+                blockIndex, runIndex, childPath,
+                out _, out var rect, out var rotationAngle, out var flipH, out var flipV,
+                out var parentTransforms)
+            || !TryGetShapeEditPointModel(blockIndex, runIndex, childPath, out var shape)
+            || shape.CustomGeometry is not { } geometry)
             yield break;
 
-        var (angle, flipH, flipV) = GetFloatRotation(blockIndex, runIndex, "Shape");
         var half = ShapeEditPointSize / 2;
         for (var index = 0; index < geometry.Segments.Count; index++)
         {
             if (geometry.Segments[index].Point is not { } point)
                 continue;
-            var center = ShapePointToPage(rect, geometry, point, angle, flipH, flipV);
+            var center = ShapePointToPage(
+                rect, geometry, point, rotationAngle, flipH, flipV, parentTransforms);
             yield return (index, new Rect(center.X - half, center.Y - half, ShapeEditPointSize, ShapeEditPointSize));
         }
     }
 
-    private void DrawShapeEditPointHandles(DrawingContext context, Rect rect, int blockIndex, int runIndex)
+    private void DrawShapeEditPointHandles(
+        DrawingContext context,
+        Rect rect,
+        int blockIndex,
+        int runIndex,
+        IReadOnlyList<int>? childPath = null)
     {
-        if (!IsCurrentShapeEditPointsTarget(blockIndex, runIndex))
+        if (!IsCurrentShapeEditPointsTarget(blockIndex, runIndex, childPath))
             return;
-        foreach (var (_, handleRect) in ShapeEditPointRects(blockIndex, runIndex, rect))
+        foreach (var (_, handleRect) in ShapeEditPointRects(blockIndex, runIndex, childPath))
         {
             context.FillRectangle(ShapeEditPointFill, handleRect);
             context.DrawRectangle(null, ShapeEditPointPen, handleRect);
@@ -8151,9 +8253,27 @@ public sealed class DocumentView : Control
     public IReadOnlyDictionary<int, Rect> ShapeEditPointRectsForSelection()
     {
         var result = new Dictionary<int, Rect>();
-        if (_selectedFloating is not { Kind: "Shape" } selected)
+        int blockIndex;
+        int runIndex;
+        IReadOnlyList<int>? childPath;
+        if (_selectedFloatingGroupChild is { Kind: "Shape" } child)
+        {
+            blockIndex = child.BlockIndex;
+            runIndex = child.RunIndex;
+            childPath = child.ChildPath;
+        }
+        else if (_selectedFloating is { Kind: "Shape" } direct)
+        {
+            blockIndex = direct.BlockIndex;
+            runIndex = direct.RunIndex;
+            childPath = null;
+        }
+        else
+        {
             return result;
-        foreach (var (index, rect) in ShapeEditPointRects(selected.BlockIndex, selected.RunIndex, selected.Rect))
+        }
+
+        foreach (var (index, rect) in ShapeEditPointRects(blockIndex, runIndex, childPath))
             result[index] = rect;
         return result;
     }
@@ -8162,9 +8282,10 @@ public sealed class DocumentView : Control
 
     private int HitTestShapeEditPoint(Point point)
     {
-        if (_selectedFloating is not { Kind: "Shape" } selected)
+        if (_shapeEditPointsTarget is not { } target)
             return -1;
-        foreach (var (index, rect) in ShapeEditPointRects(selected.BlockIndex, selected.RunIndex, selected.Rect))
+        foreach (var (index, rect) in ShapeEditPointRects(
+                     target.BlockIndex, target.RunIndex, target.ChildPath))
         {
             if (rect.Inflate(3).Contains(point))
                 return index;
@@ -8175,28 +8296,27 @@ public sealed class DocumentView : Control
     private bool TryPointToCustomCoordinate(Point pagePoint, out long x, out long y)
     {
         x = y = 0;
-        if (_selectedFloating is not { Kind: "Shape" } selected
-            || !IsCurrentShapeEditPointsTarget(selected.BlockIndex, selected.RunIndex)
-            || !TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
-            || run.Shape?.CustomGeometry is not { } geometry)
+        if (_shapeEditPointsTarget is not { } target
+            || !TryGetShapeEditPointSurface(
+                target.BlockIndex, target.RunIndex, target.ChildPath,
+                out var shape, out var rect, out var rotationAngle,
+                out var flipH, out var flipV, out var parentTransforms)
+            || !shape.HasCustomGeometry
+            || !IsCurrentShapeEditPointsTarget(
+                target.BlockIndex, target.RunIndex, target.ChildPath)
+            || shape.CustomGeometry is not { } geometry)
             return false;
 
-        var rect = selected.Rect;
-        var cx = rect.X + rect.Width / 2;
-        var cy = rect.Y + rect.Height / 2;
-        var dx = pagePoint.X - cx;
-        var dy = pagePoint.Y - cy;
-        var (angle, flipH, flipV) = GetFloatRotation(selected.BlockIndex, selected.RunIndex, "Shape");
-        var radians = -angle * Math.PI / 180.0;
-        var cos = Math.Cos(radians);
-        var sin = Math.Sin(radians);
-        var unrotatedX = dx * cos - dy * sin;
-        var unrotatedY = dx * sin + dy * cos;
-        if (flipH) unrotatedX = -unrotatedX;
-        if (flipV) unrotatedY = -unrotatedY;
+        var local = DocumentViewLayoutPlanner.UnTransformPointThroughGroupChain(
+            ToPlannerPoint(pagePoint),
+            ToPlannerRect(rect),
+            rotationAngle,
+            flipH,
+            flipV,
+            parentTransforms);
 
-        x = Math.Clamp((long)Math.Round((unrotatedX + rect.Width / 2) / rect.Width * geometry.Width), 0, geometry.Width);
-        y = Math.Clamp((long)Math.Round((unrotatedY + rect.Height / 2) / rect.Height * geometry.Height), 0, geometry.Height);
+        x = Math.Clamp((long)Math.Round((local.XDip - rect.X) / rect.Width * geometry.Width), 0, geometry.Width);
+        y = Math.Clamp((long)Math.Round((local.YDip - rect.Y) / rect.Height * geometry.Height), 0, geometry.Height);
         return true;
     }
 
@@ -8219,13 +8339,46 @@ public sealed class DocumentView : Control
     /// <summary>Enters WPF-compatible vertex editing for the selected shape.</summary>
     public void BeginShapeEditPoints()
     {
+        if (_selectedFloatingGroupChild is { Kind: "Shape" } selectedChild
+            && TryGetRun(selectedChild.BlockIndex, selectedChild.RunIndex, out var groupRun)
+            && groupRun.DrawingGroup is { } rootGroup
+            && DrawingGroupChildPathResolver.TryGetChild(
+                rootGroup, selectedChild.ChildPath, out _, out var nestedChild)
+            && nestedChild is Shape nestedShape)
+        {
+            if (!nestedShape.HasCustomGeometry)
+            {
+                var geometry = nestedShape.Kind switch
+                {
+                    ShapeKind.Ellipse => CustomGeometry.EllipsePoly(),
+                    ShapeKind.RoundedRectangle => CustomGeometry.RoundedRectPoly(),
+                    _ => CustomGeometry.RectanglePoly()
+                };
+                _bus.Execute(new SetShapeCustomGeometryCommand(
+                    selectedChild.BlockIndex,
+                    selectedChild.RunIndex,
+                    geometry,
+                    selectedChild.ChildPath));
+            }
+
+            if (nestedShape.HasCustomGeometry)
+            {
+                _shapeEditPointsTarget = (
+                    selectedChild.BlockIndex,
+                    selectedChild.RunIndex,
+                    selectedChild.ChildPath.ToArray());
+                InvalidateVisual();
+            }
+            return;
+        }
+
         if (SelectedFloatingShapeLocation() is not { } selected)
             return;
         if (!selected.Shape.HasCustomGeometry)
             ConvertSelectedShapeToFreeform();
         if (selected.Shape.HasCustomGeometry)
         {
-            _shapeEditPointsTarget = (selected.BlockIndex, selected.RunIndex);
+            _shapeEditPointsTarget = (selected.BlockIndex, selected.RunIndex, null);
             InvalidateVisual();
         }
     }
@@ -8233,19 +8386,30 @@ public sealed class DocumentView : Control
     /// <summary>Moves one active vertex through the shared undoable model command.</summary>
     public bool MoveActiveShapeEditPoint(int segmentIndex, long x, long y)
     {
-        if (_selectedFloating is not { Kind: "Shape" } selected
-            || !IsCurrentShapeEditPointsTarget(selected.BlockIndex, selected.RunIndex)
-            || !TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
-            || run.Shape?.CustomGeometry is not { } geometry
+        if (_shapeEditPointsTarget is not { } target
+            || !TryGetShapeEditPointModel(
+                target.BlockIndex, target.RunIndex, target.ChildPath, out var shape)
+            || !IsCurrentShapeEditPointsTarget(
+                target.BlockIndex, target.RunIndex, target.ChildPath)
+            || shape.CustomGeometry is not { } geometry
             || segmentIndex < 0 || segmentIndex >= geometry.Segments.Count
             || geometry.Segments[segmentIndex].Point is null)
             return false;
 
-        _bus.Execute(new MoveShapeEditPointCommand(selected.BlockIndex, selected.RunIndex, segmentIndex, x, y));
+        _bus.Execute(new MoveShapeEditPointCommand(
+            target.BlockIndex,
+            target.RunIndex,
+            segmentIndex,
+            x,
+            y,
+            target.ChildPath));
         if (_shapeEditPointDragState is not null)
             _shapeEditPointDragChanged = true;
         InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        if (target.ChildPath is not null)
+            RefreshSelectedFloatingGroupChildRect(target.BlockIndex, target.RunIndex);
+        else if (_selectedFloating is { } selected)
+            RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
         return true;
     }
 
