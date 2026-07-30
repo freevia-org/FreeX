@@ -822,6 +822,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
                 FreePRibbonText.SmartArtBasicCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtBasicCycleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.MultidirectionalCycleLayoutCommandId,
+                FreePRibbonText.SmartArtMultidirectionalCycleCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtMultidirectionalCycleCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.SegmentedCycleLayoutCommandId,
                 FreePRibbonText.SmartArtSegmentedCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtSegmentedCycleCommand.KeyTip);
