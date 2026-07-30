@@ -1,3 +1,4 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -56,12 +57,26 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
         // ambiguous Table1[...] formula references. Give the copy's tables a workbook-unique
         // identity before the copy joins the workbook. Undo is symmetric for free: Revert removes
         // the whole duplicated sheet, so the source sheet's original table identity is untouched.
-        UniquifyClonedTables(ctx.Workbook, copy);
+        var tableRenames = UniquifyClonedTables(ctx.Workbook, copy);
+
+        // R99: Sheet.Clone copied every cell formula (and every table's own
+        // CalculatedColumnFormula/TotalsRowFormula) verbatim from the source sheet, including any
+        // Table[...] structured reference naming the OLD table name UniquifyClonedTables just
+        // renamed away from. Table-name resolution is workbook-global by name
+        // (StructuredReferenceResolver), not "whichever table lives on this sheet" -- so without
+        // this rewrite, a formula like "=SUM(Table1[Price])" that Sheet.Clone copied onto the
+        // duplicate would keep resolving to the SOURCE sheet's still-named table instead of the
+        // copy's own renamed one. Mirrors RenameStructuredTableCommand's formula rewrite for the
+        // manual-rename path, but deliberately scoped to just this one (not-yet-inserted) sheet:
+        // unlike a real rename, every OTHER sheet in the workbook must keep referencing the
+        // original table unchanged. Undo needs no snapshot/restore here: Revert discards the whole
+        // duplicated sheet (and its StructuredTables) below, taking these rewrites with it.
+        RewriteClonedTableReferences(copy, tableRenames);
 
         _insertIndex = sourceIndex + 1;
         _copySheetId = copyId;
         ctx.Workbook.InsertSheet(_insertIndex, copy);
-        CopyScopedNamedRangesAndFormulas(ctx.Workbook, _sourceSheetId, copyId);
+        CopyScopedNamedRangesAndFormulas(ctx.Workbook, _sourceSheetId, copyId, tableRenames);
         return new CommandOutcome(true);
     }
 
@@ -76,9 +91,16 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
     /// expressions) onto the newly duplicated sheet, re-scoped to the copy — matching Excel,
     /// which carries a sheet's local names over to a duplicated copy. The range/formula text
     /// itself is copied verbatim, not remapped to the copy's sheet name, mirroring how cell
-    /// formulas are left unrewritten by <see cref="Sheet.Clone"/>.
+    /// formulas are left unrewritten by <see cref="Sheet.Clone"/> -- except for any renamed
+    /// cloned table's structured references, which <paramref name="tableRenames"/> repoints at
+    /// the copy's own renamed table for the same reason <see cref="RewriteClonedTableReferences"/>
+    /// does for ordinary cell formulas.
     /// </summary>
-    private static void CopyScopedNamedRangesAndFormulas(Workbook workbook, SheetId sourceSheetId, SheetId copySheetId)
+    private static void CopyScopedNamedRangesAndFormulas(
+        Workbook workbook,
+        SheetId sourceSheetId,
+        SheetId copySheetId,
+        IReadOnlyList<(string OldName, string NewName)> tableRenames)
     {
         foreach (var ((name, sheetId), range) in workbook.ScopedNamedRanges.ToList())
         {
@@ -94,7 +116,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
             if (sheetId != sourceSheetId)
                 continue;
 
-            workbook.DefineNamedFormula(name, formulaText, copySheetId);
+            var rewritten = RewriteFormulaForTableRenames(formulaText, tableRenames);
+            workbook.DefineNamedFormula(name, rewritten ?? formulaText, copySheetId);
         }
     }
 
@@ -115,19 +138,113 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
     /// collides with the source's (verbatim-copied) table identity. <paramref name="copy"/> must
     /// not yet be inserted into <paramref name="workbook"/> when this runs, so the uniqueness
     /// checks below (which scan <c>workbook.Sheets</c>) compare only against pre-existing tables.
+    /// Returns the (old name, new name) pair for every table renamed, so the caller can rewrite
+    /// any formula that referenced a table by its old (pre-rename) name.
     /// </summary>
-    private static void UniquifyClonedTables(Workbook workbook, Sheet copy)
+    private static IReadOnlyList<(string OldName, string NewName)> UniquifyClonedTables(Workbook workbook, Sheet copy)
     {
         if (copy.StructuredTables.Count == 0)
-            return;
+            return [];
 
+        var renames = new List<(string OldName, string NewName)>(copy.StructuredTables.Count);
         var nextId = NextWorkbookTableId(workbook);
         for (var i = 0; i < copy.StructuredTables.Count; i++)
         {
             var table = copy.StructuredTables[i];
             var newName = GenerateUniqueTableName(workbook, copy, table.Name);
+            renames.Add((table.Name, newName));
             copy.ReidentifyStructuredTable(i, nextId++, newName);
         }
+
+        return renames;
+    }
+
+    /// <summary>
+    /// Rewrites every Table[...] structured reference on <paramref name="copy"/> -- both ordinary
+    /// cell formulas and each cloned table's own
+    /// <see cref="StructuredTableColumnModel.CalculatedColumnFormula"/>/<see cref="StructuredTableColumnModel.TotalsRowFormula"/>
+    /// metadata -- that named one of the tables <see cref="UniquifyClonedTables"/> just renamed,
+    /// from its old (source-sheet) name to its new workbook-unique name. <see cref="Sheet.Clone"/>
+    /// copies every cell's formula text (and every table's self-reference formula metadata)
+    /// VERBATIM from the source sheet, so without this rewrite a formula such as
+    /// "=SUM(Table1[Price])" on the copy would keep resolving -- via
+    /// <see cref="StructuredReferenceResolver"/>'s workbook-global by-name lookup -- to the
+    /// SOURCE sheet's still-named table instead of the copy's own renamed one. Deliberately scoped
+    /// to just this one sheet (not the whole workbook, unlike
+    /// <see cref="RowColumnShiftHelpers.RewriteAllFormulas"/>): formulas on every OTHER sheet must
+    /// keep referencing the original table unchanged, since only this one table identity moved.
+    /// </summary>
+    private static void RewriteClonedTableReferences(
+        Sheet copy, IReadOnlyList<(string OldName, string NewName)> renames)
+    {
+        if (renames.Count == 0)
+            return;
+
+        foreach (var address in copy.EnumerateFormulaCells().ToList())
+        {
+            var cell = copy.GetCell(address);
+            if (cell?.FormulaText is null)
+                continue;
+
+            var rewritten = RewriteFormulaForTableRenames(cell.FormulaText, renames);
+            if (rewritten is not null)
+                cell.FormulaText = rewritten;
+        }
+
+        foreach (var table in copy.StructuredTables)
+        {
+            for (var i = 0; i < table.Columns.Count; i++)
+            {
+                var column = table.Columns[i];
+                var calculated = RewriteNullableFormulaForTableRenames(column.CalculatedColumnFormula, renames);
+                var totals = RewriteNullableFormulaForTableRenames(column.TotalsRowFormula, renames);
+                if (!string.Equals(calculated, column.CalculatedColumnFormula, StringComparison.Ordinal) ||
+                    !string.Equals(totals, column.TotalsRowFormula, StringComparison.Ordinal))
+                {
+                    table.Columns[i] = column with
+                    {
+                        CalculatedColumnFormula = calculated,
+                        TotalsRowFormula = totals
+                    };
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="formulaText"/> through <see cref="FormulaRewriter.Rewrite"/> once per
+    /// rename in <paramref name="renames"/> (a sheet can host more than one renamed table), and
+    /// returns the fully rewritten text, or null if none of the renames touched this formula (a
+    /// malformed formula is left untouched, same as <see cref="FormulaRewriter.Rewrite"/>'s own
+    /// malformed-formula behavior elsewhere). The host-sheet-name parameter that ordinary
+    /// structural rewrites need is irrelevant here: <see cref="RenameTableOp"/> matches purely by
+    /// table name, with no sheet-qualification concept, so any non-null placeholder is safe to pass.
+    /// </summary>
+    private static string? RewriteFormulaForTableRenames(
+        string formulaText, IReadOnlyList<(string OldName, string NewName)> renames)
+    {
+        string? current = null;
+        var changed = false;
+        foreach (var (oldName, newName) in renames)
+        {
+            var rewritten = FormulaRewriter.Rewrite(current ?? formulaText, new RenameTableOp(oldName, newName), string.Empty);
+            if (rewritten is not null)
+            {
+                current = rewritten;
+                changed = true;
+            }
+        }
+
+        return changed ? current : null;
+    }
+
+    private static string? RewriteNullableFormulaForTableRenames(
+        string? formulaText, IReadOnlyList<(string OldName, string NewName)> renames)
+    {
+        if (string.IsNullOrWhiteSpace(formulaText))
+            return formulaText;
+
+        return RewriteFormulaForTableRenames(formulaText, renames) ?? formulaText;
     }
 
     private static int NextWorkbookTableId(Workbook workbook)

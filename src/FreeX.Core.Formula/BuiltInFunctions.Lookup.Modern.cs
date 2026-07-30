@@ -23,6 +23,24 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue XmatchScalar(ScalarValue lookupValue, LookupRangeVector lookupVector, ScalarValue matchModeValue, ScalarValue searchModeValue)
     {
+        // lookup_value can itself be a broadcast multi-cell range (a spilled-array pattern like
+        // =XMATCH(A1:A5,B1:B5)), so a per-cell value reaching here can be an ErrorValue sourced
+        // from that cell (e.g. A2 is #DIV/0!). ScalarEquals/CompareScalar/MatchExactValue all treat
+        // an ErrorValue operand as simply never-equal rather than throwing or re-raising it, so
+        // without this guard the source error would be silently swallowed into a false #N/A
+        // ("not found") instead of propagating at that position, same as VlookupScalar/HlookupScalar/
+        // MatchScalar and XLOOKUP's XlookupRangeLookupValues already guard the identical case
+        // (R99-formula-xmatch-lookupvalue-error-guard).
+        if (lookupValue is ErrorValue lookupValueError) return lookupValueError;
+        // match_mode/search_mode can themselves be broadcast multi-cell ranges (R98-formula-lookup-cross-broadcast),
+        // so a per-cell value reaching here can be an ErrorValue. ToNumber below throws FormulaEvalException on
+        // anything it doesn't recognize (including ErrorValue), and that throw is not caught inside the
+        // MapTernaryTextArgsGrowBroadcast loop -- it unwinds to the blanket per-call catch in
+        // FormulaEvaluator.Functions.cs and turns the ENTIRE spilled array result into one #VALUE! scalar instead
+        // of propagating the error only at the affected cell, same as VlookupScalar/HlookupScalar/MatchScalar
+        // already guard their scalar arguments (R99-formula-xmatch-xlookup-mode-error-guard).
+        if (matchModeValue is ErrorValue matchModeError) return matchModeError;
+        if (searchModeValue is ErrorValue searchModeError) return searchModeError;
         double rawMatchMode  = matchModeValue is not BlankValue ? ToNumber(matchModeValue) : 0;
         double rawSearchMode = searchModeValue is not BlankValue ? ToNumber(searchModeValue) : 1;
         if (!double.IsFinite(rawMatchMode) || !double.IsFinite(rawSearchMode)) return ErrorValue.Value;
@@ -269,6 +287,11 @@ public static partial class BuiltInFunctions
         ScalarValue matchModeValue,
         ScalarValue searchModeValue)
     {
+        // See the identical guard/rationale in XmatchScalar above (R99-formula-xmatch-xlookup-mode-error-guard):
+        // match_mode/search_mode can be broadcast per-cell values from a multi-cell range, and an unguarded
+        // ToNumber throw on an ErrorValue here would collapse the whole spilled XLOOKUP result to one #VALUE!.
+        if (matchModeValue is ErrorValue matchModeError) return matchModeError;
+        if (searchModeValue is ErrorValue searchModeError) return searchModeError;
         double rawXMatchMode  = matchModeValue is not BlankValue ? ToNumber(matchModeValue) : 0;
         double rawXSearchMode = searchModeValue is not BlankValue ? ToNumber(searchModeValue) : 1;
         if (!double.IsFinite(rawXMatchMode) || !double.IsFinite(rawXSearchMode)) return ErrorValue.Value;

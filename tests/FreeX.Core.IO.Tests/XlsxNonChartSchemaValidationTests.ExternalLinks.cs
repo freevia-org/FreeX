@@ -92,23 +92,65 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
         SchemaErrors(saved).Should().BeEmpty();
-        AssertExternalLinkPackage(saved);
-        AssertExternalLinkGraph(saved);
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         var externalReferences = ReadWorkbookChildElement(saved, "externalReferences");
         externalReferences.Attribute("customExternalReferencesFlag").Should().BeNull();
         externalReferences.Element(workbookNs + "nativeExternalReferencesChild").Should().BeNull();
 
-        var externalReference = externalReferences
-            .Elements(workbookNs + "externalReference")
+        // R99-io-external-references-patch-normalizer-1: the fixture encodes 3 ordinal slots --
+        // [1] the real link (whitespace-padded r:id), [2] a blank r:id, [3] a duplicate of slot 1's
+        // r:id. Schema-invalid attributes/children must still be sanitized off every element, but no
+        // slot may be DROPPED: Excel's '[n]' bracket-index formula syntax addresses external
+        // references by fixed ordinal position, so removing an earlier slot would silently renumber
+        // every later one. This used to assert exactly 1 surviving <externalReference> (the old,
+        // buggy collapse-on-blank/duplicate behavior) -- it must now assert all 3 slots survive.
+        var referenceElements = externalReferences.Elements(workbookNs + "externalReference").ToList();
+        referenceElements.Should().HaveCount(3, "invalid attributes must be sanitized but no ordinal slot may be dropped");
+
+        var resolvedElement = referenceElements[0];
+        resolvedElement.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXExternalLink");
+        resolvedElement.Attribute("customExternalReferenceFlag").Should().BeNull();
+        resolvedElement.Elements().Should().BeEmpty();
+
+        var workbookRelsXml = ReadPackageRootElement(saved, "xl/_rels/workbook.xml.rels");
+        workbookRelsXml
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == "rIdFreeXExternalLink" &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink" &&
+                relationship.Attribute("Target")?.Value == "externalLinks/externalLink1.xml")
             .Should()
-            .ContainSingle()
-            .Subject;
-        externalReference.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXExternalLink");
-        externalReference.Attribute("customExternalReferenceFlag").Should().BeNull();
-        externalReference.Elements().Should().BeEmpty();
+            .ContainSingle();
+
+        // Slots 2 and 3 (the blank r:id and the duplicate) must be reserved as unbacked placeholders:
+        // each carries a freshly minted r:id, distinct from each other and from any real relationship,
+        // and left unbacked by any Relationship element.
+        var backedIds = workbookRelsXml.Elements(packageRelNs + "Relationship")
+            .Select(relationship => relationship.Attribute("Id")?.Value)
+            .Where(id => id is not null)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var mintedPlaceholderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var slot = 1; slot < referenceElements.Count; slot++)
+        {
+            var placeholderElement = referenceElements[slot];
+            placeholderElement.Attributes().Should().ContainSingle("a reserved slot must carry only its minted r:id, no leftover schema-invalid attributes");
+            var placeholderId = placeholderElement.Attribute(relNs + "id")?.Value;
+            placeholderId.Should().NotBeNullOrWhiteSpace("a reserved slot must still carry a real r:id value");
+            mintedPlaceholderIds.Add(placeholderId!).Should().BeTrue("placeholders minted in the same save must not collide with each other");
+            backedIds.Should().NotContain(placeholderId, "the reserved placeholder must stay unbacked by any real relationship");
+        }
+
+        ReadPackageRootElement(saved, "xl/externalLinks/externalLink1.xml")
+            .Element(workbookNs + "externalBook")!
+            .Element(workbookNs + "sheetNames")!
+            .Element(workbookNs + "sheetName")!
+            .Attribute("val")!
+            .Value
+            .Should()
+            .Be("LinkedSheet");
         AssertReloadedExternalLinkModel(adapter, saved);
     }
 

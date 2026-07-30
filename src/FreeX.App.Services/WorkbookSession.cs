@@ -6578,13 +6578,17 @@ public sealed class WorkbookSession
         return !clipboard.SourceRange.Overlaps(new GridRange(destination, pastedEnd));
     }
 
+    // An arithmetic Operation (Add/Subtract/Multiply/Divide) must still tile across a larger
+    // selected destination just like a plain paste — Excel applies the operation cell-by-cell
+    // to every destination cell, tiling the (possibly 1-cell) clipboard source across the whole
+    // selection, not just the anchor cell (R16-paste-special-matrix-1). The same is true for
+    // "All merging conditional formats": Core.Commands' PasteCommandFactory tiles its copied
+    // values/formats exactly like every other Paste Special content kind
+    // (R25-clipboard-paste-remaining-2) — the caller must expand the destination for this content
+    // kind too, or that tiling code path is unreachable from the real paste flow (R99-clipboard-
+    // paste-merge-cf-tile).
     private static bool ShouldFillSelectedDestinationRange(bool isCut, PasteSpecialOptions options) =>
-        !isCut &&
-        // An arithmetic Operation (Add/Subtract/Multiply/Divide) must still tile across a larger
-        // selected destination just like a plain paste — Excel applies the operation cell-by-cell
-        // to every destination cell, tiling the (possibly 1-cell) clipboard source across the whole
-        // selection, not just the anchor cell (R16-paste-special-matrix-1).
-        options.ContentKind != PasteSpecialContentKind.AllMergingConditionalFormats;
+        !isCut;
 
     private GridRange GetSinglePasteDestinationRange(CellAddress destination) =>
         SelectedRanges.Count <= 1

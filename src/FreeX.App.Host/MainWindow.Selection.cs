@@ -24,9 +24,17 @@ public partial class MainWindow
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
         SetSelectedRangesIfChanged(null);
-        SheetGrid.SelectedRange = range;
-        CellAddressBox.Text = $"{row}:{row}";
-        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        // A row that a merge only partially spans (vertically) must expand to the merge's full
+        // row footprint, exactly like drag-select/Shift-extend/Ctrl-click already do via this same
+        // helper -- Excel never allows a header click to select only part of a merged cell
+        // (R99-render-header-select-merge-expand).
+        var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
+        SheetGrid.SelectedRange = expandedRange;
+        CellAddressBox.Text = expandedRange.Start.Row == expandedRange.End.Row
+            ? $"{row}:{row}"
+            : $"{expandedRange.Start.Row}:{expandedRange.End.Row}";
+        var cell = sheet?.GetCell(_selectionAnchor.Value);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterSelectionChange();
@@ -43,10 +51,14 @@ public partial class MainWindow
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
         SetSelectedRangesIfChanged(null);
-        SheetGrid.SelectedRange = range;
-        var colName = FormatColumnReference(col);
-        CellAddressBox.Text = $"{colName}:{colName}";
-        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        // Column counterpart of the row expansion above (R99-render-header-select-merge-expand).
+        var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
+        SheetGrid.SelectedRange = expandedRange;
+        CellAddressBox.Text = expandedRange.Start.Col == expandedRange.End.Col
+            ? $"{FormatColumnReference(col)}:{FormatColumnReference(col)}"
+            : $"{FormatColumnReference(expandedRange.Start.Col)}:{FormatColumnReference(expandedRange.End.Col)}";
+        var cell = sheet?.GetCell(_selectionAnchor.Value);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterSelectionChange();
@@ -77,14 +89,19 @@ public partial class MainWindow
             return;
 
         ClearSelectionTransientOverlays();
-        var ranges = AppendAdditionalSelectionRange(SheetGrid.SelectedRanges, SheetGrid.SelectedRange, range);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        // The newly Ctrl-clicked area must also fully absorb any merge it only partially spans,
+        // same as the plain-click path (R99-render-header-select-merge-expand).
+        var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
+        var ranges = AppendAdditionalSelectionRange(SheetGrid.SelectedRanges, SheetGrid.SelectedRange, expandedRange);
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
         SetSelectedRangesIfChanged(ranges);
-        SheetGrid.SelectedRange = range;
-        var colName = FormatColumnReference(col);
-        CellAddressBox.Text = $"{colName}:{colName}";
-        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+        SheetGrid.SelectedRange = expandedRange;
+        CellAddressBox.Text = expandedRange.Start.Col == expandedRange.End.Col
+            ? $"{FormatColumnReference(col)}:{FormatColumnReference(col)}"
+            : $"{FormatColumnReference(expandedRange.Start.Col)}:{FormatColumnReference(expandedRange.End.Col)}";
+        var cell = sheet?.GetCell(_selectionAnchor.Value);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterSelectionChange();
@@ -102,13 +119,19 @@ public partial class MainWindow
             return;
 
         ClearSelectionTransientOverlays();
-        var ranges = AppendAdditionalSelectionRange(SheetGrid.SelectedRanges, SheetGrid.SelectedRange, range);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        // Row counterpart of AddAdditionalColumnSelection's expansion above
+        // (R99-render-header-select-merge-expand).
+        var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
+        var ranges = AppendAdditionalSelectionRange(SheetGrid.SelectedRanges, SheetGrid.SelectedRange, expandedRange);
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
         SetSelectedRangesIfChanged(ranges);
-        SheetGrid.SelectedRange = range;
-        CellAddressBox.Text = $"{row}:{row}";
-        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+        SheetGrid.SelectedRange = expandedRange;
+        CellAddressBox.Text = expandedRange.Start.Row == expandedRange.End.Row
+            ? $"{row}:{row}"
+            : $"{expandedRange.Start.Row}:{expandedRange.End.Row}";
+        var cell = sheet?.GetCell(_selectionAnchor.Value);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterSelectionChange();
@@ -270,9 +293,13 @@ public partial class MainWindow
                             ClearCommentPreview();
                             _selectionCursor = cursor;
                             SetSelectedRangesIfChanged(null);
+                            // Shift+click header extend must also fully absorb any merge the swept
+                            // columns only partially span, matching every other header-selection
+                            // path (R99-render-header-select-merge-expand).
+                            range = ExpandRangeToFullyContainMerges(_workbook.GetSheet(_currentSheetId), range);
                             SheetGrid.SelectedRange = range;
-                            var c1 = FormatColumnReference(Math.Min(anchorCol, cm.Col));
-                            var c2 = FormatColumnReference(Math.Max(anchorCol, cm.Col));
+                            var c1 = FormatColumnReference(range.Start.Col);
+                            var c2 = FormatColumnReference(range.End.Col);
                             CellAddressBox.Text = c1 == c2 ? $"{c1}:{c1}" : $"{c1}:{c2}";
                             var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
                             SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
@@ -326,9 +353,12 @@ public partial class MainWindow
                         ClearCommentPreview();
                         _selectionCursor = cursor;
                         SetSelectedRangesIfChanged(null);
+                        // Row counterpart of the column expansion above
+                        // (R99-render-header-select-merge-expand).
+                        range = ExpandRangeToFullyContainMerges(_workbook.GetSheet(_currentSheetId), range);
                         SheetGrid.SelectedRange = range;
-                        var r1 = Math.Min(anchorRow, rm.Row);
-                        var r2 = Math.Max(anchorRow, rm.Row);
+                        var r1 = range.Start.Row;
+                        var r2 = range.End.Row;
                         CellAddressBox.Text = r1 == r2 ? $"{r1}:{r1}" : $"{r1}:{r2}";
                         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
                         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
@@ -1753,6 +1783,7 @@ public partial class MainWindow
         ClearSelectionTransientOverlays();
         SetSelectedRangesIfChanged(null);
 
+        var sheet = _workbook.GetSheet(_currentSheetId);
         if (target == GridHeaderContextMenuTarget.Column)
         {
             var firstCol = Math.Min(anchorIndex, targetIndex);
@@ -1765,11 +1796,15 @@ public partial class MainWindow
             if (TryApplyFormulaRangeSelection(range, anchor, cursor))
                 return;
 
+            // Dragging across headers must also fully absorb any merge the swept columns only
+            // partially span, matching the plain/Ctrl-click header paths
+            // (R99-render-header-select-merge-expand).
+            var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
             _selectionAnchor = anchor;
             _selectionCursor = cursor;
-            SheetGrid.SelectedRange = range;
-            var c1 = FormatColumnReference(firstCol);
-            var c2 = FormatColumnReference(lastCol);
+            SheetGrid.SelectedRange = expandedRange;
+            var c1 = FormatColumnReference(expandedRange.Start.Col);
+            var c2 = FormatColumnReference(expandedRange.End.Col);
             CellAddressBox.Text = c1 == c2 ? $"{c1}:{c1}" : $"{c1}:{c2}";
         }
         else
@@ -1784,10 +1819,13 @@ public partial class MainWindow
             if (TryApplyFormulaRangeSelection(range, anchor, cursor))
                 return;
 
+            var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
             _selectionAnchor = anchor;
             _selectionCursor = cursor;
-            SheetGrid.SelectedRange = range;
-            CellAddressBox.Text = firstRow == lastRow ? $"{firstRow}:{firstRow}" : $"{firstRow}:{lastRow}";
+            SheetGrid.SelectedRange = expandedRange;
+            CellAddressBox.Text = expandedRange.Start.Row == expandedRange.End.Row
+                ? $"{expandedRange.Start.Row}:{expandedRange.Start.Row}"
+                : $"{expandedRange.Start.Row}:{expandedRange.End.Row}";
         }
 
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
