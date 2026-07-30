@@ -1,0 +1,154 @@
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Input;
+using FreeP.Core.Model;
+using FreeP.App.Rendering.Wpf;
+using ModelParagraph = FreeP.Core.Model.Paragraph;
+using ModelRun = FreeP.Core.Model.Run;
+
+namespace FreeP.App.Host.Tests;
+
+public sealed class WpfRichTextVerticalNavigationParityTests
+{
+    [StaFact]
+    public void WpfRichTextBox_NativeVerticalCommandsMoveAndNoOpAtEdges()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new ModelParagraph
+        {
+                Runs = { new ModelRun { Text = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn" } },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Runs = { new ModelRun { Text = "tail" } },
+        });
+
+        var box = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(body, 12))
+        {
+            AcceptsReturn = true,
+            Width = 96,
+            Height = 180,
+            IsUndoEnabled = false,
+        };
+        box.Document.PageWidth = 80;
+        box.Document.ColumnWidth = 80;
+        var window = new Window { Content = box, Width = 96, Height = 180 };
+        window.Show();
+        window.UpdateLayout();
+        try
+        {
+            box.Focus().Should().BeTrue();
+            var initial = PointerAtLogicalOffset(box.Document, 2);
+            box.Selection.Select(initial, initial);
+            Point initialCaret = CaretOrigin(box);
+
+            RaiseKey(box, Key.Down);
+            Point firstDown = CaretOrigin(box);
+            RaiseKey(box, Key.Down);
+            Point secondDown = CaretOrigin(box);
+            RaiseKey(box, Key.Up);
+            RaiseKey(box, Key.Up);
+            Point returned = CaretOrigin(box);
+
+            firstDown.Y.Should().BeGreaterThan(initialCaret.Y);
+            secondDown.Y.Should().BeGreaterThan(firstDown.Y);
+            returned.Y.Should().BeApproximately(initialCaret.Y, 1.5);
+
+            var firstLine = PointerAtLogicalOffset(box.Document, 2);
+            box.Selection.Select(firstLine, firstLine);
+            RaiseKey(box, Key.Up);
+            LogicalOffsetAt(box.Document, box.CaretPosition).Should().Be(2);
+
+            var documentEnd = PointerAtLogicalOffset(box.Document, 45);
+            box.Selection.Select(documentEnd, documentEnd);
+            RaiseKey(box, Key.Down);
+            LogicalOffsetAt(box.Document, box.CaretPosition).Should().Be(45);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [Fact]
+    public void WpfRichTextEditor_LeavesVisualLineNavigationToNativeRichTextBox()
+    {
+        string source = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "InCanvasTextEditor.cs");
+
+        var editorType = typeof(RichTextBox);
+        editorType.Name.Should().Be("RichTextBox");
+        source.Should().Contain("new RichTextBox(doc)");
+        source.Should().Contain("AcceptsReturn = true");
+        source.Should().NotContain("MoveCaretVertically");
+        source.Should().NotContain("InCanvasTextVerticalDirection");
+    }
+
+    private static Point CaretOrigin(RichTextBox box) =>
+        box.CaretPosition.GetCharacterRect(LogicalDirection.Forward).TopLeft;
+
+    private static void RaiseKey(RichTextBox box, Key key)
+    {
+        var source = PresentationSource.FromVisual(box)
+            ?? throw new InvalidOperationException("WPF RichTextBox has no presentation source.");
+        box.RaiseEvent(new KeyEventArgs(
+            Keyboard.PrimaryDevice,
+            source,
+            0,
+            key)
+        {
+            RoutedEvent = Keyboard.KeyDownEvent,
+        });
+    }
+
+    private static TextPointer PointerAtLogicalOffset(FlowDocument document, int offset)
+    {
+        int remaining = Math.Max(0, offset);
+        for (var position = document.ContentStart;
+             position is not null;
+             position = position.GetNextContextPosition(LogicalDirection.Forward))
+        {
+            if (position.GetPointerContext(LogicalDirection.Forward) != TextPointerContext.Text)
+                continue;
+
+            int length = position.GetTextRunLength(LogicalDirection.Forward);
+            if (remaining <= length)
+                return position.GetPositionAtOffset(remaining);
+            remaining -= length;
+        }
+
+        return document.ContentEnd;
+    }
+
+    private static int LogicalOffsetAt(FlowDocument document, TextPointer position) =>
+        new TextRange(document.ContentStart, position)
+            .Text
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Length;
+
+    private static string ReadWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var parts = new string[relativeParts.Length + 1];
+            parts[0] = directory.FullName;
+            relativeParts.CopyTo(parts, 1);
+
+            var candidate = Path.Combine(parts);
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(
+            "Could not locate workspace file.",
+            Path.Combine(relativeParts));
+    }
+}

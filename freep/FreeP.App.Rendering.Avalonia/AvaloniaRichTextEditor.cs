@@ -37,6 +37,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private int _pointerSelectionAnchor;
     private int? _keyboardSelectionAnchor;
     private int? _keyboardSelectionCaret;
+    private double? _preferredVerticalX;
+    private int? _preferredVerticalLineIndex;
 
     internal AvaloniaRichTextEditor(
         TextBody? body,
@@ -143,6 +145,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
     internal InCanvasEditorTextSelection Selection =>
         new(SelectionStart, SelectionEnd);
+
+    internal double? PreferredVerticalCaretX => _preferredVerticalX;
 
     internal bool FocusEditor() => InputBox.Focus();
 
@@ -298,6 +302,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
     internal bool InsertSoftBreak()
     {
+        ResetVerticalNavigation();
         SynchronizeText();
         int start = Math.Min(SelectionStart, SelectionEnd);
         int end = Math.Max(SelectionStart, SelectionEnd);
@@ -345,6 +350,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
     private bool ApplyMutation(Func<bool> mutate)
     {
+        ResetVerticalNavigation();
         SynchronizeText();
         int selectionStart = SelectionStart;
         int selectionEnd = SelectionEnd;
@@ -363,6 +369,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         if (_synchronizing)
             return;
 
+        ResetVerticalNavigation();
         _keyboardSelectionAnchor = null;
         _keyboardSelectionCaret = null;
         _buffer.ReplacePlainText(InputBox.Text);
@@ -395,6 +402,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         if (!e.GetCurrentPoint(InputBox).Properties.IsLeftButtonPressed)
             return;
 
+        ResetVerticalNavigation();
         InputBox.Focus();
         int logicalPosition = _richTextView.HitTestLogicalPosition(e.GetPosition(_richTextView));
         if (e.ClickCount >= 3)
@@ -486,10 +494,13 @@ internal sealed class AvaloniaRichTextEditor : Grid
         if ((e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Meta)) != 0)
             return;
 
+        if (e.Key is not (Key.Up or Key.Down))
+            ResetVerticalNavigation();
+
         int target = e.Key switch
         {
-            Key.Up => _richTextView.MoveCaretVertically(InputBox.CaretIndex, -1),
-            Key.Down => _richTextView.MoveCaretVertically(InputBox.CaretIndex, 1),
+            Key.Up => MoveCaretVertically(-1),
+            Key.Down => MoveCaretVertically(1),
             Key.Left => InCanvasRichTextNavigationPlanner.MoveCaret(
                 Text,
                 InputBox.CaretIndex,
@@ -550,8 +561,27 @@ internal sealed class AvaloniaRichTextEditor : Grid
         UpdateSurfaceSelection();
     }
 
+    private int MoveCaretVertically(int lineDelta)
+    {
+        var move = _richTextView.MoveCaretVertically(
+            InputBox.CaretIndex,
+            lineDelta,
+            _preferredVerticalX,
+            _preferredVerticalLineIndex);
+        _preferredVerticalX = move.PreferredX;
+        _preferredVerticalLineIndex = move.VisualLineIndex;
+        return move.LogicalPosition;
+    }
+
+    private void ResetVerticalNavigation()
+    {
+        _preferredVerticalX = null;
+        _preferredVerticalLineIndex = null;
+    }
+
     private void ApplyBufferText(int caret)
     {
+        ResetVerticalNavigation();
         _synchronizing = true;
         try
         {
