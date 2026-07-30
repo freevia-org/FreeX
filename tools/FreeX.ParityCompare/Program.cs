@@ -90,6 +90,9 @@ if (!opts.SkipCapture)
 
 var engine = new ParityComparisonEngine();
 var comparison = engine.Compare(winManifest, linManifest, winDir, linDir, imagesDir, opts.Threshold);
+var nameBoxContract = opts.WinOnly || opts.LinuxOnly
+    ? new NameBoxDropdownPairContractResult(true, [])
+    : NameBoxDropdownPairContract.Validate(winManifest, linManifest, winDir, linDir);
 
 // -------------------------------------------------------------------
 // 4. Report
@@ -114,9 +117,12 @@ if (comparison.LargeChromeDiffs.Count > 0)
         Console.WriteLine($"   chrome-diff {r.Id}  diff={r.DiffPercent:0.00}%");
 }
 Console.WriteLine($"report        : {htmlPath}");
-Console.WriteLine(comparison.Passed ? "RESULT: PASS" : "RESULT: FAIL");
+Console.WriteLine($"name-box pair : {(nameBoxContract.IsValid ? "PASS" : "FAIL")}");
+foreach (var failure in nameBoxContract.Failures)
+    Console.WriteLine($"   NAME-BOX CONTRACT {failure}");
+Console.WriteLine(comparison.Passed && nameBoxContract.IsValid ? "RESULT: PASS" : "RESULT: FAIL");
 
-return comparison.Passed ? 0 : 1;
+return comparison.Passed && nameBoxContract.IsValid ? 0 : 1;
 
 // -------------------------------------------------------------------
 static CaptureManifest LoadManifest(string dir, string platform, string shell)

@@ -6,7 +6,7 @@ namespace FreeX.ParityCompare.Core;
 /// <summary>
 /// The manifest each shell's <c>--parity-capture &lt;dir&gt;</c> mode writes to
 /// <c>&lt;dir&gt;/manifest.json</c>. Shape per the capture contract:
-/// <c>{ "platform","shell","surfaces":[{"id","kind","png","captured","note"}] }</c>.
+/// <c>{ "platform","shell","surfaces":[{"id","kind","png","captured","note","width","height"}] }</c>.
 /// </summary>
 public sealed class CaptureManifest
 {
@@ -61,4 +61,12 @@ public sealed class CapturedSurface
     /// <summary>Optional human note (e.g. why a surface was skipped).</summary>
     [JsonPropertyName("note")]
     public string? Note { get; set; }
+
+    /// <summary>Optional rendered pixel width. Fixed-size contracts use this to fail closed on clipping.</summary>
+    [JsonPropertyName("width")]
+    public int? Width { get; set; }
+
+    /// <summary>Optional rendered pixel height. Fixed-size contracts use this to fail closed on clipping.</summary>
+    [JsonPropertyName("height")]
+    public int? Height { get; set; }
 }

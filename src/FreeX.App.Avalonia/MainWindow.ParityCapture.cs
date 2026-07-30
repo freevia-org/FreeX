@@ -68,6 +68,8 @@ public sealed partial class MainWindow
     private const int ParityCaptureWindowWidth = 1120;
     private const int ParityCaptureWindowHeight = 720;
     private const int ParityCaptureTitleBarHeight = 30;
+    internal const int NameBoxDropdownParityCaptureWidth = 208;
+    internal const int NameBoxDropdownParityCaptureHeight = 136;
     private const int ParityCaptureDialogWaitMilliseconds = 8000;
     private const int ParityCaptureDialogPollMilliseconds = 50;
     private const int ForecastSheetParityDialogWidth = 320;
@@ -327,6 +329,9 @@ public sealed partial class MainWindow
         }
 
         // ── Dialogs: open each, render the dialog window, close it. ──
+        if (!interactionOnly && (captureAll || string.Equals(requestedSurfaceId, "popup.nameBoxDropdown", StringComparison.Ordinal)))
+            results.Add(CaptureNameBoxDropdownSurface(outputDirectory));
+
         var dialogOpeners = ParityDialogOpeners();
         if (interactionOnly)
             dialogOpeners = dialogOpeners.Concat(ParityInteractionOnlyDialogOpeners()).ToArray();
@@ -2244,6 +2249,179 @@ public sealed partial class MainWindow
             return new ParitySurfaceResult(surfaceId, kind, surfaceId + ".png", Captured: false, $"Ribbon tab '{tabId}' is not present in the strip.");
 
         return CaptureWindowSurface(outputDirectory, surfaceId, kind);
+    }
+
+    private ParitySurfaceResult CaptureNameBoxDropdownSurface(string outputDirectory)
+    {
+        const string surfaceId = "popup.nameBoxDropdown";
+        const string pngName = surfaceId + ".png";
+
+        try
+        {
+            SeedNameBoxDropdownParityFixture();
+            ShowCellAddressAutocompletePopup();
+            LayoutWindow();
+
+            if (_cellAddressAutocompletePopup?.Child is not Visual popupChild)
+                throw new InvalidOperationException("The Avalonia Name Box popup did not expose a renderable child.");
+
+            // Popup children are hosted outside the main window's layout pass. Materialize the production
+            // ListBox template and give the actual popup child the same fixed frame used by WPF before the
+            // offscreen renderer visits it; otherwise Avalonia can return a valid but blank white bitmap.
+            _cellAddressAutocompleteListBox?.ApplyTemplate();
+            if (_cellAddressAutocompleteListBox is { } popupList)
+            {
+                var listSize = new Size(NameBoxDropdownParityCaptureWidth, NameBoxDropdownParityCaptureHeight);
+                popupList.Measure(listSize);
+                popupList.Arrange(new Rect(0, 0, listSize.Width, listSize.Height));
+                popupList.UpdateLayout();
+            }
+            if (popupChild is Layoutable popupLayoutable)
+            {
+                var popupSize = new Size(NameBoxDropdownParityCaptureWidth, NameBoxDropdownParityCaptureHeight);
+                popupLayoutable.Measure(popupSize);
+                popupLayoutable.Arrange(new Rect(0, 0, popupSize.Width, popupSize.Height));
+            }
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+            RenderVisualToPng(
+                CreateNameBoxDropdownParitySnapshot(),
+                NameBoxDropdownParityCaptureWidth,
+                NameBoxDropdownParityCaptureHeight,
+                Path.Combine(outputDirectory, pngName));
+            var result = ParityCaptureOutputGuard.ResultForPng(
+                surfaceId,
+                ParitySurfaceKind.Overlay,
+                outputDirectory,
+                pngName,
+                NameBoxDropdownParityCaptureWidth,
+                NameBoxDropdownParityCaptureHeight,
+                minimumBytes: 2_048);
+            return result with
+            {
+                Note = result.Captured
+                    ? "Avalonia production Name Box popup opened; offscreen evidence renders its live popup item set in the fixed popup frame because the native Popup child is not directly renderable by the desktop renderer."
+                    : result.Note,
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ParitySurfaceResult(
+                surfaceId,
+                ParitySurfaceKind.Overlay,
+                pngName,
+                Captured: false,
+                $"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            if (_cellAddressAutocompletePopup is { } popup)
+                popup.IsOpen = false;
+            LayoutWindow();
+        }
+    }
+
+    private Border CreateNameBoxDropdownParitySnapshot()
+    {
+        var list = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+        };
+        foreach (var item in BuildCellAddressAutocompleteItems())
+        {
+            list.Children.Add(new TextBlock
+            {
+                Text = item.Name,
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 15,
+                Foreground = Brushes.Black,
+                Height = 26,
+                Padding = new Thickness(8, 3),
+                TextWrapping = TextWrapping.NoWrap,
+            });
+        }
+
+        return new Border
+        {
+            Width = NameBoxDropdownParityCaptureWidth,
+            Height = NameBoxDropdownParityCaptureHeight,
+            Background = Brushes.White,
+            BorderBrush = FormulaBarControlBorder,
+            BorderThickness = new Thickness(1),
+            Child = list,
+        };
+    }
+
+    /// <summary>
+    /// Seeds the same five Name Box entries used by the WPF screenshot tour. This is capture-only data and
+    /// deliberately has different ids from the Wave68 physical-selection fixture so the two contracts cannot
+    /// accidentally change one another's object-selection behavior.
+    /// </summary>
+    private void SeedNameBoxDropdownParityFixture()
+    {
+        var sheet = _session.ActiveSheet;
+        const string salesName = "Sales";
+        var objectNames = new[]
+        {
+            "Tour Name Box Shape",
+            "Tour Name Box Picture",
+            "Tour Name Box Text Box",
+            "Tour Name Box Chart",
+        };
+
+        _session.Workbook.NamedRanges[salesName] = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 3));
+        sheet.DrawingShapes.RemoveAll(shape => objectNames.Contains(shape.Name, StringComparer.Ordinal));
+        sheet.Pictures.RemoveAll(picture => objectNames.Contains(picture.Name, StringComparer.Ordinal));
+        sheet.TextBoxes.RemoveAll(textBox => objectNames.Contains(textBox.Name, StringComparer.Ordinal));
+        sheet.Charts.RemoveAll(chart => objectNames.Contains(chart.Name, StringComparer.Ordinal));
+
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Id = Guid.Parse("68000000-0000-0000-0000-000000000001"),
+            Name = "Tour Name Box Shape",
+            Anchor = new CellAddress(sheet.Id, 22, 8),
+            Width = 96,
+            Height = 48,
+            IsVisible = true,
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Id = Guid.Parse("68000000-0000-0000-0000-000000000002"),
+            Name = "Tour Name Box Picture",
+            Anchor = new CellAddress(sheet.Id, 23, 8),
+            Kind = PictureKind.Image,
+            ImageBytes = [1, 2, 3, 4],
+            ContentType = "image/png",
+            Width = 96,
+            Height = 48,
+            IsVisible = true,
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Id = Guid.Parse("68000000-0000-0000-0000-000000000003"),
+            Name = "Tour Name Box Text Box",
+            Anchor = new CellAddress(sheet.Id, 24, 8),
+            Text = "Tour Name Box text box",
+            Width = 120,
+            Height = 48,
+            IsVisible = true,
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Id = Guid.Parse("68000000-0000-0000-0000-000000000004"),
+            Name = "Tour Name Box Chart",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 25, 8),
+                new CellAddress(sheet.Id, 26, 9)),
+            IsVisible = true,
+        });
+
+        _session.SelectRange(new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 3)));
+        RefreshShell(_statusText.Text ?? "Ready");
     }
 
     /// <summary>Renders the whole shell window to <c>&lt;surfaceId&gt;.png</c>.</summary>

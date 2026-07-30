@@ -358,6 +358,57 @@ public sealed class ParityCaptureTests
     }
 
     [Fact]
+    public async Task CaptureParitySurfaces_CapturesNameBoxDropdownAtFixedPairSize()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-parity-capture-namebox-dropdown-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                try
+                {
+                    window.Show();
+                    window.Measure(new global::Avalonia.Size(1120, 720));
+                    window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
+                    window.UpdateLayout();
+
+                    var results = await window.CaptureParitySurfacesAsync(
+                        outputDirectory,
+                        targetSurfaceId: "popup.nameBoxDropdown");
+
+                    results.Should().ContainSingle();
+                    var popup = results.Single();
+                    popup.Id.Should().Be("popup.nameBoxDropdown");
+                    popup.Kind.Should().Be(ParitySurfaceKind.Overlay);
+                    popup.Captured.Should().BeTrue(popup.Note);
+                    popup.Width.Should().Be(MainWindow.NameBoxDropdownParityCaptureWidth);
+                    popup.Height.Should().Be(MainWindow.NameBoxDropdownParityCaptureHeight);
+
+                    var pngPath = Path.Combine(outputDirectory, popup.PngFileName);
+                    AssertCapturedPng(outputDirectory, popup);
+                    ReadPngDimensions(pngPath).Should().Be((208, 136),
+                        "the popup pair must be rendered into the fixed same-size frame");
+                    new FileInfo(pngPath).Length.Should().BeGreaterThan(2_048,
+                        "the open popup must contain all five fixture entries, not a blank shell");
+                }
+                finally
+                {
+                    if (window.IsVisible)
+                        window.Close();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
     public async Task CaptureParitySurfaces_CapturesOnlyRequestedScenarioManagerDialog()
     {
         var outputDirectory = Path.Combine(

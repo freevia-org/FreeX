@@ -53,7 +53,14 @@ internal static class ParityCapture
     /// <summary>The CLI switch that selects this mode.</summary>
     public const string Switch = "--parity-capture";
 
-    private sealed record SurfaceResult(string Id, string Kind, string Png, bool Captured, string Note);
+    private sealed record SurfaceResult(
+        string Id,
+        string Kind,
+        string Png,
+        bool Captured,
+        string Note,
+        int? Width = null,
+        int? Height = null);
 
     /// <summary>
     /// Returns the output directory if <paramref name="args"/> requests parity capture, else null.
@@ -224,6 +231,8 @@ internal static class ParityCapture
                 return RenderElement(window!, SurfaceWidth, SurfaceHeight);
             });
 
+            CaptureNameBoxDropdownSurface(outDir, window, results);
+
             // Backstage panes. WPF exposes Info as a true backstage pane; Export and Account are rail
             // *actions* (they open the Export-options dialog / show account info) rather than dedicated
             // panes, so capture the full backstage host with those action entries focused instead of
@@ -247,6 +256,7 @@ internal static class ParityCapture
                 AddMissing(results, surfaceId, "contextual-tab", note);
             AddMissing(results, "grid.demo", "screen", note);
             AddMissing(results, "grid.sheetTabsOverflow", "screen", note);
+            AddMissing(results, "popup.nameBoxDropdown", "overlay", note);
             AddMissing(results, "backstage.Info", "backstage", note);
             AddMissing(results, "backstage.Export", "backstage", note);
             AddMissing(results, "backstage.Account", "backstage", note);
@@ -1682,11 +1692,39 @@ internal static class ParityCapture
             encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using var stream = File.Create(Path.Combine(outDir, pngName));
             encoder.Save(stream);
-            results.Add(new SurfaceResult(surfaceId, kind, pngName, true, note));
+            results.Add(new SurfaceResult(surfaceId, kind, pngName, true, note, bitmap.PixelWidth, bitmap.PixelHeight));
         }
         catch (Exception ex)
         {
             AddMissing(results, surfaceId, kind, Flatten(ex));
+        }
+    }
+
+    private static void CaptureNameBoxDropdownSurface(
+        string outDir,
+        MainWindow window,
+        List<SurfaceResult> results)
+    {
+        try
+        {
+            var popup = window.OpenNameBoxDropdownForParityCapture();
+            PumpDispatcher();
+            CaptureSurface(
+                results,
+                "popup.nameBoxDropdown",
+                "overlay",
+                outDir,
+                () => RenderElementOnBackground(
+                    popup,
+                    MainWindow.NameBoxDropdownParityCaptureWidth,
+                    MainWindow.NameBoxDropdownParityCaptureHeight,
+                    Brushes.White),
+                note: "WPF production Name Box ComboBox popup rendered from the screenshot-tour fixture.");
+        }
+        finally
+        {
+            window.CloseNameBoxDropdownForParityCapture();
+            PumpDispatcher();
         }
     }
 
@@ -1809,6 +1847,8 @@ internal static class ParityCapture
                 png = r.Png,
                 captured = r.Captured,
                 note = r.Note,
+                width = r.Width,
+                height = r.Height,
             }),
         };
 
