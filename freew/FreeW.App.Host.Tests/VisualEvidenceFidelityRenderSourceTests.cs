@@ -183,6 +183,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("thisPixH - thisMarginBottom - fnH - FootnoteTrailingReserveDip");
         source.Should().Contain("return RenderNoteRegionPlan(notePlan, pageWDip, marginLeft, marginRight);");
         source.Should().Contain("static RenderTargetBitmap? RenderNoteRegionPlan(");
+        source.Should().Contain("double textSizePx = notePlan.TextFontSizePt * (96.0 / 72.0);");
+        source.Should().Contain("FontSize          = notePlan.LabelFontSizePt * (96.0 / 72.0)");
         source.Should().Contain("if (!string.IsNullOrEmpty(notePlan.Heading))");
         source.Should().Contain("PageLayout.PointsToDip(pb.SpacePt)");
         source.Should().Contain("DrawPageBorderFrame(dc, pen, edgeInset, thisPixW, thisPixH);");
