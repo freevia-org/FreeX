@@ -850,6 +850,37 @@ public sealed class EditingSessionTests
         outer.Children.Should().ContainSingle(shape => shape.Id == inner.Id);
     }
 
+    [Fact]
+    public void NestedGroupedSelection_AlignAndZOrderUseContainingSiblingList()
+    {
+        var sess = Make();
+        var first = MakeShape(31);
+        first.OffsetYEmu = 100;
+        var second = MakeShape(32);
+        second.OffsetXEmu = 400;
+        second.OffsetYEmu = 300;
+        var inner = new SlideShape { Id = 33, Kind = SlideShapeKind.Group };
+        inner.Children.Add(first);
+        inner.Children.Add(second);
+        var outer = new SlideShape { Id = 34, Kind = SlideShapeKind.Group };
+        outer.Children.Add(inner);
+        sess.CurrentSlide!.Shapes.Add(outer);
+
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+        sess.AlignTop();
+        first.OffsetYEmu.Should().Be(second.OffsetYEmu);
+        sess.Undo();
+        first.OffsetYEmu.Should().Be(100);
+        second.OffsetYEmu.Should().Be(300);
+
+        sess.Select(first.Id);
+        sess.BringToFront();
+        inner.Children[^1].Id.Should().Be(first.Id);
+        sess.Undo();
+        inner.Children[0].Id.Should().Be(first.Id);
+    }
+
     [Theory]
     [InlineData(DrawingShapeKind.ElbowConnector)]
     [InlineData(DrawingShapeKind.CurvedConnector)]
