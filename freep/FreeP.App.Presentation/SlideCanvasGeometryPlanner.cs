@@ -155,6 +155,61 @@ public static class SlideCanvasGeometryPlanner
         return placement;
     }
 
+    /// <summary>
+    /// Plans a cell editor in the transformed table frame. The editor keeps the cell's
+    /// local width and height, while its center is moved by the table-frame transform;
+    /// both hosts then apply the same local rotation/flip to the control.
+    /// </summary>
+    public static InCanvasEditorPlacement PlanTableCellEditorPlacement(
+        CellRectDip cellRect,
+        ShapeBoundsDip tableBounds,
+        SlideTransformCore transform,
+        double minimumWidth,
+        double minimumHeight,
+        double rotationDegrees,
+        bool flipHorizontal,
+        bool flipVertical)
+    {
+        ArgumentNullException.ThrowIfNull(transform);
+        ArgumentOutOfRangeException.ThrowIfNegative(minimumWidth);
+        ArgumentOutOfRangeException.ThrowIfNegative(minimumHeight);
+
+        var cellScreen = DipBoundsToScreen(cellRect, transform);
+        var tableScreen = DipBoundsToScreen(tableBounds, transform);
+        var cellCenter = (X: cellScreen.Left + cellScreen.Width / 2.0,
+            Y: cellScreen.Top + cellScreen.Height / 2.0);
+        var tableCenter = (X: tableScreen.Left + tableScreen.Width / 2.0,
+            Y: tableScreen.Top + tableScreen.Height / 2.0);
+        var transformedCenter = ShapeTransformPlanner.TransformPoint(
+            tableCenter.X,
+            tableCenter.Y,
+            cellCenter.X,
+            cellCenter.Y,
+            rotationDegrees,
+            flipHorizontal,
+            flipVertical);
+
+        double width = Math.Max(minimumWidth, cellScreen.Width);
+        double height = Math.Max(minimumHeight, cellScreen.Height);
+        var placement = new InCanvasEditorPlacement(
+            transformedCenter.X - width / 2.0,
+            transformedCenter.Y - height / 2.0,
+            width,
+            height)
+        {
+            RotationDegrees = rotationDegrees,
+            FlipHorizontal = flipHorizontal,
+            FlipVertical = flipVertical,
+        };
+        return placement.HasTransform
+            ? placement with
+            {
+                TransformOriginX = width / 2.0,
+                TransformOriginY = height / 2.0,
+            }
+            : placement;
+    }
+
     public static SlideScreenRect? Union(IEnumerable<SlideScreenRect> rects)
     {
         ArgumentNullException.ThrowIfNull(rects);

@@ -821,6 +821,73 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task TableCellTextEditor_TransformedTable_UsesSharedPlacementAndPersistsCommitAndCancel()
+    {
+        EditingSession? editor = null;
+        SlideShape? shape = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                var table = new TableShape();
+                table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerPixel * 100);
+                table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerPixel * 100);
+                var row = new TableRow { HeightEmu = DrawingMlCoordinateUnits.EmuPerPixel * 50 };
+                row.Cells.Add(new TableCell { TextBody = MakeTextBody("Original") });
+                row.Cells.Add(new TableCell { TextBody = MakeTextBody("Other") });
+                table.Rows.Add(row);
+                shape = new SlideShape
+                {
+                    Id = 91,
+                    Kind = SlideShapeKind.Table,
+                    OffsetXEmu = DrawingMlCoordinateUnits.EmuPerPixel * 100,
+                    OffsetYEmu = DrawingMlCoordinateUnits.EmuPerPixel * 80,
+                    ExtentCxEmu = DrawingMlCoordinateUnits.EmuPerPixel * 200,
+                    ExtentCyEmu = DrawingMlCoordinateUnits.EmuPerPixel * 50,
+                    RotationDeg = 30,
+                    FlipH = true,
+                    FlipV = true,
+                    Table = table,
+                };
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            canvas.Measure(new Size(800, 600));
+            canvas.Arrange(new Rect(0, 0, 800, 600));
+            var renderTarget = new RenderTargetBitmap(new PixelSize(800, 600));
+            renderTarget.Render(canvas);
+
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+            textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+
+            var box = overlay.Children.OfType<AvaloniaRichTextEditor>().Should().ContainSingle().Subject;
+            box.RenderTransform.Should().NotBeNull("the editor must follow the table-frame transform");
+            box.Text.Should().Be("Original");
+            box.RenderTransformOrigin.Point.X.Should().BeApproximately(0.5, 0.001);
+            box.RenderTransformOrigin.Point.Y.Should().BeApproximately(0.5, 0.001);
+
+            box.Text = "Committed transformed text";
+            textEditor.CommitCellEdit();
+            shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text
+                .Should().Be("Committed transformed text");
+
+            textEditor.ActivateCellEdit(shape.Id, 0, 0);
+            RichInput(overlay).Text = "Canceled transformed text";
+            textEditor.CancelCellEdit();
+            shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text
+                .Should().Be("Committed transformed text");
+        });
+
+        editor!.CanUndo.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task TableCellTextEditor_ActivateCommit_UsesSharedPlannerCommand()
     {
         EditingSession? editor = null;

@@ -299,7 +299,7 @@ public sealed class SlideCanvas : FrameworkElement
                 break;
             case DrawOp.Table table:
                 if (table.ShapeId != 0 && SuppressedShapeIds.Contains(table.ShapeId)) break;
-                RenderTable(dc, table);
+                RenderTableWithTransform(dc, table);
                 break;
             case DrawOp.Chart chartOp:
                 if (chartOp.ShapeId != 0 && SuppressedShapeIds.Contains(chartOp.ShapeId)) break;
@@ -864,6 +864,22 @@ public sealed class SlideCanvas : FrameworkElement
     {
         foreach (var cell in tableOp.Cells)
             RenderTableCell(dc, cell);
+    }
+
+    private static void RenderTableWithTransform(DrawingContext dc, DrawOp.Table tableOp)
+    {
+        var transform = ShapeTransformPlanner.PlanShapeTransform(
+            tableOp.BoundsDip,
+            tableOp.RotationDeg,
+            tableOp.FlipH,
+            tableOp.FlipV);
+        if (!transform.IsIdentity)
+            dc.PushTransform(ToWpfTransform(transform));
+
+        RenderTable(dc, tableOp);
+
+        if (!transform.IsIdentity)
+            dc.Pop();
     }
 
     private static void RenderTableCell(DrawingContext dc, TableCellOp cell)

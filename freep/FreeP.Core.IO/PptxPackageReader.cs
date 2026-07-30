@@ -1386,6 +1386,9 @@ public static class PptxPackageReader
                 OffsetYEmu = offY,
                 ExtentCxEmu = extCx,
                 ExtentCyEmu = extCy,
+                RotationDeg = ParseLong(xfrmEl?.Attribute("rot")?.Value) / 60000.0,
+                FlipH = xfrmEl?.Attribute("flipH")?.Value is "1" or "true",
+                FlipV = xfrmEl?.Attribute("flipV")?.Value is "1" or "true",
                 Hyperlink = ResolveHlinkClick(cNvPr?.Element(A + "hlinkClick"), slideRels, allSlides, slideDir, slidePartPathToId),
                 Table = tableShape
             };

@@ -519,6 +519,16 @@ public sealed partial class MainWindow : Window
     private Canvas? _formulaReferenceGridOverlay;
     private Canvas? _cellAffordanceOverlay;
     private readonly List<Control> _formulaReferenceGridHighlightVisuals = [];
+    private const double FormulaReferenceGripSize = 6;
+    private const double FormulaReferenceGripHitSize = 18;
+    private readonly List<Border> _formulaReferenceGripVisuals = [];
+    private readonly List<Border> _formulaReferenceGripPreviewVisuals = [];
+    private bool _formulaReferenceDragActive;
+    private IPointer? _formulaReferenceDragPointer;
+    private Border? _formulaReferenceDragGrip;
+    private Border? _formulaReferenceDragPreviewVisual;
+    private FormulaReferenceHighlight? _formulaReferenceDragHighlight;
+    private TextBox? _formulaReferenceDragEditor;
     private readonly Border _formulaBarHost = new();
     private readonly Button _formulaExpandButton = new();
     private readonly Button _openButton = new();
@@ -896,6 +906,25 @@ public sealed partial class MainWindow : Window
 
     internal void BeginFormulaEditForTest(CellAddress address, string? initialText = null) =>
         BeginFormulaEdit(address, initialText);
+
+    internal int FormulaReferenceGripCountForTest => _formulaReferenceGripVisuals.Count;
+
+    internal bool RaiseFormulaReferenceGripDragForTest(int highlightIndex, CellAddress target)
+    {
+        var editor = GetFormulaReferenceHighlightEditor();
+        IReadOnlyList<FormulaReferenceHighlight> highlights = editor is null
+            ? []
+            : GetFormulaReferenceHighlights(editor.Text ?? "");
+        if (editor is null || highlightIndex < 0 || highlightIndex >= highlights.Count ||
+            highlights[highlightIndex].Range is not { } originalRange ||
+            originalRange.Start.Sheet != target.Sheet)
+        {
+            return false;
+        }
+
+        var newRange = FormulaReferenceDragResizePlanner.ComputeResizedRange(originalRange.Start, target);
+        return TryApplyFormulaReferenceResize(editor, highlights[highlightIndex], newRange);
+    }
 
     internal bool FormulaPointModeForTest => _formulaRangeEntryMode;
 
@@ -4782,6 +4811,7 @@ public sealed partial class MainWindow : Window
 
         var overlay = BuildDrawingObjectOverlay(viewport);
         _cellAffordanceOverlay = overlay;
+        AddFormulaReferenceGripOverlay(overlay, viewport, showHeadings, zoomFactor);
         AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
 
         var pageBreakOverlay = WorksheetViewModeUiStatePlanner.Build(_session.ViewMode).UsesPageBreakPreviewOverlay
@@ -9792,6 +9822,21 @@ public sealed partial class MainWindow : Window
         return IsFormulaRangeEntryActive(_formulaBox.Text) ? _formulaBox : null;
     }
 
+    private TextBox? GetFormulaReferenceHighlightEditor()
+    {
+        if (_session.FormulaEditAddress is null)
+            return null;
+
+        if (_inlineCellEditor is { } inlineEditor &&
+            _inlineCellEditAddress is not null &&
+            IsFormulaPointModeText(inlineEditor.Text))
+        {
+            return inlineEditor;
+        }
+
+        return IsFormulaPointModeText(_formulaBox.Text) ? _formulaBox : null;
+    }
+
     private bool TryGetFormulaReferenceSpanForAppend(
         TextBox editor,
         out int referenceStart,
@@ -10511,6 +10556,7 @@ public sealed partial class MainWindow : Window
         {
             ClearFormulaReferenceTextOverlay();
             ClearFormulaReferenceGridHighlights();
+            RefreshFormulaReferenceGrips();
             return;
         }
 
@@ -10617,6 +10663,242 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void AddFormulaReferenceGripOverlay(
+        Canvas overlay,
+        ViewportModel viewport,
+        bool showHeadings,
+        double zoomFactor)
+    {
+        foreach (var preview in _formulaReferenceGripPreviewVisuals)
+            overlay.Children.Remove(preview);
+        foreach (var grip in _formulaReferenceGripVisuals)
+            overlay.Children.Remove(grip);
+
+        _formulaReferenceGripVisuals.Clear();
+        _formulaReferenceGripPreviewVisuals.Clear();
+        if (!IsFormulaReferenceHighlightActive())
+            return;
+
+        foreach (var highlight in GetFormulaReferenceHighlights(_formulaBox.Text ?? ""))
+        {
+            if (highlight.Range is not { } range || range.Start.Sheet != _session.ActiveSheet.Id ||
+                !TryGetDisplayedRangeBounds(
+                    viewport,
+                    range,
+                    showHeadings,
+                    zoomFactor,
+                    out var left,
+                    out var top,
+                    out var width,
+                    out var height))
+            {
+                continue;
+            }
+
+            var brush = FormulaReferenceBrushes[highlight.PaletteIndex % FormulaReferenceBrushes.Count];
+            var preview = new Border
+            {
+                Width = width,
+                Height = height,
+                BorderBrush = brush,
+                BorderThickness = new Thickness(2),
+                Background = CreateFormulaReferenceFill(brush),
+                IsHitTestVisible = false,
+                IsVisible = false,
+            };
+            Canvas.SetLeft(preview, left);
+            Canvas.SetTop(preview, top);
+            overlay.Children.Add(preview);
+            _formulaReferenceGripPreviewVisuals.Add(preview);
+
+            // Keep the visible square small like WPF, but give the pointer a forgiving hit area.
+            // The transparent outer border is the actual input target; its child is decorative.
+            var grip = new Border
+            {
+                Width = FormulaReferenceGripHitSize,
+                Height = FormulaReferenceGripHitSize,
+                Background = Brushes.Transparent,
+                Child = new Border
+                {
+                    Width = FormulaReferenceGripSize,
+                    Height = FormulaReferenceGripSize,
+                    Background = brush,
+                    IsHitTestVisible = false,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                },
+                Cursor = new Cursor(StandardCursorType.SizeAll),
+            };
+            AutomationProperties.SetAutomationId(grip, "WorksheetFormulaReferenceGrip");
+            AutomationProperties.SetName(grip, $"Formula reference resize grip for {highlight.Text}");
+            Canvas.SetLeft(grip, left + width - FormulaReferenceGripHitSize / 2);
+            Canvas.SetTop(grip, top + height - FormulaReferenceGripHitSize / 2);
+            grip.PointerPressed += (_, args) =>
+                BeginFormulaReferenceDrag(args, grip, preview, highlight);
+            overlay.Children.Add(grip);
+            _formulaReferenceGripVisuals.Add(grip);
+        }
+    }
+
+    private void BeginFormulaReferenceDrag(
+        PointerPressedEventArgs args,
+        Border grip,
+        Border preview,
+        FormulaReferenceHighlight highlight)
+    {
+        if (!args.GetCurrentPoint(grip).Properties.IsLeftButtonPressed ||
+            highlight.Range is not { } range ||
+            GetFormulaReferenceHighlightEditor() is not { } editor)
+        {
+            return;
+        }
+
+        DetachFormulaReferenceDragHandlers();
+        _formulaReferenceDragActive = true;
+        _formulaReferenceDragPointer = args.Pointer;
+        _formulaReferenceDragGrip = grip;
+        _formulaReferenceDragPreviewVisual = preview;
+        _formulaReferenceDragHighlight = highlight;
+        _formulaReferenceDragEditor = editor;
+        UpdateFormulaReferenceDragPreview(range);
+
+        _sheetGridHost.PointerMoved += FormulaReferenceDragPointerMoved;
+        _sheetGridHost.PointerReleased += FormulaReferenceDragPointerReleased;
+        _sheetGridHost.PointerCaptureLost += FormulaReferenceDragPointerCaptureLost;
+        args.Pointer.Capture(_sheetGridHost);
+        args.Handled = true;
+    }
+
+    private void FormulaReferenceDragPointerMoved(object? sender, PointerEventArgs args)
+    {
+        if (!_formulaReferenceDragActive || _formulaReferenceDragHighlight?.Range is not { } originalRange)
+            return;
+
+        if (TryResolveCellPointerAddress(args, out var targetCell) &&
+            targetCell.Sheet == originalRange.Start.Sheet)
+        {
+            UpdateFormulaReferenceDragPreview(
+                FormulaReferenceDragResizePlanner.ComputeResizedRange(originalRange.Start, targetCell));
+        }
+
+        args.Handled = true;
+    }
+
+    private void FormulaReferenceDragPointerReleased(object? sender, PointerReleasedEventArgs args)
+    {
+        if (!_formulaReferenceDragActive)
+            return;
+
+        var highlight = _formulaReferenceDragHighlight;
+        var editor = _formulaReferenceDragEditor;
+        var pointer = _formulaReferenceDragPointer;
+        var targetResolved = TryResolveCellPointerAddress(args, out var targetCell);
+        var targetIsSameSheet = highlight?.Range is { } range && targetCell.Sheet == range.Start.Sheet;
+
+        DetachFormulaReferenceDragHandlers();
+        pointer?.Capture(null);
+        ClearFormulaReferenceDragState();
+
+        if (editor is not null && highlight?.Range is { } originalRange &&
+            targetResolved && targetIsSameSheet)
+        {
+            var newRange = FormulaReferenceDragResizePlanner.ComputeResizedRange(originalRange.Start, targetCell);
+            TryApplyFormulaReferenceResize(editor, highlight, newRange);
+        }
+
+        args.Handled = true;
+    }
+
+    private void FormulaReferenceDragPointerCaptureLost(object? sender, PointerCaptureLostEventArgs args)
+    {
+        if (!_formulaReferenceDragActive)
+            return;
+
+        DetachFormulaReferenceDragHandlers();
+        _formulaReferenceDragPointer?.Capture(null);
+        ClearFormulaReferenceDragState();
+    }
+
+    private void DetachFormulaReferenceDragHandlers()
+    {
+        _sheetGridHost.PointerMoved -= FormulaReferenceDragPointerMoved;
+        _sheetGridHost.PointerReleased -= FormulaReferenceDragPointerReleased;
+        _sheetGridHost.PointerCaptureLost -= FormulaReferenceDragPointerCaptureLost;
+    }
+
+    private void ClearFormulaReferenceDragState()
+    {
+        if (_formulaReferenceDragPreviewVisual is { } preview)
+            preview.IsVisible = false;
+
+        _formulaReferenceDragActive = false;
+        _formulaReferenceDragPointer = null;
+        _formulaReferenceDragGrip = null;
+        _formulaReferenceDragPreviewVisual = null;
+        _formulaReferenceDragHighlight = null;
+        _formulaReferenceDragEditor = null;
+    }
+
+    private void UpdateFormulaReferenceDragPreview(GridRange range)
+    {
+        if (_formulaReferenceDragGrip is not { } grip ||
+            _formulaReferenceDragPreviewVisual is not { } preview ||
+            !TryGetDisplayedRangeBounds(
+                _session.Viewport,
+                range,
+                _session.IsShowingHeadings,
+                GetActiveZoomFactor(),
+                out var left,
+                out var top,
+                out var width,
+                out var height))
+        {
+            return;
+        }
+
+        preview.Width = width;
+        preview.Height = height;
+        Canvas.SetLeft(preview, left);
+        Canvas.SetTop(preview, top);
+        preview.IsVisible = true;
+        Canvas.SetLeft(grip, left + width - FormulaReferenceGripHitSize / 2);
+        Canvas.SetTop(grip, top + height - FormulaReferenceGripHitSize / 2);
+    }
+
+    private bool TryApplyFormulaReferenceResize(
+        TextBox editor,
+        FormulaReferenceHighlight highlight,
+        GridRange newRange)
+    {
+        var text = editor.Text ?? "";
+        var (newText, caretIndex) = FormulaReferenceDragResizePlanner.ApplyResize(
+            text,
+            highlight.TextStart,
+            highlight.TextLength,
+            newRange,
+            UseR1C1ReferenceStyle);
+        var edit = new ExcelTextEdit(newText, caretIndex, 0);
+
+        _isApplyingFormulaBoxText = true;
+        try
+        {
+            ApplyTextBoxEdit(editor, edit);
+            SetInlineCellEditorSelection(editor, edit);
+            SynchronizeFormulaEditors(editor);
+        }
+        finally
+        {
+            _isApplyingFormulaBoxText = false;
+        }
+
+        _formulaReferenceStart = highlight.TextStart;
+        _formulaReferenceLength = caretIndex - highlight.TextStart;
+        RefreshFormulaReferenceHighlights();
+        RefreshFormulaReferenceGridHighlights();
+        editor.Focus();
+        return true;
+    }
+
     private void RefreshFormulaReferenceGridHighlights()
     {
         if (_formulaReferenceGridOverlay is not { } overlay)
@@ -10624,6 +10906,19 @@ public sealed partial class MainWindow : Window
 
         ClearFormulaReferenceGridHighlights();
         AddFormulaReferenceHighlightOverlay(
+            overlay,
+            _session.Viewport,
+            _session.IsShowingHeadings,
+            GetActiveZoomFactor());
+        RefreshFormulaReferenceGrips();
+    }
+
+    private void RefreshFormulaReferenceGrips()
+    {
+        if (_cellAffordanceOverlay is not { } overlay)
+            return;
+
+        AddFormulaReferenceGripOverlay(
             overlay,
             _session.Viewport,
             _session.IsShowingHeadings,
@@ -17975,6 +18270,11 @@ public sealed partial class MainWindow : Window
         {
             _formulaBox.Text = initialText;
             _formulaRangeEntryMode = FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(initialText);
+            // Existing formulas are populated after the shell refresh above. Rebuild the live
+            // reference visuals now so Edit-mode highlights and resize grips are available on the
+            // same first frame as WPF's formula editor.
+            RefreshFormulaReferenceHighlights();
+            RefreshFormulaReferenceGridHighlights();
         }
 
         _formulaBoxEditOriginalText = originalText;
