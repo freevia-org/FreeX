@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [int]$Port = 6094,
-    [string]$OutputDir = "freew/artifacts/wave64-linux"
+    [string]$OutputDir = "freew/artifacts/wave64-linux",
+    [ValidateSet("nested-text", "nested-text-direction")]
+    [string]$Selector = "nested-text"
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,6 +17,7 @@ $probePath = Join-Path $repoRoot "tools/LinuxInteractiveDocker/run-freew-wave64-
 $sessionPath = Join-Path $resolvedOutput "freew/current-session.json"
 $containerName = "freex-linux-interactive-freew-$Port"
 $started = $false
+$isTextDirection = $Selector -eq "nested-text-direction"
 
 function Invoke-Fixture { param([string]$Action, [string]$Path)
     $lines = @(& dotnet run --project $fixtureProject --configuration Release --no-restore -- $Action $Path 2>&1)
@@ -35,6 +38,7 @@ try {
     $before = Read-Geometry inspect-nested-text $fixturePath
     if ($before['child-text'] -ne 'Nested leaf') { throw "Unexpected fixture text: '$($before['child-text'])'." }
     if ($before['child-kind'] -ne 'Shape') { throw "Nested text fixture leaf is not a Shape." }
+    if ($before['child-text-direction'] -ne 'Horizontal') { throw "Unexpected fixture text direction: '$($before['child-text-direction'])'." }
 
     & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath -Replace
     $started = $true
@@ -42,13 +46,16 @@ try {
     $sessionDir = [string]$session.sessionDirectory
     $probeSessionDir = $sessionDir
     Copy-Item $probePath (Join-Path $sessionDir "run-freew-wave64-nested-text-probe.sh") -Force
-    & docker exec $containerName bash /work/run-freew-wave64-nested-text-probe.sh /work/nested-text-wave64
+    & docker exec --env "FREEW_WAVE64_SELECTOR=$Selector" $containerName bash /work/run-freew-wave64-nested-text-probe.sh /work/nested-text-wave64
     if ($LASTEXITCODE -ne 0) { throw "The Linux/X11 nested text probe failed with exit code $LASTEXITCODE." }
 
     # Run-LinuxInteractiveDocker copies DocumentPath into its bind-mounted documents directory;
     # inspect that saved copy rather than the untouched source fixture.
     $after = Read-Geometry inspect-nested-text $savedDocumentPath
-    if ($after['child-text'] -ne 'Nested leaf!') { throw "Saved nested text mismatch: '$($after['child-text'])'." }
+    $expectedText = if ($isTextDirection) { 'Nested leaf' } else { 'Nested leaf!' }
+    $expectedDirection = if ($isTextDirection) { 'Rotate90' } else { 'Horizontal' }
+    if ($after['child-text'] -ne $expectedText) { throw "Saved nested text mismatch: '$($after['child-text'])'." }
+    if ($after['child-text-direction'] -ne $expectedDirection) { throw "Saved nested text direction mismatch: '$($after['child-text-direction'])'." }
     if ($after['outer-transform'] -ne $before['outer-transform'] -or $after['inner-transform'] -ne $before['inner-transform']) { throw "Nested group transforms changed during text editing." }
 
     & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port
@@ -63,31 +70,58 @@ try {
     & docker exec $containerName bash -lc $reopenScreenshotCommand
     if ($LASTEXITCODE -ne 0) { throw "The saved nested text document did not reopen in the Linux harness." }
     $reopened = Read-Geometry inspect-nested-text $savedDocumentPath
-    if ($reopened['child-text'] -ne 'Nested leaf!') { throw "Reopened nested text mismatch: '$($reopened['child-text'])'." }
+    if ($reopened['child-text'] -ne $expectedText) { throw "Reopened nested text mismatch: '$($reopened['child-text'])'." }
+    if ($reopened['child-text-direction'] -ne $expectedDirection) { throw "Reopened nested text direction mismatch: '$($reopened['child-text-direction'])'." }
 
     $probe = Get-Content (Join-Path $probeSessionDir "nested-text-wave64/probe-results.json") -Raw | ConvertFrom-Json
-    $manifest = [ordered]@{
-        schemaVersion = 1
-        suite = "freew-linux-nested-text-wave64-physical"
-        platform = "linux"
-        shell = "avalonia"
-        app = "FreeW"
-        coverage = [ordered]@{ scope = "physical nested grouped-child text selection, insertion, save, and reopen"; exhaustive = $false }
-        contractValidation = [ordered]@{ status = "passed"; validator = "tools/Run-FreeWWave64NestedTextValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freew-nested-text-validation.schema.json" }
-        screenshots = @(
+    $suite = if ($isTextDirection) { "freew-linux-nested-text-wave65-physical" } else { "freew-linux-nested-text-wave64-physical" }
+    $scope = if ($isTextDirection) {
+        "physical nested grouped-child text-direction selection, ribbon command, save, and reopen"
+    } else {
+        "physical nested grouped-child text selection, insertion, save, and reopen"
+    }
+    $screenshots = if ($isTextDirection) {
+        @(
+            [ordered]@{ name = "01-baseline.png"; kind = "screenshot" },
+            [ordered]@{ name = "02-nested-text-direction-rotate90.png"; kind = "screenshot" },
+            [ordered]@{ name = "04-reopened.png"; kind = "screenshot" }
+        )
+    } else {
+        @(
             [ordered]@{ name = "01-baseline.png"; kind = "screenshot" },
             [ordered]@{ name = "02-nested-text-editing.png"; kind = "screenshot" },
             [ordered]@{ name = "03-nested-text-edited.png"; kind = "screenshot" },
             [ordered]@{ name = "04-reopened.png"; kind = "screenshot" }
         )
+    }
+    $results = @($probe.results) + @(
+        [ordered]@{
+            id = if ($isTextDirection) { "nested-text-direction-x11-reopen" } else { "nested-text-x11-reopen" }
+            status = "passed"
+            evidence = @("04-reopened.png")
+            note = "The saved DOCX reopened with the exact nested child text, direction, child path, and group transforms."
+        }
+    )
+    $manifest = [ordered]@{
+        schemaVersion = 1
+        suite = $suite
+        platform = "linux"
+        shell = "avalonia"
+        app = "FreeW"
+        coverage = [ordered]@{ scope = $scope; exhaustive = $false }
+        contractValidation = [ordered]@{ status = "passed"; validator = "tools/Run-FreeWWave64NestedTextValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freew-nested-text-validation.schema.json" }
+        screenshots = $screenshots
         summary = [ordered]@{ passed = 4; failed = 0; total = 4 }
-        results = @($probe.results)
+        results = $results
         persistedText = [ordered]@{ before = $before['child-text']; after = $after['child-text']; reopened = $reopened['child-text']; exact = $true }
+        persistedDirection = [ordered]@{ before = $before['child-text-direction']; after = $after['child-text-direction']; reopened = $reopened['child-text-direction']; exact = $true }
         preservedStructure = [ordered]@{ childPath = "0,1"; childKind = $reopened['child-kind']; outerTransformUnchanged = $true; innerTransformUnchanged = $true }
         evidence = [ordered]@{ session = $probeSessionDir; reopenSession = $reopenSessionDir; fixture = $savedDocumentPath }
     }
-    $manifest | ConvertTo-Json -Depth 12 | Set-Content (Join-Path $resolvedOutput "freew-wave64-nested-text-validation.json") -Encoding utf8
-    Write-Host "Wave 64 physical validation passed. Manifest: $(Join-Path $resolvedOutput 'freew-wave64-nested-text-validation.json')"
+    $manifestName = if ($isTextDirection) { "freew-wave65-nested-text-direction-validation.json" } else { "freew-wave64-nested-text-validation.json" }
+    $manifestPath = Join-Path $resolvedOutput $manifestName
+    $manifest | ConvertTo-Json -Depth 12 | Set-Content $manifestPath -Encoding utf8
+    Write-Host "Nested text physical validation passed. Manifest: $manifestPath"
 }
 finally {
     if ($started) { & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port }

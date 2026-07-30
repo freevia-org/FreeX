@@ -102,6 +102,7 @@ if (string.Equals(args[0], "inspect-nested", StringComparison.OrdinalIgnoreCase)
             Console.WriteLine($"child-text={textShape.PlainText}");
             Console.WriteLine($"child-text-paragraphs={textShape.TextParagraphs.Count}");
             Console.WriteLine($"child-text-runs={textShape.TextParagraphs.Sum(paragraph => paragraph.Runs.Count)}");
+            Console.WriteLine($"child-text-direction={textShape.TextDirection}");
         }
         return 0;
 }

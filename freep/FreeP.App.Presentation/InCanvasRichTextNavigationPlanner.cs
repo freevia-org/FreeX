@@ -9,8 +9,8 @@ public enum InCanvasTextNavigationKey
 }
 
 /// <summary>
-/// Framework-neutral logical navigation used by both in-canvas rich-text editors.
-/// Visual line movement remains a renderer concern; document and word movement does not.
+/// Framework-neutral logical navigation for the Avalonia in-canvas editor, matching the
+/// corresponding native WPF RichTextBox semantics. Visual line movement remains renderer-owned.
 /// </summary>
 public static class InCanvasRichTextNavigationPlanner
 {
