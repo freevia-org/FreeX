@@ -132,6 +132,8 @@ public sealed record ChartDataDialogSurfacePlan(
     string MoveSeriesDownLabel,
     string AddCategoryLabel,
     string RemoveCategoryLabel,
+    string MoveCategoryLeftLabel,
+    string MoveCategoryRightLabel,
     string SwitchRowsAndColumnsLabel,
     string ChartTypeLabel,
     string OkLabel,
@@ -176,6 +178,8 @@ public sealed class ChartDataDialogPlanner
     public const string MoveSeriesDownLabel = "Move Series Down";
     public const string AddCategoryLabel = "+ Category";
     public const string RemoveCategoryLabel = "- Category";
+    public const string MoveCategoryLeftLabel = "Move Category Left";
+    public const string MoveCategoryRightLabel = "Move Category Right";
     public const string SwitchRowsAndColumnsLabel = "Switch Row/Column";
     public const string ChartTypeLabel = "Chart Type";
     public const string OkLabel = "OK";
@@ -230,6 +234,8 @@ public sealed class ChartDataDialogPlanner
             MoveSeriesDownLabel,
             AddCategoryLabel,
             RemoveCategoryLabel,
+            MoveCategoryLeftLabel,
+            MoveCategoryRightLabel,
             SwitchRowsAndColumnsLabel,
             ChartTypeLabel,
             OkLabel,
@@ -374,6 +380,16 @@ public sealed class ChartDataDialogPlanner
 
         MoveCoordinateRow(_xValues, seriesIndex, targetIndex);
         MoveCoordinateRow(_bubbleSizes, seriesIndex, targetIndex);
+        return true;
+    }
+
+    public bool MoveCategory(int categoryIndex, int targetIndex)
+    {
+        if (!_grid.MoveCategory(categoryIndex, targetIndex))
+            return false;
+
+        MoveCoordinateValue(_xValues, categoryIndex, targetIndex);
+        MoveCoordinateValue(_bubbleSizes, categoryIndex, targetIndex);
         return true;
     }
 
@@ -686,6 +702,24 @@ public sealed class ChartDataDialogPlanner
         {
             if (categoryIndex >= 0 && categoryIndex < values.Count)
                 values.RemoveAt(categoryIndex);
+        }
+    }
+
+    private static void MoveCoordinateValue(
+        List<List<double?>> matrix,
+        int categoryIndex,
+        int targetIndex)
+    {
+        foreach (var values in matrix)
+        {
+            if (categoryIndex < 0 || categoryIndex >= values.Count ||
+                targetIndex < 0 || targetIndex >= values.Count ||
+                categoryIndex == targetIndex)
+                continue;
+
+            var value = values[categoryIndex];
+            values.RemoveAt(categoryIndex);
+            values.Insert(targetIndex, value);
         }
     }
 

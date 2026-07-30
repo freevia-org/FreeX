@@ -124,6 +124,13 @@ internal sealed class ChartDataDialog : Window
         OnRemoveCategory();
     }
 
+    internal void MoveCategoryForTests(int categoryIndex, bool right)
+    {
+        FlushTextBoxEdits();
+        _activeCategoryIndex = categoryIndex;
+        MoveActiveCategory(right ? 1 : -1);
+    }
+
     private Control BuildContent()
     {
         var root = new Grid();
@@ -146,6 +153,8 @@ internal sealed class ChartDataDialog : Window
                 new Border { Width = 12 },
                 MakeToolbarButton(_surface.AddCategoryLabel, OnAddCategory),
                 MakeToolbarButton(_surface.RemoveCategoryLabel, OnRemoveCategory),
+                MakeToolbarButton(_surface.MoveCategoryLeftLabel, OnMoveCategoryLeft),
+                MakeToolbarButton(_surface.MoveCategoryRightLabel, OnMoveCategoryRight),
                 MakeToolbarButton(_surface.SwitchRowsAndColumnsLabel, OnSwitchRowsAndColumns),
                 new TextBlock
                 {
@@ -344,6 +353,22 @@ internal sealed class ChartDataDialog : Window
             _activeCategoryIndex = _planner.CategoryCount == 0
                 ? -1
                 : Math.Min(_activeCategoryIndex, _planner.CategoryCount - 1);
+            RebuildTable();
+        }
+    }
+
+    private void OnMoveCategoryLeft() => MoveActiveCategory(-1);
+
+    private void OnMoveCategoryRight() => MoveActiveCategory(1);
+
+    private void MoveActiveCategory(int delta)
+    {
+        if (!TryFlushTextBoxEdits())
+            return;
+
+        if (_planner.MoveCategory(_activeCategoryIndex, _activeCategoryIndex + delta))
+        {
+            _activeCategoryIndex = Math.Clamp(_activeCategoryIndex + delta, 0, _planner.CategoryCount - 1);
             RebuildTable();
         }
     }

@@ -47,6 +47,8 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly Button   _moveSeriesDownBtn;
     private readonly Button   _addCatBtn;
     private readonly Button   _removeCatBtn;
+    private readonly Button   _moveCatLeftBtn;
+    private readonly Button   _moveCatRightBtn;
     private readonly Button   _switchRowsAndColumnsBtn;
     private readonly ComboBox _chartTypeCombo;
     private readonly TextBlock _validationText = new();
@@ -83,6 +85,8 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _moveSeriesDownBtn = MakeToolbarButton("Move Series Down", OnMoveSeriesDown);
         _addCatBtn       = MakeToolbarButton("+ Category",  OnAddCategory);
         _removeCatBtn    = MakeToolbarButton("- Category",  OnRemoveCategory);
+        _moveCatLeftBtn  = MakeToolbarButton("Move Category Left", OnMoveCategoryLeft);
+        _moveCatRightBtn = MakeToolbarButton("Move Category Right", OnMoveCategoryRight);
         _switchRowsAndColumnsBtn = MakeToolbarButton("Switch Row/Column", OnSwitchRowsAndColumns);
         _chartTypeCombo = new ComboBox
         {
@@ -107,6 +111,8 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         toolbar.Children.Add(new Separator { Width = 12, Visibility = Visibility.Hidden });
         toolbar.Children.Add(_addCatBtn);
         toolbar.Children.Add(_removeCatBtn);
+        toolbar.Children.Add(_moveCatLeftBtn);
+        toolbar.Children.Add(_moveCatRightBtn);
         toolbar.Children.Add(_switchRowsAndColumnsBtn);
         toolbar.Children.Add(new TextBlock
         {
@@ -312,6 +318,22 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             ? _grid.SelectedIndex
             : _planner.CategoryCount - 1;
         if (_planner.RemoveCategoryAt(categoryIndex))
+            RebuildGrid();
+    }
+
+    private void OnMoveCategoryLeft() => MoveActiveCategory(-1);
+
+    private void OnMoveCategoryRight() => MoveActiveCategory(1);
+
+    private void MoveActiveCategory(int delta)
+    {
+        if (!TryCommitPendingEdit())
+            return;
+
+        var categoryIndex = _grid.SelectedIndex >= 0
+            ? _grid.SelectedIndex
+            : _planner.CategoryCount - 1;
+        if (_planner.MoveCategory(categoryIndex, categoryIndex + delta))
             RebuildGrid();
     }
 
