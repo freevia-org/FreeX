@@ -83,6 +83,7 @@ public enum SmartArtLayoutPreset
     VerticalBoxList,
     VerticalChevronList,
     VerticalBulletList,
+    VerticalPictureList,
     HorizontalBulletList,
     HorizontalBlockList,
     TrapezoidList,
@@ -222,6 +223,7 @@ public static class SmartArtAuthoringPlanner
     public const string VerticalBoxListLayoutCommandId = "freep.smartart.layout.vertical-box-list";
     public const string VerticalChevronListLayoutCommandId = "freep.smartart.layout.vertical-chevron-list";
     public const string VerticalBulletListLayoutCommandId = "freep.smartart.layout.vertical-bullet-list";
+    public const string VerticalPictureListLayoutCommandId = "freep.smartart.layout.vertical-picture-list";
     public const string HorizontalBulletListLayoutCommandId = "freep.smartart.layout.horizontal-bullet-list";
     public const string HorizontalBlockListLayoutCommandId = "freep.smartart.layout.horizontal-block-list";
     public const string TrapezoidListLayoutCommandId = "freep.smartart.layout.trapezoid-list";
@@ -464,7 +466,8 @@ public static class SmartArtAuthoringPlanner
             SmartArtLayoutPreset.PictureLineup or
             SmartArtLayoutPreset.PictureStrips or
             SmartArtLayoutPreset.ContinuousPictureList or
-            SmartArtLayoutPreset.PictureGrid);
+            SmartArtLayoutPreset.PictureGrid or
+            SmartArtLayoutPreset.VerticalPictureList);
         if (pictureLayout && (smartArt.Data is null || smartArt.Data.Nodes.Count == 0))
         {
             return NotAppliedLayout("Picture-based SmartArt layouts require a SmartArt data model with at least one node.");
@@ -534,6 +537,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalChevronList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalBulletList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.VerticalPictureList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/verticalPictureList", SmartArtFamily.List),
             SmartArtLayoutPreset.HorizontalBulletList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBulletList", SmartArtFamily.List),
             SmartArtLayoutPreset.HorizontalBlockList =>
