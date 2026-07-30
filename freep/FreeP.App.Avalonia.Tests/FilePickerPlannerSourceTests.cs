@@ -38,6 +38,8 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("PresentationExportPlanner.BuildHandoutLayoutPlan(");
         source.Should().Contain("PresentationNotesPagePdfExporter.BuildRenderPlan(");
         source.Should().Contain("PresentationNotesPagePdfExporter.ExportToBytes(");
+        source.Should().Contain("_presentation,");
+        source.Should().Contain("request,");
         source.Should().Contain("SkiaPdfWriter.WriteToBytesWithPortableFallback");
         source.Should().Contain("PresentationExportPlanner.BuildVideoExportPlan(");
         source.Should().Contain("PresentationVideoFramePackageExecutor.BuildPackage(");
