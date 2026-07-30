@@ -3323,7 +3323,8 @@ public sealed class EditingSession
         // FF2: multi-select — bring all selected shapes to front preserving relative order.
         // Process in ascending z-order (lowest first) so the last-processed (originally topmost)
         // ends up at the very top, preserving their relative stacking.
-        var shapes = CurrentSlide.Shapes;
+        var shapes = FindContainingShapeList(CurrentSlide.Shapes, _selectedShapeIds[0]);
+        if (shapes is null || _selectedShapeIds.Any(id => shapes.FindIndex(shape => shape.Id == id) < 0)) return;
         var orderedIds = _selectedShapeIds
             .Select(id => (id, zIdx: shapes.FindIndex(s => s.Id == id)))
             .Where(t => t.zIdx >= 0)
@@ -3353,7 +3354,8 @@ public sealed class EditingSession
         // FF2: multi-select — send all selected shapes to back preserving relative order.
         // Process in descending z-order (highest first) so the last-processed (originally bottommost)
         // ends up at index 0, preserving their relative stacking.
-        var shapes = CurrentSlide.Shapes;
+        var shapes = FindContainingShapeList(CurrentSlide.Shapes, _selectedShapeIds[0]);
+        if (shapes is null || _selectedShapeIds.Any(id => shapes.FindIndex(shape => shape.Id == id) < 0)) return;
         var orderedIds = _selectedShapeIds
             .Select(id => (id, zIdx: shapes.FindIndex(s => s.Id == id)))
             .Where(t => t.zIdx >= 0)

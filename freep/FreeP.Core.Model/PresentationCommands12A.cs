@@ -34,6 +34,18 @@ file static class ShapeHelper12A
         return FindContainingList(p.Slides[slideIndex].Shapes, shapeId);
     }
 
+    internal static List<SlideShape>? CommonContainingShapes(
+        Presentation p,
+        int slideIndex,
+        IReadOnlyList<uint> shapeIds)
+    {
+        if (shapeIds.Count == 0) return null;
+        var shapes = ContainingShapes(p, slideIndex, shapeIds[0]);
+        return shapes is not null && shapeIds.All(id => shapes.Any(shape => shape.Id == id))
+            ? shapes
+            : null;
+    }
+
     private static List<SlideShape>? FindContainingList(List<SlideShape> shapes, uint shapeId)
     {
         if (shapes.Any(shape => shape.Id == shapeId)) return shapes;
@@ -297,7 +309,7 @@ public sealed class AlignShapesCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.CommonContainingShapes(p, _slideIndex, _shapeIds);
         if (shapes is null || _shapeIds.Count == 0) return;
 
         var targets = _shapeIds
@@ -347,7 +359,7 @@ public sealed class AlignShapesCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.CommonContainingShapes(p, _slideIndex, _shapeIds);
         if (shapes is null || _saved is null) return;
 
         foreach (var (id, oldX, oldY) in _saved)
@@ -456,7 +468,7 @@ public sealed class DistributeShapesCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.CommonContainingShapes(p, _slideIndex, _shapeIds);
         if (shapes is null || _shapeIds.Count < 3) return;
 
         var targets = _shapeIds
@@ -510,7 +522,7 @@ public sealed class DistributeShapesCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.CommonContainingShapes(p, _slideIndex, _shapeIds);
         if (shapes is null || _saved is null) return;
 
         foreach (var (id, oldX, oldY) in _saved)
@@ -546,7 +558,7 @@ public sealed class BringToFrontCommand : IPresentationCommand
 
     public bool HasEffect(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.ContainingShapes(p, _slideIndex, _shapeId);
         if (shapes is null) return false;
         var idx = shapes.FindIndex(s => s.Id == _shapeId);
         return idx >= 0 && idx < shapes.Count - 1;
@@ -554,7 +566,7 @@ public sealed class BringToFrontCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.ContainingShapes(p, _slideIndex, _shapeId);
         if (shapes is null) return;
         _oldZIndex = shapes.FindIndex(s => s.Id == _shapeId);
         if (_oldZIndex < 0) return;
@@ -565,7 +577,7 @@ public sealed class BringToFrontCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.ContainingShapes(p, _slideIndex, _shapeId);
         if (shapes is null || _oldZIndex < 0) return;
         // Currently at the end — move back to _oldZIndex.
         var shape = shapes[shapes.Count - 1];
@@ -595,7 +607,7 @@ public sealed class SendToBackCommand : IPresentationCommand
 
     public bool HasEffect(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.ContainingShapes(p, _slideIndex, _shapeId);
         if (shapes is null) return false;
         var idx = shapes.FindIndex(s => s.Id == _shapeId);
         return idx > 0;
@@ -603,7 +615,7 @@ public sealed class SendToBackCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.ContainingShapes(p, _slideIndex, _shapeId);
         if (shapes is null) return;
         _oldZIndex = shapes.FindIndex(s => s.Id == _shapeId);
         if (_oldZIndex <= 0) return;
@@ -614,7 +626,7 @@ public sealed class SendToBackCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.ContainingShapes(p, _slideIndex, _shapeId);
         if (shapes is null || _oldZIndex <= 0) return;
         // Currently at index 0 — move back to _oldZIndex.
         var shape = shapes[0];
