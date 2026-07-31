@@ -576,7 +576,9 @@ public sealed class PresentationClipboardInteropTests
                 XamlPackageBytes: CreateXamlPackage("""
                     <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
                       <Table><TableRowGroup><TableRow>
-                        <TableCell><Paragraph><Italic>Q1</Italic></Paragraph></TableCell>
+                        <TableCell Background="#FFF2F2F2" Padding="4,2,6,8"
+                                   BorderBrush="#FF1F4E79" BorderThickness="1,2,3,4"
+                                   VerticalContentAlignment="Center"><Paragraph><Italic>Q1</Italic></Paragraph></TableCell>
                         <TableCell><Paragraph>42</Paragraph></TableCell>
                       </TableRow></TableRowGroup></Table>
                     </FlowDocument>
@@ -596,6 +598,14 @@ public sealed class PresentationClipboardInteropTests
             .Single().Text.Should().Be("Q1");
         shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
             .Single().Italic.Should().BeTrue();
+        var firstCell = shape.Table.Rows[0].Cells[0];
+        firstCell.Fill.Should().BeOfType<ShapeFill.Solid>().Which.Color.Resolved
+            .Should().Be(SrgbColor.FromRgb(0xF2F2F2));
+        firstCell.Anchor.Should().Be(TableCellAnchor.Middle);
+        firstCell.InsetLeftPt.Should().Be(3);
+        firstCell.InsetBottomPt.Should().Be(6);
+        firstCell.Borders!.Left.Should().BeOfType<ShapeOutline.Visible>().Which.WidthPt.Should().Be(0.75);
+        firstCell.Borders.Bottom.Should().BeOfType<ShapeOutline.Visible>().Which.WidthPt.Should().Be(3);
         shape.Table.Rows[0].Cells[1].TextBody!.Paragraphs.Single().Runs
             .Single().Text.Should().Be("42");
     }
