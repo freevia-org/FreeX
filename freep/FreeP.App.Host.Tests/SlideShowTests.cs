@@ -1969,6 +1969,22 @@ public sealed class SlideShowMediaControllerTests
     }
 
     [StaFact]
+    public void EnterSlide_WithGroupedMediaShape_WritesFileForNestedPlayer()
+    {
+        var fakeWriter = new FakeFileWriter();
+        var overlay = new System.Windows.Controls.Canvas();
+        var ctrl = new SlideShowMediaController(overlay, fakeWriter);
+        var group = new SlideShape { Id = 20, Kind = SlideShapeKind.Group };
+        group.Children.Add(MakeMediaShape());
+        var slide = SlideWithMedia(group);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720);
+
+        fakeWriter.Written.Should().HaveCount(1);
+        ctrl.Teardown();
+    }
+
+    [StaFact]
     public void EnterSlide_WithCaptionTrack_CreatesAndTearsDownCaptionSurface()
     {
         var fakeWriter = new FakeFileWriter();

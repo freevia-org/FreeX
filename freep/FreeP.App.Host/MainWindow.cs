@@ -621,7 +621,7 @@ public sealed partial class MainWindow : Window
         var slidePoint = SlideCanvas.CurrentTransform.ScreenToSlide(screenPoint.X, screenPoint.Y);
         var hitId = FreeP.App.Compositor.ShapeHitTester.HitTest(slide, _presentation, slidePoint.X, slidePoint.Y);
         var shape = hitId.HasValue
-            ? slide.Shapes.FirstOrDefault(candidate => candidate.Id == hitId.Value)
+            ? ShapeTreeLookup.Find(slide, hitId.Value)
             : null;
         if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
             return;
@@ -720,7 +720,9 @@ public sealed partial class MainWindow : Window
 
     internal ContextMenu? BuildTableContextMenuForTests(uint shapeId)
     {
-        var shape = Editor.CurrentSlide?.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        var shape = Editor.CurrentSlide is { } slide
+            ? ShapeTreeLookup.Find(slide, shapeId)
+            : null;
         return shape?.Kind == SlideShapeKind.Table && shape.Table is not null
             ? BuildTableContextMenu(shape)
             : null;
@@ -3081,12 +3083,13 @@ public sealed partial class MainWindow : Window
     private SlideShape? GetSelectedSmartArtShape()
     {
         var selectedShapeId = GetSingleSelectedShapeId();
-        return selectedShapeId is null
-            ? null
-            : Editor.CurrentSlide?.Shapes.FirstOrDefault(shape =>
-                shape.Id == selectedShapeId.Value &&
-                shape.Kind == SlideShapeKind.SmartArt &&
-                shape.SmartArt is not null);
+        if (selectedShapeId is null || Editor.CurrentSlide is not { } slide)
+            return null;
+
+        var shape = ShapeTreeLookup.Find(slide, selectedShapeId.Value);
+        return shape?.Kind == SlideShapeKind.SmartArt && shape.SmartArt is not null
+            ? shape
+            : null;
     }
 
     private PresentationTheme ResolveCurrentSlideTheme()
