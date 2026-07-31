@@ -197,7 +197,9 @@ public static class InCanvasRichClipboardPlanner
             var cleanedRuns = new List<Run>(paragraph.Runs.Count);
             foreach (var run in paragraph.Runs)
             {
-                if (run.InlineImage is null && !run.Text.Contains('\uFFFC', StringComparison.Ordinal))
+                if (run.InlineImage is null
+                    && run.InlineOleObject is null
+                    && !run.Text.Contains('\uFFFC', StringComparison.Ordinal))
                 {
                     cleanedRuns.Add(run);
                     continue;
@@ -211,6 +213,7 @@ public static class InCanvasRichClipboardPlanner
                 run.InlineImage = null;
                 run.InlineImageWidthEmu = null;
                 run.InlineImageHeightEmu = null;
+                run.InlineOleObject = null;
                 cleanedRuns.Add(run);
             }
 
@@ -493,6 +496,12 @@ public static class InCanvasRichClipboardPlanner
             WidthEmu = run.InlineImageWidthEmu,
             HeightEmu = run.InlineImageHeightEmu,
         },
+        InlineOleObject = run.InlineOleObject is null ? null : new ClipboardObjectDto
+        {
+            FileName = run.InlineOleObject.FileName,
+            Bytes = run.InlineOleObject.EmbeddedBytes.ToArray(),
+            ClassName = run.InlineOleObject.ClassName,
+        },
         FontFamily = run.FontFamily,
         FontSizePt = run.FontSizePt,
         BaselineOffset = run.BaselineOffset,
@@ -652,6 +661,14 @@ public static class InCanvasRichClipboardPlanner
                 : null,
             InlineImageWidthEmu = dto.InlineImage?.WidthEmu,
             InlineImageHeightEmu = dto.InlineImage?.HeightEmu,
+            InlineOleObject = dto.InlineOleObject is { Bytes.Length: > 0 } obj
+                ? new InlineOleObjectInfo
+                {
+                    EmbeddedBytes = obj.Bytes!,
+                    FileName = obj.FileName ?? "Embedded.bin",
+                    ClassName = obj.ClassName,
+                }
+                : null,
             FontFamily = dto.FontFamily,
             FontSizePt = dto.FontSizePt,
             BaselineOffset = dto.BaselineOffset,
@@ -959,6 +976,7 @@ public static class InCanvasRichClipboardPlanner
     {
         public string? Text { get; set; }
         public ClipboardImageDto? InlineImage { get; set; }
+        public ClipboardObjectDto? InlineOleObject { get; set; }
         public string? FontFamily { get; set; }
         public double? FontSizePt { get; set; }
         public int? BaselineOffset { get; set; }

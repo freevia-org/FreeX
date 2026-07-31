@@ -240,12 +240,23 @@ internal static class PresentationModelCloneHelper
                 ContentType = source.ContentType
             };
 
+    private static InlineOleObjectInfo? CloneInlineOleObject(InlineOleObjectInfo? source) =>
+        source is null
+            ? null
+            : new InlineOleObjectInfo
+            {
+                EmbeddedBytes = source.EmbeddedBytes.ToArray(),
+                FileName = source.FileName,
+                ClassName = source.ClassName,
+            };
+
     private static Run CloneRun(Run source) => new()
     {
         Text = source.Text,
         InlineImage = CloneImagePart(source.InlineImage),
         InlineImageWidthEmu = source.InlineImageWidthEmu,
         InlineImageHeightEmu = source.InlineImageHeightEmu,
+        InlineOleObject = CloneInlineOleObject(source.InlineOleObject),
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
         BaselineOffset = source.BaselineOffset,

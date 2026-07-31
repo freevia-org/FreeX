@@ -419,6 +419,7 @@ internal sealed class AvaloniaPresentationClipboardService(
                 foreach (var obj in payload.GetObjectPayloads())
                     request.Editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
                 var slideBody = payload.GetImagePayloads().Count > 0
+                    || payload.GetObjectPayloads().Count > 0
                     ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
                     : payload.Body;
                 var table = payload.ContainsTable
@@ -453,6 +454,7 @@ internal sealed class AvaloniaPresentationClipboardService(
                 foreach (var obj in payload.GetObjectPayloads())
                     request.Editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
                 var slideBody = payload.GetImagePayloads().Count > 0
+                    || payload.GetObjectPayloads().Count > 0
                     ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
                     : payload.Body;
                 var table = payload.ContainsTable

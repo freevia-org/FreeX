@@ -55,6 +55,40 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task InlineOleRun_IsRetainedBySharedVisualPlan()
+    {
+        await Session.Dispatch(() =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run { Text = "Before" },
+                    new Run
+                    {
+                        Text = "\uFFFC",
+                        InlineOleObject = new InlineOleObjectInfo
+                        {
+                            EmbeddedBytes = [0x01, 0x02, 0x03],
+                            FileName = "Embedded.xlsx",
+                            ClassName = "Excel.Sheet.12",
+                        },
+                    },
+                    new Run { Text = "After" },
+                },
+            });
+
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC);
+            var run = editor.RichTextView.VisualPlan.Paragraphs.Single().Runs[1];
+            run.Text.Should().Be("\uFFFC");
+            run.InlineOleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
+            run.InlineOleObject.FileName.Should().Be("Embedded.xlsx");
+            run.InlineOleObject.ClassName.Should().Be("Excel.Sheet.12");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task InlineImageRun_ReservesAuthoredWidthForFollowingText()
     {
         await Session.Dispatch(async () =>

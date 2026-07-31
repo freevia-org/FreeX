@@ -264,7 +264,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             item.Paragraph,
             Math.Max(1, Bounds.Width - item.Origin.X - ContentPadding.Right),
             SelectionForeground,
-            item.InlineImages);
+            item.InlineImages,
+            item.InlineOleObjects);
         foreach (var rect in selectedLayout.HitTestTextRange(
                      start - item.Paragraph.GlobalStart,
                      end - start))
@@ -317,7 +318,12 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 1,
                 width - originX - ContentPadding.Right);
             var inlineImages = CreateInlineImages(paragraph);
-            var layout = CreateLayout(paragraph, maxWidth, inlineImages: inlineImages);
+            var inlineOleObjects = CreateInlineOleObjects(paragraph);
+            var layout = CreateLayout(
+                paragraph,
+                maxWidth,
+                inlineImages: inlineImages,
+                inlineOleObjects: inlineOleObjects);
             var origin = new Point(originX, y);
             var bulletOrigin = new Point(
                 ContentPadding.Left + paragraph.IndentDip - paragraph.HangingDip,
@@ -330,6 +336,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 bulletOrigin,
                 CreateBulletImage(paragraph),
                 inlineImages,
+                inlineOleObjects,
                 paragraph.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight));
             y += layout.Height + paragraph.SpaceAfterDip;
         }
@@ -345,7 +352,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         InCanvasRichTextVisualParagraph paragraph,
         double maxWidth,
         IBrush? foregroundOverride = null,
-        IReadOnlyList<InlineImageLayout>? inlineImages = null)
+        IReadOnlyList<InlineImageLayout>? inlineImages = null,
+        IReadOnlyList<InlineOleLayout>? inlineOleObjects = null)
     {
         var seed = paragraph.Runs.FirstOrDefault();
         var defaultTypeface = CreateTypeface(seed);
@@ -362,7 +370,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 CreateRunProperties(run, foregroundOverride)));
         }
 
-        if (inlineImages is { Count: > 0 })
+        if (inlineImages is { Count: > 0 } || inlineOleObjects is { Count: > 0 })
         {
             var sourceRuns = paragraph.Runs
                 .Where(run => run.Length > 0)
@@ -370,7 +378,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                     run.Start,
                     run.Length,
                     CreateRunProperties(run, foregroundOverride),
-                    inlineImages.FirstOrDefault(image => image.Start == run.Start)))
+                    inlineImages?.FirstOrDefault(image => image.Start == run.Start),
+                    inlineOleObjects?.FirstOrDefault(ole => ole.Start == run.Start)))
                 .ToArray();
             var source = new InlineImageTextSource(
                 paragraph.Text,
@@ -478,12 +487,15 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             decorations.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough });
 
         IBrush foreground = foregroundOverride ?? (run?.InlineImage is not null
+            || run?.InlineOleObject is not null
             ? Brushes.Transparent
             : run?.Color is { } color
             ? new SolidColorBrush(Color.FromRgb(color.Resolved.R, color.Resolved.G, color.Resolved.B))
             : DefaultForeground);
         double fontSize = run?.InlineImage is not null
             ? InlineImageHeightDip(run)
+            : run?.InlineOleObject is not null
+                ? InlineOleHeightDip(run)
             : ToDip(run?.FontSizePt ?? _fallbackFontSizePt);
         return new GenericTextRunProperties(
             CreateTypeface(run),
@@ -533,6 +545,20 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         return result;
     }
 
+    private static IReadOnlyList<InlineOleLayout> CreateInlineOleObjects(
+        InCanvasRichTextVisualParagraph paragraph)
+    {
+        return paragraph.Runs
+            .Where(run => run.InlineOleObject is { EmbeddedBytes.Length: > 0 })
+            .Select(run => new InlineOleLayout(
+                run.Start,
+                42,
+                Math.Max(18, run.FontSizePt is > 0
+                    ? run.FontSizePt.Value * PtToDip + 4
+                    : 20)))
+            .ToArray();
+    }
+
     private static double InlineImageWidthDip(InCanvasRichTextVisualRun run)
     {
         if (run.InlineImageWidthEmu is > 0)
@@ -546,6 +572,9 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         run.InlineImageHeightEmu is > 0
             ? Math.Max(1, run.InlineImageHeightEmu.Value / 9525.0)
             : Math.Max(1, run.FontSizePt is > 0 ? run.FontSizePt.Value * PtToDip : 16);
+
+    private static double InlineOleHeightDip(InCanvasRichTextVisualRun run) =>
+        Math.Max(18, run.FontSizePt is > 0 ? run.FontSizePt.Value * PtToDip + 4 : 20);
 
     private IReadOnlyList<Rect> BuildSelectionRects(bool includeHorizontalScroll = true)
     {
@@ -741,6 +770,13 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                     run.Properties);
             }
 
+            if (run.InlineOleObject is { } ole && offset == 0)
+            {
+                return new InlineOleTextRun(
+                    new Size(ole.WidthDip, ole.HeightDip),
+                    run.Properties);
+            }
+
             int length = Math.Min(run.Length - offset, _text.Length - textSourceIndex);
             return new TextCharacters(
                 _text.AsMemory(textSourceIndex, length),
@@ -780,11 +816,41 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         }
     }
 
+    private sealed class InlineOleTextRun : DrawableTextRun
+    {
+        private readonly Size _size;
+        private readonly TextRunProperties _properties;
+
+        internal InlineOleTextRun(Size size, TextRunProperties properties)
+        {
+            _size = size;
+            _properties = properties;
+        }
+
+        public override int Length => 1;
+
+        public override TextRunProperties Properties => _properties;
+
+        public override Size Size => _size;
+
+        public override double Baseline => _size.Height;
+
+        public override void Draw(DrawingContext drawingContext, Point origin)
+        {
+            var rect = new Rect(origin.X, origin.Y, _size.Width, _size.Height);
+            drawingContext.DrawRectangle(
+                new SolidColorBrush(Color.FromRgb(232, 232, 232)),
+                new Pen(Brushes.Gray, 1),
+                rect);
+        }
+    }
+
     private sealed record InlineTextSourceRun(
         int Start,
         int Length,
         TextRunProperties Properties,
-        InlineImageLayout? InlineImage);
+        InlineImageLayout? InlineImage,
+        InlineOleLayout? InlineOleObject);
 
     private sealed record ParagraphLayout(
         InCanvasRichTextVisualParagraph Paragraph,
@@ -794,6 +860,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         Point BulletOrigin,
         Bitmap? BulletImage,
         IReadOnlyList<InlineImageLayout> InlineImages,
+        IReadOnlyList<InlineOleLayout> InlineOleObjects,
         FlowDirection FlowDirection)
     {
         internal double Bottom => Origin.Y + Layout.Height + Paragraph.SpaceAfterDip;
@@ -802,6 +869,11 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     private sealed record InlineImageLayout(
         int Start,
         Bitmap Bitmap,
+        double WidthDip,
+        double HeightDip);
+
+    private sealed record InlineOleLayout(
+        int Start,
         double WidthDip,
         double HeightDip);
 }

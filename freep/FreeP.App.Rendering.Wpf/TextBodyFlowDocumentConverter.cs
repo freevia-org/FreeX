@@ -335,6 +335,34 @@ internal static class TextBodyFlowDocumentConverter
 
     private static Inline ModelRunToWpfRun(ModelRun mr)
     {
+        if (mr.InlineOleObject is { } ole)
+        {
+            var label = string.IsNullOrWhiteSpace(ole.ClassName)
+                ? "OLE object"
+                : ole.ClassName;
+            var border = new Border
+            {
+                Width = 42,
+                Height = 20,
+                BorderBrush = Brushes.Gray,
+                BorderThickness = new Thickness(1),
+                Background = Brushes.Gainsboro,
+                ToolTip = label,
+                Child = new TextBlock
+                {
+                    Text = "OLE",
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    FontSize = 9,
+                    Foreground = Brushes.Black,
+                },
+            };
+            return new InlineUIContainer(border)
+            {
+                BaselineAlignment = BaselineAlignment.Center,
+            };
+        }
+
         if (mr.InlineImage is { Bytes.Length: > 0 } image)
         {
             var control = new Image
@@ -499,6 +527,17 @@ internal static class TextBodyFlowDocumentConverter
                 ?? ToEmu(image.Width);
             mr.InlineImageHeightEmu = originalRun?.InlineImageHeightEmu
                 ?? ToEmu(image.Height);
+        }
+
+        if (inline is InlineUIContainer
+            && originalRun?.InlineOleObject is { } originalOle)
+        {
+            mr.InlineOleObject = new InlineOleObjectInfo
+            {
+                EmbeddedBytes = originalOle.EmbeddedBytes.ToArray(),
+                FileName = originalOle.FileName,
+                ClassName = originalOle.ClassName,
+            };
         }
 
         // Y1: read FontFamily LOCAL value only (not resolved/inherited).

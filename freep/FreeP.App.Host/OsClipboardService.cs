@@ -417,6 +417,7 @@ public sealed class OsClipboardService
                 foreach (var obj in payload.GetObjectPayloads())
                     editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
                 var slideBody = payload.GetImagePayloads().Count > 0
+                    || payload.GetObjectPayloads().Count > 0
                     ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
                     : payload.Body;
                 var table = payload.ContainsTable
@@ -451,6 +452,7 @@ public sealed class OsClipboardService
                 foreach (var obj in payload.GetObjectPayloads())
                     editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
                 var slideBody = payload.GetImagePayloads().Count > 0
+                    || payload.GetObjectPayloads().Count > 0
                     ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
                     : payload.Body;
                 var table = payload.ContainsTable

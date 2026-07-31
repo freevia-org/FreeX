@@ -265,6 +265,13 @@ public sealed class Run
     /// <summary>Authored inline-picture height in EMUs, when the source supplied one.</summary>
     public long? InlineImageHeightEmu { get; set; }
 
+    /// <summary>
+    /// Inline embedded object carried by a rich-text editing run. The run's text is the
+    /// single object-replacement character (U+FFFC), matching inline-picture caret behavior.
+    /// Null means this is not an inline OLE object.
+    /// </summary>
+    public InlineOleObjectInfo? InlineOleObject { get; set; }
+
     /// <summary>Font family name, or null to inherit from paragraph/layout/master.</summary>
     public string? FontFamily { get; set; }
 

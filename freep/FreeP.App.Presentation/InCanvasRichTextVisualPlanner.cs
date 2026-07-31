@@ -17,7 +17,8 @@ public sealed record InCanvasRichTextVisualRun(
     ThemeAwareColor? Color,
     ImagePart? InlineImage = null,
     long? InlineImageWidthEmu = null,
-    long? InlineImageHeightEmu = null);
+    long? InlineImageHeightEmu = null,
+    InlineOleObjectInfo? InlineOleObject = null);
 
 public sealed record InCanvasRichTextVisualParagraph(
     int ParagraphIndex,
@@ -92,7 +93,8 @@ public static class InCanvasRichTextVisualPlanner
                     run.Color,
                     run.InlineImage,
                     run.InlineImageWidthEmu,
-                    run.InlineImageHeightEmu));
+                    run.InlineImageHeightEmu,
+                    run.InlineOleObject));
                 runStart += run.Text.Length;
             }
 
