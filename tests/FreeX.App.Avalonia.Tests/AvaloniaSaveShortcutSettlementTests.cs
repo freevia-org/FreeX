@@ -4,6 +4,7 @@ using Avalonia.Automation;
 using Avalonia.Headless;
 using Avalonia.Input;
 
+using FreeX.App.Presentation.Backstage;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -233,7 +234,7 @@ public sealed class AvaloniaSaveShortcutSettlementTests
     }
 
     [Fact]
-    public async Task TransformedControlShiftF12_OpensAndSettlesPrintPreview()
+    public async Task TransformedControlShiftF12_EntersAndSettlesBackstagePrintPane()
     {
         await Session.Dispatch(async () =>
         {
@@ -247,21 +248,10 @@ public sealed class AvaloniaSaveShortcutSettlementTests
                     PhysicalKey = PhysicalKey.F12,
                     KeyModifiers = KeyModifiers.Control | KeyModifiers.Shift,
                 };
-                var dispatch = window.RaiseKeyDownForTest(args);
-                global::Avalonia.Controls.Window? dialog = null;
-                for (var attempt = 0; dialog is null && !dispatch.IsCompleted && attempt < 300; attempt++)
-                {
-                    dialog = window.OwnedWindows.FirstOrDefault(
-                        candidate => AutomationProperties.GetAutomationId(candidate) == "PrintPreviewWindow");
-                    if (dialog is null)
-                        await Task.Delay(10);
-                }
+                await window.RaiseKeyDownForTest(args);
 
-                if (dialog is null && dispatch.IsCompleted)
-                    await dispatch;
-                dialog.Should().NotBeNull("Ctrl+Shift+physical-F12 should open Print Preview");
-                dialog!.Close();
-                await dispatch;
+                window.IsBackstageOverlayVisibleForTest.Should().BeTrue();
+                window.ActiveBackstagePaneForTest.Should().Be(FreeXBackstagePaneId.Print);
                 args.Handled.Should().BeTrue();
             }
             finally
@@ -277,7 +267,7 @@ public sealed class AvaloniaSaveShortcutSettlementTests
     }
 
     [Fact]
-    public async Task TransformedControlShiftF12_AfterCanceledOpenDirtyGate_OpensPrintPreview()
+    public async Task TransformedControlShiftF12_AfterCanceledOpenDirtyGate_EntersBackstagePrintPane()
     {
         await Session.Dispatch(async () =>
         {
@@ -305,16 +295,11 @@ public sealed class AvaloniaSaveShortcutSettlementTests
                     KeyModifiers = KeyModifiers.Control | KeyModifiers.Shift,
                 };
                 var printDispatch = window.RaiseKeyDownForTest(printArgs);
-                var preview = await WaitForOwnedWindowAsync(
-                    window,
-                    candidate => AutomationProperties.GetAutomationId(candidate) == "PrintPreviewWindow");
-                preview.Should().NotBeNull(
-                    "Ctrl+Shift+physical-F12 must wait for a canceled Open gate to settle, then open Print Preview");
-                preview!.Close();
-
                 await Task.WhenAll(openDispatch, printDispatch);
                 openArgs.Handled.Should().BeTrue();
                 printArgs.Handled.Should().BeTrue();
+                window.IsBackstageOverlayVisibleForTest.Should().BeTrue();
+                window.ActiveBackstagePaneForTest.Should().Be(FreeXBackstagePaneId.Print);
                 window.OwnedWindows.Should().BeEmpty();
             }
             finally

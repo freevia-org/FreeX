@@ -42,6 +42,35 @@ public sealed class AvaloniaRibbonComboTests
     }
 
     [Fact]
+    public async Task EditableCombo_EscapeStartsNewCommitWindow_AndDoesNotSwallowLaterEnter()
+    {
+        await Session.Dispatch(() =>
+        {
+            var executed = new List<string?>();
+            var registry = new RibbonCommandRegistry();
+            registry.Register("font", new RecordingCommand(executed));
+            var content = AvaloniaRibbonRenderer.BuildTabContent(BuildComboTab("font", "Calibri", "Arial"), registry);
+            var window = Show(content);
+            try
+            {
+                var combo = FindCombo(content);
+                combo.SelectedIndex = 1;
+                PressEnter(combo);
+                Assert.Equal(new[] { "Arial" }, executed);
+
+                PressKey(combo, Key.Escape);
+                PressEnter(combo);
+
+                Assert.Equal(new[] { "Arial", "Arial" }, executed);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task EditableCombo_TypedTextCommitsOnEnter()
     {
         await Session.Dispatch(() =>
@@ -174,10 +203,13 @@ public sealed class AvaloniaRibbonComboTests
     }
 
     private static void PressEnter(ComboBox combo)
+        => PressKey(combo, Key.Enter);
+
+    private static void PressKey(ComboBox combo, Key key)
     {
         combo.RaiseEvent(new KeyEventArgs
         {
-            Key = Key.Enter,
+            Key = key,
             RoutedEvent = InputElement.KeyDownEvent,
         });
     }

@@ -210,6 +210,15 @@ public sealed partial class MainWindow
         _backstageOverlay.Focus();
     }
 
+    // WPF's Ctrl+P route opens the Backstage Print pane rather than jumping straight to the
+    // standalone preview window. Keep the keyboard route on the same live pane so Preview and
+    // Print remain available as the next explicit actions.
+    private void ShowBackstagePrintPane()
+    {
+        ShowBackstageOverlay();
+        NavigateBackstageOverlay(FreeXBackstagePaneId.Print);
+    }
+
     private void HideBackstageOverlay()
     {
         _backstageOverlay.IsVisible = false;

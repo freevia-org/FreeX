@@ -3122,6 +3122,44 @@ probe_cancelable_window() {
     fi
 }
 
+probe_backstage_print_shortcut() {
+    local id="backstage-print-ctrl-shift-f12-cancel"
+    local before_count="" open_count="" cancel_count=""
+    local before_screenshot="${id}-before.png" after_screenshot="${id}-after-open.png" cancel_screenshot="${id}-after-cancel.png"
+    local artifacts="${before_screenshot};${after_screenshot};${cancel_screenshot};${id}-postcondition.txt"
+    local opened=false closed=false
+
+    focus_app
+    dismiss_overlays
+    before_count="$(visible_window_count)"
+    capture "$before_screenshot"
+    send_key "ctrl+shift+F12"
+    sleep 0.5
+    open_count="$(visible_window_count)"
+    capture "$after_screenshot"
+
+    if [[ "$open_count" == "$before_count" ]] && screen_changed "$output/$before_screenshot" "$output/$after_screenshot" 300; then
+        opened=true
+    fi
+
+    send_key "Escape"
+    sleep 0.5
+    cancel_count="$(visible_window_count)"
+    capture "$cancel_screenshot"
+    if $opened && [[ "$cancel_count" == "$before_count" ]] &&
+       screen_changed "$output/$after_screenshot" "$output/$cancel_screenshot" 300; then
+        closed=true
+    fi
+
+    write_artifact "${id}-postcondition.txt" "shortcut=ctrl+shift+F12\nwindow-count-before=$before_count\nwindow-count-after-open=$open_count\nwindow-count-after-cancel=$cancel_count\nopened-in-workbook=$opened\nclosed=$closed"
+    if $closed; then
+        record "$id" "passed" "$before_screenshot; $after_screenshot; $cancel_screenshot; window-count-before=$before_count; window-count-after-open=$open_count; window-count-after-cancel=$cancel_count" "Ctrl+Shift+F12 opened Backstage Print inside the workbook and Escape restored the workbook without creating a top-level preview window." "$artifacts"
+    else
+        record "$id" "failed" "$before_screenshot; $after_screenshot; $cancel_screenshot; window-count-before=$before_count; window-count-after-open=$open_count; window-count-after-cancel=$cancel_count; opened-in-workbook=$opened; closed=$closed" "Ctrl+Shift+F12 did not complete the in-workbook Backstage Print open/cancel lifecycle." "$artifacts"
+        dismiss_overlays
+    fi
+}
+
 if ! calibrate_geometry; then
     record "x11-geometry-calibration" "failed" "calibration-a1.png; calibration-b1.png; calibration-a2.png" "$calibration_reason"
     write_manifest
@@ -3133,6 +3171,15 @@ if ! command -v xclip >/dev/null 2>&1; then
     record "x11-clipboard-precondition" "failed" "x11-input-results.json" "$calibration_reason"
     write_manifest
     exit 2
+fi
+
+if [[ "$probe_selector" == "backstage-print" ]]; then
+    probe_backstage_print_shortcut
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
 fi
 
 if [[ "$probe_selector" == "sheet-tabs" ]]; then
@@ -3650,10 +3697,9 @@ else
     record "dialog-format-cells-keyboard" "failed" "dialog-format-cells-open.png" "Ctrl+1 did not open Format Cells."
 fi
 
-# Native file and print boundaries are cancel-only. Probe Print Preview first so each shortcut is
-# independent of GTK's picker modal loop rather than treating one picker's unwind as another
-# command's precondition.
-probe_cancelable_window "print-preview-ctrl-shift-f12-cancel" "ctrl+shift+F12" "print-preview.png"
+# WPF routes the print shortcut through the in-workbook Backstage Print pane.
+# Native file pickers remain cancel-only probes.
+probe_backstage_print_shortcut
 probe_cancelable_window "native-save-as-f12-cancel" "F12" "native-save-as.png"
 probe_cancelable_window "native-open-ctrl-f12-cancel" "ctrl+F12" "native-open.png"
 
