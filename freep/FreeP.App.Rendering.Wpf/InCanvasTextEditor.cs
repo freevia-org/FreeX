@@ -100,26 +100,26 @@ public sealed class InCanvasTextEditor : IDisposable
             _richBox.Document,
             _richBox.Selection.IsEmpty ? _richBox.CaretPosition : _richBox.Selection.Start);
 
-        bool TryActivateAt(int logicalPosition) =>
-            _editor.TryActivateInlineOleObject(
-                _editingShapeId,
-                logicalPosition,
-                updatedBytes =>
-                {
-                    if (_shapeParagraphBody is not null
-                        && InCanvasRichTextEditBuffer.FindInlineOleObjectAt(
-                            _shapeParagraphBody,
-                            logicalPosition,
-                            out var snapshot)
-                        && snapshot is not null)
-                    {
-                        snapshot.EmbeddedBytes = updatedBytes.ToArray();
-                    }
-                });
-
-        return TryActivateAt(position)
-            || (position > 0 && TryActivateAt(position - 1));
+        return TryActivateInlineOleAt(position)
+            || (position > 0 && TryActivateInlineOleAt(position - 1));
     }
+
+    private bool TryActivateInlineOleAt(int logicalPosition) =>
+        _editor.TryActivateInlineOleObject(
+            _editingShapeId,
+            logicalPosition,
+            updatedBytes =>
+            {
+                if (_shapeParagraphBody is not null
+                    && InCanvasRichTextEditBuffer.FindInlineOleObjectAt(
+                        _shapeParagraphBody,
+                        logicalPosition,
+                        out var snapshot)
+                    && snapshot is not null)
+                {
+                    snapshot.EmbeddedBytes = updatedBytes.ToArray();
+                }
+            });
 
     /// <summary>Activates the rich-text editor for the given shape.</summary>
     public void Activate(uint shapeId)
@@ -192,6 +192,7 @@ public sealed class InCanvasTextEditor : IDisposable
         _richBox.LostFocus += OnRichBoxLostFocus;
         _richBox.KeyDown += OnRichBoxKeyDown;
         _richBox.PreviewKeyDown += OnRichBoxPreviewKeyDown;
+        _richBox.PreviewMouseLeftButtonDown += OnRichBoxPreviewMouseLeftButtonDown;
 
         _overlay.IsHitTestVisible = true;
         _overlay.Children.Add(_richBox);
@@ -470,6 +471,27 @@ public sealed class InCanvasTextEditor : IDisposable
 
         Activate(hitId.Value);
         e.Handled = true;
+    }
+
+    private void OnRichBoxPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left
+            || e.ClickCount < 2
+            || _richBox is null)
+            return;
+
+        var pointer = _richBox.GetPositionFromPoint(
+            e.GetPosition(_richBox),
+            snapToText: true);
+        if (pointer is null)
+            return;
+
+        int logicalPosition = LogicalOffsetAt(_richBox.Document, pointer);
+        if (TryActivateInlineOleAt(logicalPosition)
+            || (logicalPosition > 0 && TryActivateInlineOleAt(logicalPosition - 1)))
+        {
+            e.Handled = true;
+        }
     }
 
     private static void ApplyPlacementTransform(
