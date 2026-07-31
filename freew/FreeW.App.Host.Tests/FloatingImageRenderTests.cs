@@ -261,7 +261,7 @@ public sealed class FloatingImageRenderTests
             .SelectMany(paragraph => paragraph.Inlines.OfType<Figure>())
             .Should().ContainSingle().Which;
         figure.Width.Value.Should().BeApproximately(176, 0.01);
-        figure.Height.Value.Should().BeApproximately(108, 0.01);
+        figure.Height.Value.Should().BeApproximately(95, 0.01);
         figure.HorizontalAnchor.Should().Be(FigureHorizontalAnchor.ContentLeft);
         figure.VerticalAnchor.Should().Be(FigureVerticalAnchor.ParagraphTop);
         figure.HorizontalOffset.Should().BeApproximately(232, 0.01);
