@@ -1909,6 +1909,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var quickAnalysisSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "QuickAnalysis", "QuickAnalysisSelectionReader.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -1920,6 +1921,8 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders)");
         sessionSource.Should().Contain("new SortCommand(sheetId, sheetRange, sortKeys, options)");
         sessionSource.Should().Contain("\"Select at least two rows to sort.\"");
+        quickAnalysisSource.Should().Contain("public static QuickAnalysisSelectionDescription Describe(Sheet sheet, GridRange range)");
+        quickAnalysisSource.Should().Contain("new QuickAnalysisSelectionDescription(range, hasHeaderRow, columnKinds)");
 
         source.Should().Contain("private readonly NativeMenuItem _sortAscendingMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _sortDescendingMenuItem = new();");
@@ -1942,7 +1945,11 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeMenuItemId.SortDescending, context.IsIdle && context.CanSortSelectedRange)");
         catalogSource.Should().Contain("new(NativeMenuItemId.CustomSort, context.IsIdle && context.CanSortSelectedRange)");
         source.Should().Contain("private void SortSelectedRange(bool ascending)");
-        source.Should().Contain("var result = _session.SortSelectedRange(ascending);");
+        source.Should().Contain("var range = _session.SelectedRange;");
+        source.Should().Contain("var hasHeaders = QuickAnalysisSelectionReader.Describe(_session.ActiveSheet, range).HasHeaderRow;");
+        source.Should().Contain("new CoreSortKey(0, ascending)");
+        source.Should().Contain("new SortOptions(CaseSensitive: false, LeftToRight: false)");
+        source.Should().Contain("hasHeaders);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Sort failed.\");");
         source.Should().Contain("RefreshShell($\"Sorted {rangeReference} {(ascending ? \"A to Z\" : \"Z to A\")}\");");
         source.Should().Contain("private async Task ShowSortDialogAsync()");

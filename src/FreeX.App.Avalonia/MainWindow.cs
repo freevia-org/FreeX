@@ -34,6 +34,7 @@ using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
@@ -61,6 +62,7 @@ using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 using CellVAlign = FreeX.Core.Model.VerticalAlignment;
 using AutoFilterDropdownMenuPlanner = FreeX.App.Presentation.Filtering.AutoFilterDropdownMenuPlanner;
+using CoreSortKey = FreeX.Core.Commands.SortKey;
 
 namespace FreeX.App.Avalonia;
 
@@ -19558,8 +19560,16 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var rangeReference = FormatRangeReference(_session.SelectedRange);
-        var result = _session.SortSelectedRange(ascending);
+        var range = _session.SelectedRange;
+        var rangeReference = FormatRangeReference(range);
+        // Match WPF's quick-sort path: a labels-over-values first row stays outside the sort range,
+        // while a headerless selection keeps every row as data. The session overload preserves the
+        // grouped-sheet command path and undo semantics used by the desktop host.
+        var hasHeaders = QuickAnalysisSelectionReader.Describe(_session.ActiveSheet, range).HasHeaderRow;
+        var result = _session.SortSelectedRange(
+            [new CoreSortKey(0, ascending)],
+            new SortOptions(CaseSensitive: false, LeftToRight: false),
+            hasHeaders);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Sort failed.");
