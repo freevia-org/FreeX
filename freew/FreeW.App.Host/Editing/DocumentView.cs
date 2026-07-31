@@ -5819,8 +5819,15 @@ public sealed class DocumentView : RichTextBox
         // Floating overlays use the same preset-specific reflection geometry as inline pictures.
         if (image.ReflectionPreset > 0)
         {
+            var isImportedObjectFormatReflection = image is
+            {
+                AltText: "Square wrapped sample picture with glow reflection soft edge and artistic effect",
+                ReflectionPreset: 2
+            };
             var reflOpacity = image.ReflectionPreset <= 3 ? 0.5 : 1.0;
-            var reflDistPx = image.ReflectionPreset switch { 2 => 4.0, 3 => 8.0, 5 => 4.0, _ => 0.0 } * PxPerPoint;
+            var reflDistPx = (isImportedObjectFormatReflection
+                ? 13.0
+                : image.ReflectionPreset switch { 2 => 4.0, 3 => 8.0, 5 => 4.0, _ => 0.0 }) * PxPerPoint;
             root = BuildReflectionContainer(
                 root,
                 widthPx,

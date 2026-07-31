@@ -224,6 +224,25 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void ObjectFormatSquareImage_UsesWordMeasuredReflectionDistance()
+    {
+        var canvas = new Canvas();
+        var view = new DocumentView();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(FreeWVisualEvidenceDocumentFactory.BuildObjectFormatPositionSizeStyleDocument());
+
+        var reflection = canvas.Children
+            .OfType<StackPanel>()
+            .Single(panel => panel.Tag is InlineImage
+            {
+                AltText: "Square wrapped sample picture with glow reflection soft edge and artistic effect",
+                ReflectionPreset: 2
+            });
+        var reflectionSurface = reflection.Children[1].Should().BeOfType<System.Windows.Shapes.Rectangle>().Subject;
+        reflectionSurface.Margin.Top.Should().BeApproximately(13 * 96.0 / 72.0, 0.01);
+    }
+
+    [StaFact]
     public void ImportedEffectImage_UsesItsMeasuredWordOverlayRegistration()
     {
         var doc = DocWithFloating(
