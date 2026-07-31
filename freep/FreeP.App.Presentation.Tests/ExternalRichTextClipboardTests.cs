@@ -518,6 +518,55 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfNestedTable_PreservesRecursiveInlineTableAndSurroundingText()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+\trowd\itap1\cellx2000\cellx4000
+\intbl Outer A\cell
+\trowd\itap2\nesttableprops\cellx1000\cellx2000
+\intbl Inner B\nestcell
+\intbl Inner C\nestcell
+\nestrow
+\itap1\cell
+\row
+ Before and after}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.InlineTable is not null)
+            .Should().BeTrue();
+        var outerRun = payload.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null);
+        outerRun.InlineTable!.Table.Rows.Should().HaveCount(1);
+        outerRun.InlineTable.Table.Rows[0].Cells.Should().HaveCount(2);
+        outerRun.InlineTable.Table.Rows[0].Cells[0].TextBody!
+            .Paragraphs[0].Runs[0].Text.Should().Be("Outer A");
+        var innerRun = outerRun.InlineTable.Table.Rows[0].Cells[1].TextBody!
+            .Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null);
+        innerRun.InlineTable!.Table.Rows.Should().HaveCount(1);
+        innerRun.InlineTable.Table.Rows[0].Cells.Select(cell =>
+                cell.TextBody!.Paragraphs[0].Runs[0].Text)
+            .Should().Equal("Inner B", "Inner C");
+        payload.PlainText.Should().Contain("\uFFFC");
+        payload.PlainText.Should().Contain("Before and after");
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        reopened.Should().NotBeNull();
+        reopened!.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table.Rows[0].Cells[1].TextBody!
+            .Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table.Rows[0].Cells[1].TextBody!
+            .Paragraphs[0].Runs[0].Text.Should().Be("Inner C");
+    }
+
+    [Fact]
     public void RtfSuperscriptAndSubscript_PreserveBaselineControls()
     {
         const string rtf =
